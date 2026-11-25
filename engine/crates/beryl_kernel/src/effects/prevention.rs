@@ -14,6 +14,7 @@
 
 use crate::layout::{Layout, Queue, Small};
 use crate::object::ObjectRef;
+use crate::reference::Permanent;
 use crate::relayout::{Relayout, slot};
 use crate::state::State;
 use beryl_card::{ColorChanges, FaceAbility, FaceIx};
@@ -120,17 +121,18 @@ impl<L: Layout> State<L> {
             })
     }
 
-    /// Changes the source of each shield that named `spell` if it became a permanent
-    /// ([CR 400.7c]): "Prevention effects that apply to damage from a permanent spell on the
-    /// stack continue to apply to damage from the permanent that spell becomes."
+    /// Changes the source of each shield that named `spell` to `permanent`, if `permanent`
+    /// is what the spell became as it resolved, its slot's next object ([CR 400.7c]):
+    /// "Prevention effects that apply to damage from a permanent spell on the stack continue
+    /// to apply to damage from the permanent that spell becomes."
     ///
     /// [CR 400.7c]: https://yawgatog.com/resources/magic-rules/#R4007c
     #[cold]
     #[inline(never)]
-    pub fn carry_spell_shields(&mut self, spell: ObjectRef<L>) {
-        let permanent = self.object_ref(spell.slot);
-        if spell.incarnation.checked_add(1) != Some(permanent.incarnation)
-            || self.permanent(permanent).is_none()
+    pub fn carry_spell_shields(&mut self, spell: ObjectRef<L>, permanent: Permanent<L>) {
+        let permanent = ObjectRef::from(permanent);
+        if permanent.slot != spell.slot
+            || spell.incarnation.checked_add(1) != Some(permanent.incarnation)
         {
             return;
         }

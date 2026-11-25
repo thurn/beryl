@@ -399,7 +399,6 @@ impl<L: Layout> State<L> {
         layered: bool,
     ) -> Result<Event<L>, Full> {
         let object = object.reference();
-        debug_assert!(self.is_current(object));
         let n = self.counters_of(object.slot, kind).saturating_add(amount);
         self.set_counters(object.slot, kind, n)?;
         if layered {
@@ -424,7 +423,6 @@ impl<L: Layout> State<L> {
         layered: bool,
     ) -> Event<L> {
         let object = object.reference();
-        debug_assert!(self.is_current(object));
         match self.object_mut(object.slot).counters.field_mut(kind) {
             Some(n) => *n -= amount,
             None => self.take_row(object.slot, kind, amount),

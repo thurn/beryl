@@ -895,7 +895,7 @@ fn lethal_damage_zero_toughness_and_zero_loyalty_are_state_based() {
         3,
         "enters with its loyalty"
     );
-    let shrunk_ref = s.object_ref(shrunk);
+    let shrunk_ref = s.permanent_at(shrunk).unwrap();
     let walker_ref = s.object_ref(walker);
     with_game(&t, &mut s, &mut x, hurt, |game, resolution| {
         damage::deal(
@@ -1370,7 +1370,7 @@ fn an_aura_makes_a_vehicle_artifact_with_crew_and_crewing_makes_it_a_creature() 
     s.board().attach(aura, bear);
     crate::continuous::layers::refresh(&mut s, &t, &mut x.events).unwrap();
     // Crewed: an artifact creature until end of turn, by a later timestamp.
-    let r = s.object_ref(bear);
+    let r = s.permanent_at(bear).unwrap();
     with_game(&t, &mut s, &mut x, bear, |game, resolution| {
         continuous::start(
             game,
@@ -1442,7 +1442,7 @@ fn an_aura_that_becomes_a_creature_goes_to_the_graveyard() {
     crate::continuous::layers::refresh(&mut s, &t, &mut x.events).unwrap();
     decide_with(&t, &mut s, &mut x);
     assert_eq!(s.object(aura).zone(), Zone::Battlefield);
-    let r = s.object_ref(aura);
+    let r = s.permanent_at(aura).unwrap();
     with_game(&t, &mut s, &mut x, bear, |game, resolution| {
         continuous::start(
             game,
@@ -1580,7 +1580,7 @@ fn creatures_alike_today_by_effects_that_end_apart_are_not_interchangeable() {
     let [first, second] = [(); 2].map(|()| put(&t, &mut s, &mut x, p, "Test Bear"));
     let source = put(&t, &mut s, &mut x, p, "Test Adeline");
     let [this_turn, for_good] = [first, second]
-        .map(|slot| Continuous::Layer(s.object_ref(slot), LayerChange::ModifyPt(1, 1)));
+        .map(|slot| Continuous::Layer(s.permanent_at(slot).unwrap(), LayerChange::ModifyPt(1, 1)));
     // The same bonus for as long on each: still one candidate.
     with_game(&t, &mut s, &mut x, source, |game, resolution| {
         continuous::start(game, resolution, this_turn, Duration::EndOfTurn).unwrap();
@@ -1821,7 +1821,7 @@ fn granted_keywords_end_at_cleanup_and_until_your_next_turn_lasts_through_theirs
     let (t, mut s, p) = game();
     let mut x = Scratch::new();
     let bear = put(&t, &mut s, &mut x, p, "Test Bear");
-    let r = s.object_ref(bear);
+    let r = s.permanent_at(bear).unwrap();
     with_game(&t, &mut s, &mut x, bear, |game, resolution| {
         continuous::start(
             game,
@@ -1837,13 +1837,7 @@ fn granted_keywords_end_at_cleanup_and_until_your_next_turn_lasts_through_theirs
             Duration::UntilYourNextTurn(p),
         )
         .unwrap();
-        counters::add(
-            game,
-            game.state().permanent(r).unwrap(),
-            CounterKind::PlusOne,
-            1,
-        )
-        .unwrap();
+        counters::add(game, r, CounterKind::PlusOne, 1).unwrap();
     });
     let d = s.derived(bear);
     assert!(d.keywords.contains(Keywords::FIRST_STRIKE));

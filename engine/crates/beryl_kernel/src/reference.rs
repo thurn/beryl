@@ -59,6 +59,21 @@ impl<Z: ZoneMark, L: Layout> CardIn<Z, L> {
     }
 }
 
+/// References built without a check, for kernel tests that arrange a state by hand.
+#[cfg(test)]
+impl<L: Layout> Permanent<L> {
+    pub(crate) fn unchecked(object: ObjectRef<L>) -> Self {
+        Permanent(object)
+    }
+}
+
+#[cfg(test)]
+impl<L: Layout> Spell<L> {
+    pub(crate) fn unchecked(object: ObjectRef<L>) -> Self {
+        Spell(object)
+    }
+}
+
 /// A reference checked against the state immediately before an action.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

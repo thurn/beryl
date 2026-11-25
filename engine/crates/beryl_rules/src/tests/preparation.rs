@@ -158,9 +158,9 @@ fn becoming_a_copy_keeps_the_prepare_spell_without_the_designation() {
     let source = preparation.record(&game.t).0;
     let red = Addition::new(source, FaceIx::FRONT, ExceptIx::new(0));
     let preparation = preparation.with_addition(red).unwrap();
-    let bear_ref = game.s.object_ref(bear);
+    let bear_permanent = game.s.permanent_at(bear).unwrap();
     game.s
-        .become_copy(&game.t, source, bear_ref, preparation)
+        .become_copy(&game.t, source, bear_permanent, preparation)
         .unwrap();
     assert_eq!(game.s.copiable(bear).colors(&game.t), Colors::RED);
     assert!(!game.s.is_prepared(bear));

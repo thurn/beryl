@@ -23,7 +23,7 @@ const EXILE: Payload = Payload::Move(MoveReplacement::ExileInsteadOfGraveyard);
 
 /// [`PUMP`] on `object`, to start.
 fn pump<L: Layout>(object: ObjectRef<L>) -> Continuous<L> {
-    Continuous::Layer(object, LayerChange::ModifyPt(2, 2))
+    Continuous::Layer(Permanent::unchecked(object), LayerChange::ModifyPt(2, 2))
 }
 
 /// [`EXILE`] on `object`, to start.
@@ -345,8 +345,8 @@ fn a_permission_and_a_spells_terms_survive_small_to_large_and_back() {
     // What a spell cast on such terms carries: its cost increases, added together, and
     // the replacement of where it goes.
     for terms in [
-        Continuous::Cost(spell, CostChange::Increase(2)),
-        Continuous::Cost(spell, CostChange::Increase(1)),
+        Continuous::Cost(Spell::unchecked(spell), CostChange::Increase(2)),
+        Continuous::Cost(Spell::unchecked(spell), CostChange::Increase(1)),
         Continuous::Move(spell, MoveReplacement::Flashback),
     ] {
         small
@@ -431,7 +431,7 @@ fn one_effect_on_a_set_ends_with_its_duration_or_with_its_last_member() {
     let both = permanents(&mut s, &[3, 70]);
     let began = s.zones.next_timestamp;
     let start = |s: &mut State<Small>, members, duration| {
-        s.start_effect_on_set(CardIx::FIRST, members, &[PUMPED], duration)
+        s.start_effect_on_set(CardIx::FIRST, s.permanents_in(members), &[PUMPED], duration)
     };
 
     // One entry with one timestamp, whatever the number of members.
@@ -510,8 +510,13 @@ fn signature_tells_two_objects_apart_by_the_effects_on_them() {
     // A member of an effect's set is no twin of one that is no member; of another member,
     // it is.
     let members = [a, c].into_iter().collect();
-    s.start_effect_on_set(CardIx::FIRST, members, &[PUMPED], Duration::EndOfTurn)
-        .unwrap();
+    s.start_effect_on_set(
+        CardIx::FIRST,
+        s.permanents_in(members),
+        &[PUMPED],
+        Duration::EndOfTurn,
+    )
+    .unwrap();
     assert!(!same(&mut s, a, b));
     assert!(same(&mut s, a, c));
     // The same change for longer is another effect, on a set or alone.
@@ -558,14 +563,24 @@ fn an_effect_on_one_object_is_an_entry_on_it_and_one_on_none_never_begins() {
     let began = s.zones.next_timestamp;
     let nothing = Bitboard::EMPTY;
     assert_eq!(
-        s.start_effect_on_set(CardIx::FIRST, nothing, &[PUMPED], Duration::EndOfTurn),
+        s.start_effect_on_set(
+            CardIx::FIRST,
+            s.permanents_in(nothing),
+            &[PUMPED],
+            Duration::EndOfTurn
+        ),
         Ok(())
     );
     assert!(s.effects().is_empty());
     assert_eq!(s.zones.next_timestamp, began);
 
     assert_eq!(
-        s.start_effect_on_set(CardIx::FIRST, one, &[PUMPED], Duration::EndOfTurn),
+        s.start_effect_on_set(
+            CardIx::FIRST,
+            s.permanents_in(one),
+            &[PUMPED],
+            Duration::EndOfTurn
+        ),
         Ok(())
     );
     let third = s.object_ref(Slot::from_index(3));
@@ -586,7 +601,12 @@ fn a_set_survives_small_to_large_and_back() {
         (other, Duration::EndOfTurn),
     ] {
         small
-            .start_effect_on_set(CardIx::FIRST, members, &[PUMPED], duration)
+            .start_effect_on_set(
+                CardIx::FIRST,
+                small.permanents_in(members),
+                &[PUMPED],
+                duration,
+            )
             .unwrap();
     }
     let sets = |effects: &[ContinuousEffect<Large>]| {
@@ -632,13 +652,23 @@ fn a_full_table_of_sets_returns_full_and_a_wide_one_grows() {
     let mut large: State<Large> = small.widen();
     for &pair in &pairs[..SETS] {
         assert_eq!(
-            small.start_effect_on_set(CardIx::FIRST, pair, &[PUMPED], Duration::EndOfTurn),
+            small.start_effect_on_set(
+                CardIx::FIRST,
+                small.permanents_in(pair),
+                &[PUMPED],
+                Duration::EndOfTurn
+            ),
             Ok(())
         );
     }
     let began = small.effects;
     assert_eq!(
-        small.start_effect_on_set(CardIx::FIRST, pairs[SETS], &[PUMPED], Duration::EndOfTurn),
+        small.start_effect_on_set(
+            CardIx::FIRST,
+            small.permanents_in(pairs[SETS]),
+            &[PUMPED],
+            Duration::EndOfTurn
+        ),
         Err(Full)
     );
     // What did not fit is in no index.
@@ -655,7 +685,12 @@ fn a_full_table_of_sets_returns_full_and_a_wide_one_grows() {
     }
     assert_eq!(small.effects().len(), SETS - 1);
     assert_eq!(
-        small.start_effect_on_set(CardIx::FIRST, pairs[SETS], &[PUMPED], Duration::EndOfTurn),
+        small.start_effect_on_set(
+            CardIx::FIRST,
+            small.permanents_in(pairs[SETS]),
+            &[PUMPED],
+            Duration::EndOfTurn
+        ),
         Ok(())
     );
     assert_eq!(small.check_stores(&t), Ok(()));
@@ -663,7 +698,12 @@ fn a_full_table_of_sets_returns_full_and_a_wide_one_grows() {
     for &pair in &pairs {
         let pair = Bitboard::<LargeSlot>::from(pair);
         assert_eq!(
-            large.start_effect_on_set(LargeCardIx::FIRST, pair, &[PUMPED], Duration::EndOfTurn),
+            large.start_effect_on_set(
+                LargeCardIx::FIRST,
+                large.permanents_in(pair),
+                &[PUMPED],
+                Duration::EndOfTurn
+            ),
             Ok(())
         );
     }

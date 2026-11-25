@@ -84,6 +84,7 @@ mod tests {
     use crate::ids::{CardId, SlotId};
     use crate::layout::Small;
     use crate::profile::Profile;
+    use crate::reference::Permanent;
     use crate::state::{Continuous, Duration, LayerChange, State};
     use crate::{CardIx, Slot};
 
@@ -95,7 +96,7 @@ mod tests {
         s.zones.next_timestamp = u16::MAX - 2;
         for i in 0..4 {
             let on = s.object_ref(Slot::from_index(i));
-            let effect = Continuous::Layer(on, LayerChange::ModifyPt(1, 1));
+            let effect = Continuous::Layer(Permanent::unchecked(on), LayerChange::ModifyPt(1, 1));
             s.start_effect(CardIx::from_index(i), effect, Duration::Indefinite)
                 .unwrap();
         }

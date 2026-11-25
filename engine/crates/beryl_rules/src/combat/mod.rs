@@ -237,7 +237,7 @@ fn declare_attacker<L: Layout>(s: &mut State<L>, t: &GameTable, attacker: Perman
     s.declare_attacker(attacker, player);
     // See CR 508.4: creatures put onto the battlefield attacking never "attacked"
     // for effects. Only a declaration pick records the turn's attack history.
-    s.track(t, Tracker::AttackedThisTurn, attacker.slot());
+    s.track(t, Tracker::AttackedThisTurn, attacker);
 }
 
 /// Finishes the attack declaration: the attackers tap, then attack triggers trigger.

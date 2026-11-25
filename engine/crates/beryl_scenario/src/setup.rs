@@ -191,7 +191,8 @@ fn arrange<L: Layout>(
             // A scenario's permanents entered the battlefield the turn it begins in, as its
             // setup has always had them: a permanent whose abilities are faster that turn
             // may use them so, and the scripts recorded from scenarios stop where it may.
-            s.track(t, Tracker::EnteredThisTurn, slot);
+            let permanent = s.permanent_at(slot).expect("a permanent in the scenario");
+            s.track(t, Tracker::EnteredThisTurn, permanent);
             // CR 306.5b: a planeswalker "enters with a number of loyalty counters on it equal
             // to its printed loyalty number."
             let printed = s.copiable(slot).turned(t, b.face).face(t).loyalty;

@@ -17,6 +17,7 @@ use crate::bitboard::Bitboard;
 use crate::fit::{Misfit, room};
 use crate::fixed::Full;
 use crate::layout::{Layout, Queue, Small, index};
+use crate::reference::Permanents;
 use crate::relayout::bits;
 use crate::state::{State, Zone};
 use crate::store::Duration;
@@ -160,15 +161,18 @@ impl<L: Layout> State<L> {
     pub fn start_effect_on_set(
         &mut self,
         source: L::Card,
-        members: Bitboard<L::Slot>,
+        members: Permanents<L>,
         changes: &[LayerChange],
         duration: Duration,
     ) -> Result<(), Full> {
+        let members = members.slots();
         let mut rest = members.iter();
         match (rest.next(), rest.next()) {
             (None, _) => Ok(()),
             (Some(sole), None) => {
-                let object = self.object_ref(sole);
+                let Some(object) = self.permanent_at(sole) else {
+                    return Ok(());
+                };
                 let timestamp = self.take_timestamp();
                 for &change in changes {
                     let effect = Continuous::Layer(object, change);

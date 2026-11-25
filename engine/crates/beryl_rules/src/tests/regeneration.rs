@@ -43,11 +43,12 @@ fn shielded_bear() -> (GameTable, State, Scratch, Seat, Slot) {
     let mut x = Scratch::new();
     let bear = put(&t, &mut s, &mut x, p, "Test Bear");
     let bear_ref = s.object_ref(bear);
+    let bear_permanent = s.permanent(bear_ref).unwrap();
     with_game(&t, &mut s, &mut x, bear, |game, resolution| {
-        let shield = Continuous::Regeneration(bear_ref);
+        let shield = Continuous::Regeneration(bear_permanent);
         continuous::start(game, resolution, shield, Duration::EndOfTurn).unwrap();
     });
-    assert!(s.is_shielded(bear_ref));
+    assert!(s.permanent(bear_ref).is_some_and(|p| s.is_shielded(p)));
     (t, s, x, p, bear)
 }
 
@@ -61,7 +62,7 @@ fn a_shield_replaces_one_destruction_and_the_next_destroys() {
     // CR 701.19a: "instead remove all damage marked on it and its controller taps it."
     assert_eq!(s.object(bear).zone(), Zone::Battlefield);
     assert!(s.object(bear).is_tapped());
-    assert!(!s.is_shielded(bear_ref));
+    assert!(!s.permanent(bear_ref).is_some_and(|p| s.is_shielded(p)));
     with_game(&t, &mut s, &mut x, bear, |game, _| {
         destroy(game, game.state().permanent(bear_ref).unwrap()).unwrap();
     });
@@ -79,7 +80,7 @@ fn a_shield_saves_a_creature_with_lethal_damage_and_removes_the_damage() {
     assert_eq!(s.object(bear).zone(), Zone::Battlefield);
     assert_eq!(s.object(bear).damage(), 0);
     assert!(s.object(bear).is_tapped());
-    assert!(!s.is_shielded(bear_ref));
+    assert!(!s.permanent(bear_ref).is_some_and(|p| s.is_shielded(p)));
 }
 
 #[test]
@@ -97,7 +98,7 @@ fn regeneration_uses_toughness_before_equipment_detaches() {
     let bear_permanent = s.permanent(bear_ref).unwrap();
     let equipment_permanent = s.permanent_at(equipment).unwrap();
     with_game(&t, &mut s, &mut x, bear, |game, resolution| {
-        let shield = Continuous::Regeneration(bear_ref);
+        let shield = Continuous::Regeneration(bear_permanent);
         continuous::start(game, resolution, shield, Duration::EndOfTurn).unwrap();
         game.state.attach(equipment_permanent, bear_permanent);
         let equipment = game.state().permanents_in(Bitboard::single(equipment));
@@ -124,15 +125,16 @@ fn regeneration_uses_toughness_before_equipment_detaches() {
     assert_eq!(s.derived(bear).toughness, 2);
     assert_eq!(s.object(bear).damage(), 0);
     assert!(s.object(bear).is_tapped());
-    assert!(!s.is_shielded(bear_ref));
+    assert!(!s.permanent(bear_ref).is_some_and(|p| s.is_shielded(p)));
 }
 
 #[test]
 fn a_shield_does_not_save_a_creature_with_toughness_zero() {
     let (t, mut s, mut x, _, bear) = shielded_bear();
     let bear_ref = s.object_ref(bear);
+    let bear_permanent = s.permanent(bear_ref).unwrap();
     with_game(&t, &mut s, &mut x, bear, |game, resolution| {
-        let shrink = Continuous::Layer(bear_ref, LayerChange::ModifyPt(-2, -2));
+        let shrink = Continuous::Layer(bear_permanent, LayerChange::ModifyPt(-2, -2));
         continuous::start(game, resolution, shrink, Duration::EndOfTurn).unwrap();
     });
     // CR 704.5f puts it into its owner's graveyard, which is no destruction.
@@ -172,6 +174,6 @@ fn a_shield_ends_with_the_turn() {
     let bear_ref = s.object_ref(bear);
     // CR 514.2: "all 'until end of turn' and 'this turn' effects end".
     s.expire(Duration::EndOfTurn);
-    assert!(!s.is_shielded(bear_ref));
+    assert!(!s.permanent(bear_ref).is_some_and(|p| s.is_shielded(p)));
     s.check_invariants(&t).unwrap();
 }

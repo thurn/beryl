@@ -86,7 +86,7 @@ fn a_card_copying_a_transformed_back_face_has_mana_value_zero() {
         .become_copy(
             &table,
             source,
-            state.object_ref(copy),
+            state.permanent_at(copy).unwrap(),
             state.copiable(original),
         )
         .unwrap();
@@ -119,7 +119,7 @@ fn a_card_copying_a_transformed_back_face_has_mana_value_zero() {
         .become_copy(
             &table,
             source,
-            state.object_ref(copy),
+            state.permanent_at(copy).unwrap(),
             state.copiable(original),
         )
         .unwrap();

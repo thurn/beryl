@@ -161,8 +161,10 @@ pub(crate) fn begin_activate<L: Layout>(
     let (source, index) = activated(s, t, slot, ability).expect("an ability offered");
     let a = source.face(t).ability(index);
     let (card, face) = source.record(t);
-    if a.is_loyalty() {
-        s.track(t, Tracker::LoyaltyActivated, slot);
+    if a.is_loyalty()
+        && let Some(permanent) = s.permanent_at(slot)
+    {
+        s.track(t, Tracker::LoyaltyActivated, permanent);
     }
     s.put_on_stack(
         sink,

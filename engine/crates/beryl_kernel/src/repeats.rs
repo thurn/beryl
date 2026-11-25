@@ -222,6 +222,7 @@ mod tests {
     use crate::ids::{CardId, Seat, SlotId};
     use crate::layout::Small;
     use crate::profile::Profile;
+    use crate::reference::Permanent;
     use crate::repeats::Repeats;
     use crate::state::{Continuous, Duration, LayerChange, State};
     use crate::{CardIx, Slot};
@@ -240,7 +241,7 @@ mod tests {
         s.objects[0].incarnation += moved;
         s.zones.next_timestamp += given;
         let on = s.object_ref(Slot::from_index(0));
-        let effect = Continuous::Layer(on, LayerChange::ModifyPt(1, 1));
+        let effect = Continuous::Layer(Permanent::unchecked(on), LayerChange::ModifyPt(1, 1));
         s.start_effect(CardIx::from_index(0), effect, Duration::Indefinite)
             .unwrap();
         s

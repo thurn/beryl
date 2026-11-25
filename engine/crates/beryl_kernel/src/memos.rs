@@ -28,6 +28,7 @@ use crate::layout::{Layout, Queue, Small};
 use crate::object::ObjectRef;
 use crate::observation::Observation;
 use crate::player_set::PlayerSet;
+use crate::reference::{CardIn, Exile};
 use crate::relayout::{Relayout, queue, slot};
 use crate::state::{State, Zone};
 use crate::store::{Duration, Ended, Store};
@@ -689,14 +690,15 @@ impl<L: Layout> State<L> {
         )
     }
 
-    /// Ends the card in `slot`'s memo of what it was exiled until, if it has one: the card
+    /// Ends `card`'s memo of what it was exiled until, if it has one: the card
     /// stays in exile as that permanent leaves, as an Aura with nothing it could enchant does
     /// (see [CR 303.4g](https://yawgatog.com/resources/magic-rules/#R3034g)): "If an Aura is
     /// entering the battlefield and there is no legal object or player for it to enchant, the
     /// Aura remains in its current zone". It is exiled until nothing any more.
     #[cold]
     #[inline(never)]
-    pub fn end_exiled_until(&mut self, slot: L::Slot) {
+    pub fn end_exiled_until(&mut self, card: CardIn<Exile, L>) {
+        let slot = card.slot();
         let done = self
             .memos
             .end(|e| !(e.slot == slot && matches!(e.memo, Memo::ExiledUntil(_))));

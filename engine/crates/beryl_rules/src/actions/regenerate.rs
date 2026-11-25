@@ -34,7 +34,7 @@ pub(crate) fn instruction<L: Layout>(
     let mut left = permanents;
     while let Some(permanent) = run.state().next_permanent(&mut left) {
         let (game, resolution) = run.resolving();
-        let shield = Continuous::Regeneration(permanent.into());
+        let shield = Continuous::Regeneration(permanent);
         crate::continuous::start(game, resolution, shield, Duration::EndOfTurn)?;
     }
     Ok(Outcome::acted_on(permanents.slots()))

@@ -17,7 +17,7 @@ pub use beryl_kernel::event::{
 pub use crate::zones::tokens::TokenEntry;
 use beryl_kernel::Attachment;
 use beryl_kernel::mutate::Arrival;
-use beryl_kernel::reference::Permanent;
+use beryl_kernel::reference::{Exile, Permanent};
 
 use crate::bitboard::Bitboard;
 use crate::card::{CastingKinds, FaceIx, Subtype};
@@ -79,7 +79,7 @@ pub(crate) fn arrive<L: Layout>(
     entry: Entry<L>,
 ) -> Result<(), Full> {
     let slot = permanent.slot();
-    s.track(t, Tracker::EnteredThisTurn, slot);
+    s.track(t, Tracker::EnteredThisTurn, permanent);
     s.arrive(
         permanent,
         Arrival {
@@ -560,7 +560,9 @@ fn prepare_move<L: Layout>(
             replacement::Enchants::Nothing => {
                 sink.copies.retain(|&(copier, _)| copier != slot);
                 if from != Zone::Stack {
-                    s.end_exiled_until(slot);
+                    if let Some(card) = s.card_in(s.object_ref(slot), Exile) {
+                        s.end_exiled_until(card);
+                    }
                     return Ok(None);
                 }
                 m.to = Zone::Graveyard;

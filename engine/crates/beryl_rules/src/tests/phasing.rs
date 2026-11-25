@@ -110,7 +110,7 @@ fn a_permanent_phases_in_for_who_controlled_it_as_it_phased_out() {
     let mut g = Game::new(Profile::EXACT);
     let bear = g.give(g.them, "Test Bear", Zone::Battlefield);
     let source = CardIx::FIRST;
-    let stolen = Continuous::Layer(g.s.object_ref(bear), LayerChange::Control(g.me));
+    let stolen = Continuous::Layer(g.s.permanent_at(bear).unwrap(), LayerChange::Control(g.me));
     g.s.start_effect(source, stolen, Duration::EndOfTurn)
         .unwrap();
     settled(&mut g);

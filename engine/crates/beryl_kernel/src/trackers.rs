@@ -22,6 +22,7 @@ use crate::ids::{Seat, SlotId};
 use crate::invariants::{At, Violation, check};
 use crate::layout::{Layout, Small, Table};
 use crate::observation::Observation;
+use crate::reference::Permanent;
 use crate::relayout::{Relayout, bits};
 use crate::state::{State, Zone};
 use crate::store::{Duration, Ended, Store};
@@ -319,15 +320,14 @@ impl Tracked {
 }
 
 impl<L: Layout> State<L> {
-    /// Notes `tracker` of the permanent in `slot`, for the rest of the turn or until it
-    /// leaves the battlefield: the rules call it as the thing happens. In a game no card of
-    /// which reads the tracker it writes nothing, at the cost of one AND. No event: it is
-    /// part of what the rules were doing, and the layers read no tracker.
+    /// Notes `tracker` of `permanent`, for the rest of the turn or until it leaves the
+    /// battlefield: the rules call it as the thing happens. In a game no card of which reads
+    /// the tracker it writes nothing, at the cost of one AND. No event: it is part of what
+    /// the rules were doing, and the layers read no tracker.
     #[inline]
-    pub fn track(&mut self, t: &GameTable, tracker: Tracker, slot: L::Slot) {
-        debug_assert_eq!(self.object(slot).zone, Zone::Battlefield);
+    pub fn track(&mut self, t: &GameTable, tracker: Tracker, permanent: Permanent<L>) {
         if t.can(tracker.capability()) {
-            self.trackers.set(tracker, slot, true);
+            self.trackers.set(tracker, permanent.slot(), true);
         }
     }
 

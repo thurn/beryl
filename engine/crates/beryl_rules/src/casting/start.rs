@@ -325,14 +325,13 @@ pub(crate) fn begin_on_spell<L: Layout>(
     spell: Spell<L>,
     permission: Permitted<L>,
 ) -> Result<(), Full> {
-    let spell = spell.into();
     let Permitted { terms, source, .. } = permission;
     if terms.increase > 0 {
         let cost = Continuous::Cost(spell, CostChange::Increase(terms.increase));
         s.start_effect(source, cost, Duration::Indefinite)?;
     }
     if let Some(replacement) = terms.replacement {
-        let goes = Continuous::Move(spell, replacement);
+        let goes = Continuous::Move(spell.into(), replacement);
         s.start_effect(source, goes, Duration::Indefinite)?;
     }
     Ok(())

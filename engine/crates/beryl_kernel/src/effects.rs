@@ -29,6 +29,7 @@ use crate::layout::{Layout, Queue, Small, Table};
 use crate::object::ObjectRef;
 use crate::observation::Observation;
 use crate::query::Copiable;
+use crate::reference::{Permanent, Spell};
 use crate::rule_changes::{RuleId, Rules};
 use crate::stack::{AbilityRef, TriggeredAbility};
 use crate::state::State;
@@ -75,7 +76,7 @@ pub const EFFECTS: usize = 64;
 pub enum Continuous<L: Layout = Small> {
     /// Changes one permanent in a layer (architecture §9). An effect that changes several
     /// is [`State::start_effect_on_set`]'s, which locks them in.
-    Layer(ObjectRef<L>, LayerChange),
+    Layer(Permanent<L>, LayerChange),
     /// Replaces a zone change of the object.
     Move(ObjectRef<L>, MoveReplacement),
     /// Changes a rule of the game for a player or for one object
@@ -86,9 +87,9 @@ pub enum Continuous<L: Layout = Small> {
     /// Lets a player cast the card from the zone it is in.
     Cast(ObjectRef<L>, Permission),
     /// Changes what the spell costs.
-    Cost(ObjectRef<L>, CostChange),
+    Cost(Spell<L>, CostChange),
     /// A regeneration shield on the permanent ([`regeneration`]).
-    Regeneration(ObjectRef<L>),
+    Regeneration(Permanent<L>),
     /// A prevention shield on a player or a permanent ([`prevention`]).
     Prevent(Subject<L>, Shield<L>),
     /// A copy effect: the object has these copiable values (see [CR 707.2]): "When copying an
@@ -114,11 +115,12 @@ impl<L: Layout> Continuous<L> {
     #[inline]
     pub fn subject(self) -> Subject<L> {
         match self {
-            Continuous::Layer(object, _)
-            | Continuous::Move(object, _)
+            Continuous::Layer(permanent, _) | Continuous::Regeneration(permanent) => {
+                Subject::Object(permanent.into())
+            }
+            Continuous::Cost(spell, _) => Subject::Object(spell.into()),
+            Continuous::Move(object, _)
             | Continuous::Cast(object, _)
-            | Continuous::Cost(object, _)
-            | Continuous::Regeneration(object)
             | Continuous::Copy(object, _)
             | Continuous::Text(object, _) => Subject::Object(object),
             Continuous::Rule(subject, _) | Continuous::Prevent(subject, _) => subject,
@@ -645,30 +647,26 @@ impl<L: Layout> State<L> {
         });
         if pushed.is_ok() {
             self.effects.kinds.0 |= payload.kind();
+            if let Subject::Object(object) = subject {
+                debug_assert!(self.is_current(object));
+                self.keyed.insert(object.slot);
+            }
             match effect {
                 Continuous::Rule(Subject::Player(player), rule) => {
                     let rules = &mut self.effects.rules[player.index()];
                     *rules = rules.with(rule);
                 }
-                Continuous::Prevent(Subject::Player(_), _)
+                Continuous::Copy(object, values) => self.take_copied_values(object, values)?,
+                Continuous::Rule(Subject::Object(_), _)
+                | Continuous::Layer(..)
+                | Continuous::Regeneration(_)
+                | Continuous::Cost(..)
+                | Continuous::Move(..)
+                | Continuous::Prevent(..)
+                | Continuous::Cast(..)
+                | Continuous::Text(..)
                 | Continuous::Control { .. }
                 | Continuous::ExtraTurn(..) => {}
-                Continuous::Layer(object, _)
-                | Continuous::Move(object, _)
-                | Continuous::Rule(Subject::Object(object), _)
-                | Continuous::Prevent(Subject::Object(object), _)
-                | Continuous::Cast(object, _)
-                | Continuous::Cost(object, _)
-                | Continuous::Regeneration(object)
-                | Continuous::Text(object, _) => {
-                    debug_assert!(self.is_current(object));
-                    self.keyed.insert(object.slot);
-                }
-                Continuous::Copy(object, values) => {
-                    debug_assert!(self.is_current(object));
-                    self.keyed.insert(object.slot);
-                    self.take_copied_values(object, values)?;
-                }
             }
         }
         if matches!(effect, Continuous::Layer(..) | Continuous::Text(..)) {

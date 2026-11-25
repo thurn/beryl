@@ -29,6 +29,7 @@ use crate::layout::Layout;
 use crate::memos::Memo;
 use crate::object::{Flag, ObjectRef};
 use crate::query::Copiable;
+use crate::reference::Permanent;
 use crate::state::State;
 use crate::store::Duration;
 use crate::table::GameTable;
@@ -160,7 +161,7 @@ impl<L: Layout> State<L> {
         Ok(())
     }
 
-    /// Makes the permanent `object` become a copy with the copiable values `values`, by an
+    /// Makes `permanent` become a copy with the copiable values `values`, by an
     /// effect of the card `source` (see [CR 707.2]): "When copying an object, the copy acquires
     /// the copiable values of the original object's characteristics". It is not entering: its
     /// counters, status and memos stay. Flip characteristics use the copy's own flipped status.
@@ -181,23 +182,21 @@ impl<L: Layout> State<L> {
         &mut self,
         t: &GameTable,
         source: L::Card,
-        object: ObjectRef<L>,
+        permanent: Permanent<L>,
         values: Copiable<L>,
     ) -> Result<(), Full> {
-        let flipped = self.object(object.slot).flags.has(Flag::Flipped);
-        self.set_copy(source, object, values.with_flipped_status(t, flipped))
+        let flipped = self.object(permanent.slot()).flags.has(Flag::Flipped);
+        self.set_copy(source, permanent, values.with_flipped_status(t, flipped))
     }
 
     /// Records the copy after the caller determines which face its values come from.
     pub(crate) fn set_copy(
         &mut self,
         source: L::Card,
-        object: ObjectRef<L>,
+        permanent: Permanent<L>,
         values: Copiable<L>,
     ) -> Result<(), Full> {
-        debug_assert!(self.is_current(object));
-        debug_assert_eq!(self.object(object.slot).zone, beryl_card::Zone::Battlefield);
-        let slot = object.slot;
+        let slot = permanent.slot();
         let ended = self.effects.end(|e| {
             !(matches!(e.payload, Payload::Copy(_))
                 && matches!(e.affected, Affects::Object { slot: s, .. } if s == slot))
@@ -205,7 +204,7 @@ impl<L: Layout> State<L> {
         debug_assert_eq!(ended.any, self.object(slot).flags.has(Flag::Copy));
         self.object_mut(slot).face = values.face_up();
         self.flags.derived_dirty = true;
-        let copy = Continuous::Copy(object, values);
+        let copy = Continuous::Copy(permanent.into(), values);
         self.start_effect(source, copy, Duration::Indefinite)
     }
 

@@ -589,8 +589,10 @@ fn enter_battlefield<L: Layout>(
         Reason::Resolve,
         how,
     )?;
-    if s.has_prevention_shields() {
-        s.carry_spell_shields(spell);
+    if s.has_prevention_shields()
+        && let Some(permanent) = s.permanent_at(spell.slot)
+    {
+        s.carry_spell_shields(spell, permanent);
     }
     Ok(())
 }

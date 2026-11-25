@@ -113,8 +113,13 @@ fn every_member_of_three_locked_in_sets_gets_all_three_effects() {
     let bears = tokens(&mut s, p, card, 120);
     for _ in 0..3 {
         let change = LayerChange::ModifyPt(1, 1);
-        s.start_effect_on_set(card, set_of(&bears), &[change], Duration::Indefinite)
-            .unwrap();
+        s.start_effect_on_set(
+            card,
+            s.permanents_in(set_of(&bears)),
+            &[change],
+            Duration::Indefinite,
+        )
+        .unwrap();
     }
     refresh(&mut s, &t);
     for &slot in &bears {
@@ -162,7 +167,7 @@ fn an_effect_on_the_301st_permanent_changes_it_and_no_other() {
     tokens(&mut s, p, card, 300);
     assert_eq!(s.battlefield().len(), 301);
     let pumped = s.battlefield()[300];
-    let change = Continuous::Layer(s.object_ref(pumped), LayerChange::ModifyPt(3, 3));
+    let change = Continuous::Layer(s.permanent_at(pumped).unwrap(), LayerChange::ModifyPt(3, 3));
     s.start_effect(card, change, Duration::Indefinite).unwrap();
     refresh(&mut s, &t);
     for (position, &slot) in s.battlefield().iter().enumerate() {

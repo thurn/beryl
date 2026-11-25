@@ -201,7 +201,7 @@ fn pt(s: &State, slot: Slot) -> (i8, i8) {
 /// with the next timestamp.
 fn start(t: &GameTable, s: &mut State, slot: Slot, change: LayerChange) {
     let (card, _) = s.copiable(slot).record(t);
-    let on = s.object_ref(slot);
+    let on = s.permanent_at(slot).unwrap();
     let effect = Continuous::Layer(on, change);
     s.start_effect(card, effect, Duration::Indefinite).unwrap();
     refresh(t, s);

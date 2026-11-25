@@ -46,7 +46,8 @@ fn regenerate_any<L: Layout>(
     sink: &mut Sink<L>,
     permanents: Permanents<L>,
 ) -> Result<Bitboard<L::Slot>, Full> {
-    let shielded = (permanents.slots()).filter(|slot| s.is_shielded(s.object_ref(slot)));
+    let shielded =
+        (permanents.slots()).filter(|slot| s.permanent_at(slot).is_some_and(|p| s.is_shielded(p)));
     // In battlefield order, never slot order: the taps' events are seen in this order.
     let mut left = s.permanents_in(shielded);
     while let Some(permanent) = s.next_permanent(&mut left) {
@@ -67,7 +68,7 @@ fn regenerate<L: Layout>(
     sink: &mut Sink<L>,
     permanent: Permanent<L>,
 ) -> Result<(), Full> {
-    let used = s.use_regeneration_shield(permanent.into());
+    let used = s.use_regeneration_shield(permanent);
     debug_assert!(used, "a permanent regenerated with no shield");
     s.remove_damage(permanent);
     let o = s.object(permanent.slot());

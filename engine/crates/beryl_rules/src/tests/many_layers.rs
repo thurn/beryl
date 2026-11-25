@@ -121,8 +121,13 @@ fn elk(t: &GameTable, s: &mut State, slot: Slot) {
     let (card, _) = s.copiable(slot).record(t);
     let mut members = crate::bitboard::Bitboard::EMPTY;
     members.insert(slot);
-    s.start_effect_on_set(card, members, &changes, Duration::Indefinite)
-        .unwrap();
+    s.start_effect_on_set(
+        card,
+        s.permanents_in(members),
+        &changes,
+        Duration::Indefinite,
+    )
+    .unwrap();
     refresh(t, s);
 }
 

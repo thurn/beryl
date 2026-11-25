@@ -66,7 +66,7 @@ pub fn start_on_set<L: Layout>(
     duration: Duration,
 ) -> Result<(), Full> {
     let card = resolution.entry.card();
-    (game.state).start_effect_on_set(card, permanents.slots(), changes, duration)?;
+    (game.state).start_effect_on_set(card, permanents, changes, duration)?;
     layers::refresh(game.state, game.table, game.sink)
 }
 
@@ -109,7 +109,7 @@ pub fn gain_control<L: Layout>(
 ) -> Result<(), Full> {
     let object = permanent.into();
     let player = resolution.entry.controller();
-    let control = Continuous::Layer(object, LayerChange::Control(player));
+    let control = Continuous::Layer(permanent, LayerChange::Control(player));
     start(game, resolution, control, duration)?;
     game.state.set_summoning_sick(permanent, true);
     game.settle(Event::GainControl { object, player })
@@ -257,8 +257,8 @@ pub(crate) fn exchange_instruction<L: Layout>(
         return Ok(Outcome::NOTHING);
     }
     let exchange = [
-        Continuous::Layer(a.into(), LayerChange::Control(b_controller)),
-        Continuous::Layer(b.into(), LayerChange::Control(a_controller)),
+        Continuous::Layer(a, LayerChange::Control(b_controller)),
+        Continuous::Layer(b, LayerChange::Control(a_controller)),
     ];
     (game.state).start_effects(resolution.entry.card(), &exchange, Duration::Indefinite)?;
     layers::refresh(game.state, game.table, game.sink)?;
@@ -388,8 +388,7 @@ pub(crate) fn become_copy_instruction<L: Layout>(
     let mut became = Bitboard::EMPTY;
     while let Some(copy) = run.state().next_permanent(&mut copies) {
         let game = run.game();
-        game.state
-            .become_copy(game.table, source, copy.into(), values)?;
+        game.state.become_copy(game.table, source, copy, values)?;
         became.insert(copy.slot());
     }
     let game = run.game();

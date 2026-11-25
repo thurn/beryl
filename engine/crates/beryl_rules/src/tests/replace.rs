@@ -220,7 +220,10 @@ fn a_draw_replacement_reads_the_current_controller() {
     let mut x = Scratch::new();
     let watch = put(&t, &mut s, &mut x, Seat::P0, "Test Watch");
     let (card, _) = s.definition(watch).record(&t);
-    let control = Continuous::Layer(s.object_ref(watch), LayerChange::Control(Seat::P1));
+    let control = Continuous::Layer(
+        s.permanent_at(watch).unwrap(),
+        LayerChange::Control(Seat::P1),
+    );
     s.start_effect(card, control, Duration::EndOfTurn).unwrap();
 
     drawing::draw(&mut Game::new(&mut s, &t, &mut x.events), Seat::P0, 1).unwrap();

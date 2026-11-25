@@ -120,7 +120,7 @@ fn a_tracker_is_kept_only_in_a_game_with_a_card_that_reads_it() {
     let (t, mut s, [a, _]) = game(0);
     for tracker in Tracker::ALL {
         assert!(!t.can(tracker.capability()));
-        s.track(&t, tracker, a);
+        s.track(&t, tracker, s.permanent_at(a).unwrap());
         assert!(!s.tracked(tracker, a));
     }
     assert_eq!(s.trackers, Trackers::empty());
@@ -133,7 +133,7 @@ fn a_tracker_is_kept_only_in_a_game_with_a_card_that_reads_it() {
     let (t, mut s, [a, b]) = game(1);
     for tracker in Tracker::ALL {
         assert!(t.can(tracker.capability()));
-        s.track(&t, tracker, a);
+        s.track(&t, tracker, s.permanent_at(a).unwrap());
         assert!(s.tracked(tracker, a) && !s.tracked(tracker, b));
         assert!(Observation::new(&s, Seat::P1).tracked(tracker, a));
     }
@@ -146,9 +146,9 @@ fn a_tracker_is_kept_only_in_a_game_with_a_card_that_reads_it() {
 fn a_tracker_ends_with_the_turn_and_as_its_permanent_leaves() {
     let (t, mut s, [a, b]) = game(1);
     for slot in [a, b] {
-        s.track(&t, Tracker::EnteredThisTurn, slot);
-        s.track(&t, Tracker::LoyaltyActivated, slot);
-        s.track(&t, Tracker::AttackedThisTurn, slot);
+        s.track(&t, Tracker::EnteredThisTurn, s.permanent_at(slot).unwrap());
+        s.track(&t, Tracker::LoyaltyActivated, s.permanent_at(slot).unwrap());
+        s.track(&t, Tracker::AttackedThisTurn, s.permanent_at(slot).unwrap());
     }
     // A checkpoint of the board would lose what the turn has noted.
     assert_eq!(
@@ -165,7 +165,7 @@ fn a_tracker_ends_with_the_turn_and_as_its_permanent_leaves() {
     s.move_object(&mut Sink::off(), a, Zone::Battlefield, Place::Top)
         .unwrap();
     assert_eq!(s.trackers(a), Tracked::default());
-    s.track(&t, Tracker::EnteredThisTurn, a);
+    s.track(&t, Tracker::EnteredThisTurn, s.permanent_at(a).unwrap());
     assert!(s.trackers(a).has(Tracker::EnteredThisTurn));
     assert!(!s.trackers(a).has(Tracker::LoyaltyActivated));
     assert!(!s.trackers(a).has(Tracker::AttackedThisTurn));
@@ -180,8 +180,8 @@ fn a_tracker_ends_with_the_turn_and_as_its_permanent_leaves() {
 #[test]
 fn phasing_preserves_a_permanents_turn_trackers() {
     let (t, mut s, [a, _]) = game(1);
-    s.track(&t, Tracker::EnteredThisTurn, a);
-    s.track(&t, Tracker::LoyaltyActivated, a);
+    s.track(&t, Tracker::EnteredThisTurn, s.permanent_at(a).unwrap());
+    s.track(&t, Tracker::LoyaltyActivated, s.permanent_at(a).unwrap());
     let tracked = s.trackers(a);
     let slots = Bitboard::single(a);
     derive(&t, &mut s);
@@ -206,20 +206,24 @@ fn signature_tells_two_permanents_apart_by_a_tracker() {
     };
     assert!(same(&t, &mut s));
     // Nothing else about a permanent says a loyalty ability of it was activated.
-    s.track(&t, Tracker::LoyaltyActivated, a);
+    s.track(&t, Tracker::LoyaltyActivated, s.permanent_at(a).unwrap());
     assert_eq!(s.object(a).flags(), s.object(b).flags());
     assert!(!same(&t, &mut s));
-    s.track(&t, Tracker::LoyaltyActivated, b);
+    s.track(&t, Tracker::LoyaltyActivated, s.permanent_at(b).unwrap());
     assert!(same(&t, &mut s));
-    s.track(&t, Tracker::EnteredThisTurn, b);
+    s.track(&t, Tracker::EnteredThisTurn, s.permanent_at(b).unwrap());
     assert!(!same(&t, &mut s));
 }
 
 #[test]
 fn trackers_survive_small_to_large_and_back() {
     let (t, mut small, [a, b]) = game(1);
-    small.track(&t, Tracker::EnteredThisTurn, a);
-    small.track(&t, Tracker::LoyaltyActivated, b);
+    small.track(&t, Tracker::EnteredThisTurn, small.permanent_at(a).unwrap());
+    small.track(
+        &t,
+        Tracker::LoyaltyActivated,
+        small.permanent_at(b).unwrap(),
+    );
     derive(&t, &mut small);
 
     let large: State<Large> = small.widen();

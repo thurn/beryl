@@ -118,7 +118,7 @@ fn the_fourth_block_fits_after_widening() {
 
 fn change_keywords(g: &mut Game, slot: Slot, change: LayerChange) {
     let (card, _) = g.s.copiable(slot).record(&g.t);
-    let effect = Continuous::Layer(g.s.object_ref(slot), change);
+    let effect = Continuous::Layer(g.s.permanent_at(slot).unwrap(), change);
     g.s.start_effect(card, effect, Duration::Indefinite)
         .unwrap();
     crate::continuous::layers::refresh(&mut g.s, &g.t, &mut Sink::off()).unwrap();

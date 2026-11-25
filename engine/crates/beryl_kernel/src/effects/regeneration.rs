@@ -16,17 +16,17 @@
 use std::cell::Cell;
 
 use crate::layout::Layout;
-use crate::object::ObjectRef;
+use crate::reference::Permanent;
 use crate::state::State;
 
 use super::{Affects, ContinuousEffect, Kinds, Payload};
 
 impl<L: Layout> State<L> {
-    /// Whether a regeneration shield is on `object`. With no shield on any object, one AND,
-    /// which is all that a destruction in a game with no shield pays.
+    /// Whether a regeneration shield is on `permanent`. With no shield on any permanent, one
+    /// AND, which is all that a destruction in a game with no shield pays.
     #[inline]
-    pub fn is_shielded(&self, object: ObjectRef<L>) -> bool {
-        let affected = Affects::object(object);
+    pub fn is_shielded(&self, permanent: Permanent<L>) -> bool {
+        let affected = Affects::object(permanent.into());
         (self.effects.of(Kinds::REGENERATION).iter())
             .any(|e| e.payload == Payload::Regeneration && e.affected == affected)
     }
@@ -37,14 +37,14 @@ impl<L: Layout> State<L> {
         !self.effects.of(Kinds::REGENERATION).is_empty()
     }
 
-    /// Uses up the earliest regeneration shield on `object`, as it replaces a destruction
+    /// Uses up the earliest regeneration shield on `permanent`, as it replaces a destruction
     /// (see [CR 701.19a]): "The next time [permanent] would be destroyed this turn, instead
     /// remove all damage marked on it and its controller taps it." Returns whether there was
     /// one to use up.
     ///
     /// [CR 701.19a]: https://yawgatog.com/resources/magic-rules/#R70119a
-    pub fn use_regeneration_shield(&mut self, object: ObjectRef<L>) -> bool {
-        let affected = Affects::object(object);
+    pub fn use_regeneration_shield(&mut self, permanent: Permanent<L>) -> bool {
+        let affected = Affects::object(permanent.into());
         let shield =
             |e: &ContinuousEffect<L>| e.payload == Payload::Regeneration && e.affected == affected;
         let Some(earliest) = self.effects.of(Kinds::REGENERATION).iter().position(shield) else {

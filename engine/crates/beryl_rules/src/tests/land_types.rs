@@ -331,7 +331,10 @@ fn large_layer_orders_dependencies_above_the_byte_limit() {
 
     // These resolved effects put the Moon's later than a byte can index in layer 4.
     let source = s.card_behind(tomb).unwrap();
-    let change = Continuous::Layer(s.object_ref(plains), LayerChange::AddTypes(Types::NONE));
+    let change = Continuous::Layer(
+        s.permanent_at(plains).unwrap(),
+        LayerChange::AddTypes(Types::NONE),
+    );
     for _ in 0..256 {
         s.start_effect(source, change, Duration::Indefinite)
             .unwrap();
