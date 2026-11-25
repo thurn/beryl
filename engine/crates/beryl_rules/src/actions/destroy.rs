@@ -24,19 +24,10 @@ pub fn destroy<L: Layout>(game: &mut Game<'_, L>, permanent: Permanent<L>) -> Re
     let Some(permanent) = game.state().permanent(permanent.into()) else {
         return Ok(());
     };
-    let slot = permanent.slot();
-    let one = Bitboard::single(slot);
-    if !indestructible(game.state(), one).is_empty() {
-        return Ok(());
-    }
-    let allowed = Regeneration::Allowed;
-    let permanents = game.state().permanents_in(one);
-    if replacement::destruction(game.state, game.table, game.sink, permanents, allowed)?.is_empty()
-    {
-        return Ok(());
-    }
-    let (to, reason) = (Zone::Graveyard, Reason::Destroy);
-    event::move_one(game.state, game.table, game.sink, slot, to, reason)
+    let one = game
+        .state()
+        .permanents_in(Bitboard::single(permanent.slot()));
+    destroy_all(game, one, Regeneration::Allowed)
 }
 
 /// Destroys a set of permanents simultaneously (CR 701.8a), as "Destroy each creature"
@@ -69,10 +60,7 @@ pub fn destroy_all<L: Layout>(
 ///
 /// [CR 702.12b]: https://yawgatog.com/resources/magic-rules/#R70212b
 #[inline]
-pub(crate) fn indestructible<L: Layout>(
-    s: &State<L>,
-    permanents: Bitboard<L::Slot>,
-) -> Bitboard<L::Slot> {
+fn indestructible<L: Layout>(s: &State<L>, permanents: Bitboard<L::Slot>) -> Bitboard<L::Slot> {
     permanents.filter(|slot| s.derived(slot).keywords.contains(Keywords::INDESTRUCTIBLE))
 }
 

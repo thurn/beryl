@@ -6,7 +6,7 @@ use super::effects::says_nothing;
 use super::words::{capitalized, keywords, list, mana_set, mana_text};
 use crate::ability::{Ability, AbilityKind, Behavior};
 use crate::cost::{CastingOption, Cost};
-use crate::definition::{CardDef, FaceIx, Shape};
+use crate::definition::{CardDef, FaceIx};
 use crate::mana::ManaSet;
 use crate::trigger::Subject;
 use crate::words::Words;
@@ -39,7 +39,7 @@ pub fn render_face_read(def: &CardDef, face: FaceIx, words: &Words) -> String {
     let face = def.face(face);
     let mut ctx = Ctx::of_face(face, name);
     ctx.words = *words;
-    ctx.meld = meld_names(def);
+    ctx.meld = def.shape.meld_pair();
     let mut lines = Vec::new();
     if !face.additional_cost.is_empty() {
         let actions = ctx.cost_actions(Cost::of_parts(face.additional_cost));
@@ -120,7 +120,7 @@ pub fn render_ability(ability: &Ability) -> String {
 /// One ability of a face of `def` as its rules text, the way [`render_face`] writes it.
 pub fn render_ability_of(def: &CardDef, face: FaceIx, ability: &Ability) -> String {
     let mut ctx = Ctx::of_face(def.face(face), def.face_name(face));
-    ctx.meld = meld_names(def);
+    ctx.meld = def.shape.meld_pair();
     ctx.paragraph(ability)
 }
 
@@ -262,19 +262,4 @@ fn casting_line(ctx: &mut Ctx, option: CastingOption, first: bool) -> Option<Str
         }
     };
     (line.0 == first).then_some(line.1)
-}
-
-/// Of a meld card, the names of its partner and of what they meld into.
-fn meld_names(def: &CardDef) -> Option<(&'static str, &'static str)> {
-    match def.shape {
-        Shape::Meld { with, into } => Some((with, into)),
-        Shape::Single
-        | Shape::Transforming
-        | Shape::Modal
-        | Shape::Split { .. }
-        | Shape::Adventure
-        | Shape::Prepared
-        | Shape::Flip
-        | Shape::Melded => None,
-    }
 }

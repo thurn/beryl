@@ -6,7 +6,7 @@ use beryl_card::{Players, prompt};
 
 use super::manifest::manifest;
 use crate::bitboard::Bitboard;
-use crate::card::{Flow, Prompt, Purpose, Stop};
+use crate::card::{Prompt, Purpose, Stop};
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::interpret::choices;
@@ -21,17 +21,9 @@ use crate::{zones, zones::library};
 /// ([CR 701.62a](https://yawgatog.com/resources/magic-rules/#R70162a)): "'Manifest dread'
 /// means 'Look at the top two cards of your library. Manifest one of them, then put the
 /// cards you looked at that were not manifested this way into your graveyard.'" With one
-/// card in the library, that one is manifested; with none, nothing happens.
+/// card in the library, that one is manifested; with none, nothing happens. Returns the card
+/// chosen to manifest.
 pub fn manifest_dread<L: Layout>(
-    game: &mut Game<'_, L>,
-    resolution: &mut Resolution<'_, L>,
-    player: Seat,
-) -> Flow {
-    manifest_one_of_two(game, resolution, player).map(|_| ())
-}
-
-/// [`manifest_dread`], returning the card manifested.
-fn manifest_one_of_two<L: Layout>(
     game: &mut Game<'_, L>,
     resolution: &mut Resolution<'_, L>,
     player: Seat,
@@ -62,7 +54,7 @@ pub(crate) fn instruction<L: Layout>(
     let mut manifested = Bitboard::EMPTY;
     for player in run.in_turn_order(players) {
         let (game, resolution) = run.resolving();
-        if let Some(card) = manifest_one_of_two(game, resolution, player)? {
+        if let Some(card) = manifest_dread(game, resolution, player)? {
             manifested.insert(card);
         }
     }

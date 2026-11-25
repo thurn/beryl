@@ -83,6 +83,22 @@ impl Shape {
     pub const fn can_cast_back(self) -> bool {
         matches!(self, Self::Modal | Self::Split { .. } | Self::Adventure)
     }
+
+    /// Of one card of a meld pair, the name of the other card and of the combined back face
+    /// they meld into.
+    pub const fn meld_pair(self) -> Option<(&'static str, &'static str)> {
+        match self {
+            Self::Meld { with, into } => Some((with, into)),
+            Self::Single
+            | Self::Transforming
+            | Self::Modal
+            | Self::Split { .. }
+            | Self::Adventure
+            | Self::Prepared
+            | Self::Flip
+            | Self::Melded => None,
+        }
+    }
 }
 
 /// One card: its name and its faces.

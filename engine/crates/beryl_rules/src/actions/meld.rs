@@ -9,7 +9,6 @@
 //! Implements: CR 701.42a, CR 701.42b, CR 701.42c, CR 713.1a, CR 713.6
 
 use beryl_card::Filter;
-use beryl_card::definition::Shape;
 
 use crate::bitboard::Bitboard;
 use crate::continuous::layers;
@@ -24,32 +23,9 @@ use crate::table::GameTable;
 
 use super::exile::exile;
 
-/// The other card of the meld pair of the object in `slot`, by its copiable values: the
-/// partner its definition names and the combined back face they meld into, if it is a meld
-/// card ([`Shape::Meld`]).
-fn pair_of<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    slot: L::Slot,
-) -> Option<(&'static str, &'static str)> {
-    match s.copiable(slot).shape(t) {
-        Shape::Meld { with, into } => Some((with, into)),
-        Shape::Single
-        | Shape::Transforming
-        | Shape::Modal
-        | Shape::Split { .. }
-        | Shape::Adventure
-        | Shape::Prepared
-        | Shape::Flip
-        | Shape::Melded => None,
-    }
-}
-
-/// Whether `player` both owns and controls the object in `slot`, a permanent.
+/// Whether `player` both owns and controls the permanent in `slot`.
 fn owns_and_controls<L: Layout>(s: &State<L>, player: Seat, slot: L::Slot) -> bool {
-    s.object(slot).on_battlefield()
-        && s.object(slot).owner() == player
-        && s.controller(slot) == player
+    s.object(slot).owner() == player && s.controller(slot) == player
 }
 
 impl<L: Layout> Scene<'_, L> {
@@ -64,17 +40,11 @@ impl<L: Layout> Scene<'_, L> {
         if !owns_and_controls(s, you, source) {
             return None;
         }
-        let (with, _) = pair_of(s, t, source)?;
-        let named: Bitboard<L::Slot> = s
-            .battlefield()
-            .iter()
-            .copied()
-            .filter(|&slot| {
-                slot != source
-                    && owns_and_controls(s, you, slot)
-                    && s.copiable(slot).name(t) == with
-            })
-            .collect();
+        // The partner its copiable values name.
+        let (with, _) = s.copiable(source).shape(t).meld_pair()?;
+        let named = s.permanents().slots().filter(|slot| {
+            slot != source && owns_and_controls(s, you, slot) && s.copiable(slot).name(t) == with
+        });
         let other = s.next_permanent(&mut s.permanents_in(self.passing(named, partner)))?;
         Some((source, other.slot()))
     }
@@ -87,16 +57,9 @@ impl<L: Layout> Scene<'_, L> {
 ///
 /// [CR 701.42b]: https://yawgatog.com/resources/magic-rules/#R70142b
 fn meldable<L: Layout>(s: &State<L>, t: &GameTable, a: L::Slot, b: L::Slot) -> Option<L::Card> {
-    let printed = |slot: L::Slot| match s.card_def(t, slot)?.shape {
-        Shape::Meld { with, into } => Some((t.def(s.card_really_is(slot)).name, with, into)),
-        Shape::Single
-        | Shape::Transforming
-        | Shape::Modal
-        | Shape::Split { .. }
-        | Shape::Adventure
-        | Shape::Prepared
-        | Shape::Flip
-        | Shape::Melded => None,
+    let printed = |slot: L::Slot| {
+        let (with, into) = s.card_def(t, slot)?.shape.meld_pair()?;
+        Some((t.def(s.card_really_is(slot)).name, with, into))
     };
     let (a_name, a_with, a_into) = printed(a)?;
     let (b_name, b_with, b_into) = printed(b)?;
