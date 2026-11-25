@@ -191,7 +191,6 @@ fn a_permanent_spell_chooses_a_color_as_it_enters() {
     apply(&mut s, &t, &mut x, &mut Replay, choice_of(&d, red));
     assert_eq!(s.object(painter).zone(), Zone::Battlefield);
     assert_eq!(s.chosen(painter), Some(red));
-    assert_eq!(s.memos(painter).chosen(), Some(red));
 }
 
 /// A land played asks for a creature type before it enters: the types the game's cards name,

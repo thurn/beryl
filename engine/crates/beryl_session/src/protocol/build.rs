@@ -444,7 +444,7 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
         really: really(t, obs, slot)
             .filter(|_| obs.shown().pile(slot).next().is_none())
             .map(str::to_owned),
-        chosen: obs.memos(slot).chosen().map(|value| value.name(t)),
+        chosen: obs.shown().chosen(slot).map(|value| value.name(t)),
         text,
         type_line,
         custom_colors: None,

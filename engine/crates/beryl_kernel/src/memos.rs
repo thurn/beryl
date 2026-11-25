@@ -480,17 +480,6 @@ impl<L: Layout> MemosOf<'_, L> {
             Some(by)
         })
     }
-
-    /// The value the permanent chose as it entered (see CR 614.12a).
-    #[inline]
-    pub fn chosen(&self) -> Option<ChosenValue<L>> {
-        self.iter().find_map(|memo| {
-            let Memo::Chosen(value) = memo else {
-                return None;
-            };
-            Some(value)
-        })
-    }
 }
 
 impl<L: Layout> PartialEq for MemosOf<'_, L> {
@@ -564,21 +553,6 @@ impl<L: Layout> State<L> {
     pub fn x_of(&self, slot: L::Slot) -> u8 {
         let x = |memo| if let Memo::X(x) = memo { Some(x) } else { None };
         self.memos.find(Kinds::X, slot, x).unwrap_or(0)
-    }
-
-    /// The value the permanent in `slot` chose as it entered
-    /// (see [CR 614.12a](https://yawgatog.com/resources/magic-rules/#R61412a)), if it chose one.
-    /// With no permanent in the game that chose one, one AND.
-    #[inline]
-    pub fn chosen(&self, slot: L::Slot) -> Option<ChosenValue<L>> {
-        let chosen = |memo| {
-            if let Memo::Chosen(value) = memo {
-                Some(value)
-            } else {
-                None
-            }
-        };
-        self.memos.find(Kinds::CHOSEN, slot, chosen)
     }
 
     /// The card the permanent in `slot` really is while a copy effect gives it the values of

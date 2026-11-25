@@ -226,20 +226,8 @@ impl Capability {
             if a.chapter_numbers().is_some() {
                 found |= Capability::Saga.bit();
             }
-            match a.replacement() {
-                Some(&Replacement {
-                    rewrite: Rewrite::Dredge(_),
-                    ..
-                }) => found |= Capability::Dredge.bit(),
-                Some(&Replacement {
-                    replaces: Replaced::Draw(_, Draws::ExceptFirstInDrawStep),
-                    ..
-                }) => found |= Capability::DrewInDrawStep.bit(),
-                Some(&Replacement {
-                    rewrite: Rewrite::Choose(_) | Rewrite::EnterAsCopy { .. },
-                    ..
-                }) => found |= Capability::ChoosesAsEnters.bit(),
-                _ => {}
+            if let Some(replacement) = a.replacement() {
+                found |= replacement_capabilities(replacement);
             }
             if let Some(spec) = a.layer() {
                 if matches!(spec.affected, beryl_card::Objects::Everywhere(_)) {
@@ -296,6 +284,29 @@ impl Capability {
     pub(super) const fn bit(self) -> u64 {
         1 << (self as u64)
     }
+}
+
+/// The capabilities a replacement effect gives a game. Each test reads a different field of the
+/// replacement, so they are separate tests: as arms of one match, the first to accept a
+/// replacement would hide the others.
+fn replacement_capabilities(replacement: &Replacement) -> u64 {
+    let mut found = 0;
+    if matches!(replacement.rewrite, Rewrite::Dredge(_)) {
+        found |= Capability::Dredge.bit();
+    }
+    if matches!(
+        replacement.replaces,
+        Replaced::Draw(_, Draws::ExceptFirstInDrawStep)
+    ) {
+        found |= Capability::DrewInDrawStep.bit();
+    }
+    if matches!(
+        replacement.rewrite,
+        Rewrite::Choose(_) | Rewrite::EnterAsCopy { .. }
+    ) {
+        found |= Capability::ChoosesAsEnters.bit();
+    }
+    found
 }
 
 /// The capabilities that come from a face's keyword abilities.
