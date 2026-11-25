@@ -246,3 +246,20 @@ fn session_games_keep_the_script_checks() {
         panic!("{}", report(&game, &why));
     }
 }
+
+/// A game the fuzzer once panicked in, reading face 1 of a one-face card definition. It plays
+/// to the end of its choices now, and the session accepts every answer.
+#[test]
+fn the_game_that_read_an_invalid_face_replays() {
+    let game = Fuzz {
+        seed: 2_226_390_732,
+        choices: vec![
+            1, 1, 1, 1, 0, 1, 1, 0, 3, 1, 2, 1, 0, 2, 1, 1, 2, 1, 2, 0, 0, 2, 0, 3, 3, 2, 0, 0, 1,
+            4, 1, 7, 5, 3, 4, 0, 0, 1, 2, 0, 3, 1, 3, 3, 0, 0, 1, 6, 9, 8, 8, 4, 3, 4, 4, 3, 1, 3,
+            1, 1, 5, 5, 3, 1, 3, 0, 2, 4, 0, 2, 0, 0, 0, 0, 5, 1, 7, 0, 0, 5, 0, 1, 3, 2,
+        ],
+    };
+    let (taken, result) = game.play();
+    println!("took {} of {} choices", taken.len(), game.choices.len());
+    assert_eq!(result, Ok(()), "{}", report(&game, "failed"));
+}
