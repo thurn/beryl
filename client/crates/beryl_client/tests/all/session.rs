@@ -13,6 +13,7 @@ use app_client::command::{Reply, SessionCommand};
 use app_client::{Client, Config};
 use beryl_client::session::{self, Session};
 use beryl_host::{Class, Draw, FrameLoop, Inbox, Shown, Ticks};
+use beryl_protocol::StartRequest;
 use beryl_protocol::ipc::decks::DeckImportRequest;
 use beryl_protocol::ipc::{LobbyChange, LobbyUpdate};
 use beryl_session::{SessionError, SessionId};
@@ -27,13 +28,16 @@ struct Held {
 
 impl Session for Held {
     /// Answers each concession with an error that names its session, so that the test can
-    /// tell the replies apart.
+    /// tell the replies apart, and a start (which judges a fair deal for seconds) with success.
     fn run(&mut self, command: SessionCommand) -> Reply {
         self.releases.recv().expect("the test releases every call");
-        let SessionCommand::Concede(session) = command else {
-            panic!("the test sends only concessions");
-        };
-        Reply::Done(Err(SessionError::StaleSession { session }))
+        match command {
+            SessionCommand::Concede(session) => {
+                Reply::Done(Err(SessionError::StaleSession { session }))
+            }
+            SessionCommand::Start(_) => Reply::Done(Ok(())),
+            _ => panic!("the test sends only concessions and starts"),
+        }
     }
 }
 
@@ -94,6 +98,49 @@ fn the_frame_loop_draws_every_tick_while_the_session_is_busy() {
         };
         assert_eq!(session, SessionId(id), "the replies came out of order");
     }
+    commands.close();
+}
+
+#[test]
+fn a_fair_start_judged_on_the_session_thread_leaves_the_frame_loop_drawing() {
+    let (releases, held) = channel();
+    let (sender, inbox) = channel();
+    let commands = session::spawn(
+        Class::Utility,
+        move || Held { releases: held },
+        Inbox::new(sender, || true),
+    );
+    let client = Client::new(
+        crate::test_data::data(),
+        Config {
+            elements: 64,
+            draws: 64,
+            name_bytes: 1024,
+        },
+    );
+    let mut frames = FrameLoop::new(client, NoTicks);
+    let mut counter = Counter(0);
+    commands.send(SessionCommand::Start(StartRequest {
+        agent: "random".to_owned(),
+        seed: None,
+        fair: true,
+    }));
+    for tick in 0..30_u32 {
+        frames.handle(Input::Device(DeviceInput::Lifecycle(Lifecycle::Resumed)));
+        let drawn = frames.tick(u64::from(tick + 1) * 8_333_333, &mut counter);
+        assert!(
+            drawn.is_some(),
+            "tick {tick} drew no frame while the deal was judged"
+        );
+    }
+    assert_eq!(counter.0, 30);
+    assert!(inbox.try_recv().is_err(), "the held start answered");
+    releases.send(()).expect("the session thread runs");
+    let reply = inbox.recv().expect("a reply to the start");
+    assert!(
+        matches!(reply, Input::Reply(Reply::Done(Ok(())))),
+        "{reply:?}"
+    );
     commands.close();
 }
 

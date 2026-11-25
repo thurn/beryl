@@ -1007,6 +1007,11 @@
     },
     {
       "kind": "not-seen",
+      "name": "Dealing a fair game",
+      "rule": "With Fair deal ticked, Start leaves the start screen up while the session judges candidate deals, which takes a few seconds. The start button is disabled and reads \"Dealing…\" until the new game's first view arrives, and then the game screen opens. Arena has no fair deal."
+    },
+    {
+      "kind": "not-seen",
       "name": "Banding",
       "rule": "When an attacker can start or join a band, the choice uses the existing option buttons. Assign Damage uses the number control to assign a share to each creature in turn."
     },

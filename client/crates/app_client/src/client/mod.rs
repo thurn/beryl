@@ -256,8 +256,9 @@ impl Client {
 
     /// Applies a session update and lays out what its next frames will draw.
     fn take_game_update(&mut self, update: Box<GameUpdate>) {
-        if self.views == 0 {
-            self.update_start(&start::Message::FirstView);
+        // Session numbers only grow, so a newer one is a game the client has not shown yet.
+        if self.session.is_none_or(|shown| update.session > shown) {
+            self.update_start(&start::Message::NewSession);
         }
         self.views += 1;
         self.take_session(&update);

@@ -398,6 +398,10 @@ recordings do not show them.
   frame gap in the last minute, the app’s target, the display link’s rate when
   available, and the graphics tier being drawn, Enhanced or Baseline, in the
   settings sheet’s words.
+- **Dealing a fair game.** With Fair deal ticked, Start leaves the start screen
+  up while the session judges candidate deals, which takes a few seconds. The
+  start button is disabled and reads "Dealing…" until the new game's first view
+  arrives, and then the game screen opens. Arena has no fair deal.
 - **Banding.** When an attacker can start or join a band, the choice uses the
   existing option buttons. Assign Damage uses the number control to assign a
   share to each creature in turn.

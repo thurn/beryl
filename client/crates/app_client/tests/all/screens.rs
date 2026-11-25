@@ -11,7 +11,7 @@ use beryl_protocol::ipc::{
     CONCEDE, ConcedeRequest, FixtureMessage, LIST_AGENTS, START_GAME, TABLE_HOST,
     TABLE_LOBBY_COMMAND, TableHostReply, TableHostRequest, TableHostSettings, TableLink,
 };
-use beryl_protocol::protocol::{Side, Status};
+use beryl_protocol::protocol::{LossReason, OutcomeView, Side, Status};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use beryl_protocol::{AgentView, SessionId, StartRequest};
 use kit_base::data::Data;
@@ -185,6 +185,60 @@ fn with_a_game_in_progress_the_start_button_concedes_it_first() {
         2,
         "the concession and the start were both sent"
     );
+}
+
+#[test]
+fn a_fair_start_keeps_the_start_screen_until_the_new_game_sends_a_view() {
+    // The session judges candidate deals for seconds before a fair game starts. The game screen
+    // showed the finished game's result all that time, as if the window had frozen.
+    let mut view = ViewBuilder::sample();
+    view.script(ScriptBuilder::reset().build());
+    let mut over = view.update();
+    over.view.status = Status::Over {
+        outcome: OutcomeView::Win {
+            winner: Side::Opponent,
+            reason: LossReason::Concede,
+            by: None,
+        },
+    };
+    let fair = StartRequest {
+        fair: true,
+        ..request("random")
+    };
+    let mut page = page(vec![
+        FixtureMessage::response(LIST_AGENTS, &agents()),
+        FixtureMessage::game_update(&over),
+        FixtureMessage::asked(START_GAME, &fair, &()),
+    ]);
+    page.press("button \"New Game\"");
+    page.still();
+    page.press("toggle \"Fair deal\"");
+    page.press(START);
+    page.still();
+    assert_eq!(replies(&page), 1, "the start was sent and answered");
+    let dealing = "button \"Dealing…\"";
+    assert!(page.find(dealing).states().has(StateBits::DISABLED));
+    assert!(
+        page.try_find("region \"game over\"").is_err(),
+        "{}",
+        page.tree()
+    );
+    // Enter presses the start button, which sends nothing more while the deal is judged.
+    page.key(kit_ui::input::KeyCode::Enter);
+    page.still();
+    assert_eq!(replies(&page), 1, "a second start was sent");
+    let mut next = ViewBuilder::sample();
+    next.script(ScriptBuilder::reset().build());
+    let mut update = next.update();
+    update.session = SessionId(over.session.0 + 1);
+    page.give_input(Input::Update(Box::new(update)));
+    page.still();
+    assert!(
+        page.try_find("region \"start\"").is_err(),
+        "{}",
+        page.tree()
+    );
+    assert!(page.try_find("region \"game over\"").is_err());
 }
 
 #[test]

@@ -31,14 +31,30 @@ pub struct State {
     fair: bool,
     confirming: bool,
     seed: String,
-    /// Whether the host's first session view should take us from Start to Game.
-    waiting_for_view: bool,
+    /// What a view from a new session should do while the start screen is up.
+    waiting: Waiting,
+}
+
+/// What the start screen waits for a new session's view to do.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum Waiting {
+    /// Nothing: a view arriving now leaves the screen as it is.
+    #[default]
+    Nothing,
+    /// Take the player from Start to the game the host resumed at launch.
+    Resume,
+    /// Enter the game of a fair deal, which the session judges for seconds before the game
+    /// starts. Meanwhile the start screen stays up with its start button disabled, rather than
+    /// the game screen showing the previous game.
+    Deal,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Message {
     Agents(Vec<AgentView>, bool),
-    FirstView,
+    /// A view arrived from a session newer than any the client had shown: the first view at
+    /// launch, or the first of a game just started.
+    NewSession,
     Leave,
     Open(Screen),
     Start(Option<SessionId>),
@@ -108,25 +124,31 @@ impl Feature for StartScreen {
                 state.agent = first_agent(agents);
                 state.agents.clone_from(agents);
                 if *before_view {
-                    state.waiting_for_view = true;
+                    state.waiting = Waiting::Resume;
                     context.request(Request::AwaitGame);
                 }
             }
-            Message::FirstView => {
-                if std::mem::take(&mut state.waiting_for_view) {
-                    context.request(Request::ResumeGame);
+            Message::NewSession => {
+                match std::mem::take(&mut state.waiting) {
+                    Waiting::Deal => {
+                        context.request(Request::EnterGame);
+                        return true;
+                    }
+                    Waiting::Resume => context.request(Request::ResumeGame),
+                    Waiting::Nothing => {}
                 }
                 return false;
             }
             Message::Leave => {
-                state.waiting_for_view = false;
+                state.waiting = Waiting::Nothing;
                 return false;
             }
             Message::Open(screen) => {
-                state.waiting_for_view = false;
+                state.waiting = Waiting::Nothing;
                 context.request(Request::Open(*screen));
                 return false;
             }
+            Message::Start(_) if state.dealing() => return false,
             Message::Start(going_on) => {
                 let Some(agent) = state.agent.and_then(|at| state.agents.get(usize::from(at)))
                 else {
@@ -148,8 +170,13 @@ impl Feature for StartScreen {
                     fair: state.fair,
                 }));
                 state.confirming = false;
-                state.waiting_for_view = false;
-                context.request(Request::EnterGame);
+                if state.fair {
+                    // The game screen would show the previous game until the deal is judged.
+                    state.waiting = Waiting::Deal;
+                } else {
+                    state.waiting = Waiting::Nothing;
+                    context.request(Request::EnterGame);
+                }
             }
             Message::Agent(agent) => state.agent = Some(*agent),
             Message::FairDeal => state.fair = !state.fair,
@@ -175,6 +202,13 @@ impl Feature for StartScreen {
 
     fn view(state: &State, inputs: Inputs) -> Element {
         view::start(state, &inputs)
+    }
+}
+
+impl State {
+    /// Whether a fair deal was asked for and its game has sent no view yet.
+    fn dealing(&self) -> bool {
+        self.waiting == Waiting::Deal
     }
 }
 

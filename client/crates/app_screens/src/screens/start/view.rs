@@ -96,7 +96,7 @@ pub(super) fn start(state: &State, input: &Inputs) -> Element {
         )
         .child(list("Opponent", rows).gap(space::S).max_height(room));
     let seed_row = seed_row(&seed_state, seed_ok);
-    let buttons = buttons(going_on, state.confirming, startable, input.session);
+    let buttons = buttons(going_on, state, startable, input.session);
     let export = small(button("Export Bug Reports")).on_press(bug_report::Message::Export);
     let export_tip = tooltip(
         "Includes screenshots, replays, and logs",
@@ -217,7 +217,7 @@ fn start_column(state: &State, input: &Inputs, layout: ScreenColumn) -> Element 
         field.style.align_self = Some(Align::Stretch);
     }
     let fair = fair_box(state.fair).min_height(metrics.field).shrink(0.0);
-    let (start, back) = start_buttons(going_on, state.confirming, startable, input.session);
+    let (start, back) = start_buttons(going_on, state, startable, input.session);
     let export = button("Export Bug Reports").on_press(bug_report::Message::Export);
     let content = column()
         .name("start column")
@@ -265,13 +265,8 @@ fn seed_row(state: &FieldState, ok: bool) -> Element {
 /// The start button, enabled if `startable`, and with a game `going_on`, the button back to it
 /// before it (`.start-buttons`). The start button's words say what it will do: start, ask to
 /// confirm a new game, or once `confirming`, concede and start.
-fn buttons(
-    going_on: bool,
-    confirming: bool,
-    startable: bool,
-    session: Option<SessionId>,
-) -> Element {
-    let (start, back) = start_buttons(going_on, confirming, startable, session);
+fn buttons(going_on: bool, state: &State, startable: bool, session: Option<SessionId>) -> Element {
+    let (start, back) = start_buttons(going_on, state, startable, session);
     // With a game in progress, going back to it comes first.
     row()
         .name("buttons")
@@ -282,16 +277,20 @@ fn buttons(
 
 /// The start button and, with a game `going_on`, the button back to it. The start button's
 /// words say what it will do: start, ask to confirm a new game, or once `confirming`, concede
-/// and start. Going back to a game in progress is the primary button then.
+/// and start. Going back to a game in progress is the primary button then. While a fair deal
+/// is judged (`State::dealing`), the start button is disabled and says so, and nothing goes back.
 fn start_buttons(
     going_on: bool,
-    confirming: bool,
+    state: &State,
     startable: bool,
     session: Option<SessionId>,
 ) -> (Element, Option<Element>) {
+    if state.dealing() {
+        return (primary("Dealing…").enabled(false), None);
+    }
     let label = if !going_on {
         "Start"
-    } else if confirming {
+    } else if state.confirming {
         "Concede & Start"
     } else {
         "New Game"
