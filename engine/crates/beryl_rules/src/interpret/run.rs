@@ -430,7 +430,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             }
             Effect::AdditionalStep(step) => crate::turn::additional_step(self.game(), step)?,
             Effect::AdditionalPhases { after, phases } => {
-                crate::turn::phases::additional(self, after, phases)?
+                crate::turn::additional_phases(self.game(), after, phases)?
             }
             Effect::ExtraTurn(players, ability) => {
                 continuous::extra_turn_instruction(self, players, ability)?

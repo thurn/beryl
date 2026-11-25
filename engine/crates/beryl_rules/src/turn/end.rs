@@ -112,7 +112,8 @@ fn cleanup<L: Layout>(game: &mut Game<'_, L>, resolution: &mut Resolution<'_, L>
     if !s.has_turn_plan() {
         s.plan_from_current_step(game.table.format())?;
     }
-    game.sink.note(s.cut_to_cleanup()?);
+    game.cut_to_cleanup()?;
+    let s = &mut *game.state;
     s.empty_mana_pools();
     let step = s.take_planned_step().expect("the cleanup step");
     debug_assert_eq!(step, TurnStep::Cleanup);

@@ -6,6 +6,7 @@
 use beryl_card::Players;
 
 use crate::PlayerSet;
+use crate::bitboard::Bitboard;
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::interpret::{Outcome, Run};
@@ -80,14 +81,11 @@ pub(crate) fn lose_instruction<L: Layout>(
 ) -> Outcome<L> {
     let losers = run.scene().players(players);
     let (game, resolution) = run.resolving();
-    lose(game, resolution, losers);
+    lose_for(game, losers, by(resolution));
     ended(run)
 }
 
 /// The outcome of an instruction that may have ended the game.
 fn ended<L: Layout>(run: &Run<'_, '_, L>) -> Outcome<L> {
-    Outcome::of(
-        crate::bitboard::Bitboard::EMPTY,
-        u32::from(run.state().outcome().is_some()),
-    )
+    Outcome::of(Bitboard::EMPTY, u32::from(run.state().outcome().is_some()))
 }

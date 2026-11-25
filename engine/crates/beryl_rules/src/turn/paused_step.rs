@@ -134,7 +134,7 @@ fn run<L: Layout>(
     sink.asking.begin(record, true)?;
     let scopes = sink.save_scopes();
     let done = if starting_turn {
-        turn::start::replay(s, t, sink)
+        turn::replay_turn_replacements(s, t, sink)
     } else if s.turn().number() == 0 {
         crate::game::restart::finish_opening(s, t, sink)
     } else {

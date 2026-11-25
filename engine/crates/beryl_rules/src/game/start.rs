@@ -137,14 +137,7 @@ fn advance_mulligans<L: Layout>(
                 keep(s, p);
             }
         }
-        // Bottom picks come first: they finish the hand just kept.
-        if order.clone().any(|p| s.player(p).to_bottom() > 0) {
-            return Ok(false);
-        }
-        if order
-            .clone()
-            .any(|p| s.player(p).mulligan() == MulliganStatus::Undeclared)
-        {
+        if next_to_answer(s).is_some() {
             return Ok(false);
         }
         let mut any = false;
@@ -166,12 +159,17 @@ fn advance_mulligans<L: Layout>(
 
 /// Who answers the open mulligan question, and whether it is a bottom pick.
 pub(crate) fn mulligan_question<L: Layout>(s: &State<L>) -> (Seat, bool) {
+    next_to_answer(s).unwrap_or((s.turn().starting_player(), false))
+}
+
+/// The player in turn order who still has a mulligan question to answer, and whether it is a
+/// bottom pick. Bottom picks come first: they finish the hand just kept.
+fn next_to_answer<L: Layout>(s: &State<L>) -> Option<(Seat, bool)> {
     let mut order = turn_order(s);
     if let Some(p) = order.clone().find(|&p| s.player(p).to_bottom() > 0) {
-        return (p, true);
+        return Some((p, true));
     }
-    let p = order
+    order
         .find(|&p| s.player(p).mulligan() == MulliganStatus::Undeclared)
-        .unwrap_or(s.turn().starting_player());
-    (p, false)
+        .map(|p| (p, false))
 }

@@ -3,8 +3,6 @@
 //! Implements: CR 103.8, CR 305.2, CR 500.2, CR 500.5, CR 500.6, CR 502.3, CR 502.4, CR 504.1, CR 514, CR 703.4d, CR 703.4f
 
 mod end;
-pub(crate) mod phases;
-mod start;
 pub(crate) use end::end_the_turn;
 
 pub(crate) mod paused_step;
@@ -12,26 +10,47 @@ pub(crate) mod stops;
 
 use beryl_kernel::format::{FirstDraw, Format};
 
+use crate::bitboard::Bitboard;
 use crate::combat;
 use crate::continuous::{layers, rule_change};
-use crate::decision::{Outcome, StallReason};
+use crate::decision::{Opt, Outcome, StallReason};
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
-use crate::layout::Layout;
+use crate::interpret::Outcome as Instructed;
+use crate::layout::{Layout, Queue};
 use crate::objects::phasing;
-use crate::replacement::event::{self, Reason, ReplacementKind, Sink};
-use crate::replacement::turns;
+use crate::replacement::event::{self, Event, Reason, ReplacementKind, Sink};
+use crate::replacement::{self, turns};
 use crate::state::{Duration, ObjectRef, Pending, State, TurnStep, Zone, ZoneKey};
 use crate::table::{Capability, GameTable};
 use crate::zones::drawing;
+use beryl_card::TurnPhase;
 use beryl_kernel::rule_changes::RuleKind;
+use beryl_kernel::{Placement, TurnChange};
 
 /// Whether any creature is attacking.
 pub(crate) fn any_attacking<L: Layout>(s: &State<L>) -> bool {
     s.battlefield()
         .iter()
         .any(|&slot| s.object(slot).is_attacking())
+}
+
+/// Whether this combat has attackers, so its declare blockers and combat damage steps happen
+/// (see [CR 508.8]): "If no creatures are declared as attackers or put onto the battlefield
+/// attacking, skip the declare blockers and combat damage steps."
+///
+/// [CR 508.8]: https://yawgatog.com/resources/magic-rules/#R5088
+fn has_attackers<L: Layout>(s: &State<L>) -> bool {
+    s.turn().attacked() || any_attacking(s)
+}
+
+/// Whether `step` happens only in a combat that has attackers ([`has_attackers`]).
+fn needs_attackers(step: TurnStep) -> bool {
+    matches!(
+        step,
+        TurnStep::DeclareBlockers | TurnStep::FirstStrikeDamage | TurnStep::CombatDamage
+    )
 }
 
 /// Begins the next turn: the starting player's first, then alternating
@@ -53,6 +72,30 @@ pub(crate) fn begin_turn<L: Layout>(
         return Ok(());
     }
     take_turn(s, t, sink, &[])
+}
+
+/// Applies each recorded replacement of [`begin_turn`] before beginning the first unskipped
+/// turn, when the replacements' choices are replayed ([`paused_step`]).
+/// See [CR 614.10b]: "That action is considered to be the first thing that happens during the
+/// next step, phase, or turn to actually occur." Keep the untaps in the order chosen and
+/// perform them as the turn begins, before its untap step.
+///
+/// [CR 614.10b]: https://yawgatog.com/resources/magic-rules/#R61410b
+fn replay_turn_replacements<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+) -> Result<(), Full> {
+    let mut untaps = <L::Queue<_, 32>>::default();
+    while let Some(choice) = turns::choose(s, t)? {
+        let answer = replacement::answer(s, sink, &choice)?;
+        let Some(Opt::Object(slot)) = choice.candidates.option(answer) else {
+            break;
+        };
+        untaps.push(s.object_ref(slot))?;
+        s.skip_turn();
+    }
+    take_turn(s, t, sink, untaps.as_slice())
 }
 
 /// Begins a turn that survived its replacements, carrying out any actions they deferred
@@ -187,13 +230,7 @@ fn untap_all<L: Layout, const RESTRICTED: bool>(
     while i < s.battlefield().len() {
         let slot = s.battlefield()[i];
         if s.controller(slot) == active
-            && (!RESTRICTED
-                || !crate::continuous::rule_change::own_rule_holds(
-                    s,
-                    t,
-                    slot,
-                    RuleKind::StaysTapped,
-                ))
+            && (!RESTRICTED || !rule_change::own_rule_holds(s, t, slot, RuleKind::StaysTapped))
         {
             event::set_tapped(s, t, sink, s.object_ref(slot), false)?;
         }
@@ -254,11 +291,7 @@ fn next_step<L: Layout>(
         TurnStep::Draw => TurnStep::PrecombatMain,
         TurnStep::PrecombatMain => TurnStep::BeginningOfCombat,
         TurnStep::BeginningOfCombat => TurnStep::DeclareAttackers,
-        // See CR 508.8: "If no creatures are declared as attackers or put onto the battlefield
-        // attacking, skip the declare blockers and combat damage steps."
-        TurnStep::DeclareAttackers if s.turn().attacked() || any_attacking(s) => {
-            TurnStep::DeclareBlockers
-        }
+        TurnStep::DeclareAttackers if has_attackers(s) => TurnStep::DeclareBlockers,
         TurnStep::DeclareAttackers | TurnStep::CombatDamage => TurnStep::EndOfCombat,
         TurnStep::DeclareBlockers => {
             layers::refresh(s, t, sink)?;
@@ -307,14 +340,12 @@ fn begin_planned_turn<L: Layout>(
     begin_step(s, t, sink, step)
 }
 
-/// Applies conditional combat steps within the current phase and advances the plan.
+/// Applies conditional combat steps within the current phase and advances the plan: a combat
+/// without attackers skips the steps that need them ([`has_attackers`]), and a first-strike
+/// damage step happens only when a creature would deal damage in it (see [CR 510.4]): "the
+/// only creatures that assign combat damage in that step are those with first strike or double
+/// strike".
 ///
-/// See [CR 508.8]: "If no creatures are declared as attackers or put onto the battlefield
-/// attacking, skip the declare blockers and combat damage steps."
-/// See [CR 510.4]: "the only creatures that assign combat damage in that step are those
-/// with first strike or double strike".
-///
-/// [CR 508.8]: https://yawgatog.com/resources/magic-rules/#R5088
 /// [CR 510.4]: https://yawgatog.com/resources/magic-rules/#R5104
 #[cold]
 #[inline(never)]
@@ -349,11 +380,7 @@ fn advance_plan<L: Layout>(
             combat::end_combat(s);
             still_in_combat = false;
         }
-        let requires_attackers = matches!(
-            next,
-            TurnStep::DeclareBlockers | TurnStep::FirstStrikeDamage | TurnStep::CombatDamage
-        );
-        let mut skip = requires_attackers && !(s.turn().attacked() || any_attacking(s));
+        let mut skip = needs_attackers(next) && !has_attackers(s);
         if next == TurnStep::FirstStrikeDamage && !skip {
             layers::refresh(s, t, sink)?;
             skip = !combat::first_strike_step(s);
@@ -377,16 +404,43 @@ fn advance_plan<L: Layout>(
 pub(crate) fn additional_step<L: Layout>(
     game: &mut Game<'_, L>,
     step: TurnStep,
-) -> Result<crate::interpret::Outcome<L>, Full> {
-    use crate::interpret::Outcome;
-    use beryl_kernel::{Placement, TurnPhase};
+) -> Result<Instructed<L>, Full> {
     let current = game.state.turn().step();
     let phase = TurnPhase::of(current);
     if !game.state.has_turn_plan() || phase == TurnPhase::Main || phase != TurnPhase::of(step) {
-        return Ok(Outcome::NOTHING);
+        return Ok(Instructed::NOTHING);
     }
     game.insert_step(current, Placement::After, step)?;
-    Ok(Outcome::of(crate::bitboard::Bitboard::EMPTY, 1))
+    Ok(Instructed::of(Bitboard::EMPTY, 1))
+}
+
+/// Adds the named phases after the current phase (see [CR 500.8]): "They do this by adding
+/// the phases directly after the specified phase." If the current phase does not match the
+/// instruction's anchor, there is no specified phase to add them after.
+///
+/// [CR 500.8]: https://yawgatog.com/resources/magic-rules/#R5008
+pub(crate) fn additional_phases<L: Layout>(
+    game: &mut Game<'_, L>,
+    after: TurnPhase,
+    phases: &[TurnPhase],
+) -> Result<Instructed<L>, Full> {
+    if !game.state.has_turn_plan() {
+        if phases.is_empty() || TurnPhase::of(game.state.turn().step()) != after {
+            return Ok(Instructed::NOTHING);
+        }
+        game.state.plan_from_current_step(game.table.format())?;
+    }
+    if !game.state.insert_phases_after_current(after, phases)? {
+        return Ok(Instructed::NOTHING);
+    }
+    for &phase in phases {
+        game.sink
+            .note(Event::TurnPlanChanged(TurnChange::InsertPhase(phase)));
+    }
+    Ok(Instructed::of(
+        Bitboard::EMPTY,
+        u32::try_from(phases.len()).expect("the turn plan fits in a u32"),
+    ))
 }
 
 /// Continues after a cleanup that needed no priority (see CR 514.3a).
@@ -411,12 +465,19 @@ pub(crate) fn finish_planned_cleanup<L: Layout>(
 /// cards to reduce their hand size to that number." The discards are decisions, one card at a
 /// time; [`finish_cleanup`] follows them.
 fn cleanup<L: Layout>(s: &mut State<L>, t: &GameTable) {
-    let active = s.turn().active();
-    if s.hand_size(active) > crate::continuous::rule_change::maximum_hand(s, t, active) {
+    if cleanup_discards(s, t) > 0 {
         s.ask(Pending::Discard);
     } else {
         finish_cleanup(s);
     }
+}
+
+/// How many cards the active player still has to discard in the cleanup step (CR 514.1): the
+/// cards in their hand over their maximum hand size.
+pub(crate) fn cleanup_discards<L: Layout>(s: &State<L>, t: &GameTable) -> u32 {
+    let active = s.turn().active();
+    s.hand_size(active)
+        .saturating_sub(rule_change::maximum_hand(s, t, active))
 }
 
 /// Discards one card in the cleanup step, finishing the step once the hand is small enough.
@@ -430,8 +491,7 @@ pub(crate) fn cleanup_discard<L: Layout>(
     slot: L::Slot,
 ) -> Result<(), Full> {
     event::move_one(s, t, sink, slot, Zone::Graveyard, Reason::Discard)?;
-    let active = s.turn().active();
-    if s.hand_size(active) <= crate::continuous::rule_change::maximum_hand(s, t, active) {
+    if cleanup_discards(s, t) == 0 {
         s.settle_question();
         finish_cleanup(s);
     }
@@ -474,6 +534,6 @@ pub(crate) fn may_play_land<L: Layout>(s: &State<L>, player: Seat, format: Forma
 }
 
 /// The cards in a player's hand.
-pub(crate) fn hand<L: Layout>(s: &State<L>, player: Seat) -> crate::bitboard::Bitboard<L::Slot> {
+pub(crate) fn hand<L: Layout>(s: &State<L>, player: Seat) -> Bitboard<L::Slot> {
     s.zone(ZoneKey::Of(player, Zone::Hand))
 }

@@ -78,19 +78,7 @@ pub fn next_stop<L: Layout>(
     if !s.stack().is_empty() {
         return NextStop::Resolve;
     }
-    let step = s.turn().step();
-    let attacking = any_attacking(s);
-    if attacking
-        && matches!(
-            step,
-            TurnStep::DeclareBlockers | TurnStep::FirstStrikeDamage
-        )
-        && (!s.has_turn_plan()
-            || matches!(
-                s.planned_next_step(),
-                Some((TurnStep::FirstStrikeDamage | TurnStep::CombatDamage, false))
-            ))
-    {
+    if combat_damage_is_next(s) {
         return NextStop::CombatDamage;
     }
     if stops != Stops::Smart {
@@ -108,6 +96,22 @@ pub fn next_stop<L: Layout>(
         );
     }
     next_step_stop(t, obs, step_stops, None)
+}
+
+/// Whether the next step is one in which combat damage is dealt: blockers are declared or
+/// first-strike damage was dealt, a creature is still attacking, and no change to the turn puts
+/// another step before the damage step.
+fn combat_damage_is_next<L: Layout>(s: &State<L>) -> bool {
+    any_attacking(s)
+        && matches!(
+            s.turn().step(),
+            TurnStep::DeclareBlockers | TurnStep::FirstStrikeDamage
+        )
+        && (!s.has_turn_plan()
+            || matches!(
+                s.planned_next_step(),
+                Some((TurnStep::FirstStrikeDamage | TurnStep::CombatDamage, false))
+            ))
 }
 
 /// The next step of the turn after `after` that is one of the viewer's `steps` under the smart
