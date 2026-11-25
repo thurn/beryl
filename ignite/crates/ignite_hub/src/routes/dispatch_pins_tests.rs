@@ -224,6 +224,40 @@ fn a_ticket_holding_master_falls_back_when_its_machine_is_silent() {
     assert_eq!(none, Value::Null);
 }
 
+/// Seen on the fleet: a regression pinned to the culprit's machine waited there while that
+/// machine kept reporting with every slot busy. After ten minutes ready, another machine may take
+/// it, and a release starts the ten minutes again.
+#[test]
+fn a_ticket_holding_master_leaves_a_busy_culprit_machine_after_ten_minutes() {
+    let mut conn = two_machines();
+    let id = file(&mut conn, &[("regression", &[], &[])]).remove(0);
+    let id = id.as_str();
+    set(&conn, id, "labels", r#"["regression","machine:cygnus"]"#);
+    set(&conn, id, "fallback", 1);
+    let affinity = json!({"culprit_affinity": {
+        "landing": {"machine": "m-2", "provider": "claude"},
+        "machine_label": "machine:cygnus",
+        "added_label": true,
+    }});
+    set(&conn, id, "metadata", affinity.to_string());
+    // cygnus registered at the start, so the hub still counts it as heard from throughout.
+    let (_, early) = post(&mut conn, "/next", &free("m-1", &["local_a"]), at(599.0));
+    assert_eq!(early, Value::Null);
+    let (_, taken) = post(&mut conn, "/next", &free("m-1", &["local_a"]), at(600.0));
+    assert_eq!(taken["ticket"], id);
+    post(
+        &mut conn,
+        "/claims",
+        &claim_reserved(&taken, "local_a"),
+        at(601.0),
+    );
+    post(&mut conn, "/release", &release(id, "local_a"), at(610.0));
+    let (_, early) = post(&mut conn, "/next", &free("m-1", &["local_b"]), at(1209.0));
+    assert_eq!(early, Value::Null);
+    let (_, taken) = post(&mut conn, "/next", &free("m-1", &["local_b"]), at(1210.0));
+    assert_eq!(taken["ticket"], id);
+}
+
 #[test]
 fn a_release_for_a_machine_replaces_the_machine_pin() {
     let mut conn = two_machines();

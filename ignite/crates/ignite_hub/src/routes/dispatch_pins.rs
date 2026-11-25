@@ -13,21 +13,33 @@ use ignite_store::hub::{fleet, pins};
 /// A blocker pinned to a machine can run elsewhere after half an hour of silence.
 const FALLBACK_SECONDS: f64 = 30.0 * 60.0;
 
+/// A blocker pinned by culprit affinity can run elsewhere after ten minutes ready and
+/// unclaimed, even while its machine still reports. A pinned machine with a free slot takes the
+/// ticket within one dispatch wait, so ten minutes unclaimed means its slots are busy with other
+/// work. The culprit's transcript saves a repair a few minutes of reading at most, which is less
+/// than what `master` loses while it waits longer.
+const BUSY_FALLBACK_SECONDS: f64 = 10.0 * 60.0;
+
 /// Resolve each inherited pin. Only the machine restriction can expire.
 pub(super) fn effective(
     conn: &Connection,
     ticket: &Ticket,
     heard: &HashSet<String>,
+    now: Timestamp,
 ) -> Result<Pins> {
     let mut pins = pins::of(conn, ticket.id.as_str())?;
     if let Some(affinity) = crate::upkeep::culprit_affinity::affinity(ticket)
         && ticket.labels.contains(&affinity.machine_label)
         && let Some(machine) = affinity.machine_label.strip_prefix("machine:")
     {
-        if heard.contains(&machine.to_ascii_lowercase()) {
+        let live = heard.contains(&machine.to_ascii_lowercase())
+            && !(ticket.fallback
+                && now.seconds_since(ready_since(conn, ticket)?) >= BUSY_FALLBACK_SECONDS);
+        if live {
             pins.machine = Some(machine.to_owned());
             pins.provider = Some(affinity.landing.provider);
         } else {
+            // The machine is silent, or busy past `BUSY_FALLBACK_SECONDS` while `master` waits.
             // The transcript stays on the original machine. Any fallback worker starts fresh.
             pins.machine = None;
         }
@@ -42,6 +54,20 @@ pub(super) fn effective(
         pins.machine = None;
     }
     Ok(pins)
+}
+
+/// When the ticket last became claimable: its last release, or its creation if it was never
+/// released. A release clears `claimed_at`, and the history records that change.
+fn ready_since(conn: &Connection, ticket: &Ticket) -> Result<Timestamp> {
+    let released: Option<String> = conn.query_row(
+        "SELECT max(at) FROM history WHERE ticket = ?1 \
+         AND json_type(change, '$.claimed_at[1]') = 'null'",
+        [ticket.id.as_str()],
+        |row| row.get(0),
+    )?;
+    Ok(released
+        .and_then(|at| at.parse::<Timestamp>().ok())
+        .map_or(ticket.created_at, |at| at.max(ticket.created_at)))
 }
 
 /// The names, in lower case, of the machines the hub heard from in the last

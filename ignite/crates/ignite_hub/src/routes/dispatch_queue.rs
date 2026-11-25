@@ -579,7 +579,7 @@ impl Snapshot {
             if self.parked(&ticket, &self.group(id)).is_some() {
                 continue;
             }
-            let pins = pins::effective(conn, &ticket, &self.heard)?;
+            let pins = pins::effective(conn, &ticket, &self.heard, now)?;
             let candidate = self.ready_ticket(ticket, pins, history, landed, &mut memo, now);
             if fallback.is_some_and(|fallback| !fallback.allows(&candidate)) {
                 continue;

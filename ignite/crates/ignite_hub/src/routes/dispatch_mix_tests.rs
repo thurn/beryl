@@ -642,20 +642,18 @@ fn a_late_culprit_reroutes_an_unclaimed_regression_to_its_machine_and_provider()
 
     let nearby = machine_room("m-1", 1, &["claude", "codex"]);
     let elsewhere = machine_room("m-2", 1, &["claude"]);
-    assert_eq!(
-        ask(&mut conn, &elsewhere, at(1799.0))["ticket"],
-        Value::Null
-    );
-    let resumed = ask(&mut conn, &nearby, at(1799.0));
+    assert_eq!(ask(&mut conn, &elsewhere, at(600.0))["ticket"], Value::Null);
+    let resumed = ask(&mut conn, &nearby, at(600.0));
     assert_eq!(resumed["ticket"], id);
     assert_eq!(resumed["provider"], "codex");
     assert_eq!(
-        post(&mut conn, "/reservations/refuse", &resumed, at(1799.0)).0,
+        post(&mut conn, "/reservations/refuse", &resumed, at(600.0)).0,
         200
     );
 
-    // The last ask is not a heartbeat. At 30 minutes the original provider is no longer required.
-    let fresh = ask(&mut conn, &elsewhere, at(1800.0));
+    // jarvis still reports, but the regression holds `master` back and has been ready for ten
+    // minutes, so another machine may take it and the original provider is no longer required.
+    let fresh = ask(&mut conn, &elsewhere, at(601.0));
     assert_eq!(fresh["ticket"], id);
     assert_eq!(fresh["provider"], "claude");
 }
