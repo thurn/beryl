@@ -408,7 +408,9 @@ impl<'a> Run<'a> {
     }
 
     /// Assigns `ticket` to the actor unless someone holds it or has a live reservation.
-    /// The first claim records when and on which machine the work started.
+    /// A claim by a new assignee, or a re-claim of a ticket that is not in progress (after a
+    /// release or a close), records when the work started. A repeated claim of a ticket the actor
+    /// already holds in progress keeps its start time.
     fn claim(&mut self, index: usize, ticket: &Ticket) -> Step<()> {
         let reserved = self.conn.query_row(
             "SELECT EXISTS(SELECT 1 FROM reservations WHERE ticket = ?1 AND expires_at > ?2)",
@@ -432,11 +434,14 @@ impl<'a> Run<'a> {
             ("closed_at", Value::Null),
             ("close_reason", Value::Null),
         ]);
-        if ticket.assignee.as_deref() != Some(self.actor) {
+        let restarted = ticket.status != Status::InProgress;
+        if ticket.assignee.as_deref() != Some(self.actor) || restarted {
             changes.insert("claimed_at".to_owned(), self.at.clone());
-            if self.machine.parse::<ignite_core::ids::MachineId>().is_ok() {
-                changes.insert("machine".to_owned(), json!(self.machine));
-            }
+        }
+        if ticket.assignee.as_deref() != Some(self.actor)
+            && self.machine.parse::<ignite_core::ids::MachineId>().is_ok()
+        {
+            changes.insert("machine".to_owned(), json!(self.machine));
         }
         self.save(ticket, changes)
     }

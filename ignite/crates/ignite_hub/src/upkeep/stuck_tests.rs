@@ -454,6 +454,42 @@ fn a_ticket_held_by_a_working_session_waits_six_hours() {
 }
 
 #[test]
+fn a_ticket_reclaimed_ten_minutes_ago_is_not_held_even_if_first_claimed_long_ago() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    let mut upkeep = Upkeep::new(None).unwrap();
+    let work = apply(
+        &mut conn,
+        vec![create("Work", TicketType::Task, None, &[])],
+        clock.now(),
+    );
+    let claim = || Operation::Claim {
+        id: work[0].clone(),
+    };
+    apply(&mut conn, vec![claim()], clock.now());
+    apply(
+        &mut conn,
+        vec![Operation::Close {
+            id: work[0].clone(),
+            reason: "paused".to_owned(),
+            include_ready: false,
+        }],
+        clock.now(),
+    );
+    clock.advance(8.0 * 3_600.0);
+    apply(&mut conn, vec![claim()], clock.now());
+    clock.advance(10.0 * 60.0);
+    assert_eq!(ticket(&conn, &work[0]).status, Status::InProgress);
+    assert!(
+        upkeep
+            .pass(&mut conn, clock.now())
+            .unwrap()
+            .tickets_filed
+            .is_empty()
+    );
+}
+
+#[test]
 fn a_tip_waiting_on_a_family_no_machine_runs_files_a_ticket_naming_it() {
     use super::filing::UPKEEP;
     use super::stuck;
