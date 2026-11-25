@@ -241,7 +241,12 @@ fn idle_dispatch_observable(sample: &MachineSnapshot) -> bool {
             .start_reason
             .as_deref()
             .is_some_and(|reason| reason.contains(BUILD_SLOT_WAIT));
-    dispatch_observable(sample) && !build_slots_held
+    // While a check fails the same way for several workers, the daemon deliberately starts only
+    // tickets that hold master back, and the ready count still includes every other ticket. The
+    // regression ticket for that check is the handler; the hold ends when the check passes,
+    // `green` moves, or the hold lapses.
+    let shared_failure = sample.start_block == Some(StartBlock::SharedFailure);
+    dispatch_observable(sample) && !build_slots_held && !shared_failure
 }
 
 fn disk_blocked(sample: &MachineSnapshot) -> bool {

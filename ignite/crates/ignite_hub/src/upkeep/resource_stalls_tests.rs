@@ -480,6 +480,33 @@ fn idle_workers_at_the_build_slot_limit_do_not_escalate() {
 }
 
 #[test]
+fn idle_workers_during_a_shared_failure_hold_do_not_escalate() {
+    let mut conn = hub::open_in_memory().unwrap();
+    let mut upkeep = Upkeep::new(None).unwrap();
+    machine(&conn, "m-held", Os::Macos);
+    let held = MachineSnapshot {
+        idle_workers: 17,
+        working_workers: 3,
+        ready_tickets: 21,
+        start_block: Some(StartBlock::SharedFailure),
+        start_reason: Some(
+            "2 workers failed client-test:a the same way, so only tickets that hold master \
+             back start"
+                .to_owned(),
+        ),
+        ..healthy()
+    };
+    record(&conn, "m-held", 0..=20, held);
+    assert!(
+        upkeep
+            .pass(&mut conn, at(20))
+            .unwrap()
+            .tickets_filed
+            .is_empty()
+    );
+}
+
+#[test]
 fn an_idle_escalation_needs_healthy_dispatch_samples_to_clear() {
     let mut conn = hub::open_in_memory().unwrap();
     let mut upkeep = Upkeep::new(None).unwrap();
