@@ -1,7 +1,7 @@
 //! Triggered abilities: matching events and state, and putting waiting triggers on the
 //! stack in APNAP order (architecture §8.3).
 //!
-//! Implements: CR 603.2, CR 603.3, CR 603.4, CR 603.6a, CR 603.8, CR 603.10
+//! Implements: CR 107.3m, CR 603.2, CR 603.3, CR 603.4, CR 603.6a, CR 603.8, CR 603.10
 
 use crate::bitboard::Bitboard;
 use crate::card::{Ability, AbilityIx, CastingKind, FaceIx, Subject, Trigger, TriggerEvent, Words};
@@ -272,7 +272,7 @@ fn fires<L: Layout>(
             Some(info(Some(object), you, level))
         }
         // The amount is the X its spell was cast with
-        // (see [CR 107.3m](https://yawgatog.com/resources/magic-rules/#R1073m)): "If an object's
+        // ([CR 107.3m](https://yawgatog.com/resources/magic-rules/#R1073m)): "If an object's
         // enters-the-battlefield triggered ability ... refers to X, and the spell that became
         // that object as it resolved had a value of X chosen for any of its costs, the value
         // of X for that ability is the same as the value of X for that spell".

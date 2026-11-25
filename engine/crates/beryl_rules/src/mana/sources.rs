@@ -1,7 +1,7 @@
 //! What can make mana: the sources a player's mana abilities form, in classes of
 //! interchangeable permanents.
 //!
-//! Implements: none. Groups usable mana sources and checks their activation restrictions.
+//! Implements: CR 302.6, CR 702.10c
 
 use crate::bitboard::Bitboard;
 #[cfg(doc)]
@@ -118,10 +118,13 @@ const RESTRICTED_RANK: u8 = CONSUMED_RANK + 1;
 
 /// Whether `player` may tap the permanent in `slot`, whose derived characteristics are `d`,
 /// for an ability's {T} cost now: they control it, it is untapped, and a creature has been
-/// theirs since their most recent turn began (see [CR 302.6]): "A creature's activated ability
+/// theirs since their most recent turn began ([CR 302.6]): "A creature's activated ability
 /// with the tap symbol ... in its activation cost can't be activated unless the creature has
 /// been under its controller's control continuously since their most recent turn began."
-/// Haste lifts that (see [CR 702.10c]).
+/// Haste lifts that ([CR 702.10c]): "If a creature has haste, its controller can activate its
+/// activated abilities whose cost includes the tap symbol or the untap symbol even if that
+/// creature hasn't been controlled by that player continuously since their most recent turn
+/// began."
 ///
 /// [CR 302.6]: https://yawgatog.com/resources/magic-rules/#R3026
 /// [CR 702.10c]: https://yawgatog.com/resources/magic-rules/#R70210c

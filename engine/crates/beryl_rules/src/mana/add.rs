@@ -1,6 +1,6 @@
 //! Adding mana ([CR 106.4](https://yawgatog.com/resources/magic-rules/#R1064)).
 //!
-//! Implements: none. Adds mana under the rule declared in the parent module.
+//! Implements: CR 106.3
 
 use beryl_card::{Amount, Players};
 
@@ -28,9 +28,11 @@ pub fn add<L: Layout>(
     game.sink.note(added);
 }
 
-/// [`Effect::AddMana`](beryl_card::Effect::AddMana): "[Player] adds [mana]" (see CR 106.3): "A
+/// [`Effect::AddMana`](beryl_card::Effect::AddMana): "[Player] adds [mana]" ([CR 106.3]): "A
 /// spell or ability that produces mana instructs a player to add that mana", of the kind its
 /// activator chose among those it produces. The outcome is the mana added.
+///
+/// [CR 106.3]: https://yawgatog.com/resources/magic-rules/#R1063
 pub(crate) fn add_instruction<L: Layout>(
     run: &mut Run<'_, '_, L>,
     players: Players,

@@ -1,6 +1,6 @@
 //! Turn structure: turns, steps and their turn-based actions (architecture §12.1).
 //!
-//! Implements: CR 103.8, CR 305.2, CR 500.2, CR 500.5, CR 500.6, CR 502.3, CR 502.4, CR 504.1, CR 514, CR 703.4d, CR 703.4f
+//! Implements: CR 103.8, CR 305.2, CR 500.2, CR 500.5, CR 500.6, CR 502.3, CR 502.4, CR 504.1, CR 514, CR 508.8, CR 703.4d, CR 703.4f
 
 mod end;
 pub(crate) use end::end_the_turn;
@@ -37,7 +37,7 @@ pub(crate) fn any_attacking<L: Layout>(s: &State<L>) -> bool {
 }
 
 /// Whether this combat has attackers, so its declare blockers and combat damage steps happen
-/// (see [CR 508.8]): "If no creatures are declared as attackers or put onto the battlefield
+/// ([CR 508.8]): "If no creatures are declared as attackers or put onto the battlefield
 /// attacking, skip the declare blockers and combat damage steps."
 ///
 /// [CR 508.8]: https://yawgatog.com/resources/magic-rules/#R5088
