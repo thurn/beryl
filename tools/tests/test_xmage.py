@@ -491,6 +491,64 @@ def test_a_returning_cards_copy_choice_is_queued_for_xmage() -> None:
     ]
 
 
+def scry_answers(*picks: card_facts.Json) -> list[str]:
+    """The commands the exporter queues for `picks`, Beryl's answers to Battlewise Valor's
+    scry on the stack, followed by the end of the scry."""
+    entry: card_facts.Json = {
+        "setup": {"turn": 1, "active": 0, "step": "PrecombatMain"},
+        "actions": [],
+        "cards": {
+            "Battlewise Valor": {
+                "faces": [
+                    {
+                        "name": "Battlewise Valor",
+                        "abilities": [
+                            {
+                                "index": "Own 0",
+                                "kind": "Spell",
+                                "instructions": [{"kind": "Scry", "player": "You"}],
+                            }
+                        ],
+                    }
+                ]
+            }
+        },
+    }
+    export = xmage_java.Export(card="Battlewise Valor", scenario="scry", method="scry")
+    writer = xmage.Exporter(entry, xmage_java.Faces.load(card_store.STORE), export)
+    position = xmage.Position.of(
+        {
+            "turn": 1,
+            "step": "PrecombatMain",
+            "decider": 0,
+            "kind": "ChooseUpTo",
+            "purpose": "choose",
+            "stack": [{"name": "Battlewise Valor", "spell": True}],
+            "flips": [],
+            "taps": [],
+            "forced": [],
+        }
+    )
+    for pick in picks:
+        writer.act(
+            {"action": "Answer", "player": 0, "kind": "ChooseUpTo", "pick": pick},
+            position,
+        )
+    writer.end_scry()
+    return export.body
+
+
+def test_a_scry_that_puts_its_card_on_the_bottom_names_the_card_for_xmage() -> None:
+    # Beryl ends the scry once the one card is picked, with no Done answer after it.
+    bottom: card_facts.Json = {"pick": "Card", "card": "Island"}
+    assert scry_answers(bottom) == ['addTarget(playerA, "Island");']
+
+
+def test_a_scry_that_keeps_its_card_skips_xmages_bottom_pick() -> None:
+    done: card_facts.Json = {"pick": "Done"}
+    assert scry_answers(done) == ["addTarget(playerA, TestPlayer.TARGET_SKIP);"]
+
+
 def test_what_pays_a_cost_is_told_by_the_prompts_purpose() -> None:
     # Beryl asks a waterbend's permanents as a mana payment and a crew's creatures as a choice
     # of an object, as it asks an effect's: the trace's purpose says which they are.
