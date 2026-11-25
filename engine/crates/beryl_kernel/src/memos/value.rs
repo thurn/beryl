@@ -19,6 +19,7 @@ impl<L: Layout> Memo<L> {
             Memo::PartOf(_) => Kinds::PART_OF,
             Memo::FaceDownUnder(_) => Kinds::FACE_DOWN_UNDER,
             Memo::Morphed => Kinds::MORPHED,
+            Memo::Cast => Kinds::CAST,
             Memo::ClassLevel(_) => Kinds::CLASS_LEVEL,
             Memo::Solved => Kinds::SOLVED,
             Memo::CombatBand(_) => Kinds::COMBAT_BAND,
@@ -39,6 +40,7 @@ impl<L: Layout> Memo<L> {
             | Memo::PhasedOutUnder(_)
             | Memo::FaceDownUnder(_)
             | Memo::Morphed
+            | Memo::Cast
             | Memo::ClassLevel(_)
             | Memo::CombatBand(_)
             | Memo::Solved
@@ -69,6 +71,7 @@ impl<L: Layout> Memo<L> {
             | Memo::PhasedOutUnder(_)
             | Memo::FaceDownUnder(_)
             | Memo::Morphed
+            | Memo::Cast
             | Memo::ClassLevel(_)
             | Memo::CombatBand(_)
             | Memo::Solved => None,
@@ -94,6 +97,7 @@ impl<L: Layout> Memo<L> {
             | Memo::Really(_)
             | Memo::PhasedOutUnder(_)
             | Memo::Morphed
+            | Memo::Cast
             | Memo::Solved
             | Memo::CombatBand(_) => true,
             // Somebody knew the face-down card: at least its controller (see CR 708.5).
@@ -124,6 +128,7 @@ impl<L: Layout> Memo<L> {
             Memo::PartOf(of) => Memo::PartOf(slot(of)),
             Memo::FaceDownUnder(knew) => Memo::FaceDownUnder(knew),
             Memo::Morphed => Memo::Morphed,
+            Memo::Cast => Memo::Cast,
             Memo::ClassLevel(level) => Memo::ClassLevel(level),
             Memo::Solved => Memo::Solved,
             Memo::CombatBand(band) => Memo::CombatBand(slot(band)),

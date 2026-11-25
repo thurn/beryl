@@ -236,6 +236,16 @@ class Exporter:
             self.answer(answer, p)
             return
         pick = cast(Json, answer["pick"])
+        if kind == "CastOffer" and pick.get("pick") == "Pass":
+            # Beryl offers only the casts that are legal and passes for a player with none.
+            # XMage asks whether to cast a card or its copy before it checks, as Arcane
+            # Proxy's "Cast copy of Counterspell without paying its mana cost?" with no spell
+            # to counter, so it may ask a question to answer no.
+            who = self.player(answer["player"])
+            turn = self.turn(cast(int, answer["turn"]))
+            step = STEPS[cast(str, answer["step"])]
+            self.emit(f'setOptionalChoice({who}, {turn}, PhaseStep.{step}, "No");')
+            return
         if (
             kind in FORCED_CHOICES
             and "card" in pick

@@ -75,6 +75,7 @@ const CAST_A_SORCERY: Effect = Effect::MayCast {
     card: cards_in(Zone::Hand, &you(), Filter::Types(Types::SORCERY)),
     free: false,
     free_below: None,
+    copy: false,
 };
 
 /// "You may cast a sorcery card from your hand. Scry 1."

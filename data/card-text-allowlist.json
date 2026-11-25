@@ -6,6 +6,13 @@
       "Animate Dead: when ~ enters , if it's on the battlefield , [-it-] {+~+} loses \" enchant creature card in a graveyard \" and gains \" enchant creature put onto the battlefield with ~ [-.-] \" return enchanted creature card to the battlefield under your control [-and-] {+.+} attach ~ to it . when ~ leaves the battlefield , that [-creature's-] {+permanent's+} controller sacrifices it ."
     ]
   },
+  "Arcane Proxy": {
+    "reason": "wording",
+    "note": "The renderer says \"in your graveyard\" for the target where Oracle says \"from your graveyard\" because the instruction exiles it, and calls the exiled card \"it\" where Oracle says \"that card\". Same instructions in the same order.",
+    "diff": [
+      "Arcane Proxy: when ~ enters , if you cast it , exile target instant or sorcery card with mana value less than or equal to ~'s power [-from-] {+in+} your graveyard . copy [-that card-] {+it+} . you may cast the copy without paying its mana cost ."
+    ]
+  },
   "Ashen Rider": {
     "reason": "wording",
     "note": "The renderer prints separate enters and dies triggers. Each of those events triggers the same mandatory exile of one target permanent.",

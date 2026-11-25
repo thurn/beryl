@@ -671,19 +671,22 @@ pub(super) fn local(effect: &'static Effect) -> Vec<(Kind, String, Effect)> {
             }
         }
         Effect::MayCast {
-            player, card, free, ..
-        } => {
-            add(
-                Kind::FreeCast,
-                format!("free: {}", !free),
-                Effect::MayCast {
-                    player,
-                    card,
-                    free: !free,
-                    free_below: None,
-                },
-            );
-        }
+            player,
+            card,
+            free,
+            copy,
+            ..
+        } => add(
+            Kind::FreeCast,
+            format!("free: {}", !free),
+            Effect::MayCast {
+                player,
+                card,
+                free: !free,
+                free_below: None,
+                copy,
+            },
+        ),
         Effect::UntapUpTo {
             player,
             count,

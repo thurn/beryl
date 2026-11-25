@@ -58,6 +58,16 @@ pub enum Condition {
     ///
     /// [CR 504.1]: https://yawgatog.com/resources/magic-rules/#R5041
     DrewInDrawStep(Players),
+    /// "If you cast it": there is such an object, and every one is a permanent that was a
+    /// spell its controller cast, which became that permanent as it resolved. A copy of a
+    /// spell was not cast ([CR 707.10]): "a copy of a spell isn't cast". A permanent that was
+    /// put onto the battlefield, or that left and came back, is a new object that was not
+    /// (see [CR 400.7]). Kept only in a game with a card that asks (`beryl_kernel`'s
+    /// `Memo::Cast`).
+    ///
+    /// [CR 707.10]: https://yawgatog.com/resources/magic-rules/#R70710
+    /// [CR 400.7]: https://yawgatog.com/resources/magic-rules/#R4007
+    Cast(Objects),
     Not(&'static Condition),
     /// Every one of them: "if ... and ...".
     All(&'static [Condition]),
@@ -83,7 +93,8 @@ impl Condition {
             }
             Condition::EnteredThisTurn(objects)
             | Condition::Token(objects)
-            | Condition::OnBattlefield(objects) => objects.needs_a_resolution(),
+            | Condition::OnBattlefield(objects)
+            | Condition::Cast(objects) => objects.needs_a_resolution(),
             Condition::Not(condition) => condition.needs_a_resolution(),
             Condition::All(conditions) | Condition::Any(conditions) => {
                 let mut i = 0;
@@ -109,7 +120,8 @@ impl Condition {
             Condition::Is(objects, _)
             | Condition::EnteredThisTurn(objects)
             | Condition::Token(objects)
-            | Condition::OnBattlefield(objects) => objects.names_paid(),
+            | Condition::OnBattlefield(objects)
+            | Condition::Cast(objects) => objects.names_paid(),
             Condition::Not(condition) => condition.names_paid(),
             Condition::All(conditions) | Condition::Any(conditions) => {
                 let mut i = 0;
@@ -141,6 +153,7 @@ impl Condition {
                 | Condition::EnteredThisTurn(_)
                 | Condition::OnBattlefield(_)
                 | Condition::Token(_)
+                | Condition::Cast(_)
                 | Condition::WonFlip
                 | Condition::DrewInDrawStep(_) => false,
             }

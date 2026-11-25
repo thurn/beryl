@@ -577,7 +577,10 @@ fn passes<L: Layout>(
         Filter::Not(filter) => !passes(s, t, *filter, i, by),
         Filter::All(filters) => filters.iter().all(|&filter| passes(s, t, filter, i, by)),
         Filter::AnyOf(filters) => filters.iter().any(|&filter| passes(s, t, filter, i, by)),
-        Filter::ManaValueAtMostX | Filter::PowerAtMost(_) | Filter::AttackedThisTurn => {
+        Filter::ManaValueAtMostX
+        | Filter::ManaValueAtMostPower
+        | Filter::PowerAtMost(_)
+        | Filter::AttackedThisTurn => {
             unreachable!("the card table refuses a filter the layers cannot read")
         }
     }
@@ -594,6 +597,7 @@ pub(super) fn filter_reads(filter: Filter) -> Characteristics {
         | Filter::Token
         | Filter::ManaValueAtMost(_)
         | Filter::ManaValueAtMostX
+        | Filter::ManaValueAtMostPower
         | Filter::InZone(_) => Characteristics::NONE,
         Filter::Types(_) => Characteristics::TYPES,
         Filter::Supertypes(_) => Characteristics::SUPERTYPES,

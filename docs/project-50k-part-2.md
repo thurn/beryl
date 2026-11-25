@@ -999,6 +999,20 @@ the combined characteristics index, so a spell copy uses the same
 characteristics and instructions. The combined spell announces the left half's
 targets first and uses the normal spell target checks and resolution order.
 
+**Prototype.** The generator reads the inset's mana cost, power and toughness
+from the first line of the Oracle text into the face's
+`CastingOption::Prototype`, and the definition supplies the prototyped face
+after its one printed face, at `FaceIx::PROTOTYPE` (`Face::prototyped`). A
+prototyped cast is a cast of that face with the option's bit chosen, which
+`option_sets` requires of that face and refuses of the printed one. The object's
+face field records it, so the spell, the permanent, a copy of either and the
+mana value all read the prototyped characteristics, and every zone change but
+resolving turns the front face up again. Arcane Proxy's "copy that card, you may
+cast the copy" is `Effect::MayCast` with `copy`: the offer names the card, and
+the copy is made in the card's zone once it is chosen, because a decision during
+a resolution can only name objects the replayed state holds. "If you cast it" is
+`Condition::Cast`, kept as `Memo::Cast` only in a game whose cards ask.
+
 **Face-down spells**
 ([CR 708.2](https://yawgatog.com/resources/magic-rules/#R7082)).
 `CastingOption::Morph(cost)` casts the card face down: `become_spell` takes

@@ -49,6 +49,23 @@ fn printed_defense_and_meld_links_are_read_from_the_store() {
     );
 }
 
+#[test]
+fn a_prototype_line_becomes_the_faces_casting_option() {
+    let text = ",\"mana_cost\":\"{7}\",\"power\":\"4\",\"toughness\":\"3\",\"oracle_text\":\
+                \"Prototype {1}{U}{U} \u{2014} 2/1 (You may cast this spell with different mana \
+                cost, color, and size.)\\nFlying\"";
+    let face: beryl_card_store::Face =
+        serde_json::from_str(&face("Test Proxy", "Artifact Creature", text)).unwrap();
+    let source = face_source(&face, 0, &subtypes()).unwrap();
+    assert!(
+        source.contains(
+            ".casting(&[beryl_card::CastingOption::prototype(beryl_card::mana(\"{1}{U}{U}\"), 2, 1)])"
+        ),
+        "{source}"
+    );
+    assert!(source.contains(".power_toughness(4, 3)"), "{source}");
+}
+
 /// The test store, its lines sorted as `just cards` writes them.
 fn store_text() -> String {
     let human = |id, color| {

@@ -27,6 +27,7 @@ pub(crate) static CASCADE: Effect = Effect::Sequence(&[
             card: Objects::Those,
             free: true,
             free_below: Some(Amount::ManaValue(Objects::This)),
+            copy: false,
         },
     },
     Effect::PutIntoLibrary {

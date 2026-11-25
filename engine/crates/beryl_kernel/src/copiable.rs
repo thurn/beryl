@@ -363,14 +363,14 @@ impl<L: Layout> Copiable<L> {
     ///
     /// # Panics
     ///
-    /// In debug builds if a request names a printed face this shape does not have.
+    /// In debug builds if a request names a face the definition does not supply.
     ///
     /// [CR 712.8b]: https://yawgatog.com/resources/magic-rules/#R7128b
     #[inline]
     #[must_use]
     pub fn turned(self, t: &GameTable, face: FaceIx) -> Copiable<L> {
         debug_assert!(
-            face == FaceIx::DOWN || usize::from(face.get()) < self.shape(t).characteristics_count()
+            face == FaceIx::DOWN || usize::from(face.get()) < t.def(self.card).faces.len()
         );
         Copiable {
             face,

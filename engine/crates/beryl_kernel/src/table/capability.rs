@@ -134,10 +134,18 @@ pub enum Capability {
     Preparation,
     /// A card reads whether a permanent was declared as an attacker this turn.
     AttackedThisTurn,
+    /// A card asks whether a permanent was a spell its controller cast
+    /// ([`Condition::Cast`]), so a permanent that was remembers it
+    /// ([`crate::Memo::Cast`]).
+    RemembersCast,
+    /// A card's target filter compares with the power of its source
+    /// ([`beryl_card::Filter::ManaValueAtMostPower`]), so choosing and checking targets reads
+    /// that power.
+    ReadsSourcePower,
 }
 
 // The game keeps its capabilities in a `u64`.
-const _: () = assert!((Capability::AttackedThisTurn as u32) < u64::BITS);
+const _: () = assert!((Capability::ReadsSourcePower as u32) < u64::BITS);
 
 impl Capability {
     /// The capabilities of every face and subtype the game can contain.
@@ -311,7 +319,8 @@ fn casting_capabilities(face: &Face) -> u64 {
                 | CastingOption::Evoke { .. }
                 | CastingOption::Alternative { .. }
                 | CastingOption::Escape { .. }
-                | CastingOption::Fuse => 0,
+                | CastingOption::Fuse
+                | CastingOption::Prototype { .. } => 0,
             }
     })
 }
@@ -376,6 +385,8 @@ fn facts_read_by(ability: &Ability) -> u64 {
             Node::Amount(Amount::CardsDrawn(_)) => Capability::CardsDrawn.bit(),
             Node::Condition(Condition::DrewInDrawStep(_)) => Capability::DrewInDrawStep.bit(),
             Node::Filter(Filter::AttackedThisTurn) => Capability::AttackedThisTurn.bit(),
+            Node::Condition(Condition::Cast(_)) => Capability::RemembersCast.bit(),
+            Node::Filter(Filter::ManaValueAtMostPower) => Capability::ReadsSourcePower.bit(),
             Node::Filter(_) | Node::Amount(_) | Node::Condition(_) | Node::Objects(_) => 0,
         };
     });

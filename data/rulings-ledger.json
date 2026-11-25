@@ -135,6 +135,90 @@
       "untestable": "The White Knight scenario checks that protection doesn't apply in the graveyard. Shroud is absent from the permanent keyword vocabulary."
     }
   ],
+  "Arcane Proxy": [
+    {
+      "published_at": "2022-10-14",
+      "hash": "eec4cee2f7d5",
+      "scenario": [
+        "cast normally, a colorless 4/3 copies a card of mana value 4"
+      ]
+    },
+    {
+      "published_at": "2022-10-14",
+      "hash": "4cf6d32b6f3e",
+      "scenario": [
+        "a copy not cast ceases to exist and the card stays exiled"
+      ]
+    },
+    {
+      "published_at": "2022-10-14",
+      "hash": "79c1beff7054",
+      "scenario": [
+        "cast prototyped, a blue 2/1 copies a card of mana value 2",
+        "a blinked prototyped Proxy returns a 4/3 and does not trigger"
+      ]
+    },
+    {
+      "published_at": "2022-10-14",
+      "hash": "6f94c91c9dd1",
+      "scenario": [
+        "cast prototyped from exile without paying its mana cost"
+      ]
+    },
+    {
+      "published_at": "2022-10-14",
+      "hash": "515ae1e55096",
+      "covered": "Effect::MayCast"
+    },
+    {
+      "published_at": "2022-10-14",
+      "hash": "7c156730bc8f",
+      "scenario": [
+        "in hand it is colorless and Force of Will cannot exile it"
+      ]
+    },
+    {
+      "published_at": "2022-10-14",
+      "hash": "34bd9cb97870",
+      "scenario": [
+        "cast prototyped from exile without paying its mana cost"
+      ]
+    },
+    {
+      "published_at": "2022-10-14",
+      "hash": "a17264fee816",
+      "scenario": [
+        "cast prototyped, a blue 2/1 copies a card of mana value 2",
+        "a Phantasmal Image of a prototyped Proxy is a blue 2/1 that triggers"
+      ]
+    },
+    {
+      "published_at": "2022-10-14",
+      "hash": "9a870cce59bd",
+      "scenario": [
+        "a copy cast without paying its mana cost has X 0"
+      ]
+    },
+    {
+      "published_at": "2022-10-14",
+      "hash": "9849632f5219",
+      "untestable": "It needs a card that changes which spells may be cast by their color, as Chandra, Dressed to Kill does, and none is implemented. A prototyped cast is checked as the prototyped face, as the free cast from exile shows."
+    },
+    {
+      "published_at": "2022-10-14",
+      "hash": "ce1eaf8eb77e",
+      "scenario": [
+        "a Phantasmal Image of a prototyped Proxy is a blue 2/1 that triggers"
+      ]
+    },
+    {
+      "published_at": "2022-10-14",
+      "hash": "ba50ada7ceb7",
+      "scenario": [
+        "a power lowered in response makes the target illegal"
+      ]
+    }
+  ],
   "Benalish Hero": [
     {
       "published_at": "2008-10-01",

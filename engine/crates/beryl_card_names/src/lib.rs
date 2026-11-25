@@ -159,6 +159,7 @@ pub mod decks {
                 names::COUNTERSPELL,
                 names::VALAKUT_AWAKENING,
                 names::SYLVAN_SCRYING,
+                names::ARCANE_PROXY,
             ],
         ),
         ("outside-the-game", &[names::BURNING_WISH]),

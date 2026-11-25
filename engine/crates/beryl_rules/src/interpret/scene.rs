@@ -668,6 +668,12 @@ impl<L: Layout> Scene<'_, L> {
                 let objects = self.objects(names);
                 !objects.is_empty() && objects.all(|slot| self.s.object(slot).on_battlefield())
             }
+            // "If you cast it": a permanent remembers it was a spell its controller cast, in
+            // a game with a card that asks (`beryl_kernel`'s `Capability::RemembersCast`).
+            Condition::Cast(names) => {
+                let objects = self.objects(names);
+                !objects.is_empty() && objects.all(|slot| self.s.was_cast(slot))
+            }
             Condition::Is(names, filter) => {
                 // What a target was is not kept once the effect has moved it (`Known` holds
                 // no characteristics), so "if it was a [filter]" cannot be asked of one: a

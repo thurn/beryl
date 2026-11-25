@@ -599,11 +599,20 @@ pub enum Effect {
     /// Without its mana cost the card is cast for an alternative cost
     /// ([CR 118.9](https://yawgatog.com/resources/magic-rules/#R1189)). The free cast can
     /// require the resulting spell's mana value to be less than `free_below`.
+    ///
+    /// With `copy`, "copy [card]. [Player] may cast the copy": the player chooses among the
+    /// cards, and a copy of the card chosen is made in its zone and cast ([CR 707.12]): "the copy
+    /// is created in the same zone the object is in and then cast while another spell or
+    /// ability is resolving." A copy not cast would cease to exist at once, so none is made
+    /// for a player who declines.
+    ///
+    /// [CR 707.12]: https://yawgatog.com/resources/magic-rules/#R70712
     MayCast {
         player: Players,
         card: Objects,
         free: bool,
         free_below: Option<Amount>,
+        copy: bool,
     },
     /// "[Player] untaps up to [count] [permanents]", of their choice as the instruction is
     /// reached

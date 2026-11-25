@@ -31,19 +31,37 @@ pub(super) enum From {
 /// cost can be applied to any one spell as it's being cast." Casting without paying the mana
 /// cost is itself an alternative cost, and so is a flashback cost, so `alternative` (one of
 /// them is paid) excludes the face's own.
+///
+/// A prototype card's printed face and its prototyped face list the same options. A cast of
+/// the prototyped face chooses [`CastingOption::Prototype`] and a cast of the printed face
+/// does not (see [CR 719.3]): "As a player casts a prototype card, the player chooses whether
+/// they cast the card normally or cast it as a prototyped spell using the prototype keyword
+/// ability".
+///
+/// [CR 719.3]: https://yawgatog.com/resources/magic-rules/#R7193
 pub(super) fn option_sets(face: &Face, alternative: bool) -> impl Iterator<Item = Castings> + '_ {
     Castings::subsets(face).filter(move |&costs| {
         if costs.is_empty() {
-            return true;
+            return !face.is_prototyped();
         }
         let mut alternatives = 0;
+        let mut prototyped = false;
         for option in costs.paid(face) {
-            if matches!(option, CastingOption::Morph(_) | CastingOption::Fuse) {
-                return false;
+            match option {
+                CastingOption::Morph(_) | CastingOption::Fuse => return false,
+                CastingOption::Prototype { .. } => prototyped = true,
+                CastingOption::Kicker { .. }
+                | CastingOption::Offspring(_)
+                | CastingOption::Impending { .. }
+                | CastingOption::Overload { .. }
+                | CastingOption::Evoke { .. }
+                | CastingOption::Alternative { .. }
+                | CastingOption::Escape { .. }
+                | CastingOption::Mutate { .. } => {}
             }
             alternatives += usize::from(option.is_alternative());
         }
-        alternatives <= usize::from(!alternative)
+        alternatives <= usize::from(!alternative) && prototyped == face.is_prototyped()
     })
 }
 
@@ -71,7 +89,8 @@ pub(super) fn x_range_start(face: &Face, costs: Castings, free: bool) -> Option<
                 | CastingOption::Escape { .. }
                 | CastingOption::Mutate { .. }
                 | CastingOption::Morph(_)
-                | CastingOption::Fuse => 0,
+                | CastingOption::Fuse
+                | CastingOption::Prototype { .. } => 0,
             };
             min = Some(min.map_or(least, |m: u8| m.max(least)));
         }

@@ -493,7 +493,20 @@ impl Ctx {
                 card,
                 free,
                 free_below,
-            } => self.cast_offer(player, card, free, free_below),
+                copy,
+            } => {
+                let mut clauses = self.cast_offer(player, card, free, free_below);
+                if copy {
+                    // "Copy that card. You may cast the copy" (see CR 707.12).
+                    let copied = format!("copy {}", self.objects(card));
+                    for clause in &mut clauses {
+                        *clause =
+                            clause.replacen(&format!(" {}", self.objects(card)), " the copy", 1);
+                    }
+                    clauses.insert(0, copied);
+                }
+                clauses
+            }
             Effect::UntapUpTo {
                 player,
                 count,

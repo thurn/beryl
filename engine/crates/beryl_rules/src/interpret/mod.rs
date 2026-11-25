@@ -282,6 +282,7 @@ pub(crate) fn without_a_scene<L: Layout>(
         | Condition::EnteredThisTurn(_)
         | Condition::OnBattlefield(_)
         | Condition::Token(_)
+        | Condition::Cast(_)
         | Condition::WonFlip
         | Condition::DrewInDrawStep(_)
         | Condition::Not(_)

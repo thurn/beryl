@@ -112,6 +112,10 @@ impl Ctx {
                 noun.suffixes.push(format!("with mana value {n} or less"));
             }
             Filter::ManaValueAtMostX => noun.suffixes.push("with mana value X or less".to_owned()),
+            Filter::ManaValueAtMostPower => noun.suffixes.push(format!(
+                "with mana value less than or equal to {}'s power",
+                self.this
+            )),
             Filter::PowerAtMost(n) => noun.suffixes.push(format!("with power {n} or less")),
             Filter::Not(inner) => self.add_not(noun, *inner, kind),
             Filter::All(
@@ -192,6 +196,7 @@ impl Ctx {
             | Filter::ManaValueAtMost(_)
             | Filter::PowerAtMost(_)
             | Filter::ManaValueAtMostX
+            | Filter::ManaValueAtMostPower
             | Filter::InZone(_)
             | Filter::Not(_)
             | Filter::All(_)

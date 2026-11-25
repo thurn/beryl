@@ -133,7 +133,8 @@ impl Evaluate for Filter {
             Filter::AttackedThisTurn => s.tracked(crate::trackers::Tracker::AttackedThisTurn, slot),
             Filter::Token => o.is_token(),
             Filter::ManaValueAtMost(n) => s.mana_value(t, slot) <= n,
-            Filter::ManaValueAtMostX => s.mana_value(t, slot) <= x,
+            // The reader passes the power of the filter's source where it would pass X.
+            Filter::ManaValueAtMostX | Filter::ManaValueAtMostPower => s.mana_value(t, slot) <= x,
             Filter::PowerAtMost(n) => s.power(t, slot) <= n,
             Filter::InZone(zone) => o.zone == zone,
             Filter::Not(_) | Filter::All(_) | Filter::AnyOf(_) => {
@@ -173,6 +174,7 @@ fn combined<L: Layout>(
         | Filter::ManaValueAtMost(_)
         | Filter::PowerAtMost(_)
         | Filter::ManaValueAtMostX
+        | Filter::ManaValueAtMostPower
         | Filter::InZone(_) => filter.matches_x(s, t, slot, you, words, x),
     }
 }
@@ -212,6 +214,7 @@ pub(crate) fn passes_so_far<L: Layout>(
         | Filter::Token
         | Filter::ManaValueAtMost(_)
         | Filter::ManaValueAtMostX
+        | Filter::ManaValueAtMostPower
         | Filter::PowerAtMost(_)
         | Filter::InZone(_) => filter.matches(s, t, slot, you, words),
     }
@@ -254,7 +257,7 @@ pub fn matches_outside(filter: &Filter, card: &CardDef, owner: Seat, words: &Wor
         }
         Filter::Whose(players) | Filter::Owned(players) => is_for(players, owner, owner),
         Filter::ManaValueAtMost(n) => mana_value() <= n,
-        Filter::ManaValueAtMostX => mana_value() <= x,
+        Filter::ManaValueAtMostX | Filter::ManaValueAtMostPower => mana_value() <= x,
         Filter::PowerAtMost(n) => front.power.unwrap_or(0) <= n,
         Filter::Not(f) => !passes(f),
         Filter::All(fs) => fs.iter().all(passes),

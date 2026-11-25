@@ -30,6 +30,7 @@ use super::parts;
 use super::targets::{Itself, targetable};
 use super::timing::{activated, instant_speed, sorcery_timing};
 
+mod copies;
 mod preparation;
 mod special;
 mod ways;
@@ -387,7 +388,7 @@ pub(super) fn cast_options<L: Layout, const TARGETS: bool, const SEARCH: bool>(
     // share, so the cards kept are the same.
     let special = !SEARCH && t.can_either(Capability::Morph, Capability::Split);
     let cards = cards.filter(|slot| {
-        s.card_def(t, slot).is_some_and(|def| {
+        copies::castable_def(s, t, slot, from).is_some_and(|def| {
             def.face_ixs().any(|f| {
                 let face = def.face(f);
                 face.playable()
@@ -399,7 +400,7 @@ pub(super) fn cast_options<L: Layout, const TARGETS: bool, const SEARCH: bool>(
     // Each card cast during a search leaves its own place in the library.
     let cards = if SEARCH { cards } else { collapse(s, cards) };
     Candidates::<L>::extend_options(out, cards, |out, slot| {
-        let Some(def) = s.card_def(t, slot) else {
+        let Some(def) = copies::castable_def(s, t, slot, from) else {
             return Ok(());
         };
         let ways = Ways::of(s, t, player, slot, from);

@@ -11,7 +11,7 @@
 use crate::ability::{Ability, Behavior};
 use crate::continuous::{LayerSpec, Modification, Rewrite};
 use crate::cost::{Chosen, Cost, CostAction, CostPart, Measure};
-use crate::definition::{CardDef, Face, FaceUse};
+use crate::definition::{CardDef, Face, FaceUse, Shape};
 use crate::effect::{Amount, Branches, Condition, CopyChange, Effect, Objects, Players};
 use crate::filter::Filter;
 use crate::ids::Zone;
@@ -68,7 +68,12 @@ impl CardDef {
     ///
     /// The first mistake found ([`Malformed`]).
     pub const fn check(&self) -> Checked {
-        let expected = self.shape.characteristics_count();
+        // A prototype card's definition supplies its prototyped face after its one printed
+        // face ([`Face::prototyped`]).
+        let prototype = matches!(self.shape, Shape::Single)
+            && !self.faces.is_empty()
+            && self.faces[0].has_prototype();
+        let expected = self.shape.characteristics_count() + prototype as usize;
         if self.faces.len() != expected {
             return Err(match expected {
                 1 => Malformed::ExpectedOneFace,
@@ -79,7 +84,9 @@ impl CardDef {
         let mut i = 0;
         while i < self.faces.len() {
             let face = &self.faces[i];
-            let expected_use = if i == 2 {
+            let expected_use = if prototype && i == 1 {
+                FaceUse::Prototype
+            } else if i == 2 {
                 FaceUse::Fused
             } else {
                 FaceUse::of(self.shape, i == 0)
@@ -624,9 +631,8 @@ impl Scope<'_> {
             ),
             Condition::EnteredThisTurn(objects)
             | Condition::Token(objects)
-            | Condition::OnBattlefield(objects) => {
-                both(self.unmoved(objects), self.objects(objects))
-            }
+            | Condition::OnBattlefield(objects)
+            | Condition::Cast(objects) => both(self.unmoved(objects), self.objects(objects)),
             Condition::Not(condition) => self.condition(condition),
             Condition::All(conditions) | Condition::Any(conditions) => self.conditions(conditions),
         }
@@ -659,6 +665,7 @@ impl Scope<'_> {
             | Filter::ManaValueAtMost(_)
             | Filter::PowerAtMost(_)
             | Filter::ManaValueAtMostX
+            | Filter::ManaValueAtMostPower
             | Filter::InZone(_) => Ok(()),
         }
     }

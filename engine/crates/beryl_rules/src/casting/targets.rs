@@ -16,7 +16,7 @@ use crate::state::{
     AbilityTarget, CastKind, CastStep, Casting, StackEntry, StackItem, State, Target, TargetPlace,
     Zone, placed,
 };
-use crate::table::GameTable;
+use crate::table::{Capability, GameTable};
 
 use super::steps::{ability_event, advance, specs, top};
 use super::timing::entry_ability;
@@ -95,6 +95,7 @@ pub(crate) fn player_matches(spec: &TargetSpec, player: Seat, you: Seat) -> bool
             | Filter::ManaValueAtMost(_)
             | Filter::PowerAtMost(_)
             | Filter::ManaValueAtMostX
+            | Filter::ManaValueAtMostPower
             | Filter::Not(_)
             | Filter::All(_)
             | Filter::AnyOf(_)
@@ -194,14 +195,49 @@ fn candidates_through<L: Layout>(
         abilities,
     } = domain(s, t, spec, you, itself, source);
     TargetSet {
-        objects: if objects.is_empty() {
-            objects
-        } else {
-            spec.filter.select_x(s, t, objects, you, &words, x)
+        objects: match compared_with(s, t, spec, x, source) {
+            Some(x) if !objects.is_empty() => spec.filter.select_x(s, t, objects, you, &words, x),
+            Some(_) | None => Bitboard::EMPTY,
         },
         players,
         abilities,
     }
+}
+
+/// The number a target filter compares mana values with: X, or for a filter that compares
+/// with its source's power ([`Filter::ManaValueAtMostPower`]), that power, read as the
+/// filter is. None where no object can pass, as below a negative power.
+#[inline]
+fn compared_with<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    spec: &TargetSpec,
+    x: u8,
+    source: Option<L::Slot>,
+) -> Option<u8> {
+    if t.can(Capability::ReadsSourcePower) && spec.filter.reads_source_power() {
+        source_power(s, t, source)
+    } else {
+        Some(x)
+    }
+}
+
+/// The power of an ability's source, its last known power once it has left the battlefield
+/// (see [CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h)): "if it's no longer in
+/// that zone ... the effect uses the object's last known information." None for a negative
+/// power or no source.
+#[cold]
+#[inline(never)]
+fn source_power<L: Layout>(s: &State<L>, t: &GameTable, source: Option<L::Slot>) -> Option<u8> {
+    let slot = source?;
+    let power = if s.object(slot).on_battlefield() {
+        s.power(t, slot)
+    } else {
+        (s.last_known_rows().iter().rev())
+            .find(|row| row.object.slot == slot)
+            .map(|row| row.derived.power)?
+    };
+    u8::try_from(power).ok()
 }
 
 /// What [`candidates`] chooses from: the players and abilities a spec can choose, and the
@@ -284,6 +320,9 @@ fn enough_candidates<L: Layout>(
         return true;
     };
     let words = printed_on(s, itself, source);
+    let Some(x) = compared_with(s, t, spec, x, source) else {
+        return false;
+    };
     objects.at_least(need, |slot| {
         spec.filter.matches_x(s, t, slot, you, &words, x)
     })

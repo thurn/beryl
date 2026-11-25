@@ -73,6 +73,9 @@ impl Ctx {
                 let what = self.objects(objects);
                 format!("{} a token", be(&what, false, true))
             }
+            Condition::Cast(objects) => {
+                format!("you cast {}", self.condition_subject(objects))
+            }
             Condition::WonFlip => "you win the flip".to_owned(),
             Condition::DrewInDrawStep(players) => format!(
                 "{} drew a card in their draw step this turn",
@@ -140,6 +143,9 @@ impl Ctx {
             Condition::Token(objects) => {
                 let what = self.objects(objects);
                 format!("{} a token", be(&what, false, false))
+            }
+            Condition::Cast(objects) => {
+                format!("you didn't cast {}", self.condition_subject(objects))
             }
             Condition::WonFlip => "you lose the flip".to_owned(),
             Condition::DrewInDrawStep(players) => format!(
@@ -402,6 +408,7 @@ fn without_you(filter: Filter) -> Option<Filter> {
         | Filter::ManaValueAtMost(_)
         | Filter::PowerAtMost(_)
         | Filter::ManaValueAtMostX
+        | Filter::ManaValueAtMostPower
         | Filter::Not(_)
         | Filter::All(_)
         | Filter::AnyOf(_)

@@ -613,7 +613,8 @@ fn paid_costs<L: Layout>(t: &GameTable, e: &StackEntry<L>, flashback: bool) -> V
             | CastingOption::Escape { .. }
             | CastingOption::Mutate { .. }
             | CastingOption::Morph(_)
-            | CastingOption::Fuse => None,
+            | CastingOption::Fuse
+            | CastingOption::Prototype { .. } => None,
         })
         .collect()
 }

@@ -135,6 +135,13 @@ pub enum Memo<L: Layout = Small> {
     FaceDownUnder(PlayerSet),
     /// This permanent entered by resolving a face-down spell cast for morph (see CR 702.37c).
     Morphed,
+    /// This permanent was a spell that its controller cast, which became it as it resolved:
+    /// what "if you cast it" asks ([`beryl_card::Condition::Cast`]). A copy of a spell was
+    /// not cast (see [CR 707.10]): "a copy of a spell isn't cast". Kept only in a game with a
+    /// card that asks ([`crate::Capability::RemembersCast`]).
+    ///
+    /// [CR 707.10]: https://yawgatog.com/resources/magic-rules/#R70710
+    Cast,
     /// A Class level (see [CR 717.2b]): "A level is a designation that any permanent can
     /// have." The memo stays with the same object through copy and type changes.
     ///
@@ -175,6 +182,7 @@ impl Kinds {
     const SOLVED: u32 = 1 << 19;
     const COMBAT_BAND: u32 = 1 << 20;
     const PREPARED: u32 = 1 << 21;
+    const CAST: u32 = 1 << 22;
     /// The kinds whose memo names a slot ([`Memo::names`]).
     const NAMING: u32 = Kinds::EXILED_WITH
         | Kinds::EXILED_UNTIL
@@ -420,6 +428,7 @@ impl<L: Layout> MemosOf<'_, L> {
             | Memo::PartOf(_)
             | Memo::FaceDownUnder(_)
             | Memo::Morphed
+            | Memo::Cast
             | Memo::ClassLevel(_)
             | Memo::CombatBand(_)
             | Memo::Solved
@@ -442,6 +451,7 @@ impl<L: Layout> MemosOf<'_, L> {
             | Memo::PartOf(_)
             | Memo::FaceDownUnder(_)
             | Memo::Morphed
+            | Memo::Cast
             | Memo::ClassLevel(_)
             | Memo::CombatBand(_)
             | Memo::Solved
@@ -464,6 +474,7 @@ impl<L: Layout> MemosOf<'_, L> {
             | Memo::PartOf(_)
             | Memo::FaceDownUnder(_)
             | Memo::Morphed
+            | Memo::Cast
             | Memo::ClassLevel(_)
             | Memo::CombatBand(_)
             | Memo::Solved
@@ -527,6 +538,16 @@ impl<L: Layout> State<L> {
                 *knew = players;
             }
         }
+    }
+
+    /// Whether the permanent in `slot` was a spell its controller cast
+    /// ([`Memo::Cast`]). With no permanent in the game that remembers one, one AND.
+    #[inline]
+    pub fn was_cast(&self, slot: L::Slot) -> bool {
+        self.memos
+            .of(Kinds::CAST)
+            .iter()
+            .any(|e| e.slot == slot && e.memo == Memo::Cast)
     }
 
     /// Whether the permanent in `slot` entered by resolving a face-down morph spell.

@@ -494,6 +494,20 @@ pub enum CastingOption {
     Morph(Cost),
     /// Choose both halves of a split card when casting it from hand.
     Fuse,
+    /// Prototype ([CR 702.160a]): "A player who casts a spell with prototype can choose to
+    /// cast that card 'prototyped.' If they do, the alternative set of its power, toughness,
+    /// and mana cost characteristics are used." The face lists it with that set, and the
+    /// definition supplies the face it makes ([`crate::Face::prototyped`]) after the printed
+    /// one, at [`crate::FaceIx::PROTOTYPE`]. A prototyped spell is cast as that face with
+    /// this option chosen, so it is not an alternative cost (see [CR 719.3]) and adds none.
+    ///
+    /// [CR 702.160a]: https://yawgatog.com/resources/magic-rules/#R702160a
+    /// [CR 719.3]: https://yawgatog.com/resources/magic-rules/#R7193
+    Prototype {
+        cost: ManaCost,
+        power: i8,
+        toughness: i8,
+    },
 }
 
 /// The part of a granted escape cost that is not mana ([`CastingOption::Escape`]): "exile
@@ -605,12 +619,13 @@ impl CastingOption {
             | CastingOption::Alternative { .. }
             | CastingOption::Escape { .. }
             | CastingOption::Morph(_)
-            | CastingOption::Fuse => None,
+            | CastingOption::Fuse
+            | CastingOption::Prototype { .. } => None,
         }
     }
 
-    /// The kind of cost paid by choosing this option. Morph and fuse select a different
-    /// set of spell characteristics, which supply the base cost.
+    /// The kind of cost paid by choosing this option. Morph, fuse and prototype select a
+    /// different set of spell characteristics, which supply the base cost.
     pub const fn kind(self) -> Option<CastingKind> {
         Some(match self {
             CastingOption::Kicker { .. } => CastingKind::Kicker,
@@ -621,7 +636,9 @@ impl CastingOption {
             CastingOption::Alternative { .. } => CastingKind::Alternative,
             CastingOption::Escape { .. } => CastingKind::Escape,
             CastingOption::Mutate { .. } => CastingKind::Mutate,
-            CastingOption::Morph(_) | CastingOption::Fuse => return None,
+            CastingOption::Morph(_) | CastingOption::Fuse | CastingOption::Prototype { .. } => {
+                return None;
+            }
         })
     }
 
@@ -653,7 +670,8 @@ impl CastingOption {
             | CastingOption::Escape { cost, .. }
             | CastingOption::Mutate { cost, .. } => cost,
             CastingOption::Morph(_) => ManaCost::generic(3),
-            CastingOption::Fuse => ManaCost::NONE,
+            // The prototyped face's own mana cost is the spell's: nothing is added to it.
+            CastingOption::Fuse | CastingOption::Prototype { .. } => ManaCost::NONE,
         }
     }
 
@@ -669,7 +687,18 @@ impl CastingOption {
             | CastingOption::Overload { .. }
             | CastingOption::Mutate { .. }
             | CastingOption::Morph(_)
-            | CastingOption::Fuse => &[],
+            | CastingOption::Fuse
+            | CastingOption::Prototype { .. } => &[],
+        }
+    }
+
+    /// "Prototype [cost] -- [power]/[toughness]" ([`CastingOption::Prototype`]), as the card
+    /// store's generated face writes it.
+    pub const fn prototype(cost: ManaCost, power: i8, toughness: i8) -> CastingOption {
+        CastingOption::Prototype {
+            cost,
+            power,
+            toughness,
         }
     }
 }

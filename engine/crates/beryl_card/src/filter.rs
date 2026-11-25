@@ -59,6 +59,16 @@ pub enum Filter {
     /// Mana value X or less, X being the value of the spell or ability whose target this is
     /// (Thieving Skydiver's "target artifact with mana value X or less").
     ManaValueAtMostX,
+    /// Mana value less than or equal to the power of the object the filter is printed on,
+    /// as Arcane Proxy's "instant or sorcery card with mana value less than or equal to this
+    /// creature's power". The power is read whenever the filter is, so a target that the
+    /// creature's power has fallen below is illegal as the ability resolves (see
+    /// [CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)); once the creature has
+    /// left the battlefield, its last known power is used
+    /// ([CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h)). Only a target's
+    /// filter says it, and a filter has this or [`Filter::ManaValueAtMostX`], never both: the
+    /// target rules read the power where they would read X.
+    ManaValueAtMostPower,
     Not(&'static Filter),
     All(&'static [Filter]),
     AnyOf(&'static [Filter]),
@@ -69,6 +79,39 @@ pub enum Filter {
 }
 
 impl Filter {
+    /// Whether this compares with the power of the object it is printed on
+    /// ([`Filter::ManaValueAtMostPower`]), itself or through a filter it is made of.
+    pub const fn reads_source_power(&self) -> bool {
+        match self {
+            Filter::ManaValueAtMostPower => true,
+            Filter::Not(filter) => filter.reads_source_power(),
+            Filter::All(filters) | Filter::AnyOf(filters) => {
+                let mut i = 0;
+                while i < filters.len() {
+                    if filters[i].reads_source_power() {
+                        return true;
+                    }
+                    i += 1;
+                }
+                false
+            }
+            Filter::Any
+            | Filter::Types(_)
+            | Filter::Supertypes(_)
+            | Filter::SubtypeWord(_)
+            | Filter::ColorWords(_)
+            | Filter::Whose(_)
+            | Filter::Owned(_)
+            | Filter::Tapped
+            | Filter::AttackedThisTurn
+            | Filter::Token
+            | Filter::ManaValueAtMost(_)
+            | Filter::PowerAtMost(_)
+            | Filter::ManaValueAtMostX
+            | Filter::InZone(_) => false,
+        }
+    }
+
     /// The filters required together, when this is a conjunction.
     pub(crate) const fn conjunction(self) -> Option<&'static [Filter]> {
         match self {
@@ -86,6 +129,7 @@ impl Filter {
             | Filter::ManaValueAtMost(_)
             | Filter::PowerAtMost(_)
             | Filter::ManaValueAtMostX
+            | Filter::ManaValueAtMostPower
             | Filter::Not(_)
             | Filter::AnyOf(_)
             | Filter::InZone(_) => None,
@@ -120,6 +164,7 @@ impl Filter {
             | Filter::Token
             | Filter::ManaValueAtMost(_)
             | Filter::PowerAtMost(_)
+            | Filter::ManaValueAtMostPower
             | Filter::InZone(_) => false,
             Filter::ManaValueAtMostX => true,
             Filter::Whose(players) | Filter::Owned(players) => players.needs_a_resolution(),

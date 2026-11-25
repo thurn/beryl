@@ -10,8 +10,9 @@ use crate::mana::ManaCost;
 use crate::words::SubtypeWords;
 
 /// How a card's printed characteristics are divided. Sagas, Classes, Cases and levelers
-/// have one face with abilities that depend on counters or designations. Prototype is an
-/// alternative way to cast one face. Those differences belong in the card vocabulary.
+/// have one face with abilities that depend on counters or designations. A prototype card is
+/// a single face whose definition also supplies its prototyped characteristics
+/// ([`Face::prototyped`]). Those differences belong in the card vocabulary.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Shape {
     #[default]
@@ -158,6 +159,9 @@ impl FaceIx {
     pub const BACK: FaceIx = FaceIx(1);
     /// The combined characteristics of a split spell cast with fuse.
     pub const FUSED: FaceIx = FaceIx(2);
+    /// The prototyped characteristics of a prototype card, which has one printed face
+    /// ([`Face::prototyped`]).
+    pub const PROTOTYPE: FaceIx = FaceIx(1);
     /// Face down: a permanent whose card is turned face down
     /// ([CR 110.5](https://yawgatog.com/resources/magic-rules/#R1105)): "A permanent's status
     /// is its physical state. There are four status categories, each of which has two possible
@@ -227,6 +231,8 @@ pub enum FaceUse {
     TransformingBack,
     Alternative,
     Fused,
+    /// The prototyped characteristics of a single-faced card ([`Face::prototyped`]).
+    Prototype,
 }
 
 impl FaceUse {
@@ -267,6 +273,88 @@ impl Face {
         }
     }
 
+    /// The prototyped characteristics of this face, which lists
+    /// [`CastingOption::Prototype`]: the definition's next face, at [`FaceIx::PROTOTYPE`]. It
+    /// has the option's mana cost, power and toughness, and the colors of that mana cost
+    /// ([CR 719.3b]): "Both a prototyped spell and the permanent it becomes have only its
+    /// alternative set of power, toughness, and mana cost characteristics. If that mana cost
+    /// includes one or more colored mana symbols, the spell and the permanent it becomes are
+    /// also that color or colors". Everything else is this face's ([CR 719.5]): "A prototype
+    /// card's characteristics other than its power, toughness, and mana cost (and other than
+    /// color) remain the same whether it was cast as a prototyped spell or cast normally."
+    ///
+    /// Copies read the face that is up, so a copy of a prototyped spell or permanent is
+    /// prototyped too (see CR 719.3c and CR 719.3d).
+    ///
+    /// # Panics
+    ///
+    /// As the definition compiles, if this face lists no prototype.
+    ///
+    /// [CR 719.3b]: https://yawgatog.com/resources/magic-rules/#R7193b
+    /// [CR 719.5]: https://yawgatog.com/resources/magic-rules/#R7195
+    #[must_use]
+    pub const fn prototyped(&self) -> Self {
+        let mut i = 0;
+        while i < self.casting.len() {
+            if let CastingOption::Prototype {
+                cost,
+                power,
+                toughness,
+            } = self.casting[i]
+            {
+                let mut colors = Colors::NONE;
+                let mut c = 0;
+                while c < Colors::EACH.len() {
+                    if cost.symbols[c] > 0 {
+                        colors = colors.union(Colors::EACH[c]);
+                    }
+                    c += 1;
+                }
+                return Self {
+                    name: self.name,
+                    cost,
+                    supertypes: self.supertypes,
+                    types: self.types,
+                    subtypes: self.subtypes,
+                    colors,
+                    power: Some(power),
+                    toughness: Some(toughness),
+                    loyalty: self.loyalty,
+                    defense: self.defense,
+                    keywords: self.keywords,
+                    abilities: self.abilities,
+                    casting: self.casting,
+                    use_of_face: FaceUse::Prototype,
+                    additional_cost: self.additional_cost,
+                    grants: self.grants,
+                    excepts: self.excepts,
+                };
+            }
+            i += 1;
+        }
+        panic!("a prototyped face is made of a face that lists a prototype");
+    }
+
+    /// Whether this face lists [`CastingOption::Prototype`], so its definition supplies the
+    /// prototyped face after it.
+    pub const fn has_prototype(&self) -> bool {
+        let mut i = 0;
+        while i < self.casting.len() {
+            if matches!(self.casting[i], CastingOption::Prototype { .. }) {
+                return true;
+            }
+            i += 1;
+        }
+        false
+    }
+
+    /// Whether this is a prototype card's prototyped face ([`Face::prototyped`]), which a
+    /// cast chooses with its [`CastingOption::Prototype`] and only so.
+    #[inline]
+    pub const fn is_prototyped(&self) -> bool {
+        matches!(self.use_of_face, FaceUse::Prototype)
+    }
+
     /// Applies the definition's generated shape to this face.
     #[must_use]
     pub const fn for_shape(self, shape: Shape, face: FaceIx) -> Self {
@@ -280,7 +368,7 @@ impl Face {
     /// whether it is a spell or a land are checked separately.
     #[inline]
     pub const fn playable(&self) -> bool {
-        matches!(self.use_of_face, FaceUse::Playable)
+        matches!(self.use_of_face, FaceUse::Playable | FaceUse::Prototype)
     }
 
     /// Whether the mana value of this face comes from the front face ([CR 712.6d]).

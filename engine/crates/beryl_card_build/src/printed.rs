@@ -197,6 +197,41 @@ fn is_changeling(face: &Face) -> bool {
         .any(|words| words.trim().eq_ignore_ascii_case("changeling"))
 }
 
+/// The second set of characteristics a prototype card prints in its inset frame, read from
+/// its Oracle text's first line, "Prototype {1}{U}{U} — 2/1" ([CR 719.1]): "The inset frame
+/// contains the prototype keyword ability as well as a second set of power, toughness, and
+/// mana cost characteristics." The `beryl_card::CastingOption` source, or none for a face
+/// with no such line.
+///
+/// # Errors
+///
+/// A prototype line whose cost, power or toughness the engine cannot hold.
+///
+/// [CR 719.1]: https://yawgatog.com/resources/magic-rules/#R7191
+fn prototype_source(face: &Face) -> Result<Option<String>, String> {
+    let text = face.oracle_text.as_deref().unwrap_or_default();
+    let Some(rest) = text
+        .lines()
+        .find_map(|line| line.strip_prefix("Prototype {"))
+    else {
+        return Ok(None);
+    };
+    let unreadable = || {
+        format!(
+            "{}: no prototype the engine can hold in {rest:?}",
+            face.name
+        )
+    };
+    let (cost, rest) = rest.split_once(" \u{2014} ").ok_or_else(unreadable)?;
+    let stats = rest.split_whitespace().next().ok_or_else(unreadable)?;
+    let (power, toughness) = stats.split_once('/').ok_or_else(unreadable)?;
+    let power: i8 = power.parse().map_err(|_| unreadable())?;
+    let toughness: i8 = toughness.parse().map_err(|_| unreadable())?;
+    Ok(Some(format!(
+        "beryl_card::CastingOption::prototype(beryl_card::mana(\"{{{cost}\"), {power}, {toughness})"
+    )))
+}
+
 /// The generated shape, if it differs from the single face that the ordinary card builder
 /// supplies. A meld result is a separate record with one face.
 pub fn shape_source(record: &Record) -> Option<String> {
@@ -293,6 +328,10 @@ pub fn face_source(face: &Face, index: usize, subtypes: &Subtypes) -> Result<Str
             .parse()
             .map_err(|_| format!("{name}: no defense the engine can hold in {defense}"))?;
         write!(out, "\n    .defense({value})").unwrap();
+    }
+    // A card file writes no casting option of a prototype card: the store's are complete.
+    if let Some(prototype) = prototype_source(face)? {
+        write!(out, "\n    .casting(&[{prototype}])").unwrap();
     }
     Ok(out)
 }

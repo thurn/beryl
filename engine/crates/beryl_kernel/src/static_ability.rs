@@ -136,6 +136,7 @@ fn mentions_tapped(filter: Filter) -> bool {
         | Filter::ManaValueAtMost(_)
         | Filter::PowerAtMost(_)
         | Filter::ManaValueAtMostX
+        | Filter::ManaValueAtMostPower
         | Filter::InZone(_) => false,
     }
 }
@@ -156,6 +157,7 @@ fn condition_reads_tapped(condition: &Condition) -> bool {
         | Condition::WonFlip
         | Condition::EnteredThisTurn(_)
         | Condition::OnBattlefield(_)
+        | Condition::Cast(_)
         | Condition::DrewInDrawStep(_)
         | Condition::Token(_) => false,
     }
@@ -176,6 +178,7 @@ fn condition_reads_life(condition: &Condition) -> bool {
         | Condition::Is(..)
         | Condition::EnteredThisTurn(_)
         | Condition::OnBattlefield(_)
+        | Condition::Cast(_)
         | Condition::DrewInDrawStep(_)
         | Condition::Token(_) => false,
     }
@@ -193,6 +196,7 @@ fn compares(condition: &Condition, mentions: &impl Fn(&Amount) -> bool) -> bool 
         | Condition::Is(..)
         | Condition::EnteredThisTurn(_)
         | Condition::OnBattlefield(_)
+        | Condition::Cast(_)
         | Condition::Token(_)
         | Condition::WonFlip
         | Condition::DrewInDrawStep(_) => false,
@@ -472,7 +476,10 @@ pub fn read_by_the_layers(filter: Filter) -> bool {
         | Filter::InZone(_) => true,
         // The layers have no resolution X or attack history input. Reading power in earlier
         // layers requires dependency ordering because layer 7 writes power.
-        Filter::ManaValueAtMostX | Filter::PowerAtMost(_) | Filter::AttackedThisTurn => false,
+        Filter::ManaValueAtMostX
+        | Filter::ManaValueAtMostPower
+        | Filter::PowerAtMost(_)
+        | Filter::AttackedThisTurn => false,
         Filter::Not(filter) => read_by_the_layers(*filter),
         Filter::All(filters) | Filter::AnyOf(filters) => {
             filters.iter().all(|&filter| read_by_the_layers(filter))
@@ -541,6 +548,7 @@ fn reads(condition: &Condition) -> bool {
         | Condition::Is(..)
         | Condition::EnteredThisTurn(_)
         | Condition::OnBattlefield(_)
+        | Condition::Cast(_)
         | Condition::DrewInDrawStep(_)
         | Condition::Token(_) => false,
     }
@@ -568,6 +576,7 @@ pub fn reads_results(condition: &Condition) -> bool {
         | Condition::WonFlip
         | Condition::EnteredThisTurn(_)
         | Condition::OnBattlefield(_)
+        | Condition::Cast(_)
         | Condition::DrewInDrawStep(_)
         | Condition::Token(_) => false,
     }
@@ -716,6 +725,7 @@ pub fn holds<L: Layout>(
         | Condition::Is(..)
         | Condition::EnteredThisTurn(_)
         | Condition::OnBattlefield(_)
+        | Condition::Cast(_)
         | Condition::DrewInDrawStep(_)
         | Condition::Token(_) => {
             unreachable!("the card table refuses a static ability with this condition")
@@ -746,6 +756,7 @@ fn counts(condition: &Condition, of: &dyn Fn(CounterKind) -> bool) -> bool {
         | Condition::Is(..)
         | Condition::EnteredThisTurn(_)
         | Condition::OnBattlefield(_)
+        | Condition::Cast(_)
         | Condition::DrewInDrawStep(_)
         | Condition::Token(_) => false,
     }

@@ -151,6 +151,9 @@ pub struct Permanent {
     /// Entered by resolving a face-down spell cast for morph.
     #[serde(default, skip_serializing_if = "is_default")]
     pub morphed: bool,
+    /// Was a spell its controller cast, which "if you cast it" asks.
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub cast: bool,
     /// The persistent designations of a Class or Case.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub class_level: Option<u8>,
@@ -214,7 +217,9 @@ pub enum Face {
     #[default]
     Front,
     /// The back face of a double-faced card
-    /// ([CR 712.2](https://yawgatog.com/resources/magic-rules/#R7122)).
+    /// ([CR 712.2](https://yawgatog.com/resources/magic-rules/#R7122)), or the prototyped
+    /// characteristics of a prototype card, which the definition holds in the same place
+    /// ([`FaceIx::PROTOTYPE`]).
     Back,
     /// Face down, a 2/2 with no name or text
     /// ([CR 708.2](https://yawgatog.com/resources/magic-rules/#R7082)).
@@ -409,6 +414,9 @@ impl Checkpoint {
             }
             if b.morphed {
                 s.board().remember(slot, Memo::Morphed).map_err(full)?;
+            }
+            if b.cast {
+                s.board().remember(slot, Memo::Cast).map_err(full)?;
             }
             if let Some(level) = b.class_level {
                 if level < 2 {
@@ -651,6 +659,7 @@ fn permanent<L: Layout>(
         enchanted_player: o.enchanted_player().map(Seat::get),
         impending: s.paid(slot, CastingKind::Impending),
         morphed: s.morphed(slot),
+        cast: s.was_cast(slot),
         class_level: (class_level > 1).then_some(class_level),
         solved: s.is_solved(slot),
         known: if face == Face::Down {

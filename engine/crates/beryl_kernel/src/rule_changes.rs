@@ -346,6 +346,7 @@ fn of_a_spells_characteristics(filter: Filter) -> bool {
         | Filter::ManaValueAtMost(_)
         | Filter::PowerAtMost(_)
         | Filter::ManaValueAtMostX
+        | Filter::ManaValueAtMostPower
         | Filter::InZone(_) => false,
         Filter::Not(filter) => of_a_spells_characteristics(*filter),
         Filter::All(filters) | Filter::AnyOf(filters) => filters

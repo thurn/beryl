@@ -288,7 +288,9 @@ pub fn card_facts(def: &'static CardDef) -> CardFacts {
                 face_facts(
                     def.face_name(ix),
                     def.face(ix),
-                    ix == FaceIx::BACK && !def.shape.can_cast_back(),
+                    ix == FaceIx::BACK
+                        && !def.shape.can_cast_back()
+                        && !def.face(ix).is_prototyped(),
                 )
             })
             .collect(),
@@ -569,6 +571,7 @@ fn casting_facts(bit: usize, option: CastingOption) -> CastingFacts {
         keyword: match option {
             CastingOption::Fuse => "Fuse".to_owned(),
             CastingOption::Morph(_) => "Morph".to_owned(),
+            CastingOption::Prototype { .. } => "Prototype".to_owned(),
             _ => variant(&option.kind().expect("a casting cost kind")),
         },
         alternative: option.is_alternative(),

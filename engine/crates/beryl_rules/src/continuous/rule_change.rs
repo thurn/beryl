@@ -196,6 +196,7 @@ pub(crate) fn accepts(filter: Filter, face: &Face) -> bool {
         | Filter::ManaValueAtMost(_)
         | Filter::PowerAtMost(_)
         | Filter::ManaValueAtMostX
+        | Filter::ManaValueAtMostPower
         | Filter::Not(_)
         | Filter::All(_)
         | Filter::AnyOf(_)
@@ -227,6 +228,7 @@ fn accepts_composed(filter: Filter, face: &Face) -> bool {
         | Filter::ManaValueAtMost(_)
         | Filter::PowerAtMost(_)
         | Filter::ManaValueAtMostX
+        | Filter::ManaValueAtMostPower
         | Filter::InZone(_) => {
             unreachable!("the card table refuses a filter that is not of a spell's own")
         }

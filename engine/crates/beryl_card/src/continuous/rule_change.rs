@@ -323,6 +323,7 @@ fn spells(filter: Filter) -> &'static str {
         | Filter::ManaValueAtMost(_)
         | Filter::PowerAtMost(_)
         | Filter::ManaValueAtMostX
+        | Filter::ManaValueAtMostPower
         | Filter::Not(_)
         | Filter::All(_)
         | Filter::AnyOf(_)

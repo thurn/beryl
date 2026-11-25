@@ -18,7 +18,7 @@ use crate::copiable::additions::Addition;
 use crate::effects::Continuous;
 use crate::event::{Event, Recipient};
 use crate::fixed::Full;
-use crate::ids::Seat;
+use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Table};
 use crate::object::{Attachment, AttackTarget, CombatRole, Flag, ObjectFlags, ObjectRef, SlotSet};
 use crate::query::Copiable;
@@ -321,6 +321,30 @@ impl<L: Layout> State<L> {
         let (_, face) = what.record(t);
         self.ready_token(slot, owner, what.recorded(t))?;
         Ok(face)
+    }
+
+    /// Makes a copy of the card in `card`'s slot, owned by `owner`, in a free slot of the
+    /// shared pool, in the zone that card is in (see CR 707.12): "the copy is created in the
+    /// same zone the object is in and then cast while another spell or ability is resolving."
+    /// The copy has the card's copiable values, and is a token, so it ceases to exist outside
+    /// the stack and the battlefield. It did not move from another zone, so nothing says it
+    /// moved. Returns its slot. [`Full`] if the pool has no free slot.
+    pub fn make_card_copy(
+        &mut self,
+        t: &GameTable,
+        sink: &mut crate::event::Sink<L>,
+        card: L::Slot,
+        owner: Seat,
+    ) -> Result<L::Slot, Full> {
+        let zone = self.object(card).zone;
+        let values = self.copiable(card);
+        let copy = L::Slot::pool()
+            .find(|&slot| self.object(slot).zone == Zone::Nowhere)
+            .ok_or(Full)?;
+        let face = self.make_token(t, copy, owner, values)?;
+        self.move_object(sink, copy, zone, crate::zone::Place::Top)?;
+        self.object_mut(copy).face = face;
+        Ok(copy)
     }
 
     /// [`State::make_token`] of values already as a record keeps them

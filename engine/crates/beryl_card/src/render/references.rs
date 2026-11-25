@@ -629,6 +629,7 @@ pub(super) fn mentions_owner(filter: Filter) -> bool {
         | Filter::ManaValueAtMost(_)
         | Filter::PowerAtMost(_)
         | Filter::ManaValueAtMostX
+        | Filter::ManaValueAtMostPower
         | Filter::Not(_)
         | Filter::AnyOf(_)
         | Filter::InZone(_) => false,
@@ -667,6 +668,7 @@ fn zone_of(filter: Filter) -> Option<Zone> {
         | Filter::ManaValueAtMost(_)
         | Filter::PowerAtMost(_)
         | Filter::ManaValueAtMostX
+        | Filter::ManaValueAtMostPower
         | Filter::Not(_)
         | Filter::AnyOf(_) => None,
     }

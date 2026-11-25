@@ -394,6 +394,12 @@ fn move_ordered<L: Layout, const N: usize>(
             if from == Zone::Stack && entry.face == FaceIx::DOWN {
                 s.remember(slot, Memo::Morphed)?;
             }
+            // A permanent spell that resolves becomes the permanent (see CR 608.3), and only
+            // a copy of a spell, which is a token, was not cast (see CR 707.10).
+            if from == Zone::Stack && t.can(Capability::RemembersCast) && !s.object(slot).is_token()
+            {
+                s.remember(slot, Memo::Cast)?;
+            }
             if !sink.copies.is_empty() {
                 start_copy(s, sink, slot)?;
             }
@@ -485,15 +491,18 @@ fn prepare_move<L: Layout>(
     proposal: replacement::Move<L>,
     auras: bool,
 ) -> Result<Option<PreparedMove<L>>, Full> {
-    let replacement::Move { slot, from, .. } = proposal;
+    let replacement::Move { slot, from, to, .. } = proposal;
     // see CR 111.8: "A token that has left the battlefield can't move to another zone or
     // come back onto the battlefield. If such a token would change zones, it remains in
     // its current zone instead." A token on the stack is a copy of a spell, which leaves
     // it as a spell does: onto the battlefield as a token as it resolves
     // (see [CR 608.3f](https://yawgatog.com/resources/magic-rules/#R6083f)), or to where a
-    // card would go, where the state-based check ends it (see CR 704.5e).
+    // card would go, where the state-based check ends it (see CR 704.5e). A copy of a card
+    // never was on the battlefield, and only a cast of it moves it onto the stack
+    // (see CR 707.12).
     if s.object(slot).is_token()
         && !matches!(from, Zone::Battlefield | Zone::Nowhere | Zone::Stack)
+        && to != Zone::Stack
         && !(from == Zone::Exile && s.prepare_source(slot).is_some())
     {
         return Ok(None);

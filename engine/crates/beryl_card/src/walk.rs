@@ -272,6 +272,7 @@ impl Filter {
             | Filter::ManaValueAtMost(_)
             | Filter::PowerAtMost(_)
             | Filter::ManaValueAtMostX
+            | Filter::ManaValueAtMostPower
             | Filter::InZone(_) => {}
             Filter::Whose(players) | Filter::Owned(players) => players.walk(visit),
             Filter::Not(filter) => filter.walk(visit),
@@ -376,7 +377,8 @@ impl Condition {
             }
             Condition::EnteredThisTurn(objects)
             | Condition::Token(objects)
-            | Condition::OnBattlefield(objects) => {
+            | Condition::OnBattlefield(objects)
+            | Condition::Cast(objects) => {
                 objects.walk(visit);
             }
             Condition::Not(condition) => condition.walk(visit),
