@@ -15,7 +15,6 @@ use beryl_kernel::reference::{Cards, ZoneMark};
 
 use crate::bitboard::Bitboard;
 use crate::card::FaceIx;
-use crate::casting;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
@@ -38,17 +37,10 @@ pub fn move_to<L: Layout>(
     to: Zone,
     reason: Reason,
 ) -> Result<(), Full> {
-    let Some(object) = game.state.current(object) else {
+    if !game.state.is_current(object) {
         return Ok(());
-    };
-    event::move_one(
-        game.state,
-        game.table,
-        game.sink,
-        object.reference().slot,
-        to,
-        reason,
-    )
+    }
+    event::move_one(game.state, game.table, game.sink, object.slot, to, reason)
 }
 
 /// Moves a set of objects to one zone simultaneously, each to its owner's
@@ -87,25 +79,6 @@ pub fn exile_cards_for_cost<Z: ZoneMark, L: Layout>(
     cards: Cards<Z, L>,
 ) -> Result<(), Full> {
     move_all(game, cards.slots(), Zone::Exile, Reason::Exile)
-}
-
-/// Returns a spell or a permanent to its owner's hand (CR 400.3). A spell leaves the stack
-/// without resolving, or is exiled instead ([`crate::replacement::exiled_instead`]).
-pub fn return_to_hand<L: Layout>(game: &mut Game<'_, L>, object: ObjectRef<L>) -> Result<(), Full> {
-    if !game.state.is_current(object) {
-        return Ok(());
-    }
-    let to = if game.state.permanent(object).is_some() {
-        Some(Zone::Hand)
-    } else if let Some(spell) = game.state.spell(object) {
-        casting::unstack(game.state, game.table, game.sink, spell, Zone::Hand)?
-    } else {
-        None
-    };
-    match to {
-        Some(to) => move_to(game, object, to, Reason::Effect),
-        None => Ok(()),
-    }
 }
 
 /// Puts a permanent card onto the battlefield under `controller`'s control, with the face up
@@ -156,17 +129,7 @@ pub(crate) fn return_instruction<L: Layout>(
     run: &mut Run<'_, '_, L>,
     cards: Objects,
 ) -> Result<Outcome<L>, Full> {
-    let cards = run.elsewhere_than(cards, Zone::Battlefield);
-    let game = run.game();
-    let cards = cards.filter(|slot| {
-        let (def, face) = game.state.definition(slot).record(game.table);
-        let types = game.table.def(def).face(face).types;
-        !types.intersects(Types::INSTANT.union(Types::SORCERY))
-    });
-    let (to, reason) = (Zone::Battlefield, Reason::Effect);
-    let entry = Entry::default();
-    event::move_batch(game.state, game.table, game.sink, cards, to, reason, entry)?;
-    Ok(run.now_in(cards, Zone::Battlefield))
+    onto_battlefield(run, cards, Entry::default())
 }
 
 /// [`Effect::PutOntoBattlefield`](beryl_card::Effect::PutOntoBattlefield): "Return [objects]
@@ -195,29 +158,40 @@ pub(crate) fn put_onto_instruction<L: Layout>(
         },
         None => None,
     };
-    let objects = run.elsewhere_than(onto.objects, Zone::Battlefield);
     let source = run.resolution().source();
+    let entry = Entry {
+        controller,
+        tapped: onto.tapped,
+        ..Entry::default()
+    };
+    let outcome = onto_battlefield(run, onto.objects, entry)?;
+    if onto.linked {
+        let link = Link::PutOntoBattlefieldWith;
+        linked::link(run.game(), outcome.objects, source, link)?;
+    }
+    Ok(outcome)
+}
+
+/// Puts the objects `objects` names onto the battlefield from whatever zone each is in, all at
+/// once, as `entry` says, but for instant and sorcery cards, which stay where they are
+/// (CR 400.4a). The outcome is the permanents they are.
+fn onto_battlefield<L: Layout>(
+    run: &mut Run<'_, '_, L>,
+    objects: Objects,
+    entry: Entry<L>,
+) -> Result<Outcome<L>, Full> {
+    let objects = run.elsewhere_than(objects, Zone::Battlefield);
     let game = run.game();
     let objects = objects.filter(|slot| {
         let (def, face) = game.state.definition(slot).record(game.table);
         let types = game.table.def(def).face(face).types;
         !types.intersects(Types::INSTANT.union(Types::SORCERY))
     });
-    let entry = Entry {
-        controller,
-        tapped: onto.tapped,
-        ..Entry::default()
-    };
     let (to, reason) = (Zone::Battlefield, Reason::Effect);
     event::move_batch(
         game.state, game.table, game.sink, objects, to, reason, entry,
     )?;
-    let outcome = run.now_in(objects, Zone::Battlefield);
-    if onto.linked {
-        let link = Link::PutOntoBattlefieldWith;
-        linked::link(run.game(), outcome.objects, source, link)?;
-    }
-    Ok(outcome)
+    Ok(run.now_in(objects, Zone::Battlefield))
 }
 
 /// Puts cards onto the battlefield tapped, each under its owner's control, simultaneously:

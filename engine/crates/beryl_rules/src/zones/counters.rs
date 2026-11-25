@@ -3,7 +3,7 @@
 //! Implements: CR 122.6
 
 use beryl_card::{Amount, Objects};
-use beryl_kernel::reference::Permanent;
+use beryl_kernel::reference::{Permanent, Permanents};
 
 use crate::fixed::Full;
 use crate::game::Game;
@@ -126,13 +126,7 @@ pub(crate) fn remove_all_instruction<L: Layout>(
     objects: Objects,
 ) -> Result<Outcome<L>, Full> {
     let permanents = run.permanents(objects);
-    let counters = |run: &Run<'_, '_, L>| -> u32 {
-        let s = run.state();
-        permanents
-            .slots()
-            .sum(|slot| s.counters(slot).iter().map(|(_, n)| u32::from(n)).sum())
-    };
-    let before = counters(run);
+    let before = counters_on(run, permanents, None);
     let mut left = permanents;
     while let Some(object) = run.state().next_permanent(&mut left) {
         // Each kind it has; `remove` takes as many as there are.
@@ -140,10 +134,8 @@ pub(crate) fn remove_all_instruction<L: Layout>(
             remove(run.game(), object, kind, u8::MAX)?;
         }
     }
-    Ok(Outcome::of(
-        permanents.slots(),
-        counters(run).abs_diff(before),
-    ))
+    let after = counters_on(run, permanents, None);
+    Ok(Outcome::of(permanents.slots(), after.abs_diff(before)))
 }
 
 /// Puts counters on each permanent `objects` names, or removes them, with `change`, in the
@@ -157,19 +149,24 @@ fn change<L: Layout>(
 ) -> Result<Outcome<L>, Full> {
     let count = run.scene().amount(count);
     let permanents = run.permanents(objects);
-    let counters = |run: &Run<'_, '_, L>| -> u32 {
-        let s = run.state();
-        permanents
-            .slots()
-            .sum(|slot| u32::from(s.counters_of(slot, kind)))
-    };
-    let before = counters(run);
+    let before = counters_on(run, permanents, Some(kind));
     let mut left = permanents;
     while let Some(object) = run.state().next_permanent(&mut left) {
         change(run.game(), object, kind, count)?;
     }
-    Ok(Outcome::of(
-        permanents.slots(),
-        counters(run).abs_diff(before),
-    ))
+    let after = counters_on(run, permanents, Some(kind));
+    Ok(Outcome::of(permanents.slots(), after.abs_diff(before)))
+}
+
+/// The counters of `kind` on `permanents`, or of every kind with none.
+fn counters_on<L: Layout>(
+    run: &Run<'_, '_, L>,
+    permanents: Permanents<L>,
+    kind: Option<CounterKind>,
+) -> u32 {
+    let s = run.state();
+    permanents.slots().sum(|slot| match kind {
+        Some(kind) => u32::from(s.counters_of(slot, kind)),
+        None => s.counters(slot).iter().map(|(_, n)| u32::from(n)).sum(),
+    })
 }
