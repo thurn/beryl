@@ -10,6 +10,10 @@
 //! looks at every recording from both seats in the 1600x900 window, and draws only the check
 //! time (the moments the interface tests check) at which each kind of light first shows in that
 //! recording, so it draws a few frames per recording rather than every tick.
+//!
+//! The sweep of the recordings is split into `PARTS` tests, and a separate test requires one
+//! recording that shows every kind of light to draw each of them, so that the sweep cannot pass
+//! by finding nothing to draw.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -41,14 +45,25 @@ const LEAST_PIXELS: usize = 20;
 /// that a faint fringe of rounding counts as dark.
 const LEVELS: u8 = 2;
 
-/// How many recordings each kind of light is drawn in. Drawing every recording where a light
-/// first shows drew 1346 recordings in 33 s on every core of a Mac; the light is drawn by one
-/// writer whatever the card, so 24 recordings of each kind, spread over the list, keep each
-/// kind's variety of ends at a fraction of the cost.
-const PER_KIND: usize = 24;
+/// How many tests the sweep of the recordings is split into, each part taking every `PARTS`th
+/// recording of the list. Finding where each kind of light first shows plays every recording
+/// from both seats: 2590 of them took about 90 s of thread time, 23 s on a 10-core Mac. As one
+/// test, the sweep ran for minutes on the few cores a busy tip round left it, after every other
+/// test of its batch had finished. The parts run beside the other tests instead.
+const PARTS: usize = 8;
 
-/// The kinds of light at least one recording must show, so that the test cannot pass by finding
-/// nothing to draw.
+/// How many recordings each kind of light is drawn in, in each part. Drawing every recording
+/// where a light first shows drew 1346 recordings in 33 s on every core of a Mac; the light is
+/// drawn by one writer whatever the card, so 24 recordings of each kind over all the parts,
+/// spread over the list, keep each kind's variety of ends at a fraction of the cost.
+const PER_KIND: usize = 3;
+
+/// The recording that shows every kind of light in `KINDS`, from your seat: a combat with
+/// attackers, blockers and a targeted spell.
+const EVERY_KIND: &str = "verbs-combat";
+
+/// The kinds of light `EVERY_KIND` must draw, so that the sweep cannot pass by finding nothing
+/// to draw.
 const KINDS: [&str; 6] = [
     "source",
     "hostile-target",
@@ -221,12 +236,48 @@ fn each_replay<T: Sync, R: Send>(items: &[T], check: impl Fn(&T) -> R + Sync) ->
     .collect()
 }
 
-#[test]
-fn every_arrow_line_and_fight_mark_the_tree_lists_is_drawn() {
+/// What drawing `lit` found: how many lights of each kind were drawn, and a line for each that
+/// lit too few pixels.
+fn draw_all(lit: &[(&str, Side, BTreeSet<u64>)]) -> (BTreeMap<String, usize>, Vec<String>) {
+    // The isolated records sample the same light atlas as the host. They can all share one
+    // device and target. Opening a device and loading card art for each replay stalled on Windows.
+    let tuning = beryl_inspect::data::checkout().expect("tuning");
+    let mut renderer = Renderer::headless(Limits::Default, tuning.lighting).expect("a GPU");
+    let mut target = Target::offscreen(&renderer, WINDOW.width as u32, WINDOW.height as u32);
+    assert!(
+        renderer.upload_page(&beryl_assets::light::prepared(&tuning.light, &tuning.own)),
+        "the shapes of light are uploaded"
+    );
+    let mut drawn: BTreeMap<String, usize> = BTreeMap::new();
+    let mut faults: Vec<String> = Vec::new();
+    for (name, side, times) in lit {
+        let (kinds, more) = draw_lights(&mut renderer, &mut target, name, *side, times);
+        for kind in kinds {
+            *drawn.entry(kind).or_default() += 1;
+        }
+        faults.extend(more);
+    }
+    (drawn, faults)
+}
+
+/// Fails with every light in `faults`.
+fn assert_no_faults(faults: &[String]) {
+    assert!(
+        faults.is_empty(),
+        "lights the tree lists drew nothing (`just client png <recording> --seat <seat> --at <ms>` \
+         shows each):\n{}",
+        faults.join("\n")
+    );
+}
+
+/// Draws the lights of every `PARTS`th recording, starting at the one numbered `part`.
+fn sweep(part: usize) {
     let tests: Vec<(String, Side)> = recordings::names()
         .expect("the recordings pack")
         .into_iter()
         .filter(|(name, _)| Board::parse(name).is_none())
+        .skip(part)
+        .step_by(PARTS)
         .map(|(name, seat)| {
             let side = if seat == Seat::P0 {
                 Side::You
@@ -249,48 +300,79 @@ fn every_arrow_line_and_fight_mark_the_tree_lists_is_drawn() {
         .zip(moments)
         .map(|((name, _), first)| first.unwrap_or_else(|error| panic!("{name}: {error}")))
         .collect();
-    let lit_tests: Vec<(&str, Side, BTreeSet<u64>)> = tests
+    let lit: Vec<(&str, Side, BTreeSet<u64>)> = tests
         .iter()
         .zip(chosen(&first))
         .map(|((name, side), times)| (name.as_str(), *side, times))
         .filter(|(_, _, times)| !times.is_empty())
         .collect();
-    // The isolated records sample the same light atlas as the host. They can all share one
-    // device and target. Opening a device and loading card art for each replay stalled on Windows.
-    let tuning = beryl_inspect::data::checkout().expect("tuning");
-    let mut renderer = Renderer::headless(Limits::Default, tuning.lighting).expect("a GPU");
-    let mut target = Target::offscreen(&renderer, WINDOW.width as u32, WINDOW.height as u32);
-    assert!(
-        renderer.upload_page(&beryl_assets::light::prepared(&tuning.light, &tuning.own)),
-        "the shapes of light are uploaded"
-    );
-    let mut drawn: BTreeMap<String, usize> = BTreeMap::new();
-    let mut faults: Vec<String> = Vec::new();
-    for (name, side, times) in &lit_tests {
-        let (kinds, more) = draw_lights(&mut renderer, &mut target, name, *side, times);
-        for kind in kinds {
-            *drawn.entry(kind).or_default() += 1;
-        }
-        faults.extend(more);
-    }
+    let (drawn, faults) = draw_all(&lit);
     eprintln!(
         "drew {} recordings in {:?}: {drawn:?}",
-        lit_tests.len(),
+        lit.len(),
         start.elapsed()
     );
+    assert!(
+        !drawn.is_empty(),
+        "no recording of this part shows any light, so the part tests nothing"
+    );
+    assert_no_faults(&faults);
+}
+
+#[test]
+fn every_arrow_line_and_fight_mark_the_tree_lists_is_drawn_0() {
+    sweep(0);
+}
+
+#[test]
+fn every_arrow_line_and_fight_mark_the_tree_lists_is_drawn_1() {
+    sweep(1);
+}
+
+#[test]
+fn every_arrow_line_and_fight_mark_the_tree_lists_is_drawn_2() {
+    sweep(2);
+}
+
+#[test]
+fn every_arrow_line_and_fight_mark_the_tree_lists_is_drawn_3() {
+    sweep(3);
+}
+
+#[test]
+fn every_arrow_line_and_fight_mark_the_tree_lists_is_drawn_4() {
+    sweep(4);
+}
+
+#[test]
+fn every_arrow_line_and_fight_mark_the_tree_lists_is_drawn_5() {
+    sweep(5);
+}
+
+#[test]
+fn every_arrow_line_and_fight_mark_the_tree_lists_is_drawn_6() {
+    sweep(6);
+}
+
+#[test]
+fn every_arrow_line_and_fight_mark_the_tree_lists_is_drawn_7() {
+    sweep(7);
+}
+
+#[test]
+fn every_kind_of_light_is_drawn() {
+    let first = first_lights(EVERY_KIND, Side::You).unwrap_or_else(|error| panic!("{error}"));
+    let times: BTreeSet<u64> = first.into_values().collect();
+    let (drawn, faults) = draw_all(&[(EVERY_KIND, Side::You, times)]);
     let missing: Vec<&str> = KINDS
         .into_iter()
         .filter(|kind| !drawn.contains_key(*kind))
         .collect();
     assert!(
         missing.is_empty(),
-        "no recording shows these kinds of light, so the test cannot tell whether they draw: \
-         {missing:?} (drawn: {drawn:?})"
+        "{EVERY_KIND} from your seat no longer draws these kinds of light, so the sweep cannot \
+         tell whether they draw: {missing:?} (drawn: {drawn:?}). Name a recording that shows \
+         every kind in `EVERY_KIND`."
     );
-    assert!(
-        faults.is_empty(),
-        "lights the tree lists drew nothing (`just client png <recording> --seat <seat> --at <ms>` \
-         shows each):\n{}",
-        faults.join("\n")
-    );
+    assert_no_faults(&faults);
 }

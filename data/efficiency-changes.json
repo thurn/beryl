@@ -990,5 +990,10 @@
     "label": "A tip round in a `master` stall reverts a confirmed culprit when its platform is catching up from `master` itself, and when `staging` moved with a change to what the check reads but the check still fails there. On 2026-11-25 neither revert could happen: jarvis found the culprit of a test over every card twice and gave up each time because a newer landing touched the cards, and cygnus could never revert a Windows clippy failure because Windows was catching up from `master`. `master` did not move for 20 hours while 96 product commits waited on `staging`",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
+  },
+  {
+    "label": "The `client-test` sweep that draws every arrow and fight mark in the recordings pack is split into eight tests, each scanning every eighth recording, plus a test that one combat recording draws every kind of light. On 2026-11-25 the single test held three tip rounds on jarvis for 6 to 26 minutes, running alone on the few cores left to it after every other test of its 1156-check batch had finished",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]
