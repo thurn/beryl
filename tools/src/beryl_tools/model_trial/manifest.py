@@ -173,8 +173,12 @@ class Grade:
     start_commit: str | None = None
     end_commit: str | None = None
     # pass, fail or unknown: the stored `ignite check` (copy) or landing gate (source) runs
-    # of `end_commit`.
+    # on the tree of `end_commit`.
     check: str = "unknown"
+    # True when part of the arm's sessions ran where their transcripts are not on the grading
+    # machine, so `dollars` and `agent_minutes` are too low. The report leaves it out of those
+    # medians.
+    cost_partial: bool = False
     dollars: float | None = None
     tokens: dict[str, int] = field(default_factory=dict)
     agent_minutes: float | None = None

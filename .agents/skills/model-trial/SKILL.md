@@ -204,6 +204,14 @@ the list ended the trial.
 To compare with an earlier trial, `just model-trial report --trial <A> --trial <B>` prints both
 side by side and flags any difference in rubric or model IDs.
 
+## Regrading
+
+`grade` writes each pair's two rows once, and skips a pair that has rows. After a fix to how
+`grade` measures (a check verdict, a cost), regrade by moving
+`$BERYL_CACHE`'s trial `grades.jsonl` aside (rename it, keep it) and running `grade` again
+through `ignite run --`. Contamination decisions live in `pairs.jsonl`, so they survive. Then run
+`report` again.
+
 ## What a trial cannot show
 
 - About 24 pairs can show a large difference (one arm failing 30% of tickets where the other

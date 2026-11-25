@@ -48,7 +48,9 @@ each arm's commands from the efficiency store's `tool_calls` table, which keeps
 only each command's first 300 characters and no output. It reads output and the
 model's messages from the session's Claude or Antigravity (`agy`) transcript,
 whose path the store's `sources` table records, when the transcript is on the
-grading machine. It reads check verdicts from the store's `lane_runs` table, by
+grading machine. An arm whose transcript is not on it gets `cost_partial`, and
+the report leaves it out of the dollar and minute medians. It reads check
+verdicts from the store's `lane_runs` table, by the tree hash of the arm's final
 commit.
 
 `review` runs a headless `claude -p` reviewer on each graded pair that is not

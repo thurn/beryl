@@ -25,7 +25,7 @@ import argparse
 import json
 import re
 from dataclasses import dataclass
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -112,13 +112,32 @@ def diff(start: str, end: str) -> Diff:
     return Diff(files, added, removed, test_added, [l for l in lines if l])
 
 
-def check_verdict(commit: str | None, tree: str) -> str:
-    """`pass`, `fail` or `unknown` from the stored runs of `commit` by the given verb."""
+def check_verdict(commit: str | None, verb: str) -> str:
+    """`pass`, `fail` or `unknown` for an arm's final `commit`, from the store's `lane_runs`.
+
+    A `lane_runs` row keeps the commit that a check ran on, and a check runs before the session
+    commits or lands, then the landing rebases: the arm's final commit is never a commit that a
+    check ran on. The store does keep each run's tree hash, and a rebase or a re-commit leaves a
+    commit's tree unchanged when nothing else moved, so the runs are matched on the tree hash of
+    `commit`. Older rows keep the verb (`check` or `land`) in `tree` instead of a hash and only
+    match by commit, so those are read as a fallback. `verb` is `land` for the source and
+    `check` for the copy. A tree with no run is `unknown`."""
     if not commit or not SHA.fullmatch(commit):
+        return "unknown"
+    try:
+        tree = io.git("rev-parse", f"{commit}^{{tree}}")
+    except io.IgniteError:
+        tree = ""
+    matches = []
+    if SHA.fullmatch(tree):
+        matches.append(f"tree = '{tree}'")
+    if verb in ("land", "check"):
+        matches.append(f"(\"commit\" = '{commit}' AND tree = '{verb}')")
+    if not matches:
         return "unknown"
     rows = io.sql(
         f"SELECT SUM(fails) AS fails, COUNT(*) AS runs FROM lane_runs "
-        f"WHERE \"commit\" = '{commit}' AND tree = '{tree}'"
+        f"WHERE {' OR '.join(matches)}"
     )
     if not rows or not rows[0].get("runs"):
         return "unknown"
@@ -146,28 +165,54 @@ def traces(cost_row: dict[str, Any]) -> list[Trace]:
         )
     ]
     for window in cost_row.get("sessions") or []:
-        transcript = str(window.get("transcript") or "")
-        provider = str(window.get("provider") or "")
-        if not BEAD.fullmatch(transcript):
+        located = window_transcripts(window)
+        if located is None:
             continue
-        # An Antigravity (`agy`) conversation keeps its transcript at
-        # `<conversation>/.system_generated/logs/transcript.jsonl`.
-        if provider == "claude":
-            source, pattern, read = "claude", f"%{transcript}.jsonl", transcript_traces
-        elif provider.startswith("agy-"):
-            source, pattern, read = "agy", f"%/{transcript}/%", agy_traces
-        else:
-            continue
-        rows = io.sql(
-            f"SELECT path FROM sources WHERE source = '{source}' AND path LIKE '{pattern}'"
-        )
-        for row in rows:
-            path = Path(str(row["path"]))
-            if path.is_file():
-                found += read(
-                    path, str(window.get("start") or ""), str(window.get("end") or "~")
-                )
+        read, paths = located
+        for path in paths:
+            found += read(
+                path, str(window.get("start") or ""), str(window.get("end") or "~")
+            )
     return found
+
+
+def window_transcripts(
+    window: dict[str, Any],
+) -> tuple[Callable[[Path, str, str], list[Trace]], list[Path]] | None:
+    """The reader of a session window's transcript and the transcript files of it that are on
+    this machine, or `None` for a window that has no readable kind of transcript."""
+    transcript = str(window.get("transcript") or "")
+    provider = str(window.get("provider") or "")
+    if not BEAD.fullmatch(transcript):
+        return None
+    # An Antigravity (`agy`) conversation keeps its transcript at
+    # `<conversation>/.system_generated/logs/transcript.jsonl`.
+    if provider == "claude":
+        source, pattern, read = "claude", f"%{transcript}.jsonl", transcript_traces
+    elif provider.startswith("agy-"):
+        source, pattern, read = "agy", f"%/{transcript}/%", agy_traces
+    else:
+        return None
+    rows = io.sql(
+        f"SELECT path FROM sources WHERE source = '{source}' AND path LIKE '{pattern}'"
+    )
+    paths = [Path(str(r["path"])) for r in rows]
+    return read, [p for p in paths if p.is_file()]
+
+
+def cost_partial(cost_row: dict[str, Any]) -> bool:
+    """Whether `cost_row` leaves out part of the arm's work. The efficiency store prices a
+    session from its transcript, so a session that ran on another machine, whose transcript is
+    not on this one, is priced at nothing or part of its cost. An arm with no session at all is
+    partial too."""
+    windows = cost_row.get("sessions") or []
+    if not windows:
+        return True
+    for window in windows:
+        located = window_transcripts(window)
+        if located is None or not located[1]:
+            return True
+    return False
 
 
 def transcript_traces(path: Path, start: str, end: str) -> list[Trace]:
@@ -391,6 +436,7 @@ def grade_pair(
                 start_commit=start,
                 end_commit=end,
                 check=check_verdict(end, verb),
+                cost_partial=cost_partial(row),
                 dollars=row.get("dollars"),
                 tokens={k: int(v or 0) for k, v in (row.get("tokens") or {}).items()},
                 agent_minutes=row.get("agent_minutes"),

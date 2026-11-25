@@ -909,3 +909,80 @@ def test_seeing_another_arms_copy_marks_a_pair_suspect() -> None:
     copy = arm("TC1", cmd("ignite ticket show THYDR"))
     found = scan.suspect(source, copy, "", [], "", set(), [("THYDR", "Other words")])
     assert any("another arm's copy THYDR" in f.what for f in found)
+
+
+def test_a_check_verdict_matches_the_tree_of_the_final_commit(monkeypatch: Any) -> None:
+    queries: list[str] = []
+
+    def sql(query: str) -> list[dict[str, Any]]:
+        queries.append(query)
+        return [{"fails": 0, "runs": 2}]
+
+    monkeypatch.setattr(grade.io, "git", lambda *a: "abc1234abc1234")
+    monkeypatch.setattr(grade.io, "sql", sql)
+    assert grade.check_verdict("7e595bfaed53c", "check") == "pass"
+    assert "tree = 'abc1234abc1234'" in queries[0]
+
+
+@pytest.mark.parametrize(
+    ("rows", "verdict"),
+    [
+        ([{"fails": 3, "runs": 2}], "fail"),
+        ([{"fails": None, "runs": 0}], "unknown"),
+        ([], "unknown"),
+    ],
+)
+def test_a_check_verdict_is_fail_with_a_failure_and_unknown_with_no_run(
+    monkeypatch: Any, rows: list[dict[str, Any]], verdict: str
+) -> None:
+    monkeypatch.setattr(grade.io, "git", lambda *a: "abc1234abc1234")
+    monkeypatch.setattr(grade.io, "sql", lambda q: rows)
+    assert grade.check_verdict("7e595bfaed53c", "land") == verdict
+
+
+def test_an_arm_whose_transcript_is_elsewhere_has_a_partial_cost(
+    monkeypatch: Any, tmp_path: Any
+) -> None:
+    here = tmp_path / "here.jsonl"
+    here.write_text("", encoding="utf-8")
+    store = {"here": str(here), "gone": str(tmp_path / "gone.jsonl")}
+    monkeypatch.setattr(
+        grade.io,
+        "sql",
+        lambda q: [{"path": v} for k, v in store.items() if f"{k}.jsonl" in q],
+    )
+    window = lambda t: {"transcript": t, "provider": "claude"}  # noqa: E731
+    assert not grade.cost_partial({"sessions": [window("here")]})
+    assert grade.cost_partial({"sessions": [window("here"), window("gone")]})
+    assert grade.cost_partial({"sessions": []})
+    assert grade.cost_partial({})
+
+
+def test_the_report_leaves_a_partial_cost_out_of_the_medians() -> None:
+    from beryl_tools.model_trial import report
+
+    def result(dollars: float, partial: bool) -> Any:
+        g = manifest.Grade(
+            pair="p",
+            trial="T",
+            arm="source",
+            ticket="X",
+            ended="landed",
+            finished=True,
+            dollars=dollars,
+            agent_minutes=dollars,
+            cost_partial=partial,
+        )
+        return type(
+            "R",
+            (),
+            {
+                "arms": {"source": g, "copy": g},
+                "defects": None,
+                "pair": type("P", (), {"kind": "logic"})(),
+            },
+        )()
+
+    group = [result(1.0, False), result(0.0, True), result(3.0, False)]
+    rows = dict((line, cells) for line, *cells in report.group_rows(None, group))
+    assert rows["Median dollars"][0].startswith("$2.00 (n=2), 1 left out")

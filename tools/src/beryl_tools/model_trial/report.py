@@ -158,10 +158,30 @@ def group_rows(spec: Spec, group: list[Result]) -> list[tuple[str, str, str]]:
         ("Median agent minutes", "agent_minutes", ""),
         ("Median claim-to-close minutes", "claim_to_close_minutes", ""),
     ):
-        s_cell, s_m = median_cell(
-            [getattr(r.arms["source"], attr) for r in group], unit
-        )
-        c_cell, c_m = median_cell([getattr(r.arms["copy"], attr) for r in group], unit)
+
+        def values(arm: str) -> list[float | None]:
+            # The efficiency store prices an arm from its transcripts, so an arm with a
+            # transcript on another machine has too low a cost: leave it out of the medians.
+            return [
+                (
+                    None
+                    if attr != "claim_to_close_minutes" and r.arms[arm].cost_partial
+                    else getattr(r.arms[arm], attr)
+                )
+                for r in group
+            ]
+
+        s_cell, s_m = median_cell(values("source"), unit)
+        c_cell, c_m = median_cell(values("copy"), unit)
+        if attr != "claim_to_close_minutes":
+            for arm_name, cell in (("source", "s"), ("copy", "c")):
+                left = sum(r.arms[arm_name].cost_partial for r in group)
+                if left:
+                    note = f", {left} left out for a partial cost"
+                    if cell == "s":
+                        s_cell += note
+                    else:
+                        c_cell += note
         if s_m:
             c_cell += f", {c_m / s_m:.0%} of the source's"
         rows.append((label, s_cell, c_cell))
@@ -256,7 +276,7 @@ def header(trial: Trial, found: list[Result]) -> list[str]:
         {
             a["source"].ticket: a["source"].dollars
             for a in latest.values()
-            if a["source"].dollars is not None
+            if a["source"].dollars is not None and not a["source"].cost_partial
         }.values()
     )
     reviewer_cost = sum((r.cost_usd for r in trial.reviews), 0.0)
