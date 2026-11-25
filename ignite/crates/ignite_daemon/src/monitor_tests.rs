@@ -537,3 +537,111 @@ fn a_kickstart_ends_every_daemon_that_did_not_stop_newest_first() {
     ];
     assert_eq!(daemons_to_end(&starts), [31892, 1828, 24900]);
 }
+
+/// A `status` section that signals when entered and waits until the test lets it go, as `status`
+/// waits on a hub that answers 502.
+struct WaitingSection {
+    entered: std::sync::Mutex<Option<mpsc::Sender<()>>>,
+    release: std::sync::Mutex<mpsc::Receiver<()>>,
+}
+
+impl crate::doctor::StatusSection for WaitingSection {
+    fn title(&self) -> &'static str {
+        "tip round"
+    }
+
+    fn lines(&self) -> Vec<String> {
+        if let Some(entered) = self.entered.lock().unwrap().take() {
+            let _ = entered.send(());
+        }
+        let _ = self.release.lock().unwrap().recv();
+        Vec::new()
+    }
+}
+
+fn server_context() -> crate::server::Context {
+    use ignite_core::fakes::{FakeBuilds, FakeClock, FakeGit, FakeHub, FakeLauncher};
+    let text = r#"
+        [repository]
+        remote = "origin"
+        staging = "staging"
+        master = "master"
+        trees = "trees"
+        checks = "checks"
+        [hub]
+        url = "http://localhost:1"
+        project = "test"
+        [gate]
+        threshold = 0.01
+        cap = 10
+    "#;
+    crate::server::Context {
+        config: ignite_core::config::Config::parse("ignite.toml", text).unwrap(),
+        repo: PathBuf::from("/repo"),
+        machine: ignite_core::ids::MachineId::new("m-1").unwrap(),
+        clock: std::sync::Arc::new(FakeClock::new(Timestamp::EPOCH)),
+        hub: std::sync::Arc::new(FakeHub::default()),
+        git: std::sync::Arc::new(FakeGit::default()),
+        launcher: std::sync::Arc::new(FakeLauncher::default()),
+        builds: std::sync::Arc::new(FakeBuilds::default()),
+        session: None,
+        tree: None,
+    }
+}
+
+/// On 2026-11-25 the monitor probed with `status`, whose sections wait on the hub. While the hub
+/// answered 502s, `status` took longer than the probe's deadline, and the monitor restarted
+/// working daemons as hung. The probe must be answered while `status` is still waiting and even
+/// while the daemon's local database lock is held.
+#[test]
+fn the_probe_is_answered_while_status_waits_for_the_hub() {
+    use crate::server::{Registry, Server, serve_listener};
+    use ignite_core::protocol::client::Request;
+    use ignite_os::Native;
+    use ignite_os::ipc::Ipc;
+
+    let dir = ignite_core::test_files::temp_dir()
+        .join(format!("ignite-monitor-probe-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&dir);
+    let socket = dir.join("d.sock");
+    let (entered_tx, entered_rx) = mpsc::channel();
+    let (release, waiting) = mpsc::channel();
+    let mut registry = Registry::default();
+    registry.register(Box::new(crate::doctor::StatusVerb::new(vec![Box::new(
+        WaitingSection {
+            entered: std::sync::Mutex::new(Some(entered_tx)),
+            release: std::sync::Mutex::new(waiting),
+        },
+    )])));
+    registry.register(Box::new(crate::doctor::AliveVerb));
+    let db = std::sync::Arc::new(std::sync::Mutex::new(
+        ignite_store::local::open_in_memory().unwrap(),
+    ));
+    let server =
+        std::sync::Arc::new(Server::new(server_context(), registry, Some(db.clone())).unwrap());
+    let listener = Native.listen(&socket.to_string_lossy()).unwrap();
+    std::thread::spawn(move || serve_listener(&server, listener.as_ref()));
+
+    let status = {
+        let socket = socket.to_string_lossy().into_owned();
+        std::thread::spawn(move || {
+            let request = Request {
+                verb: "status".to_owned(),
+                args: Vec::new(),
+                cwd: PathBuf::from("/repo"),
+                session: None,
+                wait_s: 60,
+                pid: None,
+            };
+            crate::server::send(&socket, &request)
+        })
+    };
+    entered_rx.recv().unwrap();
+    let held = db.lock().unwrap();
+    assert!(probe_daemon(&socket), "the probe got no answer");
+    drop(held);
+    assert!(!status.is_finished(), "status did not wait for the hub");
+    drop(release);
+    assert_eq!(status.join().unwrap().unwrap().exit, Exit::Success);
+    let _ = fs::remove_dir_all(&dir);
+}

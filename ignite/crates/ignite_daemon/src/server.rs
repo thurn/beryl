@@ -438,6 +438,14 @@ impl Server {
         if self.refused_while_draining(&req.verb) {
             return restarting_reply();
         }
+        // `alive` is the monitor's probe: answer without locking the local database or touching
+        // the disk (tree resolution and emergency checks both lock `self.db`).
+        if req.verb == crate::doctor::ALIVE_VERB {
+            return match self.registry.get(&req.verb) {
+                Some(verb) => verb.run(&self.ctx, req),
+                None => unknown_verb(&req.verb),
+            };
+        }
         let mut ctx = self.ctx.clone();
         ctx.session.clone_from(&req.session);
         ctx.tree = ctx.tree_of_in(&req.cwd, self.db.as_ref().map(|db| lock(db)).as_deref());

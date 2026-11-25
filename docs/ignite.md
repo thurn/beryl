@@ -974,14 +974,18 @@ How a broken build or a crash is survived:
   `ignite monitor` from the last-good build every two minutes. It restarts a
   daemon that does not answer, rolls back a build that crash-loops, and when
   neither helps for 15 minutes, writes `justiciar-needed.json` in the Ignite
-  home and posts a notification. On the hub's machine it also kickstarts a hub
-  that has not answered an HTTP request in two runs in a row. The monitor has no
-  agent logic of its own, and its only hub call is the report of a stuck trees
-  drive, below. A run gives up after 100 seconds, because the login service
-  starts no new run while one is still running, and the notification's helper
-  process runs without the monitor waiting for it. A restart ends every daemon
-  in `starts.jsonl` that did not stop on purpose, not only the newest, so a hung
-  daemon cannot keep `daemon.lock` through later restarts.
+  home and posts a notification. It asks the daemon with an `alive` request,
+  which the daemon answers at once without asking the hub or git, so a slow hub
+  never makes a working daemon look hung; `ignite status` asks the hub and can
+  take far longer than the probe's 5 seconds. On the hub's machine it also
+  kickstarts a hub that has not answered an HTTP request in two runs in a row.
+  The monitor has no agent logic of its own, and its only hub call is the report
+  of a stuck trees drive, below. A run gives up after 100 seconds, because the
+  login service starts no new run while one is still running, and the
+  notification's helper process runs without the monitor waiting for it. A
+  restart ends every daemon in `starts.jsonl` that did not stop on purpose, not
+  only the newest, so a hung daemon cannot keep `daemon.lock` through later
+  restarts.
 - Each monitor run also probes every trees root the daemon uses, which the
   daemon records in `trees-roots.json` in the Ignite home after each heartbeat.
   The probe is a child process, `ignite internal probe-storage`, that reads the

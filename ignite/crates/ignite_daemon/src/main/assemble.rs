@@ -520,6 +520,7 @@ pub fn server(
     registry.register(Box::new(
         StatusVerb::new(status_sections(base, parts)).running_under(executable_of(base)?),
     ));
+    registry.register(Box::new(doctor::AliveVerb));
     // `ignite wait deploy-<commit>`, which `ignite land` names when it moves the release.
     crate::deploy::install(Arc::new(crate::deploy::DeployWaiter {
         state: parts.update.clone(),

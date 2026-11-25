@@ -255,6 +255,45 @@ impl Verb for StatusVerb {
     }
 }
 
+/// The `alive` request, which the CLI has no command for: answers at once with the daemon's
+/// version, and asks nothing of the hub, git or the disk. It is what `ignite monitor` probes the
+/// daemon with.
+///
+/// `status` is no probe. Its sections ask the hub, which the hub client tries again for up to 15
+/// seconds while the hub answers 502, and git. On 2026-11-25 `status` on cygnus took 11 seconds
+/// while the hub answered 502s, and the monitor, which waits 5, took busy daemons for hung ones:
+/// most of the 15 runs it marked hung that day had started after a release, while the hub was
+/// slow, and its restarts cut off the verbs and tip rounds they ran.
+///
+/// A reply to `alive` still comes through the socket, the connection thread and the server, so a
+/// daemon that is really stuck there still fails the probe.
+pub struct AliveVerb;
+
+/// The name of [`AliveVerb`].
+pub const ALIVE_VERB: &str = "alive";
+
+impl Verb for AliveVerb {
+    fn name(&self) -> &'static str {
+        ALIVE_VERB
+    }
+
+    fn needs_the_tree_lease(&self) -> bool {
+        false
+    }
+
+    fn blocks_update(&self) -> bool {
+        false
+    }
+
+    fn run(&self, ctx: &Context, _req: &Request) -> Reply {
+        let version = running_version().map_or_else(|| "unknown".to_owned(), |c| c.to_string());
+        Reply::text(
+            Exit::Success,
+            format!("alive    {}, ignite {version}", ctx.machine),
+        )
+    }
+}
+
 /// The version recorded by [`remember_running_version`] when the daemon started.
 static RUNNING: std::sync::OnceLock<Option<Commit>> = std::sync::OnceLock::new();
 

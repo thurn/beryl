@@ -41,8 +41,9 @@ pub fn serve(server: &Arc<Server>, socket: &str) -> std::io::Result<()> {
 
 /// The verbs answered at once while the daemon is starting, with a reply that says so, rather
 /// than waiting until it is ready: they only report, and are what a person runs to see why the
-/// daemon does not answer.
-const ANSWERED_WHILE_STARTING: &[&str] = &["status", "doctor"];
+/// daemon does not answer. `alive` is the monitor's probe, which a starting daemon passes as it
+/// passed `status` before.
+const ANSWERED_WHILE_STARTING: &[&str] = &["status", "doctor", "alive"];
 
 /// The server a socket answers from, which exists only once the daemon has started.
 ///
