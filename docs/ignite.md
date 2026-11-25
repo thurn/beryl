@@ -3113,6 +3113,15 @@ oldest tip of the streak, says that no search ran, and names the machine and
 path of the failing run's output. A round that later finishes its search adds
 the culprit to the same ticket.
 
+Once a round has recorded its failed verdict, a newer candidate no longer stops
+it: it finishes the culprit search, any revert and the promotion of an ancestor
+before the culprits. On 2026-11-25, with a landing every 10 to 20 minutes and
+rounds of 30 minutes or more, each search was stopped for a newer tip that
+failed in turn, so for 16 hours no search finished, nothing was reverted and
+`master` did not move. The search runs between fixed commits, so a newer tip
+does not change its answer. `master` reaching the tip, or every failed check
+passing, still stops it.
+
 ### Regression tickets
 
 The hub then files a **regression ticket**, or adds the check to one already

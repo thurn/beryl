@@ -22,8 +22,10 @@
 //!   the new release (`SelfUpdate::after_master_moved`), as before; a loop that waited for a
 //!   round started before a restart does the same with that round's reply.
 //! - While waiting, the loop checks whether a failed candidate can give way to newer staging,
-//!   the hub already selected a replacement, or `master` advanced past its target. It also
-//!   stops culprit searches once all failed keys pass, so ordinary verification can resume.
+//!   the hub already selected a replacement, or `master` advanced past its target. A round
+//!   that has recorded its failed verdict finishes its culprit search whatever newer tip
+//!   appears, and stops only when `master` passes its target or all failed keys pass, so
+//!   ordinary verification can resume.
 //!
 //! A round whose verb process dies is not run again: its handle ends `incomplete`, and the next
 //! turn of the loop starts a new round when the tip still needs one.
@@ -253,12 +255,25 @@ impl TipLoop {
         finished
     }
 
+    /// Why the loop stops the running round, if it should.
+    ///
+    /// A newer candidate does not stop a round that has recorded its failed verdict and is
+    /// searching for culprits. On 2026-11-25 landings arrived every 10 to 20 minutes while
+    /// rounds took 30 or more, so the newer candidate that stopped each search also failed and
+    /// was stopped in turn. For 16 hours no search finished: the hub filed regressions with no
+    /// culprit, nothing was reverted, and `promote_ancestor` never moved `master` to the
+    /// commits before the culprits, while 75 product commits waited. The search's range ends
+    /// at the failed tip, so a newer tip does not change its answer, and a revert is built on
+    /// the newest `staging` anyway. `master` reaching the tip, or the failed checks passing,
+    /// still ends the search, since neither its culprits nor its revert would then be needed.
     fn interruption(&self, ctx: &Context, tip: &Commit, handle: &Handle) -> Option<TipOutcome> {
-        if let Some(by) = self.superseding_tip(ctx, tip) {
+        let verifier = self.verb.verifier();
+        if let Some(by) = self.superseding_tip(ctx, tip)
+            && (master_reached(ctx, tip).is_some() || !searching(&verifier, tip, handle))
+        {
             return Some(TipOutcome::Superseded { by });
         }
-        self.verb
-            .verifier()
+        verifier
             .failure_recovered(ctx, tip, Some(handle))
             .then_some(TipOutcome::Recovered)
     }
@@ -266,14 +281,8 @@ impl TipLoop {
     /// A round can spend hours waiting for checks or searching for a culprit. A running
     /// loop can select the successor itself once the hub lets the candidate advance.
     fn superseding_tip(&self, ctx: &Context, target: &Commit) -> Option<Commit> {
-        let master = ctx.git.tip(&ctx.config.repository.master).ok();
-        if master.as_ref() == Some(target) {
-            return None;
-        }
-        if let Some(master) =
-            master.filter(|master| ctx.git.is_ancestor(target, master).unwrap_or(false))
-        {
-            return Some(master);
+        if let Some(master) = master_reached(ctx, target) {
+            return (master != *target).then_some(master);
         }
         let selected = ctx.hub.tip_candidate().ok()??;
         if selected.commit != *target {
@@ -289,6 +298,23 @@ impl TipLoop {
             .flatten()
             .filter(|tip| tip != target)
     }
+}
+
+/// `master` when it has reached `target` or moved past it.
+fn master_reached(ctx: &Context, target: &Commit) -> Option<Commit> {
+    ctx.git
+        .tip(&ctx.config.repository.master)
+        .ok()
+        .filter(|master| master == target || ctx.git.is_ancestor(target, master).unwrap_or(false))
+}
+
+/// Whether the round `handle` has recorded a failed verdict at `tip` and gone on to search for
+/// culprits, revert and promote an ancestor (see `verify`, which saves the failure first).
+fn searching(verifier: &TipVerifier, tip: &Commit, handle: &Handle) -> bool {
+    verifier
+        .failed
+        .as_ref()
+        .is_some_and(|failed| failed.commit == *tip && failed.round.as_ref() == Some(handle))
 }
 
 /// Leaves a stopped round before it treats interrupted checks as missing or failing.

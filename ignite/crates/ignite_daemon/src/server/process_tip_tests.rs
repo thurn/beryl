@@ -594,3 +594,61 @@ fn a_pass_stops_a_running_culprit_search_and_retries_the_same_tip() {
     assert_eq!(machine.commands.begun(), 2);
     assert!(lock(&machine.landing.owner).is_none());
 }
+
+/// On 2026-11-25 every culprit search was stopped for a newer tip that failed in turn, so for
+/// 16 hours no search finished and nothing was reverted or promoted. A round that has recorded
+/// its failed verdict now finishes its search when a newer candidate appears.
+#[test]
+fn a_newer_tip_does_not_stop_a_running_culprit_search() {
+    let target = Commit::new("bbbb000").unwrap();
+    let machine = TipMachine::with_work(
+        "searching-tip-round",
+        OneCheck {
+            fail_at: Some(target.clone()),
+            ..OneCheck::default()
+        },
+    );
+    let ctx = machine.threads.ctx.clone();
+    assert!(
+        machine
+            .hub
+            .update_tip_candidate(&TipCandidateUpdate {
+                expected: None,
+                replacement: TipCandidate {
+                    commit: target.clone(),
+                    retry_on_new_tip: false,
+                },
+            })
+            .unwrap()
+    );
+    let (server, tips) = machine.daemon();
+    machine.switch.set(Some(server.clone()));
+    server.start_internal(
+        tips.verb.clone(),
+        TipRoundVerb::request(&target, Seq(0), &ctx.repo),
+    );
+    assert!(until(|| machine.commands.begun() == 1));
+    machine.commands.finish_all();
+    assert!(until(|| machine.commands.begun() == 2));
+
+    // The second command is the culprit search's probe. A newer tip lands while it runs, and
+    // the loop selects it as the next candidate, but leaves the search running.
+    let newer = Commit::new("cccc000").unwrap();
+    machine.git.set_tip("staging", newer.clone());
+    let searching = turn_on_a_thread(tips, ctx.clone());
+    assert!(until(|| machine
+        .hub
+        .tip_candidate()
+        .unwrap()
+        .is_some_and(|candidate| candidate.commit == newer)));
+    std::thread::sleep(Duration::from_millis(200));
+    assert_eq!(machine.switch.stops.load(Ordering::SeqCst), 0);
+    machine.commands.finish_all();
+    let (_, turn) = searching.join().unwrap();
+    let (tip, outcome) = turn.unwrap().unwrap();
+    assert_eq!(tip, target);
+    assert!(
+        matches!(outcome, TipOutcome::Failed { .. }),
+        "the search finished with {outcome:?}"
+    );
+}
