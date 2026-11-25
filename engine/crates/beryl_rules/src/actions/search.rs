@@ -21,17 +21,19 @@ use crate::state::{Zone, ZoneKey};
 use crate::table::Capability;
 use crate::zones;
 
-/// `player` searches `owner`'s library for up to `n` cards that pass `filter`, and finds some
-/// of the cards that do, or none ([CR 701.23a](https://yawgatog.com/resources/magic-rules/#R70123a)):
-/// "To search for a card in a zone, look at all cards in that zone (even if it's a hidden
-/// zone) and find a card that matches the given description."
-/// [CR 701.23b](https://yawgatog.com/resources/magic-rules/#R70123b): "If a player is
-/// searching a hidden zone for cards with a stated quality ... that player isn't required
-/// to find some or all of those cards even if they're present in that zone." Returns the
-/// cards found, still in the library: the caller says where they go, whether they are
-/// revealed ([CR 701.23e](https://yawgatog.com/resources/magic-rules/#R70123e)), and
-/// shuffles. Each card is one [`DecisionKind::ChooseUpTo`](crate::decision::DecisionKind::ChooseUpTo),
-/// whose [`Opt::Done`](crate::decision::Opt::Done) ends the search.
+/// `player` searches `owner`'s library for `n` cards that pass `filter`
+/// ([CR 701.23a](https://yawgatog.com/resources/magic-rules/#R70123a)): "To search for a card
+/// in a zone, look at all cards in that zone (even if it's a hidden zone) and find a card that
+/// matches the given description." When `filter` states a quality (anything other than
+/// [`Filter::Any`]), the player may find fewer or none
+/// ([CR 701.23b](https://yawgatog.com/resources/magic-rules/#R70123b)): "If a player is
+/// searching a hidden zone for cards with a stated quality, such as a card with a certain card
+/// type or color, that player isn't required to find some or all of those cards even if they're
+/// present in that zone." Otherwise the player must find as many cards as the library holds up
+/// to `n`, and [`Opt::Done`](crate::decision::Opt::Done) is not offered while matching cards
+/// remain. Returns the cards found, still in the library: the caller says where they go,
+/// whether they are revealed
+/// ([CR 701.23e](https://yawgatog.com/resources/magic-rules/#R70123e)), and shuffles.
 #[inline]
 pub fn search_library<L: Layout>(
     game: &mut Game<'_, L>,
@@ -42,14 +44,15 @@ pub fn search_library<L: Layout>(
     n: u8,
 ) -> Result<Bitboard<L::Slot>, Stop> {
     let prompt = Prompt::new(Purpose::Search).most(n);
+    let min = if filter == Filter::Any { n } else { 0 };
     if game.table.can(Capability::CastWhileSearching) && player == owner && n != 0 {
-        return search_with_casts(game, resolution, player, filter, n, prompt);
+        return search_with_casts(game, resolution, player, filter, min, n, prompt);
     }
     let library = game.state.zone(ZoneKey::Of(owner, Zone::Library));
     zones::look_at(game, player, library);
     let words = resolution.words(game);
     let found = filter.select(game.state, game.table, library, player, &words);
-    choices::pick_up_to(game, resolution, player, found, n, prompt)
+    choices::pick_up_to(game, resolution, player, found, min, n, prompt)
 }
 
 /// A card in the player's own library can permit a cast before any card has been found.
@@ -65,6 +68,7 @@ fn search_with_casts<L: Layout>(
     resolution: &mut Resolution<'_, L>,
     player: Seat,
     filter: Filter,
+    min: u8,
     n: u8,
     prompt: Prompt,
 ) -> Result<Bitboard<L::Slot>, Stop> {
@@ -73,7 +77,9 @@ fn search_with_casts<L: Layout>(
         zones::look_at(game, player, library);
         let words = resolution.words(game);
         let found = filter.select(game.state, game.table, library, player, &words);
-        let pick = choices::search_pick(game, resolution, player, found, library, prompt)?;
+        let must_find = min > 0 && !found.is_empty();
+        let pick =
+            choices::search_pick(game, resolution, player, found, library, must_find, prompt)?;
         if let Opt::Cast { slot, face, .. } = pick {
             if cfg!(debug_assertions) {
                 let def = game
@@ -94,7 +100,15 @@ fn search_with_casts<L: Layout>(
             return Ok(Bitboard::EMPTY);
         };
         let first = Bitboard::single(slot);
-        let rest = choices::pick_up_to(game, resolution, player, found & !first, n - 1, prompt)?;
+        let rest = choices::pick_up_to(
+            game,
+            resolution,
+            player,
+            found & !first,
+            min.saturating_sub(1),
+            n - 1,
+            prompt,
+        )?;
         return Ok(first | rest);
     }
 }
@@ -123,6 +137,12 @@ pub(crate) fn instruction<L: Layout>(
         let (game, resolution) = run.resolving();
         let cards = search_library(game, resolution, player, player, filter, count)?;
         match found {
+            Found::ToHand => {
+                for &slot in game.state.in_game_order(game.table, cards)?.iter() {
+                    let card = game.state.object_ref(slot);
+                    zones::move_to(game, card, Zone::Hand, Reason::Effect)?;
+                }
+            }
             Found::RevealToHand => {
                 for &slot in game.state.in_game_order(game.table, cards)?.iter() {
                     reveal::reveal(game, player, slot);

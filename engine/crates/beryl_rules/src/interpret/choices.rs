@@ -261,22 +261,34 @@ fn pick_or_end_options<L: Layout>(
 
 /// Before the player has found any card in their library, the search also offers legal
 /// casts of cards that grant that permission. A cast is chosen in the search's question
-/// (see CR 608.2d) and performed by the caller. With nothing to find or cast, there is
-/// nothing to ask, as in [`pick_up_to`].
+/// (see CR 608.2d) and performed by the caller. When `must_find` is set (a search with no
+/// stated quality while cards remain in the library), [`Opt::Done`] is not offered. With
+/// nothing to find or cast, there is nothing to ask, as in [`pick_up_to`].
 pub(crate) fn search_pick<L: Layout>(
     game: &mut Game<'_, L>,
     resolution: &mut Resolution<'_, L>,
     player: Seat,
     found: Bitboard<L::Slot>,
     library: Bitboard<L::Slot>,
+    must_find: bool,
     prompt: Prompt,
 ) -> Result<Opt<L>, Stop> {
-    let mut list = pick_or_end_options(game, found)?;
+    let mut list: L::Queue<Opt<L>, OPTIONS> = Default::default();
+    if !must_find {
+        list.push(Opt::Done)?;
+    }
+    let left = crate::engine::collapse(game.state, found);
+    Candidates::<L>::extend_options(&mut list, left, |out, slot| out.push(Opt::Object(slot)))?;
     crate::casting::search_cast_options(game.state, game.table, library, player, &mut list)?;
-    if list.len() == 1 {
+    if !must_find && list.len() == 1 {
         return Ok(Opt::Done);
     }
-    let question = Decision::options(player, DecisionKind::ChooseUpTo, list, prompt);
+    let kind = if must_find {
+        DecisionKind::ChooseObject
+    } else {
+        DecisionKind::ChooseUpTo
+    };
+    let question = Decision::options(player, kind, list, prompt);
     let answer = resolution.answer(game, &question)?;
     Ok(question
         .candidates
@@ -284,22 +296,28 @@ pub(crate) fn search_pick<L: Layout>(
         .expect("an answer among the options"))
 }
 
-/// Asks `player` to choose up to `n` of `candidates`, one [`pick_or_end`] at a time, each a
-/// pick of `prompt` as it is given: the whole run of a [`Shape::Pick`] with an end. Returns
-/// those chosen.
+/// Asks `player` to choose between `min` and `n` of `candidates`, one pick at a time, each a
+/// pick of `prompt` as it is given: a mandatory [`pick`] until `min` have been chosen, then
+/// [`pick_or_end`] until `n` have been chosen or the player ends the run. Returns those chosen.
 pub fn pick_up_to<L: Layout>(
     game: &mut Game<'_, L>,
     resolution: &mut Resolution<'_, L>,
     player: Seat,
     candidates: Bitboard<L::Slot>,
+    min: u8,
     n: u8,
     prompt: Prompt,
 ) -> Result<Bitboard<L::Slot>, Stop> {
     let mut chosen = Bitboard::EMPTY;
     while chosen.count() < u32::from(n) && !(candidates & !chosen).is_empty() {
-        match pick_or_end(game, resolution, player, candidates & !chosen, prompt)? {
-            Some(slot) => chosen.insert(slot),
-            None => break,
+        let left = candidates & !chosen;
+        if chosen.count() < u32::from(min) {
+            chosen.insert(pick(game, resolution, player, left, prompt)?);
+        } else {
+            match pick_or_end(game, resolution, player, left, prompt)? {
+                Some(slot) => chosen.insert(slot),
+                None => break,
+            }
         }
     }
     Ok(chosen)

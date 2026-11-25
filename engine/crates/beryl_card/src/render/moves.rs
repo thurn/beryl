@@ -137,6 +137,10 @@ impl Ctx {
             let library = c.possessive(player);
             let it = if several { "them" } else { "it" };
             let found = match found {
+                Found::ToHand => {
+                    let that = if several { "those cards" } else { "that card" };
+                    format!("{} {that} into {library} hand", c.verb("put", "puts"))
+                }
                 Found::RevealToHand => format!(
                     "{} {it}, {} {it} into {library} hand",
                     c.verb("reveal", "reveals"),

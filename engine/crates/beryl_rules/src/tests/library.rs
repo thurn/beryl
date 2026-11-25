@@ -230,6 +230,78 @@ fn casting_during_a_search_preserves_the_library_and_ends_at_the_first_find() {
     assert!(s.knows(opponent, cast));
 }
 
+/// Searching with `Filter::Any` has no stated quality (CR 701.23b), so `Opt::Done` is not
+/// offered while cards remain in the library, both with and without cast-while-searching.
+#[test]
+fn search_for_any_card_cannot_end_early_while_cards_remain() {
+    use beryl_card::{CardDef, Face, Filter, card, mana};
+
+    static CASTER: CardDef = card(
+        "Search Caster",
+        &[Face::EMPTY
+            .types(Types::CREATURE)
+            .cost(mana("{G}"))
+            .power_toughness(1, 1)
+            .abilities(&[Ability::cast_while_searching()])],
+    );
+    static BEAR: CardDef = card(
+        "Search Bear",
+        &[Face::EMPTY.types(Types::CREATURE).power_toughness(2, 2)],
+    );
+    static CATALOG: CardTable = CardTable::new(&[&CASTER, &BEAR]);
+    let deck = [(1, CASTER.name), (1, BEAR.name)];
+    let t = GameTable::new(Format::CONSTRUCTED, &CATALOG, [&deck, &deck]).unwrap();
+    let mut s = State::new(&t, 1, Profile::EXACT).unwrap();
+    let mut x = Scratch::recording();
+    let player = Seat::P0;
+    let opponent = player.opponent();
+    let bear = find(&s, &t, player, BEAR.name);
+    let caster = find(&s, &t, player, CASTER.name);
+    let source = s.object_ref(bear);
+    let _mana = s.add_mana(player, None, crate::card::ManaColor::Green, 1);
+
+    // Without cast-while-searching (searching opponent's library): ChooseObject, no Opt::Done.
+    let (_, foreign) = resolving(&t, &mut s, &mut x, source, &[], |game, resolution| {
+        crate::actions::search::search_library(game, resolution, player, opponent, Filter::Any, 1)
+    });
+    let foreign = foreign.unwrap();
+    assert_eq!(foreign.kind, DecisionKind::ChooseObject);
+    assert_eq!(foreign.len(), 2);
+
+    // With cast-while-searching (own library): offers both cards and casting, but no Opt::Done.
+    let original = s;
+    let (_, first) = resolving(&t, &mut s, &mut x, source, &[], |game, resolution| {
+        crate::actions::search::search_library(game, resolution, player, player, Filter::Any, 1)
+    });
+    let first = first.unwrap();
+    assert_eq!(first.kind, DecisionKind::ChooseObject);
+    assert!(matches!(&first.candidates, Candidates::Options(options)
+        if !options.iter().any(|o| *o == Opt::Done) && options.len() == 3));
+
+    // After casting the only castable card, one card remains and is found automatically.
+    let cast_answer = pick(
+        &first,
+        Opt::Cast {
+            slot: caster,
+            face: FaceIx::FRONT,
+            costs: Castings::NONE,
+        },
+    );
+    s = original;
+    let (found, next) = resolving(
+        &t,
+        &mut s,
+        &mut x,
+        source,
+        &[cast_answer],
+        |game, resolution| {
+            crate::actions::search::search_library(game, resolution, player, player, Filter::Any, 1)
+        },
+    );
+    assert!(next.is_none());
+    assert_eq!(found.unwrap().sole(), Some(bear));
+}
+
 /// [CR 701.26b](https://yawgatog.com/resources/magic-rules/#R70126b): "Only tapped permanents
 /// can be untapped." Here an opponent of the ability's controller untaps a creature: neither
 /// the lands nor the controller the helper was first written for.

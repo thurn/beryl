@@ -282,11 +282,13 @@ pub enum Effect {
     /// then shuffles" ([`Found`] says where)
     /// ([CR 701.23a](https://yawgatog.com/resources/magic-rules/#R70123a)): "To search for a
     /// card in a zone, look at all cards in that zone (even if it's a hidden zone) and find
-    /// a card that matches the given description." The player may find fewer, or none
-    /// ([CR 701.23b](https://yawgatog.com/resources/magic-rules/#R70123b)). The filter is
-    /// read for the player searching. A player told to search for no cards neither searches
-    /// nor shuffles: "for each creature exiled this way, its controller searches" has the
-    /// players it exiled none of do nothing.
+    /// a card that matches the given description." When the search states a quality (a filter
+    /// other than [`Filter::Any`]), the player may find fewer, or none
+    /// ([CR 701.23b](https://yawgatog.com/resources/magic-rules/#R70123b)); otherwise they must
+    /// find as many as the library holds up to `count`. The filter is read for the player
+    /// searching. A player told to search for no cards neither searches nor shuffles: "for each
+    /// creature exiled this way, its controller searches" has the players it exiled none of do
+    /// nothing.
     Search {
         player: Players,
         filter: Filter,

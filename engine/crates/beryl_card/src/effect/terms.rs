@@ -195,6 +195,11 @@ pub enum LibraryOrder {
 /// Where the cards a search finds go ([`Effect::Search`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Found {
+    /// "Put that card into your hand", without revealing it
+    /// ([CR 701.23e](https://yawgatog.com/resources/magic-rules/#R70123e)): "If the effect that
+    /// contains the search instruction doesn't also contain instructions to reveal the found
+    /// card(s), then they're not revealed."
+    ToHand,
     /// "Reveal it, put it into your hand"
     /// ([CR 701.23e](https://yawgatog.com/resources/magic-rules/#R70123e)).
     RevealToHand,

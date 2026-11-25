@@ -61,7 +61,7 @@ pub fn untap_up_to<L: Layout>(
     let s = &*game.state;
     let tapped = permanents.slots().filter(|slot| s.object(slot).is_tapped());
     let prompt = Prompt::new(Purpose::Untap).most(n);
-    let chosen = choices::pick_up_to(game, resolution, player, tapped, n, prompt)?;
+    let chosen = choices::pick_up_to(game, resolution, player, tapped, 0, n, prompt)?;
     untap_selected(game, chosen)?;
     Ok(chosen)
 }

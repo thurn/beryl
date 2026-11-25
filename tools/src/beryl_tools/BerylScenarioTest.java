@@ -225,6 +225,19 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
                     () -> super.choose(outcome, cards, target, source, game));
         }
 
+        /**
+         * XMage's `TargetCardInLibrary.choose` still prompts `chooseTarget` when the library has
+         * no matching cards (including when it is empty), where Beryl asks nothing.
+         */
+        @Override
+        public boolean chooseTarget(Outcome outcome, Cards cards, TargetCard target, Ability source, Game game) {
+            if (target instanceof mage.target.common.TargetCardInLibrary
+                    && target.possibleTargets(target.getAffectedAbilityControllerId(getId()), source, game, cards).isEmpty()) {
+                return false;
+            }
+            return super.chooseTarget(outcome, cards, target, source, game);
+        }
+
         @Override
         public boolean choose(Outcome outcome, Choice choice, Game game) {
             if (castCost != null && choice.isKeyChoice()

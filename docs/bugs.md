@@ -6,6 +6,21 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **A search for any card let the player find nothing.** Searching a library
+  with `Filter::Any` (no stated quality) offered `Opt::Done` on every pick, even
+  while cards remained in the library, although CR 701.23b allows finding fewer
+  cards only when searching a hidden zone for cards with a stated quality.
+  `actions::search::search_library` and `search_with_casts` always called
+  `choices::pick_up_to` and `choices::search_pick`, both of which always offered
+  `Opt::Done`. `choices::pick_up_to` now takes a minimum count and asks a
+  mandatory `choices::pick` while fewer than that minimum have been found, and
+  `choices::search_pick` omits `Opt::Done` when a search with `Filter::Any` has
+  matching cards left. Guard: the Demonic Tutor scenarios (a non-empty library
+  offers only its cards; an empty library finds nothing),
+  `search_for_any_card_cannot_end_early_while_cards_remain`, and the mutation
+  check on Sylvan Scrying and Spellseeker (whose `Filter::Any` mutants are no
+  longer in `ORACLE_BLIND`).
+
 - **Automatic mana payment chose which copy of a source to tap by slot.** When a
   payment needed one of two copies of the same land or mana creature, the rules
   tapped the copy in the lower slot. Slots are assigned by the deal, so the same
@@ -40,7 +55,6 @@ fixed in the same session. Newest first.
   `the_graveyard_permission_works_only_during_its_controllers_turn`. No check
   can tell that a permission's Oracle words name a turn its code ignores; a test
   with a flash card covers the timing words of a casting permission.
-
 - **Two different game histories hashed alike.** The hash of a `State` added the
   turns played before a restart and the turns played in ended subgames only when
   each was nonzero, with nothing to say which was which. So a game five turns
