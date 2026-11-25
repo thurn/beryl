@@ -150,7 +150,12 @@ fn each_step_and_each_agent_decision_has_a_view_and_each_event_one_view() {
                 "seed {seed}: {:?} at {:?}",
                 view.status, view.turn
             );
-            if began {
+            // A subgame's first view is at turn 0, before any step of it has begun, and the
+            // view after it ends returns to the step the spell that started it resolves in, with
+            // the subgame's `Win` among its events. Neither shows a step beginning.
+            let subgame_boundary =
+                view.turn.number == 0 || events.iter().any(|e| matches!(e, Event::Win { .. }));
+            if began && !subgame_boundary {
                 began_steps += 1;
                 assert!(
                     events.iter().any(|e| matches!(e, Event::StepBegins { .. })),
