@@ -75,7 +75,7 @@ pub(crate) fn instruction<L: Layout>(
 ) -> Result<Outcome<L>, Stop> {
     let permanents = run.permanents(objects);
     let mut left = permanents;
-    while let Some(object) = run.next_permanent(&mut left) {
+    while let Some(object) = run.state().next_permanent(&mut left) {
         let (game, resolution) = run.resolving();
         explore(game, resolution, object.into())?;
     }

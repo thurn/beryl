@@ -10,7 +10,7 @@
 //! Implements: CR 608.2f
 
 use beryl_card::{Effect, ExileMatch, Objects, Players, Types};
-use beryl_kernel::reference::{Permanent, Permanents};
+use beryl_kernel::reference::Permanents;
 
 use crate::actions::{
     attach, coins, counter, destroy, discard, exile, explore, fateseal, manifest_dread, meld, mill,
@@ -588,8 +588,8 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 .iter()
                 .copied()
                 .chain(original)
-                .filter(|&card| self.state().is_current(card))
-                .map(|card| card.slot)
+                .filter_map(|card| self.state().current(card))
+                .map(|card| card.reference().slot)
                 .collect(),
         ))
     }
@@ -603,11 +603,9 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             return Types::NONE;
         };
         let s = self.state();
-        if s.spell(spell).is_some() {
-            s.types(self.game.table, spell.slot)
-        } else {
-            s.departed_spell(spell)
-                .map_or(Types::NONE, |known| known.types)
+        match s.spell(spell) {
+            Some(on_stack) => s.types(self.game.table, on_stack.slot()),
+            None => (s.departed_spell(spell)).map_or(Types::NONE, |known| known.types),
         }
     }
 
@@ -624,13 +622,11 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
         self.registers.controlled =
             Table::from_fn(|player| leaving.filter(|slot| s.controller(slot).index() == player));
         for (place, target) in placed(self.resolving.entry.targets.as_slice()) {
-            let Some(object) = target.as_object() else {
+            let Some(object) = target.as_object().and_then(|object| s.current(object)) else {
                 continue;
             };
-            if self.registers.legal.contains(place)
-                && self.game.state.is_current(object)
-                && leaving.contains(object.slot)
-            {
+            let object = object.reference();
+            if self.registers.legal.contains(place) && leaving.contains(object.slot) {
                 self.registers.known[place.index()] = self.scene().known(object.slot);
                 self.registers.noted.insert(place);
             }
@@ -683,13 +679,6 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             permanents
                 .filter(|slot| !matches!(s.object(slot).zone(), Zone::Battlefield | Zone::Merged)),
         )
-    }
-
-    /// The first of `permanents`, in the order they entered the battlefield, that is still
-    /// one, taken out of the set: how an instruction acts on each of several in an order the
-    /// game can see, whatever the ones before did.
-    pub(crate) fn next_permanent(&self, permanents: &mut Permanents<L>) -> Option<Permanent<L>> {
-        self.state().next_permanent(permanents)
     }
 
     /// The outcome of an instruction that moved `objects` to `zone`: those that are there.

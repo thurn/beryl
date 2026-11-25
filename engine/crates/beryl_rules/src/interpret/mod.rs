@@ -343,7 +343,8 @@ pub(crate) fn condition_holds<L: Layout>(
             || subject
                 .of
                 .source
-                .is_some_and(|r| s.permanent(r).is_some() && !s.is_solved(r.slot));
+                .and_then(|source| s.permanent(source))
+                .is_some_and(|case| !s.is_solved(case.slot()));
         can_solve && holds(s, t, subject, condition)
     })
 }

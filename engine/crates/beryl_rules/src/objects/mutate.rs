@@ -32,7 +32,7 @@ pub(crate) fn instruction<L: Layout>(
     objects: Objects,
 ) -> Result<Outcome<L>, Stop> {
     let mut permanents = run.permanents(objects);
-    let Some(onto) = run.next_permanent(&mut permanents) else {
+    let Some(onto) = run.state().next_permanent(&mut permanents) else {
         return Ok(Outcome::default());
     };
     let (game, resolution) = run.resolving();

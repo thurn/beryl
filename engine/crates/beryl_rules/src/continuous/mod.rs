@@ -140,7 +140,7 @@ pub(crate) fn instruction<L: Layout>(
     // (see CR 302.6).
     if modifications.contains(&Modification::Control) {
         let mut left = permanents;
-        while let Some(permanent) = run.next_permanent(&mut left) {
+        while let Some(permanent) = run.state().next_permanent(&mut left) {
             let (game, resolution) = run.resolving();
             gain_control(game, resolution, permanent, duration)?;
         }
@@ -372,7 +372,7 @@ pub(crate) fn become_copy_instruction<L: Layout>(
     except: Option<ExceptIx>,
 ) -> Result<Outcome<L>, Full> {
     let mut originals = run.permanents(of);
-    let Some(original) = run.next_permanent(&mut originals) else {
+    let Some(original) = run.state().next_permanent(&mut originals) else {
         return Ok(Outcome::NOTHING);
     };
     let entry = &run.resolution().entry;
@@ -386,7 +386,7 @@ pub(crate) fn become_copy_instruction<L: Layout>(
     }
     let mut copies = run.permanents(objects);
     let mut became = Bitboard::EMPTY;
-    while let Some(copy) = run.next_permanent(&mut copies) {
+    while let Some(copy) = run.state().next_permanent(&mut copies) {
         let game = run.game();
         game.state
             .become_copy(game.table, source, copy.into(), values)?;

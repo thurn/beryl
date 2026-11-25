@@ -9,6 +9,7 @@
 //! Implements: CR 107.1a, CR 107.1b, CR 109.5, CR 608.2h
 
 use beryl_card::{Amount, CastingKind, Condition, Objects, Players, SpecIx, Types, Words};
+use beryl_kernel::reference::Current;
 
 use crate::PlayerSet;
 use crate::bitboard::Bitboard;
@@ -20,8 +21,8 @@ use crate::layout::{Layout, PerPlayer, Table};
 use crate::query::Copiable;
 use crate::stack::trigger::entered_with;
 use crate::state::{
-    AbilityRef, AbilityTarget, Count, CountersHeld, PendingTrigger, State, TARGETS, Target,
-    TargetPlace, TargetPlaces, Tracker, Zone, ZoneKey, placed,
+    AbilityRef, AbilityTarget, Count, CountersHeld, ObjectRef, PendingTrigger, State, TARGETS,
+    Target, TargetPlace, TargetPlaces, Tracker, Zone, ZoneKey, placed,
 };
 use crate::table::GameTable;
 
@@ -152,6 +153,20 @@ impl<L: Layout> Scene<'_, L> {
         self.subject.of.controller.seat()
     }
 
+    /// The ability's source if it is still the object it was (see CR 400.7): a source that
+    /// has changed zones since is a new object, which "this" no longer names.
+    fn source(&self) -> Option<ObjectRef<L>> {
+        let source = self.subject.of.source?;
+        self.s.current(source).map(Current::reference)
+    }
+
+    /// What the ability triggered on, or the object a delayed ability carries, if it is still
+    /// the object it was (see CR 400.7).
+    fn triggered_on(&self) -> Option<ObjectRef<L>> {
+        let object = self.subject.info.object?;
+        self.s.current(object).map(Current::reference)
+    }
+
     fn words(&self) -> Words {
         (self.s).words_by(self.subject.of.source.map(|source| source.slot), self.words)
     }
@@ -232,25 +247,18 @@ impl<L: Layout> Scene<'_, L> {
         let s = self.s;
         match objects {
             Objects::This => self
-                .subject
-                .of
-                .source
-                .filter(|&source| s.is_current(source))
+                .source()
                 .map_or(Bitboard::EMPTY, |source| Bitboard::single(source.slot)),
             Objects::Target(spec) => self
                 .targets(spec)
-                .filter_map(|(_, target)| target.as_object())
-                .filter(|&object| s.is_current(object))
-                .map(|object| object.slot)
+                .filter_map(|(_, target)| s.current(target.as_object()?))
+                .map(|object| object.reference().slot)
                 .collect(),
             // See CR 303.4b: "The object or player an Aura is attached to is called enchanted."
             // Asked of the source where it is now: once it has left the battlefield it is
             // attached to nothing.
             Objects::AttachedTo => self
-                .subject
-                .of
-                .source
-                .filter(|&source| s.is_current(source))
+                .source()
                 .and_then(|source| s.object(source.slot).attached_to())
                 .map_or(Bitboard::EMPTY, Bitboard::single),
             Objects::Those => self.registers.outcome.objects,
@@ -258,8 +266,8 @@ impl<L: Layout> Scene<'_, L> {
                 self.objects(*objects) & !self.registers.outcome.objects
             }
             Objects::LibraryTop { players, count } => self.library_top(*players, count),
-            Objects::TriggeredOn => (self.subject.info.object)
-                .filter(|&object| s.is_current(object))
+            Objects::TriggeredOn => self
+                .triggered_on()
                 .map_or(Bitboard::EMPTY, |object| Bitboard::single(object.slot)),
             // See CR 603.7c: "if that object is no longer in the zone it's expected to be in at
             // the time the delayed triggered ability resolves, the ability won't affect it."
@@ -267,11 +275,12 @@ impl<L: Layout> Scene<'_, L> {
             // event was about, and one that has changed zones is no longer current.
             // The cards a merged or melded permanent became in exile are found together
             // (see CR 713.8c).
-            Objects::Carried => (self.subject.info.object)
-                .filter(|&object| s.is_current(object))
+            Objects::Carried => self
+                .triggered_on()
                 .map_or(Bitboard::EMPTY, |object| s.exiled_together(object.slot)),
-            Objects::TriggeredOnIn(zone) => (self.subject.info.object)
-                .filter(|&object| s.is_current(object) && s.object(object.slot).zone() == zone)
+            Objects::TriggeredOnIn(zone) => self
+                .triggered_on()
+                .filter(|&object| s.object(object.slot).zone() == zone)
                 .map_or(Bitboard::EMPTY, |object| Bitboard::single(object.slot)),
             // See CR 607.2a: "The second ability refers only to cards in the exile zone that
             // were put there as a result of an instruction to exile them in the first
@@ -341,7 +350,7 @@ impl<L: Layout> Scene<'_, L> {
             // changed zones since is a new object (see CR 400.7), which is "other".
             Objects::Other(objects) => {
                 let mut others = self.objects(*objects);
-                if let Some(source) = self.subject.of.source.filter(|&o| s.is_current(o)) {
+                if let Some(source) = self.source() {
                     others.remove(source.slot);
                 }
                 others
@@ -400,10 +409,7 @@ impl<L: Layout> Scene<'_, L> {
             Players::EachPlayer => self.s.players(),
             // See CR 303.4b: "The object or player an Aura is attached to is called enchanted."
             Players::Enchanted => self
-                .subject
-                .of
-                .source
-                .filter(|&source| self.s.is_current(source))
+                .source()
                 .and_then(|source| self.s.object(source.slot).enchanted_player())
                 .map_or(PlayerSet::NOBODY, PlayerSet::only),
             Players::Target(spec) => {

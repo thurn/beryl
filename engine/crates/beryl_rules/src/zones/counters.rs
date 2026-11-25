@@ -135,7 +135,7 @@ pub(crate) fn remove_all_instruction<L: Layout>(
     };
     let before = counters(run);
     let mut left = permanents;
-    while let Some(object) = run.next_permanent(&mut left) {
+    while let Some(object) = run.state().next_permanent(&mut left) {
         // Each kind it has; `remove` takes as many as there are.
         for &kind in CounterKind::ALL {
             remove(run.game(), object, kind, u8::MAX)?;
@@ -166,7 +166,7 @@ fn change<L: Layout>(
     };
     let before = counters(run);
     let mut left = permanents;
-    while let Some(object) = run.next_permanent(&mut left) {
+    while let Some(object) = run.state().next_permanent(&mut left) {
         change(run.game(), object, kind, count)?;
     }
     Ok(Outcome::of(

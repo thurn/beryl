@@ -160,7 +160,7 @@ pub(crate) fn instruction<L: Layout>(
     if let Some(objects) = permanents {
         let mut left = run.permanents(objects);
         damaged = left.slots();
-        while let Some(permanent) = run.next_permanent(&mut left) {
+        while let Some(permanent) = run.state().next_permanent(&mut left) {
             let to = Recipient::Permanent(permanent.into());
             dealt += u32::from(deal(run.game(), source, to, amount, false)?);
         }
@@ -273,7 +273,7 @@ pub(crate) fn prevent_instruction<L: Layout>(
     };
     let shielded = run.permanents(objects);
     let mut left = shielded;
-    while let Some(permanent) = run.next_permanent(&mut left) {
+    while let Some(permanent) = run.state().next_permanent(&mut left) {
         let (game, resolution) = run.resolving();
         let effect = Continuous::Prevent(Subject::Object(permanent.into()), shield);
         continuous::start(game, resolution, effect, Duration::EndOfTurn)?;

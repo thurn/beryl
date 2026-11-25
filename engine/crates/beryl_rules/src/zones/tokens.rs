@@ -232,7 +232,7 @@ pub(crate) fn create_copies_instruction<L: Layout>(
         let card = run.resolution().entry.card();
         copy(run.game(), Copiable::of_card(card))?;
     }
-    while let Some(object) = run.next_permanent(&mut originals) {
+    while let Some(object) = run.state().next_permanent(&mut originals) {
         let what = run.state().copiable(object.slot());
         copy(run.game(), what)?;
     }

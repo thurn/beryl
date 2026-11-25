@@ -98,14 +98,9 @@ fn perform<L: Layout>(
     } else {
         Bitboard::EMPTY
     };
-    if !loose.is_empty() {
-        for index in 0..s.battlefield().len() {
-            let slot = s.battlefield()[index];
-            if loose.contains(slot) {
-                let equipment = s.permanent_at(slot).expect("Equipment on the battlefield");
-                s.unattach(equipment);
-            }
-        }
+    let mut loose = s.permanents_in(loose);
+    while let Some(equipment) = s.next_permanent(&mut loose) {
+        s.unattach(equipment);
     }
     if graveyard.is_empty() && tokens.is_empty() {
         if legends {
