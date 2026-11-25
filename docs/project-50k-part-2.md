@@ -109,7 +109,7 @@ census, bug log and state size checked on 2026-11-16 at staging `950e3c614`.
 | Engine source files between 745 and 800 lines     | 16 of 287 across `beryl_kernel`, `beryl_rules` and `beryl_card`                                               |
 | Rules functions that repeat `<L: Layout>`         | 644 of about 1,300 in `beryl_rules`                                                                           |
 | `size_of::<State<Small>>()`                       | 20,240 bytes of 20,480                                                                                        |
-| Cold `cargo check` of 50,000 cards (`just scale`) | 58.7 s against a 60 s budget (2026-11-12)                                                                     |
+| Cold `cargo check` of 50,000 cards (`just scale`) | 127.5 s under load against a 140 s held limit, 295 CPU-s (three quarters of clones without scenarios)         |
 | Most expensive check in CI                        | `rust:clippy`, about 76 s a run over 1,081 runs                                                               |
 | Per-card tests (`every_card_has_scenarios_...`)   | About 12 CPU-seconds a run at 121 cards                                                                       |
 
@@ -516,10 +516,12 @@ definition each real card's scenario covers.
   compiler executes to rebuild after one fixed edit. Ignite keeps the series,
   and its `slow-crate` rule files a ticket based on what agents spent rebuilding
   a crate. See [Rebuild counts](ignite.md#rebuild-counts).
+
 - **What was tried.** Non-generic engine entry points raised the rollout count
   by 0.68% and are not built (section C). Merging `beryl_search`'s test binaries
   into one saved nothing that could be measured. No ticket of this plan reduces
   compile time: Ignite's rule decides when a crate is worth it.
+
 - **What an engine change tests.** Every card. At 132 cards
   `every_card_has_scenarios_and_they_pass`, the mutation check and the generated
   scenarios cost about 13 CPU-seconds together, and Ignite reruns them only when
@@ -528,10 +530,35 @@ definition each real card's scenario covers.
   card then reruns that card, and an engine change runs the deck cards, the
   keystones and a sample fixed by the commit, with the rest played on idle
   cores.
-- **The rehearsal follows the workflow.** `just scale` clones today's card
-  files, scenarios and all. Once simple cards carry no hand-written scenarios
-  (section E), the rehearsal's mix is three quarters cards without a scenarios
-  module, as the pool will be, and its budgets are set again from that run.
+
+- **The rehearsal follows the workflow.** `just scale` clones three of every
+  four cards from card files with no `scenarios` module and the fourth from
+  files that keep one, as the pool will be (section E). Two runs of
+  `just scale --edits 8` on the same tree and machine, 50,000 clones in 68 set
+  crates, one with every clone's scenarios and one with the mix. The machine was
+  shared with other sessions both times: load average 14 to 19 on 10 cores for
+  the first and 13 to 17 for the second.
+
+  | Measure                  | All scenarios       | Three quarters none |
+  | ------------------------ | ------------------- | ------------------- |
+  | Cold check               | 269.2 s (550 CPU-s) | 127.5 s (295 CPU-s) |
+  | Release build            | 80.7 s (216 CPU-s)  | 57.9 s (178 CPU-s)  |
+  | One-edit rebuild, median | 2.0 s               | 1.8 s               |
+  | Largest compiler process | 1.93 GiB            | 1.04 GiB            |
+  | `target` after build     | 11.8 GB             | 7.6 GB              |
+
+  The wall times are inflated by the load, so read the CPU-seconds: the mix
+  halves the cold check's CPU cost. The cold check still misses the plan's 60 s
+  on this machine under that load, so `BUDGETS` holds it to 140 s, the run's
+  127.5 s plus 10%; the plan's 60 s stays as the target for an idle machine. The
+  other three budgets are met and unchanged. The script checks of the 182 pooled
+  cards take 9.2 s, and 50,000 clones of that mix would take about 6,400
+  CPU-seconds of them.
+
+  `every_card_has_scenarios_and_they_pass` was at the tip failing on Jace, the
+  Mind Sculptor's generated scenarios, so its timing is that of a failed run:
+  2.4 s over 182 cards, which is 13 ms a card and about 670 s for 50,000 cards
+  at one thread. Treat it as a lower bound until the test passes.
 
 ### E. The card workflow
 

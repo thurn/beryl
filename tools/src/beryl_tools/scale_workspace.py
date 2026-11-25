@@ -25,6 +25,10 @@ A clone of card file `f` numbered `i` is `f` with its card renamed "<name> i" (e
 every `Card::`, `Printed::` and `PrintedShape::` one, of the card and its faces becomes the
 clone's, so it keeps its abilities, faces and scenarios.
 
+The clones have the mix of cards the pool will have (see [`original`]): three of every four come
+from card files with no `scenarios` module, which are cycled through in order, and the fourth
+from files that keep one, likewise. A pool with only one kind clones that kind alone.
+
 The crates follow the shipped grouping (data/set-groups.json: the first-printing sets of a year,
 or of a half or quarter of one, of at most 1,200 cards): with no `--crates`, there are as many as N cards make at the tree's mean
 group size, sized and split into sets as the tree's groups are, in order and cycled.
@@ -40,6 +44,7 @@ import shutil
 import time
 from collections import Counter
 from dataclasses import dataclass
+from functools import cached_property
 from pathlib import Path
 from typing import cast
 
@@ -61,6 +66,11 @@ CONSTANT: re.Pattern[str] = re.compile(r"\b(names|printed)::([A-Z0-9_]+)\b")
 CAMEL: re.Pattern[str] = re.compile(
     r"\b(Card|Printed|PrintedShape)::([A-Z][A-Za-z0-9]*)\b"
 )
+# A card file's own scenarios, which the simple cards of the pool no longer carry.
+SCENARIOS: re.Pattern[str] = re.compile(r"^\s*(pub\s+)?mod\s+scenarios\b", re.MULTILINE)
+# Of every `MIX_PERIOD` clones, this many come from files with no `scenarios` module.
+MIX_PERIOD = 4
+MIX_SIMPLE = 3
 FIRST_SET: re.Pattern[str] = re.compile(r'"first_set":"([^"]+)"')
 
 
@@ -72,6 +82,10 @@ class Source:
     text: str
     name: str
     record: card_store.Json
+
+    @cached_property
+    def has_scenarios(self) -> bool:
+        return SCENARIOS.search(self.text) is not None
 
     def faces(self) -> list[str]:
         return [
@@ -96,6 +110,20 @@ def sources(
                 continue
             pool.append(Source(path, path.read_text(), name, record))
     return pool, left
+
+
+def original(pool: list[Source], index: int) -> Source:
+    """The card file clone number `index` copies: of each `MIX_PERIOD` clones, `MIX_SIMPLE`
+    come from the files with no `scenarios` module and the rest from those that keep one, each
+    kind cycled in order. A pool with only one kind clones it alone."""
+    simple = [s for s in pool if not s.has_scenarios]
+    kept = [s for s in pool if s.has_scenarios]
+    if not simple or not kept:
+        return pool[index % len(pool)]
+    rounds, place = divmod(index, MIX_PERIOD)
+    if place < MIX_SIMPLE:
+        return simple[(rounds * MIX_SIMPLE + place) % len(simple)]
+    return kept[rounds % len(kept)]
 
 
 def clone_name(source: Source, index: int) -> str:
@@ -387,7 +415,7 @@ def generate(root: Path, plan_: list[Crate], pool: list[Source]) -> list[str]:
             folder = directory / set_groups.set_module(code)
             folder.mkdir()
             for _ in range(count):
-                source = pool[index % len(pool)]
+                source = original(pool, index)
                 name = clone_name(source, index)
                 card = folder / f"{set_groups.card_module(name)}.rs"
                 card.write_text(clone(source, index))

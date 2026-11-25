@@ -22,6 +22,20 @@ def test_every_card_file_is_in_the_pool() -> None:
     assert any(s.name == "Counterspell" for s in pool)
 
 
+def test_three_quarters_of_the_clones_have_no_scenarios_module() -> None:
+    pool, _ = scale_workspace.sources()
+    assert any(s.has_scenarios for s in pool) and any(not s.has_scenarios for s in pool)
+    picked = [scale_workspace.original(pool, i) for i in range(4_000)]
+    simple = sum(not s.has_scenarios for s in picked)
+    assert simple == 3_000
+    # Each kind is cycled through in order, so every file of both kinds is cloned.
+    assert {s.path for s in picked} == {s.path for s in pool}
+    only = [s for s in pool if s.has_scenarios]
+    assert {scale_workspace.original(only, i).path for i in range(9)} <= {
+        s.path for s in only
+    }
+
+
 def test_a_clone_renames_only_its_own_card_and_faces() -> None:
     pool, _ = scale_workspace.sources()
     counterspell = next(s for s in pool if s.name == "Counterspell")
