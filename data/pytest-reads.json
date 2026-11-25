@@ -268,8 +268,9 @@
       "ignite/checks"
     ],
     "tools/tests/test_ignite_inputs.py": [
+      "client/Cargo.lock",
+      "engine",
       "ignite/checks",
-      "rust",
       "tools/src",
       "tools/tests"
     ],
