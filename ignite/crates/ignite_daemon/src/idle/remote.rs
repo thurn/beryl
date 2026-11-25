@@ -30,6 +30,7 @@ impl IdleHost for RemoteIdleHost {
             holder: super::LANDING_HOLDER.to_owned(),
             commit: commit.clone(),
             keep_free: KEEP_FREE,
+            products: None,
         };
         Ok(match self.remote.link.lease_landing(&call)? {
             LeaseLandingReply::Leased { tree, path, .. } => Some((tree, path)),

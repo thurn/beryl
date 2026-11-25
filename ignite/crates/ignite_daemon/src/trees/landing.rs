@@ -1,12 +1,14 @@
 //! Landing trees: they stay at the tip, and a landing or a tip verification leases one so that
 //! it builds only what one change added.
 
+use std::collections::HashMap;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 
 use ignite_core::ids::{Commit, Handle, TicketId, TreeId};
 use ignite_core::traits::{Error, Result};
 use ignite_git::{changed, worktree};
+use ignite_store::local::builds;
 use ignite_store::local::trees as store;
 
 use super::{Kind, Locked, TreeLease, Trees, choice, head, owner_alive, park_branch, store_error};
@@ -40,6 +42,24 @@ impl Trees {
         self.lease_landing_keeping(holder, None, tip, 1)
     }
 
+    /// Leases a landing tree at `tip` as [`Trees::lease_landing_keeping`] does with nothing kept
+    /// free, but among free trees prefers the one that built the most of `products`, nearest
+    /// the tip, falling back to the tree built nearest the tip.
+    ///
+    /// A tip round runs several families of checks at once, each in its own landing tree. Given
+    /// whichever tree was built nearest the tip, a family that needs the `client` build often got
+    /// a tree that had never built it: a tip-class `client` build took 11.9 minutes there,
+    /// against 2.2 minutes in a tree that had built it a few commits earlier.
+    pub fn lease_landing_for_products(
+        &self,
+        holder: &str,
+        owner: Option<&Handle>,
+        tip: &Commit,
+        products: &[String],
+    ) -> Result<Option<TreeLease>> {
+        self.lease_landing_preferring(holder, owner, tip, 0, products)
+    }
+
     /// Leases the landing tree `owner` already holds, or else the free landing tree built
     /// nearest `tip` if more than `keep_free` are free.
     pub(crate) fn lease_landing_keeping(
@@ -48,6 +68,19 @@ impl Trees {
         owner: Option<&Handle>,
         tip: &Commit,
         keep_free: usize,
+    ) -> Result<Option<TreeLease>> {
+        self.lease_landing_preferring(holder, owner, tip, keep_free, &[])
+    }
+
+    /// [`Trees::lease_landing_keeping`], preferring among free trees the one that holds the most
+    /// of `products` (see [`Trees::lease_landing_for_products`]).
+    fn lease_landing_preferring(
+        &self,
+        holder: &str,
+        owner: Option<&Handle>,
+        tip: &Commit,
+        keep_free: usize,
+        products: &[String],
     ) -> Result<Option<TreeLease>> {
         let kept = {
             let locked = self.lock();
@@ -60,7 +93,7 @@ impl Trees {
         let held = kept.is_some();
         let (tree, _reset_guard) = match kept {
             Some(tree) => (tree, None),
-            None => match self.take_free_landing(holder, owner, tip, keep_free)? {
+            None => match self.take_free_landing(holder, owner, tip, keep_free, products)? {
                 Some((tree, guard)) => (tree, Some(guard)),
                 None => return Ok(None),
             },
@@ -164,14 +197,16 @@ impl Trees {
             .transpose()
     }
 
-    /// Picks the free landing tree built nearest `tip`, if more than `keep_free` are free, and
-    /// marks it landing for `holder` and `owner`.
+    /// Picks the free landing tree that holds the most of `products`, then the one whose builds
+    /// of them lie nearest `tip`, then the one built nearest `tip`, if more than `keep_free` are
+    /// free, and marks it landing for `holder` and `owner`.
     fn take_free_landing(
         &self,
         holder: &str,
         owner: Option<&Handle>,
         tip: &Commit,
         keep_free: usize,
+        products: &[String],
     ) -> Result<Option<(TreeId, File)>> {
         let locked = self.lock();
         let rows = store::all(&locked.db).map_err(|e| store_error(&e))?;
@@ -187,9 +222,40 @@ impl Trees {
         if free.len() <= keep_free {
             return Ok(None);
         }
-        free.sort_by_key(|row| {
-            self.distance(row.built_commit.as_deref(), tip)
-                .unwrap_or(usize::MAX)
+        let held = if products.is_empty() {
+            Vec::new()
+        } else {
+            builds::all(&locked.db).map_err(|e| store_error(&e))?
+        };
+        let mut distances: HashMap<Option<String>, usize> = HashMap::new();
+        let mut distance = |built: Option<&str>| {
+            *distances
+                .entry(built.map(str::to_owned))
+                .or_insert_with(|| self.distance(built, tip).unwrap_or(usize::MAX))
+        };
+        free.sort_by_cached_key(|row| {
+            let tree = distance(row.built_commit.as_deref());
+            let mut missing = 0;
+            let mut behind = 0usize;
+            for product in products {
+                match held.iter().find(|build| {
+                    build.tree == row.id
+                        && build.product == *product
+                        && build.outcome == builds::HELD
+                }) {
+                    // A row recorded before builds kept their commit counts as built when the
+                    // tree last built.
+                    Some(build) => {
+                        let at = build
+                            .built_commit
+                            .as_deref()
+                            .or(row.built_commit.as_deref());
+                        behind = behind.saturating_add(distance(at));
+                    }
+                    None => missing += 1,
+                }
+            }
+            (missing, behind, tree)
         });
         let idle_can_take_slot =
             holder != crate::idle::LANDING_HOLDER || self.idle_can_take_slot(&locked, &rows);

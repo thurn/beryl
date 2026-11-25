@@ -259,6 +259,29 @@ pub struct RemoteLandTrees {
     pub local: MachineTrees,
 }
 
+impl RemoteLandTrees {
+    /// Leases a landing tree through the daemon (`host-lease-landing`).
+    fn lease_remote(
+        &self,
+        holder: &str,
+        at: &Commit,
+        keep_free: usize,
+        products: Option<Vec<String>>,
+    ) -> Result<Option<GateTree>> {
+        let call = LeaseLanding {
+            handle: self.remote.link.handle().clone(),
+            holder: holder.to_owned(),
+            commit: at.clone(),
+            keep_free: u32::try_from(keep_free).unwrap_or(u32::MAX),
+            products,
+        };
+        Ok(match self.remote.link.lease_landing(&call)? {
+            LeaseLandingReply::Leased { tree, path, .. } => Some(GateTree { tree, path }),
+            LeaseLandingReply::Busy => None,
+        })
+    }
+}
+
 impl LandTrees for RemoteLandTrees {
     fn dispatch_pressure(
         &self,
@@ -306,16 +329,16 @@ impl LandTrees for RemoteLandTrees {
         at: &Commit,
         keep_free: usize,
     ) -> Result<Option<GateTree>> {
-        let call = LeaseLanding {
-            handle: self.remote.link.handle().clone(),
-            holder: holder.to_owned(),
-            commit: at.clone(),
-            keep_free: u32::try_from(keep_free).unwrap_or(u32::MAX),
-        };
-        Ok(match self.remote.link.lease_landing(&call)? {
-            LeaseLandingReply::Leased { tree, path, .. } => Some(GateTree { tree, path }),
-            LeaseLandingReply::Busy => None,
-        })
+        self.lease_remote(holder, at, keep_free, None)
+    }
+
+    fn lease_landing_for_products(
+        &self,
+        holder: &str,
+        at: &Commit,
+        products: &[String],
+    ) -> Result<Option<GateTree>> {
+        self.lease_remote(holder, at, 0, Some(products.to_vec()))
     }
 
     fn release_landing(&self, tree: &TreeId, built_at: Option<&Commit>) -> Result<()> {

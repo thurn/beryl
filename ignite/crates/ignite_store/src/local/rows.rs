@@ -161,6 +161,9 @@ crate::tables! {
         /// The failed build's output file.
         output: Option<String>,
         updated_at: String,
+        /// The commit the tree was checked out at when it built a held product; `None` for a
+        /// failure and for a row written before this was recorded.
+        built_commit: Option<String>,
     }
 
     /// The tip verifier's memory between rounds: one row, `id` always 1.

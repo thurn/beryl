@@ -121,6 +121,18 @@ pub trait LandingTrees: Send + Sync {
         at: &Commit,
         keep_free: usize,
     ) -> Result<Option<TreeLease>>;
+    /// [`LandingTrees::lease`] with nothing kept free, preferring among free trees the one that
+    /// built the most of `products` nearest `at` (see
+    /// [`crate::trees::Trees::lease_landing_for_products`]).
+    fn lease_for_products(
+        &self,
+        holder: &str,
+        owner: &Handle,
+        at: &Commit,
+        _products: &[String],
+    ) -> Result<Option<TreeLease>> {
+        self.lease(holder, owner, at, 0)
+    }
     /// Frees `tree` if `owner` still holds it; a tree already freed is left alone.
     fn release(&self, owner: &Handle, tree: &TreeId, built: Option<&Commit>) -> Result<()>;
 }

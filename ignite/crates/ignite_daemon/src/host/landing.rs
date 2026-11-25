@@ -26,20 +26,26 @@ impl Host {
     ) -> Result<LeaseLandingReply> {
         self.running(ctx, &call.handle)?;
         let keep_free = usize::try_from(call.keep_free).unwrap_or(usize::MAX);
-        Ok(
-            match self
+        let lease = match &call.products {
+            Some(products) if keep_free == 0 => self.landing.lease_for_products(
+                &call.holder,
+                &call.handle,
+                &call.commit,
+                products,
+            )?,
+            _ => self
                 .landing
-                .lease(&call.holder, &call.handle, &call.commit, keep_free)?
-            {
-                Some(lease) => LeaseLandingReply::Leased {
-                    tree: lease.tree,
-                    path: lease.path,
-                    branch: lease.branch,
-                    at: lease.at,
-                },
-                None => LeaseLandingReply::Busy,
+                .lease(&call.holder, &call.handle, &call.commit, keep_free)?,
+        };
+        Ok(match lease {
+            Some(lease) => LeaseLandingReply::Leased {
+                tree: lease.tree,
+                path: lease.path,
+                branch: lease.branch,
+                at: lease.at,
             },
-        )
+            None => LeaseLandingReply::Busy,
+        })
     }
 
     pub(super) fn release_landing(&self, call: &ReleaseLanding) -> Result<()> {
@@ -65,6 +71,17 @@ impl LandingTrees for TreesLanding {
     ) -> Result<Option<TreeLease>> {
         self.trees
             .lease_landing_keeping(holder, Some(owner), at, keep_free)
+    }
+
+    fn lease_for_products(
+        &self,
+        holder: &str,
+        owner: &Handle,
+        at: &Commit,
+        products: &[String],
+    ) -> Result<Option<TreeLease>> {
+        self.trees
+            .lease_landing_for_products(holder, Some(owner), at, products)
     }
 
     fn release(&self, owner: &Handle, tree: &TreeId, built: Option<&Commit>) -> Result<()> {

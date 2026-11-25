@@ -250,6 +250,7 @@ fn tree_files() -> Vec<String> {
             holder: "m-7f3a:Tq44s.9.48".to_owned(),
             commit: commit(),
             keep_free: 0,
+            products: None,
         },
         &[
             (

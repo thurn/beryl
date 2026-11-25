@@ -970,5 +970,10 @@
     "label": "Every command the daemon starts in a ticket tree waits while the tree's lease copies another tree's build into it, as the daemon's own builds already did. A check listing or `ignite run` command that compiled during the copy held Cargo's lock when the copy was ready, so the seed was thrown away and the ticket built from its own older build: 33 of 560 seeds in jarvis's daemon log (2026-11-25)",
     "metric": "ignite.cycle-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Tip verification leases each family of checks the free landing tree that last built the products the family needs, instead of whichever tree was built nearest the tip. A tip-class `client` build took 11.9 minutes on cygnus in a tree that had never built it, against 2.2 minutes in one that had (2026-11-25)",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]

@@ -703,6 +703,7 @@ fn a_repeated_build_answers_once_and_leases_are_kept_by_their_owner() {
         holder: "m-1:T1".to_owned(),
         commit: commit.clone(),
         keep_free: 0,
+        products: None,
     };
     let leased = send(&daemon.registry, &lease).unwrap();
     assert!(matches!(leased, LeaseLandingReply::Leased { .. }));

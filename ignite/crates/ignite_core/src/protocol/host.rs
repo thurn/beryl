@@ -474,6 +474,11 @@ pub struct LeaseLanding {
     pub commit: Commit,
     /// Lease only while this many other landing trees stay free (1 for idle work, else 0).
     pub keep_free: u32,
+    /// The build products the holder will need, such as a tip family's. Among free trees the
+    /// daemon prefers the one that built the most of them nearest `commit`. A daemon that
+    /// predates the field ignores it and leases the tree built nearest `commit`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub products: Option<Vec<String>>,
 }
 
 /// The answer to `host-lease-landing`.

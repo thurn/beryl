@@ -37,18 +37,28 @@ pub struct CheckTipWork {
 impl CheckTipWork {
     /// Leases a landing tree at `commit` for `holder`, calls `f` with it and frees it again.
     /// Leases that may be held at once need holders of their own: a lease owned by a handle is
-    /// given back to the same handle and holder (see `crate::trees`). While every landing tree
-    /// is busy it waits for one (see [`wait_for_tree`]).
+    /// given back to the same handle and holder (see `crate::trees`). Among free trees it
+    /// prefers the one that built the most of `products` nearest `commit`, so that a family's
+    /// build reuses what an earlier round built. While every landing tree is busy it waits for
+    /// one (see [`wait_for_tree`]).
     fn at_for<T>(
         &self,
         ctx: &Context,
         holder: &str,
         commit: &Commit,
+        products: &[String],
         f: impl FnOnce(&TreeId) -> T,
     ) -> Result<T> {
         let lease = wait_for_tree(
             ctx.clock.as_ref(),
-            || self.trees.lease_landing(holder, commit),
+            || {
+                if products.is_empty() {
+                    self.trees.lease_landing(holder, commit)
+                } else {
+                    self.trees
+                        .lease_landing_for_products(holder, commit, products)
+                }
+            },
             || std::thread::sleep(TREE_POLL),
         )?;
         let value = f(&lease.tree);
@@ -66,7 +76,7 @@ impl CheckTipWork {
 
     /// [`CheckTipWork::at_for`] for one lease at a time, as listing and single runs take.
     fn at<T>(&self, ctx: &Context, commit: &Commit, f: impl FnOnce(&TreeId) -> T) -> Result<T> {
-        self.at_for(ctx, &format!("tip {commit}"), commit, f)
+        self.at_for(ctx, &format!("tip {commit}"), commit, &[], f)
     }
 }
 
@@ -114,13 +124,22 @@ impl TipWork for CheckTipWork {
         callbacks: &crate::checks::BatchCallbacks<'_>,
     ) -> (Vec<TipRun>, usize) {
         let options = options(false);
-        // Families run at once, each in a tree of its own.
-        let ran = self.at_for(ctx, &format!("tip {commit} {family}"), commit, |tree| {
-            self.checks
-                .run_batches(ctx, tree, family, batches, &options, callbacks)
-        });
+        // Families run at once, each in a tree of its own, preferably one that built the
+        // products the family needs.
+        let needs = self.family_needs();
+        let products = needs.get(family).map(Vec::as_slice).unwrap_or_default();
+        let ran = self.at_for(
+            ctx,
+            &format!("tip {commit} {family}"),
+            commit,
+            products,
+            |tree| {
+                self.checks
+                    .run_batches(ctx, tree, family, batches, &options, callbacks)
+            },
+        );
         match ran {
-            Ok((run, ran)) => (tip_runs(&run, &self.family_needs()), ran),
+            Ok((run, ran)) => (tip_runs(&run, &needs), ran),
             Err(error) => (
                 not_run(batches.iter().flat_map(|(_, names)| names), &error),
                 0,

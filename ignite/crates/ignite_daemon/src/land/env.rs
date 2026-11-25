@@ -83,6 +83,17 @@ pub trait LandTrees: Send + Sync {
         at: &Commit,
         keep_free: usize,
     ) -> Result<Option<GateTree>>;
+    /// Leases a free landing tree checked out at `at` for work that needs `products`, such as a
+    /// tip family, preferring the tree that built the most of them nearest `at` (see
+    /// [`Trees::lease_landing_for_products`]); `None` when every one is busy.
+    fn lease_landing_for_products(
+        &self,
+        holder: &str,
+        at: &Commit,
+        _products: &[String],
+    ) -> Result<Option<GateTree>> {
+        self.lease_landing(holder, at)
+    }
     /// Frees a landing tree; `built_at` is the commit its builds now match.
     fn release_landing(&self, tree: &TreeId, built_at: Option<&Commit>) -> Result<()>;
     /// Whether a landing that changes `change` builds less at `head` in its ticket tree, whose
@@ -259,6 +270,22 @@ impl LandTrees for MachineTrees {
         let lease = self
             .trees
             .lease_landing_keeping(holder, owner.as_ref(), at, keep_free)?;
+        Ok(lease.map(|lease| GateTree {
+            tree: lease.tree,
+            path: lease.path,
+        }))
+    }
+
+    fn lease_landing_for_products(
+        &self,
+        holder: &str,
+        at: &Commit,
+        products: &[String],
+    ) -> Result<Option<GateTree>> {
+        let owner = crate::steps::current().and_then(|activity| activity.handle());
+        let lease = self
+            .trees
+            .lease_landing_for_products(holder, owner.as_ref(), at, products)?;
         Ok(lease.map(|lease| GateTree {
             tree: lease.tree,
             path: lease.path,

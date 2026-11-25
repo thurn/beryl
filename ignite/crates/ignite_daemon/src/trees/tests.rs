@@ -225,6 +225,48 @@ fn a_compiling_ticket_prefers_a_tree_holding_the_build_directory_beside_its_file
 }
 
 #[test]
+fn a_tip_family_prefers_the_landing_tree_that_built_its_products() {
+    let f = Fixture::with_landing(1, 2, 3);
+    // landing-1 last built at the tip, landing-2 one commit behind; only landing-2 built
+    // `client`.
+    f.trees.record_build(&id("landing-1"), &f.tip()).unwrap();
+    f.trees
+        .record_build(&id("landing-2"), &f.commits[1])
+        .unwrap();
+    ignite_store::local::builds::set(
+        &f.trees.lock().db,
+        &ignite_store::local::rows::Build {
+            tree: "landing-2".to_owned(),
+            product: "client".to_owned(),
+            packages: "[]".to_owned(),
+            hash: "h1".to_owned(),
+            outcome: ignite_store::local::builds::HELD.to_owned(),
+            output: None,
+            updated_at: "2026-11-25T00:00:00.000Z".to_owned(),
+            built_commit: Some(f.commits[1].to_string()),
+        },
+    )
+    .unwrap();
+
+    let client = f
+        .trees
+        .lease_landing_for_products("tip client", None, &f.tip(), &["client".to_owned()])
+        .unwrap()
+        .unwrap();
+    assert_eq!(client.tree.as_str(), "landing-2");
+    f.trees
+        .release_landing(&client.tree, Some(&f.tip()))
+        .unwrap();
+    // A lease that asks for no product gets the tree built nearest the tip.
+    let any = f
+        .trees
+        .lease_landing_for_products("tip other", None, &f.tip(), &[])
+        .unwrap()
+        .unwrap();
+    assert_eq!(any.tree.as_str(), "landing-1");
+}
+
+#[test]
 fn a_compiling_ticket_gets_the_tree_nearest_the_tip_and_any_other_the_oldest() {
     let f = Fixture::new(3, 3);
     // tree-01 last built two commits behind the tip, tree-02 one behind, tree-03 never.

@@ -531,6 +531,7 @@ mod tests {
             holder: "m-1:T1".to_owned(),
             commit: commit.clone(),
             keep_free: 0,
+            products: None,
         };
         let first = host.lease_landing(&lease).unwrap();
         assert_eq!(host.lease_landing(&lease).unwrap(), first);

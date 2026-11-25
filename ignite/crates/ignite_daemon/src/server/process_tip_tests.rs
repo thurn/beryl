@@ -60,6 +60,7 @@ impl OneCheck {
                 holder: format!("tip {at}"),
                 commit: at.clone(),
                 keep_free: 0,
+                products: None,
             })
             .unwrap()
         else {

@@ -93,6 +93,14 @@ impl BuildManager {
             return;
         };
         let packages = serde_json::to_string(&request.packages).unwrap_or_else(|_| "[]".into());
+        // Tip verification prefers the landing tree that built a family's products nearest
+        // the tip (see `crate::trees::landing`), so a held product records the commit it was
+        // built at.
+        let built_commit = matches!(change, Change::Held)
+            .then(|| self.trees.path(&request.tree))
+            .flatten()
+            .and_then(|path| crate::trees::head::commit_at(&path))
+            .map(|commit| commit.to_string());
         let row = |outcome: &str, output: Option<String>| rows::Build {
             tree: request.tree.to_string(),
             product: request.product.clone(),
@@ -101,6 +109,7 @@ impl BuildManager {
             outcome: outcome.to_owned(),
             output,
             updated_at: ignite_core::time::SystemClock.now().to_string(),
+            built_commit: built_commit.clone(),
         };
         let written = match change {
             Change::Held => builds::set(conn, &row(builds::HELD, None)),

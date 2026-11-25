@@ -16,7 +16,7 @@ pub const FAILED: &str = "failed";
 /// Every recorded row.
 pub fn all(conn: &Connection) -> Result<Vec<rows::Build>> {
     let mut statement = conn.prepare(
-        "SELECT tree, product, packages, hash, outcome, output, updated_at \
+        "SELECT tree, product, packages, hash, outcome, output, updated_at, built_commit \
          FROM builds ORDER BY tree, product, packages",
     )?;
     let found = statement
@@ -29,6 +29,7 @@ pub fn all(conn: &Connection) -> Result<Vec<rows::Build>> {
                 outcome: row.get(4)?,
                 output: row.get(5)?,
                 updated_at: row.get(6)?,
+                built_commit: row.get(7)?,
             })
         })?
         .collect::<rusqlite::Result<_>>()?;
@@ -40,8 +41,8 @@ pub fn all(conn: &Connection) -> Result<Vec<rows::Build>> {
 pub fn set(conn: &Connection, build: &rows::Build) -> Result<()> {
     conn.execute(
         "INSERT OR REPLACE INTO builds \
-         (tree, product, packages, hash, outcome, output, updated_at) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+         (tree, product, packages, hash, outcome, output, updated_at, built_commit) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         params![
             build.tree,
             build.product,
@@ -50,6 +51,7 @@ pub fn set(conn: &Connection, build: &rows::Build) -> Result<()> {
             build.outcome,
             build.output,
             build.updated_at,
+            build.built_commit,
         ],
     )?;
     Ok(())
@@ -93,6 +95,7 @@ mod tests {
             outcome: outcome.to_owned(),
             output: None,
             updated_at: "2027-01-01T00:00:00.000Z".to_owned(),
+            built_commit: None,
         }
     }
 
