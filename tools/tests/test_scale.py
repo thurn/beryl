@@ -187,17 +187,21 @@ def runs(check: float) -> dict[str, scale.Run]:
 
 
 def test_the_report_gives_each_budget_and_margin() -> None:
-    text = scale.report(2000, 4, False, 41, runs(45.0), 1_234, 5_678)
+    limit = scale.BUDGETS["cold check"].limit
+    text = scale.report(2000, 4, False, 41, runs(limit - 15.0), 1_234, 5_678)
     assert "2,000 cards" in text and "as the tree's grouping gives" in text
-    assert "45.0 s   budget 60.0 s, margin 15.0 s  ok" in text
+    assert f"{limit - 15.0:.1f} s   budget 60.0 s" in text
+    assert "margin 15.0 s  ok" in text
     assert "3.00 GiB   budget 4.00 GiB, margin 1.00 GiB  ok" in text
     assert "100 s CPU" in text
 
 
 def test_a_measure_over_its_budget_is_missed() -> None:
-    assert scale.missed(scale.measures(runs(45.0))) == []
-    assert scale.missed(scale.measures(runs(61.0))) == ["cold check"]
-    assert "MISSED" in scale.report(2000, 4, False, 41, runs(61.0), 1_234, 5_678)
+    limit = scale.BUDGETS["cold check"].limit
+    assert scale.missed(scale.measures(runs(limit - 1.0))) == []
+    assert scale.missed(scale.measures(runs(limit + 1.0))) == ["cold check"]
+    over = runs(limit + 1.0)
+    assert "MISSED" in scale.report(2000, 4, False, 41, over, 1_234, 5_678)
 
 
 def test_scale_reports_target_bytes_before_and_after_edits_under_assert(
