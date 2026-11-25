@@ -467,6 +467,52 @@ fn cli_e2e_a_restarted_daemon_rechecks_the_claim_before_launching_a_recorded_res
 }
 
 #[test]
+fn cli_e2e_a_claim_released_for_silence_waits_for_the_heartbeat_and_continues_when_given_back() {
+    let rig = Rig::new("released-for-silence");
+    rig.script(1, &[ExitWith(1)]);
+    let session = rig.begin();
+    rig.wait_turn(&session, 1);
+    rig.daemon.step().unwrap();
+    assert_eq!(rig.slot().state, SlotState::Parked);
+
+    // The machine was silent for two hours and the hub released the claim. The hold ends
+    // before the heartbeat's reply arrives: the slot neither starts a turn nor retires.
+    rig.set_hub_released(&session);
+    rig.clock.advance(super::super::health::PROBE_EVERY_S + 1.0);
+    rig.health.tick(&rig.ctx, &[("claude", &Claude)]);
+    assert!(rig.daemon.held("claude").is_none());
+    assert!(rig.daemon.step().is_err());
+    assert_ne!(rig.daemon.check(&session), SessionCheck::Gone);
+    assert_eq!(rig.invocations(), 2);
+
+    // The heartbeat's reply says the hub gave the ticket back: the worker continues.
+    rig.set_hub_claim(&session);
+    rig.script(3, &[Init, Say("continuing".to_owned()), Done]);
+    rig.daemon.step().unwrap();
+    rig.wait_turn(&session, 2);
+    assert_eq!(rig.invocations(), 3);
+    assert!(rig.releases().is_empty());
+}
+
+#[test]
+fn cli_e2e_a_worker_that_lost_its_ticket_while_away_ends_its_turn_and_frees_its_slot() {
+    let rig = Rig::new("lost-while-away");
+    rig.script(1, &held());
+    let session = rig.begin();
+    rig.wait_started(1);
+    rig.daemon.step().unwrap();
+
+    assert!(rig.daemon.retire(&session).unwrap());
+    rig.wait_turn(&session, 1);
+    assert_eq!(rig.daemon.check(&session), SessionCheck::Gone);
+    assert!(rig.daemon.slots("claude").is_empty());
+    let turn = rig.daemon.turn_row(&session, 1).unwrap().unwrap();
+    assert_eq!(turn.state, "ended");
+    rig.daemon.step().unwrap();
+    assert_eq!(rig.invocations(), 1, "no turn starts after the retirement");
+}
+
+#[test]
 fn cli_e2e_tell_now_ends_the_running_turn_and_the_next_prompt_holds_the_text() {
     let rig = Rig::new("tell");
     rig.script(1, &held());

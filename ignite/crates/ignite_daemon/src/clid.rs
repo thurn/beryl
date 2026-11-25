@@ -156,6 +156,10 @@ pub trait CliPool: Send + Sync {
     fn check(&self, session: &SessionId) -> SessionCheck;
     /// Current worker rows of `app`, ordered by number.
     fn slots(&self, app: &str) -> Vec<Slot>;
+    /// Ends the session's running turn, if any, and frees its slot, for a session whose ticket
+    /// was lost while this machine was away (see `ignite_core::protocol::returning`). Returns
+    /// whether the session had a slot.
+    fn retire(&self, session: &SessionId) -> Result<bool>;
     /// How this worker started a regression or reverted ticket.
     fn handoff_note(&self, _session: &SessionId) -> Option<String> {
         None
@@ -750,6 +754,10 @@ impl CliPool for CliDaemon {
             .filter(|r| r.app == app)
             .map(slot_of)
             .collect()
+    }
+
+    fn retire(&self, session: &SessionId) -> Result<bool> {
+        self.retire_lost(session)
     }
 
     fn worker_memory_mb(&self) -> u64 {

@@ -165,6 +165,7 @@ impl Parts {
                 if let Err(error) = crate::fleet_notice::heard(pool, &reply) {
                     eprintln!("ignite: fleet notice not saved: {error}");
                 }
+                headless_dispatch.reconciled(&ctx, &reply.reconciled);
                 *hub_version.borrow_mut() = Some(reply.hub_version);
                 emergencies.heard(reply.emergency);
                 Ok(())

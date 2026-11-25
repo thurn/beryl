@@ -534,6 +534,10 @@ impl Host for DaemonHost {
             .release_session(&self.ctx, session, ticket, reason, cause)
     }
 
+    fn free_lost(&self, session: &SessionId, ticket: &TicketId) -> Result<Option<String>> {
+        self.claims.free_lost(session, ticket)
+    }
+
     fn release_if(
         &self,
         session: &SessionId,

@@ -120,6 +120,12 @@ impl Host for FakeHost {
         lock(&self.green).clone()
     }
 
+    /// Saving frees the session's tree, as the real one does.
+    fn free_lost(&self, session: &SessionId, ticket: &TicketId) -> Result<Option<String>> {
+        let held = lock(&self.holders).remove(session);
+        Ok((held.as_ref() == Some(ticket)).then(|| format!("saved/{ticket}")))
+    }
+
     /// Releasing frees the session's tree, as the real release does.
     fn release(
         &self,

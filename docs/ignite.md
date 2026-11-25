@@ -4032,7 +4032,11 @@ leased for nothing.
 - A worker that ends its turn while holding a ticket gets the instructions in
   [Headless workers](#headless-workers) without waiting for the stall check.
 - The hub releases the claims of a machine that has not reported for 2 hours,
-  with a comment on each ticket.
+  with a comment on each ticket. When the machine reports again, a worker that
+  still holds its tree for one of those tickets gets the ticket back, for the
+  same session and tree, if nobody took, closed or changed it meanwhile.
+  Otherwise the daemon saves the tree's work on the ticket's saved branch, ends
+  the worker and says so on the ticket.
 - The hub also releases a ticket that is in progress although no Ignite session
   or machine holds it, once it has not changed for 2 hours. Such a claim came
   from outside Ignite, such as a ticket imported in progress from the old

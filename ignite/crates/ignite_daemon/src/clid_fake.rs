@@ -50,6 +50,7 @@ pub struct FakeCliPool {
     /// Apps no probe has passed for yet, whose slots are not offered.
     unprobed: Mutex<BTreeSet<String>>,
     digests: Mutex<BTreeMap<String, (SessionId, Vec<TranscriptLine>)>>,
+    retired: Mutex<Vec<SessionId>>,
 }
 
 impl FakeCliPool {
@@ -76,6 +77,11 @@ impl FakeCliPool {
     /// Every message so far, in order.
     pub fn sent(&self) -> Vec<SentMessage> {
         lock(&self.sent).clone()
+    }
+
+    /// Every session `retire` was asked to retire, in order.
+    pub fn retired(&self) -> Vec<SessionId> {
+        lock(&self.retired).clone()
     }
 
     pub fn set_check(&self, session: &SessionId, answer: SessionCheck) {
@@ -183,6 +189,12 @@ impl CliPool for FakeCliPool {
 
     fn slots(&self, app: &str) -> Vec<Slot> {
         lock(&self.slots).get(app).cloned().unwrap_or_default()
+    }
+
+    /// Records the retirement; the session answers `check` with `Gone` afterwards.
+    fn retire(&self, session: &SessionId) -> Result<bool> {
+        lock(&self.retired).push(session.clone());
+        Ok(lock(&self.checks).remove(session).is_some())
     }
 
     fn digest(&self, target: &str) -> Result<Option<(SessionId, Vec<TranscriptLine>)>> {

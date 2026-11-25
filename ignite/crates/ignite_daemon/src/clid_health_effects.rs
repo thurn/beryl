@@ -8,6 +8,7 @@ use serde_json::json;
 use ignite_core::cli::{HoldReason, Slot, TurnEnd, TurnEvents, UsageSample};
 use ignite_core::ids::{SessionId, TicketId};
 use ignite_core::protocol::hub::MetricsImport;
+use ignite_core::protocol::returning::awaits_return;
 use ignite_core::protocol::tickets::Status;
 use ignite_core::traits::{Error, Result};
 
@@ -154,8 +155,13 @@ impl Effects for HealthEffects {
         self.health.probed().contains(app)
     }
 
+    /// A ticket the hub released for this machine's silence and nobody has claimed since is
+    /// neither: the next heartbeat gets it back or reports it lost, so the check is deferred.
     fn claim_is_current(&self, session: &SessionId, ticket: &TicketId) -> Result<bool> {
         match self.ctx.hub.ticket(ticket) {
+            Ok(detail) if awaits_return(&detail.ticket, session) => Err(Error::Conflict(format!(
+                "{ticket} waits for the next heartbeat to come back to {session}"
+            ))),
             Ok(detail) => Ok(detail.ticket.status == Status::InProgress
                 && detail.ticket.assignee.as_deref() == Some(session.as_str())
                 && detail.ticket.session.as_ref() == Some(session)

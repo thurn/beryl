@@ -207,6 +207,12 @@ impl Host for E2eHost {
     fn running_under(&self, _root: u32, _asker: Option<u32>) -> Option<Vec<u32>> {
         None
     }
+
+    /// Saving frees the session's tree, as the real one does.
+    fn free_lost(&self, session: &SessionId, ticket: &TicketId) -> Result<Option<String>> {
+        let held = lock(&self.holders).remove(session);
+        Ok((held.as_ref() == Some(ticket)).then(|| format!("saved/{ticket}")))
+    }
 }
 
 /// The daemon's real effects, with every turn end recorded.
@@ -564,6 +570,22 @@ impl Rig {
             "machine": self.ctx.machine, "created_at": self.clock.now(), "created_by": "test",
             "updated_at": self.clock.now(), "version": 1, "edges": [], "children": [],
             "ready": false, "blocked_by": [],
+        }))
+        .unwrap();
+        self.hub.insert_ticket(detail);
+    }
+
+    /// The hub released the session's claim because this machine stopped reporting, and nobody
+    /// has taken the ticket since.
+    fn set_hub_released(&self, session: &SessionId) {
+        let detail = serde_json::from_value(serde_json::json!({
+            "id": TICKET, "next_child": 1, "title": "Test ticket", "type": "bug",
+            "status": "open", "priority": 2, "created_at": self.clock.now(), "created_by": "test",
+            "updated_at": self.clock.now(), "version": 2, "edges": [], "children": [],
+            "ready": true, "blocked_by": [],
+            "metadata": {"released_offline": {
+                "machine": self.ctx.machine, "session": session, "at": self.clock.now(),
+            }},
         }))
         .unwrap();
         self.hub.insert_ticket(detail);

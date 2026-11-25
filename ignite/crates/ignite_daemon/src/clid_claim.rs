@@ -170,6 +170,32 @@ impl CliDaemon {
         Ok(false)
     }
 
+    /// Ends the session's running turn, if any, and frees its slot (see [`CliPool::retire`]).
+    pub(super) fn retire_lost(&self, session: &SessionId) -> Result<bool> {
+        let Some(row) = self.row(session)? else {
+            return Ok(false);
+        };
+        let slot = slot_of(&row);
+        let live = matches!(slot.state, SlotState::Starting | SlotState::Running);
+        if live && self.turns.recover(session, slot.turn) == super::Recovery::Running {
+            self.turns.end(session, slot.turn)?;
+        }
+        match self.turn_row(session, slot.turn)? {
+            Some(turn) if turn.state != "ended" => {
+                self.close(
+                    &row,
+                    &turn,
+                    &TurnEnd::Interrupted,
+                    None,
+                    SlotState::Free,
+                    |_| {},
+                )?;
+            }
+            _ => self.retire_slot(&row, session)?,
+        }
+        Ok(true)
+    }
+
     /// Records and starts the next turn with its prompt and every undelivered message.
     pub(super) fn start_next(&self, row: &CliSlot) -> Result<()> {
         if self.held(&row.app).is_some() || self.retire_if_claim_lost(row)? {

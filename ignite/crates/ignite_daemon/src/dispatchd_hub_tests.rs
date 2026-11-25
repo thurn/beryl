@@ -84,6 +84,7 @@ fn hear_fleet_state(rig: &Rig) {
             paused_everywhere: rig.hub.pauses().last().is_some_and(|pause| pause.paused),
             hub_version: "test".to_owned(),
             emergency: None,
+            reconciled: Vec::new(),
         },
     )
     .unwrap();

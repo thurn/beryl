@@ -108,6 +108,11 @@ pub(super) fn heartbeat(conn: &mut Connection, beat: &Heartbeat, now: Timestamp)
         StoreError::Invalid(message) => failure(404, &message),
         other => store_failure(&other),
     })?;
+    // A failure here must not cost the machine its heartbeat; the next one tries again.
+    let reconciled = crate::upkeep::returning::reconcile(conn, beat, now).unwrap_or_else(|error| {
+        eprintln!("ignite: claims of {} not reconciled: {error}", beat.machine);
+        Vec::new()
+    });
     // The heartbeat was recorded above. The reply only reads, so it can take a snapshot
     // without holding the write lock while assembling the fleet policy.
     let snapshot = conn
@@ -130,6 +135,7 @@ pub(super) fn heartbeat(conn: &mut Connection, beat: &Heartbeat, now: Timestamp)
         emergency: emergency::in_force(&snapshot, now).map_err(|e| store_failure(&e))?,
         paused_everywhere: fleet::paused_everywhere(&snapshot, now)
             .map_err(|e| store_failure(&e))?,
+        reconciled,
     };
     snapshot.commit().map_err(sql_failure)?;
     if let Some(sample) = &beat.sample

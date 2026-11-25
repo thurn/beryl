@@ -12,6 +12,7 @@
 use ignite_core::ids::{SessionId, TicketId, TreeId};
 use ignite_core::protocol::client::{Reply, Request};
 use ignite_core::protocol::hub::ReleaseCause;
+use ignite_core::protocol::returning::awaits_return;
 use ignite_core::protocol::tickets::Status;
 use ignite_core::traits::{Error, Result};
 use ignite_store::local::{shown, trees as tree_rows};
@@ -49,6 +50,11 @@ pub(super) enum AtHub {
     Closed,
     /// It is open and has no assignee, or another session's.
     Lost,
+    /// The hub released it from the session because this machine stopped reporting, and
+    /// nobody has claimed it since. The machine's next heartbeat gets it back for the session
+    /// or reports it lost (see `ignite_core::protocol::returning`), so until then the session
+    /// keeps its tree.
+    Away,
     /// The hub could not be read, which proves nothing.
     Unknown,
 }
@@ -187,7 +193,7 @@ impl Claims {
         match self.at_hub(&held.ticket, &held.session) {
             AtHub::Closed => Some(Ended::AlreadyClosed),
             AtHub::Lost => Some(Ended::NotHeld),
-            AtHub::Held | AtHub::Unknown => None,
+            AtHub::Held | AtHub::Away | AtHub::Unknown => None,
         }
     }
 
@@ -199,6 +205,7 @@ impl Claims {
             Ok(detail) if detail.ticket.assignee.as_deref() == Some(session.as_str()) => {
                 AtHub::Held
             }
+            Ok(detail) if awaits_return(&detail.ticket, session) => AtHub::Away,
             Ok(_) => AtHub::Lost,
         }
     }
@@ -215,12 +222,36 @@ impl Claims {
             let gone = match self.at_hub(&held.ticket, &held.session) {
                 AtHub::Closed => "closed",
                 AtHub::Lost if held.at.is_some() => "no longer held",
-                AtHub::Lost | AtHub::Held | AtHub::Unknown => continue,
+                AtHub::Lost | AtHub::Held | AtHub::Away | AtHub::Unknown => continue,
             };
             if let Err(error) = self.free_saved(&held) {
                 eprintln!("ignite: {} is {gone} but {error}", held.ticket);
             }
         }
+    }
+
+    /// Saves the work of `session`'s tree for `ticket` and frees the tree, for a ticket the hub
+    /// gave to someone else, closed or saw changed while this machine was away (see
+    /// `ignite_core::protocol::returning`). Returns the saved branch, or `None` when the session
+    /// holds no tree for the ticket. A failed save keeps the tree, and is the error.
+    pub fn free_lost(&self, session: &SessionId, ticket: &TicketId) -> Result<Option<String>> {
+        self.forget_released();
+        let held = {
+            let state = lock(&self.state);
+            let found = state
+                .held
+                .values()
+                .find(|h| &h.session == session && &h.ticket == ticket);
+            found.cloned()
+        };
+        let Some(held) = held else {
+            return Ok(None);
+        };
+        let saved = self.trees.save(&held.tree, &held.ticket)?;
+        if let Some(error) = self.free(&held, None) {
+            eprintln!("ignite: {} not reset: {error}", held.tree);
+        }
+        Ok(Some(saved.branch))
     }
 
     /// Saves a tree's work and frees it, for a ticket nobody on this machine holds any more.

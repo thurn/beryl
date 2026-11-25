@@ -565,7 +565,9 @@ impl Claims {
             ))
         };
         match self.at_hub(id, &held.session) {
-            finish::AtHub::Held | finish::AtHub::Unknown => refusal(String::new()),
+            finish::AtHub::Held | finish::AtHub::Away | finish::AtHub::Unknown => {
+                refusal(String::new())
+            }
             finish::AtHub::Closed | finish::AtHub::Lost => match self.free_saved(&held) {
                 Ok(()) => None,
                 Err(error) => refusal(format!(", which the hub no longer names, but {error}")),

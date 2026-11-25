@@ -26,6 +26,8 @@ mod cli_view;
 mod feed;
 #[path = "dispatchd_recovery.rs"]
 mod recovery;
+#[path = "dispatchd_returning.rs"]
+mod returning;
 #[path = "dispatchd_shared.rs"]
 mod shared;
 #[path = "dispatchd_stall.rs"]
@@ -136,6 +138,13 @@ pub trait Host: Send + Sync {
         reason: &str,
         cause: ReleaseCause,
     ) -> Result<()>;
+    /// Saves the work of the session's tree for a ticket it lost while this machine was away,
+    /// without asking the hub, and frees the tree. Returns the saved branch, or `None` when the
+    /// session holds no tree for the ticket. The default is for a host that holds no trees.
+    fn free_lost(&self, session: &SessionId, ticket: &TicketId) -> Result<Option<String>> {
+        let _ = (session, ticket);
+        Ok(None)
+    }
     /// Gives back a stalled session's ticket if the stall still holds when the lease is returned.
     fn release_if(
         &self,
@@ -408,6 +417,9 @@ mod reporter_tests;
 #[cfg(test)]
 #[path = "dispatchd_restart_tests.rs"]
 mod restart_tests;
+#[cfg(test)]
+#[path = "dispatchd_returning_tests.rs"]
+mod returning_tests;
 #[cfg(test)]
 #[path = "dispatchd_stall_tests.rs"]
 mod stall_tests;

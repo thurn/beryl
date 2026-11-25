@@ -32,7 +32,8 @@
 //! records why tip verification missed a check a landing found failing, in [`missed`]), a check
 //! still incomplete after its attempts ([`stuck::incomplete`]), a cache audit that disagreed
 //! ([`stuck::audit`]), an exploration find ([`explore::find`]) and a pass that replaced another
-//! machine's failure ([`machines::disagreement`]). The dashboard asks [`machines::unassignable`]
+//! machine's failure ([`machines::disagreement`]), and a heartbeat from a machine whose claims
+//! were released for silence ([`returning::reconcile`]). The dashboard asks [`machines::unassignable`]
 //! for tickets that no machine can take.
 //!
 //! Automatic tickets match earlier faults by signature ([`signature`], [`filing`]).
@@ -55,6 +56,7 @@ mod platform_wait;
 mod regression_stalls;
 pub mod regressions;
 mod resource_stalls;
+pub mod returning;
 pub mod reverted;
 pub mod schedules;
 pub mod signature;

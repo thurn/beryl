@@ -752,3 +752,33 @@ fn the_tick_frees_the_tree_of_a_ticket_reopened_at_the_hub() {
     assert!(world.claims.holder(Path::new("/trees/tree-01")).is_none());
     assert_eq!(lock(&world.trees.free).len(), 2);
 }
+
+#[test]
+fn a_tree_whose_claim_the_hub_released_for_silence_is_kept_until_the_hub_answers() {
+    let world = World::new();
+    world.desk.add(ticket("Tq.74", "Counter names", ""));
+    start(&world, &["Tq.74"], WORKER);
+    // The hub released the claim while this machine was silent, and nobody took it since.
+    world.desk.reopen("Tq.74");
+    lock(&world.desk.details)
+        .get_mut(&id("Tq.74"))
+        .unwrap()
+        .ticket
+        .metadata
+        .insert(
+            ignite_core::protocol::returning::RELEASED_OFFLINE_KEY.to_owned(),
+            serde_json::json!({"machine": world.ctx.machine, "session": WORKER,
+                "at": "1970-01-01T00:00:00Z"}),
+        );
+    world.claims.tick(&world.ctx);
+    assert!(world.claims.holder(Path::new("/trees/tree-01")).is_some());
+
+    // The heartbeat's reply says another worker took it: the work is saved and the tree freed.
+    let branch = world.claims.free_lost(&session(WORKER), &id("Tq.74"));
+    assert_eq!(branch.unwrap().as_deref(), Some("ignite/Tq.74"));
+    assert!(world.claims.holder(Path::new("/trees/tree-01")).is_none());
+    assert!(
+        lock(&world.desk.releases).is_empty(),
+        "the hub is not asked"
+    );
+}

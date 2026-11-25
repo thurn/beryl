@@ -8,6 +8,7 @@
 //! - [`emergency`]: the fleet-wide pause declared by an incident commander or justiciar.
 //! - [`cli`]: CLI mode's verbs and the hub's transcript routes.
 //! - [`attachments`]: image attachments on tickets.
+//! - [`returning`]: what a machine gets back after the hub released its claims for silence.
 //!
 //! Types that more than one of those use (the command classes, the cost of a command, a
 //! check's outcome) are defined here.
@@ -20,6 +21,7 @@ pub mod fleet;
 pub mod host;
 pub mod hub;
 pub mod machine_state;
+pub mod returning;
 pub mod tickets;
 
 use serde::{Deserialize, Serialize};

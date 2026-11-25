@@ -4,8 +4,9 @@
 //! tickets. Without this step they stay `in_progress` for good and count against their epic's
 //! allocation of workers. [`release_claims`] gives back every claim of a machine whose last
 //! heartbeat is more than [`OFFLINE_SECONDS`] old. The ticket returns to the queue with a
-//! comment, and a daemon that comes back finds its claim lost, which `/landed` and `/release`
-//! answer with 409 (exit code 3).
+//! comment and a [`ReleasedOffline`] record of who held it. A daemon that comes back lists its
+//! workers' tickets in its heartbeat, and `returning` gives each one back to the same session if
+//! nobody else took or changed it meanwhile.
 //!
 //! [`release_unheld`] gives back a ticket that is in progress although no Ignite session or
 //! machine holds it, once it has gone [`OFFLINE_SECONDS`] without a change. Such a ticket was
@@ -16,6 +17,8 @@
 use rusqlite::{Connection, TransactionBehavior};
 use serde_json::Value;
 
+use ignite_core::ids::{MachineId, SessionId, TreeId};
+use ignite_core::protocol::returning::{RELEASED_OFFLINE_KEY, ReleasedOffline};
 use ignite_core::protocol::tickets::{BatchRequest, Operation, Precondition, Status, TicketFields};
 use ignite_core::time::Timestamp;
 use ignite_store::hub::batch::{self, BatchOutcome};
@@ -34,7 +37,7 @@ const ACTOR: &str = super::filing::UPKEEP.actor;
 pub fn release_claims(conn: &mut Connection, now: Timestamp) -> Result<Vec<String>> {
     let held = {
         let mut select = conn.prepare(
-            "SELECT t.id, t.assignee, t.tree, m.id, m.name, m.last_seen
+            "SELECT t.id, t.assignee, t.tree, m.id, m.name, m.last_seen, t.session, t.provider
              FROM tickets t JOIN machines m ON m.id = t.machine
              WHERE t.status != 'closed' AND t.assignee IS NOT NULL ORDER BY t.id",
         )?;
@@ -47,16 +50,19 @@ pub fn release_claims(conn: &mut Connection, now: Timestamp) -> Result<Vec<Strin
                     row.get::<_, String>(3)?,
                     row.get::<_, String>(4)?,
                     row.get::<_, String>(5)?,
+                    row.get::<_, Option<String>>(6)?,
+                    row.get::<_, Option<String>>(7)?,
                 ))
             })?
             .collect::<rusqlite::Result<Vec<_>>>()?
     };
     let mut released = Vec::new();
-    for (id, assignee, tree, machine, name, last_seen) in held {
+    for (id, assignee, tree, machine, name, last_seen, session, provider) in held {
         let silent = parse_time(&last_seen)?;
         if now.seconds_since(silent) < OFFLINE_SECONDS {
             continue;
         }
+        let record = released_record(&machine, session.as_deref(), tree.as_deref(), provider, now);
         let tree = tree.map_or(String::new(), |tree| format!(" ({tree})"));
         let text = format!(
             "Released by the hub: machine {name} ({machine}) has not reported since {last_seen}. \
@@ -73,7 +79,10 @@ pub fn release_claims(conn: &mut Connection, now: Timestamp) -> Result<Vec<Strin
                 }),
                 add_labels: Vec::new(),
                 remove_labels: Vec::new(),
-                set_meta: std::collections::BTreeMap::new(),
+                set_meta: record
+                    .into_iter()
+                    .map(|record| (RELEASED_OFFLINE_KEY.to_owned(), record))
+                    .collect(),
                 unset_meta: Vec::new(),
             },
             Operation::Comment {
@@ -107,6 +116,26 @@ pub fn release_claims(conn: &mut Connection, now: Timestamp) -> Result<Vec<Strin
         released.push(id);
     }
     Ok(released)
+}
+
+/// The [`ReleasedOffline`] record of a claim released at `now`, as ticket metadata. A claim
+/// with no session (or an ID that no longer parses) has no session to give the ticket back to,
+/// so it records nothing.
+fn released_record(
+    machine: &str,
+    session: Option<&str>,
+    tree: Option<&str>,
+    provider: Option<String>,
+    now: Timestamp,
+) -> Option<Value> {
+    let record = ReleasedOffline {
+        machine: MachineId::new(machine).ok()?,
+        session: SessionId::new(session?).ok()?,
+        tree: tree.and_then(|tree| TreeId::new(tree).ok()),
+        provider,
+        at: now,
+    };
+    serde_json::to_value(record).ok()
 }
 
 /// Releases each ticket in progress that no session and no machine holds and that has not

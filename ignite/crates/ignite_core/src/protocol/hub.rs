@@ -109,6 +109,9 @@ pub struct HeartbeatReply {
     /// Fleet settings and provider holds for this machine.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fleet: Option<FleetNotice>,
+    /// Released tickets this machine's workers still hold trees for ([`super::returning`]).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub reconciled: Vec<super::returning::Reconciled>,
 }
 
 /// An idle pool member that could take a ticket.
