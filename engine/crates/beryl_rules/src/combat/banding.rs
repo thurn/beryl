@@ -76,23 +76,22 @@ pub(super) fn append_attack_options<L: Layout>(
 pub(super) fn attack<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    slot: L::Slot,
+    attacker: Permanent<L>,
     first: L::Slot,
 ) -> Result<(), Full> {
-    s.remember(slot, Memo::CombatBand(first))?;
-    declare_attacker(s, t, slot);
-    let attacker = if first == slot {
-        Some(slot)
+    s.remember(attacker.slot(), Memo::CombatBand(first))?;
+    declare_attacker(s, t, attacker);
+    let aiming = if first == attacker.slot() {
+        Some(first)
     } else {
         let target = s
             .object(first)
             .attack_target()
             .expect("a band has an attack target");
-        let attacker = s.permanent_at(slot).expect("a declared attacker");
         s.choose_attacked(attacker, target);
         None
     };
-    s.ask(Pending::DeclareAttackers { attacker });
+    s.ask(Pending::DeclareAttackers { attacker: aiming });
     Ok(())
 }
 

@@ -19,6 +19,7 @@ use crate::replacement::event::{self, Event, Sink};
 use crate::replacement::protection;
 use crate::state::{AttackTarget, CombatRole, Pending, State, Tracker, TurnStep};
 use crate::table::{Capability, GameTable};
+use beryl_kernel::reference::Permanent;
 
 mod assignment;
 mod banding;
@@ -174,7 +175,7 @@ pub(crate) fn attack<L: Layout>(
 ) -> Result<(), Full> {
     match opt {
         Opt::Attack { slot, band: None } => {
-            declare_attacker(s, t, slot);
+            declare_attacker(s, t, s.permanent_at(slot).expect("a declared attacker"));
             s.ask(Pending::DeclareAttackers {
                 attacker: Some(slot),
             });
@@ -183,7 +184,12 @@ pub(crate) fn attack<L: Layout>(
         Opt::Attack {
             slot,
             band: Some(first),
-        } => banding::attack(s, t, slot, first),
+        } => banding::attack(
+            s,
+            t,
+            s.permanent_at(slot).expect("a declared attacker"),
+            first,
+        ),
         Opt::Defender(target) => {
             let Pending::DeclareAttackers {
                 attacker: Some(attacker),
@@ -228,14 +234,13 @@ pub(crate) fn attack<L: Layout>(
 ///
 /// [CR 508.1k]: https://yawgatog.com/resources/magic-rules/#R5081k
 #[inline]
-fn declare_attacker<L: Layout>(s: &mut State<L>, t: &GameTable, slot: L::Slot) {
-    let attacker = s.permanent_at(slot).expect("a declared attacker");
+fn declare_attacker<L: Layout>(s: &mut State<L>, t: &GameTable, attacker: Permanent<L>) {
     let mut defending = s.players_in_turn_order(s.defending_players());
     let player = defending.next().expect("combat has a defending player");
     s.declare_attacker(attacker, player);
     // See CR 508.4: creatures put onto the battlefield attacking never "attacked"
     // for effects. Only a declaration pick records the turn's attack history.
-    s.track(t, Tracker::AttackedThisTurn, slot);
+    s.track(t, Tracker::AttackedThisTurn, attacker.slot());
 }
 
 /// Finishes the attack declaration: the attackers tap, then attack triggers trigger.
@@ -486,7 +491,7 @@ pub(crate) fn block_decision<L: Layout>(
 /// [CR 509.1a]: https://yawgatog.com/resources/magic-rules/#R5091a
 pub(crate) fn choose_blocker<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, option: Opt<L>) {
     match option {
-        Opt::Block(slot) => block_with(s, slot),
+        Opt::Block(slot) => block_with(s, s.permanent_at(slot).expect("a declared blocker")),
         Opt::Pass
         | Opt::PlayLand(_)
         | Opt::Play
@@ -517,13 +522,12 @@ pub(crate) fn choose_blocker<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, op
 ///
 /// [CR 509.1g](https://yawgatog.com/resources/magic-rules/#R5091g): "Each chosen creature still
 /// controlled by the defending player becomes a blocking creature."
-pub(crate) fn block_with<L: Layout>(s: &mut State<L>, blocker: L::Slot) {
-    if !s.object(blocker).is_blocking() {
-        let permanent = s.permanent_at(blocker).expect("a declared blocker");
-        s.declare_blocker(permanent);
+fn block_with<L: Layout>(s: &mut State<L>, blocker: Permanent<L>) {
+    if !s.object(blocker.slot()).is_blocking() {
+        s.declare_blocker(blocker);
     }
     s.ask(Pending::DeclareBlockers {
-        blocker: Some(blocker),
+        blocker: Some(blocker.slot()),
     });
 }
 
