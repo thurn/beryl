@@ -164,11 +164,13 @@ pub fn probe_model(config: &Config, app: &str) -> Option<String> {
         .cloned()
 }
 
-/// The model a worker uses for an untiered ticket.
+/// The model a worker uses for an untiered ticket: the app's `light` model, else its `sonnet`
+/// model for a table written before the semantic tiers existed.
 pub fn default_model(config: &Config, app: &str) -> Option<String> {
-    config
-        .pool
-        .model_id(app, "sonnet")
+    let table = config.pool.models.get(app);
+    table
+        .and_then(|table| table.get("light").or_else(|| table.get("sonnet")).cloned())
+        .or_else(|| table.is_none().then(|| "sonnet".to_owned()))
         .or_else(|| probe_model(config, app))
 }
 

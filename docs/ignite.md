@@ -3372,7 +3372,7 @@ evidence, and improvement tickets from the rules.
 
 ```sh
 ignite ticket create "Split beryl_session's replay code" -p P2 \
-  --parent TIG9A --labels tier:opus --deps TIG9A.1 --body-file body.txt
+  --parent TIG9A --labels tier:high --deps TIG9A.1 --body-file body.txt
 ignite ticket ready --limit 10 --brief
 ignite ticket wait TIG9A.1 --status closed
 ```
@@ -3393,11 +3393,16 @@ or held by a build tree, since its branch, tree and session title carry the ID:
 release it first. An import is refused if it would break the rule, and tickets
 moved before the rule existed were renumbered once by a migration.
 
-Labels say what a worker needs to run the ticket: `tier:opus`, `tier:sonnet` or
-`tier:light` names the model it needs, and `lane:<name>` a chain.
-[Machine and provider pins](#machine-and-provider-pins) constrain where the
-ticket runs. `ignite ticket batch` creates or changes many tickets in one
-request that succeeds or fails as a whole.
+Labels say what a worker needs to run the ticket: a `tier:` label names the
+model, and `lane:<name>` a chain. A provider takes a ticket only when its
+`[pool.models.<provider>]` table in `ignite.toml` has the ticket's tier as a
+key. The semantic tiers `tier:high` (design work) and `tier:light` (mechanical
+work) are in every provider's table, each mapped to that provider's model of
+that strength. A model tier such as `tier:opus`, `tier:sol` or `tier:hydrogen`
+is in only the table of the provider that runs that model, so it pins the ticket
+to one model. [Machine and provider pins](#machine-and-provider-pins) constrain
+where the ticket runs. `ignite ticket batch` creates or changes many tickets in
+one request that succeeds or fails as a whole.
 
 Every change to anything in Beryl has a ticket. `ignite start "<summary>"` makes
 that cheap for a session that was handed a task directly: it files the ticket
@@ -3536,7 +3541,7 @@ hub copies it into a new child ticket on that schedule.
 
 ```sh
 ignite ticket create "Sweep stale tickets" --every 24h -p P2 \
-  --labels tier:sonnet --body-file sweep.txt
+  --labels tier:light --body-file sweep.txt
 ignite ticket update MAB12 --every 2d
 ```
 
@@ -3722,7 +3727,7 @@ Messages, usage and repair:
   rejected before any daemon restarts into it.
 - When the daemon has been down for 15 minutes and `justiciar-needed.json`
   exists, a machine with a configured CLI provider has its monitor start one
-  headless justiciar turn in the main checkout, on the `opus` tier at `high`
+  headless justiciar turn in the main checkout, on the `high` tier at `high`
   effort, as session `cli-monitor-justiciar`. Its prompt is
   `ignite guide justiciar` with the crash evidence: the monitor's request, the
   newest crash record, and the last 50 lines of the daemon's log and of
@@ -4131,7 +4136,7 @@ the ticket graph, release or rewrite tickets, repair the machine, and fix Ignite
 itself. If Ignite blocks its own landing, the justiciar can deploy the fix
 through the release ref.
 
-- The hub files justiciar tickets at P0 with the `justiciar` and `tier:opus`
+- The hub files justiciar tickets at P0 with the `justiciar` and `tier:high`
   labels and a root ID beginning with `J`. It matches reports by signature so a
   repeated sighting adds a comment and never a second ticket. They come from
   upkeep, when the oldest landing since the last verified tip has waited two
@@ -4572,8 +4577,8 @@ free space to start a build.
 
 A provider is a configured coding-agent CLI such as `claude` or `codex`. Each
 provider offers the tiers in its `[pool.models.<provider>]` table. A ticket
-without a tier uses the provider's configured `sonnet` model if present, or the
-model used for its health probe.
+without a tier uses the provider's `light` model, or its `sonnet` model in a
+table without `light`, or the model used for its health probe.
 
 The hub chooses a provider for each reservation. It considers providers that are
 on with a positive share, have passed their CLI probe and are available on the

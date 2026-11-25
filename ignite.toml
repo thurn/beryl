@@ -192,33 +192,45 @@ protected = ["native-app", "clippy", "pyre", "source", "oracle", "oracle-generat
 [pool.default_effort]
 codex = "high"
 
-# The model ID each provider accepts for each `tier:` label. Update the IDs here when
-# a new model is released; tier labels on tickets do not change.
+# The model ID each provider runs for each `tier:` label. A provider takes a ticket only when
+# its table has the ticket's tier as a key, so a tier means exactly what these tables say.
+#
+# Two kinds of tier:
+# - Semantic tiers, which every provider offers: `high` (Opus, Sol, Neon) for design work and
+#   `light` (Sonnet, Terra, Hydrogen) for mechanical work. Planners label tickets with these.
+# - Model tiers, which name one model and are offered only by a provider that runs it:
+#   `opus`, `sonnet`, `sol`, `terra`, `neon`, `hydrogen`, `flash`. Use one to pin a ticket to a
+#   model, as the model trial does for its arms (`tier:opus` with `provider:claude`).
+#
+# Update the IDs here when a new model is released; tier labels on tickets do not change.
+# A ticket without a tier runs on its provider's `light` model.
 [pool.models.claude]
+high = "claude-opus-5-5"
+light = "claude-sonnet-5-5"
 opus = "claude-opus-5-5"
 sonnet = "claude-sonnet-5-5"
-light = "claude-sonnet-5-5"
 
-# Codex runs every tier on GPT-6.2 Sol.
+# The newest Terra that Codex runs with a ChatGPT account is 6.1: `gpt-6.2-terra` is refused.
 [pool.models.codex]
-opus = "gpt-6.2-sol"
-sonnet = "gpt-6.2-sol"
-light = "gpt-6.2-sol"
+high = "gpt-6.2-sol"
+light = "gpt-6.1-terra"
+sol = "gpt-6.2-sol"
+terra = "gpt-6.1-terra"
 
 # Antigravity CLI (`agy`) splits Gemini and Claude into separate providers because
 # they draw from independent quota pools.
 [pool.models.agy-gemini]
-opus = "gemini-4-neon"
-sonnet = "gemini-4-neon"
-light = "gemini-3.8-flash"
-# A tier of its own for the model trial's Gemini arm (`tier:hydrogen`). No other provider
-# has this key, so only agy-gemini takes such a ticket, and the other tiers keep their models.
+high = "gemini-4-neon"
+light = "gemini-4-hydrogen"
+neon = "gemini-4-neon"
 hydrogen = "gemini-4-hydrogen"
+flash = "gemini-3.8-flash"
 
 [pool.models.agy-claude]
+high = "claude-opus-5-5"
+light = "claude-sonnet-5-5"
 opus = "claude-opus-5-5"
 sonnet = "claude-sonnet-5-5"
-light = "claude-sonnet-5-5"
 
 # The daemon runs each worker turn with the configured program and CLI adapter. Set
 # `dialect` when the provider name differs from the adapter name. See "CLI mode" in docs/ignite.md.

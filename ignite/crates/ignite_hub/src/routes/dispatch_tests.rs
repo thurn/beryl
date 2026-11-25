@@ -177,7 +177,12 @@ pub(super) fn free(machine: &str, sessions: &[&str]) -> Value {
             .map(|s| IdleWorker {
                 session: s.parse().unwrap(),
                 app: "claude".into(),
-                models: vec!["opus".into(), "sonnet".into()],
+                models: vec![
+                    "high".into(),
+                    "light".into(),
+                    "opus".into(),
+                    "sonnet".into()
+                ],
                 model_ids: std::collections::BTreeMap::new(),
                 default_model: None,
             })

@@ -63,6 +63,7 @@ pub fn model_for_tier<'a>(
     if let Some(tier) = tier {
         let fallback = match (provider, tier) {
             ("claude", "light") => "sonnet",
+            ("claude", "high") => "opus",
             _ => tier,
         };
         model_ids.get(tier).map_or(fallback, String::as_str)

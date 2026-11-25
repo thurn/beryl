@@ -42,7 +42,7 @@ fn a_repeated_report_comments_on_one_p0_ticket_offered_first() {
     assert_eq!(filed.priority, 0);
     // An emergency cannot wait for a person to release its ticket.
     assert_eq!(filed.status, Status::Open);
-    for label in ["justiciar", "tier:opus"] {
+    for label in ["justiciar", "tier:high"] {
         assert!(
             filed.labels.iter().any(|l| l == label),
             "{:?}",

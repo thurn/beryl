@@ -62,7 +62,7 @@ pub const MASTER_LAG_SUBJECT: &str = "master-lag";
 pub(super) const REGRESSION_STALL_SUBJECT: &str = "regression-stall:";
 
 /// The model tier a justiciar ticket asks for.
-const TIER: &str = "tier:opus";
+const TIER: &str = "tier:high";
 
 /// How long the oldest landing on `staging` that `master` does not hold may wait before a
 /// justiciar ticket is filed: two hours. A tip round under load takes a few minutes, and a

@@ -42,7 +42,7 @@ pub const ANSWERED_RUNS_TO_END: u32 = 2;
 /// The Ignite session every turn runs as.
 pub const SESSION: &str = "cli-monitor-justiciar";
 /// The model tier and effort of every turn.
-pub const TIER: &str = "opus";
+pub const TIER: &str = "high";
 pub const EFFORT: &str = "high";
 /// Lines of the daemon's log and of `starts.jsonl` the prompt quotes.
 pub const LOG_LINES: usize = 50;

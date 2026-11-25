@@ -176,6 +176,7 @@ pub(super) fn rig_on(workers: &[&str], db: rusqlite::Connection, now: Timestamp)
         ticket_trees = 4
         landing_trees = 1
         [pool.models.claude]
+        high = "opus"
         opus = "opus"
         sonnet = "sonnet"
         light = "light"

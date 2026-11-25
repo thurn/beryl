@@ -691,14 +691,22 @@ fn capacity_reports_probe_and_hold_independently() {
     );
     let mut expected = ProviderCapacity {
         name: "claude".into(),
-        tiers: ["light", "opus", "sonnet"].map(str::to_owned).into(),
+        tiers: ["high", "light", "opus", "sonnet"]
+            .map(str::to_owned)
+            .into(),
         probed: true,
         hold_reason: Some("plan_limit".into()),
-        model_ids: ["light", "opus", "sonnet"]
-            .into_iter()
-            .map(|tier| (tier.to_owned(), tier.to_owned()))
-            .collect(),
-        default_model: Some("sonnet".into()),
+        model_ids: [
+            ("high", "opus"),
+            ("light", "light"),
+            ("opus", "opus"),
+            ("sonnet", "sonnet"),
+        ]
+        .into_iter()
+        .map(|(tier, id)| (tier.to_owned(), id.to_owned()))
+        .collect(),
+        // An untiered ticket runs on the provider's `light` model.
+        default_model: Some("light".into()),
     };
     assert_eq!(
         rig.headless_dispatch.provider_capacity(),

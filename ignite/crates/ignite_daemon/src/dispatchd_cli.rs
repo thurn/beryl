@@ -459,7 +459,7 @@ impl HeadlessDispatch {
     /// Starts a local justiciar when the hub is unreachable and one is not already on duty.
     pub fn hand_off_justiciar(&self, ctx: &Context, prompt: &str) -> Option<SessionId> {
         const HOLD_S: f64 = 2.0 * 3_600.0;
-        const TIER: &str = "opus";
+        const TIER: &str = "high";
         const EFFORT: &str = "high";
         let now = ctx.clock.now();
         if self
