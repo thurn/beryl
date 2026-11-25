@@ -11,6 +11,15 @@ use crate::time::Timestamp;
 /// The default stop percentage of a provider.
 pub const DEFAULT_HOLD_PERCENT: u32 = 99;
 
+/// The label of the plan window that resets five hours after its first use. Every other window
+/// a provider reports is a weekly one.
+pub const FIVE_HOUR_LABEL: &str = "5-hour";
+
+/// Whether the window labelled `label` is the 5-hour window rather than a weekly one.
+pub fn is_five_hour(label: &str) -> bool {
+    label == FIVE_HOUR_LABEL
+}
+
 /// One window of the plan whose newest sample holds hand-offs.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Hold {

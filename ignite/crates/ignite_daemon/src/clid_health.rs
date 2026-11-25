@@ -106,7 +106,7 @@ pub fn parked_by_hold(reason: Option<&str>) -> bool {
 pub fn window_label(window: &str) -> String {
     match window {
         "seven_day" => "Weekly · all models".to_owned(),
-        "five_hour" => "5-hour".to_owned(),
+        "five_hour" => ignite_core::plan_usage::FIVE_HOUR_LABEL.to_owned(),
         other => match other.strip_prefix("seven_day_") {
             Some(family) if !family.is_empty() => {
                 let mut chars = family.chars();

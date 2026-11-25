@@ -266,10 +266,11 @@ fn provider_row<'a>(page: &'a str, name: &str) -> &'a str {
 }
 
 fn configure_providers(settings: &mut FleetSettings) {
-    for (name, enabled, share, stop_percent) in [
-        ("claude", true, 12, 90),
-        ("codex", true, 12, 95),
-        ("disabled", false, 100, 99),
+    // Claude stops at 90% of its 5-hour window and 95% of its weekly ones.
+    for (name, enabled, share, stop_percent, five_hour_stop_percent) in [
+        ("claude", true, 12, 95, Some(90)),
+        ("codex", true, 12, 95, None),
+        ("disabled", false, 100, 99, None),
     ] {
         settings.providers.insert(
             name.to_owned(),
@@ -277,6 +278,7 @@ fn configure_providers(settings: &mut FleetSettings) {
                 enabled,
                 share,
                 stop_percent,
+                five_hour_stop_percent,
                 ignore_usage_threshold: name == "codex",
             },
         );
@@ -288,7 +290,9 @@ fn assert_provider_controls(body: &str) {
     for expected in [
         r#"aria-label="codex enabled" checked"#,
         r#"data-fleet-field="share" aria-label="codex share""#,
-        r#"data-fleet-field="stop_percent""#,
+        r#"data-fleet-field="stop_percent" aria-label="codex weekly stop percentage""#,
+        // A provider saved before the 5-hour window had its own percentage uses the weekly one.
+        r#"data-fleet-field="five_hour_stop_percent" aria-label="codex 5-hour stop percentage" min="1" max="100" step="1" required value="95""#,
         r#"aria-label="codex continue past usage threshold" checked"#,
         ">50%<",
     ] {
@@ -360,7 +364,8 @@ fn fleet_renders_provider_shares_usage_holds_and_workers() {
         "5-hour at 92%",
         "datetime=\"2026-11-17T14:00:00.000Z\"",
         "Share can go to codex.",
-        "--fleet-stop:90%",
+        r#"aria-label="5-hour usage, stop at 90%""#,
+        r#"aria-label="Weekly · all models usage, stop at 95%""#,
         "width:92%",
         "Weekly · all models",
         "Not reported",

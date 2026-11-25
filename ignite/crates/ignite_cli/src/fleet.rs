@@ -40,9 +40,12 @@ pub enum FleetCommand {
         /// Relative weight, from 0 to 1000. Zero turns the provider off.
         #[arg(long)]
         share: Option<u32>,
-        /// Hold at this percentage of a plan window, from 1 to 100.
+        /// Hold at this percentage of a weekly plan window, from 1 to 100.
         #[arg(long)]
         stop_percent: Option<u32>,
+        /// Hold at this percentage of the 5-hour plan window, from 1 to 100.
+        #[arg(long)]
+        five_hour_stop_percent: Option<u32>,
         /// Continue past the usage threshold and let the provider enforce its limits.
         #[arg(long, action = clap::ArgAction::Set)]
         ignore_usage_threshold: Option<bool>,
@@ -97,12 +100,14 @@ impl FleetCommand {
                 off,
                 share,
                 stop_percent,
+                five_hour_stop_percent,
                 ignore_usage_threshold,
             } => {
                 if !*on
                     && !*off
                     && share.is_none()
                     && stop_percent.is_none()
+                    && five_hour_stop_percent.is_none()
                     && ignore_usage_threshold.is_none()
                 {
                     return;
@@ -116,6 +121,9 @@ impl FleetCommand {
                 }
                 if let Some(stop_percent) = stop_percent {
                     provider.stop_percent = *stop_percent;
+                }
+                if let Some(five_hour) = five_hour_stop_percent {
+                    provider.five_hour_stop_percent = Some(*five_hour);
                 }
                 if let Some(ignore) = ignore_usage_threshold {
                     provider.ignore_usage_threshold = *ignore;
@@ -269,6 +277,7 @@ mod tests {
             off: false,
             share: Some(50),
             stop_percent: None,
+            five_hour_stop_percent: None,
             ignore_usage_threshold: None,
         };
         let mut current = FleetSettings {

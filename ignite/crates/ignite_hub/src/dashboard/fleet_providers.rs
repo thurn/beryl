@@ -58,8 +58,7 @@ pub(super) fn section(
             let workers = format!("{running} of {} by share", decimal(total_workers * fraction));
             let controls = settings_fields(name, setting, &share, workers, editable);
             let holds = hold_rows(name, setting, view, &providers);
-            let stop = (!setting.ignore_usage_threshold).then_some(setting.stop_percent);
-            let usage = usage_rows(name, stop, &view.usage);
+            let usage = usage_rows(name, setting, &view.usage);
             let probes = probe_rows(name, &view.machines);
             format!(
                 r#"<div class="c-fleet-provider" data-fleet-provider="{name}"><h3 class="c-subsection-title">{name}</h3>{controls}{holds}{usage}{probes}</div>"#,
@@ -116,10 +115,12 @@ fn settings_fields(
         enabled,
         share,
         stop_percent,
+        five_hour_stop_percent: _,
         ignore_usage_threshold,
     } = setting;
+    let five_hour_stop = setting.five_hour_stop();
     let state = if enabled { "On" } else { "Off" };
-    let (state, share, stop, usage_policy) = if editable {
+    let (state, share, five_hour, weekly, usage_policy) = if editable {
         let name = esc(name);
         let checked = if enabled { " checked" } else { "" };
         let (ignore_checked, threshold_readonly) = if ignore_usage_threshold {
@@ -135,7 +136,10 @@ fn settings_fields(
                 r#"<div class="c-edit-form"><input type="number" autocomplete="off" data-fleet-field="share" aria-label="{name} share" min="0" max="1000" step="1" required value="{share}"></div>"#
             ),
             format!(
-                r#"<div class="c-edit-form"><input type="number" autocomplete="off" data-fleet-field="stop_percent" aria-label="{name} stop percentage" min="1" max="100" step="1" required value="{stop_percent}"{threshold_readonly}></div>"#
+                r#"<div class="c-edit-form"><input type="number" autocomplete="off" data-fleet-field="five_hour_stop_percent" aria-label="{name} 5-hour stop percentage" min="1" max="100" step="1" required value="{five_hour_stop}"{threshold_readonly}></div>"#
+            ),
+            format!(
+                r#"<div class="c-edit-form"><input type="number" autocomplete="off" data-fleet-field="stop_percent" aria-label="{name} weekly stop percentage" min="1" max="100" step="1" required value="{stop_percent}"{threshold_readonly}></div>"#
             ),
             format!(
                 r#"<label class="c-fleet-switch"><input type="checkbox" autocomplete="off" data-fleet-field="ignore_usage_threshold" aria-label="{name} continue past usage threshold"{ignore_checked}>Continue past threshold</label>"#
@@ -145,6 +149,7 @@ fn settings_fields(
         (
             state.to_owned(),
             share.to_string(),
+            format!("{five_hour_stop}%"),
             format!("{stop_percent}%"),
             if ignore_usage_threshold {
                 "Continue past threshold"
@@ -157,7 +162,8 @@ fn settings_fields(
     c::meta(&[
         ("State".to_owned(), state),
         ("Share".to_owned(), share + &c::muted(share_label)),
-        ("Stop percentage".to_owned(), stop),
+        ("5-hour stop".to_owned(), five_hour),
+        ("Weekly stop".to_owned(), weekly),
         ("Usage policy".to_owned(), usage_policy),
         ("Workers now".to_owned(), workers),
     ])
@@ -225,11 +231,15 @@ fn reset_time(at: &str) -> String {
     c::time(Some(&at), "Unknown")
 }
 
-fn usage_rows(name: &str, stop: Option<u32>, samples: &[ProviderSample]) -> String {
+fn usage_rows(name: &str, setting: ProviderSetting, samples: &[ProviderSample]) -> String {
     let windows: Vec<_> = samples
         .iter()
         .filter(|sample| sample.provider == name)
-        .filter_map(|sample| usage_row(sample, stop))
+        .filter_map(|sample| {
+            let stop = (!setting.ignore_usage_threshold)
+                .then(|| setting.stop_percent_for(sample.label.as_deref().unwrap_or_default()));
+            usage_row(sample, stop)
+        })
         .collect();
     let body = if windows.is_empty() {
         c::muted("No usage reported")

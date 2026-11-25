@@ -85,7 +85,7 @@ pub fn held(
                 label,
                 sample.percent_used,
                 sample.resets_at.as_deref(),
-                setting.stop_percent,
+                setting.stop_percent_for(label),
                 now,
             )
         {
@@ -161,5 +161,50 @@ mod tests {
         record(&conn, &claude).unwrap();
         assert_eq!(latest(&conn).unwrap(), [lower, no_windows, codex]);
         assert!(held(&conn, &settings, then).unwrap().is_empty());
+    }
+
+    #[test]
+    fn the_five_hour_window_holds_at_its_own_percentage() {
+        let conn = open_in_memory().unwrap();
+        let now = Timestamp::EPOCH;
+        let mut settings = FleetSettings::default();
+        let mut gemini = ProviderSetting {
+            stop_percent: 80,
+            five_hour_stop_percent: Some(90),
+            ..ProviderSetting::default()
+        };
+        settings.providers.insert("gemini".to_owned(), gemini);
+        for label in ["5-hour", "Weekly · all models"] {
+            record(
+                &conn,
+                &ProviderSample {
+                    provider: "gemini".to_owned(),
+                    at: now,
+                    machine: "m-1".parse().unwrap(),
+                    status: "ok".to_owned(),
+                    label: Some(label.to_owned()),
+                    percent_used: Some(85.0),
+                    resets_at: None,
+                    note: None,
+                },
+            )
+            .unwrap();
+        }
+        let labels = |settings: &FleetSettings| {
+            held(&conn, settings, now)
+                .unwrap()
+                .remove("gemini")
+                .unwrap_or_default()
+                .into_iter()
+                .map(|hold| hold.label)
+                .collect::<Vec<_>>()
+        };
+        // 85% is past the weekly 80% but short of the 5-hour 90%.
+        assert_eq!(labels(&settings), ["Weekly · all models"]);
+
+        // Settings saved before the 5-hour window had its own percentage use the weekly one.
+        gemini.five_hour_stop_percent = None;
+        settings.providers.insert("gemini".to_owned(), gemini);
+        assert_eq!(labels(&settings), ["5-hour", "Weekly · all models"]);
     }
 }

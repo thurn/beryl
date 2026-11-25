@@ -185,7 +185,14 @@ pub struct ProviderSetting {
     /// a provider without a setting takes no unpinned work; with the switch on it still takes
     /// tickets pinned to it with a `provider:` label (see [`Self::takes_ticket`]).
     pub share: u32,
+    /// Hold new work when a weekly window reaches this percentage.
     pub stop_percent: u32,
+    /// Hold new work when the 5-hour window reaches this percentage. `None` uses
+    /// `stop_percent`, which is what settings saved before the two windows had separate
+    /// percentages mean. Hitting the 5-hour limit costs a few hours at most while hitting a
+    /// weekly one can cost days, so this one is usually higher.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub five_hour_stop_percent: Option<u32>,
     /// Keep offering work when a usage sample reaches the stop percentage.
     #[serde(default)]
     pub ignore_usage_threshold: bool,
@@ -197,6 +204,7 @@ impl Default for ProviderSetting {
             enabled: true,
             share: 0,
             stop_percent: DEFAULT_HOLD_PERCENT,
+            five_hour_stop_percent: None,
             ignore_usage_threshold: false,
         }
     }
@@ -225,11 +233,31 @@ impl ProviderSetting {
         }
     }
 
+    /// The 5-hour window's stop percentage.
+    pub fn five_hour_stop(self) -> u32 {
+        self.five_hour_stop_percent.unwrap_or(self.stop_percent)
+    }
+
+    /// The stop percentage of the window labelled `label`.
+    pub fn stop_percent_for(self, label: &str) -> u32 {
+        if crate::plan_usage::is_five_hour(label) {
+            self.five_hour_stop()
+        } else {
+            self.stop_percent
+        }
+    }
+
     pub fn usage_policy(self) -> String {
         if self.ignore_usage_threshold {
             "continue past usage threshold".to_owned()
-        } else {
+        } else if self.five_hour_stop() == self.stop_percent {
             format!("stop at {}%", self.stop_percent)
+        } else {
+            format!(
+                "stop at {}% of 5-hour, {}% of weekly",
+                self.five_hour_stop(),
+                self.stop_percent
+            )
         }
     }
 }
@@ -265,7 +293,9 @@ impl FleetSettings {
             if provider.share > 1_000 {
                 return Err(format!("provider {name}: share must be at most 1,000"));
             }
-            if !(1..=100).contains(&provider.stop_percent) {
+            if !(1..=100).contains(&provider.stop_percent)
+                || !(1..=100).contains(&provider.five_hour_stop())
+            {
                 return Err(format!(
                     "provider {name}: stop percentage must be from 1 to 100"
                 ));
@@ -438,12 +468,15 @@ mod tests {
 
     #[test]
     fn provider_limits_include_their_boundaries() {
-        for (share, stop_percent, valid) in [
-            (0, 1, true),
-            (1_000, 100, true),
-            (1_001, 99, false),
-            (0, 0, false),
-            (0, 101, false),
+        for (share, stop_percent, five_hour_stop_percent, valid) in [
+            (0, 1, None, true),
+            (1_000, 100, Some(1), true),
+            (0, 99, Some(100), true),
+            (1_001, 99, None, false),
+            (0, 0, None, false),
+            (0, 101, None, false),
+            (0, 99, Some(0), false),
+            (0, 99, Some(101), false),
         ] {
             let settings = FleetSettings {
                 providers: BTreeMap::from([(
@@ -452,6 +485,7 @@ mod tests {
                         enabled: false,
                         share,
                         stop_percent,
+                        five_hour_stop_percent,
                         ..ProviderSetting::default()
                     },
                 )]),
@@ -475,6 +509,11 @@ mod tests {
         assert_eq!(
             summary(&before, &after),
             "machine host: defaults restored | provider agent: on, share 50, stop at 99%"
+        );
+        after.providers.get_mut("agent").unwrap().five_hour_stop_percent = Some(85);
+        assert!(
+            summary(&before, &after)
+                .ends_with("provider agent: on, share 50, stop at 85% of 5-hour, 99% of weekly")
         );
     }
 }
