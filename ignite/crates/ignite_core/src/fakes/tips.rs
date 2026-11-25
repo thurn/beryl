@@ -4,6 +4,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Mutex;
 
 use crate::ids::Commit;
+use crate::protocol::hub::{TipUnclaimed, TipUnclaimedReply};
 use crate::tipround::{
     TipBudgetPlan, TipCandidate, TipCandidateUpdate, TipCosts, TipCostsRequest, TipCoverage,
     TipCoverageUpdate, TipRound, TipRoundFiled, TipSelection, TipSelectionUpdate,
@@ -30,6 +31,31 @@ pub(super) struct FakeTips {
 }
 
 impl FakeHub {
+    /// The checks of `ask` whose batch no other machine has claimed and whose key has no result.
+    /// The fake's claims never expire.
+    pub(super) fn fake_tip_unclaimed(&self, ask: &TipUnclaimed) -> Result<TipUnclaimedReply> {
+        self.reachable()?;
+        let claims = lock(&self.tip_claims);
+        let results = lock(&self.results);
+        let held = |batch: u32| {
+            claims.iter().any(|claim| {
+                claim.commit == ask.commit
+                    && claim.family == ask.family
+                    && claim.batch == batch
+                    && claim.machine != ask.machine
+            })
+        };
+        let checks = ask
+            .batches
+            .iter()
+            .filter(|batch| !held(batch.batch))
+            .flat_map(|batch| &batch.checks)
+            .filter(|key| !results.contains_key(*key))
+            .map(|key| key.check.clone())
+            .collect();
+        Ok(TipUnclaimedReply { checks })
+    }
+
     pub(super) fn fake_tip_candidate(&self) -> Result<Option<TipCandidate>> {
         self.reachable()?;
         Ok(lock(&self.tips.candidate).clone())

@@ -324,6 +324,12 @@ pub struct RoundBudget {
     /// landing then found failing (see "Tip verification" in `docs/ignite.md`).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub unrun: BTreeMap<String, u32>,
+    /// For each family, how many of the checks the round set out to run it left to other
+    /// machines. When the round came to the family, other machines held the claims on all of
+    /// its batches or had stored results for all of its checks, so the round neither built nor
+    /// listed it. These checks are not in [`RoundBudget::unrun`]: another machine runs them.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub elsewhere: BTreeMap<String, u32>,
     /// The newer `staging` tip that ended the round before it ran every check it set out to.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ended_by: Option<Commit>,

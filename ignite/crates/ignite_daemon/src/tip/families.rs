@@ -17,8 +17,17 @@
 //! of the daemon too. Families run on up to [`TipWork::parallel`] threads, each in its own
 //! landing tree; every command still asks the scheduler for its cores in the `tip` class, so a
 //! busy machine runs fewer at once.
+//!
+//! Before a family's thread leases a tree for it, the round asks the hub which of the family's
+//! checks to run here still need a run: no other machine holds their batch's claim or has
+//! stored their result (`Round::left_elsewhere`). Leasing a tree for a family lists it, and
+//! listing builds its products. A slow machine used to build a family for many minutes and then
+//! find that faster machines had claimed every batch meanwhile, so it ran nothing. A family with
+//! none left is skipped and counted as left to other machines ([`Elsewhere`]), not as unrun; it
+//! stores no verdict, so a later round still runs the checks if those claims lapse. A hub that
+//! cannot answer leaves the family to be built as before, so a failed lookup never loses a check.
 
-use std::collections::{BTreeMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::thread;
@@ -26,7 +35,9 @@ use std::time::{Duration, Instant};
 
 use ignite_core::config::Os;
 use ignite_core::ids::{CheckName, Commit};
-use ignite_core::protocol::hub::{ResultKey, TipCheckFailures, TipClaim};
+use ignite_core::protocol::hub::{
+    ResultKey, TipCheckFailures, TipClaim, TipUnclaimed, TipUnclaimedBatch,
+};
 use ignite_core::tipround::{self, TipCosts, TipCostsRequest};
 use ignite_core::traits::Result;
 
@@ -40,6 +51,14 @@ pub const RENEW_EVERY: Duration = Duration::from_secs(300);
 
 /// One family's batches, in the order every machine cuts them.
 type FamilyBatches = (String, Vec<(u32, Vec<CheckName>)>);
+
+/// The checks a round skipped, by family, because when it came to their family every one of
+/// them was claimed or answered by another machine (see the module documentation).
+pub(super) type Elsewhere = BTreeMap<String, Vec<CheckName>>;
+
+/// What [`TipVerifier::run_families`] returns: the newer tip that ended the round, if one did,
+/// the runs, and the checks left to other machines.
+pub(super) type FamilyRuns = (Option<Commit>, Vec<TipRun>, Elsewhere);
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
@@ -65,10 +84,13 @@ struct Round<'a> {
     after_master: bool,
     /// Claim names for checks scoped to an OS or to an individual verifier.
     claim_scopes: BTreeMap<&'a str, (Os, bool)>,
+    /// The result key of each check to run, which the hub looks up for a stored result.
+    keys: HashMap<&'a CheckName, &'a ResultKey>,
     queue: Mutex<VecDeque<FamilyBatches>>,
     /// The commit that ended the round, or the error reading `staging` after promotion.
     ended: Mutex<Option<Result<Commit>>>,
     runs: Mutex<Vec<TipRun>>,
+    elsewhere: Mutex<Elsewhere>,
     /// The batch each family is running under a claim, which the renewer claims again.
     held: Mutex<BTreeMap<String, u32>>,
 }
@@ -119,16 +141,66 @@ impl Round<'_> {
         granted
     }
 
+    /// The name the hub keeps `family`'s claims under: scoped to an OS for checks keyed to one,
+    /// and to this machine as well for checks whose results belong to the verifier.
+    fn claim_name(&self, family: &str) -> String {
+        match self.claim_scopes.get(family) {
+            Some((os, true)) => format!("{family}@{os}@{}", self.ctx.machine),
+            Some((os, false)) => format!("{family}@{os}"),
+            None => family.to_owned(),
+        }
+    }
+
+    /// Whether every check of `batches` is claimed or answered by another machine, so that this
+    /// machine has nothing of `family` to run and need not build or list it. Records the checks
+    /// in `elsewhere` when so. A hub that cannot answer leaves the family to run.
+    fn left_elsewhere(&self, family: &str, batches: &[(u32, Vec<CheckName>)]) -> bool {
+        let ask = TipUnclaimed {
+            commit: self.tip.clone(),
+            family: self.claim_name(family),
+            machine: self.ctx.machine.clone(),
+            batches: batches
+                .iter()
+                .map(|(batch, names)| TipUnclaimedBatch {
+                    batch: *batch,
+                    checks: names
+                        .iter()
+                        .filter_map(|name| self.keys.get(name).map(|key| (*key).clone()))
+                        .collect(),
+                })
+                .collect(),
+        };
+        match self.ctx.hub.tip_unclaimed(&ask) {
+            Ok(reply) if reply.checks.is_empty() => {
+                let names: Vec<CheckName> = batches.iter().flat_map(|(_, n)| n.clone()).collect();
+                eprintln!(
+                    "ignite: tip verification: {family} not built: other machines hold or have \
+                     answered all {} of its checks to run",
+                    names.len()
+                );
+                lock(&self.elsewhere)
+                    .entry(family.to_owned())
+                    .or_default()
+                    .extend(names);
+                true
+            }
+            Ok(_) => false,
+            Err(error) => {
+                eprintln!(
+                    "ignite: tip verification: building {family} without knowing whether other \
+                     machines hold its checks: {error}"
+                );
+                false
+            }
+        }
+    }
+
     /// Asks the hub for `batch` of `family`. The hub grants a batch this machine holds again,
     /// renewing its claim.
     fn ask(&self, family: &str, batch: u32) -> bool {
         let claim = TipClaim {
             commit: self.tip.clone(),
-            family: match self.claim_scopes.get(family) {
-                Some((os, true)) => format!("{family}@{os}@{}", self.ctx.machine),
-                Some((os, false)) => format!("{family}@{os}"),
-                None => family.to_owned(),
-            },
+            family: self.claim_name(family),
             batch,
             machine: self.ctx.machine.clone(),
         };
@@ -174,14 +246,15 @@ impl TipVerifier {
     /// over the round's listing. A replacement selected by the hub ends the round at the
     /// next family or batch.
     /// After `master` moves, a newer tip ends the round at the next family or batch
-    /// whatever is under way.
+    /// whatever is under way. A family whose checks other machines all hold or have answered is
+    /// skipped and returned in [`Elsewhere`].
     pub(super) fn run_families(
         &self,
         ctx: &Context,
         tip: &Commit,
         to_run: &[&TipCheck],
         phase: RunPhase,
-    ) -> Result<(Option<Commit>, Vec<TipRun>)> {
+    ) -> Result<FamilyRuns> {
         let after_master = phase == RunPhase::AfterMaster;
         let costs = |family: &str| family_costs(ctx, tip, family);
         let round = Round {
@@ -198,9 +271,14 @@ impl TipVerifier {
                     ))
                 })
                 .collect(),
+            keys: to_run
+                .iter()
+                .map(|check| (&check.check, &check.key))
+                .collect(),
             queue: Mutex::new(by_family(batches(&self.listed, to_run, &costs)).into()),
             ended: Mutex::new(None),
             runs: Mutex::new(Vec::new()),
+            elsewhere: Mutex::new(BTreeMap::new()),
             held: Mutex::new(BTreeMap::new()),
         };
         // A build check may be covered by a family we have not listed yet. Only report a
@@ -234,6 +312,9 @@ impl TipVerifier {
                     scope.spawn(|| {
                         let _entered = activity.as_ref().map(crate::steps::Activity::enter);
                         while let Some((family, batches)) = round.next() {
+                            if round.left_elsewhere(&family, &batches) {
+                                continue;
+                            }
                             crate::steps::step(format!("verifying family {family}"));
                             let claim = |batch: u32| round.claim(&family, batch);
                             let callbacks = BatchCallbacks {
@@ -272,7 +353,11 @@ impl TipVerifier {
             .runs
             .into_inner()
             .unwrap_or_else(PoisonError::into_inner);
-        Ok((superseded, runs))
+        let elsewhere = round
+            .elsewhere
+            .into_inner()
+            .unwrap_or_else(PoisonError::into_inner);
+        Ok((superseded, runs, elsewhere))
     }
 }
 

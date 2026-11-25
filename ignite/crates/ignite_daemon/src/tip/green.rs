@@ -41,7 +41,9 @@ impl TipVerifier {
         tally: &mut Tally,
     ) -> Result<Option<Commit>> {
         if !plan.queued.is_empty() {
-            let (superseded, runs) = self.run_families(ctx, tip, &plan.queued, RunPhase::Build)?;
+            let (superseded, runs, elsewhere) =
+                self.run_families(ctx, tip, &plan.queued, RunPhase::Build)?;
+            super::split::note_elsewhere(tally, &elsewhere);
             self.record_runs(checks, runs, verdicts, tally);
             if superseded.is_some() {
                 return Ok(superseded);

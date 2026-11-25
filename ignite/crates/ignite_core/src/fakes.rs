@@ -18,7 +18,8 @@ use crate::protocol::hub::{
     JusticiarCleared, JusticiarReport, Landed, LandedCommit, LandedReply, ListingKey, MachineFree,
     MetricsImport, NewResult, OpenRegression, Pause, Record, RegressionFiled, RegressionReport,
     ReportFiled, Reservation, ResultKey, RevertFiled, Reverted, SessionTitle, StoredListing,
-    TicketBrief, TipClaim, TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled, Verdict,
+    TicketBrief, TipClaim, TipClaimReply, TipUnclaimed, TipUnclaimedReply, TipVerified, TipWaiting,
+    TipWaitingFiled, Verdict,
 };
 use crate::protocol::tickets::{
     BatchReply, BatchRequest, Comment, FeedBatch, FeedChange, ImportReply, ImportRequest, Lease,
@@ -535,6 +536,10 @@ impl Hub for FakeHub {
             granted,
             expires_at: None,
         })
+    }
+
+    fn tip_unclaimed(&self, ask: &TipUnclaimed) -> Result<TipUnclaimedReply> {
+        self.fake_tip_unclaimed(ask)
     }
 
     fn tip_candidate(&self) -> Result<Option<TipCandidate>> {

@@ -233,7 +233,8 @@ impl TipVerifier {
             } else {
                 RunPhase::BeforeMaster
             };
-            let (newer, runs) = self.run_families(ctx, tip, &split.within, phase)?;
+            let (newer, runs, elsewhere) = self.run_families(ctx, tip, &split.within, phase)?;
+            split::note_elsewhere(tally, &elsewhere);
             if let Some(by) = newer {
                 tally.ran = tally.ran.saturating_add(count(runs.len()));
                 let left = split::unrun(
@@ -243,6 +244,7 @@ impl TipVerifier {
                         .chain(&cache_disabled)
                         .chain(&split.after),
                     &runs,
+                    &elsewhere,
                 );
                 split::note_unrun(tally, left, Some(by.clone()));
                 return Ok(TipOutcome::Superseded { by });

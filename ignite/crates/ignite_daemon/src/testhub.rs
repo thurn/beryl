@@ -9,7 +9,8 @@ use ignite_core::protocol::hub::{
     AuditReport, CachedResult, Claim, ExplorationFind, FlakyReport, Landed, LandedCommit,
     LandedReply, MachineFree, MetricsImport, NewResult, OpenRegression, Pause, Record,
     RegressionFiled, RegressionReport, ReportFiled, Reservation, ResultKey, RevertFiled, Reverted,
-    TicketBrief, TipClaim, TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled,
+    TicketBrief, TipClaim, TipClaimReply, TipUnclaimed, TipUnclaimedReply, TipVerified, TipWaiting,
+    TipWaitingFiled,
 };
 use ignite_core::protocol::tickets::{
     BatchReply, BatchRequest, FeedBatch, LeaseOp, LeaseReply, Ticket, TicketDetail, TicketQuery,
@@ -106,6 +107,10 @@ impl Hub for SpyHub {
     fn tip_claim(&self, claim: &TipClaim) -> Result<TipClaimReply> {
         self.gate("tip_claim")?;
         self.inner.tip_claim(claim)
+    }
+    fn tip_unclaimed(&self, ask: &TipUnclaimed) -> Result<TipUnclaimedReply> {
+        self.gate("tip_unclaimed")?;
+        self.inner.tip_unclaimed(ask)
     }
     fn tip_candidate(&self) -> Result<Option<TipCandidate>> {
         self.gate("tip_candidate")?;

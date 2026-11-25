@@ -92,6 +92,20 @@ pub fn lookup(
     Ok(found)
 }
 
+/// Whether each key has a stored result, in order. Unlike [`lookup`] it marks nothing as looked
+/// up: asking whether a check still needs a run does not use its result.
+pub fn stored(conn: &Connection, keys: &[ResultKey]) -> Result<Vec<bool>> {
+    let mut select = conn.prepare_cached(
+        "SELECT 1 FROM results WHERE check_name = ?1 AND hash = ?2 AND platform = ?3",
+    )?;
+    keys.iter()
+        .map(|key| {
+            let args = params![key.check.as_str(), key.hash.as_str(), platform_text(key)];
+            Ok(select.exists(args)?)
+        })
+        .collect()
+}
+
 /// Stores each result that is a pass or a failure, replacing an entry with the same key.
 pub fn store(conn: &mut Connection, results: &[NewResult], now: Timestamp) -> Result<()> {
     let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;

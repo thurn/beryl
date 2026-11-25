@@ -2817,6 +2817,14 @@ How a daemon verifies a tip:
   each in its own landing tree, leaving one landing tree free for landings. See
   [How long a round takes](#how-long-a-round-takes) for how large a batch is.
 
+- Before it leases a tree for a family, the round asks the hub
+  (`POST /tips/unclaimed`) which of the family's checks still need a run: no
+  other machine holds their batch's claim or has stored their result. When none
+  do, it skips the family without listing or building it, and the round's record
+  counts those checks as left to other machines (`elsewhere` in its budget), not
+  as unrun. Nothing is stored for them, so a later round runs them if the claims
+  lapse. A hub that cannot answer leaves the family to be built as before.
+
 - A build that fails keeps its family's checks from running. The hub hears of it
   once, as `<family>:build`, not once for each check. A check whose build failed
   is never held off: holding off is for checks that ran and hung or went

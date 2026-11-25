@@ -29,8 +29,8 @@ use ignite_core::protocol::hub::{
     MachineRegister, MachineRegistered, MetricsImport, NewResult, OpenRegression, OpenRegressions,
     Pause, Record, RecordBatch, RegressionAttribution, RegressionFiled, RegressionReport, Release,
     ReportFiled, Reservation, ResultKey, RevertFiled, Reverted, SessionTitle, StoreRequest,
-    StoredListing, TicketBrief, TipCheckFailures, TipClaim, TipClaimReply, TipVerified, TipWaiting,
-    TipWaitingFiled, Verdict, VerdictKey,
+    StoredListing, TicketBrief, TipCheckFailures, TipClaim, TipClaimReply, TipUnclaimed,
+    TipUnclaimedReply, TipVerified, TipWaiting, TipWaitingFiled, Verdict, VerdictKey,
 };
 use ignite_core::protocol::tickets::{
     BatchReply, BatchRequest, FeedBatch, ImportReply, ImportRequest, Lease, LeaseBusy, LeaseOp,
@@ -464,6 +464,10 @@ impl Hub for HubClient {
 
     fn tip_claim(&self, claim: &TipClaim) -> Result<TipClaimReply> {
         self.post("/tips/claim", claim)
+    }
+
+    fn tip_unclaimed(&self, ask: &TipUnclaimed) -> Result<TipUnclaimedReply> {
+        self.post("/tips/unclaimed", ask)
     }
 
     fn tip_candidate(&self) -> Result<Option<TipCandidate>> {

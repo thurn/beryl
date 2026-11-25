@@ -10,7 +10,7 @@ use ignite_core::config::Os;
 use ignite_core::ids::{Commit, TicketId};
 use ignite_core::protocol::hub::{
     LandedCommit, RegressionReport, TipCheckFailures, TipClaim, TipClaimReply, TipState,
-    TipVerified,
+    TipUnclaimed, TipUnclaimedReply, TipVerified,
 };
 use ignite_core::time::Timestamp;
 use ignite_core::tipround::{TipCandidate, TipCandidateUpdate};
@@ -192,6 +192,45 @@ pub fn claim(conn: &Connection, claim: &TipClaim, now: Timestamp) -> Result<TipC
         granted: true,
         expires_at: Some(expires),
     })
+}
+
+/// The checks of `ask` that still need a run at its tip: those whose batch no other machine
+/// holds an unexpired claim on, and whose result key has no stored result. A tip round asks
+/// before it builds a family, and skips the family when none are left.
+pub fn unclaimed(
+    conn: &Connection,
+    ask: &TipUnclaimed,
+    now: Timestamp,
+) -> Result<TipUnclaimedReply> {
+    let mut holder = conn.prepare_cached(
+        "SELECT machine, expires_at FROM tip_claims
+         WHERE commit_sha = ?1 AND family = ?2 AND batch = ?3",
+    )?;
+    let mut checks = Vec::new();
+    for batch in &ask.batches {
+        let held: Option<(String, String)> = holder
+            .query_row(
+                params![ask.commit.as_str(), ask.family, batch.batch],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()?;
+        if let Some((machine, expires_at)) = held {
+            let expires: Timestamp = parse("time", &expires_at)?;
+            if expires > now && machine != ask.machine.as_str() {
+                continue;
+            }
+        }
+        let stored = crate::hub::results::stored(conn, &batch.checks)?;
+        checks.extend(
+            batch
+                .checks
+                .iter()
+                .zip(stored)
+                .filter(|(_, stored)| !stored)
+                .map(|(key, _)| key.check.clone()),
+        );
+    }
+    Ok(TipUnclaimedReply { checks })
 }
 
 /// Sets a tip's state. `verified` and `failed` also record when verification finished, and

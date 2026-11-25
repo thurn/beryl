@@ -20,7 +20,7 @@ use crate::protocol::hub::{
     LandingRegression, ListingKey, MachineFree, MetricsImport, NewResult, OpenRegression, Pause,
     Record, RegressionAttribution, RegressionFiled, RegressionReport, ReportFiled, Reservation,
     ResultKey, SessionTitle, StoredListing, TicketBrief, TipCheckFailures, TipClaim, TipClaimReply,
-    TipVerified, TipWaiting, TipWaitingFiled,
+    TipUnclaimed, TipUnclaimedReply, TipVerified, TipWaiting, TipWaitingFiled,
 };
 use crate::protocol::hub::{RevertFiled, Reverted, Verdict, VerdictKey};
 use crate::protocol::tickets::{
@@ -444,6 +444,12 @@ pub trait Hub: Send + Sync {
     /// Claims one batch of one family's checks at a tip, so two machines never run the same
     /// batch (`POST /tips/claim`).
     fn tip_claim(&self, claim: &TipClaim) -> Result<TipClaimReply>;
+    /// Which of one family's checks at a tip no other machine holds or has answered, asked
+    /// before a round builds the family (`POST /tips/unclaimed`). A caller treats an error as
+    /// "all of them", so a hub that cannot answer never loses a check.
+    fn tip_unclaimed(&self, _ask: &TipUnclaimed) -> Result<TipUnclaimedReply> {
+        Err(not_supported("list a tip's unclaimed checks"))
+    }
     /// Sets a tip's verification state (`POST /tips/verified`).
     fn tip_verified(&self, verified: &TipVerified) -> Result<()>;
     /// Records failures for diagnostics while a tip is still running.

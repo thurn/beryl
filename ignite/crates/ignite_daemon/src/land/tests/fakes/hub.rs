@@ -11,7 +11,8 @@ use ignite_core::protocol::hub::{
     CachedResult, Claim, FlakyReport, Landed, LandedCommit, LandedReply, LandingAttribution,
     LandingRegression, MachineFree, MetricsImport, NewResult, OpenRegression, OpenRegressions,
     Record, RegressionAttribution, RegressionFiled, RegressionReport, Reservation, ResultKey,
-    TicketBrief, TipClaim, TipClaimReply, TipVerified, Verdict, VerdictKey,
+    TicketBrief, TipClaim, TipClaimReply, TipUnclaimed, TipUnclaimedReply, TipVerified, Verdict,
+    VerdictKey,
 };
 use ignite_core::protocol::tickets::{
     FeedBatch, Lease, LeaseBusy, LeaseOp, LeaseReply, TicketDetail,
@@ -178,6 +179,9 @@ impl Hub for LeaseHub {
     }
     fn tip_claim(&self, claim: &TipClaim) -> Result<TipClaimReply> {
         self.hub.tip_claim(claim)
+    }
+    fn tip_unclaimed(&self, ask: &TipUnclaimed) -> Result<TipUnclaimedReply> {
+        self.hub.tip_unclaimed(ask)
     }
     fn tip_candidate(&self) -> Result<Option<TipCandidate>> {
         self.hub.tip_candidate()

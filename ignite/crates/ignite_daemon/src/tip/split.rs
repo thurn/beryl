@@ -38,7 +38,7 @@ use ignite_core::tipround::{PortableTipBudget, RoundBudget, TipSelection, TipSel
 use ignite_core::traits::Result;
 
 use super::coverage::Scope;
-use super::families::RunPhase;
+use super::families::{Elsewhere, RunPhase};
 use super::meter::Tally;
 use super::verify::RunPlan;
 use super::{TipCheck, TipRun, TipVerifier, candidate, settle_runs};
@@ -100,7 +100,7 @@ impl<'a> Split<'a> {
             within: u32::try_from(within.len()).unwrap_or(u32::MAX),
             forced: u32::try_from(plan.recheck.len()).unwrap_or(u32::MAX),
             after: u32::try_from(after.len()).unwrap_or(u32::MAX),
-            unrun: unrun(after.iter(), &[]),
+            unrun: unrun(after.iter(), &[], &Elsewhere::new()),
             ..RoundBudget::default()
         };
         Self {
@@ -234,10 +234,11 @@ impl TipVerifier {
             "ignite: master is at {tip}; running the {} checks past the tip budget",
             split.after.len()
         );
-        let (superseded, runs) =
+        let (superseded, runs, elsewhere) =
             self.run_families(ctx, tip, &split.after, RunPhase::AfterMaster)?;
         // Until now every check past the budget counted as unrun (see `split_by`).
-        let left = unrun(split.after.iter(), &runs);
+        let left = unrun(split.after.iter(), &runs, &elsewhere);
+        note_elsewhere(tally, &elsewhere);
         note_unrun(tally, left, superseded.clone());
         tally.ran = tally
             .ran
@@ -287,12 +288,18 @@ pub(super) fn budget_eligible(check: &TipCheck, regressions: &HashSet<CheckName>
     check.reuse && !check.is_build() && !regressions.contains(&check.check)
 }
 
-/// For each family, how many of `set` have no run among `runs`.
+/// For each family, how many of `set` have no run among `runs` and were not left to other
+/// machines in `elsewhere`.
 pub(super) fn unrun<'a>(
     set: impl Iterator<Item = &'a &'a TipCheck>,
     runs: &[TipRun],
+    elsewhere: &Elsewhere,
 ) -> BTreeMap<String, u32> {
-    let ran: HashSet<&CheckName> = runs.iter().map(|run| &run.check).collect();
+    let ran: HashSet<&CheckName> = runs
+        .iter()
+        .map(|run| &run.check)
+        .chain(elsewhere.values().flatten())
+        .collect();
     let mut left: BTreeMap<String, u32> = BTreeMap::new();
     for check in set.filter(|check| !ran.contains(&check.check)) {
         *left.entry(check.family.clone()).or_default() += 1;
@@ -306,6 +313,15 @@ pub(super) fn note_unrun(tally: &mut Tally, left: BTreeMap<String, u32>, ended_b
     if let Some(budget) = tally.budget.as_mut() {
         budget.unrun = left;
         budget.ended_by = ended_by;
+    }
+}
+
+/// Counts in the round's tally the checks it left to other machines, by family.
+pub(super) fn note_elsewhere(tally: &mut Tally, elsewhere: &Elsewhere) {
+    for (family, names) in elsewhere {
+        let count = u32::try_from(names.len()).unwrap_or(u32::MAX);
+        let total = tally.elsewhere.entry(family.clone()).or_default();
+        *total = total.saturating_add(count);
     }
 }
 
@@ -411,7 +427,7 @@ fn split_by<'a>(
         .partition(|check| !forced.contains(&check.check) && after_names.contains(&check.check));
     // The checks past the budget count as unrun until they run after `master` moves; a round
     // that does not move `master` leaves them for a later round.
-    figures.unrun = unrun(after.iter(), &[]);
+    figures.unrun = unrun(after.iter(), &[], &Elsewhere::new());
     Split {
         after_keys: after.iter().map(|c| c.key.clone()).collect(),
         recheck: recheck.to_vec(),

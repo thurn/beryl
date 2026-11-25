@@ -1,5 +1,5 @@
 //! The result cache, check and record routes: `/results/lookup`, `/results/store`, `/flaky`, `/flaky/batch`,
-//! `/checks/stats`, `/checks/fix-outcomes`, `/tips/claim`, `/tips/verified`, `/landings/lookup`, `/regressions`, `/regressions/move`, `/reverted`,
+//! `/checks/stats`, `/checks/fix-outcomes`, `/tips/claim`, `/tips/unclaimed`, `/tips/verified`, `/landings/lookup`, `/regressions`, `/regressions/move`, `/reverted`,
 //! `/records`, `/metrics/import`, and the reports that file tickets: `/incomplete`, `/audits`,
 //! `/finds` and `/tips/waiting`. `/tips/failures` records and reads failures observed at
 //! the selected candidate while its required checks are still running. The landing regression
@@ -11,8 +11,8 @@
 //!
 //! Each route decodes its body with the types of `ignite_core::protocol::hub`, calls the store in
 //! `ignite_store::hub` and encodes the reply. Every route except `/results/lookup`,
-//! `/landings/lookup` and the GET routes writes to the database. Writes and a machine's
-//! pending attribution lookup require a registered machine's token.
+//! `/landings/lookup`, `/tips/unclaimed` and the GET routes writes to the database. Writes and
+//! a machine's pending attribution lookup require a registered machine's token.
 
 use std::collections::BTreeMap;
 
@@ -45,7 +45,7 @@ const BILLION: f64 = 1e9;
 /// The response if this module owns the request's path.
 pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Option<Response> {
     let (method, needs_token) = match request.path.as_str() {
-        "/results/lookup" | "/landings/lookup" => ("POST", false),
+        "/results/lookup" | "/landings/lookup" | "/tips/unclaimed" => ("POST", false),
         "/checks/stats"
         | "/checks/fix-outcomes"
         | "/regressions/open"
@@ -153,11 +153,7 @@ fn route(conn: &mut Connection, request: &Request, now: Timestamp) -> Result<Res
             Ok(Response::json(200, &json!(updated)))
         }
         "/tips/budget" | "/tips/selection" => tip_budget(conn, request),
-        "/tips/claim" => {
-            let claim: TipClaim = body(request)?;
-            let reply = tips::claim(conn, &claim, now).map_err(|e| store_failure(&e))?;
-            Ok(Response::json(200, &json!(reply)))
-        }
+        "/tips/claim" | "/tips/unclaimed" => tip_claims(conn, request, now),
         "/tips/verified" => {
             let verified: TipVerified = body(request)?;
             tips::verified(conn, &verified, now).map_err(|e| store_failure(&e))?;
@@ -196,6 +192,18 @@ fn route(conn: &mut Connection, request: &Request, now: Timestamp) -> Result<Res
         "/incomplete" | "/audits" | "/finds" | "/justiciar" => report(conn, request, now),
         other => Err(failure(404, &format!("no route {other}"))),
     }
+}
+
+/// `/tips/claim` claims one batch of a family at a tip; `/tips/unclaimed` says which of a
+/// family's checks no other machine holds or has answered there.
+fn tip_claims(conn: &Connection, request: &Request, now: Timestamp) -> Result<Response, Response> {
+    let reply = if request.path == "/tips/claim" {
+        let claim: TipClaim = body(request)?;
+        json!(tips::claim(conn, &claim, now).map_err(|e| store_failure(&e))?)
+    } else {
+        json!(tips::unclaimed(conn, &body(request)?, now).map_err(|e| store_failure(&e))?)
+    };
+    Ok(Response::json(200, &reply))
 }
 
 fn tip_budget(conn: &mut Connection, request: &Request) -> Result<Response, Response> {

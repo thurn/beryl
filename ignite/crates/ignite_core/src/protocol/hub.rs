@@ -4,8 +4,8 @@
 //! - Hand-offs: `POST /next`, `POST /claims`, `POST /landed`, `POST /release`.
 //! - The result cache: `POST /results/lookup`, `POST /results/store`, `POST /flaky`,
 //!   `GET /checks/stats?family=`.
-//! - Tips: `POST /tips/claim`, `POST /tips/verified`, `POST /tips/waiting`, `POST /regressions`,
-//!   `POST /landings/lookup`.
+//! - Tips: `POST /tips/claim`, `POST /tips/unclaimed`, `POST /tips/verified`,
+//!   `POST /tips/waiting`, `POST /regressions`, `POST /landings/lookup`.
 //! - Records: `POST /records`, `POST /metrics/import`.
 //! - Listings: `POST /listings/lookup`, `POST /listings/store`.
 

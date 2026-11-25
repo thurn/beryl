@@ -50,6 +50,9 @@ pub(super) struct Tally {
     pub budget: Option<ignite_core::tipround::RoundBudget>,
     /// When `master` moved to the tip, if it did.
     pub master_at: Option<Timestamp>,
+    /// For each family, how many checks the round left to other machines without building
+    /// the family (see `families`). Recorded in the round's budget, when it has one.
+    pub elsewhere: std::collections::BTreeMap<String, u32>,
 }
 
 /// Which of the round's commands and builds are running, for timing listing alone.
@@ -173,6 +176,7 @@ impl Meter {
                 budget.master_s = tally
                     .master_at
                     .map(|moved| moved.seconds_since(self.start).max(0.0));
+                budget.elsewhere.clone_from(&tally.elsewhere);
                 budget
             }),
         }

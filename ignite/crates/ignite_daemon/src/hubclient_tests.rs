@@ -10,6 +10,8 @@ use ignite_core::time::Timestamp;
 
 #[path = "hubclient_tests/result_cache.rs"]
 mod result_cache;
+#[path = "hubclient_tests/tips.rs"]
+mod tips;
 
 /// One request the stand-in hub received.
 #[derive(Clone, Debug)]

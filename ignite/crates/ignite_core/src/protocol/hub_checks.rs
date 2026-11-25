@@ -300,3 +300,32 @@ pub struct RegressionMoved {
     pub from: TicketId,
     pub to: TicketId,
 }
+
+/// `POST /tips/unclaimed`: which of one family's checks at a tip still need a run, asked by a
+/// tip round before it builds and lists the family. A slow machine used to build a family and
+/// then find that faster machines had claimed every batch meanwhile.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TipUnclaimed {
+    pub commit: Commit,
+    /// The family's name in claims, with the scope the round claims its batches under:
+    /// `<family>`, `<family>@<os>` or `<family>@<os>@<machine>`.
+    pub family: String,
+    /// The machine asking. Its own claims do not hold a batch against it.
+    pub machine: MachineId,
+    pub batches: Vec<TipUnclaimedBatch>,
+}
+
+/// One batch of [`TipUnclaimed`]: its number, as every machine cuts it, and the result keys of
+/// the checks in it that the asking machine still has to run.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TipUnclaimedBatch {
+    pub batch: u32,
+    pub checks: Vec<ResultKey>,
+}
+
+/// The checks of a [`TipUnclaimed`] whose batch no other machine holds an unexpired claim on
+/// and whose key has no stored result.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TipUnclaimedReply {
+    pub checks: Vec<CheckName>,
+}

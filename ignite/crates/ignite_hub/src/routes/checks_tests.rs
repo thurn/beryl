@@ -19,6 +19,9 @@ use ignite_store::hub::{self, batch};
 use super::{Request, handle};
 use crate::auth::Writer;
 
+#[path = "checks_tests/unclaimed.rs"]
+mod unclaimed;
+
 fn at(seconds: f64) -> Timestamp {
     Timestamp::from_millis(0).plus_seconds(seconds)
 }
