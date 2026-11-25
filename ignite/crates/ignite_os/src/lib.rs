@@ -5,10 +5,10 @@
 //! This is the only crate where `unsafe` is allowed.
 
 pub mod clones;
-pub mod fifo;
 pub mod files;
 pub mod hostcpu;
 pub mod ipc;
+pub mod jobserver;
 pub mod notify;
 pub mod occupants;
 pub mod paths;

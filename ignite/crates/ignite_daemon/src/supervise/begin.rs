@@ -13,7 +13,7 @@ use std::thread;
 use ignite_core::protocol::Class;
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{CommandSpec, RunResult};
-use ignite_os::fifo;
+use ignite_os::jobserver;
 
 use super::grants::{GrantFile, GrantGuard, watch_for_stop};
 use super::jobserver::compiles_only;
@@ -57,16 +57,16 @@ impl SupervisedLauncher {
         // Every command gets a jobserver, whatever its first word, so that the Cargo builds a
         // script, `just` or `uv` starts follow the grant as it grows. Only a Cargo command that
         // only compiles shrinks: what other commands run besides Cargo, such as tests, keeps
-        // the thread count it started with. Where there are no FIFOs, a command without a
-        // jobserver keeps the size it started with, unless it rereads its cores file.
+        // the thread count it started with. Where there is no jobserver, a command keeps the
+        // size it started with, unless it rereads its cores file.
         if self.quick(spec) {
             return self.start_quick(dir, spec);
         }
-        let shrinks = shrinks_with(fifo::AVAILABLE, &spec.args);
+        let shrinks = shrinks_with(jobserver::AVAILABLE, &spec.args);
         let cores_file = self
             .scheduler
             .as_ref()
-            .filter(|_| fifo::AVAILABLE || shrinks || spec.grows)
+            .filter(|_| jobserver::AVAILABLE || shrinks || spec.grows)
             .map(|_| dir.join(CORES));
         let Some(grant) = self.grant(spec, shrinks, cores_file.clone(), since, cancelled) else {
             let _ = fs::remove_dir_all(&dir);
@@ -82,7 +82,7 @@ impl SupervisedLauncher {
         }
         let follows = cores_file.is_some();
         let jobserver = cores_file
-            .filter(|_| fifo::AVAILABLE)
+            .filter(|_| jobserver::AVAILABLE)
             .zip(self.scheduler.as_ref())
             .map(|(file, scheduler)| (file, scheduler.status().max_per_command));
         let file = GrantFile {
@@ -235,7 +235,7 @@ impl Run {
 
 /// Whether a command's grant gives cores back while a higher class waits: only a Cargo command
 /// that only compiles ([`compiles_only`]), and only under a jobserver (`jobserver`, which is
-/// [`fifo::AVAILABLE`] outside tests). Without one, Cargo keeps the `CARGO_BUILD_JOBS` it
+/// [`jobserver::AVAILABLE`] outside tests). Without one, Cargo keeps the `CARGO_BUILD_JOBS` it
 /// started with, so a grant that shrank would free cores its compile jobs still use.
 fn shrinks_with(jobserver: bool, args: &[String]) -> bool {
     jobserver && compiles_only(args)
@@ -243,18 +243,18 @@ fn shrinks_with(jobserver: bool, args: &[String]) -> bool {
 
 /// Whether a command that says it `grows` ([`CommandSpec::grows`]) gets a grant that grows. A
 /// command that compiles follows a growing grant only through its jobserver (`jobserver`, which
-/// is [`fifo::AVAILABLE`] outside tests): without one, Cargo keeps the `CARGO_BUILD_JOBS` of
-/// the grant's first size. On Windows, which has no FIFOs, the `client` product's build was
-/// granted one core while cores were short, its grant then grew to ten in the scheduler's
+/// is [`jobserver::AVAILABLE`] outside tests): without one, Cargo keeps the `CARGO_BUILD_JOBS` of
+/// the grant's first size. On Windows before it had a jobserver, the `client` product's build
+/// was granted one core while cores were short, its grant then grew to ten in the scheduler's
 /// count, and Cargo compiled one crate at a time for over an hour while the machine reported
-/// no free cores at 25% CPU. Such a command instead waits for the cores it asked for.
+/// no free cores at 25% CPU. Such a command instead keeps the size it was granted.
 pub fn grows_with(jobserver: bool, grows: bool, compiles: bool) -> bool {
     grows && (jobserver || !compiles)
 }
 
 /// [`grows_with`] on this platform.
 pub fn grows_here(grows: bool, compiles: bool) -> bool {
-    grows_with(fifo::AVAILABLE, grows, compiles)
+    grows_with(jobserver::AVAILABLE, grows, compiles)
 }
 
 /// Whether `spec`'s command is quick ([`QUICK_CPU_MS`]) by the CPU its last runs recorded in

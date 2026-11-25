@@ -7,8 +7,9 @@
 //!   supervisor.
 //! - `cores`: for a command run under the scheduler, its grant's current size, which the
 //!   scheduler rewrites when it changes and the command finds in `IGNITE_CORES_FILE`.
-//! - `jobserver`: for a command run under the scheduler, the FIFO that the Cargo builds it runs
-//!   take their job slots from, kept at the size in `cores` (see `jobserver`).
+//! - `jobserver`: for a command run under the scheduler, the FIFO on macOS that the Cargo
+//!   builds it runs take their job slots from, kept at the size in `cores` (see `jobserver`).
+//!   On Windows the jobserver is a named semaphore, which has no file.
 //! - `lock`: held exclusively by the supervisor for as long as it lives. Whoever wants the
 //!   result takes a shared lock on it, which blocks until the supervisor exits. This works for
 //!   a daemon that started the supervisor and for one that restarted since and is no longer its
