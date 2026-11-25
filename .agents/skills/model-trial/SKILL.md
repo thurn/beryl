@@ -79,10 +79,14 @@ every source and copy is outside it, so the next block cannot depend on this blo
 Instead `pair file --then <next>` defers the next ticket for two hours, and each block and the
 report ticket start with `pair wait`, which defers them again while any arm is unfinished.
 
-0. **Wait.** Run `just model-trial pair wait --trial <epic>`. It exits 0 when both arms of
-   every filed pair have ended (closed, or released by their first session). If it exits 3,
-   run `ignite release -m "<the arms it listed are not finished>"` and then, in the same
-   command, `just model-trial pair wait --trial <epic> --defer <this ticket>`, and stop.
+0. **Wait.** Run `just model-trial pair wait --trial <epic> --defer <this ticket>`. It exits 0
+   when both arms of every filed pair have ended (closed, or released by their first
+   session). If it exits 3, it has already deferred this ticket: run
+   `ignite release -m "<the arms it listed are not finished>"` and stop. Defer before you
+   release, never after. The hub does not count the release of a ticket that is deferred to a
+   later time, but it counts any other, and holds a ticket back from the pool once two
+   sessions have released it. A ticket left undeferred after its release can also be given to
+   a second worker straight away.
 1. **Grade and review.** Run `just efficiency ingest`, then
    `ignite run -- just model-trial grade --trial <epic>` and
    `ignite run -- just model-trial review --trial <epic>`. They cover every pair that has

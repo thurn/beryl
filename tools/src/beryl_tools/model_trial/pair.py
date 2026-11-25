@@ -444,7 +444,9 @@ def defer(ticket: str) -> None:
 
 def cmd_wait(args: argparse.Namespace, spec: Spec) -> int:
     """Exits 0 when every filed pair's two arms have ended, else lists the unfinished arms,
-    defers `--defer` (the block ticket, after its session released it) and exits 3."""
+    defers `--defer` (the block ticket, which its session releases next) and exits 3. The
+    deferral comes first because the hub does not count the release of a deferred ticket
+    toward holding it back."""
     pairs = [p for p in manifest.read_pairs(args.trial) if p.state == FILED]
     ids = [t for p in pairs for t in (p.source, str(p.copy))]
     tickets = {str(t["id"]): t for t in io.show(ids, history=True)}

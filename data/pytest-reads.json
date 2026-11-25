@@ -154,6 +154,9 @@
       "tools/src/beryl_tools/model_trial/templates/epic.txt",
       "tools/src/beryl_tools/model_trial/templates/report.txt"
     ],
+    "tools/src/beryl_tools/model_trial/review.py": [
+      "tools/src/beryl_tools/model_trial/reviewer_prompt.txt"
+    ],
     "tools/src/beryl_tools/oracle_discovery.py": [
       "data/oracle-candidates.json"
     ],
@@ -282,6 +285,9 @@
     ],
     "tools/tests/test_ignite_script.py": [
       "ignite/checks/script.toml"
+    ],
+    "tools/tests/test_model_trial_report.py": [
+      "tools/src/beryl_tools/model_trial/reviewer_prompt.txt"
     ],
     "tools/tests/test_phase_draft.py": [
       "tools/tests/fixtures/phase-draft.json"
