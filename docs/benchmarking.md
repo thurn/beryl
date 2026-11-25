@@ -135,7 +135,11 @@ it is in play. The present-cost gate measures what it costs while one is:
   spends mana on X), and `outside` Burning Wish and Lurrus of the Dream-Den,
   `turn-structure` Time Stop, Paradox Haze, Relentless Assault and Time Vault
   (ending the turn, additional upkeep, combat phases and an extra turn), and
-  `restart` Karn Liberated, three copies. A stand-in drops abilities and
+  `restart` Karn Liberated, three copies, `cast-in-resolution` Bloodbraid Elf,
+  Knowledge Pool and Panglacial Wurm with Sylvan Scrying to search for it (and
+  Mountains and Forests, so they can be cast), and `combat-assignment` Benalish
+  Hero, Palace Guard, Fencing Ace and Master of the Hunt (and Forests, so the
+  last can be cast). A stand-in drops abilities and
   keywords, not a card's shape, so these families measure what the cards'
   abilities cost in play; the cost of the shape itself, which every card pays
   through `State::copiable`, is in the absent-cost count.

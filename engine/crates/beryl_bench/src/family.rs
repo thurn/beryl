@@ -233,6 +233,37 @@ pub const FAMILIES: &[Family] = &[
             (1, names::KARN_LIBERATED, names::TRINKET_MAGE),
         ],
     },
+    // The cast-in-resolution family: Bloodbraid Elf (cascade, a cast made inside a resolution),
+    // Knowledge Pool (a cast trigger that exiles the spell and offers another card) and
+    // Panglacial Wurm (cast from the library during a search, which Trinket Mage and Sylvan
+    // Scrying give it). Mountains, Forests and Islands stand in for Plains so the red and
+    // green cards can be cast.
+    Family {
+        name: "cast-in-resolution",
+        swaps: &[
+            (1, names::BLOODBRAID_ELF, names::REPRIEVE),
+            (1, names::KNOWLEDGE_POOL, names::OUST),
+            (1, names::PANGLACIAL_WURM, names::PORTABLE_HOLE),
+            (1, names::SYLVAN_SCRYING, names::NO_MORE_LIES),
+            (2, names::MOUNTAIN, names::PLAINS),
+            (2, names::FOREST, names::ISLAND),
+        ],
+    },
+    // The combat-assignment family: Benalish Hero (banding), Palace Guard (blocks any number
+    // of creatures), Fencing Ace (double strike) and Master of the Hunt ("bands with other"
+    // Wolves). Combat damage is assigned by the player `combat::assigner` names, and a band or
+    // a multiple block widens what each assignment can be. Forests stand in for Islands so
+    // Master of the Hunt can be cast.
+    Family {
+        name: "combat-assignment",
+        swaps: &[
+            (1, names::BENALISH_HERO, names::CURRENCY_CONVERTER),
+            (1, names::PALACE_GUARD, names::STAFF_OF_THE_STORYTELLER),
+            (1, names::FENCING_ACE, names::THIRST_FOR_DISCOVERY),
+            (1, names::MASTER_OF_THE_HUNT, names::WINDS_OF_ABANDON),
+            (2, names::FOREST, names::ISLAND),
+        ],
+    },
 ];
 
 /// The family called `name`.

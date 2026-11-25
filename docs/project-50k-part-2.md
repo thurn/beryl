@@ -1076,6 +1076,29 @@ perturbation. The oracle exporters export casts inside a resolution and report
 attacking bands, exact damage shares and casting while searching as unsupported
 with their reasons.
 
+**What this family costs a rollout.** Measured on the Jarvis verifier with
+`just count-gate --family`, each against the bar of 1.25:
+
+- `cast-in-resolution` (Bloodbraid Elf, Knowledge Pool, Panglacial Wurm with
+  Sylvan Scrying): 329,432,767 instructions with the family and 329,439,879 on
+  the controls, ratio 1.000, 3,331 steps paired and 14 skipped.
+- `combat-assignment` (Benalish Hero, Palace Guard, Fencing Ace, Master of the
+  Hunt): 269,516,454 with the family and 269,522,824 on the controls, ratio
+  1.000, 3,106 steps paired and 12 skipped.
+
+The ratios are 1.000 within the noise of a step, so a rollout with these cards
+in play pays nothing measurable for them beyond what the controls pay. The
+control keeps each card's shape and its spell and activated abilities, so the
+assigner query and the capability checks that every rollout pays are in the
+absent cost, not in these ratios. The WU mirror rollout measured 376,935,258
+instructions before this family began (the Bloodbraid Elf landing) and
+380,672,174 at the tree this ticket started from, 3,736,916 more (+0.99%). That
+is +0.66% over the bar of 378,170,543 and inside its 1% tolerance. The change
+includes every landing between the two, not only this family's; the family's
+own landings that measured the mirror reported +8,138 (Bloodbraid Elf),
++53,899 (Panglacial Wurm), +92,210 (Knowledge Pool and Possibility Storm) and
+banding's +754,056 (+0.2% of the bar), which the owner approved.
+
 ### I. Card shapes, face-down cards and cards outside the game
 
 A `CardDef` already holds one or two faces, `casting/legal.rs` already loops

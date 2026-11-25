@@ -40,6 +40,8 @@ use {
 #[bench::outside(FamilyWorkload::new("outside"))]
 #[bench::turn_structure(FamilyWorkload::new("turn-structure"))]
 #[bench::restart(FamilyWorkload::new("restart"))]
+#[bench::cast_in_resolution(FamilyWorkload::new("cast-in-resolution"))]
+#[bench::combat_assignment(FamilyWorkload::new("combat-assignment"))]
 fn present(w: FamilyWorkload) -> u64 {
     black_box(family::roll_paired(black_box(&w)).paired)
 }
@@ -66,6 +68,8 @@ fn present(w: FamilyWorkload) -> u64 {
 #[bench::outside(FamilyWorkload::new("outside"))]
 #[bench::turn_structure(FamilyWorkload::new("turn-structure"))]
 #[bench::restart(FamilyWorkload::new("restart"))]
+#[bench::cast_in_resolution(FamilyWorkload::new("cast-in-resolution"))]
+#[bench::combat_assignment(FamilyWorkload::new("combat-assignment"))]
 fn control(w: FamilyWorkload) -> u64 {
     black_box(family::roll_paired(black_box(&w)).paired)
 }
