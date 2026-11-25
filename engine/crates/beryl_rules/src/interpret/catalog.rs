@@ -27,12 +27,8 @@ pub(crate) fn decision<L: Layout>(
     kind: ChosenKind,
     about: Bitboard<L::Slot>,
 ) -> Result<Decision<L>, Full> {
-    let mut options: L::Queue<Opt<L>, OPTIONS> = Default::default();
-    for n in ChosenValue::<L>::candidates(t, kind) {
-        options.push(Opt::Number(n))?;
-    }
     let prompt = Prompt::new(kind.purpose());
-    Ok(Decision::options(player, DecisionKind::ChooseObject, options, prompt).about(about))
+    decision_among(t, player, kind, prompt, about, |_| true)
 }
 
 /// The question that asks `player` for one of the values of `kind` that `keep` takes, by

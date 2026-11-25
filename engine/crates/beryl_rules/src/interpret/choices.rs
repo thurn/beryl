@@ -82,7 +82,7 @@ use crate::game::Game;
 use crate::ids::Seat;
 use crate::interpret::{Outcome, Run};
 use crate::layout::{Layout, Queue};
-use crate::resolution::Resolution;
+use crate::resolution::{Resolution, picked};
 
 /// Asks `player` to take one of `opts`, as a question of `kind`.
 fn option<L: Layout>(
@@ -98,14 +98,7 @@ fn option<L: Layout>(
     for o in opts {
         list.push(o)?;
     }
-    let d = Decision {
-        player,
-        decider: player,
-        kind,
-        candidates: Candidates::Options(list),
-        prompt,
-        about,
-    };
+    let d = Decision::options(player, kind, list, prompt).about(about);
     let c = resolution.answer(game, &d)?;
     Ok(d.candidates.option(c).expect("an answer among the options"))
 }
@@ -214,14 +207,8 @@ fn pick_about<L: Layout>(
         },
         "{prompt:?} is not answered with an object"
     );
-    let d = Decision {
-        player,
-        decider: player,
-        kind: DecisionKind::ChooseObject,
-        candidates: Candidates::Objects(crate::engine::collapse(game.state, candidates)),
-        prompt,
-        about,
-    };
+    let candidates = crate::engine::collapse(game.state, candidates);
+    let d = Decision::objects(player, DecisionKind::ChooseObject, candidates, prompt).about(about);
     let c = resolution.answer(game, &d)?;
     Ok(d.candidates.object(c).expect("an answer among the objects"))
 }
@@ -255,12 +242,11 @@ pub fn pick_or_end<L: Layout>(
     let list = pick_or_end_options(game, candidates)?;
     let d = Decision::options(player, DecisionKind::ChooseUpTo, list, prompt);
     let answer = resolution.answer(game, &d)?;
-    Ok(match d.candidates.option(answer) {
-        Some(Opt::Object(slot)) => Some(slot),
-        _ => None,
-    })
+    Ok(picked(&d, answer))
 }
 
+/// The options of a pick that may end: the end first, then the objects of `candidates` in
+/// candidate order, interchangeable ones as one option (§7.2).
 #[inline]
 fn pick_or_end_options<L: Layout>(
     game: &Game<'_, L>,
@@ -578,20 +564,8 @@ pub fn hidden_pick<L: Layout>(
     candidates: Bitboard<L::Slot>,
     prompt: Prompt,
 ) -> Result<Option<L::Slot>, Stop> {
-    let mut list: L::Queue<Opt<L>, OPTIONS> = Default::default();
-    list.push(Opt::Done)?;
-    let candidates = crate::engine::collapse(game.state, candidates);
-    Candidates::<L>::extend_options(&mut list, candidates, |out, slot| {
-        out.push(Opt::Object(slot))
-    })?;
-    let d = Decision {
-        player,
-        decider: player,
-        kind: DecisionKind::ChooseUpTo,
-        candidates: Candidates::Options(list),
-        prompt,
-        about: Bitboard::EMPTY,
-    };
+    let list = pick_or_end_options(game, candidates)?;
+    let d = Decision::options(player, DecisionKind::ChooseUpTo, list, prompt);
     resolution.answer_hidden(game, &d)
 }
 

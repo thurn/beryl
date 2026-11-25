@@ -42,9 +42,18 @@
 //! names no card, and no player but those it is given.
 //!
 //! The engine's own code (turns, casting, combat, the event pipeline) still passes the three
-//! apart. It is not rewritten for this: a bead that touches such a function converts it, and
-//! until then a caller of the library makes the game where it calls, as
+//! apart. It is not rewritten for this: a change that touches such a function converts it,
+//! and until then a caller of the library makes the game where it calls, as
 //! `combat/assignment.rs` does to deal combat damage.
+//!
+//! A function that acts on one kind of object takes the kernel's typed reference for it
+//! ([`Permanent`](beryl_kernel::reference::Permanent),
+//! [`Spell`](beryl_kernel::reference::Spell), [`CardIn`](beryl_kernel::reference::CardIn) and
+//! their sets), and so makes no `is_current` test of its own. The interpreter turns a
+//! vocabulary `Objects` value into such a set (`Run::permanents` in `interpret/run.rs`), and
+//! reads a reference it stored earlier, such as an ability's source, through
+//! [`State::current`](state::State::current) once. Decisions and open questions name objects
+//! by bare slot, as the kernel's contract says.
 //!
 //! ## Layout
 //!

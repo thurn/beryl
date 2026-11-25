@@ -17,7 +17,7 @@ use crate::ids::Seat;
 use crate::layout::{Layout, PerPlayer, Table};
 use crate::replacement;
 use crate::replacement::event::{self, Entry, Event, LossCause, Reason, Sink};
-use crate::state::{Pending, State, Zone};
+use crate::state::{Derived, Object, Pending, State, Zone};
 use crate::table::{Capability, GameTable};
 use beryl_card::Regeneration;
 
@@ -201,9 +201,7 @@ fn doomed<L: Layout>(s: &State<L>, t: &GameTable) -> Doomed<L> {
             // that checks for lethal damage".
             let lethal = types.contains(Types::CREATURE)
                 && (d.toughness <= 0
-                    || (o.damage() > 0
-                        && i16::from(o.damage()) >= i16::from(d.toughness)
-                        && !d.keywords.contains(Keywords::INDESTRUCTIBLE)));
+                    || (lethal_damage(d, o) && !d.keywords.contains(Keywords::INDESTRUCTIBLE)));
             lethal || (types.contains(Types::PLANESWALKER) && o.counters().loyalty == 0)
         };
         if dies || (auras && aura.of(d.subtypes) && illegal_aura(s, t, slot)) {
@@ -228,6 +226,15 @@ fn doomed<L: Layout>(s: &State<L>, t: &GameTable) -> Doomed<L> {
         expired_tokens(s, candidates)
     };
     (graveyard, tokens, legendary)
+}
+
+/// Whether a creature with toughness greater than 0 has damage marked on it at least equal to
+/// its toughness, the lethal damage of CR 704.5g.
+#[inline]
+fn lethal_damage<L: Layout>(d: &Derived<L>, o: &Object<L>) -> bool {
+    d.types.contains(Types::CREATURE)
+        && d.toughness > 0
+        && i16::from(o.damage()) >= i16::from(d.toughness)
 }
 
 /// Whether an Aura is unattached or attached illegally (see CR 704.5m).
@@ -269,12 +276,9 @@ fn destroyed_for_damage<L: Layout>(
     let aura = t.subtypes().has(Subtype::Aura);
     graveyard.filter(|slot| {
         let (d, o) = (s.derived(slot), s.object(slot));
-        let lethal = d.types.contains(Types::CREATURE)
-            && d.toughness > 0
-            && i16::from(o.damage()) >= i16::from(d.toughness);
         let unattached = aura.of(d.subtypes) && o.attachment().is_none();
         let no_loyalty = d.types.contains(Types::PLANESWALKER) && o.counters().loyalty == 0;
-        lethal && !unattached && !no_loyalty
+        lethal_damage(d, o) && !unattached && !no_loyalty
     })
 }
 
@@ -427,11 +431,6 @@ fn end<L: Layout>(s: &mut State<L>, format: Format, sink: &mut Sink<L>, causes: 
     sink.apart();
 }
 
-/// The name of the permanent in `slot`: its face up's (see CR 712.6c, 712.6d).
-fn name<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> &'static str {
-    s.definition(slot).name(t)
-}
-
 /// The legendary permanents each player controls.
 fn legendary<L: Layout>(s: &State<L>) -> Legendary<L> {
     let mut by_controller: Legendary<L> = Table::filled(Bitboard::EMPTY);
@@ -468,8 +467,9 @@ fn legend_group<L: Layout>(
     legendary: &Legendary<L>,
     slot: L::Slot,
 ) -> Bitboard<L::Slot> {
-    let name_of = name(s, t, slot);
-    legendary[s.controller(slot).index()].filter(|other| name(s, t, other) == name_of)
+    // The name of a permanent is its face up's (see CR 712.6c, 712.6d).
+    let name_of = s.definition(slot).name(t);
+    legendary[s.controller(slot).index()].filter(|other| s.definition(other).name(t) == name_of)
 }
 
 /// The choice for the next legend-rule group in APNAP order (see CR 704.5j).
@@ -499,16 +499,7 @@ pub(crate) fn unresolved_legends<L: Layout>(
     t: &GameTable,
     kept: Bitboard<L::Slot>,
 ) -> Option<(Seat, Bitboard<L::Slot>)> {
-    legend_group_in(s, t, &legendary(s), kept)
-}
-
-/// [`unresolved_legends`], of `legendary`, the legendary permanents each player controls.
-fn legend_group_in<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    legendary: &Legendary<L>,
-    kept: Bitboard<L::Slot>,
-) -> Option<(Seat, Bitboard<L::Slot>)> {
+    let legendary = &legendary(s);
     for player in s.players_in_turn_order(s.players()) {
         let mut seen = Bitboard::EMPTY;
         for &slot in s.battlefield() {

@@ -15,7 +15,7 @@ mod scene;
 use beryl_card::{Amount, Condition, Effect, Objects, Players, Zone};
 
 use crate::bodies::Bodies;
-use crate::card::{Ability, Behavior, Flow, ManaColor, ObjectAbility, Stop};
+use crate::card::{Ability, Behavior, FaceIx, Flow, ManaColor, ObjectAbility, Stop};
 use crate::continuous::layers;
 use crate::filter::Filter;
 use crate::fixed::Full;
@@ -149,21 +149,6 @@ pub(crate) fn mana_ability<L: Layout>(
     done
 }
 
-/// Whether a triggered ability's intervening "if" holds, or it has none
-/// (see [CR 603.4](https://yawgatog.com/resources/magic-rules/#R6034)): "When the trigger event
-/// occurs, the ability checks whether the stated condition is true. The ability triggers only
-/// if it is; otherwise it does nothing. If the ability triggers, it checks the stated
-/// condition again as it resolves."
-#[inline]
-pub(crate) fn intervening_if<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    trigger: &PendingTrigger<L>,
-    ability: &Ability,
-) -> bool {
-    condition_holds(s, t, trigger, ability)
-}
-
 /// Whether the condition of a static or replacement ability of the permanent in `slot`
 /// holds, or it has none: its "as long as" or "while", read for the permanent as "this"
 /// and its controller as "you". `ability` names it among the permanent's abilities
@@ -207,17 +192,51 @@ pub(crate) fn static_condition_holds<L: Layout>(
             unreachable!("the card table refuses a granted replacement or rule change")
         }
     };
-    let subject = PendingTrigger {
+    let subject = ability_of(s, slot, card, face, TriggeredAbility::own(index));
+    condition_holds(s, t, &subject, a)
+}
+
+/// The ability `ability` of the object in `slot`, printed on `card`'s `face`, as the trigger
+/// it would be with nothing triggering it: the object as "this" and its controller as "you".
+#[inline]
+fn ability_of<L: Layout>(
+    s: &State<L>,
+    slot: L::Slot,
+    card: L::Card,
+    face: FaceIx,
+    ability: TriggeredAbility,
+) -> PendingTrigger<L> {
+    PendingTrigger {
         of: AbilityRef {
             source: Some(s.object_ref(slot)),
             card,
             face,
-            ability: TriggeredAbility::own(index),
+            ability,
             controller: s.controller(slot).into(),
         },
         info: TriggerInfo::default(),
-    };
-    condition_holds(s, t, &subject, a)
+    }
+}
+
+/// What `read` finds of a scene of `subject` with no resolution: no costs, X and targets,
+/// nothing done yet, and its source's words as they are now.
+#[inline]
+fn without_resolution<L: Layout, R>(
+    s: &State<L>,
+    t: &GameTable,
+    subject: &PendingTrigger<L>,
+    read: impl FnOnce(&Scene<'_, L>) -> R,
+) -> R {
+    read(&Scene {
+        s,
+        t,
+        subject,
+        costs: None,
+        x: 0,
+        targets: &[],
+        registers: &Registers::default(),
+        words: crate::state::READ_NOW,
+    })
 }
 
 /// Whether `objects` names nothing, read for the object in `slot` as "this" and its
@@ -235,27 +254,8 @@ pub(crate) fn names_nothing<L: Layout>(
         return s.exiled_with(s.object_ref(slot)).is_empty();
     }
     let (card, face) = s.definition(slot).record(t);
-    let subject = PendingTrigger {
-        of: AbilityRef {
-            source: Some(s.object_ref(slot)),
-            card,
-            face,
-            ability: TriggeredAbility::default(),
-            controller: s.controller(slot).into(),
-        },
-        info: TriggerInfo::default(),
-    };
-    let scene = Scene {
-        s,
-        t,
-        subject: &subject,
-        costs: None,
-        x: 0,
-        targets: &[],
-        registers: &Registers::default(),
-        words: crate::state::READ_NOW,
-    };
-    scene.objects(objects).is_empty()
+    let subject = ability_of(s, slot, card, face, TriggeredAbility::default());
+    without_resolution(s, t, &subject, |scene| scene.objects(objects).is_empty())
 }
 
 /// Whether `condition` holds for the permanent in `slot` as "this" and its controller as
@@ -328,8 +328,13 @@ fn own_amount<L: Layout>(s: &State<L>, you: Seat, amount: Amount) -> Option<u8> 
 }
 
 /// Whether an ability's condition holds, or it has none, read for `subject`: the ability
-/// as the trigger it would be, with its source and its controller as "you". A static
-/// ability's "as long as" or "while" is read this way too, as often as it is asked.
+/// as the trigger it would be, with its source and its controller as "you". A triggered
+/// ability's intervening "if" is read this way as it triggers and again as it resolves
+/// (see [CR 603.4](https://yawgatog.com/resources/magic-rules/#R6034)): "When the trigger event
+/// occurs, the ability checks whether the stated condition is true. The ability triggers only
+/// if it is; otherwise it does nothing. If the ability triggers, it checks the stated
+/// condition again as it resolves." A static ability's "as long as" or "while" is read this
+/// way too, as often as it is asked.
 #[inline]
 pub(crate) fn condition_holds<L: Layout>(
     s: &State<L>,
@@ -358,15 +363,5 @@ pub(crate) fn holds<L: Layout>(
     subject: &PendingTrigger<L>,
     condition: &Condition,
 ) -> bool {
-    let scene = Scene {
-        s,
-        t,
-        subject,
-        costs: None,
-        x: 0,
-        targets: &[],
-        registers: &Registers::default(),
-        words: crate::state::READ_NOW,
-    };
-    scene.holds(condition)
+    without_resolution(s, t, subject, |scene| scene.holds(condition))
 }

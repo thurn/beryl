@@ -629,7 +629,7 @@ pub(crate) fn enqueue<L: Layout>(
     t: &GameTable,
     pending: PendingTrigger<L>,
 ) -> Result<(), Full> {
-    if !crate::interpret::intervening_if(s, t, &pending, ability(t, &pending.of)) {
+    if !crate::interpret::condition_holds(s, t, &pending, ability(t, &pending.of)) {
         return Ok(());
     }
     s.queue_trigger(pending)

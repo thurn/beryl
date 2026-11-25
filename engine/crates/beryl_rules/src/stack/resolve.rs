@@ -363,7 +363,7 @@ fn condition_fails<L: Layout>(
     let StackItem::Triggered { of, info } = entry.item else {
         unreachable!("a triggered ability's entry");
     };
-    !interpret::intervening_if(s, t, &PendingTrigger { of, info }, ability)
+    !interpret::condition_holds(s, t, &PendingTrigger { of, info }, ability)
 }
 
 /// Resolves `entry`, the top of `s`'s stack, answering from `answered`'s record and then
