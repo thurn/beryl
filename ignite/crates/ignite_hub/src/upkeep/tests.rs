@@ -23,6 +23,25 @@ use ignite_store::hub::{self, checks, edges, fleet, results, rows, tickets, tips
 use super::filing::{Change, UPKEEP};
 use super::{Upkeep, backup, regressions, stuck};
 
+/// Sets every automated source's allocation to zero, so the tickets the hub files stay pending
+/// for review instead of opening on the next pass ([`super::source_release`]).
+pub(super) fn hold_sources(conn: &mut Connection) {
+    let mut settings = ignite_store::hub::fleet_settings::settings(conn).unwrap();
+    let version = settings.version;
+    settings.allocations = Some(ignite_core::fleet::Allocations {
+        general: None,
+        sources: ignite_core::shares::Source::ALL
+            .into_iter()
+            .map(|source| (source, 0))
+            .collect(),
+    });
+    assert!(matches!(
+        ignite_store::hub::fleet_settings::put(conn, version, settings, "operator", start().now())
+            .unwrap(),
+        ignite_store::hub::fleet_settings::PutOutcome::Stored(_)
+    ));
+}
+
 pub(super) fn start() -> FakeClock {
     FakeClock::new(Timestamp::parse("2026-11-17T12:00:00Z").unwrap())
 }

@@ -243,6 +243,32 @@ fn a_paused_machine_gets_the_tickets_holding_master_back_one_at_a_time() {
 }
 
 #[test]
+fn an_active_machine_asking_for_master_blockers_takes_a_justiciar_beside_a_regression() {
+    let mut conn = open();
+    let ids = file(
+        &mut conn,
+        &[("fix a check", &[], &[]), ("fix another check", &[], &[])],
+    );
+    regression(&conn, "rust:a::b", &ids[0], "open");
+    regression(&conn, "rust:c::d", &ids[1], "open");
+    // The daemon asks this way while a check fails the same way for several of its workers.
+    let ask = |workers: &[&str]| {
+        let mut ask = free("m-1", workers);
+        ask["master_only"] = json!(true);
+        ask
+    };
+    let workers = ["local_a", "local_b", "local_c"];
+    let (_, first) = post(&mut conn, "/next", &ask(&workers), at(1.0));
+    assert_eq!(offered(&first), Some(ids[0].as_str()), "{first}");
+    // The second regression waits for the first, but a justiciar ticket filed later does not.
+    let (_, second) = post(&mut conn, "/next", &ask(&workers[1..]), at(2.0));
+    assert_eq!(second, Value::Null);
+    let justiciar = file(&mut conn, &[("ignite is stuck", &["justiciar"], &[])]);
+    let (_, third) = post(&mut conn, "/next", &ask(&workers[1..]), at(3.0));
+    assert_eq!(offered(&third), Some(justiciar[0].as_str()), "{third}");
+}
+
+#[test]
 fn checks_only_offers_the_native_repair_before_its_unclaimed_escalation() {
     let (mut conn, repair, _, now) = stalled_repair(&["machine:jarvis"]);
     let mut asking = free("m-1", &[]);

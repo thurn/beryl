@@ -4,7 +4,7 @@
 //! The hub answers with the first ticket, in this order, that the machine can take:
 //!
 //! 1. A ticket labeled `justiciar`, which the integrator's judge files to report a fault in the
-//!    system itself. Then:
+//!    system itself. Like a regression, it skips the test of expected cores. Then:
 //! 2. An open regression ticket. It skips the test of expected cores.
 //! 3. An improvement ticket, when improvements are under their share
 //!    ([`crate::shares::improvements_due`]). The largest saving goes first, taking the three
@@ -142,10 +142,13 @@ pub fn platform_fits(free: &MachineFree, ticket: &ReadyTicket) -> bool {
     ticket.platform_fits(free.os, &free.families)
 }
 
-/// Whether the scheduler admits the ticket's expected core use.
+/// Whether the scheduler admits the ticket's expected core use. Justiciar and regression tickets
+/// and tip repairs always fit: they are what frees a busy fleet, and a machine whose builds use
+/// every core would otherwise never be offered them.
 pub fn cores_fit(free: &MachineFree, ticket: &ReadyTicket) -> bool {
     ticket.kind == TicketKind::Regression
         || ticket.holds_tip
+        || ticket.labels.iter().any(|l| l == JUSTICIAR)
         || admission::fits(free.free_cores, ticket.expected_cores)
 }
 

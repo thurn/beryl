@@ -3757,7 +3757,10 @@ release.
 A daemon asks the hub for work with its current room, provider offers and
 scheduler readings. The hub considers tickets in this order:
 
-1. A justiciar ticket for a fault in Ignite or its workflow.
+1. A justiciar ticket for a fault in Ignite or its workflow. Like a regression,
+   it skips the test of expected cores. An active machine that already works a
+   ticket holding `master` back, and so takes no second one, still takes a
+   justiciar ticket. A checks-only machine keeps its single slot.
 2. A repair blocking tip verification, then other open regression tickets. These
    go ahead of allocation-controlled work, even when their Allocation is zero.
    They still need a tree on a machine that can run the check and can bypass the
@@ -3799,9 +3802,14 @@ Not every ticket is offered:
   source set to zero parks its work even if one of its tickets sits under an
   epic. Setting an allocation affects future hand-offs. A session can still
   start a parked ticket by name if it meets the claim rules.
-- The hub can file improvements and fault reports pending for an operator to
-  review. It files work holding `master` back open and can open an existing
-  report when a later tip begins waiting on it.
+- The hub files improvements and fault reports pending, and files work holding
+  `master` back open. Each pending report belongs to an automated source, such
+  as Efficiency improvements, and inherits that source's allocation: its own
+  weight, or the General pool's when it has none. Upkeep opens the report while
+  that allocation is positive, so setting a source to zero is how an operator
+  holds its reports for review. A report that a person set back to pending stays
+  pending. The hub also opens an existing report when a later tip begins
+  waiting on it.
 - A ticket marked `needs:person` is never offered.
 
 ### Machine and provider pins

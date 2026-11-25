@@ -24,7 +24,7 @@ use ignite_store::hub::{self, edges, fleet, listings, results, tickets, tip_roun
 use super::clearing::{CLOSE_PREFIX, HOLD_SECONDS, RETURNED_HOLD_SECONDS};
 use super::filing::{self, Change, FAULT_KEY, FILERS_KEY, Filing, UPKEEP};
 use super::signature::Signature;
-use super::tests::{apply, comment_count, create, start, ticket};
+use super::tests::{hold_sources, apply, comment_count, create, start, ticket};
 use super::{Upkeep, regressions, stuck};
 use crate::routes::tip_rounds as rounds_route;
 
@@ -83,6 +83,7 @@ fn passes(
 fn a_graph_repair_ticket_closes_an_hour_after_its_epic_can_move_and_reopens_if_it_cannot() {
     let clock = start();
     let mut conn = hub::open_in_memory().unwrap();
+    hold_sources(&mut conn);
     let mut upkeep = Upkeep::new(None).unwrap();
     let (inside, repair) = stuck_epic(&mut conn, &mut upkeep, &clock);
     assert!(passes(&mut conn, &mut upkeep, &clock, 2.0 * HOLD_SECONDS).is_empty());
@@ -172,6 +173,7 @@ fn a_fault_seen_again_starts_the_hour_over() {
 fn a_ticket_a_person_commented_on_stays_open_and_a_release_does_not_count() {
     let clock = start();
     let mut conn = hub::open_in_memory().unwrap();
+    hold_sources(&mut conn);
     let mut upkeep = Upkeep::new(None).unwrap();
     let (inside, repair) = stuck_epic(&mut conn, &mut upkeep, &clock);
     let release = Operation::Update {
@@ -299,6 +301,7 @@ fn file_with(
 fn faults_that_cannot_be_seen_to_clear_stay_open() {
     let clock = start();
     let mut conn = hub::open_in_memory().unwrap();
+    hold_sources(&mut conn);
     let mut upkeep = Upkeep::new(None).unwrap();
     let flaky = file(&mut conn, "rust:x", "flaky", clock.now());
     let found = file(&mut conn, "scenarios", "found", clock.now());

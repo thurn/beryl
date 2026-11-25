@@ -101,6 +101,17 @@ fn a_regression_goes_first_and_skips_the_cores_test() {
 }
 
 #[test]
+fn a_justiciar_ticket_skips_the_cores_test_on_a_busy_machine() {
+    let mut free = everyone();
+    free.free_cores = 0.0;
+    let mut justiciar = with_labels(ticket("Tj1", None), &["justiciar"]);
+    justiciar.expected_cores = 2.0;
+    let ready = [ticket("To1", None), justiciar];
+    let answer = next_for(&free, &ready, &ALL, None, &[]);
+    assert_eq!(ticket_of(answer), Some("Tj1".to_owned()));
+}
+
+#[test]
 fn a_worker_kept_for_the_justiciar_takes_nothing_else() {
     let mut free = everyone();
     free.justiciar_only = true;

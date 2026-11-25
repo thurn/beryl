@@ -16,7 +16,7 @@ use ignite_core::time::Timestamp;
 use ignite_core::traits::Clock;
 use ignite_store::hub::{self, checks, fleet, results};
 
-use super::tests::{all_tickets, apply, check_state, comment_count, list_check, start, ticket};
+use super::tests::{hold_sources, all_tickets, apply, check_state, comment_count, list_check, start, ticket};
 use super::{Upkeep, machines};
 use crate::auth::Writer;
 use crate::routes::{Request, checks as check_routes};
@@ -288,6 +288,7 @@ fn recovery_restores_only_checks_disabled_by_the_import_and_runs_once() {
 fn twenty_ordinary_check_families_share_one_pending_batch() {
     let clock = start();
     let mut conn = hub::open_in_memory().unwrap();
+    hold_sources(&mut conn);
     let mut upkeep = Upkeep::new(None).unwrap();
     let mut names: Vec<_> = (0..19).map(|n| format!("family-{n:02}:check")).collect();
     names.push("ui-smoke:protected".to_owned());
@@ -340,6 +341,7 @@ fn twenty_ordinary_check_families_share_one_pending_batch() {
 fn a_pending_batch_updates_its_cluster_summary_until_approval() {
     let clock = start();
     let mut conn = hub::open_in_memory().unwrap();
+    hold_sources(&mut conn);
     let mut upkeep = Upkeep::new(None).unwrap();
     let mut seed = |conn: &mut Connection, name: &str, command: &str| {
         list_check(conn, name);

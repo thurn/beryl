@@ -12,6 +12,8 @@
 //!   and one for an epic in which nothing can start ([`stuck`]);
 //! - files justiciar tickets for sustained machine resource stalls ([`resource_stalls`]);
 //! - files the copy of each meta-ticket whose schedule says one is due ([`schedules`]);
+//! - opens the tickets the hub filed pending once their automated source has a positive
+//!   allocation, its own or the General pool's ([`source_release`]);
 //! - closes tickets whose fault has stayed clear for an hour, unless a person touched them or
 //!   a worker holds them, and settles regressions as soon as verification confirms the fix
 //!   ([`clearing`]);
@@ -54,6 +56,7 @@ mod resource_stalls;
 pub mod reverted;
 pub mod schedules;
 pub mod signature;
+pub mod source_release;
 pub mod stuck;
 
 #[cfg(test)]
@@ -76,6 +79,8 @@ mod resource_stalls_tests;
 mod reverted_tests;
 #[cfg(test)]
 mod schedules_tests;
+#[cfg(test)]
+mod source_release_tests;
 #[cfg(test)]
 mod stuck_tests;
 #[cfg(test)]
@@ -215,6 +220,8 @@ impl Upkeep {
                 note(&mut report, tidied.filed.into_iter().collect());
             }));
         }
+        // After every step that files, so a ticket filed on this pass opens on the same pass.
+        keep(source_release::release(conn, now).map(|_| ()));
         // After every step that files, so a fault seen again on this pass keeps its ticket open.
         keep(clearing::close_cleared(conn, now).map(|closed| report.tickets_closed = closed));
         keep(

@@ -197,6 +197,13 @@ pub fn holds_master(ticket: &ReadyTicket) -> bool {
         || ticket.labels.iter().any(|l| l == JUSTICIAR)
 }
 
+/// Whether the ticket is a justiciar's: a fault in Ignite itself. An active machine that already
+/// works a ticket holding `master` back still takes one, because the fault may be what keeps that
+/// ticket from finishing.
+pub fn is_justiciar(ticket: &ReadyTicket) -> bool {
+    ticket.labels.iter().any(|l| l == JUSTICIAR)
+}
+
 /// A checks-only machine has one repair slot. Compare the escalation with its own
 /// regression so other emergencies keep their usual place in the queue.
 pub(super) fn defer_escalation<'a, I: Iterator<Item = &'a ReadyTicket>>(

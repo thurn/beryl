@@ -208,7 +208,10 @@ fn ticket_block(
             )
             .and_then(|HandoffWait { block, reason }| block.map(|block| (block, reason)))
     };
-    if (backlog || fallback || sample.shared_failure.is_some()) && (holds_one || !master_blocker) {
+    // An active machine starts a justiciar ticket beside the one ticket it already works.
+    let one_at_a_time = holds_one && (fallback || !held::is_justiciar(ticket));
+    if (backlog || fallback || sample.shared_failure.is_some()) && (one_at_a_time || !master_blocker)
+    {
         return if let Some(reason) = &sample.shared_failure {
             Some((StartBlock::SharedFailure, reason.clone()))
         } else if backlog && !master_blocker {
