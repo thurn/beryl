@@ -2,6 +2,8 @@
 //!
 //! Implements: CR 116.3, CR 305.1
 
+use beryl_kernel::reference::{CardIn, Hand};
+
 use crate::bitboard::Bitboard;
 use crate::engine::land_face;
 use crate::fixed::Full;
@@ -30,8 +32,9 @@ pub(crate) fn play_land<L: Layout>(
     t: &GameTable,
     sink: &mut Sink<L>,
     player: Seat,
-    slot: L::Slot,
+    card: CardIn<Hand, L>,
 ) -> Result<(), Full> {
+    let slot = card.slot();
     s.count_land_played(player);
     s.give_priority(player);
     let face = land_face(s, t, slot).expect("a land face");
@@ -44,7 +47,7 @@ pub(crate) fn play_land<L: Layout>(
             s.ask(Pending::EnterPayingLife { slot, life });
             Ok(())
         }
-        _ => enter_or_choose(s, t, sink, slot, false),
+        _ => enter_or_choose(s, t, sink, card, false),
     }
 }
 
@@ -54,9 +57,10 @@ pub(crate) fn enter_or_choose<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
-    slot: L::Slot,
+    card: CardIn<Hand, L>,
     pay_life: bool,
 ) -> Result<(), Full> {
+    let slot = card.slot();
     let entry = Entry {
         face: land_face(s, t, slot).expect("a land face"),
         ..Entry::default()
@@ -70,7 +74,7 @@ pub(crate) fn enter_or_choose<L: Layout>(
             });
             Ok(())
         }
-        None => enter_from_hand(s, t, sink, slot, pay_life),
+        None => enter_from_hand(s, t, sink, card, pay_life),
     }
 }
 
@@ -79,9 +83,10 @@ pub(crate) fn enter_from_hand<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
-    slot: L::Slot,
+    card: CardIn<Hand, L>,
     pay_life: bool,
 ) -> Result<(), Full> {
+    let slot = card.slot();
     event::move_batch(
         s,
         t,

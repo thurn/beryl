@@ -333,7 +333,8 @@ pub(super) fn perform_machine<L: Layout>(
             s.settle_question();
             let pay = d.candidates.option(c) == Some(Opt::Yes);
             act(s, &mut x.events, d.player, None);
-            let done = enter_or_choose(s, t, &mut x.events, slot, pay);
+            let land = s.card_in(s.object_ref(slot), Hand).expect("a land in hand");
+            let done = enter_or_choose(s, t, &mut x.events, land, pay);
             x.events.leave();
             done
         }
@@ -350,7 +351,8 @@ pub(super) fn perform_machine<L: Layout>(
             // The land's entering asks the same question again, of the same candidates, and
             // the answer is recorded for it.
             let done = x.events.asking.begin(&[index::<L>(c.0.into())], false);
-            let done = done.and_then(|()| enter_from_hand(s, t, &mut x.events, slot, pay_life));
+            let land = s.card_in(s.object_ref(slot), Hand).expect("a land in hand");
+            let done = done.and_then(|()| enter_from_hand(s, t, &mut x.events, land, pay_life));
             x.events.asking.end();
             x.events.leave();
             done

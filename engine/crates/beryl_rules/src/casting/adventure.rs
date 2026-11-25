@@ -2,6 +2,8 @@
 //!
 //! Implements: CR 716.3c, CR 716.3d
 
+use beryl_kernel::reference::Spell;
+
 use crate::fixed::Full;
 use crate::layout::Layout;
 use crate::replacement::event::{Reason, Sink};
@@ -27,8 +29,9 @@ pub(crate) fn finish_adventure<L: Layout>(
     t: &GameTable,
     sink: &mut Sink<L>,
     entry: &StackEntry<L>,
-    slot: L::Slot,
+    spell: Spell<L>,
 ) -> Result<(), Full> {
+    let slot = spell.slot();
     let copy = s.object(slot).is_token();
     leave_stack(s, t, sink, entry, Zone::Exile, Reason::Resolve)?;
     if copy || s.object(slot).zone() != Zone::Exile {

@@ -501,7 +501,7 @@ fn body<L: Layout>(
         // it already, as Time Spiral exiles itself.
         if let Some(spell) = spell.and_then(|spell| s.spell(spell)) {
             if entry.face() == FaceIx::BACK && def.shape == Shape::Adventure {
-                casting::finish_adventure(s, t, sink, entry, spell.slot())?;
+                casting::finish_adventure(s, t, sink, entry, spell)?;
             } else {
                 casting::leave_stack(s, t, sink, entry, Zone::Graveyard, Reason::Resolve)?;
             }

@@ -4,6 +4,7 @@
 //! Implements: CR 117.1, CR 117.3, CR 117.4, CR 117.5
 
 use beryl_kernel::format::StartingPlayer;
+use beryl_kernel::reference::Hand;
 
 use crate::casting::land::play_land;
 use crate::decision::{Answers, Choice, Decision, DecisionKind, Opt, Outcome, StallReason, Step};
@@ -538,7 +539,10 @@ fn take_action<L: Layout>(
     option: Opt<L>,
 ) -> Result<(), Full> {
     match option {
-        Opt::PlayLand(slot) => play_land(s, t, &mut x.events, player, slot),
+        Opt::PlayLand(slot) => {
+            let land = s.card_in(s.object_ref(slot), Hand).expect("a land in hand");
+            play_land(s, t, &mut x.events, player, land)
+        }
         cast_option @ Opt::Cast { .. } => {
             casting::begin_cast(s, t, &mut x.events, player, cast_option, None)
         }

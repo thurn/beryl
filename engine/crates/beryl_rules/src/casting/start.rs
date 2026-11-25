@@ -9,6 +9,7 @@
 //! Implements: CR 608.2g
 
 use beryl_card::{Amount, CastFace, CastTerms, Filter, Objects, Players, Types, Words};
+use beryl_kernel::reference::Spell;
 
 use crate::bitboard::Bitboard;
 use crate::card::{Prompt, Purpose, Stop};
@@ -258,7 +259,7 @@ pub(crate) fn permission<L: Layout>(
         .find(|p| p.card.slot == slot && p.terms.player == player && p.terms.allows_face(face))
 }
 
-/// Starts, on the spell now in `slot`, the terms of the permission it was cast under: its
+/// Starts, on `spell`, the terms of the permission it was cast under: its
 /// cost increase
 /// ([CR 601.2f](https://yawgatog.com/resources/magic-rules/#R6012f): "plus all additional
 /// costs and cost increases") and the replacement of where it goes as it leaves the stack
@@ -268,10 +269,10 @@ pub(crate) fn permission<L: Layout>(
 /// object, and these end with it.
 pub(crate) fn begin_on_spell<L: Layout>(
     s: &mut State<L>,
-    slot: L::Slot,
+    spell: Spell<L>,
     permission: Permitted<L>,
 ) -> Result<(), Full> {
-    let spell = s.object_ref(slot);
+    let spell = spell.into();
     let Permitted { terms, source, .. } = permission;
     if terms.increase > 0 {
         let cost = Continuous::Cost(spell, CostChange::Increase(terms.increase));

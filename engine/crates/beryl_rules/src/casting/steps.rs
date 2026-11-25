@@ -101,7 +101,7 @@ pub(crate) fn begin_cast<L: Layout>(
     s.put_on_stack(
         sink,
         StackEntry::new(StackItem::Spell {
-            object: s.object_ref(slot),
+            object: spell.into(),
             controller: player,
             card,
             face,
@@ -109,7 +109,7 @@ pub(crate) fn begin_cast<L: Layout>(
         }),
     )?;
     if let Some(permission) = permission {
-        start::begin_on_spell(s, slot, permission)?;
+        start::begin_on_spell(s, spell, permission)?;
     }
     let free = resolving.unwrap_or(false);
     let def_face = t.def(card).face(face);
