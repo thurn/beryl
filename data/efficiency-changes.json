@@ -965,5 +965,10 @@
     "label": "The build-ceiling cleanup deletes whole Cargo profiles, the one built longest ago first, before it falls back to deleting every build directory. Wiping everything ran even when a tree was already back under its ceiling, and it threw away a seed copy just made. On jarvis, 4 trees were wiped and rebuilt from nothing in about an hour, while CPU was at 98% (2026-11-25)",
     "metric": "ignite.cycle-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Every command the daemon starts in a ticket tree waits while the tree's lease copies another tree's build into it, as the daemon's own builds already did. A check listing or `ignite run` command that compiled during the copy held Cargo's lock when the copy was ready, so the seed was thrown away and the ticket built from its own older build: 33 of 560 seeds in jarvis's daemon log (2026-11-25)",
+    "metric": "ignite.cycle-minutes",
+    "expect": "down"
   }
 ]

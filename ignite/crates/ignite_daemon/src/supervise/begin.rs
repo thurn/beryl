@@ -48,6 +48,15 @@ impl SupervisedLauncher {
         since: Option<Timestamp>,
         cancelled: &dyn Fn() -> bool,
     ) -> Launch {
+        // A newly leased tree's Cargo target directories are replaced by a copy of another
+        // tree's build (see `trees/seed.rs`). Only the daemon's builds waited for the copy, so a
+        // check's listing or an `ignite run` command could start Cargo in the tree first. A
+        // compile that still held Cargo's lock when the copy was ready threw the copy away (33
+        // of 560 seeds in one daemon log), and a command that held no lock, such as a test run,
+        // had its target directory swapped while it ran. Every command waits for the copy.
+        if crate::trees::wait_until_seeded_or(&spec.cwd, cancelled).is_err() {
+            return Launch::Cancelled;
+        }
         // The run directory comes before the grant, because a grant that changes keeps its size
         // in a file there from the moment it is granted.
         let dir = match self.new_run() {
@@ -343,3 +352,7 @@ mod tests {
         assert!(!grows_with(true, false, false));
     }
 }
+
+#[cfg(test)]
+#[path = "begin_tests.rs"]
+mod seeding_tests;

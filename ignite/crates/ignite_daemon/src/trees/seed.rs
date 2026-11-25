@@ -10,8 +10,9 @@
 //! copy runs after the lease has returned, on the
 //! thread that then prebuilds the tree ([`Trees::start_builds`]): a copy of large target
 //! directories under load took up to 141 s, and the session could do nothing while `ignite
-//! start` waited for it. Every build in the tree waits for the copy ([`wait_until_seeded`]),
-//! and a file the session edits during the copy keeps its own modification time. On macOS each
+//! start` waited for it. Every build and every other command the daemon starts in the tree
+//! waits for the copy ([`wait_until_seeded`]), and a file the session edits during the copy
+//! keeps its own modification time. On macOS each
 //! profile directory is cloned in one APFS `clonefile` call (`seed_copy.rs`): it takes seconds
 //! and almost no disk until either tree writes. A seed that a daemon restart cut short is started
 //! again by the next daemon (`seed_swap.rs`, [`Trees::resume_seeds`]). Measured
@@ -160,10 +161,19 @@ impl Drop for Seeding {
 /// copy. While it waits, the calling work is shown as waiting for the copy. `Err` says why it
 /// stopped waiting when its owner finished or was asked to stop first.
 pub fn wait_until_seeded(path: &Path) -> std::result::Result<(), String> {
+    wait_until_seeded_or(path, &|| false)
+}
+
+/// [`wait_until_seeded`] for any path inside a tree, such as the directory a command runs in,
+/// which also stops waiting once `cancelled` turns true.
+pub fn wait_until_seeded_or(
+    path: &Path,
+    cancelled: &dyn Fn() -> bool,
+) -> std::result::Result<(), String> {
     let activity = crate::steps::current();
     let mut seeding = seeding();
     let mut waiting = None;
-    while let Some(marker) = seeding.iter().find(|m| m.path == path) {
+    while let Some(marker) = seeding.iter().find(|m| path.starts_with(&m.path)) {
         let what = match &marker.donor {
             Some(donor) => format!(
                 "{}'s build directories to be copied from {donor}",
@@ -171,9 +181,10 @@ pub fn wait_until_seeded(path: &Path) -> std::result::Result<(), String> {
             ),
             None => format!("{}'s build directories to be copied", marker.tree),
         };
-        if activity
-            .as_ref()
-            .is_some_and(|activity| activity.cancelled())
+        if cancelled()
+            || activity
+                .as_ref()
+                .is_some_and(|activity| activity.cancelled())
         {
             return Err(format!(
                 "stopped waiting for {what}: its work was asked to stop or has ended"

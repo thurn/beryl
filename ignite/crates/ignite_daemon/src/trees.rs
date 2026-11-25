@@ -64,7 +64,7 @@ use rusqlite::Connection;
 use serde::Serialize;
 
 pub(crate) use elastic::ticket_tree_number;
-pub use seed::{Seeding, wait_for_seed_on_disk, wait_until_seeded};
+pub use seed::{Seeding, wait_for_seed_on_disk, wait_until_seeded, wait_until_seeded_or};
 pub use setup::Unfinished;
 pub(crate) use slots::{
     BuildSlot, BuildSlots, TreeBuildControl, caller_processes, ceiling_bytes, command_lock,
