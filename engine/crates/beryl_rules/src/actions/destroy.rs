@@ -31,7 +31,9 @@ pub fn destroy<L: Layout>(game: &mut Game<'_, L>, object: Permanent<L>) -> Resul
         return Ok(());
     }
     let allowed = Regeneration::Allowed;
-    if replacement::destruction(game.state, game.table, game.sink, one, allowed)?.is_empty() {
+    let permanents = game.state().permanents_in(one);
+    if replacement::destruction(game.state, game.table, game.sink, permanents, allowed)?.is_empty()
+    {
         return Ok(());
     }
     let (to, reason) = (Zone::Graveyard, Reason::Destroy);
@@ -50,7 +52,9 @@ pub fn destroy_all<L: Layout>(
     regeneration: Regeneration,
 ) -> Result<(), Full> {
     let permanents = permanents.slots();
-    let permanents = permanents & !indestructible(game.state(), permanents);
+    let permanents = game
+        .state()
+        .permanents_in(permanents & !indestructible(game.state(), permanents));
     let (s, t, sink) = (&mut *game.state, game.table, &mut *game.sink);
     let permanents = replacement::destruction(s, t, sink, permanents, regeneration)?;
     let (to, reason) = (Zone::Graveyard, Reason::Destroy);

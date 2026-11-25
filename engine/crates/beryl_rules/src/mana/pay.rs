@@ -376,7 +376,9 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
     {
         let source = s.object_ref(slot);
         // Its only cost is {T} (see CR 602.2b, see CR 601.2h).
-        event::set_tapped(s, t, sink, source, true)?;
+        if let Some(permanent) = s.permanent(source) {
+            event::set_tapped(s, t, sink, permanent, true)?;
+        }
         return remembered::add(s, t, sink, source, ability, color);
     }
     // See [CR 305.6](https://yawgatog.com/resources/magic-rules/#R3056): a land of a basic land
@@ -398,8 +400,10 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
     // see [CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h): "The player pays the
     // total cost." The hand is discarded before the source is sacrificed: the player pays a
     // cost's parts in any order, and the order changes nothing here.
-    if ability.cost().does(CostAction::Tap) {
-        event::set_tapped(s, t, sink, source, true)?;
+    if ability.cost().does(CostAction::Tap)
+        && let Some(permanent) = s.permanent(source)
+    {
+        event::set_tapped(s, t, sink, permanent, true)?;
     }
     if ability.cost().discards_hand() {
         let hand = s.zone(ZoneKey::Of(controller, Zone::Hand));

@@ -32,6 +32,7 @@ use crate::bitboard::Bitboard;
 use crate::layout::Layout;
 use crate::state::State;
 use crate::table::GameTable;
+use beryl_kernel::reference::Permanent;
 
 /// Whether any permanent may have protection now: the gate of every test here.
 #[inline]
@@ -39,23 +40,19 @@ pub(crate) fn live<L: Layout>(s: &State<L>) -> bool {
     s.may_protect()
 }
 
-/// Whether the permanent in `permanent` has protection from `source`: from one of the colors
-/// `source` has ([CR 702.16a]): "This quality is usually a color (as in “protection from
-/// black”) but can be any characteristic value or information." A source on the battlefield
-/// has the colors of its layer results, and a spell or a card elsewhere those of its face
-/// ([`State::colors`]). False for an object that is no permanent.
+/// Whether `permanent` has protection from `source`: from one of the colors `source` has
+/// ([CR 702.16a]): "This quality is usually a color (as in “protection from black”) but can be
+/// any characteristic value or information." A source on the battlefield has the colors of its
+/// layer results, and a spell or a card elsewhere those of its face ([`State::colors`]).
 ///
 /// [CR 702.16a]: https://yawgatog.com/resources/magic-rules/#R70216a
 #[inline]
 pub(crate) fn protected_from<L: Layout>(
     s: &State<L>,
     t: &GameTable,
-    permanent: L::Slot,
+    permanent: Permanent<L>,
     source: L::Slot,
 ) -> bool {
-    let Some(permanent) = s.permanent(s.object_ref(permanent)) else {
-        return false;
-    };
     let protection = s.protection(permanent);
     protection != Colors::NONE && protection.intersects(s.colors(t, source))
 }
@@ -88,7 +85,10 @@ fn unprotected<L: Layout>(
     objects: Bitboard<L::Slot>,
     source: L::Slot,
 ) -> Bitboard<L::Slot> {
-    objects.filter(|slot| !protected_from(s, t, slot, source))
+    objects.filter(|slot| {
+        !s.permanent_at(slot)
+            .is_some_and(|permanent| protected_from(s, t, permanent, source))
+    })
 }
 
 /// Whether `blocker` may not block `attacker` for the attacker's protection
@@ -103,7 +103,9 @@ pub(crate) fn forbids_block<L: Layout>(
     attacker: L::Slot,
     blocker: L::Slot,
 ) -> bool {
-    live(s) && protected_from_cold(s, t, attacker, blocker)
+    live(s)
+        && s.permanent_at(attacker)
+            .is_some_and(|attacker| protected_from_cold(s, t, attacker, blocker))
 }
 
 /// [`protected_from`], out of line, for the callers that have tested [`live`].
@@ -112,7 +114,7 @@ pub(crate) fn forbids_block<L: Layout>(
 pub(crate) fn protected_from_cold<L: Layout>(
     s: &State<L>,
     t: &GameTable,
-    permanent: L::Slot,
+    permanent: Permanent<L>,
     source: L::Slot,
 ) -> bool {
     protected_from(s, t, permanent, source)

@@ -8,11 +8,12 @@
 
 use crate::bitboard::Bitboard;
 use crate::fixed::Full;
-use crate::layout::{Layout, Queue};
+use crate::layout::Layout;
 use crate::replacement::event::{self, Sink};
-use crate::state::{ObjectRef, State};
+use crate::state::State;
 use crate::table::GameTable;
 use beryl_card::Regeneration;
+use beryl_kernel::reference::{Permanent, Permanents};
 
 /// Of `permanents`, which a destruction would put into their owners' graveyards, those still
 /// destroyed after its replacement effects: a regeneration shield saves each permanent it is
@@ -26,13 +27,13 @@ pub(crate) fn destruction<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
-    permanents: Bitboard<L::Slot>,
+    permanents: Permanents<L>,
     regeneration: Regeneration,
 ) -> Result<Bitboard<L::Slot>, Full> {
     if regeneration == Regeneration::Forbidden || !s.has_regeneration_shields() {
-        return Ok(permanents);
+        return Ok(permanents.slots());
     }
-    Ok(permanents & !regenerate_any(s, t, sink, permanents)?)
+    Ok(permanents.slots() & !regenerate_any(s, t, sink, permanents)?)
 }
 
 /// Of `permanents`, which a destruction that may be replaced would destroy, regenerates
@@ -43,21 +44,18 @@ fn regenerate_any<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
-    permanents: Bitboard<L::Slot>,
+    permanents: Permanents<L>,
 ) -> Result<Bitboard<L::Slot>, Full> {
-    let shielded = permanents.filter(|slot| s.is_shielded(s.object_ref(slot)));
-    if shielded.is_empty() {
-        return Ok(Bitboard::EMPTY);
-    }
+    let shielded = (permanents.slots()).filter(|slot| s.is_shielded(s.object_ref(slot)));
     // In battlefield order, never slot order: the taps' events are seen in this order.
-    let ordered = s.in_game_order(t, shielded)?;
-    for &slot in ordered.as_slice() {
-        regenerate(s, t, sink, s.object_ref(slot))?;
+    let mut left = s.permanents_in(shielded);
+    while let Some(permanent) = s.next_permanent(&mut left) {
+        regenerate(s, t, sink, permanent)?;
     }
     Ok(shielded)
 }
 
-/// Uses up a shield on `object` in place of destroying it (see [CR 701.19a]): "The next time
+/// Uses up a shield on `permanent` in place of destroying it (see [CR 701.19a]): "The next time
 /// [permanent] would be destroyed this turn, instead remove all damage marked on it and its
 /// controller taps it. If it's an attacking or blocking creature, remove it from combat."
 /// The tap is the one event: removing damage and leaving combat have none.
@@ -67,17 +65,14 @@ fn regenerate<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
-    object: ObjectRef<L>,
+    permanent: Permanent<L>,
 ) -> Result<(), Full> {
-    let Some(permanent) = s.permanent(object) else {
-        return Ok(());
-    };
-    let used = s.use_regeneration_shield(object);
+    let used = s.use_regeneration_shield(permanent.into());
     debug_assert!(used, "a permanent regenerated with no shield");
     s.remove_damage(permanent);
-    let o = s.object(object.slot);
+    let o = s.object(permanent.slot());
     if o.is_attacking() || o.is_blocking() {
         s.remove_from_combat(permanent);
     }
-    event::set_tapped(s, t, sink, object, true)
+    event::set_tapped(s, t, sink, permanent, true)
 }

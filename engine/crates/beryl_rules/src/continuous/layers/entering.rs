@@ -60,9 +60,9 @@ pub(crate) fn entered<L: Layout, R>(
     if let Some(values) = copied {
         entry.face = values.record(t).1;
     }
-    event::arrive(&mut copy, t, slot, entry)?;
+    let permanent = copy.permanent_at(slot).expect("a copy just entered");
+    event::arrive(&mut copy, t, permanent, entry)?;
     if let Some(values) = copied {
-        let permanent = copy.permanent_at(slot).expect("a copy just entered");
         copy.enter_as_copy(permanent, values)?;
     }
     super::refresh(&mut copy, t, &mut sink)?;

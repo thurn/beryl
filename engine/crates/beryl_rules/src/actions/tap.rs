@@ -14,14 +14,14 @@ use crate::interpret::{Outcome, Run};
 use crate::layout::{Layout, Queue};
 use crate::replacement::event;
 use crate::resolution::Resolution;
-use crate::state::ObjectRef;
+use beryl_kernel::reference::Permanent;
 
 /// Taps a permanent ([CR 701.26a](https://yawgatog.com/resources/magic-rules/#R70126a)): "To
 /// tap a permanent, turn it sideways from an upright position. Only untapped permanents can
 /// be tapped."
 #[inline]
-pub fn tap<L: Layout>(game: &mut Game<'_, L>, object: ObjectRef<L>) -> Result<(), Full> {
-    event::set_tapped(game.state, game.table, game.sink, object, true)
+pub fn tap<L: Layout>(game: &mut Game<'_, L>, permanent: Permanent<L>) -> Result<(), Full> {
+    event::set_tapped(game.state, game.table, game.sink, permanent, true)
 }
 
 /// Taps the untapped permanents named by the instruction.
@@ -33,7 +33,7 @@ pub(crate) fn instruction<L: Layout>(
     let mut tapped = Bitboard::EMPTY;
     while let Some(permanent) = run.next_permanent(&mut left) {
         if !run.state().object(permanent.slot()).is_tapped() {
-            tap(run.game(), permanent.into())?;
+            tap(run.game(), permanent)?;
             tapped.insert(permanent.slot());
         }
     }
@@ -44,8 +44,8 @@ pub(crate) fn instruction<L: Layout>(
 /// "To untap a permanent, rotate it back to the upright position from a sideways position.
 /// Only tapped permanents can be untapped."
 #[inline]
-pub fn untap<L: Layout>(game: &mut Game<'_, L>, object: ObjectRef<L>) -> Result<(), Full> {
-    event::set_tapped(game.state, game.table, game.sink, object, false)
+pub fn untap<L: Layout>(game: &mut Game<'_, L>, permanent: Permanent<L>) -> Result<(), Full> {
+    event::set_tapped(game.state, game.table, game.sink, permanent, false)
 }
 
 /// `player` untaps up to `n` of `permanents`, of their choice, whoever controls them: "untap
@@ -84,7 +84,9 @@ fn untap_selected<L: Layout>(game: &mut Game<'_, L>, slots: Bitboard<L::Slot>) -
     // In battlefield order, never slot order: the untaps' events are seen in this order.
     let ordered = game.state.in_game_order(game.table, slots)?;
     for &slot in ordered.as_slice() {
-        untap(game, game.state.object_ref(slot))?;
+        if let Some(permanent) = game.state.permanent_at(slot) {
+            untap(game, permanent)?;
+        }
     }
     Ok(())
 }

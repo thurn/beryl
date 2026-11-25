@@ -120,7 +120,8 @@ fn perform<L: Layout>(
     // (see [CR 614.8](https://yawgatog.com/resources/magic-rules/#R6148)): "Regeneration is a
     // destruction-replacement effect."
     if !lethal.is_empty() {
-        let destroyed = replacement::destruction(s, t, sink, lethal, Regeneration::Allowed)?;
+        let destroyed =
+            replacement::destruction(s, t, sink, s.permanents_in(lethal), Regeneration::Allowed)?;
         graveyard &= !(lethal & !destroyed);
     }
     // "As a single event": the one batch below is every action of this check that has an

@@ -285,7 +285,10 @@ fn declare_attack<L: Layout>(
         if has(s, slot, Keywords::VIGILANCE) {
             return Ok(());
         }
-        event::set_tapped(s, t, sink, s.object_ref(slot), true)
+        let Some(permanent) = s.permanent_at(slot) else {
+            return Ok(());
+        };
+        event::set_tapped(s, t, sink, permanent, true)
     };
     let mut untapped = attackers;
     if attackers.count() > 1 {

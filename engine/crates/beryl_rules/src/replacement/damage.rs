@@ -190,7 +190,10 @@ fn candidates<L: Layout>(
     // Damage replacements that aren't prevention still apply.
     if p.preventable && !unpreventable(s, t) {
         let permanent_protected = |r: ObjectRef<L>| {
-            protection::live(s) && protection::protected_from_cold(s, t, r.slot, p.source.slot)
+            protection::live(s)
+                && s.permanent_at(r.slot).is_some_and(|permanent| {
+                    protection::protected_from_cold(s, t, permanent, p.source.slot)
+                })
         };
         let protected = match p.to {
             Recipient::Permanent(r) => permanent_protected(r),

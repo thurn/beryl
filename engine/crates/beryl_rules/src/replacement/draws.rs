@@ -27,6 +27,7 @@ use crate::replacement::event::{LossCause, Reason, ReplacementKind};
 use crate::state::{Count, ObjectRef, State, TurnStep, Zone, ZoneKey};
 use crate::table::GameTable;
 use crate::{actions, zones};
+use beryl_kernel::reference::Permanent;
 use beryl_kernel::replacement;
 
 /// A replacement of draws by a static ability of a permanent ([`Replaced::Draw`]) that applies
@@ -35,7 +36,7 @@ use beryl_kernel::replacement;
 /// the players it names are read (see CR 109.5).
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct DrawReplacement<L: Layout> {
-    pub permanent: L::Slot,
+    pub permanent: Permanent<L>,
     pub index: ObjectAbility,
     pub ability: &'static crate::card::Ability,
     pub controller: Seat,
@@ -50,8 +51,8 @@ impl<L: Layout> DrawReplacement<L> {
     }
 
     /// What the rules record as having applied ([`Sink::applied`]).
-    pub fn applied(&self, s: &State<L>) -> (ObjectRef<L>, ObjectAbility) {
-        (s.object_ref(self.permanent), self.index)
+    pub fn applied(&self) -> (ObjectRef<L>, ObjectAbility) {
+        (self.permanent.into(), self.index)
     }
 
     /// The card whose ability it is, that card's face and the ability's index on it: the
@@ -61,13 +62,14 @@ impl<L: Layout> DrawReplacement<L> {
     ///
     /// [CR 702.140e]: https://yawgatog.com/resources/magic-rules/#R702140e
     pub fn card(&self, s: &State<L>, t: &GameTable) -> (L::Card, FaceIx, AbilityIx) {
-        if let Some((card, face, index, _)) = s.merged_ability(t, self.permanent, self.index) {
+        let slot = self.permanent.slot();
+        if let Some((card, face, index, _)) = s.merged_ability(t, slot, self.index) {
             return (card, face, index);
         }
         let ObjectAbility::Own(index) = self.index else {
             unreachable!("the card table refuses a granted replacement of draws");
         };
-        let (card, face) = s.definition(self.permanent).record(t);
+        let (card, face) = s.definition(slot).record(t);
         (card, face, index)
     }
 
@@ -76,7 +78,7 @@ impl<L: Layout> DrawReplacement<L> {
     pub fn cause(&self, s: &State<L>, t: &GameTable) -> LossCause<L> {
         let (card, face, index) = self.card(s, t);
         LossCause::Effect {
-            source: Some(s.object_ref(self.permanent)),
+            source: Some(self.permanent.into()),
             card,
             face,
             ability: Some(FaceAbility::Own(index)),
@@ -109,11 +111,14 @@ pub(crate) fn draw<L: Layout>(
     layers::refresh(game.state, game.table, game.sink)?;
     let (s, t) = (&*game.state, game.table);
     let mut found: Fixed<Option<DrawReplacement<L>>, MOST> = Fixed::new();
-    for &permanent in s.battlefield() {
-        if !super::may_replace(s, t, permanent, ReplacementKind::Draw) {
+    for &slot in s.battlefield() {
+        if !super::may_replace(s, t, slot, ReplacementKind::Draw) {
             continue;
         }
-        let controller = s.controller(permanent);
+        let Some(permanent) = s.permanent_at(slot) else {
+            continue;
+        };
+        let controller = s.controller(slot);
         let draws = |ability: &Ability, r: &Replacement| match *r {
             Replacement {
                 replaces: Replaced::Draw(players, draws),
@@ -126,12 +131,12 @@ pub(crate) fn draw<L: Layout>(
             }
             _ => None,
         };
-        for (index, ability, ()) in super::statics(s, t, permanent, draws) {
+        for (index, ability, ()) in super::statics(s, t, slot, draws) {
             let applies = !game
                 .sink
                 .applied
                 .as_slice()
-                .contains(&(s.object_ref(permanent), index));
+                .contains(&(permanent.into(), index));
             if applies {
                 found.push(Some(DrawReplacement {
                     permanent,
@@ -167,7 +172,7 @@ fn choose_draw_replacement<L: Layout>(
     for r in found.iter().flatten() {
         if !firsts.iter().flatten().any(|f| f.same_as(r)) {
             firsts.push(Some(*r))?;
-            candidates.push(Opt::Object(r.permanent))?;
+            candidates.push(Opt::Object(r.permanent.slot()))?;
         }
     }
     let d = Decision::options(

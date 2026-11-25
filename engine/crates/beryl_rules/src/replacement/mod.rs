@@ -36,11 +36,12 @@ use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
 use crate::profile::Stops;
 use crate::replacement::event::{Entry, Preparation, ReplacementKind, Sink};
-use crate::state::{AbilityMask, CounterKind, MoveReplacement, ObjectRef, State, Zone};
+use crate::state::{AbilityMask, CounterKind, MoveReplacement, State, Zone};
 use crate::table::{Capability, GameTable};
 use crate::{interpret, interpret::catalog};
 use beryl_kernel::copiable::additions::Addition;
 use beryl_kernel::query::Copiable;
+use beryl_kernel::reference::Spell;
 
 mod damage;
 mod destruction;
@@ -661,11 +662,11 @@ pub(crate) fn life_to_enter<L: Layout>(
     Ok((!lost.contains(ability)).then_some(life))
 }
 
-/// Whether `object`, about to move to `to`, is exiled instead by an entry of the Effects store
+/// Whether `spell`, about to move to `to`, is exiled instead by an entry of the Effects store
 /// on it ([`effect_destination`]), for an instruction that takes a spell off the stack and
 /// must know where its card goes before it moves.
-pub(crate) fn exiled_instead<L: Layout>(s: &State<L>, object: ObjectRef<L>, to: Zone) -> bool {
-    s.move_replacements(object)
+pub(crate) fn exiled_instead<L: Layout>(s: &State<L>, spell: Spell<L>, to: Zone) -> bool {
+    s.move_replacements(spell.into())
         .any(|r| effect_destination(r, to).is_some())
 }
 

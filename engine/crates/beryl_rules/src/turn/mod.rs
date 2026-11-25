@@ -118,8 +118,11 @@ fn take_turn<L: Layout>(
     // most recent turn began.
     s.reset_permanents_for_turn(active);
     for &object in untaps {
+        let Some(permanent) = s.permanent(object) else {
+            continue;
+        };
         sink.enter_source(|| object);
-        let result = event::set_tapped(s, t, sink, object, false);
+        let result = event::set_tapped(s, t, sink, permanent, false);
         sink.leave();
         result?;
     }
@@ -230,9 +233,10 @@ fn untap_all<L: Layout, const RESTRICTED: bool>(
     while i < s.battlefield().len() {
         let slot = s.battlefield()[i];
         if s.controller(slot) == active
+            && let Some(permanent) = s.permanent_at(slot)
             && (!RESTRICTED || !rule_change::own_rule_holds(s, t, slot, RuleKind::StaysTapped))
         {
-            event::set_tapped(s, t, sink, s.object_ref(slot), false)?;
+            event::set_tapped(s, t, sink, permanent, false)?;
         }
         i += 1;
     }

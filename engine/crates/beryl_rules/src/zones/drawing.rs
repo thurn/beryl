@@ -146,7 +146,7 @@ fn instead<L: Layout>(
             ending::lose_for(game, named(players), cause);
         }
         Ok(Instead::Instructions) => {
-            game.sink.applied.push(replacement.applied(s))?;
+            game.sink.applied.push(replacement.applied())?;
             let done = instructions(game, player, replacement);
             game.sink.applied.pop();
             done?;
@@ -163,7 +163,7 @@ fn instructions<L: Layout>(
     replacement: DrawReplacement<L>,
 ) -> Result<(), Full> {
     let s = &*game.state;
-    let source = s.object_ref(replacement.permanent);
+    let source = replacement.permanent.into();
     // An ability of a card under a merged permanent is that card's, as its triggered
     // abilities are.
     let (card, face, index) = replacement.card(s, game.table);

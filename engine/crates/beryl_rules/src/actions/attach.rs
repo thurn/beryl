@@ -112,7 +112,8 @@ fn enchantable<L: Layout>(
             .matches_x(s, t, host, s.controller(aura), &s.words_of(aura), 0)
         && !(zone == crate::state::Zone::Battlefield
             && protection::live(s)
-            && protection::protected_from_cold(s, t, host, aura))
+            && s.permanent_at(host)
+                .is_some_and(|host| protection::protected_from_cold(s, t, host, aura)))
 }
 
 /// Whether the Equipment in `equipment` may be attached to the permanent in `host`, both on
@@ -142,7 +143,9 @@ pub(crate) fn may_equip_in<L: Layout>(
         && equipment != host
         && !gear.types.contains(Types::CREATURE)
         && creature.types.contains(Types::CREATURE)
-        && !(protection::live(s) && protection::protected_from_cold(s, t, host, equipment))
+        && !(protection::live(s)
+            && s.permanent_at(host)
+                .is_some_and(|host| protection::protected_from_cold(s, t, host, equipment)))
 }
 
 /// [`Effect::Attach`](beryl_card::Effect::Attach): "Attach [an Equipment] to [a creature]",

@@ -244,7 +244,7 @@ fn any_player_untaps_up_to_n_of_the_tapped_permanents_named() {
     let [mine, theirs] = [p, p.opponent()].map(|owner| put(&t, &mut s, &mut x, owner, "Test Bear"));
     let upright = put(&t, &mut s, &mut x, p, "Test Bear");
     for slot in [land, mine, theirs] {
-        let permanent = s.object_ref(slot);
+        let permanent = s.permanent_at(slot).expect("a permanent");
         tap::tap(&mut Game::new(&mut s, &t, &mut x.events), permanent).unwrap();
     }
     let creatures: Bitboard<Slot> = [mine, theirs, upright].into_iter().collect();

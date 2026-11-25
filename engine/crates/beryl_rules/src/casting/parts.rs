@@ -312,7 +312,10 @@ fn pay_with_source<L: Layout>(
 ) -> Result<(), Full> {
     let source = top(s).object().expect("an activated ability's source");
     match action {
-        CostAction::Tap => event::set_tapped(s, t, sink, source, true),
+        CostAction::Tap => match s.permanent(source) {
+            Some(permanent) => event::set_tapped(s, t, sink, permanent, true),
+            None => Ok(()),
+        },
         CostAction::Sacrifice => {
             event::move_one(s, t, sink, source.slot, Zone::Graveyard, Reason::Sacrifice)
         }
@@ -643,7 +646,10 @@ fn pay_with<L: Layout>(
     slot: L::Slot,
 ) -> Result<(), Full> {
     match action {
-        CostAction::Tap => event::set_tapped(s, t, sink, s.object_ref(slot), true),
+        CostAction::Tap => match s.permanent_at(slot) {
+            Some(permanent) => event::set_tapped(s, t, sink, permanent, true),
+            None => Ok(()),
+        },
         CostAction::Sacrifice
         | CostAction::Discard
         | CostAction::Exile

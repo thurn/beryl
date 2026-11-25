@@ -62,7 +62,7 @@ pub(crate) fn unstack<L: Layout>(
     if s.take_off_stack(t, sink, spell)?.is_none() {
         return Ok(None);
     }
-    let exiled = crate::replacement::exiled_instead(s, spell.into(), to);
+    let exiled = crate::replacement::exiled_instead(s, spell, to);
     Ok(Some(if exiled { Zone::Exile } else { to }))
 }
 

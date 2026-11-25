@@ -17,6 +17,7 @@ pub use beryl_kernel::event::{
 pub use crate::zones::tokens::TokenEntry;
 use beryl_kernel::Attachment;
 use beryl_kernel::mutate::Arrival;
+use beryl_kernel::reference::Permanent;
 
 use crate::bitboard::Bitboard;
 use crate::card::{CastingKinds, FaceIx, Subtype};
@@ -26,7 +27,7 @@ use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Small};
 use crate::replacement;
 use crate::stack::trigger;
-use crate::state::{CounterKind, Memo, ObjectRef, State, Tracker, Zone};
+use crate::state::{CounterKind, Memo, State, Tracker, Zone};
 use crate::table::{Capability, GameTable};
 use crate::zone::Place;
 
@@ -67,18 +68,16 @@ pub(crate) enum Preparation {
     Prepared,
 }
 
-/// Gives the permanent that just entered in `slot` what it enters with, has it remember
-/// what its spell was cast with, and notes that it entered this turn, in a game with a card
-/// that reads that.
+/// Gives the permanent that just entered what it enters with, has it remember what its
+/// spell was cast with, and notes that it entered this turn, in a game with a card that reads
+/// that.
 pub(crate) fn arrive<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    slot: L::Slot,
+    permanent: Permanent<L>,
     entry: Entry<L>,
 ) -> Result<(), Full> {
-    let permanent = s
-        .permanent_at(slot)
-        .expect("an object just moved onto the battlefield");
+    let slot = permanent.slot();
     s.track(t, Tracker::EnteredThisTurn, slot);
     s.arrive(
         permanent,
@@ -104,22 +103,23 @@ pub(crate) fn arrive<L: Layout>(
     Ok(())
 }
 
-/// Starts the copy effect of the permanent that just arrived in `slot`, if it chose to enter as
-/// a copy ([`Sink::copies`]), before the layers or any trigger look at it (see [CR 707.5]): "It
+/// Starts the copy effect of the permanent that just arrived, if it chose to enter as a copy ([`Sink::copies`]), before the layers or any trigger look at it (see [CR 707.5]): "It
 /// doesn't enter the battlefield, and then become a copy of that permanent. ... Also, any
 /// enters-the-battlefield triggered abilities of the copy will have a chance to trigger."
 ///
 /// [CR 707.5]: https://yawgatog.com/resources/magic-rules/#R7075
 #[cold]
 #[inline(never)]
-fn start_copy<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, slot: L::Slot) -> Result<(), Full> {
+fn start_copy<L: Layout>(
+    s: &mut State<L>,
+    sink: &mut Sink<L>,
+    permanent: Permanent<L>,
+) -> Result<(), Full> {
+    let slot = permanent.slot();
     let Some(i) = sink.copies.iter().position(|&(copier, _)| copier == slot) else {
         return Ok(());
     };
     let (_, values) = sink.copies.remove(i);
-    let permanent = s
-        .permanent_at(slot)
-        .expect("a copy entering the battlefield");
     s.enter_as_copy(permanent, values)
 }
 
@@ -388,7 +388,10 @@ fn move_ordered<L: Layout, const N: usize>(
         }
         s.move_object(sink, slot, dest, place)?;
         if dest == Zone::Battlefield {
-            arrive(s, t, slot, entry)?;
+            let permanent = s
+                .permanent_at(slot)
+                .expect("an object just moved onto the battlefield");
+            arrive(s, t, permanent, entry)?;
             // See CR 702.37c: "When the spell resolves, it enters the battlefield with the
             // same characteristics the spell had." Its controller still pays its morph cost.
             if from == Zone::Stack && entry.face == FaceIx::DOWN {
@@ -401,7 +404,7 @@ fn move_ordered<L: Layout, const N: usize>(
                 s.remember(slot, Memo::Cast)?;
             }
             if !sink.copies.is_empty() {
-                start_copy(s, sink, slot)?;
+                start_copy(s, sink, permanent)?;
             }
             arrived.push_bounded(slot);
         }
@@ -589,12 +592,9 @@ pub(crate) fn set_tapped<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
-    object: ObjectRef<L>,
+    permanent: Permanent<L>,
     tapped: bool,
 ) -> Result<(), Full> {
-    let Some(permanent) = s.permanent(object) else {
-        return Ok(());
-    };
     if s.object(permanent.slot()).is_tapped() == tapped {
         return Ok(());
     }
