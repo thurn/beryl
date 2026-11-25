@@ -139,3 +139,37 @@ def test_an_allowlisted_child_can_be_adopted_after_its_parent(tmp_path: Path) ->
         f"{child}:1: CR 602.1 is outside the module's "
         "Implements declaration; use 'see' for a cross-reference"
     ]
+
+
+EXCEPTIONS: dict[str, str] = citations.parse_rules("""400. General
+400.7. An object that moves from one zone to another becomes a new object.
+400.7a Effects that change a permanent spell continue to apply.
+400.7j Other parts of an effect can find an object it moved to a public zone.
+400.7m Stickers are retained.
+""")
+
+
+def test_an_exact_claim_leaves_the_rules_exceptions_to_other_owners(
+    tmp_path: Path,
+) -> None:
+    write(
+        tmp_path,
+        f"{KERNEL}/zone.rs",
+        "//! Implements: CR 400.7 only, CR 400.7a\n// CR 400.7\n// CR 400.7a\n",
+    )
+    write(tmp_path, f"{RULES}/run.rs", "//! Implements: CR 400.7j\n// CR 400.7j\n")
+    write(tmp_path, rule_ownership.ALLOWLIST, "[]")
+    assert rule_ownership.check(tmp_path, EXCEPTIONS) == []
+    assert rule_ownership.coverage(tmp_path, EXCEPTIONS) == (
+        {"400": ["400", "400.7m"]},
+        [],
+    )
+    write(tmp_path, f"{RULES}/follow.rs", "//! Implements: CR 400.7j\n// CR 400.7j\n")
+    write(tmp_path, f"{RULES}/stickers.rs", "//! Implements: CR 400.7\n// CR 400.7\n")
+    assert rule_ownership.check(tmp_path, EXCEPTIONS) == [
+        f"{RULES}/run.rs:1: CR 400.7j overlaps the declaration in {RULES}/follow.rs",
+        f"{RULES}/stickers.rs:1: CR 400.7 overlaps the declaration in "
+        f"{KERNEL}/zone.rs",
+        f"{RULES}/stickers.rs:1: CR 400.7 overlaps the declaration in "
+        f"{RULES}/follow.rs",
+    ]

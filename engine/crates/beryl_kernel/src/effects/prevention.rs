@@ -10,7 +10,7 @@
 //!
 //! [CR 615.1]: https://yawgatog.com/resources/magic-rules/#R6151
 //!
-//! Implements: CR 615.7, CR 615.8
+//! Implements: CR 400.7c, CR 615.7, CR 615.8
 
 use crate::layout::{Layout, Queue, Small};
 use crate::object::ObjectRef;
@@ -120,8 +120,8 @@ impl<L: Layout> State<L> {
             })
     }
 
-    /// Changes the source of each shield that named `spell` if it became a permanent.
-    /// See [CR 400.7c]: "Prevention effects that apply to damage from a permanent spell on the
+    /// Changes the source of each shield that named `spell` if it became a permanent
+    /// ([CR 400.7c]): "Prevention effects that apply to damage from a permanent spell on the
     /// stack continue to apply to damage from the permanent that spell becomes."
     ///
     /// [CR 400.7c]: https://yawgatog.com/resources/magic-rules/#R4007c

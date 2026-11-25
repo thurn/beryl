@@ -65,7 +65,9 @@ def declare(
         return Declaration(line, {})
     ranges: dict[str, set[str]] = {}
     for entry in value.split(","):
-        match = re.fullmatch(rf"CR ({citations.NUMBER})", entry.strip())
+        # `CR 400.7 only` claims the rule's own text and leaves its subrules, such
+        # as the exceptions that CR 400.7 lists, to other modules.
+        match = re.fullmatch(rf"CR ({citations.NUMBER})( only)?", entry.strip())
         if match is None:
             problems.append(f"{where}: expected CR number(s) or 'none. <reason>.'")
             break
@@ -75,7 +77,11 @@ def declare(
             continue
         if number in ranges:
             problems.append(f"{where}: repeats CR {number}")
-        ranges[number] = {child for child in numbers if covers(number, child)}
+        ranges[number] = (
+            {number}
+            if match[2]
+            else {child for child in numbers if covers(number, child)}
+        )
     return Declaration(line, ranges)
 
 

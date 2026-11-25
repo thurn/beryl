@@ -7,7 +7,7 @@
 //! order the game can see (slots are none: the deal puts cards in them at random). Either
 //! way the events of such an instruction are kept as one group ([`at_once`]).
 //!
-//! Implements: CR 608.2f
+//! Implements: CR 400.7j, CR 608.2f
 
 use beryl_card::{Effect, ExileMatch, Objects, Players, Types};
 use beryl_kernel::reference::Permanents;
@@ -672,8 +672,8 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     }
 
     /// The outcome of an instruction that moved `permanents` off the battlefield: those that
-    /// left it, as they are now
-    /// (see [CR 400.7j](https://yawgatog.com/resources/magic-rules/#R4007j)): "If an effect
+    /// left it, as they are now, which later instructions of the same effect act on
+    /// ([CR 400.7j](https://yawgatog.com/resources/magic-rules/#R4007j)): "If an effect
     /// causes an object to move to a public zone, other parts of that effect can find that
     /// object."
     pub(crate) fn left_the_battlefield(&self, permanents: Bitboard<L::Slot>) -> Outcome<L> {

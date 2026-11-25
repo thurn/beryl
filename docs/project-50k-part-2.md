@@ -333,11 +333,18 @@ check fails when:
 - two modules declare the same rule;
 - a module declares a rule it never cites.
 
-A section or numeric subrule in the declaration claims its descendants. A child
-module can cite rules declared in its own header or an enclosing module's
-header. A module that implements no rule gives its reason in the same line, for
-example `//! Implements: none. Holds scratch buffers.` Test files and card files
-are outside the check.
+A section or numeric subrule in the declaration claims its descendants. The word
+`only` after a number claims that rule's own text and none of its subrules, for
+a rule whose subrules belong to other modules. The kernel's zone mutator
+declares `CR 400.7 only, CR 400.7a`: it makes a moved object new and carries a
+permanent spell's text changes over. The prevention store declares CR 400.7c,
+because it moves a spell's shields to the permanent the spell becomes. The
+interpreter declares CR 400.7j, because its later instructions find an object
+that an earlier one moved. The exceptions no module implements yet stay in the
+coverage list. A child module can cite rules declared in its own header or an
+enclosing module's header. A module that implements no rule gives its reason in
+the same line, for example `//! Implements: none. Holds scratch buffers.` Test
+files and card files are outside the check.
 
 `just citations coverage` lists every rule of the pinned release that no module
 owns, by section, and writes the same to `$BERYL_CACHE/rule-coverage.json`. A
@@ -351,24 +358,24 @@ stays in its test module. The table inventories the source trees at the start of
 the passes.
 
 The kernel groups its code by what it stores. Its modules declare rules where
-they implement them directly. The kernel's zone mutator owns CR 400.7, so
-`zones/` uses specific rules from section 400 and a cross-reference to CR 400.7.
-The timestamp clock in `timestamps.rs` owns CR 613.7. The simultaneous-entry
-ordering in `continuous/arrival_timestamps.rs` cites that rule as a
-cross-reference. The layers declare the other parts of section 613 that they
-implement. The rules' turn module handles the noncombat steps. Combat owns its
-own steps, and the stack owns section 405. Land play belongs to casting's
-special action module, while the turn's land limit stays in the turn module.
-Delve stays beside the casting costs it adjusts. `keywords/` declares the
-keyword rules it implements individually. Protection is in `replacement/`. That
-directory also handles the entry choice for an Aura (CR 303.4f and CR 303.4g)
-and dredge (CR 702.52a). Phasing, mutate and turning a manifested permanent face
-up are in `objects/`. Manifesting and transforming stay with their keyword
-actions. Combat's damage module handles lifelink and choosing the source a
-shield prevents damage from. The zone modules handle tokens that enter attacking
-and token copies of double-faced permanents. The pass labels group related rules
-for navigation. A declaration claims only the sections or subrules that the
-module implements.
+they implement them directly. The kernel's zone mutator owns CR 400.7 without
+its exceptions, so `zones/` uses specific rules from section 400 and a
+cross-reference to CR 400.7. The timestamp clock in `timestamps.rs` owns CR
+613.7. The simultaneous-entry ordering in `continuous/arrival_timestamps.rs`
+cites that rule as a cross-reference. The layers declare the other parts of
+section 613 that they implement. The rules' turn module handles the noncombat
+steps. Combat owns its own steps, and the stack owns section 405. Land play
+belongs to casting's special action module, while the turn's land limit stays in
+the turn module. Delve stays beside the casting costs it adjusts. `keywords/`
+declares the keyword rules it implements individually. Protection is in
+`replacement/`. That directory also handles the entry choice for an Aura (CR
+303.4f and CR 303.4g) and dredge (CR 702.52a). Phasing, mutate and turning a
+manifested permanent face up are in `objects/`. Manifesting and transforming
+stay with their keyword actions. Combat's damage module handles lifelink and
+choosing the source a shield prevents damage from. The zone modules handle
+tokens that enter attacking and token copies of double-faced permanents. The
+pass labels group related rules for navigation. A declaration claims only the
+sections or subrules that the module implements.
 
 #### `beryl_kernel/src/`
 

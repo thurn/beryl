@@ -5,7 +5,7 @@
 //! They are mutators of [`State`] (the crate's contract, "Mutators"), and the only code that
 //! writes the zones' membership and order.
 //!
-//! Implements: CR 400.7, CR 701.20d, CR 708.9
+//! Implements: CR 400.7 only, CR 400.7a, CR 701.20d, CR 708.9
 
 use crate::bitboard::Bitboard;
 use crate::chance;
