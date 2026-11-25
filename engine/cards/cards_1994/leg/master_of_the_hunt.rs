@@ -170,5 +170,54 @@ pub mod scenarios {
                 ME.controls(WOLF, 1),
                 THEM.has(Zone::Graveyard, Prop::Vanilla, 1),
             ]),
+        // Removing all abilities from Wolves of the Hunt removes "bands with other" (CR 702.22b),
+        // so they can no longer form an attacking band.
+        Scenario::new("losing abilities removes bands with other from Wolves of the Hunt")
+            .interaction(&[Card::DressDown])
+            .battlefield(
+                P0,
+                &[
+                    MASTER,
+                    Card::Forest,
+                    Card::Forest,
+                    Card::Forest,
+                    Card::Forest,
+                    Card::Forest,
+                    Card::Forest,
+                    Card::Forest,
+                    Card::Forest,
+                    Card::Island,
+                    Card::Island,
+                ],
+            )
+            .library(
+                P0,
+                &[Card::Island, Card::Island, Card::Island, Card::Island],
+            )
+            .library(
+                P1,
+                &[Card::Island, Card::Island, Card::Island, Card::Island],
+            )
+            .hand(P0, &[Card::DressDown])
+            .actions(&[
+                ME.activates(MASTER, 0),
+                Resolve,
+                ME.activates(MASTER, 0),
+                Resolve,
+                START,
+                ME.passes(),
+                ME.done_attacking(),
+                advance_to(3, TurnStep::PrecombatMain),
+                ME.casts(Card::DressDown),
+                Resolve,
+                advance_to(3, TurnStep::BeginningOfCombat),
+                ME.passes(),
+                ME.deciding(DecisionKind::Attacker, 3),
+                ME.attacks_with(WOLF),
+                ME.attacks_with(WOLF),
+                ME.done_attacking(),
+                advance_to(3, TurnStep::EndOfCombat),
+                THEM.life(18),
+            ]),
     ];
 }

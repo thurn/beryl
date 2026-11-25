@@ -159,3 +159,25 @@ fn regular_damage_uses_first_step_history_and_current_double_strike() {
         assert_eq!(g.life(d), life_after_second);
     }
 }
+
+#[test]
+fn double_strike_trampler_tramples_for_full_power_after_killing_blocker_in_first_step() {
+    let mut g = Game::new();
+    let (a, d) = (g.attacker, g.defender());
+    let wurm = g.put(a, "Wurm");
+    let bear = g.put(d, "Bear");
+    change_keywords(
+        &mut g,
+        wurm,
+        LayerChange::AddKeywords(Keywords::DOUBLE_STRIKE),
+    );
+    g.pass_to_combat();
+    g.pick(DecisionKind::Attacker, Opt::attack(wurm));
+    g.pick(DecisionKind::Blocker, Opt::Block(bear));
+    stop_at(&mut g, TurnStep::FirstStrikeDamage);
+    assert!(!g.on_battlefield(bear));
+    assert_eq!(g.life(d), 17);
+    g.finish_combat();
+    assert_eq!(g.life(d), 12);
+    assert!(g.on_battlefield(wurm));
+}

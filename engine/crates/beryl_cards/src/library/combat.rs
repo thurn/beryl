@@ -4,7 +4,7 @@
 //! [CR 511]: https://yawgatog.com/resources/magic-rules/#R511
 
 use beryl_engine::{DecisionKind, TurnStep, Zone};
-use beryl_scenario::{P0, P1, Permanent, Scenario};
+use beryl_scenario::{P0, P1, Permanent, Pick, Scenario};
 use beryl_scenario_types::{ME, Resolve, THEM, advance_to};
 
 use super::keywords::trample;
@@ -96,22 +96,92 @@ pub const FIRST_STRIKE: &[Scenario] = &[
             ME.has(Zone::Graveyard, KNIGHT, 1),
             trample::two_damage(P1),
         ]),
+    Scenario::new(
+        "a first-striking trampler kills multiple blockers in the first step and tramples over",
+    )
+    .interaction(&[names::COORDINATED_ASSAULT, DREADMAW])
+    .battlefield(P0, &[DREADMAW, names::MOUNTAIN])
+    .hand(P0, &[names::COORDINATED_ASSAULT])
+    .battlefield(P1, &[names::GRIZZLY_BEARS, names::SAVANNAH_LIONS])
+    .actions(&[
+        advance_to(1, TurnStep::BeginningOfCombat),
+        ME.passes(),
+        ME.attacks_with(DREADMAW),
+        ME.passes(),
+        THEM.chooses(DecisionKind::Blocker, names::GRIZZLY_BEARS),
+        THEM.chooses(DecisionKind::Blocker, names::SAVANNAH_LIONS),
+        advance_to(1, TurnStep::DeclareBlockers),
+        ME.casts(names::COORDINATED_ASSAULT),
+        ME.answers(DecisionKind::TargetCount, Pick::Number { n: 1 }),
+        ME.targets(DREADMAW),
+        Resolve,
+        ME.passes(),
+        ME.chooses(DecisionKind::DamageDivision, names::GRIZZLY_BEARS),
+        ME.chooses(DecisionKind::DamageDivision, names::SAVANNAH_LIONS),
+        advance_to(1, TurnStep::FirstStrikeDamage),
+        THEM.has(Zone::Graveyard, names::GRIZZLY_BEARS, 1),
+        THEM.has(Zone::Graveyard, names::SAVANNAH_LIONS, 1),
+        THEM.life(16),
+        advance_to(1, TurnStep::EndOfCombat),
+        ME.controls(DREADMAW, 1),
+        THEM.life(16),
+    ]),
 ];
 
-pub const DOUBLE_STRIKE: &[Scenario] =
-    &[
-        Scenario::new("Fencing Ace deals damage in both combat damage steps")
-            .battlefield(P0, &[names::FENCING_ACE])
-            .actions(&[
-                advance_to(1, TurnStep::BeginningOfCombat),
-                ME.passes(),
-                ME.attacks_with(names::FENCING_ACE),
-                advance_to(1, TurnStep::FirstStrikeDamage),
-                THEM.life(19),
-                advance_to(1, TurnStep::CombatDamage),
-                THEM.life(18),
-            ]),
-    ];
+pub const DOUBLE_STRIKE: &[Scenario] = &[
+    Scenario::new("Fencing Ace deals damage in both combat damage steps")
+        .battlefield(P0, &[names::FENCING_ACE])
+        .actions(&[
+            advance_to(1, TurnStep::BeginningOfCombat),
+            ME.passes(),
+            ME.attacks_with(names::FENCING_ACE),
+            advance_to(1, TurnStep::FirstStrikeDamage),
+            THEM.life(19),
+            advance_to(1, TurnStep::CombatDamage),
+            THEM.life(18),
+        ]),
+    Scenario::new(
+        "a double striker whose blocker dies in the first step deals no damage to the player",
+    )
+    .battlefield(P0, &[names::FENCING_ACE])
+    .battlefield(P1, &[GROUND])
+    .actions(&[
+        advance_to(1, TurnStep::BeginningOfCombat),
+        ME.passes(),
+        ME.attacks_with(names::FENCING_ACE),
+        THEM.chooses(DecisionKind::Blocker, GROUND),
+        advance_to(1, TurnStep::FirstStrikeDamage),
+        THEM.has(Zone::Graveyard, GROUND, 1),
+        ME.controls(names::FENCING_ACE, 1),
+        THEM.life(20),
+        advance_to(1, TurnStep::EndOfCombat),
+        ME.controls(names::FENCING_ACE, 1),
+        THEM.life(20),
+    ]),
+    Scenario::new("Palace Guard survives first strike from Fencing Ace and divides regular damage")
+        .interaction(&[names::PALACE_GUARD, names::SAVANNAH_LIONS])
+        .battlefield(P0, &[names::FENCING_ACE, names::SAVANNAH_LIONS])
+        .battlefield(P1, &[names::PALACE_GUARD])
+        .actions(&[
+            advance_to(1, TurnStep::BeginningOfCombat),
+            ME.passes(),
+            ME.attacks_with(names::FENCING_ACE),
+            ME.attacks_with(names::SAVANNAH_LIONS),
+            THEM.chooses(DecisionKind::Blocker, names::PALACE_GUARD),
+            THEM.chooses(DecisionKind::BlockTarget, names::FENCING_ACE),
+            THEM.chooses(DecisionKind::Blocker, names::PALACE_GUARD),
+            advance_to(1, TurnStep::FirstStrikeDamage),
+            THEM.controls(names::PALACE_GUARD, 1),
+            ME.controls(names::FENCING_ACE, 1),
+            ME.passes(),
+            THEM.chooses(DecisionKind::DamageDivision, names::FENCING_ACE),
+            advance_to(1, TurnStep::EndOfCombat),
+            THEM.has(Zone::Graveyard, names::PALACE_GUARD, 1),
+            ME.has(Zone::Graveyard, names::FENCING_ACE, 1),
+            ME.controls(names::SAVANNAH_LIONS, 1),
+            THEM.life(20),
+        ]),
+];
 
 pub const REMOVED_BLOCKER: &[Scenario] =
     &[
