@@ -317,14 +317,14 @@ Tier-specific records add shading work at those positions.
 
 Baseline uses materials that can run within the downlevel device limits. Depth
 writes let hidden pixels of opaque table geometry and cards be rejected before
-shading. A card face is a sample from a prepared texture. Every card's outline is
-softened by a strip one pixel wide that fades to nothing, so a tilted card has no
-stair-stepped edge. An opaque card draws the strip as a second record among the
-blended ones, and a blended card draws it with its own record. Both tiers draw the
-strip, since the Enhanced tier draws the flat layer with one sample. A lifted card can cast
-a soft contact shadow, drawn as a quad on the table or just above cards beneath
-it. The shadow spreads and fades with height. Baseline keeps these shadows and
-the effect sprites in the main draw list.
+shading. A card face is a sample from a prepared texture. Every card's outline
+is softened by a strip one pixel wide that fades to nothing, so a tilted card
+has no stair-stepped edge. An opaque card draws the strip as a second record
+among the blended ones, and a blended card draws it with its own record. Both
+tiers draw the strip, since the Enhanced tier draws the flat layer with one
+sample. A lifted card can cast a soft contact shadow, drawn as a quad on the
+table or just above cards beneath it. The shadow spreads and fades with height.
+Baseline keeps these shadows and the effect sprites in the main draw list.
 
 ### Effects
 
