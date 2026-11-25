@@ -578,7 +578,9 @@ fn a_tip_that_changed_the_checks_inputs_but_still_fails_gets_the_revert() {
     clean_revert(&world);
     let newer = commit("dddd000");
     world.git.set_changed(&tip, &newer, &["src/a/lib.rs"]);
-    world.work.set_outcome(&newer, &failing.check, Outcome::Fail);
+    world
+        .work
+        .set_outcome(&newer, &failing.check, Outcome::Fail);
     let git = world.git.clone();
     let moved = newer.clone();
     let land: fake::BeforeBatches = Arc::new(move || git.set_tip("staging", moved.clone()));
