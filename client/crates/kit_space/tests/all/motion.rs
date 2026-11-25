@@ -163,6 +163,46 @@ fn a_full_track_drops_ended_segments_but_the_latest() {
     assert_eq!(track.segments().len(), SEGMENTS);
 }
 
+/// A card in a pile takes a segment that only changes its height each time a card joins the
+/// pile. A full track drops those before the segments that carry the card, so the card still
+/// stands where it started until its flight begins.
+#[test]
+fn a_full_track_drops_ended_layer_changes_before_flights() {
+    let high = |z: f32| Pose {
+        position: Vec3::new(0.0, 0.0, z),
+        ..Pose::default()
+    };
+    let mut track = Track::default();
+    track.push(segment(0, 0, at(0.0), at(0.0)), 0).unwrap();
+    track
+        .push(segment(100 * MS, 50 * MS, at(0.0), at(5.0)), 0)
+        .unwrap();
+    for i in 2..SEGMENTS as u64 {
+        track
+            .push(
+                segment(i * 100 * MS, 0, high(i as f32 - 2.0), high(i as f32 - 1.0)),
+                0,
+            )
+            .unwrap();
+    }
+    assert_eq!(track.segments().len(), SEGMENTS);
+    track
+        .push(segment(5_000 * MS, 0, high(14.0), high(15.0)), 5_000 * MS)
+        .unwrap();
+    let starts: Vec<u64> = track.segments().iter().map(|s| s.start / MS).collect();
+    assert_eq!(starts, vec![0, 100, 5_000]);
+    assert_eq!(
+        track.pose_at(50 * MS),
+        at(0.0),
+        "it stands where it started"
+    );
+    assert_eq!(
+        track.pose_at(200 * MS),
+        at(5.0),
+        "and the flight still moves it"
+    );
+}
+
 /// What is drawn on a card (its plaque, its marks) lies on the side of the card that faces up:
 /// flat on its face while face up and on its back while face down, and edge-on with the card
 /// half way through turning over.

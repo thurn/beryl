@@ -148,16 +148,20 @@ impl Track {
 
     /// Adds `segment` after every segment that starts no later than it, so that of two that
     /// start together the one added last decides the pose. When the track is full it first
-    /// drops the segments that ended by `now`, all but the latest of them: that one still
-    /// gives the pose until the next begins, and no time from `now` on can reach the others,
-    /// because a later segment has begun. A segment that has not ended is never dropped,
-    /// since a script laid out ahead of time holds segments that lie in the future, so with
-    /// none ended a full track refuses the new one.
+    /// drops the segments that only changed how high the object lies and ended by `now`, except
+    /// the first (`drop_layers`), and then those that ended by `now`, all but the latest of
+    /// them: that one still gives the pose until the next begins, and no time from `now` on
+    /// can reach the others, because a later segment has begun. A segment that has not ended
+    /// is never dropped, since a script laid out ahead of time holds segments that lie in the
+    /// future, so with none ended a full track refuses the new one.
     ///
     /// # Errors
     ///
     /// `Full` when the track holds `SEGMENTS` segments and at most one of them has ended.
     pub fn push(&mut self, segment: Segment, now: u64) -> Result<(), Full> {
+        if self.segments.is_full() {
+            self.drop_layers(now);
+        }
         if self.segments.is_full() {
             self.drop_ended(now);
             if self.segments.is_full() {
@@ -184,6 +188,9 @@ impl Track {
                 .last()
                 .is_none_or(|last| last.start <= segment.start)
         );
+        if self.segments.is_full() {
+            self.drop_layers(segment.start);
+        }
         if self.segments.is_full() {
             self.drop_ended(segment.start);
             if self.segments.is_full() {
@@ -218,6 +225,22 @@ impl Track {
         self.segments
             .truncate(self.segments.partition_point(|s| s.start <= t));
         true
+    }
+
+    /// Drops every segment after the first that ended by `now` and only changed how high the
+    /// object lies above the table (`Segment::shifts`). A card that lies in a pile takes one such
+    /// segment each time a card joins or leaves the pile, so a card that flew to an exile pile
+    /// early in a long script would otherwise fill its track with them. `drop_ended` would then
+    /// drop the segments that fly it there, and the card would stand at the end of its flight
+    /// from the start of the script. The first segment holds the object where it rested before
+    /// the script and stays.
+    fn drop_layers(&mut self, now: u64) {
+        let mut index = 0;
+        self.segments.retain(|s| {
+            let retain = index == 0 || s.end() > now || s.shifts();
+            index += 1;
+            retain
+        });
     }
 
     /// Drops every segment that ended by `now` except the latest of them.
