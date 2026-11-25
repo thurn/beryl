@@ -29,8 +29,9 @@ use crate::options::{Options, Window};
 use crate::places::out_dir;
 use crate::places::{checkout, frames_dir, now_ms};
 use crate::session::{self, Commands, Live};
-use crate::settings::{self, Saver};
+use crate::settings::Saver;
 
+mod saved;
 mod timing;
 
 /// The window the app opens, and the windowless host stands in for, in logical points: the
@@ -517,7 +518,7 @@ pub fn run(options: &Options) -> Result<Finished, String> {
         .map(crate::options::drive_script)
         .transpose()?;
     let slow_gpu = options.slow_gpu.unwrap_or_default();
-    let (settings, saver) = player_settings(options);
+    let (settings, saver) = saved::player_settings(options);
     let data = crate::data::embedded()?;
     #[cfg(feature = "tools")]
     let (data, reload) = crate::data::initial(data, options.watch);
@@ -718,42 +719,6 @@ fn start_audio(window: Window, settings: &app_client::settings::Settings) -> Aud
     });
     audio.levels(settings.music, settings.effects, settings.muted);
     audio
-}
-
-/// The player's saved settings and the writer of their changes, in a live game the viewer
-/// plays, with `--tier` in place of the saved graphics setting. It goes in the settings the
-/// client holds, so that the settings the client asks to save never carry the other value back
-/// to the frame loop.
-fn player_settings(options: &Options) -> (Option<app_client::settings::Settings>, Option<Saver>) {
-    let (mut settings, saver) = saved_settings(options);
-    if let Some(graphics) = options.graphics {
-        settings.get_or_insert_default().graphics = graphics;
-    }
-    (settings, saver)
-}
-
-/// The player's saved settings and the writer of their changes, in a live game the viewer
-/// plays. A replayed recording, a resumed replay file and a game `--agent` plays start from
-/// the defaults and save nothing, so that a test's or an agent's run never changes the
-/// player's settings.
-fn saved_settings(options: &Options) -> (Option<app_client::settings::Settings>, Option<Saver>) {
-    #[cfg(feature = "tools")]
-    if options.fixture.is_some() {
-        return (None, None);
-    }
-    if options.agent.is_some() || options.replay.is_some() {
-        return (None, None);
-    }
-    let Some(dir) =
-        beryl_shell::Dirs::for_installed_app(beryl_shell::Profile::current()).map(|dirs| dirs.data)
-    else {
-        return (None, None);
-    };
-    let settings = settings::load(&dir).unwrap_or_else(|error| {
-        eprintln!("beryl: the saved settings could not be read, so the defaults apply: {error}");
-        None
-    });
-    (settings, Some(Saver::start(dir)))
 }
 
 /// The web app's folders for the profile `BERYL_PROFILE` names, so that the two apps share
