@@ -29,7 +29,6 @@ pub mod scenarios {
         // An until-end-of-turn effect ends with the turn, so the
         // creature is its printed 2/1 again in the next turn.
         Scenario::new("Battlewise Valor's bonus ends with the turn")
-            .interaction(&[Card::BattlewiseValor, Card::Plains])
             .at(1, P0, TurnStep::PrecombatMain)
             .hand(P0, &[Card::BattlewiseValor])
             .battlefield(P0, &[Card::Plains, Card::Plains, Prop::Vanilla])

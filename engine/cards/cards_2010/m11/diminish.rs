@@ -28,7 +28,6 @@ pub mod scenarios {
         // An until-end-of-turn effect ends with the turn, so the
         // creature is its printed 2/1 again in the next turn.
         Scenario::new("Diminish's base 1/1 ends with the turn")
-            .interaction(&[Card::Diminish, Card::Island])
             .at(1, P0, TurnStep::PrecombatMain)
             .hand(P0, &[Card::Diminish])
             .battlefield(P0, &[Card::Island, Prop::Vanilla])

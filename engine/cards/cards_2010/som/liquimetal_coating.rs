@@ -46,7 +46,7 @@ pub mod scenarios {
         // turn the land is not an artifact again, so P1's Wear (destroy target artifact) has no
         // legal target and the land stays.
         Scenario::new("Liquimetal Coating's artifact type ends with the turn")
-            .interaction(&[Card::WearTear, Card::Mountain])
+            .interaction(&[Card::WearTear])
             .at(1, P0, TurnStep::PrecombatMain)
             .battlefield(P0, &[COATING, Card::Mountain, Card::Mountain])
             .battlefield(P1, &[Card::Plains, Card::Mountain, Card::Mountain])

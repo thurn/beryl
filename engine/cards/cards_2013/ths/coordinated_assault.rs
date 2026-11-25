@@ -31,7 +31,6 @@ pub mod scenarios {
         // An until-end-of-turn effect ends with the turn, so the
         // creature is its printed 2/1 again in the next turn.
         Scenario::new("Coordinated Assault's bonus ends with the turn")
-            .interaction(&[Card::Mountain])
             .at(1, P0, TurnStep::PrecombatMain)
             .hand(P0, &[ASSAULT])
             .battlefield(P0, &[Card::Mountain, Prop::Vanilla])
