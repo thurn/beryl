@@ -26,7 +26,7 @@ use ignite_core::protocol::hub::{
     AuditReport, ExplorationFind, FlakyReport, IncompleteReport, JusticiarCleared, JusticiarReport,
     LandingsReply, LandingsRequest, LookupReply, LookupRequest, MetricsImport, NewResult,
     OpenRegression, OpenRegressions, RecordBatch, ReportFiled, RevertFiled, Reverted, StoreRequest,
-    TipClaim, TipVerified, TipWaiting, TipWaitingFiled,
+    TipCheckFailures, TipClaim, TipVerified, TipWaiting, TipWaitingFiled,
 };
 use ignite_core::time::Timestamp;
 use ignite_store::StoreError;
@@ -110,7 +110,27 @@ fn route(conn: &mut Connection, request: &Request, now: Timestamp) -> Result<Res
             Ok(Response::json(200, &json!(failures)))
         }
         "/tips/failures" => {
-            tips::note_check_failures(conn, &body(request)?).map_err(|e| store_failure(&e))?;
+            let failures: TipCheckFailures = body(request)?;
+            tips::note_check_failures(conn, &failures).map_err(|e| store_failure(&e))?;
+            // The failures are recorded. A regression that cannot be filed now is filed when
+            // the next failure at a later tip arrives, so the request still succeeds.
+            if let Some(writer) = &request.writer
+                && let Err(error) = regressions::file_streaks(
+                    conn,
+                    Author {
+                        actor: &writer.actor,
+                        machine: writer.machine.as_str(),
+                    },
+                    &failures,
+                    now,
+                )
+            {
+                eprintln!(
+                    "ignite-hub: the regression of a check failing at consecutive tips up to {} \
+                     was not filed: {error}",
+                    failures.commit
+                );
+            }
             Ok(done())
         }
         "/tips/candidate/update" => {

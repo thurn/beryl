@@ -64,6 +64,20 @@ fn a_failure_whose_rerun_hangs_stays_a_failure() {
     assert_eq!(world.launcher.commands("runner").len(), 2);
 }
 
+/// A `jsonl` tool writes why a check failed only to its results file, which the runner deletes,
+/// so the saved output says it too.
+#[test]
+fn a_failures_saved_output_says_where_it_failed() {
+    let world = jsonl_world();
+    world
+        .launcher
+        .script("unit:b", &[Some("fail"), Some("fail")]);
+    let run = run(&world, &["unit:b"]);
+    let output = failure(&run, "unit:b").output.as_deref().unwrap();
+    let text = fs::read_to_string(output).unwrap();
+    assert!(text.contains("unit:b failed at src/a.py:3"), "{text:?}");
+}
+
 #[test]
 fn a_passing_run_keeps_its_output_only_a_day() {
     let world = jsonl_world();

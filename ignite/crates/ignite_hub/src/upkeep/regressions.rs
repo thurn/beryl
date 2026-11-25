@@ -48,7 +48,9 @@ use crate::routes::dispatch::set_columns;
 
 pub(crate) mod landing;
 mod resolution;
+mod streaks;
 pub use resolution::{passing, settle};
+pub use streaks::file_streaks;
 
 /// Settle regressions after verification or a check switch. The evidence has already
 /// committed, so upkeep can retry a failure without making the original request fail.

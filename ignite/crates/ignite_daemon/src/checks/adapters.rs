@@ -222,6 +222,40 @@ pub fn jsonl_results_cut_short(text: &str) -> Vec<Reported> {
     reported
 }
 
+/// Appends the place and message of each failure in `reported` to `output`, the file that
+/// holds a `jsonl` run's whole output. The tool writes them only to its results file, which the
+/// runner reads and deletes, so the saved output that a failure and its regression ticket point
+/// to said nothing about why the check failed.
+pub fn append_failures(output: &std::path::Path, reported: &[Reported]) {
+    use std::fmt::Write as _;
+    use std::io::Write as _;
+    let mut text = String::new();
+    for r in reported.iter().filter(|r| r.outcome == Outcome::Fail) {
+        let _ = write!(text, "\n{} failed", r.check);
+        if let Some(at) = &r.at {
+            let _ = write!(text, " at {at}");
+        }
+        if let Some(message) = &r.message {
+            let _ = write!(text, ":\n{message}");
+        }
+        text.push('\n');
+    }
+    if text.is_empty() {
+        return;
+    }
+    let appended = std::fs::OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(output)
+        .and_then(|mut file| file.write_all(text.as_bytes()));
+    if let Err(error) = appended {
+        eprintln!(
+            "ignite: the failures were not added to {}: {error}",
+            output.display()
+        );
+    }
+}
+
 /// The results in `text` (see [`jsonl_results`]) and the check the last line names.
 fn parsed_results(text: &str) -> (Vec<Reported>, Option<CheckName>) {
     #[derive(Deserialize)]

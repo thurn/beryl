@@ -570,6 +570,7 @@ impl Checks {
                 let text = fs::read_to_string(&file).unwrap_or_default();
                 let _ = fs::remove_file(&file);
                 let reported = adapters::jsonl_results(&text);
+                adapters::append_failures(&result.output, &reported);
                 let cut_short = result.hung
                     || (result.exit != Some(0)
                         && !reported.iter().any(|r| r.outcome == Outcome::Fail));

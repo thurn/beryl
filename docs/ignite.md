@@ -3066,6 +3066,17 @@ apply the work again. If the hub misses the report, the verifier sends it again
 at the start of the next round. Another eligible check that failed with the same
 landing is covered by the same revert once it passes at that revert commit.
 
+A round that sees a required check fail tells the hub at once
+(`POST /tips/failures`), and the hub then lets a newer `staging` tip replace the
+candidate, since a newer landing may hold the fix. On a busy day the round is
+replaced before it reaches its verdict and its culprit search, and so is the
+next. So the hub also reports a check itself once it has failed on the same
+platform at two consecutive tips with failures on record, matched by name rather
+than input hash. The report's range runs from the last verified tip to the
+oldest tip of the streak, says that no search ran, and names the machine and
+path of the failing run's output. A round that later finishes its search adds
+the culprit to the same ticket.
+
 ### Regression tickets
 
 The hub then files a **regression ticket**, or adds the check to one already

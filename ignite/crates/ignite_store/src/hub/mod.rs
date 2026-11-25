@@ -41,6 +41,7 @@ pub mod tickets;
 pub mod tip_coverage;
 pub mod tip_misses;
 pub mod tip_rounds;
+pub mod tip_streaks;
 pub mod tips;
 pub mod tokens;
 pub mod transcripts;
