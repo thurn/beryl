@@ -232,6 +232,12 @@ class Exporter:
         if kind == "ChooseUpTo" and hiding:
             self.answer(answer, p, hiding[0])
             return
+        # A scry's cards for the bottom, which Beryl answers silently when the top card is the
+        # only one to choose (the card, or none): XMage still asks for them as a target list.
+        scriers = [c for c in (top, self.last_answer[0]) if c and self.cards.scries(c)]
+        if kind == "ChooseUpTo" and scriers:
+            self.answer(answer, p, scriers[0])
+            return
         if asked or self.may_choose is not None or scrying:
             self.answer(answer, p)
             return
@@ -266,7 +272,21 @@ class Exporter:
         the one Beryl puts in place unasked, so the scenario cannot name that answer."""
         if self.scry is not None and self.scry[2]:
             raise Unsupported("ordering a scry's cards on top")
+        if self.scry is not None and self.scry[1]:
+            # Beryl ends a scry without a "done" once every card has been put on the bottom
+            # (as with one card), so the bottom cards are queued here.
+            self.queue_bottom()
         self.scry = None
+
+    def queue_bottom(self) -> None:
+        """Queues the scry's cards for the bottom as XMage's one target list, or the skip
+        for none, and forgets them so that a later "done" queues nothing twice."""
+        assert self.scry is not None
+        who, bottom, _ = self.scry
+        skip = "TestPlayer.TARGET_SKIP"
+        names = java_string("^".join(bottom)) if bottom else skip
+        self.emit(f"addTarget({who}, {names});")
+        bottom.clear()
 
     def arrange(self) -> None:
         self.emit("removeAllCardsFromLibrary(playerA);")
@@ -593,11 +613,7 @@ class Exporter:
             if card is not None:
                 self.scry[1].append(card)
             else:
-                bottom = "^".join(self.scry[1])
-                skip = "TestPlayer.TARGET_SKIP"
-                self.emit(
-                    f"addTarget({who}, {java_string(bottom) if bottom else skip});"
-                )
+                self.queue_bottom()
         elif self.scry is not None and kind == "ChooseObject" and card is not None:
             self.scry[2].append(card)
         elif (

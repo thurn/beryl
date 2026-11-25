@@ -773,3 +773,56 @@ def test_exact_mana_values_keep_each_snapshot_controllers_identity() -> None:
         entry, 1, xmage_java.Faces.load(card_store.STORE), XMAGE_CARDS
     )
     assert export.skipped == ["ManaValue: in the middle of a ChooseUpTo decision"]
+
+
+@pytest.mark.parametrize(
+    ("pick", "queued"),
+    [
+        ({"pick": "Done"}, "addTarget(playerA, TestPlayer.TARGET_SKIP);"),
+        (
+            {"pick": "Card", "card": "Island"},
+            None,
+        ),
+    ],
+)
+def test_a_scry_answered_silently_is_queued_as_the_bottom_target(
+    pick: card_facts.Json, queued: str | None
+) -> None:
+    # Beryl answers a one-card scry without asking. XMage asks for the cards to put on the
+    # bottom as a target list, so keeping the top card must queue the skip, or XMage fails
+    # with "Missing TARGET def".
+    source = "Scryer"
+    scry: card_facts.Json = {"kind": "Scry", "player": "You", "count": 1}
+    ability: card_facts.Json = {"index": "Own 0", "kind": "Spell"}
+    ability |= {"instructions": [scry]}
+    entry: card_facts.Json = {
+        "setup": {"turn": 1, "active": 0, "step": "PrecombatMain"},
+        "actions": [],
+        "cards": {source: {"faces": [{"name": source, "abilities": [ability]}]}},
+    }
+    export = xmage_java.Export(card=source, scenario="scry", method="scry")
+    writer = xmage.Exporter(entry, xmage_java.Faces.load(card_store.STORE), export)
+    position = xmage.Position(
+        turn=1,
+        step="PrecombatMain",
+        decider=None,
+        kind=None,
+        purpose=None,
+        stack=[{"name": source}],
+        flips=[],
+        taps=[],
+        forced=[],
+        flashback=[],
+        face_down=[],
+        creatures=[0, 0],
+    )
+    answer: card_facts.Json = {"player": 0, "kind": "ChooseUpTo", "turn": 1}
+    answer |= {"step": "PrecombatMain", "pick": pick}
+    writer.forced(answer, position)
+    if queued is None:
+        # Beryl ends a one-card scry after the pick, with no "done": the list is queued when
+        # the next action begins.
+        assert export.body == []
+        writer.end_scry()
+        queued = 'addTarget(playerA, "Island");'
+    assert export.body == [queued]
