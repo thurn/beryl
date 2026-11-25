@@ -493,7 +493,9 @@ def test_the_gate_counts_the_current_files_from_the_guest_filesystem(
     measure = tmp_path / "measure.json"
     assert (
         count_gate.count_gate(
-            argparse.Namespace(family=None, measure=str(measure), environment=False)
+            argparse.Namespace(
+                family=None, subgame=False, measure=str(measure), environment=False
+            )
         )
         == 0
     )
