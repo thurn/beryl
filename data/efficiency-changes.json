@@ -945,5 +945,10 @@
     "label": "Windows engine instruction counts build from WSL's Linux filesystem after copying the checkout into the guest.",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "`ignite test` refuses at once a name that no listing holds and that cannot name a new check: a family-shaped prefix that names no family (`rust-test:`), or a test name that no file of the tree holds. Before, each listed every family first: 449 s for `rust-test:<crate>` and 1040 s for a test name no file held (2026-11-25)",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

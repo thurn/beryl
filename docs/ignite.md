@@ -352,7 +352,16 @@ The verbs an agent uses while working:
   it waiting for the 3D client and the scenario dump to build, to run two tests
   that the Rust family's listing found. A name that no family could hold is
   refused at once with a hint on how checks are named, so a Rust test function
-  name never builds every family.
+  name never builds every family. When every family has a listing on the
+  machine, a name that no listing holds is also refused at once if it cannot
+  name a check added since: its text before the first `:` is shaped like a
+  family name but names no family (`rust-test:beryl_card`), or it is a test name
+  or a `::` path to one whose last part no file of the tree holds, tracked or
+  untracked. A new test's name is in the file the branch wrote it in. On
+  2026-11-25 `ignite test rust-test:beryl_card` listed every family for 449 s,
+  and `the_plain_card_back_is_brown`, which no file held, for 1040 s, before
+  each said that no check matches. A name with a real family's prefix still
+  lists that family afresh.
 
   When every name matched, a `nextest` family found only through its newest
   listing, whose `list` says `{packages}`, is built and listed for the packages

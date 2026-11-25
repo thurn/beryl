@@ -60,3 +60,29 @@ pub fn files(root: &Path) -> Result<Vec<String>> {
     files.sort();
     Ok(files)
 }
+
+/// Whether any file of the checkout at `root` that [`files`] lists holds `text`, as a fixed
+/// string: `git grep` over the tracked files as they are in the checkout and the untracked files
+/// it does not ignore. `Err` when git cannot answer, such as outside a checkout.
+pub fn mentions(root: &Path, text: &str) -> Result<bool> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args([
+            "grep",
+            "--quiet",
+            "--fixed-strings",
+            "--untracked",
+            "-e",
+            text,
+        ])
+        .output()?;
+    match output.status.code() {
+        Some(0) => Ok(true),
+        Some(1) => Ok(false),
+        _ => Err(Error::Io(format!(
+            "git grep failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ))),
+    }
+}

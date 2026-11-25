@@ -791,3 +791,75 @@ fn test_finds_a_bare_name_in_a_familys_newest_listing_after_its_inputs_change() 
     assert_eq!(reply.exit, Exit::Usage, "{}", reply.text);
     assert!(world.launcher.commands("cargo").len() > cargo);
 }
+
+/// A name no listing holds is refused at once, without listing a family again, when it cannot
+/// name a check added since: its prefix is shaped like a family's name but names none, or it is
+/// a test name, or a `::` path to one, that no file of the tree holds. A test name that a file
+/// holds, such as a test the branch has just written, still lists every family to find it.
+#[test]
+fn test_refuses_a_name_that_cannot_name_a_new_check_without_listing() {
+    let world = jsonl_world();
+    let request = |args: &[&str]| Request {
+        verb: "test".to_owned(),
+        args: args.iter().map(|s| (*s).to_owned()).collect(),
+        cwd: world.dir.join("sub"),
+        session: None,
+        wait_s: 1,
+        pid: None,
+    };
+    let verb = TestVerb {
+        checks: world.checks.clone(),
+        express: None,
+    };
+    let reply = verb.run(&world.ctx, &request(&["it:b"]));
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    // No family keeps a listing for the new inputs, so a new word would list them all.
+    world
+        .git
+        .set_object("src", Oid::new("e".repeat(40)).unwrap());
+    let init = std::process::Command::new("git")
+        .args(["init", "--quiet"])
+        .current_dir(&world.dir)
+        .status()
+        .unwrap();
+    assert!(init.success());
+    fs::create_dir_all(world.dir.join("src")).unwrap();
+    fs::write(
+        world.dir.join("src/lib.rs"),
+        "#[test]\nfn a_test_written_on_the_branch() {}\n",
+    )
+    .unwrap();
+    let listers = world.launcher.commands("lister").len();
+    let cargo = world.launcher.commands("cargo").len();
+
+    for (word, reason) in [
+        ("rust-test:b", "no family is named rust-test"),
+        (
+            "a_test_nobody_wrote",
+            "no file in the tree holds a_test_nobody_wrote",
+        ),
+        (
+            "lib::tests::a_test_nobody_wrote",
+            "no file in the tree holds a_test_nobody_wrote",
+        ),
+    ] {
+        let reply = verb.run(&world.ctx, &request(&[word]));
+        assert_eq!(reply.exit, Exit::Usage, "{}", reply.text);
+        assert!(
+            reply.text.starts_with(&format!(
+                "no check matches {word}\nno listing on this machine holds it, and {reason}; "
+            )),
+            "{}",
+            reply.text
+        );
+        assert_eq!(world.launcher.commands("lister").len(), listers, "{word}");
+        assert_eq!(world.launcher.commands("cargo").len(), cargo, "{word}");
+    }
+
+    let reply = verb.run(&world.ctx, &request(&["a_test_written_on_the_branch"]));
+    assert_eq!(reply.exit, Exit::Usage, "{}", reply.text);
+    assert!(
+        world.launcher.commands("cargo").len() > cargo,
+        "a name a file holds lists the families again"
+    );
+}

@@ -12,6 +12,69 @@ use super::verbs::{changed_paths, matches};
 use super::{CheckRun, Checks, OpenTree};
 use crate::server::Context;
 
+/// The refusal of `words`, which name no check, with why each cannot (`reasons`, empty when the
+/// listings alone show it) and how checks are named.
+fn no_match(all: &[(&str, &Family)], words: &[&str], reasons: &[String]) -> Reply {
+    let names: Vec<&str> = all.iter().map(|(n, _)| *n).collect();
+    let why = if reasons.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "no listing on this machine holds it, and {}; `<family>:<name>` lists that family \
+             afresh\n",
+            reasons.join(", ")
+        )
+    };
+    Reply::text(
+        Exit::Usage,
+        format!(
+            "no check matches {}\n{why}checks are named <family>:<check> (families: {}); to run \
+             one Rust test, use `cargo nextest run -p <crate> <name>` in the tree",
+            words.join(", "),
+            names.join(", ")
+        ),
+    )
+}
+
+/// Why `word`, which no listing holds, cannot name a check added since the listings were made,
+/// or `None` when it may. Such a check is most often a test the branch has just written, and its
+/// name is then in a file of the tree. Two kinds of word are known not to be one:
+///
+/// - A word whose text before its first `:` is shaped like a family name but names no family,
+///   such as `rust-test:cards`. Families are renamed (`b3d-test` became `client-test`),
+///   and the old names stay in agents' habits.
+/// - A Rust or Python test name, or a `::` path to one, whose last part no file of the tree
+///   holds (see [`ignite_git::tracked::mentions`]).
+///
+/// Any other word, such as a recording's name, may be made from data, so the families are
+/// listed to find out. On 2026-11-25 `ignite test rust-test:<crate>` listed every family for
+/// 449 s, and `the_plain_card_back_is_brown`, which no file held, for 1040 s, before each said
+/// that no check matches.
+fn absent(tree: &OpenTree, word: &str) -> Option<String> {
+    if let Some((prefix, rest)) = word.split_once(':')
+        && !rest.starts_with(':')
+    {
+        let shaped = prefix.starts_with(|c: char| c.is_ascii_lowercase())
+            && prefix
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+        return shaped.then(|| format!("no family is named {prefix}"));
+    }
+    let path = word.strip_suffix("::").unwrap_or(word);
+    let identifier = |part: &str| {
+        part.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_')
+            && part.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+    };
+    if !path.split("::").all(identifier) {
+        return None;
+    }
+    let last = path.rsplit("::").next()?;
+    match ignite_git::tracked::mentions(&tree.path, last) {
+        Ok(false) => Some(format!("no file in the tree holds {last}")),
+        Ok(true) | Err(_) => None,
+    }
+}
+
 /// The families `ignite test` lists, and what it left out.
 #[derive(Debug, Default)]
 pub(crate) struct TestFamilies<'a> {
@@ -80,7 +143,8 @@ fn cheap(family: &Family, kept: bool) -> bool {
 /// test in one engine crate, `ignite test a_turn_past_small_does_not_narrow`, used to list all
 /// 23 families: 1241 s, of which 888 s waited for the 3D client to build and 637 s for the
 /// scenario dump, to run two tests that the Rust family's listing of the changed packages
-/// found.
+/// found. When every family has a listing here and each word no listing holds cannot name a
+/// check added since ([`absent`]), the words are refused before anything is listed.
 ///
 /// A family whose listing needs a product build (see [`cheap`]) is left out when every bare
 /// word it matches also matches a check of a family that is cheap to list, and so is a family
@@ -132,6 +196,8 @@ pub(crate) fn test_families<'a>(
     let mut not_current = Vec::new();
     // Families never listed here whose listing needs a build.
     let mut unknown_costly = Vec::new();
+    // Whether some family has never been listed here, so no listing can say what it holds.
+    let mut unlisted = false;
     // Each family whose listing needs a build, with the indexes of the words it matched.
     let mut costly: Vec<(&str, Vec<usize>)> = Vec::new();
     // The packages of the matching checks of each family found through its newest listing.
@@ -151,6 +217,7 @@ pub(crate) fn test_families<'a>(
                 reading,
             );
             let Some(latest) = latest else {
+                unlisted = true;
                 if is_cheap {
                     families.push(name);
                 } else {
@@ -198,6 +265,20 @@ pub(crate) fn test_families<'a>(
         .iter()
         .position(|&was| !was)
         .map(|index| bare[index].to_owned());
+    if new_word.is_some() && !unlisted {
+        let unheld: Vec<&str> = bare
+            .iter()
+            .zip(&found)
+            .filter(|(_, was)| !**was)
+            .map(|(word, _)| *word)
+            .collect();
+        let reading = Stopwatch::start(ctx);
+        let reasons: Option<Vec<String>> = unheld.iter().map(|w| absent(tree, w)).collect();
+        run.slow(ctx, "searching the tree for the names", reading);
+        if let Some(reasons) = reasons {
+            return Err(no_match(&all, &unheld, &reasons));
+        }
+    }
     if new_word.is_some() {
         // A word no listing holds may name a check added since to any family. The families
         // that are cheap to list are listed first; one whose listing needs a build waits for
@@ -248,16 +329,7 @@ pub(crate) fn test_families<'a>(
         .map(|(name, packages)| (name.clone(), Checks::test_scope(tree, packages, &changed)))
         .collect();
     if families.is_empty() && deferred.is_empty() {
-        let names: Vec<&str> = all.iter().map(|(n, _)| *n).collect();
-        return Err(Reply::text(
-            Exit::Usage,
-            format!(
-                "no check matches {}\nchecks are named <family>:<check> (families: {}); to run \
-                 one Rust test, use `cargo nextest run -p <crate> <name>` in the tree",
-                bare.join(", "),
-                names.join(", ")
-            ),
-        ));
+        return Err(no_match(&all, &bare, &[]));
     }
     families.sort_unstable();
     families.dedup();
