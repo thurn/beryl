@@ -241,8 +241,8 @@
       "client/Cargo.toml"
     ],
     "tools/tests/test_card.py": [
-      "engine/crates/beryl_card/src/effect/build.rs",
-      "engine/crates/beryl_card/src/effect/mod.rs",
+      "engine/crates/beryl_card/src/effect/build/zones.rs",
+      "engine/crates/beryl_card/src/effect/instruction.rs",
       "engine/crates/beryl_card/src/target.rs"
     ],
     "tools/tests/test_card_header.py": [

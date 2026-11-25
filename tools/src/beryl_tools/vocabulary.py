@@ -52,9 +52,18 @@ class Entry:
 
 
 def module(path: Path, root: Path) -> str:
-    """The module a source file is: `effect` for effect/mod.rs, `build` for effect/build.rs."""
+    """The module a source file is: `effect` for effect/mod.rs, `build` for effect/build.rs.
+
+    A file whose parent module re-exports all of it (`pub use zones::*;` in effect/build.rs)
+    is named as its parent, `build` for effect/build/zones.rs, since that is where a card file
+    finds what it holds."""
     part = path.relative_to(root)
-    return part.parent.name if part.stem in ("mod", "lib") else part.stem
+    if part.stem in ("mod", "lib"):
+        return part.parent.name
+    for parent in (path.parent.with_suffix(".rs"), path.parent / "mod.rs"):
+        if parent.is_file() and f"pub use {part.stem}::*;" in parent.read_text():
+            return module(parent, root)
+    return part.stem
 
 
 def code(line: str) -> str:
