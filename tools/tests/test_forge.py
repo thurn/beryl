@@ -255,7 +255,9 @@ def test_summary_applies_the_allowlist() -> None:
         {"card": "F", "name": "f", "status": "unsupported", "reason": "a coin flip"},
     ]
     allowed = {
-        key: oracle_summary.Divergence("forge", card, name, "CR 704.5a", "Forge is wrong")
+        key: oracle_summary.Divergence(
+            "forge", card, name, "CR 704.5a", "Forge is wrong"
+        )
         for key, card, name in (("C / c", "C", "c"), ("D / d", "D", "d"))
     }
     skipped: list[Json] = [{"card": "E", "name": "e", "reason": "casting face 1 of E"}]
