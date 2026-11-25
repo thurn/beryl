@@ -45,7 +45,13 @@ pub struct Described {
     /// where `player` answered, as every answer before version 12 did.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub decider: Option<u8>,
+    /// The turn's number in its own game, which starts again at 1 in a game Karn Liberated
+    /// restarted and in a subgame.
     pub turn: u16,
+    /// Turns begun across every game in this playthrough when the answer was made
+    /// ([`State::elapsed_turns`]), which orders answers across a restart or a subgame, since
+    /// version 15; none in an older file, whose answers replay orders by `turn`.
+    pub elapsed: Option<u16>,
     pub step: StepName,
     /// The position as played when this game can repeat or reorder steps.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -84,6 +90,12 @@ enum ChosenFile {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         decider: Option<u8>,
         turn: u16,
+        /// Written only where it differs from `turn`, as in a checkpoint.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        elapsed: Option<u16>,
+        /// Marks an answer of a file before version 15, which did not record `elapsed`.
+        #[serde(default, rename = "beforeV15", skip_serializing_if = "is_false")]
+        before_v15: bool,
         step: StepName,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         ordinal: Option<u32>,
@@ -114,6 +126,8 @@ impl From<ChosenFile> for Chosen {
                 player,
                 decider,
                 turn,
+                elapsed,
+                before_v15,
                 step,
                 ordinal,
                 kind,
@@ -127,6 +141,7 @@ impl From<ChosenFile> for Chosen {
                     player,
                     decider,
                     turn,
+                    elapsed: (!before_v15).then(|| elapsed.unwrap_or(turn)),
                     step,
                     ordinal,
                     kind: kind.now(),
@@ -147,6 +162,7 @@ impl From<Chosen> for ChosenFile {
                 player,
                 decider,
                 turn,
+                elapsed,
                 step,
                 ordinal,
                 kind,
@@ -159,6 +175,8 @@ impl From<Chosen> for ChosenFile {
                 player,
                 decider,
                 turn,
+                elapsed: elapsed.filter(|&e| e != turn),
+                before_v15: elapsed.is_none(),
                 step,
                 ordinal,
                 kind: KindFile::Now(kind),
@@ -188,6 +206,7 @@ impl Chosen {
                 player: d.player.get(),
                 decider: (d.decider != d.player).then(|| d.decider.get()),
                 turn: s.turn().number(),
+                elapsed: Some(s.elapsed_turns()),
                 step: s.turn().step().into(),
                 ordinal: saved_ordinal(s),
                 kind: d.kind.into(),
@@ -244,8 +263,11 @@ impl Chosen {
         self.what.as_ref().map(|w| (w.turn, w.step))
     }
 
-    /// Where the recorded answer falls relative to the current step. Historical saves
-    /// without an ordinal identify the step by name.
+    /// Where the recorded answer falls relative to the current step. Turns are ordered by
+    /// the turns begun across the playthrough, since a turn's number starts again in a
+    /// restarted game or a subgame; an answer from before version 15, which lacks that
+    /// count, by its turn's number. Historical saves without an ordinal identify the step by
+    /// name.
     pub(crate) fn compare_when<L: Layout>(&self, s: &State<L>) -> Option<std::cmp::Ordering> {
         let what = self.what.as_ref()?;
         let turn = s.turn();
@@ -255,7 +277,15 @@ impl Chosen {
                 .then_with(|| what.step.cmp(&turn.step().into())),
             None => what.step.cmp(&turn.step().into()),
         };
-        Some(what.turn.cmp(&turn.number()).then(in_turn))
+        // A new game's opening, before its turn 1, has begun no turn of its own, so it shares
+        // its count with the last turn of the game before it, which it follows.
+        let by_turn = match what.elapsed {
+            Some(elapsed) => {
+                (elapsed, what.turn == 0).cmp(&(s.elapsed_turns(), turn.number() == 0))
+            }
+            None => what.turn.cmp(&turn.number()),
+        };
+        Some(by_turn.then(in_turn))
     }
 
     /// Whether this answer passed priority: an answer that no later position can miss, which

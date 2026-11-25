@@ -16,6 +16,8 @@ use beryl_engine::state::Pending;
 use beryl_engine::{Layout, Seat, State, TurnStep};
 use beryl_session::perturb::{self, Perturbation};
 use beryl_session::protocol::Candidate;
+use beryl_session::replay::Entry;
+use beryl_session::save::Chosen;
 use beryl_session::{
     CandidateIndex, Game, PlayerView, ReplayFile, SessionId, StartGame, Status, StopsSetting,
 };
@@ -237,6 +239,20 @@ fn cut(game: &Game, view: &PlayerView, card: &str, moment: Moment) {
 /// Plays `keystone`'s game until it has reached and cut each moment it expects.
 fn plays(keystone: &Keystone) {
     let card = keystone.card;
+    play_until(keystone, |game, view, moment| {
+        cut(game, view, card, moment);
+        false
+    });
+}
+
+/// Plays `keystone`'s game until it has reached each moment it expects, calling `reached` at
+/// the first decision of each. Returns the game at the first moment `reached` returns true
+/// for, if any.
+fn play_until(
+    keystone: &Keystone,
+    mut reached: impl FnMut(&Game, &PlayerView, Moment) -> bool,
+) -> Option<Game> {
+    let card = keystone.card;
     let start = StartGame {
         seed: 7,
         decks: [
@@ -258,7 +274,7 @@ fn plays(keystone: &Keystone) {
     let mut last: Option<Position> = None;
     for _ in 0..4000 {
         if keystone.expect.iter().all(|m| seen.contains(m)) {
-            return;
+            return None;
         }
         let Some(view) = game.next_view() else {
             break;
@@ -280,7 +296,9 @@ fn plays(keystone: &Keystone) {
         let mut conceded = false;
         for moment in moments {
             if keystone.expect.contains(&moment) && seen.insert(moment) {
-                cut(&game, &view, card, moment);
+                if reached(&game, &view, moment) {
+                    return Some(game);
+                }
                 if moment == Moment::Subgame {
                     // The subgame would play out to an empty library; the cut is what is tested.
                     game.concede();
@@ -319,6 +337,7 @@ fn plays(keystone: &Keystone) {
         .filter(|m| !seen.contains(m))
         .collect();
     assert!(missing.is_empty(), "{card}: never reached {missing:?}");
+    None
 }
 
 #[test]
@@ -326,4 +345,75 @@ fn saves_cut_in_each_new_turn_or_game_state_replay_under_each_perturbation() {
     for keystone in KEYSTONES {
         plays(keystone);
     }
+}
+
+/// The answer `entry` records, if it records one.
+fn answer(entry: &Entry) -> Option<&Chosen> {
+    match entry {
+        Entry::Choice(c) | Entry::Auto(c) => Some(c),
+        _ => None,
+    }
+}
+
+/// A save whose replay drifts across Karn Liberated's restart: its record lacks the last
+/// priority pass of the old game, so at that priority the record's next answer is one from the
+/// restarted game, whose turns are numbered from 1 again. Replay must order that answer after
+/// the open priority, which it passes unasked as the game did, rather than before it, which
+/// would skip a recorded pass or stop the replay.
+#[test]
+fn a_save_that_drifts_across_a_restart_replays_into_the_restarted_game() {
+    let karn = KEYSTONES
+        .iter()
+        .find(|k| k.card == names::KARN_LIBERATED)
+        .unwrap();
+    let mut view = None;
+    let mut game = play_until(karn, |_, v, moment| {
+        let restarted = moment == Moment::Restarted;
+        if restarted {
+            view = Some(v.clone());
+        }
+        restarted
+    })
+    .expect("Karn Liberated restarts the game");
+    let mut view = view.unwrap();
+    // A few answers into the restarted game, so the record has some.
+    for _ in 0..6 {
+        let open = game.open().expect("the restarted game is at a decision");
+        let answer = open.answer(open.id(), CandidateIndex(0)).unwrap();
+        game.choose(answer);
+        view = loop {
+            let next = game.next_view().expect("the restarted game plays on");
+            game.opponent_view();
+            if matches!(next.status, Status::Deciding { .. }) {
+                break next;
+            }
+        };
+    }
+    let mut file: ReplayFile =
+        serde_json::from_str(&serde_json::to_string(game.replay()).unwrap()).unwrap();
+    let now = position(&game).0.turn;
+    let old_game = |e: &Entry| {
+        answer(e)
+            .and_then(Chosen::when)
+            .is_some_and(|(t, _)| t > now)
+    };
+    let last_old = file
+        .log
+        .iter()
+        .rposition(old_game)
+        .expect("answers before the restart");
+    let pass = file.log[..=last_old]
+        .iter()
+        .rposition(|e| answer(e).is_some_and(Chosen::is_priority_pass))
+        .expect("a priority passed before the restart");
+    file.log.remove(pass);
+    let next = file.log[pass..].iter().find_map(answer).unwrap();
+    assert!(
+        next.when().is_some_and(|(t, _)| t <= now),
+        "the record's next answer is from the restarted game: {next:?}"
+    );
+    let (replayed, again) = Game::replay_exactly(&CARDS, &file, SESSION)
+        .unwrap_or_else(|e| panic!("the drifted save does not replay: {e}"));
+    assert_eq!(again, view);
+    assert_eq!(replayed.replay().log, game.replay().log);
 }

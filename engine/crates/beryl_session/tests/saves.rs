@@ -204,8 +204,8 @@ fn a_loaded_version_1_save_is_in_the_format_of_today() {
 }
 
 /// `log` with each object its answers name marked as named before versions 5, 6, 13 and 14
-/// ([`Obj::before_v5`], [`Obj::before_v6`], [`Obj::before_v13`], [`Obj::before_v14`]), as a
-/// version 4 file's are
+/// ([`Obj::before_v5`], [`Obj::before_v6`], [`Obj::before_v13`], [`Obj::before_v14`]), and
+/// each answer as made before version 15 ([`Described::elapsed`]), as a version 4 file's are
 /// once loaded.
 fn before_v5(log: &[Entry]) -> Vec<Entry> {
     fn mark(value: &mut serde_json::Value) {
@@ -228,10 +228,43 @@ fn before_v5(log: &[Entry]) -> Vec<Entry> {
             let mut v = serde_json::to_value(e).unwrap();
             if matches!(e, Entry::Choice(_) | Entry::Auto(_)) {
                 mark(&mut v);
+                for answer in v.as_object_mut().unwrap().values_mut() {
+                    answer
+                        .as_object_mut()
+                        .unwrap()
+                        .insert("beforeV15".to_owned(), true.into());
+                }
             }
             serde_json::from_value(v).unwrap()
         })
         .collect()
+}
+
+#[test]
+fn a_version_14_save_orders_its_answers_by_turn_number() {
+    let (game, view, _) = played(4, 30);
+    let mut old = serde_json::to_value(game.replay()).unwrap();
+    old["formatVersion"] = 14.into();
+    let loaded = migrate::to_current(old, &CARDS).unwrap();
+    assert_eq!(loaded.format_version, FORMAT_VERSION);
+    let answers: Vec<&Chosen> = loaded
+        .log
+        .iter()
+        .filter_map(|e| match e {
+            Entry::Choice(c) | Entry::Auto(c) => Some(c),
+            _ => None,
+        })
+        .collect();
+    assert!(!answers.is_empty());
+    for c in answers {
+        assert_eq!(c.what.as_ref().unwrap().elapsed, None, "{c:?}");
+    }
+    assert!(
+        serde_json::to_string(&loaded)
+            .unwrap()
+            .contains("\"beforeV15\":true")
+    );
+    assert_eq!(replayed(&loaded).unwrap(), view);
 }
 
 #[test]
@@ -333,6 +366,7 @@ fn a_recorded_pass_where_no_priority_is_open_is_skipped() {
         })
         .expect("a question other than priority");
     let (turn, step) = chosen(&file.log[asked.at]).when().unwrap();
+    let elapsed = chosen(&file.log[asked.at]).what.as_ref().unwrap().elapsed;
     let mut file = file.clone();
     let pass = Chosen {
         index: 0,
@@ -341,6 +375,7 @@ fn a_recorded_pass_where_no_priority_is_open_is_skipped() {
             player: 0,
             decider: None,
             turn,
+            elapsed,
             step,
             ordinal: None,
             kind: Kind::Priority,

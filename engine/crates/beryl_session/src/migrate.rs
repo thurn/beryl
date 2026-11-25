@@ -36,7 +36,7 @@ pub type Step = fn(Value, &'static CardTable) -> Result<Value, SessionError>;
 /// [`FORMAT_VERSION`] less one.
 pub const CHAIN: [Step; FORMAT_VERSION as usize - 1] = [
     v1_to_v2, v2_to_v3, v3_to_v4, v4_to_v5, v5_to_v6, v6_to_v7, v7_to_v8, v8_to_v9, v9_to_v10,
-    v10_to_v11, v11_to_v12, v12_to_v13, v13_to_v14,
+    v10_to_v11, v11_to_v12, v12_to_v13, v13_to_v14, v14_to_v15,
 ];
 
 /// `file`, a replay file of any version this build knows, in the format it writes. `cards`
@@ -316,6 +316,25 @@ fn v12_to_v13(mut file: Value, _: &'static CardTable) -> Result<Value, SessionEr
 fn v13_to_v14(mut file: Value, _: &'static CardTable) -> Result<Value, SessionError> {
     mark_objects(&mut file, "beforeV14");
     set_version(&mut file, 14)?;
+    Ok(file)
+}
+
+/// Version 14 to 15: version 15 dates each answer by the turns begun across the playthrough
+/// as well as by its turn's number, which starts again in a game Karn Liberated restarted and
+/// in a subgame ([`crate::save::Described::elapsed`]). An older answer cannot say that count,
+/// so each is marked as before version 15, and replay orders it by its turn's number, as
+/// version 14 did.
+fn v14_to_v15(mut file: Value, _: &'static CardTable) -> Result<Value, SessionError> {
+    if let Some(log) = file.get_mut("log").and_then(Value::as_array_mut) {
+        for entry in log.iter_mut().filter_map(Value::as_object_mut) {
+            for kind in ["choice", "auto"] {
+                if let Some(answer) = entry.get_mut(kind).and_then(Value::as_object_mut) {
+                    answer.insert("beforeV15".to_owned(), true.into());
+                }
+            }
+        }
+    }
+    set_version(&mut file, 15)?;
     Ok(file)
 }
 
