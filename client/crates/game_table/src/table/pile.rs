@@ -221,6 +221,7 @@ pub(super) fn lay_pile(
                 place,
                 visible: height + 2 >= count,
                 copies: 1,
+                overlapped: false,
             },
         );
     }
@@ -313,6 +314,7 @@ pub(super) fn lay_unseen_exile(
                 place,
                 visible: false,
                 copies: 1,
+                overlapped: false,
             },
         );
     }

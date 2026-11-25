@@ -11,6 +11,7 @@ use super::{
 use crate::table::rows::{Beneath, NameIds, SameName, face_up, grouped};
 use crate::table::{Camera, FittedRow, Layout, Place, RowArea, RowWindow, RowZoom, row_area};
 use glam::{Quat, Vec3};
+use kit_base::pose::Pose;
 use kit_scene::hit::CELL;
 use kit_space::arrange::row::{self as solver, Row};
 
@@ -87,15 +88,14 @@ impl Zooms {
 
     /// The zoom of every row, from how far each row alone would need to shrink to fit its room.
     /// The battlefield zooms out as far as its most crowded row, on either side, needs to fit
-    /// its room, down to `ZOOM_LEAST`; a back row (lands or others) pulls it no lower than
-    /// `BACK_ROW_PULL`. The creatures' rows take that zoom. A back row takes it too, or shrinks
-    /// further alone to fit its room. The web lets its lands shrink without end and its others'
-    /// row down to `ZOOM_LEAST`; here either back row stops at `LEAST_BACK_ZOOM` and past it
-    /// crowds and scrolls, since a land at a zoom of 0.3 is about 28 points wide, too narrow to
-    /// leave the reachable check's 24-point square inside its slanted edges.
+    /// its room, down to `limits.minimum`. A row with a limit of its own pulls that shared zoom
+    /// no lower than the limit's `shared_minimum`, and shrinks further alone to fit its room,
+    /// down to the limit's `minimum`. Past it the row's cards overlap and scroll. The desktop
+    /// gives every row its own limit and a shared minimum of 1 (`RowZoom::independent`), so
+    /// each row shrinks only as far as it needs to.
     fn of_fits(fits: [[f32; 3]; 2], limits: RowZoom) -> Self {
         let back = Some(limits.back);
-        let rows = solver::linked_scales(fits, limits.minimum, [None, back, back]);
+        let rows = solver::linked_scales(fits, limits.minimum, [limits.creatures, back, back]);
         Self { rows, fits }
     }
 }
@@ -206,7 +206,7 @@ fn row_rules(
     let fitted = layout
         .fitted
         .map(|rows| rows[side_index(side)][row_index(row)]);
-    let (scale, gap, tapped_gap) = fitted.map_or((1.0, layout.gap, layout.gap), |fitted| {
+    let (scale, gap, tapped_gap) = fitted.map_or((zoom, layout.gap, layout.gap), |fitted| {
         (fitted.scale * zoom, fitted.gap, fitted.tapped_gap)
     });
     let container = container
@@ -252,15 +252,15 @@ pub(super) fn battlefield_row(
     // the stack's arrows run, and a back row its edge toward its player. The far edge of the
     // table is up the screen, so the viewer's creatures and the opponent's back rows keep their
     // far edges, and move their line of centres that much further away.
-    let line = fitted.map_or(y, |fitted| {
-        let shrink =
-            camera.data.card.height / 2.0 * fitted.scale * (1.0 - zoom) * fitted.tilt.cos();
+    let line = {
+        let (full, tilt) = fitted.map_or((1.0, 0.0), |fitted| (fitted.scale, fitted.tilt));
+        let shrink = camera.data.card.height / 2.0 * full * (1.0 - zoom) * tilt.cos();
         if (side == Side::You) == (row == RowName::Creatures) {
             y + shrink
         } else {
             y - shrink
         }
-    });
+    };
     let height = fitted.map_or(0.0, |fitted| fitted.height(line, camera.data.card));
     let on_line = (camera, area, row, Vec3::new(0.0, line, height));
     let faces = faces(&cards, placement, on_line, layout.blocker_spacing, |x| {
@@ -308,6 +308,8 @@ pub(super) fn battlefield_row(
                     .region_fit
                     .row_pose(&fitted, zoom, camera, pose, object.tapped);
             }
+        } else if scale < 1.0 {
+            pose = shrunk_pose(pose, (area.left, y, line), scale);
         }
         (object, pose)
     };
@@ -317,8 +319,15 @@ pub(super) fn battlefield_row(
         (camera.card_corners(pose.transform()), pressable)
     };
     let capture = placement.decisions.is_some();
+    // A row's cards overlap on purpose only once it has shrunk them as far as it may. A row
+    // that overlaps them while it could still shrink them leaves them unmarked, so that the
+    // row-overlap check reports it.
+    let least = layout.row_zoom.map_or(1.0, |limits| limits.least(row));
+    // `Zooms::of_fits` clamps a row's zoom to its least, so a row at its least holds it exactly.
+    let shrunk = zoom <= least;
     let restore = |placed: solver::Placed| {
         let (object, pose) = posed(&placed);
+        let face = matches!(placed.member, solver::Member::Copy(0));
         placement.set(
             object.slot,
             Rest {
@@ -326,6 +335,7 @@ pub(super) fn battlefield_row(
                 place: place(object.zone),
                 visible: placed.visible,
                 copies: u16::try_from(placed.copies).unwrap_or(u16::MAX),
+                overlapped: placed.overlapped && (shrunk || !face),
             },
         );
     };
@@ -344,13 +354,7 @@ pub(super) fn battlefield_row(
             items,
             groups: inputs.len(),
             zoom,
-            least_zoom: layout.row_zoom.map(|limits| {
-                if row == RowName::Creatures {
-                    limits.minimum
-                } else {
-                    limits.back.minimum
-                }
-            }),
+            least_zoom: layout.row_zoom.map(|limits| limits.least(row)),
             fit: decision,
             region: region_key(fitted.is_some(), side, row),
         };
@@ -361,6 +365,20 @@ pub(super) fn battlefield_row(
         window.scroll.last,
         (window.before, window.after),
     );
+}
+
+/// `pose`, laid out on a row's line at full size, in a row shrunk by `scale` to fit its room: its
+/// cards and the spaces between them scaled about the row's left end, and about `line`, the
+/// line the row shrinks toward from `y`, its line at full size.
+fn shrunk_pose(mut pose: Pose, (left, y, line): (f32, f32, f32), scale: f32) -> Pose {
+    let at = pose.position;
+    pose.position = Vec3::new(
+        left + (at.x - left) * scale,
+        line + (at.y - y) * scale,
+        at.z * scale,
+    );
+    pose.scale *= scale;
+    pose
 }
 
 fn region_key(fitted: bool, side: Side, row: RowName) -> &'static str {

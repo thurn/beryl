@@ -203,7 +203,7 @@
     "Cards under a merged permanent": {
       "recording": "gemrazer/over-a-creature-a-44-gemrazer-that-mutated",
       "at": "end",
-      "shows": "card \"Blood Artist\" merged.yours.creatures covered("
+      "shows": "card \"Blood Artist\" merged.yours.creatures overlapped covered("
     },
     "Copies": {
       "recording": "glasspool-mimic/the-mimic-enters-as-a-shapeshifter-rogue-copy",

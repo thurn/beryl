@@ -2,10 +2,12 @@
 
 mod cards;
 mod report;
+mod rows;
 pub mod steps;
 
 pub use cards::blank_cards;
 pub use report::print_fault;
+pub use rows::row_overlaps;
 
 use kit_frame::frame::Frame;
 use kit_probe::agent::{Context, Fault, Judged, Rule, checks};
@@ -15,6 +17,7 @@ use kit_probe::agent::{Context, Fault, Judged, Rule, checks};
 pub fn check(frame: &Frame, context: &Context) -> Vec<Fault> {
     let mut faults = checks::check(frame, context);
     faults.extend(blank_cards(frame, context));
+    faults.extend(row_overlaps(frame, context));
     faults
 }
 
@@ -24,4 +27,5 @@ pub fn count_frame(tally: &mut Judged, frame: &Frame) {
         Rule::BlankCard,
         cards::face_up(frame).count() + cards::piles(frame).count(),
     );
+    tally.add(Rule::RowOverlap, rows::row_cards(frame).count());
 }

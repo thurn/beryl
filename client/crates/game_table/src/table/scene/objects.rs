@@ -47,6 +47,7 @@ impl Table {
                     visible: rest.visible,
                     tapped: false,
                     copies: 1,
+                    overlapped: false,
                     view_index: u32::try_from(index).expect("a stack holds fewer than 2^32 items"),
                 },
             ));
@@ -80,6 +81,7 @@ impl Table {
                 visible: rest.visible,
                 tapped: object.tapped,
                 copies: rest.copies,
+                overlapped: rest.overlapped,
                 view_index: u32::try_from(index).expect("a view holds fewer than 2^32 objects"),
             });
         }

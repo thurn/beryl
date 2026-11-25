@@ -18,6 +18,11 @@ pub struct Anchored {
     pub life_clearance: f32,
     /// The player anchors in normalized device coordinates, the viewer's first.
     pub players: [Player; 2],
+    /// The smallest fraction of its full size a table row shrinks its cards to before they
+    /// overlap. A crowded row shrinks only as far as it needs to fit its room with a gap
+    /// between neighbours, as Arena's table does.
+    #[serde(deserialize_with = "positive_fraction")]
+    pub least_row_scale: f32,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]

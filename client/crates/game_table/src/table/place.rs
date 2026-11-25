@@ -43,6 +43,9 @@ pub struct Rest {
     /// as a count; 0 for each copy beneath a pile's top, which a press reaches through the top
     /// card as the web interface's does; and 1 for every other card.
     pub copies: u16,
+    /// Whether its battlefield row lays it partly over or under another card on purpose
+    /// (`solver::Placed::overlapped`). Every other card is false.
+    pub overlapped: bool,
 }
 
 /// The rows of one side, in the order of `Placement::scroll`'s entries.

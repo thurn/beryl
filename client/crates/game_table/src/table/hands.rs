@@ -83,6 +83,7 @@ pub(super) fn hand(
                     place,
                     visible: laid.in_view,
                     copies: 1,
+                    overlapped: false,
                 },
             );
         };

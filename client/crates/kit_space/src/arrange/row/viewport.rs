@@ -67,7 +67,7 @@ impl<'a> Layout<'a> {
         }
         let mut layer = 0;
         for (index, left) in positions {
-            self.place(index, left, (true, &mut layer), emit);
+            self.place(index, left, (true, &mut layer, false), emit);
         }
         true
     }
@@ -105,7 +105,7 @@ impl<'a> Layout<'a> {
             self.place(
                 index,
                 left,
-                (shown, if shown { &mut layer } else { &mut hidden }),
+                (shown, if shown { &mut layer } else { &mut hidden }, true),
                 emit,
             );
             rest_layer += self.groups[index].copies + self.groups[index].tucks.len();
@@ -184,7 +184,7 @@ impl<'a> Layout<'a> {
         &self,
         index: usize,
         left: f32,
-        layer: (bool, &mut usize),
+        layer: (bool, &mut usize, bool),
         emit: &mut impl FnMut(Placed),
     ) {
         self.packs[index].place(&self.groups[index], index, self.row, left, layer, emit);
@@ -211,7 +211,7 @@ impl<'a> Layout<'a> {
         let mut surfaces = Vec::new();
         let mut layer = 0;
         for (index, left) in positions {
-            self.place(index, left, (true, &mut layer), &mut |placed| {
+            self.place(index, left, (true, &mut layer, false), &mut |placed| {
                 let (corners, pressable) = (self.project)(&placed);
                 surfaces.push((Quad::new(corners), pressable));
             });

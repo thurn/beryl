@@ -31,6 +31,7 @@ pub enum Rule {
     Drawn,
     Named,
     BlankCard,
+    RowOverlap,
     LinesHold,
     Clips,
     LayerDrawn,
@@ -45,7 +46,7 @@ pub enum Rule {
 
 impl Rule {
     /// Every rule, in the doc's order.
-    pub const ALL: [Self; 19] = [
+    pub const ALL: [Self; 20] = [
         Self::OnScreen,
         Self::Overlap,
         Self::Reachable,
@@ -64,6 +65,7 @@ impl Rule {
         Self::StepShown,
         Self::Crowded,
         Self::BlankCard,
+        Self::RowOverlap,
         Self::LinesHold,
     ];
 
@@ -89,6 +91,7 @@ impl Rule {
             Self::Drawn => "drawn",
             Self::Named => "named",
             Self::BlankCard => "blank-card",
+            Self::RowOverlap => "row-overlap",
             Self::LinesHold => "lines-hold",
             Self::Clips => "clips",
             Self::LayerDrawn => "layer-drawn",

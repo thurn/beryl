@@ -82,9 +82,9 @@
       "kind": "exception",
       "number": 2,
       "name": "Full cards that tap",
-      "rule": "A permanent is its whole card and turns when it taps.",
+      "rule": "A permanent is its whole card and turns when it taps. Each row stands its permanents apart with a gap, and a crowded row shrinks them, to no less than three fifths of their size, before it lays one over another.",
       "arena": {
-        "does": "Arena shows a crop of the art."
+        "does": "Arena shows a crop of the art, on cards small enough that a row of them stands apart with a gap even on a crowded board (IACoyoys7w8 38:40 and 42:45)."
       }
     },
     {

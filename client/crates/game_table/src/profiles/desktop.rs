@@ -2,7 +2,8 @@
 
 use super::row;
 use crate::table::{
-    Across, HandData, Layout, PlayerAnchor, RegionFit, StackData, StackPlacement, TraySpace,
+    Across, HandData, Layout, PlayerAnchor, RegionFit, RowZoom, StackData, StackPlacement,
+    TraySpace,
 };
 use kit_base::data::Card;
 use kit_base::data::profiles::{Anchored, ProfileData, TrayTuning, anchored};
@@ -46,7 +47,7 @@ pub(super) fn reference(profile: &ProfileData, data: &Anchored) -> Layout {
         life_dock: None,
         revealed: None,
         region_fit: RegionFit::default(),
-        row_zoom: None,
+        row_zoom: Some(RowZoom::independent(data.least_row_scale)),
         bands: None,
         fitted: None,
         fitted_piles: None,

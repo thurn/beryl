@@ -10,6 +10,9 @@ mod anchor;
 mod strip;
 mod viewport;
 
+/// The share of its exact fit a row's scale takes (`Row::fit`), leaving room for rounding.
+const FIT_MARGIN: f32 = 0.9999;
+
 /// An item tucked under the face of a group.
 pub struct Tuck {
     pub key: usize,
@@ -47,6 +50,9 @@ pub struct Placed {
     pub visible: bool,
     /// The size of the pile on its face, 0 on copies, and 1 on tucked items.
     pub copies: usize,
+    /// Whether the row lays it partly over or under another item on purpose: a copy behind a
+    /// pile's face, a tucked item, or any item of a row too crowded to fit side by side.
+    pub overlapped: bool,
 }
 
 /// A scroll window and the number of primary items off either end.
@@ -162,7 +168,9 @@ impl Row {
         }
     }
 
-    /// The proportion of its requested width the row has room for.
+    /// The proportion of its requested width the row has room for, a hair under the exact
+    /// proportion (`FIT_MARGIN`): measured again at exactly that scale, rounding could leave
+    /// the groups a fraction of a millimetre wider than the row, and the row would overlap them.
     #[must_use]
     pub fn fit(self, groups: impl IntoIterator<Item = Group>) -> f32 {
         let (mut widths, mut gaps) = (0.0, 0.0);
@@ -176,7 +184,7 @@ impl Row {
         }
         let width = widths + gaps;
         if width > 0.0 {
-            self.room() / width
+            self.room() / width * FIT_MARGIN
         } else {
             1.0
         }
@@ -291,11 +299,12 @@ impl Pack {
         index: usize,
         row: Row,
         left: f32,
-        (visible, layer): (bool, &mut usize),
+        (visible, layer, crowded): (bool, &mut usize, bool),
         placed: &mut impl FnMut(Placed),
     ) {
         let face = left + self.left_peek + group.width / 2.0;
         let mut emit = |member, centre, copies| {
+            let overlapped = crowded || !matches!(member, Member::Copy(0));
             placed(Placed {
                 group: index,
                 member,
@@ -303,6 +312,7 @@ impl Pack {
                 layer: *layer,
                 visible,
                 copies,
+                overlapped,
             });
             *layer += 1;
         };

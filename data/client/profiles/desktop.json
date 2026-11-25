@@ -20,13 +20,13 @@
     },
     "lands": {
       "y": -160,
-      "left": -400,
+      "left": -430,
       "right": -20
     },
     "others": {
       "y": -160,
       "left": 20,
-      "right": 320
+      "right": 420
     },
     "row_count_gap": 4,
     "blocker_spacing": 1.04,
@@ -43,7 +43,7 @@
       "rim_curve_depth": 45,
       "opponent_rim_direction": [-0.3, 0.65]
     },
-    "gap": 4,
+    "gap": 8,
     "pile_step": [4, 4],
     "beneath_step": [0.3, 0.17],
     "inspector": {
@@ -140,6 +140,7 @@
         "spare": 1.25,
         "least_scale": 0.4
       },
+      "least_row_scale": 0.6,
       "life_clearance": 10,
       "players": [
         {

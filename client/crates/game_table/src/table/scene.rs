@@ -22,7 +22,7 @@ use super::tray::TrayMotion;
 use super::tray_layout::Held;
 use super::{Camera, Layout, Place, PlayerAnchor, ScreenProjection, takes_pointer};
 use crate::faces::{CARD_BACK, Faces};
-use crate::table::labels::{COPY_NOTE, FACE_NOTE, PHASED_OUT, PICKED, TAPPED};
+use crate::table::labels::{COPY_NOTE, FACE_NOTE, OVERLAPPED, PHASED_OUT, PICKED, TAPPED};
 use kit_base::data::Data;
 use kit_base::pose::{Interval, Pose};
 use kit_frame::frame::{
@@ -51,6 +51,8 @@ pub(super) struct SceneObject {
     tapped: bool,
     /// How many identical permanents it stands for (`Rest::copies`).
     copies: u16,
+    /// Whether its row overlaps it on purpose (`Rest::overlapped`).
+    overlapped: bool,
     /// Its index in the view's `objects`, for its name; for an ability, in the view's `stack`.
     view_index: u32,
 }
@@ -271,6 +273,7 @@ impl Table {
                         place: object.place,
                         visible: object.visible,
                         copies: 1,
+                        overlapped: false,
                     };
                     (*id, rest)
                 })
@@ -285,6 +288,7 @@ impl Table {
                         place: object.place,
                         visible: object.visible,
                         copies: object.copies,
+                        overlapped: object.overlapped,
                     })
                 })
                 .collect(),
@@ -462,6 +466,7 @@ impl Table {
                     visible: resting.visible,
                     tapped: resting.tapped,
                     copies,
+                    overlapped: resting.overlapped,
                     ..last
                 };
                 return Some((object, motion.view, false));
@@ -511,12 +516,30 @@ impl Table {
         let place = resting
             .filter(|rest| !begun && !takes_pointer(rest.place))
             .map_or(object.place, |rest| rest.place);
+        // A card overlaps its row's other cards on purpose as where it rests does until its track
+        // begins, and as where the script leaves it does once the track has settled. Its row
+        // does not lay it out at all while it is on its way, which may hold it up large to be
+        // read, nor before its track begins if it rests elsewhere, as a spell waits on the stack
+        // for the step that puts it in its row. Only a card in a row wears it.
+        let in_row = matches!(place, Place::Card { row: Some(_), .. });
+        let overlapped = in_row
+            && if !begun {
+                resting
+                    .filter(|rest| rest.place == place)
+                    .is_none_or(|rest| rest.overlapped)
+            } else if track.settled(motion.t) {
+                last.map_or(object.overlapped, |last| last.overlapped)
+            } else {
+                // A frame in which a card moves is not judged, so only a paused card needs it.
+                !track.moving(motion.t)
+            };
         let object = SceneObject {
             pose,
             visible: pose.opacity > 0.0,
             tapped,
             place,
             copies,
+            overlapped,
             ..object
         };
         Some((object, view, track.moving(motion.t)))
@@ -560,6 +583,7 @@ impl Table {
         }
         state |= u32::from(shown.phased_out) * PHASED_OUT;
         state |= u32::from(shown.hidden_pick) * PICKED;
+        state |= u32::from(object.overlapped) * OVERLAPPED;
         // The desktop hand and stack show the full frame. The phone uses the board frame
         // (`scanOrFrame` in `ui/src/mobile/faces.tsx`).
         let full = (matches!(shown.zone, ZoneName::Hand | ZoneName::Stack)

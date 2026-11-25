@@ -318,6 +318,7 @@ pub(crate) fn lay_picked(
                 },
                 visible: true,
                 copies: 1,
+                overlapped: false,
             },
         );
     }

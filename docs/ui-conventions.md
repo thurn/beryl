@@ -23,7 +23,11 @@ removes an entry; nothing else does.
    total, filled where a stop is set, the same rows for both seats (by-2o5,
    by-42v, by-sjp, by-cio). Arena shows one row above the action button.
 2. **Full cards that tap.** A permanent is its whole card and turns when it
-   taps. Arena shows a crop of the art.
+   taps. Each row stands its permanents apart with a gap, and a crowded row
+   shrinks them, to no less than three fifths of their size, before it lays one
+   over another. Arena shows a crop of the art, on cards small enough that a row
+   of them stands apart with a gap even on a crowded board (IACoyoys7w8 38:40
+   and 42:45).
 3. **No question before a choice.** Never ask a yes or no whose answer the next
    screen could take: open the search, chooser or payment with a way to decline
    (by-kac). Arena asks "Search your library…?" first.

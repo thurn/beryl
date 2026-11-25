@@ -1,5 +1,6 @@
 //! Optional adjustments to a profile's table geometry for a screen projection.
 
+use beryl_protocol::protocol::RowName;
 use glam::Vec2;
 use kit_base::data::{Card, profiles::ProfileData};
 use kit_base::pose::Pose;
@@ -149,8 +150,37 @@ impl FittedRow {
 /// How far a crowded row can zoom the battlefield out and shrink its own cards.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RowZoom {
+    /// The least zoom the rows share.
     pub minimum: f32,
+    /// The creatures' rows' own limit, or `None` when they take the shared zoom.
+    pub creatures: Option<ScaleLimit>,
     pub back: ScaleLimit,
+}
+
+impl RowZoom {
+    /// Each row shrinks on its own, as far as it needs to fit its room, down to `least`. No
+    /// row shrinks another.
+    #[must_use]
+    pub const fn independent(least: f32) -> Self {
+        let limit = ScaleLimit {
+            minimum: least,
+            shared_minimum: 1.0,
+        };
+        Self {
+            minimum: 1.0,
+            creatures: Some(limit),
+            back: limit,
+        }
+    }
+
+    /// The least zoom of `row`.
+    #[must_use]
+    pub fn least(&self, row: RowName) -> f32 {
+        match row {
+            RowName::Creatures => self.creatures.map_or(self.minimum, |limit| limit.minimum),
+            _ => self.back.minimum,
+        }
+    }
 }
 
 /// Piles placed by the projection of their top cards. Each array starts with the viewer's side.

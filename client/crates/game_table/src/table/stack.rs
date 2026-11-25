@@ -166,6 +166,7 @@ pub(super) fn place_stack(
             },
             visible,
             copies: 1,
+            overlapped: false,
         };
         match *item {
             OnStack::Spell(slot) => placement.set(slot, rest),

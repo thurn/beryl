@@ -94,6 +94,7 @@ impl Table {
                     visible: true,
                     tapped: false,
                     copies: 1,
+                    overlapped: false,
                     view_index: 0,
                 };
                 (object, item)
