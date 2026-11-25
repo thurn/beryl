@@ -208,10 +208,16 @@ impl Ctx {
             let many = how_many(comparison, n);
             match left {
                 Amount::Counters(objects, kind) => {
-                    let on = self.objects(objects);
+                    // A set of objects is a total across all of them, so "on all creatures you
+                    // control" would read as a counter on each one. Say "among" instead.
+                    let on = if matches!(objects, Objects::All { .. } | Objects::InZoneOf { .. }) {
+                        format!("among {}", self.counted_objects(objects))
+                    } else {
+                        format!("on {}", self.objects(objects))
+                    };
                     return if n == 0 && matches!(comparison, Comparison::Equal | Comparison::AtMost)
                     {
-                        format!("there are no {} counters on {on}", kind.name())
+                        format!("there are no {} counters {on}", kind.name())
                     } else {
                         let counters = if n == 1 && comparison == Comparison::AtLeast {
                             format!("a {} counter", kind.name())
@@ -223,7 +229,7 @@ impl Ctx {
                         } else {
                             "are"
                         };
-                        format!("there {be} {counters} on {on}")
+                        format!("there {be} {counters} {on}")
                     };
                 }
                 Amount::Count(objects) => {

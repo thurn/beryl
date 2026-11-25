@@ -45,9 +45,9 @@
   },
   "Chronicler of Heroes": {
     "reason": "wording",
-    "note": "The effect counts +1/+1 counters across the creatures you control and draws if the total is at least one. The renderer puts the condition before the draw and describes the set as all creatures you control.",
+    "note": "The effect counts +1/+1 counters across the creatures you control and draws if the total is at least one. The renderer puts the condition before the draw and says the total is among the creatures you control.",
     "diff": [
-      "Chronicler of Heroes: when ~ enters , [-draw a card-] if [-you control a creature with-] {+there is+} a +1/+1 counter on [-it-] {+all creatures you control , draw a card+} ."
+      "Chronicler of Heroes: when ~ enters , {+if there is a +1/+1 counter among creatures you control ,+} draw a card [-if you control a creature with a +1/+1 counter on it-] ."
     ]
   },
   "Currency Converter": {

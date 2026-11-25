@@ -13,13 +13,14 @@ use crate::effect::build::may;
 use crate::effect::build::{
     carried_object, counter, deal_damage_to, deal_damage_to_any_target, delay_with, destroy, dig,
     discard, draw, exile, exile_until_this_leaves, flip_coin, if_then, if_you_lose_the_flip,
-    may_cast_free, put_any_on_bottom, put_back, return_to_battlefield, sequence, target, this,
-    those, you,
+    may_cast_free, permanents, put_any_on_bottom, put_back, return_to_battlefield, sequence,
+    target, this, those, you,
 };
 use crate::effect::{Amount, Comparison, Condition, Effect, LibraryOrder, Objects, Players, Taken};
 use crate::filter::Filter;
 use crate::ids::TurnStep;
 use crate::mana::{ManaSet, mana};
+use crate::phrases::creature_you_control;
 use crate::target::{TargetKind, TargetSpec};
 use crate::trigger::{Subject, Trigger, TriggerEvent};
 
@@ -306,4 +307,31 @@ fn a_card_in_a_graveyard_calls_itself_this_card_and_a_creature_can_be_unable_to_
         "This creature can't block.\nWhenever a land you control enters, you may return \
          this card from your graveyard to the battlefield."
     );
+}
+
+/// A counter total across a set of permanents, as in Chronicler of Heroes' "When this creature
+/// enters, if you control a creature with a +1/+1 counter on it, draw a card." It must not
+/// read as a counter on every creature, while a single permanent still says "on".
+#[test]
+fn a_counter_total_across_permanents_is_said_among_them() {
+    static AT_LEAST_ONE: Condition = Condition::Compare(
+        Amount::Counters(permanents(creature_you_control()), CounterKind::PlusOne),
+        Comparison::AtLeast,
+        Amount::Fixed(1),
+    );
+    static ON_THIS: Condition = Condition::Compare(
+        Amount::Counters(this(), CounterKind::PlusOne),
+        Comparison::AtLeast,
+        Amount::Fixed(1),
+    );
+    static DRAW: Effect = draw(you(), 1);
+    static AMONG: Effect = if_then(AT_LEAST_ONE, &DRAW);
+    static ON: Effect = if_then(ON_THIS, &DRAW);
+    let among = render_ability(&Ability::spell().effect(&AMONG));
+    assert!(
+        among.contains("there is a +1/+1 counter among creatures you control"),
+        "{among}"
+    );
+    let on = render_ability(&Ability::spell().effect(&ON));
+    assert!(on.contains("counter on "), "{on}");
 }
