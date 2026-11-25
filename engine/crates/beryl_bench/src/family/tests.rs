@@ -1,4 +1,6 @@
 use super::*;
+use beryl_engine::table::Capability;
+
 use crate::rollout::stable_hash;
 
 /// The control takes every card of the family out of play and leaves the rest alone: each
@@ -102,22 +104,22 @@ fn family_corpora_never_change() {
             (
                 "two-faced",
                 vec![2, 5, 8, 5, 8, 11, 2, 5, 8, 9, 12, 15],
-                3_746_690_392_626_505_240
+                9_501_083_284_754_984_952
             ),
             (
                 "levels",
                 vec![2, 5, 8, 2, 5, 8, 2, 5, 8, 3, 6, 9],
-                3_124_586_745_196_377_747
+                5_871_855_318_322_817_847
             ),
             (
                 "face-down",
-                vec![4, 21, 24, 3, 13, 16, 19, 6, 9, 12, 4, 6],
-                9_899_035_086_967_694_136
+                vec![4, 7, 10, 21, 24, 3, 13, 16, 19, 6, 9, 12],
+                14_559_857_343_038_397_930
             ),
             (
                 "outside",
                 vec![6, 9, 12, 13, 16, 19, 2, 5, 8, 14, 17, 20],
-                3_301_674_592_042_243_926
+                2_362_218_478_832_720_540
             ),
         ]
     );
@@ -126,7 +128,10 @@ fn family_corpora_never_change() {
 /// Each family pairs nearly all its steps, which `just count-gate --family` needs (it fails
 /// past a tenth skipped, `SKIPPED_LIMIT` in `tools/src/beryl_tools/count_gate.py`); the
 /// do-nothing family pairs every one; no rollout stalls on a full fixed-capacity list, whose
-/// steps would not be what a `Large` game costs; and the counts are the same on a second run,
+/// steps would not be what a `Large` game costs, unless a card of the family records the mana
+/// spent on an ability's X (`Capability::SpentOnX`, Illusionary Mask): only `Large` holds that
+/// record, so every activation for X above 0 stalls a `Small` rollout, and the family is
+/// measured up to it; and the counts are the same on a second run,
 /// since the gate compares counts from separate runs. The exact counts are not pinned: they
 /// move with every change to the engine or the rollout policy, and the corpora themselves are
 /// pinned by `family_corpora_never_change`.
@@ -144,7 +149,9 @@ fn families_pair_their_steps() {
         if f.name == "blank" {
             assert_eq!(p.skipped, 0, "{p:?}");
         }
-        assert_eq!(p.capacity_stalls, 0, "{}: {p:?}", f.name);
+        if !w.table.can(Capability::SpentOnX) {
+            assert_eq!(p.capacity_stalls, 0, "{}: {p:?}", f.name);
+        }
         assert_eq!(roll_paired(&w), p, "{}: a second run differs", f.name);
     }
 }
