@@ -3181,18 +3181,17 @@ between fixed commits, so a newer tip does not change its answer.
 
 A newer candidate does not stop a round that is still running its own checks
 before `master` moves, on any machine, unless `master` has reached the round's
-tip. Once it has listed its checks, the round saves its tip and handle
-locally, so the tip loop leaves it running; a round still listing gives way as
-before. It finishes its checks, then gives way to the newer
-candidate if none of its own checks failed. The newer round reuses its results
-wherever the inputs did not change. Before, any machine's failure replaced the
-candidate and ended the other machines' rounds at the next landing. On
-2026-11-25 a Windows-only lint failed at every tip from 14:21 to 20:50 UTC.
-Between 15:40 and 21:50, 84 rounds ran about 5,000 checks between them, against
-some 24,000 in one full round. Breakages that landed meanwhile went unseen and
-were found one at a time after the lint stopped failing. The last of them was
-reverted at 22:14, 1 hour 40 minutes after it landed, while 99 product commits
-waited on `staging`.
+tip. Once it has listed its checks, the round saves its tip and handle locally,
+so the tip loop leaves it running; a round still listing gives way as before. It
+finishes its checks, then gives way to the newer candidate if none of its own
+checks failed. The newer round reuses its results wherever the inputs did not
+change. Before, any machine's failure replaced the candidate and ended the other
+machines' rounds at the next landing. On 2026-11-25 a Windows-only lint failed
+at every tip from 14:21 to 20:50 UTC. Between 15:40 and 21:50, 84 rounds ran
+about 5,000 checks between them, against some 24,000 in one full round.
+Breakages that landed meanwhile went unseen and were found one at a time after
+the lint stopped failing. The last of them was reverted at 22:14, 1 hour 40
+minutes after it landed, while 99 product commits waited on `staging`.
 
 ### Regression tickets
 
