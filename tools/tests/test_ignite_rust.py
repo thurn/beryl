@@ -109,30 +109,15 @@ def test_clippy_requires_a_successful_build_to_report_a_pass(
     assert evidence in result.message
 
 
-DOCTESTS = """\
-   Doc-tests beryl_card
-
-running 2 tests
-..
-test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
-
-   Doc-tests beryl_kernel
-
-running 5 tests
-....F
-failures:
-    src/index.rs - Index (line 12)
-test result: FAILED. 4 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out
-"""
-
-
-def test_doctests_report_each_package_by_its_section() -> None:
-    card, kernel = rust.doctest_results(
-        DOCTESTS, ["beryl_card", "beryl_kernel", "beryl_rules"]
+def test_doctests_pass_only_if_every_batch_passes() -> None:
+    both_ok = "running 2 tests\ntest result: ok. 2 passed\n\nrunning 1 test\ntest result: ok. 1 passed\n"
+    second_failed = "running 2 tests\ntest result: ok. 2 passed\n\nrunning 1 test\ntest result: FAILED. 0 passed; 1 failed\n"
+    assert rust.doctest_result(both_ok, "beryl_card") == ignite.Result(
+        "doctests:beryl_card", "pass"
     )
-    assert card == ignite.Result("doctests:beryl_card", "pass")
-    assert kernel.outcome == "fail"
-    assert "src/index.rs - Index (line 12)" in kernel.message
+    failed = rust.doctest_result(second_failed, "beryl_card")
+    assert failed is not None and failed.outcome == "fail"
+    assert rust.doctest_result("error: could not compile", "beryl_card") is None
 
 
 def test_has_doctest_skips_text_blocks() -> None:

@@ -79,8 +79,7 @@ DOCTEST_TAGS: frozenset[str] = frozenset(
     {"", "rust", "compile_fail", "should_panic", "no_run", "test_harness"}
 )
 
-# The header cargo test prints before each package's doctests, and the line ending them.
-DOCTESTS_HEADER: re.Pattern[str] = re.compile(r"^\s*Doc-tests (\S+)\s*$")
+# The line that ends each batch of a package's doctests.
 TEST_RESULT: re.Pattern[str] = re.compile(r"^test result: (ok|FAILED)\.")
 # rustfmt --check's line naming a file that is not formatted.
 RUSTFMT_DIFF: re.Pattern[str] = re.compile(
@@ -354,48 +353,41 @@ def documented(package: Package) -> bool:
     return False
 
 
-def doctest_results(output: str, wanted: list[str]) -> list[Result]:
-    """Each package in `wanted` from `cargo test --doc` output: each `Doc-tests <crate>` section
-    passes or fails by its `test result:` line; a package with no section is left out.
+def doctest_result(output: str, name: str) -> Result | None:
+    """The result of one package from the output of `cargo test --doc -p <name>`, or `None` when
+    the output holds no `test result:` line. The package prints one `test result:` line for each
+    batch of doctests rustdoc compiled (plain tests, then `compile_fail` ones), so it passes only
+    if every line is `ok`, and fails if any line is `FAILED`.
     """
-    sections: dict[str, list[str]] = {}
-    current: list[str] | None = None
-    for line in output.splitlines():
-        header = DOCTESTS_HEADER.match(line)
-        if header:
-            current = sections.setdefault(header.group(1), [])
-        elif current is not None:
-            current.append(line)
-    results: list[Result] = []
-    for name in wanted:
-        lines = sections.get(name.replace("-", "_"))
-        verdict = next(
-            (m.group(1) for m in map(TEST_RESULT.match, lines or []) if m), None
-        )
-        if verdict == "ok":
-            results.append(Result(f"doctests:{name}", "pass"))
-        elif verdict == "FAILED":
-            text = "\n".join(lines or []).strip()
-            results.append(Result(f"doctests:{name}", "fail", text))
-    return results
+    verdicts = [m.group(1) for m in map(TEST_RESULT.match, output.splitlines()) if m]
+    if not verdicts:
+        return None
+    if all(v == "ok" for v in verdicts):
+        return Result(f"doctests:{name}", "pass")
+    return Result(f"doctests:{name}", "fail", output.strip())
 
 
 def doctests_run(checks: list[str]) -> list[Result]:
-    wanted = asked("doctests", checks)
-    if not wanted:
-        return []
-    run = subprocess.run(
-        # Not `-q`: it hides cargo's `Doc-tests <crate>` lines, which say whose results follow.
-        ["cargo", "test", "--locked", "--no-fail-fast", "--doc"]
-        + [a for name in wanted for a in ("-p", name)],
-        cwd=paths.ENGINE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        errors="replace",
-        check=False,
-    )
-    return doctest_results(run.stdout, wanted)
+    """Runs each package's doctests in its own `cargo test --doc`. One invocation for several
+    packages merged cargo's `Doc-tests <crate>` headers (standard error) with rustdoc's results
+    (standard output) in one pipe, where the two streams arrive in no fixed order. Under load a
+    header could follow another package's results, so a package's section was empty and its
+    check was reported incomplete."""
+    results: list[Result] = []
+    for name in asked("doctests", checks):
+        run = subprocess.run(
+            ["cargo", "test", "--locked", "--no-fail-fast", "--doc", "-p", name],
+            cwd=paths.ENGINE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            errors="replace",
+            check=False,
+        )
+        result = doctest_result(run.stdout, name)
+        if result is not None:
+            results.append(result)
+    return results
 
 
 # The `allocations` binaries.
