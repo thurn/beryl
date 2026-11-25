@@ -278,9 +278,13 @@ impl RolloutPolicy {
         }
         let p = self.view(t, obs, d.player, expert);
         match d.kind {
-            DecisionKind::Priority | DecisionKind::CastOffer => {
-                pick.choose(d, |c| c.option().map(|o| p.action(o)))
-            }
+            DecisionKind::Priority => pick.choose(d, |c| c.option().map(|o| p.action(o))),
+            // A cast offered during a resolution cannot be held for a later step.
+            DecisionKind::CastOffer => pick.choose(d, |c| match c.option() {
+                Some(Opt::Cast { slot, face, costs }) => Some(p.cast(slot, face, costs)),
+                Some(Opt::Pass) => Some(0),
+                _ => None,
+            }),
             DecisionKind::PlayOrDraw => {
                 pick.choose_fixed(d, |c| Some(i32::from(c.option() == Some(Opt::Play))))
             }
@@ -311,13 +315,22 @@ impl RolloutPolicy {
                     }
                 })
             }),
-            DecisionKind::ChooseUpTo => pick.choose(d, |c| match c.object() {
-                Some(slot) => up_to(&p, obs, d, slot),
-                None => Some(0),
+            DecisionKind::ChooseUpTo => pick.choose(d, |c| match c {
+                Candidate::Option(Opt::Cast { slot, face, costs }) => {
+                    let v = p.cast(slot, face, costs);
+                    // Finding the first card ends the casting window during a search, so cast a
+                    // worthwhile spell from the library before taking a found card.
+                    Some(if v > 0 { 1000 + v } else { 0 })
+                }
+                _ => match c.object() {
+                    Some(slot) => up_to(&p, obs, d, slot),
+                    None => Some(0),
+                },
             }),
             DecisionKind::Attacker => pick.choose(d, |c| match c.option() {
-                Some(Opt::Attack { slot, band: None }) => p.attack_score(slot),
-                _ => Some(0),
+                Some(Opt::Attack { slot, .. }) => p.attack_score(slot),
+                Some(Opt::Done) => Some(0),
+                _ => None,
             }),
             DecisionKind::AttackTarget => pick.choose(d, |c| match c.option() {
                 Some(Opt::Defender(None)) => Some(if obs.player(p.me.opponent()).life() <= 6 {
@@ -339,10 +352,12 @@ impl RolloutPolicy {
                     Some(blocker.and_then(|b| p.block(b, attacker)).unwrap_or(0))
                 })
             }
-            // Both sides divide for their own creatures. The options name the opposing
-            // creatures that can receive lethal damage from the source.
+            // Either player may divide combat damage: lethal picks name opposing creatures,
+            // while exact shares (with banding) assign a number to the creature named in `about`,
+            // which may be our own or the opponent's.
             DecisionKind::DamageDivision => pick.choose(d, |c| match c.option() {
                 Some(Opt::Lethal(recipient)) => Some(1 + p.value(recipient)),
+                Some(Opt::Number(amount)) => Some(p.damage_share(d.about.sole(), amount)),
                 _ => Some(0),
             }),
             DecisionKind::Target => {

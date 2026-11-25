@@ -5,6 +5,7 @@ mod common;
 
 mod agents;
 mod card_shapes;
+mod casting_and_combat;
 mod estimate;
 mod expert;
 mod families;

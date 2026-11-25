@@ -1013,7 +1013,7 @@
     {
       "kind": "not-seen",
       "name": "Banding",
-      "rule": "When an attacker can start or join a band, the choice uses the existing option buttons. Assign Damage uses the number control to assign a share to each creature in turn."
+      "rule": "When an attacker can start or join a band, the choice uses the existing option buttons. Attacking bands carry no extra mark on the table. Assign Damage uses the number control to assign a share to each creature in turn."
     },
     {
       "kind": "not-seen",

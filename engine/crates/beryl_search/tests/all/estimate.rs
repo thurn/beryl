@@ -84,3 +84,13 @@ fn a_transforming_card_is_worth_more_than_its_front() {
         assert!(delver > lions, "{knowledge:?}: {delver} {lions}");
     }
 }
+
+#[test]
+fn cascade_and_banding_add_value_to_the_estimate() {
+    // Bloodbraid Elf is a 3/2 haste cascade for {2}{R}{G}; Hill Giant is a 3/3 for {3}{R}.
+    let [elf, giant] = values([names::BLOODBRAID_ELF, "Hill Giant"]);
+    assert!(elf > giant, "cascade: {elf} vs {giant}");
+    // Benalish Hero is a 1/1 with banding for {W}; Savannah Lions is a 2/1 vanilla for {W}.
+    let [hero, infantry] = values([names::BENALISH_HERO, names::BENALISH_INFANTRY]);
+    assert!(hero > 0 && infantry > hero, "banding: {hero} vs {infantry}");
+}

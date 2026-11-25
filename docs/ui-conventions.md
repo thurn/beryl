@@ -407,8 +407,9 @@ recordings do not show them.
   start button is disabled and reads "Dealing…" until the new game's first view
   arrives, and then the game screen opens. Arena has no fair deal.
 - **Banding.** When an attacker can start or join a band, the choice uses the
-  existing option buttons. Assign Damage uses the number control to assign a
-  share to each creature in turn.
+  existing option buttons. Attacking bands carry no extra mark on the table.
+  Assign Damage uses the number control to assign a share to each creature in
+  turn.
 - **Notes on manual cards.** A card shows its table note on one line, with an
   ellipsis when it runs out of room. Its inspection panel shows the full note.
 - **A card picked face down.** While the other player still has to pick, as for

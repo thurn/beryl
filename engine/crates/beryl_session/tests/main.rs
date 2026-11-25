@@ -22,6 +22,7 @@ mod cancel;
 mod candidates;
 mod card_records;
 mod card_shapes;
+mod casting_and_combat;
 mod chance;
 mod checkpoints;
 mod chosen_values;

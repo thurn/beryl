@@ -56,6 +56,8 @@ pub(crate) struct CardFeatures {
     /// Time it gives its controller: 2 for each extra turn and 1 for each additional combat
     /// phase.
     pub turns: i16,
+    /// Free spells its controller may cast as part of resolving an ability, such as cascade.
+    pub free_casts: i16,
 }
 
 /// How many single targets a removal of every permanent a filter accepts counts as.
@@ -90,6 +92,10 @@ mod weight {
     /// it is worth half a counterspell, so an extra turn counts about as much as one, which
     /// is roughly what a player pays for either.
     pub const TURNS: i32 = 800;
+    /// Set by hand, not fitted: none of the tuned cards has cascade or casts a free spell
+    /// during resolution. A free spell adds a card and tempo, about three quarters of a
+    /// counterspell.
+    pub const FREE_CASTS: i32 = 1200;
 }
 
 /// The card's estimated value, from what its definition says it does: each face estimated
@@ -115,7 +121,8 @@ fn estimate_face(face: &Face) -> i16 {
         + weight::REPEATABLE * i32::from(f.repeatable)
         + weight::OPTIONS * i32::from(f.options)
         + weight::EXTRA_COSTS * i32::from(f.extra_costs)
-        + weight::TURNS * i32::from(f.turns);
+        + weight::TURNS * i32::from(f.turns)
+        + weight::FREE_CASTS * i32::from(f.free_casts);
     i16::try_from((hundredths / 100).clamp(0, i32::from(i16::MAX))).unwrap_or(i16::MAX)
 }
 
@@ -149,6 +156,7 @@ pub(crate) fn features(front: &Face) -> CardFeatures {
             AbilityKind::Triggered if a.trigger().is_some_and(|t| recurs(t.event)) => {
                 f.repeatable += 1;
             }
+            AbilityKind::Static if a.bands_with().is_some() => f.keywords += 1,
             _ => {}
         }
         let Behavior::Data(effect) = a.body() else {
@@ -167,6 +175,7 @@ pub(crate) fn features(front: &Face) -> CardFeatures {
     f.removal = effects.removal;
     f.counters = effects.counters;
     f.turns = effects.turns;
+    f.free_casts = effects.free_casts;
     f
 }
 
@@ -186,6 +195,7 @@ struct Effects {
     removal: i16,
     counters: i16,
     turns: i16,
+    free_casts: i16,
 }
 
 impl Effects {
@@ -264,6 +274,11 @@ impl Effects {
                 let combats = phases.iter().filter(|&&p| p == TurnPhase::Combat).count();
                 e.turns = i16::try_from(combats).unwrap_or(i16::MAX);
             }
+            Effect::MayCast {
+                player: Players::You,
+                free: true,
+                ..
+            } => e.free_casts = 1,
             _ => {}
         }
         e
@@ -276,6 +291,7 @@ impl Effects {
             removal: self.removal + other.removal,
             counters: self.counters + other.counters,
             turns: self.turns + other.turns,
+            free_casts: self.free_casts + other.free_casts,
         }
     }
 
@@ -286,6 +302,7 @@ impl Effects {
             removal: self.removal.max(other.removal),
             counters: self.counters.max(other.counters),
             turns: self.turns.max(other.turns),
+            free_casts: self.free_casts.max(other.free_casts),
         }
     }
 }

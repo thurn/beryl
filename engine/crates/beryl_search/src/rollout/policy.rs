@@ -686,6 +686,35 @@ impl<L: Layout> Policy<'_, L> {
             .filter_map(|&a| self.block(blocker, a))
             .max()
     }
+
+    /// The score of assigning `amount` combat damage to `recipient` in an exact division:
+    /// when `me` controls `recipient` (dividing opposing damage because of banding), absorb
+    /// as much non-lethal damage as possible and avoid killing valuable creatures; when the
+    /// opponent controls `recipient`, prefer exact lethal over overkill or partial damage.
+    pub(super) fn damage_share(&self, recipient: Option<L::Slot>, amount: u8) -> i32 {
+        let Some(slot) = recipient else {
+            return i32::from(amount);
+        };
+        let lethal = (i16::from(self.obs.derived(slot).toughness)
+            - i16::from(self.obs.object(slot).damage()))
+        .max(0);
+        let dealt = i16::from(amount);
+        if self.obs.controller(slot) == self.me {
+            if dealt < lethal {
+                100 + i32::from(amount)
+            } else {
+                -self.value(slot) + i32::from(amount)
+            }
+        } else if lethal > 0 && dealt == lethal {
+            200 + self.value(slot)
+        } else if lethal > 0 && dealt > lethal {
+            100 + self.value(slot) - i32::from(dealt - lethal)
+        } else if amount == 0 {
+            50
+        } else {
+            i32::from(amount)
+        }
+    }
 }
 
 fn targeted_enters(face: &Face) -> impl Iterator<Item = &'static Ability> {

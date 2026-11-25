@@ -22,7 +22,11 @@ use beryl_engine::{Large, LargeSlot, Layout, Relayout, Small};
 
 use std::marker::PhantomData;
 
+mod banding;
+mod swing;
 mod walker;
+
+use swing::{life, swing_back};
 
 use crate::AgentDecision;
 use crate::rollout::{Inline, Policy, RolloutPolicy};
@@ -68,6 +72,12 @@ const DEAD_ON_BOARD: i32 = 2_000;
 enum Declare<L: Layout = Small> {
     /// Attack with a creature, the player (`None`) or a planeswalker.
     Attack(L::Slot, Option<L::Slot>),
+    /// Start (`slot == first`) or join (`slot != first`) an attacking band.
+    Band {
+        slot: L::Slot,
+        first: L::Slot,
+        target: Option<L::Slot>,
+    },
     /// Block an attacker with a creature.
     Block(L::Slot, L::Slot),
     /// Attack with every creature still able to, the player or a planeswalker.
@@ -118,6 +128,15 @@ impl Plan<Small> {
                 .iter()
                 .map(|&d| match d {
                     Declare::Attack(a, p) => Declare::Attack(slot(a), p.map(slot)),
+                    Declare::Band {
+                        slot: a,
+                        first,
+                        target,
+                    } => Declare::Band {
+                        slot: slot(a),
+                        first: slot(first),
+                        target: target.map(slot),
+                    },
                     Declare::Block(b, a) => Declare::Block(slot(b), slot(a)),
                     Declare::Every(p) => Declare::Every(p.map(slot)),
                 })
@@ -311,6 +330,7 @@ impl<'a, L: Layout, J: Judgments<L>> Sim<'a, L, J> {
                 plans.push(all);
             }
         }
+        banding::append_plans(start, d, &mut plans);
         plans
     }
 
@@ -645,52 +665,6 @@ impl<'a, L: Layout, J: Judgments<L>> Sim<'a, L, J> {
     }
 }
 
-/// What life is worth: each point 2, 10 more each of the last 10, and 15 more each of the
-/// last 5, where one trick or loot away from dead.
-fn life(l: i16) -> i32 {
-    let l = i32::from(l.max(0));
-    2 * l + 10 * l.min(10) + 15 * l.min(5)
-}
-
-/// The damage the opponent's creatures could deal `me` attacking next turn, each of our
-/// creatures blocking one of them it could block, the strongest first: our untapped ones, or
-/// with `untap`, all of them. With `fragile`, the opponent removes one of our blockers first,
-/// as they will when one more blocker is all that keeps us alive.
-fn swing_back<L: Layout>(s: &State<L>, me: Seat, untap: bool, fragile: bool) -> i32 {
-    let creature = |slot: L::Slot| s.derived(slot).types.intersects(Types::CREATURE);
-    let flies = |slot: L::Slot, k: Keywords| s.derived(slot).keywords.intersects(k);
-    let mut attackers: Vec<(i32, bool)> = s
-        .battlefield()
-        .iter()
-        .copied()
-        .filter(|&a| s.controller(a) != me && creature(a) && s.derived(a).power > 0)
-        .map(|a| (i32::from(s.derived(a).power), flies(a, Keywords::FLYING)))
-        .collect();
-    attackers.sort_unstable_by(|a, b| b.cmp(a));
-    let mut blockers: Vec<bool> = s
-        .battlefield()
-        .iter()
-        .copied()
-        .filter(|&b| s.controller(b) == me && creature(b) && (untap || !s.object(b).is_tapped()))
-        .map(|b| flies(b, Keywords::FLYING.union(Keywords::REACH)))
-        .collect();
-    if fragile && !blockers.is_empty() {
-        // The best of them: one that blocks fliers too, if any.
-        let i = blockers.iter().position(|&reach| reach).unwrap_or(0);
-        blockers.swap_remove(i);
-    }
-    let mut damage = 0;
-    for (power, flying) in attackers {
-        match blockers.iter().position(|&reach| reach || !flying) {
-            Some(i) => {
-                blockers.swap_remove(i);
-            }
-            None => damage += power,
-        }
-    }
-    damage
-}
-
 /// The choice that makes declaration `want` at decision `d`: its creature, or one
 /// interchangeable with it; for [`Declare::Every`], any attacker with power. `None` when it
 /// is no longer legal.
@@ -710,6 +684,19 @@ fn declare<L: Layout>(s: &State<L>, d: &Decision<L>, want: Declare<L>) -> Option
             )
             | (Declare::Block(a, _), Opt::Block(b)) => like(s, a, b),
             (
+                Declare::Band {
+                    slot: a, first: f, ..
+                },
+                Opt::Attack {
+                    slot: b,
+                    band: Some(g),
+                },
+            ) => {
+                like(s, a, b)
+                    && ((a == f && b == g)
+                        || (a != f && (f == g || s.definition(f).key() == s.definition(g).key())))
+            }
+            (
                 Declare::Every(_),
                 Opt::Attack {
                     slot: b,
@@ -724,7 +711,9 @@ fn declare<L: Layout>(s: &State<L>, d: &Decision<L>, want: Declare<L>) -> Option
 /// The answer to the question that follows declaring `d`: what it attacks or blocks.
 fn follow_up<L: Layout>(d: Declare<L>) -> Opt<L> {
     match d {
-        Declare::Attack(_, target) | Declare::Every(target) => Opt::Defender(target),
+        Declare::Attack(_, target) | Declare::Band { target, .. } | Declare::Every(target) => {
+            Opt::Defender(target)
+        }
         Declare::Block(_, a) => Opt::Object(a),
     }
 }

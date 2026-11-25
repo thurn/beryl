@@ -1043,6 +1043,26 @@ copiable name, so a copy of a Wolf bands with it. Scryfall has no record of that
 token because it was never printed. `UNPRINTED_TOKENS` in
 `tools/src/beryl_tools/cards.py` writes its card-store record.
 
+**Agents and the session.** The rollout policy casts offered spells during a
+resolution without holding them for a later step, casts a worthwhile spell
+offered during a library search before finding a card, scores band attacks
+alongside ordinary attacks, and divides exact combat damage shares for both own
+and opposing creatures. The combat planner adds no candidates when no band
+option is offered and bounds band plans when one is (`combat/banding.rs`). Card
+estimates count free casts during a resolution (such as cascade) and count
+"bands with other" alongside banding.
+`beryl_search/tests/all/casting_and_combat.rs` plays seeded pool games of the
+`casting` and `combat` families with the greedy agent, the expert and MCTS. In
+the session, a band choice and a search offering a cast use the existing
+option-button prompt shape, exact damage shares use the number prompt shape, and
+attacking bands carry no extra mark on the table (`data/ui-conventions.json`,
+"Not seen in Arena"). `beryl_session/tests/casting_and_combat.rs` cuts saves at
+each keystone's new states — including casts inside a resolution, search casts,
+band declarations and combat damage divisions — and replays them under every
+perturbation. The oracle exporters export casts inside a resolution and report
+attacking bands, exact damage shares and casting while searching as unsupported
+with their reasons.
+
 ### I. Card shapes, face-down cards and cards outside the game
 
 A `CardDef` already holds one or two faces, `casting/legal.rs` already loops

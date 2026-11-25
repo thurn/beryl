@@ -78,6 +78,19 @@ fn card_shape_deck(seed: u64) -> Vec<(u8, &'static str)> {
     fuzz_deck_from(seed, &keystone_family(family).expect("a keystone family"))
 }
 
+/// A fuzz deck of the `casting` and `combat` keystone families' cards with the basic lands:
+/// cascade, casting while searching a library, hand-only cast triggers, multi-blocking,
+/// double strike, banding and "bands with other".
+fn casting_and_combat_deck(seed: u64) -> Vec<(u8, &'static str)> {
+    let mut cards = keystone_family("casting").expect("the casting family");
+    for card in keystone_family("combat").expect("the combat family") {
+        if !cards.iter().any(|c| c.name == card.name) {
+            cards.push(card);
+        }
+    }
+    fuzz_deck_from(seed, &cards)
+}
+
 /// The choices of a game as both seats take them, shared by the agent in the other seat and
 /// the loop answering the human: the choices to take, and the indices taken so far.
 #[derive(Clone, Default)]
@@ -312,6 +325,14 @@ fn card_shape_keystone_games_keep_the_script_checks() {
 #[ignore = "a handful of session games: `just fuzz` plays them"]
 fn turn_and_game_keystone_games_keep_the_script_checks() {
     if let Some((game, why)) = shrink(games(3), MOST_CHOICES, rng(), turn_and_game_deck) {
+        panic!("{}", report(&game, &why));
+    }
+}
+
+#[test]
+#[ignore = "a handful of session games: `just fuzz` plays them"]
+fn casting_and_combat_keystone_games_keep_the_script_checks() {
+    if let Some((game, why)) = shrink(games(3), MOST_CHOICES, rng(), casting_and_combat_deck) {
         panic!("{}", report(&game, &why));
     }
 }
