@@ -106,7 +106,7 @@ pub(crate) fn decision<L: Layout>(
         Pending::DeclareBlockers { blocker } => combat::block_decision(s, t, blocker),
         Pending::CombatDamage {
             source, ref lethal, ..
-        } => combat::division_decision(s, source, lethal.as_slice()),
+        } => combat::division_decision(s, t, source, lethal.as_slice()),
         Pending::ExactCombatDamage(ref dividing) => combat::exact_decision(s, t, dividing),
         Pending::Casting(c) => casting::decision(s, t, sink, &c),
         Pending::TurningFaceUp {

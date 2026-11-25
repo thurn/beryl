@@ -2,15 +2,14 @@
 
 mod trample;
 
-use super::{assigner, assigns_now, attacked, power, recipients};
+use super::{Assignment, assigner, assigns_now, attacked, power, recipients};
 use crate::bitboard::Bitboard;
 use crate::card::{Keywords, Part, Prompt, Purpose};
-use crate::combat::{damage, has};
+use crate::combat::has;
 use crate::decision::{Decision, DecisionKind, Opt};
 use crate::fixed::Full;
-use crate::game::Game;
 use crate::layout::{Layout, Queue};
-use crate::replacement::event::Sink;
+use crate::replacement::event::{Recipient, Sink};
 use crate::state::{CombatRole, DamageDivision, DamageShare, Pending, State};
 use crate::table::GameTable;
 
@@ -166,40 +165,29 @@ pub(super) fn answer<L: Layout>(
     advance(s, t, sink, dividing.done, dividing.shares)
 }
 
-/// Under [CR 510.2], "Second, all combat damage that's been assigned is dealt simultaneously."
-///
-/// [CR 510.2]: https://yawgatog.com/resources/magic-rules/#R5102
+/// Deals the shares (see CR 510.2), each share with no creature going to what its source
+/// attacks.
 fn deal<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
     shares: &[DamageShare<L>],
 ) -> Result<(), Full> {
-    use crate::replacement::event::Recipient;
-
-    sink.together();
-    let result = (|| {
-        for share in shares {
-            let source = s.object_ref(share.source);
-            let target = if let Some(slot) = share.target {
-                Some(Recipient::Permanent(s.object_ref(slot)))
-            } else {
-                s.object(share.source)
-                    .attack_target()
-                    .and_then(|target| attacked(s, target))
-            };
-            if let Some(target) = target {
-                damage::deal(
-                    &mut Game::new(s, t, sink),
-                    source,
-                    target,
-                    share.amount,
-                    true,
-                )?;
-            }
-        }
-        Ok(())
-    })();
-    sink.apart();
-    result
+    let mut assigned: L::Queue<Assignment<L>, 32> = Default::default();
+    for share in shares {
+        let to = match share.target {
+            Some(slot) => Some(Recipient::Permanent(s.object_ref(slot))),
+            None => s
+                .object(share.source)
+                .attack_target()
+                .and_then(|target| attacked(s, target)),
+        };
+        // One assignment for each share, and the shares' queue holds 32.
+        assigned.push_bounded(Assignment {
+            source: s.object_ref(share.source),
+            to,
+            amount: share.amount,
+        });
+    }
+    super::deal(s, t, sink, assigned.as_slice())
 }

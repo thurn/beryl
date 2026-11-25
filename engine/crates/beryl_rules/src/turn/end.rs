@@ -107,7 +107,7 @@ fn cleanup<L: Layout>(game: &mut Game<'_, L>, resolution: &mut Resolution<'_, L>
     let s = &mut *game.state;
     s.forget_last_known();
     if combat::in_combat(s.turn().step()) {
-        combat::end_combat(s);
+        s.end_combat();
     }
     if !s.has_turn_plan() {
         s.plan_from_current_step(game.table.format())?;

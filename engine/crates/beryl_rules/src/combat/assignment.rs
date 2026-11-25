@@ -119,11 +119,7 @@ fn next_attacker<L: Layout>(s: &State<L>, done: Bitboard<L::Slot>) -> Option<L::
             && !done.contains(slot)
             && assigns_now(s, slot)
             && power(s, slot) > 0
-            && s.battlefield()
-                .iter()
-                .filter(|&&b| s.object(b).blocks(slot))
-                .nth(1)
-                .is_some()
+            && blockers_of(s, slot).count() > 1
     })
 }
 
@@ -171,6 +167,19 @@ fn lethal_targets<L: Layout>(source: L::Slot, lethal: &[LethalAssignment<L>]) ->
         .collect()
 }
 
+/// A division in progress: the recipients picked for lethal damage, those not yet picked, and
+/// the damage the source has left once each picked one is assigned lethal damage.
+fn division<L: Layout>(
+    s: &State<L>,
+    source: L::Slot,
+    lethal: &[LethalAssignment<L>],
+) -> (Bitboard<L::Slot>, Bitboard<L::Slot>, u32) {
+    let killed = lethal_targets(source, lethal);
+    let spent: u32 = killed.sum(|slot| u32::from(lethal_damage(s, slot)));
+    let left = u32::from(power(s, source)) - spent;
+    (killed, recipients(s, source) & !killed, left)
+}
+
 /// Records the first-step participants before any damage changes the battlefield. If every
 /// assignment is determined, deals the damage immediately (CR 510.1 and CR 510.2).
 pub(crate) fn begin_damage<L: Layout>(
@@ -198,7 +207,7 @@ pub(crate) fn begin_damage<L: Layout>(
         });
         Ok(())
     } else {
-        deal(s, t, sink, &[])
+        deal(s, t, sink, assign(s, &[])?.as_slice())
     }
 }
 
@@ -210,14 +219,11 @@ pub(crate) fn begin_damage<L: Layout>(
 /// (see [`exact_damage`]).
 pub(crate) fn division_decision<L: Layout>(
     s: &State<L>,
+    t: &GameTable,
     source: L::Slot,
     lethal_picks: &[LethalAssignment<L>],
 ) -> Result<Decision<L>, Full> {
-    let recipients = recipients(s, source);
-    let killed = lethal_targets(source, lethal_picks);
-    let spent: u32 = killed.sum(|slot| u32::from(lethal_damage(s, slot)));
-    let left = u32::from(power(s, source)) - spent;
-    let unpicked = recipients & !killed;
+    let (killed, unpicked, left) = division(s, source, lethal_picks);
     let absorbable: u32 = unpicked.sum(|slot| u32::from(lethal_damage(s, slot)) - 1);
     let mut list: L::Queue<Opt<L>, OPTIONS> = Default::default();
     if !killed.is_empty() || left <= absorbable {
@@ -227,7 +233,7 @@ pub(crate) fn division_decision<L: Layout>(
     Candidates::<L>::extend_options(&mut list, collapse(s, more), |out, slot| {
         out.push(Opt::Lethal(slot))
     })?;
-    let player = s.controller(source);
+    let player = assigner(s, t, source);
     Ok(Decision {
         player,
         decider: player,
@@ -253,12 +259,8 @@ pub fn preferred_damage<L: Layout>(s: &State<L>, d: &Decision<L>) -> Option<(Cho
     let Candidates::Options(options) = &d.candidates else {
         return None;
     };
-    let source = *source;
-    let recipients = recipients(s, source);
-    let killed = lethal_targets(source, chosen.as_slice());
-    let spent: u32 = killed.sum(|slot| u32::from(lethal_damage(s, slot)));
-    let left = u32::from(power(s, source)) - spent;
-    let cost: u32 = (recipients & !killed).sum(|slot| {
+    let (_, unpicked, left) = division(s, *source, chosen.as_slice());
+    let cost: u32 = unpicked.sum(|slot| {
         let cost = u32::from(lethal_damage(s, slot));
         if cost <= left { cost } else { 0 }
     });
@@ -302,7 +304,7 @@ pub(crate) fn divide<L: Layout>(
         done.insert(source);
         let Some(next) = next_division(s, t, done) else {
             s.settle_question();
-            return deal(s, t, sink, lethal.as_slice());
+            return deal(s, t, sink, assign(s, lethal.as_slice())?.as_slice());
         };
         source = next;
     }
@@ -314,7 +316,7 @@ pub(crate) fn divide<L: Layout>(
     Ok(())
 }
 
-/// One assignment of combat damage.
+/// One assignment of combat damage. `to` is `None` only in the default a fixed queue fills with.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 struct Assignment<L: Layout = Small> {
     source: ObjectRef<L>,
@@ -322,7 +324,7 @@ struct Assignment<L: Layout = Small> {
     amount: u8,
 }
 
-/// Deals the combat damage of this step, including the players' lethal assignments.
+/// Deals the combat damage assigned in this step.
 ///
 /// [CR 510.2](https://yawgatog.com/resources/magic-rules/#R5102): "Second, all combat damage that's
 /// been assigned is dealt simultaneously." Every assignment is made from the creatures as they are
@@ -332,22 +334,22 @@ fn deal<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
-    lethal: &[LethalAssignment<L>],
+    assigned: &[Assignment<L>],
 ) -> Result<(), Full> {
     sink.together();
-    let dealt = deal_assigned(s, t, sink, lethal);
+    let dealt = assigned.iter().try_for_each(|a| {
+        let Some(to) = a.to else { return Ok(()) };
+        damage::deal(&mut Game::new(s, t, sink), a.source, to, a.amount, true).map(drop)
+    });
     sink.apart();
     dealt
 }
 
-/// [`deal`], inside the group it opens.
-#[inline]
-fn deal_assigned<L: Layout>(
-    s: &mut State<L>,
-    t: &GameTable,
-    sink: &mut Sink<L>,
+/// The combat damage of this step, including the players' lethal assignments.
+fn assign<L: Layout>(
+    s: &State<L>,
     lethal: &[LethalAssignment<L>],
-) -> Result<(), Full> {
+) -> Result<L::Queue<Assignment<L>, 128>, Full> {
     let mut assigned: L::Queue<Assignment<L>, 128> = Default::default();
     for &slot in s.battlefield() {
         if !assigns_now(s, slot) {
@@ -426,12 +428,7 @@ fn deal_assigned<L: Layout>(
             CombatRole::None => {}
         }
     }
-    for a in assigned.iter() {
-        if let Some(to) = a.to {
-            damage::deal(&mut Game::new(s, t, sink), a.source, to, a.amount, true)?;
-        }
-    }
-    Ok(())
+    Ok(assigned)
 }
 
 /// Assigns lethal damage to the chosen creatures and distributes any remainder in battlefield

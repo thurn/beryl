@@ -3,7 +3,9 @@
 //! Implements: CR 120, CR 609.7a, CR 615.3, CR 702.15b, CR 702.15d
 
 use beryl_card::prompt::Purpose;
-use beryl_card::{Amount, Filter, Keywords, Prevention, Prompt, Recipients, Words};
+use beryl_card::{
+    Amount, Filter, Keywords, Objects, Players, Prevention, Prompt, Recipients, Words,
+};
 
 use crate::bitboard::Bitboard;
 use crate::card::Stop;
@@ -137,12 +139,10 @@ pub(crate) fn instruction<L: Layout>(
     to: Recipients,
     amount: Amount,
 ) -> Result<Outcome<L>, Full> {
-    let (players, permanents) = match to {
-        Recipients::Players(players) => (Some(players), None),
-        Recipients::Permanents(objects) => (None, Some(objects)),
-        Recipients::Both(players, objects) => (Some(players), Some(objects)),
-        Recipients::DividedTwo(spec) => return divided_two(run, spec),
-    };
+    if let Recipients::DividedTwo(spec) = to {
+        return divided_two(run, spec);
+    }
+    let (players, permanents) = parts(to);
     let amount = run.scene().amount(amount);
     let source = run.resolution().source();
     let (mut damaged, mut dealt) = (Bitboard::EMPTY, 0);
@@ -166,6 +166,17 @@ pub(crate) fn instruction<L: Layout>(
         }
     }
     Ok(Outcome::of(damaged, dealt))
+}
+
+/// The players and the permanents among `to`. A division of damage is dealt by
+/// [`divided_two`] and never comes here.
+fn parts(to: Recipients) -> (Option<Players>, Option<Objects>) {
+    match to {
+        Recipients::Players(players) => (Some(players), None),
+        Recipients::Permanents(objects) => (None, Some(objects)),
+        Recipients::Both(players, objects) => (Some(players), Some(objects)),
+        Recipients::DividedTwo(_) => unreachable!("a division of damage is dealt by divided_two"),
+    }
 }
 
 /// Deals the shares determined by the number of targets chosen while casting.
@@ -249,12 +260,7 @@ pub(crate) fn prevent_instruction<L: Layout>(
         Prevention::Next(n) => Some(n),
     };
     let shield = Shield { left, from: chosen };
-    let (players, permanents) = match to {
-        Recipients::Players(players) => (Some(players), None),
-        Recipients::Permanents(objects) => (None, Some(objects)),
-        Recipients::Both(players, objects) => (Some(players), Some(objects)),
-        Recipients::DividedTwo(_) => unreachable!("division is only used to deal damage"),
-    };
+    let (players, permanents) = parts(to);
     if let Some(players) = players {
         for player in run.in_turn_order(players) {
             let (game, resolution) = run.resolving();

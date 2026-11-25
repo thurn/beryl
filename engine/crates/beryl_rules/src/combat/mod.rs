@@ -5,7 +5,7 @@
 //! [`Pending`]; every candidate offered is legal, so a declaration never has to be undone
 //! (CR 508.1, 509.1 return the game to before an illegal one).
 //!
-//! Implements: CR 506.2, CR 506.4, CR 508.1, CR 508.3a, CR 509.1, CR 511.3, CR 702.9b, CR 702.10b, CR 702.14c
+//! Implements: CR 506.2, CR 506.4, CR 508.1, CR 508.3a, CR 509.1, CR 702.9b, CR 702.10b, CR 702.14c
 
 use crate::bitboard::Bitboard;
 use crate::card::{Keywords, Part, Prompt, Purpose, Types};
@@ -29,10 +29,6 @@ pub use assignment::{assigner, preferred_damage};
 pub(crate) use assignment::{
     begin_damage, divide, division_decision, exact_decision, first_strike_step,
 };
-
-fn is_creature<L: Layout>(s: &State<L>, slot: L::Slot) -> bool {
-    s.derived(slot).types.contains(Types::CREATURE)
-}
 
 fn has<L: Layout>(s: &State<L>, slot: L::Slot, keyword: Keywords) -> bool {
     s.derived(slot).keywords.contains(keyword)
@@ -622,7 +618,7 @@ pub(crate) fn prune<L: Layout>(s: &mut State<L>) {
                 !defending.contains(controller)
             }
         };
-        if !is_creature(s, slot) || changed(s.controller(slot)) {
+        if !s.derived(slot).types.contains(Types::CREATURE) || changed(s.controller(slot)) {
             let permanent = s.permanent_at(slot).expect("a permanent in combat");
             s.remove_from_combat(permanent);
         } else if let Some(walker) = walker
@@ -645,12 +641,4 @@ pub(crate) fn in_combat(step: TurnStep) -> bool {
             | TurnStep::CombatDamage
             | TurnStep::EndOfCombat
     )
-}
-
-/// Ends combat ([CR 511.3]): "As soon as the end of combat step ends, all creatures, battles, and
-/// planeswalkers are removed from combat."
-///
-/// [CR 511.3]: https://yawgatog.com/resources/magic-rules/#R5113
-pub(crate) fn end_combat<L: Layout>(s: &mut State<L>) {
-    s.end_combat();
 }

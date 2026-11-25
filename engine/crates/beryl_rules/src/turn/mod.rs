@@ -307,7 +307,7 @@ fn next_step<L: Layout>(
         }
         TurnStep::FirstStrikeDamage => TurnStep::CombatDamage,
         TurnStep::EndOfCombat => {
-            combat::end_combat(s);
+            s.end_combat();
             TurnStep::PostcombatMain
         }
         TurnStep::PostcombatMain => TurnStep::End,
@@ -381,7 +381,7 @@ fn advance_plan<L: Layout>(
     let mut still_in_combat = combat::in_combat(s.turn().step());
     while let Some((next, starts_phase)) = s.planned_next_step() {
         if still_in_combat && starts_phase {
-            combat::end_combat(s);
+            s.end_combat();
             still_in_combat = false;
         }
         let mut skip = needs_attackers(next) && !has_attackers(s);
@@ -395,7 +395,7 @@ fn advance_plan<L: Layout>(
         let _skipped = s.remove_step(next);
     }
     if still_in_combat {
-        combat::end_combat(s);
+        s.end_combat();
     }
     Ok(None)
 }
