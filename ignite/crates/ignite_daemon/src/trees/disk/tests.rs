@@ -316,10 +316,7 @@ fn ceiling_cleanup_keeps_the_incremental_caches_compiled_last() {
         fs::create_dir_all(&session).unwrap();
         fs::write(session.join("query-cache.bin"), vec![b'x'; 100]).unwrap();
         for dir in [session, incremental.join(name)] {
-            fs::File::open(&dir)
-                .unwrap()
-                .set_modified(SystemTime::UNIX_EPOCH + Duration::from_secs(age))
-                .unwrap();
+            set_dir_modified(&dir, age);
         }
     }
     // 300 bytes against a ceiling of 260 and a target of 208: one cache must go.
@@ -353,10 +350,7 @@ fn ceiling_cleanup_deletes_the_profile_built_longest_ago_and_keeps_the_rest() {
         fs::create_dir_all(dir.join("deps")).unwrap();
         fs::write(dir.join("deps/libpkg.rlib"), vec![b'x'; 100]).unwrap();
         for path in [dir.join(".fingerprint"), dir.join("deps"), dir.clone()] {
-            fs::File::open(&path)
-                .unwrap()
-                .set_modified(SystemTime::UNIX_EPOCH + Duration::from_secs(age))
-                .unwrap();
+            set_dir_modified(&path, age);
         }
     }
     // 300 bytes against a ceiling of 260 and a target of 208: one profile must go.
@@ -372,4 +366,24 @@ fn ceiling_cleanup_deletes_the_profile_built_longest_ago_and_keeps_the_rest() {
     assert!(!target.0.join("aarch64-apple-ios-sim/debug").exists());
     assert!(target.0.join("release/deps/libpkg.rlib").is_file());
     assert!(target.0.join("debug/deps/libpkg.rlib").is_file());
+}
+
+/// Sets a directory's modification time to `age` seconds after the epoch. Windows opens a
+/// directory only with `FILE_FLAG_BACKUP_SEMANTICS`, and sets times only through a handle that
+/// may write, so `File::open` failed there with "Access is denied".
+fn set_dir_modified(dir: &Path, age: u64) {
+    #[cfg(windows)]
+    let file = {
+        use std::os::windows::fs::OpenOptionsExt as _;
+        const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+        fs::OpenOptions::new()
+            .write(true)
+            .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+            .open(dir)
+            .unwrap()
+    };
+    #[cfg(not(windows))]
+    let file = fs::File::open(dir).unwrap();
+    file.set_modified(SystemTime::UNIX_EPOCH + Duration::from_secs(age))
+        .unwrap();
 }
