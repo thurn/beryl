@@ -14,7 +14,7 @@ use super::badges;
 use super::hands::hand_top;
 use super::look::{Dress, Look};
 use super::own::{self, Fights};
-use super::pile::PileShown;
+use super::pile::{PileShown, PilesNow, uncovered};
 use super::place::{Placement, Rest, RowFits, Rows, Scroll, Zooms};
 use super::shadows::Floors;
 use super::shown::Shown;
@@ -349,6 +349,7 @@ impl Table {
         builder: &mut FrameBuilder,
     ) {
         let back = faces.board_layer_of(CARD_BACK).unwrap_or(0);
+        let piles = self.piles_now(motion, dress.now);
         builder.camera(self.camera.view_projection);
         let slots = motion
             .map_or(0, |motion| motion.tracks.len())
@@ -362,9 +363,10 @@ impl Table {
             let boxed = (self.in_box(slot))
                 .then(|| self.objects.cards.get(slot).copied().flatten())
                 .flatten();
-            let Some((mut object, mut drawn, mut under_way)) = (self
-                .object_at(slot, view, motion, builder))
-            .or_else(|| boxed.map(|resting| (resting, view, false))) else {
+            let Some((mut object, mut drawn, mut under_way)) =
+                (self.object_at(slot, view, (motion, &piles), builder))
+                    .or_else(|| boxed.map(|resting| (resting, view, false)))
+            else {
                 self.fights.forget(slot);
                 continue;
             };
@@ -400,7 +402,7 @@ impl Table {
                 builder,
             );
         }
-        self.write_piles(builder);
+        self.write_piles(&piles, builder);
         self.write_tray_library(back, builder);
         self.write_abilities(view, motion, faces, (back, dress), builder);
         self.write_revealed(faces, (back, dress.now), revealed, builder);
@@ -429,7 +431,7 @@ impl Table {
         &self,
         slot: usize,
         view: &'v PlayerView,
-        motion: Option<Motion<'v>>,
+        (motion, piles): (Option<Motion<'v>>, &PilesNow),
         builder: &mut FrameBuilder,
     ) -> Option<(SceneObject, &'v PlayerView, bool)> {
         let resting = self.objects.cards.get(slot).copied().flatten();
@@ -441,8 +443,15 @@ impl Table {
             let track = motion.tracks.get(slot)?;
             (!track.segments().is_empty()).then_some((motion, track))
         });
+        let last = |motion: Motion<'_>| motion.finals.cards.get(slot).copied().flatten();
+        let uncovered = resting.is_some_and(|resting| {
+            !resting.visible
+                && (piles.shows(slot)
+                    || motion.is_some_and(|motion| uncovered(resting, last(motion))))
+        });
         let Some((motion, track)) = track else {
-            let resting = resting?;
+            let mut resting = resting?;
+            resting.visible |= uncovered;
             // A card that stands still shows its new record from its turn on, where it stands.
             if let Some((motion, at)) = turn
                 && motion.t >= at
@@ -459,7 +468,7 @@ impl Table {
             }
             return Some((SceneObject { copies, ..resting }, view, false));
         };
-        let last = motion.finals.cards.get(slot).copied().flatten();
+        let last = last(motion);
         // A card a row has scrolled out of view rests undrawn at the row's nearer end
         // (`rows::beyond_right` for the right end), as does a card under the top two of a pile.
         // One out of view before the script and after it stays undrawn while it slides, or only
@@ -470,6 +479,7 @@ impl Table {
         // where it rests is; once its track has ended, as where the script leaves it is.
         let moves = resting.zip(last).is_some_and(|(a, b)| a.place != b.place);
         if !moves
+            && !uncovered
             && !resting.is_some_and(|object| object.visible)
             && !last.is_some_and(|object| object.visible)
             && !track.carried(motion.t)
@@ -479,7 +489,7 @@ impl Table {
         let begun = track.begun(motion.t);
         match (resting, last) {
             (Some(resting), _) if !begun => {
-                if !resting.visible {
+                if !resting.visible && !uncovered {
                     return None;
                 }
             }

@@ -23,7 +23,7 @@ use beryl_protocol::protocol::{ObjectId, ObjectView, Side, ZoneName};
 use glam::{Affine3A, Mat3, Vec2, Vec3};
 
 use super::place::{Placement, Rest, turn};
-use super::scene::Table;
+use super::scene::{Motion, SceneObject, Table};
 use super::{Camera, Layout, Place};
 use kit_base::data::Card;
 use kit_base::data::profiles::PileGeometry;
@@ -227,6 +227,52 @@ pub(super) fn lay_pile(
     placement.piles[PileShown::index(side, zone)] = pile;
 }
 
+/// The cards each pile shows at one moment of a script (`Table::piles_now`).
+#[derive(Clone, Copy, Debug, Default)]
+pub(super) struct PilesNow {
+    /// How many of each pile's cards at rest, in `PileShown::index` order, are off it.
+    left: [usize; 6],
+    /// The slots of the top two cards still on each pile, top first, with their heights.
+    top: [[Option<(usize, f32)>; 2]; 6],
+    /// Whether `top` was worked out: at rest it is not, and every card is drawn as it rests.
+    worked_out: bool,
+}
+
+impl PilesNow {
+    /// Whether the card in `slot` is one of the top two cards still on its pile. A card that
+    /// rests undrawn beneath a pile's top two is drawn once the cards above it leave, as one
+    /// after another leaves when a spell draws or mills several: otherwise the pile shows only
+    /// the dark rims `write_side` draws for the cards beneath, a black card where its top card
+    /// should be.
+    pub(super) fn shows(&self, slot: usize) -> bool {
+        self.worked_out
+            && self
+                .top
+                .iter()
+                .flatten()
+                .flatten()
+                .any(|&(shown, _)| shown == slot)
+    }
+}
+
+/// Whether a card that rests undrawn in a pile, `resting`, is drawn where the script leaves it,
+/// `last`, in the same pile, as the cards a look lifts beside a library uncover the cards
+/// beneath them. Such a card is drawn from the script's start, beneath the cards that still
+/// cover it.
+pub(super) fn uncovered(resting: SceneObject, last: Option<SceneObject>) -> bool {
+    let in_pile = matches!(
+        resting.place,
+        Place::Card {
+            zone: ZoneName::Library | ZoneName::Graveyard | ZoneName::Exile,
+            row: None,
+            ..
+        }
+    );
+    in_pile
+        && !resting.visible
+        && last.is_some_and(|last| last.visible && last.place == resting.place)
+}
+
 /// Places `side`'s exile, `objects` bottom first, on the phone layout: under that side's
 /// graveyard, whose base is `at`, and never drawn, as the web's `ui/src/stage/phone.ts` places it
 /// (docs/ui-conventions.md, "The phone"). The phone keeps the third pile's place in the
@@ -337,10 +383,99 @@ impl Table {
         Some((count, Anchor::new(id, at, align, offset)))
     }
 
+    /// Which cards each pile shows at this moment of `motion`, or at rest without one. A card is
+    /// off its pile while a prompt's tray or a box holds it, or the tray or a box moves it at `now`,
+    /// while it rests beside the pile, as
+    /// the cards a look lifts do, while its track carries it, and once its track has begun when
+    /// the script leaves it in another zone or beside the pile. Allocates nothing: the table
+    /// works this out on every frame.
+    pub(super) fn piles_now(&self, motion: Option<Motion<'_>>, now: u64) -> PilesNow {
+        let mut piles_now = PilesNow::default();
+        let tolerance = self.layout().pile.top_tolerance;
+        let piles = &self.objects.piles;
+        let lies_on = |object: &SceneObject, index: usize| {
+            object.pose.position.truncate().distance(piles[index].base) <= tolerance
+        };
+        // At rest, with no tray up, no box and every pile's top card on its pile rather than
+        // lifted beside it by a look, every card lies where `lay_pile` put it.
+        let (tray, shown) = (
+            self.held.is_some() || self.tray_moving(now),
+            self.any_shown(),
+        );
+        let lifted = piles.iter().enumerate().any(|(index, pile)| {
+            pile.top
+                .and_then(|top| {
+                    self.objects
+                        .cards
+                        .get(usize::from(top.0))
+                        .copied()
+                        .flatten()
+                })
+                .is_some_and(|top| !lies_on(&top, index))
+        });
+        if motion.is_none() && !tray && !shown && !lifted {
+            return piles_now;
+        }
+        piles_now.worked_out = true;
+        for (slot, resting) in self.objects.cards.iter().enumerate() {
+            let Some(resting) = resting else {
+                continue;
+            };
+            let Place::Card {
+                zone: zone @ (ZoneName::Library | ZoneName::Graveyard | ZoneName::Exile),
+                side,
+                row: None,
+            } = resting.place
+            else {
+                continue;
+            };
+            // The phone keeps exile under the graveyard, never drawn (`lay_unseen_exile`).
+            if !self.layout().pile_visible(zone) {
+                continue;
+            }
+            let index = PileShown::index(side, zone);
+            let off = !lies_on(resting, index);
+            let leaves = off
+                || motion.is_some_and(|motion| {
+                    let last = motion.finals.cards.get(slot).copied().flatten();
+                    let elsewhere = last
+                        .is_none_or(|last| last.place != resting.place || !lies_on(&last, index));
+                    motion.tracks.get(slot).is_some_and(|track| {
+                        track.begun(motion.t) && (elsewhere || !track.settled(motion.t))
+                    })
+                });
+            if leaves
+                || (tray && (self.in_tray(slot) || self.tray_carries(slot, now)))
+                || (shown && (self.in_box(slot) || self.shown_carries(slot, now)))
+            {
+                piles_now.left[index] += 1;
+                continue;
+            }
+            // `lay_pile` rests each card one layer above the one below it.
+            let height = resting.pose.position.z;
+            let top = &mut piles_now.top[index];
+            if top[0].is_none_or(|(_, above)| height > above) {
+                top[1] = top[0];
+                top[0] = Some((slot, height));
+            } else if top[1].is_none_or(|(_, above)| height > above) {
+                top[1] = Some((slot, height));
+            }
+        }
+        piles_now
+    }
+
     /// Writes each pile that holds a card: its resolved element, and the side of the cards
-    /// beneath its top two, which `write` does not draw.
-    pub(super) fn write_piles(&self, builder: &mut FrameBuilder) {
+    /// beneath its top two, which `write` does not draw. While a script plays, the side shows
+    /// only the cards that have not yet left the pile, and the element's `count` says how many
+    /// those are: a script that takes every card of a pile, or the top cards one after another,
+    /// would otherwise leave the dark rims of cards already gone with nothing on them, a black
+    /// card where the pile's top card should be.
+    pub(super) fn write_piles(&self, now: &PilesNow, builder: &mut FrameBuilder) {
         for (index, pile) in self.objects.piles.iter().enumerate() {
+            let present = PileShown {
+                count: pile.count.saturating_sub(now.left[index]),
+                ..*pile
+            };
             // A pile whose top card a box of the flat layer shows, as the viewer shows a pile's
             // cards, is drawn as though it had left.
             let (side, zone) = PileShown::of_index(index);
@@ -361,7 +496,7 @@ impl Table {
                 continue;
             };
             if self.layout().style.show_pile_sides {
-                write_side(builder, (self.layout(), self.camera()), pile, side);
+                write_side(builder, (self.layout(), self.camera()), &present, side);
             }
             // A pile writes no element over its top card while a prompt holds that card up in
             // its tray, or once it has left the pile: a press, and the checks that ask what a
@@ -390,7 +525,7 @@ impl Table {
                     interactive: false,
                     state: StateBits(0),
                     face: None,
-                    count: 1,
+                    count: u16::try_from(present.count).unwrap_or(u16::MAX),
                     annotations: Default::default(),
                 },
             );

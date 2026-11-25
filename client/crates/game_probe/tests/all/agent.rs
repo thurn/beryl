@@ -663,6 +663,47 @@ fn a_known_face_up_card_without_a_face_is_a_fault() {
     );
 }
 
+#[test]
+fn a_pile_with_no_card_drawn_on_top_is_a_fault() {
+    let library = Place::Card {
+        zone: ZoneName::Library,
+        side: Side::Opponent,
+        row: None,
+    };
+    let pile = |id, count| {
+        element(
+            Role::Pile,
+            "Opponent's library",
+            id,
+            library,
+            rect(0.0, 0.0, 96.0, 134.0),
+        )
+        .with(|e| e.count = count)
+    };
+    // A script that mills two flies the top two cards to the graveyard: the card that becomes
+    // the top must be drawn while they leave.
+    let covered = frame(vec![pile(9, 5), card("", 4, library, 2.0, 2.0, 10.0)]);
+    assert_eq!(summary(&blank_cards(&covered, &regular_context())), vec![]);
+    let graveyard = Place::Card {
+        zone: ZoneName::Graveyard,
+        side: Side::Opponent,
+        row: None,
+    };
+    let bare = |count| {
+        frame(vec![
+            pile(9, count),
+            card("", 4, library, 2.0, 2.0, 10.0).with(|e| e.opacity = 0.0),
+            card("Island", 5, graveyard, 200.0, 20.0, 10.0),
+        ])
+    };
+    assert_eq!(
+        summary(&blank_cards(&bare(5), &regular_context())),
+        one(Rule::BlankCard, &["pile \"Opponent's library\" #9"])
+    );
+    // A pile of two whose cards are both leaving has nothing beneath them to draw.
+    assert_eq!(summary(&blank_cards(&bare(2), &regular_context())), vec![]);
+}
+
 /// An arrow from (0, 0) to (300, 0), bending through `bend`.
 fn arrow(start: Vec2, bend: f32, end: Vec2) -> Frame {
     frame(vec![

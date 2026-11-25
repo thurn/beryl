@@ -275,6 +275,18 @@ impl Table {
         self.shown.in_box(slot).is_some()
     }
 
+    /// Whether any card is in a box or moves into or out of one.
+    pub(super) fn any_shown(&self) -> bool {
+        !self.shown.boxes.is_empty() || !self.shown.moves.is_empty()
+    }
+
+    /// Whether the card in `slot` moves into or out of a box at `now` (`shown_look`).
+    pub(super) fn shown_carries(&self, slot: usize, now: u64) -> bool {
+        self.shown
+            .moving(slot)
+            .is_some_and(|moving| moving.running(now))
+    }
+
     /// Whether a card moves into or out of a box at `now`.
     #[must_use]
     pub fn shown_moving(&self, now: u64) -> bool {

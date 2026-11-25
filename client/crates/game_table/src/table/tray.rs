@@ -366,6 +366,12 @@ impl Table {
         moving.is_some()
     }
 
+    /// Whether the move of the tray's cards under way at `now` carries the card in `slot`
+    /// (`tray_look`).
+    pub(super) fn tray_carries(&self, slot: usize, now: u64) -> bool {
+        self.tray.share(now).is_some() && self.tray.from(slot).is_some()
+    }
+
     /// Whether a card of the tray moves at `now`. A let-go that waits for its script holds
     /// still until the script places it.
     #[must_use]

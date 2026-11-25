@@ -222,6 +222,26 @@ pub(crate) fn lay(
             );
         }
     }
+    // The top two of the cards left on a pile are drawn, as `lay_pile` draws a pile's top two,
+    // or the pile shows only the dark rims of the cards beneath them, a black card where its
+    // top card should be.
+    if matches!(group, Group::Pile { .. }) {
+        let remaining = members
+            .iter()
+            .rev()
+            .filter(|object| !handled.slots.contains(&object.slot));
+        for object in remaining.take(2) {
+            if let Some(rest) = placement.get(object.slot).copied() {
+                placement.set(
+                    object.slot,
+                    super::Rest {
+                        visible: true,
+                        ..rest
+                    },
+                );
+            }
+        }
+    }
 }
 
 /// The anchor for a hand held in front of the camera. The viewer's regular hand stays

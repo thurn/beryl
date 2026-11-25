@@ -20,5 +20,8 @@ pub fn check(frame: &Frame, context: &Context) -> Vec<Fault> {
 
 /// Counts the elements the game-specific frame checks judge.
 pub fn count_frame(tally: &mut Judged, frame: &Frame) {
-    tally.add(Rule::BlankCard, cards::face_up(frame).count());
+    tally.add(
+        Rule::BlankCard,
+        cards::face_up(frame).count() + cards::piles(frame).count(),
+    );
 }
