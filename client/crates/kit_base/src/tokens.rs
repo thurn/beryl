@@ -132,6 +132,11 @@ pub mod color {
     /// The edge of a permanent its owner does not control: the border of `.card-stolen-edge`
     /// (`ui/src/design/components/card-marks-and-piles.css`).
     pub const OUTLINE: [u8; 4] = STOLEN;
+    /// The outer halo round a card shown away from the zone it is in: a cool violet, apart from
+    /// the cyan of a card that may be played.
+    pub const AWAY: [u8; 4] = [176, 140, 255, 150];
+    /// The inner halo round the same card, nearly white.
+    pub const AWAY_CORE: [u8; 4] = [236, 228, 255, 120];
 }
 
 /// The colors of symbol discs and their glyphs, from `flat.symbol`.

@@ -33,6 +33,7 @@ mod preparation;
 pub(super) mod special;
 mod ways;
 
+pub use ways::castable_from_graveyard;
 use ways::{Ways, cast_sources};
 
 /// What every check of one player's options reads, found once for all of them: the mana they

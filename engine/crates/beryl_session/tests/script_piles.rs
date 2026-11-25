@@ -9,7 +9,8 @@ use crate::common::fixtures::{
     TRINKET_MAGE_FINDS_MANA_CRYPT,
 };
 
-use common::{script, text};
+use beryl_protocol::protocol::ZoneName;
+use common::{script, text, views};
 
 /// `fly` of a mill: the cards go from the library to the graveyard face up, together, and the
 /// draw that follows is a beat of its own.
@@ -55,6 +56,32 @@ fn a_card_cast_with_flashback_flies_from_the_graveyard() {
     };
     assert_eq!(first, cast("you"));
     assert_eq!(second, cast("opponent"));
+}
+
+/// A card its owner may cast from their graveyard is marked so in their view alone, from the
+/// moment Snapcaster Mage's trigger gives it flashback until it is cast, so that the table shows
+/// it in their hand only while they may cast it.
+#[test]
+fn a_card_with_flashback_is_marked_castable_in_its_owners_view_alone() {
+    let views = views(SNAPCASTER_MAGE, |_, _, _| {});
+    let marked = |seat: usize| -> Vec<bool> {
+        views
+            .iter()
+            .map(|seats| {
+                seats[seat].objects.iter().any(|object| {
+                    object.castable_from_graveyard
+                        && object.zone == ZoneName::Graveyard
+                        && object.name.as_deref() == Some("Counterspell")
+                })
+            })
+            .collect()
+    };
+    // The reset, Timetwister cast, Snapcaster Mage cast, Snapcaster and its trigger resolved,
+    // Timetwister's controller passing, Counterspell cast with flashback, and what follows.
+    let mut owner = [false; 9];
+    owner[3..5].fill(true);
+    assert_eq!(marked(0), owner);
+    assert_eq!(marked(1), [false; 9]);
 }
 
 /// `fly` of a card cast from exile: from the pile Elite Spellbinder put it in to the stack.
