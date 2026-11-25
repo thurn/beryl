@@ -17,13 +17,15 @@ pub mod replay;
 pub mod save;
 pub mod tracked;
 pub mod treehash;
+pub mod words;
 pub mod worktree;
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use ignite_core::ids::{Commit, Oid};
 use ignite_core::time::Timestamp;
-use ignite_core::traits::{Git, Push, Rebase, Result, RevertOutcome};
+use ignite_core::traits::{Git, LineChanges, Push, Rebase, Result, RevertOutcome};
 
 /// One repository: the main checkout, and the remote that holds the delivery branches.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -103,6 +105,19 @@ impl Git for GitCli {
 
     fn subject(&self, repo: &Path, commit: &Commit) -> Result<String> {
         refs::subject(repo, commit)
+    }
+
+    fn line_changes(&self, repo: &Path, commits: &[Commit]) -> Result<LineChanges> {
+        words::line_changes(repo, commits)
+    }
+
+    fn words_before(
+        &self,
+        repo: &Path,
+        commit: &Commit,
+        words: &[String],
+    ) -> Result<BTreeSet<String>> {
+        words::before(repo, commit, words)
     }
 
     fn merge_base(&self, repo: &Path, a: &Commit, b: &Commit) -> Result<Commit> {

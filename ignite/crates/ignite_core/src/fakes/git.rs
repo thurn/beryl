@@ -1,12 +1,12 @@
 //! [`FakeGit`], the in-memory repository of [`super`]'s fakes.
 
-use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use crate::ids::{Commit, Oid};
 use crate::time::Timestamp;
-use crate::traits::{Error, Git, Push, Rebase, Result, RevertOutcome};
+use crate::traits::{Error, Git, LineChanges, Push, Rebase, Result, RevertOutcome};
 
 use super::lock;
 
@@ -41,6 +41,11 @@ pub struct FakeGit {
     tree_ids: Mutex<HashMap<PathBuf, String>>,
     /// Each commit's subject for `subject`; a commit not here has the subject `change <sha>`.
     subjects: Mutex<HashMap<Commit, String>>,
+    /// The lines each run of commits changed, for `line_changes`; a run not here changed none.
+    line_changes: Mutex<HashMap<Vec<Commit>, LineChanges>>,
+    /// The words the parent of each commit holds, for `words_before`; a commit not here has a
+    /// parent that holds none of the words asked about.
+    words_before: Mutex<HashMap<Commit, BTreeSet<String>>>,
 }
 
 impl FakeGit {
@@ -106,6 +111,24 @@ impl FakeGit {
     /// Sets the subject `subject` gives for `commit`.
     pub fn set_subject(&self, commit: &Commit, subject: &str) {
         lock(&self.subjects).insert(commit.clone(), subject.to_owned());
+    }
+
+    /// Sets the lines `line_changes` gives for `commits`, oldest first.
+    pub fn set_line_changes(&self, commits: &[Commit], added: &[&str], removed: &[&str]) {
+        let lines = |lines: &[&str]| lines.iter().map(|l| (*l).to_owned()).collect();
+        lock(&self.line_changes).insert(
+            commits.to_vec(),
+            LineChanges {
+                added: lines(added),
+                removed: lines(removed),
+            },
+        );
+    }
+
+    /// Sets the words the parent of `commit` holds, for `words_before`.
+    pub fn set_words_before(&self, commit: &Commit, words: &[&str]) {
+        let words = words.iter().map(|w| (*w).to_owned()).collect();
+        lock(&self.words_before).insert(commit.clone(), words);
     }
 
     /// Sets the date `committed_at` gives for `commit`.
@@ -251,6 +274,28 @@ impl Git for FakeGit {
             .get(commit)
             .cloned()
             .unwrap_or_else(|| format!("change {commit}")))
+    }
+
+    fn line_changes(&self, _repo: &Path, commits: &[Commit]) -> Result<LineChanges> {
+        Ok(lock(&self.line_changes)
+            .get(commits)
+            .cloned()
+            .unwrap_or_default())
+    }
+
+    fn words_before(
+        &self,
+        _repo: &Path,
+        commit: &Commit,
+        words: &[String],
+    ) -> Result<BTreeSet<String>> {
+        let held = lock(&self.words_before);
+        let held = held.get(commit);
+        Ok(words
+            .iter()
+            .filter(|word| held.is_some_and(|held| held.contains(*word)))
+            .cloned()
+            .collect())
     }
 
     fn merge_base(&self, _repo: &Path, _a: &Commit, b: &Commit) -> Result<Commit> {

@@ -254,6 +254,14 @@ pub enum RevertOutcome {
     Conflict { files: Vec<String> },
 }
 
+/// The lines a run of commits added and removed, as [`Git::line_changes`] reads them. Each line
+/// is the text without its leading `+` or `-`; the files they belong to are not kept.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct LineChanges {
+    pub added: Vec<String>,
+    pub removed: Vec<String>,
+}
+
 /// How a push ended.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Push {
@@ -332,6 +340,26 @@ pub trait Git: Send + Sync {
     ) -> Result<RevertOutcome> {
         let _ = (repo, tip, commits, message);
         Err(git_not_supported("revert commits"))
+    }
+
+    /// The lines that `commits` (oldest first, one after another on the first-parent line)
+    /// added and removed together: the difference between the first commit's parent and the
+    /// last commit. Binary files are left out.
+    fn line_changes(&self, repo: &Path, commits: &[Commit]) -> Result<LineChanges> {
+        let _ = (repo, commits);
+        Err(git_not_supported("read the lines commits changed"))
+    }
+
+    /// Which of `words` occur as whole words in some text file of the first parent of
+    /// `commit`.
+    fn words_before(
+        &self,
+        repo: &Path,
+        commit: &Commit,
+        words: &[String],
+    ) -> Result<BTreeSet<String>> {
+        let _ = (repo, commit, words);
+        Err(git_not_supported("search a commit's files for words"))
     }
 
     /// The first line of `commit`'s message.

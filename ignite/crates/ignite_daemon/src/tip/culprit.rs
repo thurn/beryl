@@ -214,6 +214,7 @@ impl TipVerifier {
             .ok()
             .and_then(|culprit| culprit.as_ref()?.suspects.last()?.commits.first().cloned());
         // An eligible failure can revert a single confirmed landing.
+        let mut note = None;
         if allow_revert && let Ok(Some(found)) = &culprit {
             match self.try_revert(ctx, tip, check, found, output) {
                 Handled::Reverted => {
@@ -225,21 +226,28 @@ impl TipVerifier {
                 Handled::NextRound if self.deferred.insert(check.check.clone()) => {
                     return Ok(cutoff);
                 }
+                // The revert would not build. The failure may have been reported before, but
+                // without saying why no revert came, so it is reported again with the note.
+                Handled::Unbuildable(text) => note = Some(text),
                 Handled::NextRound | Handled::Report => {}
             }
         }
         super::round::require_running()?;
-        if reported {
+        if reported && note.is_none() {
             return Ok(cutoff);
         }
+        let output = output
+            .map(|o| tail(o, &self.own_outputs))
+            .unwrap_or_default();
         let report = RegressionReport {
             check: check.check.clone(),
             first_bad: tip.clone(),
             last_good: last.clone(),
             caused_by: None,
-            output: output
-                .map(|o| tail(o, &self.own_outputs))
-                .unwrap_or_default(),
+            output: match note {
+                Some(note) => format!("{note}\n\n{output}"),
+                None => output,
+            },
             suspects: Vec::new(),
             platform: check.key.platform,
             search: None,

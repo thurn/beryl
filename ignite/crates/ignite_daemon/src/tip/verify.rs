@@ -84,6 +84,7 @@ impl TipVerifier {
     ) -> Result<TipOutcome> {
         self.own_outputs.clear();
         self.reverted.clear();
+        self.round_builds.clear();
         self.listed.clear();
         self.send_reverts(ctx);
         let mut verdicts = HashMap::new();
@@ -140,6 +141,12 @@ impl TipVerifier {
         let other = self.work.checks(ctx, tip, phase)?;
         self.record_listing(&other);
         listing.append(other);
+        self.round_builds = listing
+            .checks
+            .iter()
+            .filter(|check| check.is_build() && check.runnable)
+            .cloned()
+            .collect();
         require_running()?;
         let mut regressions: HashSet<CheckName> = ctx
             .hub
@@ -398,6 +405,10 @@ impl TipVerifier {
             self.retry_for_stall = stall_at.filter(|at| now < *at).map(|at| (tip.clone(), at));
             let stalled = stall_at.is_some_and(|at| now >= at);
 
+            // A revert must not break a build that passed at the tip; one that already fails
+            // here is blamed on its own landing.
+            self.round_builds
+                .retain(|build| !failed.iter().any(|check| check.check == build.check));
             let mut culprits = HashSet::new();
             let mut blame_complete = true;
             for check in &failed {

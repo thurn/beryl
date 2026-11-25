@@ -57,6 +57,7 @@ mod candidate;
 mod coverage;
 mod covered;
 mod culprit;
+mod dependents;
 mod families;
 mod green;
 mod machines;
@@ -415,6 +416,10 @@ pub struct TipVerifier {
     /// The commits of each landing this round reverted, and the commit that undid them (see
     /// `revert`).
     reverted: Vec<(Vec<Commit>, Commit)>,
+    /// The build checks this machine can run that the round listed at its tip and that did not
+    /// fail there. A revert is pushed only once those whose inputs it changes pass at it (see
+    /// `dependents`).
+    round_builds: Vec<TipCheck>,
     /// Reverts pushed that the hub has not taken yet.
     unsent_reverts: Vec<ignite_core::protocol::hub::Reverted>,
     /// How the round waits for a lease another holder has.
@@ -448,6 +453,7 @@ impl TipVerifier {
             saved: None,
             renew_every: families::RENEW_EVERY,
             reverted: Vec::new(),
+            round_builds: Vec::new(),
             unsent_reverts: Vec::new(),
             pause: revert::sleep(),
         }

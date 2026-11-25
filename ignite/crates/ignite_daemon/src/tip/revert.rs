@@ -22,15 +22,22 @@
 //!   landing recorded at the hub), so a round never reverts a revert;
 //! - the round has reverted fewer than [`MAX_REVERTS`] landings;
 //! - one commit on the tip undoes all the landing's commits without a conflict, and the failing
-//!   check passes at that commit (a cached pass for its inputs counts).
+//!   check passes at that commit (a cached pass for its inputs counts);
+//! - the build checks this machine can run whose inputs the revert changes pass at that commit
+//!   too. A failing check that is not a build (a test suite, say) can pass at a revert that does
+//!   not compile, when a later landing uses something the reverted landing added. When a build
+//!   fails there, or the revert conflicts, the later landings that use what the landing added
+//!   are undone in the same commit and the revert is built again (see `dependents`). A revert
+//!   that still does not build is not pushed, and the regression is reported, even if it was
+//!   reported before, with a note naming the landings involved.
 //!
 //! The revert commit is pushed to `staging` under the hub's lease, as a landing pushes. When the
 //! tip moved meanwhile, the revert is built again on the new tip, [`MAX_ATTEMPTS`] times at most;
 //! a new tip that changed what the check reads (a fix, or another machine's revert) is left to
 //! the next round, which runs the check there first. Another check blamed on a landing
 //! the round reverted already needs only to pass at that revert.
-//! The hub is then told with [`Hub::reverted`](ignite_core::traits::Hub::reverted), which
-//! reopens the landing's ticket. A report the hub did not take is kept in the verifier's memory
+//! The hub is then told with [`Hub::reverted`](ignite_core::traits::Hub::reverted), once for
+//! each landing the commit undid, which reopens each landing's ticket. A report the hub did not take is kept in the verifier's memory
 //! and sent again at the start of the next round.
 
 use std::sync::Arc;
@@ -38,13 +45,14 @@ use std::time::Duration;
 
 use serde_json::json;
 
-use ignite_core::ids::{Commit, TicketId};
+use ignite_core::ids::{CheckName, Commit, TicketId};
 use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::Reverted;
 use ignite_core::time::Timestamp;
 use ignite_core::tipround::CulpritSearch;
 use ignite_core::traits::{Push, RevertOutcome};
 
+use super::dependents::Built;
 use super::{Culprit, TipCheck, TipLanding, TipVerifier, tail, touches};
 use crate::land::lease::{self, HeldLease};
 use crate::server::Context;
@@ -81,6 +89,22 @@ pub(super) enum Handled {
     NextRound,
     /// The regression is reported, as for any failing check.
     Report,
+    /// The check passes at the revert, but the tree there does not build, even with the later
+    /// landings that use what the landing added undone too. Nothing is pushed. The regression
+    /// is reported with this text, which names the landings, even when the failure was
+    /// reported before.
+    Unbuildable(String),
+}
+
+/// How [`TipVerifier::push_revert`] ended when it did not fail.
+enum Pushed {
+    /// The revert commit is on `staging`. It undoes these landings, oldest first: the culprit,
+    /// then any later landings that had to go with it for the tree to build.
+    Done(Commit, Vec<TipLanding>),
+    /// The tip moved with a change to what the check reads; the next round runs it there.
+    NextRound,
+    /// The revert does not build; the text says what was tried (see [`Handled::Unbuildable`]).
+    Unbuildable(String),
 }
 
 /// How the round waits between tries for a busy lease, in seconds.
@@ -165,8 +189,14 @@ impl TipVerifier {
             if !self.passes_at(ctx, &revert, check) {
                 return Err(format!("the check does not pass at the revert {revert}"));
             }
-            if let Some(report) = self.unsent_reverts.iter_mut().find(|r| r.revert == revert) {
-                report.checks.push(check.check.clone());
+            for report in self
+                .unsent_reverts
+                .iter_mut()
+                .filter(|r| r.revert == revert)
+            {
+                if !report.checks.contains(&check.check) {
+                    report.checks.push(check.check.clone());
+                }
             }
             return Ok(Handled::Reverted);
         }
@@ -183,13 +213,11 @@ impl TipVerifier {
                 "this round already reverted {MAX_REVERTS} landings"
             ));
         }
-        let subjects = landing
-            .commits
-            .iter()
-            .map(|c| ctx.git.subject(&ctx.repo, c))
-            .collect::<Result<Vec<String>, _>>()
-            .map_err(|error| format!("its subjects could not be read: {error}"))?;
-        if landing.ticket.is_none() && subjects.iter().all(|s| s.starts_with(REVERT_PREFIX)) {
+        if landing.ticket.is_none()
+            && subjects(ctx, landing)?
+                .iter()
+                .all(|s| s.starts_with(REVERT_PREFIX))
+        {
             return Err("it is a revert that a round made".to_owned());
         }
         // One failed run may be a fault of that run, and a revert reopens a ticket, so the
@@ -197,29 +225,44 @@ impl TipVerifier {
         if self.outcome_at(ctx, tip, check, true) != Some(Outcome::Fail) {
             return Err(format!("the check did not fail again at {tip}"));
         }
-        let message = message(tip, check, landing, &subjects);
-        let Some(revert) = self.push_revert(ctx, tip, check, landing, &message)? else {
-            return Ok(Handled::NextRound);
+        let (revert, undone) = match self.push_revert(ctx, tip, check, landing)? {
+            Pushed::Done(revert, undone) => (revert, undone),
+            Pushed::NextRound => return Ok(Handled::NextRound),
+            Pushed::Unbuildable(note) => return Ok(Handled::Unbuildable(note)),
         };
-        self.reverted
-            .push((landing.commits.clone(), revert.clone()));
         let machine = if self.host.is_empty() {
             ctx.machine.to_string()
         } else {
             self.host.clone()
         };
-        let report = Reverted {
-            ticket: landing.ticket.clone(),
-            landed: landing.commits.clone(),
-            revert,
-            checks: vec![check.check.clone()],
-            output: output
-                .map(|o| tail(o, &self.own_outputs))
-                .unwrap_or_default(),
-            search: culprit.search.clone(),
-            machine,
-        };
-        self.unsent_reverts.push(report);
+        let output = output
+            .map(|o| tail(o, &self.own_outputs))
+            .unwrap_or_default();
+        for undone in &undone {
+            self.reverted.push((undone.commits.clone(), revert.clone()));
+            // A later landing was undone only because it uses what the culprit added, so its
+            // ticket says so before the check's output.
+            let output = if undone.commits == landing.commits {
+                output.clone()
+            } else {
+                format!(
+                    "This landing was undone together with {}, which {} blamed: it uses what \
+                     that landing added, so the tree did not build with only that landing \
+                     undone.\n\n{output}",
+                    landing_name(landing),
+                    check.check
+                )
+            };
+            self.unsent_reverts.push(Reverted {
+                ticket: undone.ticket.clone(),
+                landed: undone.commits.clone(),
+                revert: revert.clone(),
+                checks: vec![check.check.clone()],
+                output,
+                search: culprit.search.clone(),
+                machine: machine.clone(),
+            });
+        }
         self.send_reverts(ctx);
         self.save(ctx);
         crate::steps::allow_stop();
@@ -248,22 +291,31 @@ impl TipVerifier {
             .map(|r| r.outcome)
     }
 
-    /// Builds the revert of `landing` on the `staging` tip, checks that `check` passes there,
-    /// and pushes it under the lease. Builds it again when the tip moved, [`MAX_ATTEMPTS`]
-    /// times at most. Returns the pushed commit, or `None` when the tip moved past `tip` with a
-    /// change to the check's inputs: a fix, or another machine's revert, may have landed, and
-    /// the next round runs the check there first, as `blame` leaves such a check.
+    /// Builds the revert of `landing` on the `staging` tip, checks that `check` passes there and
+    /// that the tree there builds, and pushes it under the lease. Builds it again when the tip
+    /// moved, [`MAX_ATTEMPTS`] times at most.
+    ///
+    /// When the revert conflicts or does not build, the later landings that use what `landing`
+    /// added are undone in the same commit, once (see `dependents`). A revert that still does
+    /// not build is not pushed ([`Pushed::Unbuildable`]). The round gives up with
+    /// [`Pushed::NextRound`] when the tip moved past `tip` with a change to the check's inputs:
+    /// a fix, or another machine's revert, may have landed, and the next round runs the check
+    /// there first, as `blame` leaves such a check.
+    #[allow(clippy::too_many_lines)]
     fn push_revert(
         &self,
         ctx: &Context,
         tip: &Commit,
         check: &TipCheck,
         landing: &TipLanding,
-        message: &str,
-    ) -> Result<Option<Commit>, String> {
+    ) -> Result<Pushed, String> {
         let staging = &ctx.config.repository.staging;
         let holder = format!("{}:revert", ctx.machine);
-        for _ in 0..MAX_ATTEMPTS {
+        let mut undone = vec![landing.clone()];
+        let mut widened = false;
+        let mut attempts = 0;
+        while attempts < MAX_ATTEMPTS {
+            attempts += 1;
             let base = ctx.git.tip(staging).map_err(|e| e.to_string())?;
             if base != *tip {
                 let changed = ctx.git.changed(tip, &base).map_err(|e| e.to_string())?;
@@ -273,16 +325,29 @@ impl TipVerifier {
                          next round runs it there",
                         check.check
                     );
-                    return Ok(None);
+                    return Ok(Pushed::NextRound);
                 }
             }
+            let commits: Vec<Commit> = undone.iter().flat_map(|l| l.commits.clone()).collect();
+            let message = message(ctx, tip, check, &undone)?;
             let revert = match ctx
                 .git
-                .revert(&ctx.repo, &base, &landing.commits, message)
+                .revert(&ctx.repo, &base, &commits, &message)
                 .map_err(|e| e.to_string())?
             {
                 RevertOutcome::Clean { commit } => commit,
                 RevertOutcome::Conflict { files } => {
+                    if !widened {
+                        widened = true;
+                        if let Some(more) = self.widen(ctx, landing, &base, &mut undone)? {
+                            eprintln!(
+                                "ignite: undoing {} conflicts; undoing {more} with it",
+                                landing_name(landing)
+                            );
+                            attempts -= 1;
+                            continue;
+                        }
+                    }
                     return Err(format!(
                         "undoing it on {base} conflicts in {}",
                         files.join(", ")
@@ -291,6 +356,32 @@ impl TipVerifier {
             };
             if !self.passes_at(ctx, &revert, check) {
                 return Err(format!("the check does not pass at the revert {revert}"));
+            }
+            let paths: Vec<String> = undone.iter().flat_map(|l| l.paths.clone()).collect();
+            match self.builds_at(ctx, &revert, &paths, &check.check) {
+                Built::Yes => {}
+                Built::Unknown(names) => {
+                    return Err(format!(
+                        "{} gave no verdict at the revert {revert}",
+                        join(&names)
+                    ));
+                }
+                Built::Fails(names) => {
+                    if !widened {
+                        widened = true;
+                        if let Some(more) = self.widen(ctx, landing, &base, &mut undone)? {
+                            eprintln!(
+                                "ignite: {} fails at the revert {revert}; undoing {more} too",
+                                join(&names)
+                            );
+                            attempts -= 1;
+                            continue;
+                        }
+                    }
+                    return Ok(Pushed::Unbuildable(unbuildable(
+                        check, landing, &undone, &names, &revert,
+                    )));
+                }
             }
             let held = self.take_lease(ctx, &holder, landing)?;
             if !held.still_held() {
@@ -311,15 +402,16 @@ impl TipVerifier {
             // Keep the round alive until a pushed revert has been reported or saved for
             // retry, so the landing's ticket can be reopened.
             if !crate::steps::refuse_stop(&format!("its revert push to {staging} has begun")) {
-                return Ok(None);
+                return Ok(Pushed::NextRound);
             }
             let pushed = ctx.git.push(&ctx.repo, &revert, staging);
             if matches!(pushed, Ok(Push::Pushed { .. })) {
+                let names: Vec<String> = undone.iter().map(landing_name).collect();
                 eprintln!(
                     "ignite: reverted {} on {staging} with {revert}",
-                    landing_name(landing)
+                    names.join(", ")
                 );
-                return Ok(Some(revert));
+                return Ok(Pushed::Done(revert, undone));
             }
             crate::steps::allow_stop();
             pushed.map_err(|e| e.to_string())?;
@@ -327,6 +419,49 @@ impl TipVerifier {
         Err(format!(
             "the tip moved each of {MAX_ATTEMPTS} times before the revert was pushed"
         ))
+    }
+
+    /// Adds to `undone` the later landings up to `base` that depend on `landing`, and names
+    /// them; `None` when there are none. A landing that changed Ignite's own source or is a
+    /// revert a round made is never undone, so finding one ends the attempt.
+    fn widen(
+        &self,
+        ctx: &Context,
+        landing: &TipLanding,
+        base: &Commit,
+        undone: &mut Vec<TipLanding>,
+    ) -> Result<Option<String>, String> {
+        let more = self.dependents(ctx, landing, base)?;
+        if more.is_empty() {
+            return Ok(None);
+        }
+        let checks = checks_dir(&ctx.config);
+        for other in &more {
+            if let Some(path) = other
+                .paths
+                .iter()
+                .find(|p| ignite_change(Source::ignite(&checks), p))
+            {
+                return Err(format!(
+                    "the later landing {} that uses what it added changed Ignite's own source, \
+                     {path}",
+                    landing_name(other)
+                ));
+            }
+            if other.ticket.is_none()
+                && subjects(ctx, other)?
+                    .iter()
+                    .all(|s| s.starts_with(REVERT_PREFIX))
+            {
+                return Err(format!(
+                    "the later landing {} that uses what it added is a revert that a round made",
+                    landing_name(other)
+                ));
+            }
+        }
+        let names: Vec<String> = more.iter().map(landing_name).collect();
+        undone.extend(more);
+        Ok(Some(names.join(", ")))
     }
 
     /// The `staging` lease, waiting while another holder has it, [`LEASE_WAITS`] times at most.
@@ -389,28 +524,122 @@ fn landing_name(landing: &TipLanding) -> String {
     )
 }
 
-/// The revert commit's message: `revert: <the landing's first subject>`, cut to
-/// [`SUBJECT_CHARS`], then a body naming the check and the commits it undoes.
-fn message(tip: &Commit, check: &TipCheck, landing: &TipLanding, subjects: &[String]) -> String {
-    let first = subjects.first().map_or("", String::as_str);
+/// The subject of each of `landing`'s commits.
+fn subjects(ctx: &Context, landing: &TipLanding) -> Result<Vec<String>, String> {
+    landing
+        .commits
+        .iter()
+        .map(|c| ctx.git.subject(&ctx.repo, c))
+        .collect::<Result<Vec<String>, _>>()
+        .map_err(|error| {
+            format!(
+                "the subjects of {} could not be read: {error}",
+                landing_name(landing)
+            )
+        })
+}
+
+/// Each of `landing`'s commits with its subject, one per line.
+fn commit_lines(ctx: &Context, landing: &TipLanding) -> Result<Vec<String>, String> {
+    Ok(landing
+        .commits
+        .iter()
+        .zip(subjects(ctx, landing)?)
+        .map(|(commit, line)| format!("{commit} {line}"))
+        .collect())
+}
+
+/// The revert commit's message: `revert: <the culprit's first subject>`, cut to
+/// [`SUBJECT_CHARS`], then a body naming the check and the commits it undoes. `undone` starts
+/// with the culprit; any landings after it were undone because they use what it added.
+fn message(
+    ctx: &Context,
+    tip: &Commit,
+    check: &TipCheck,
+    undone: &[TipLanding],
+) -> Result<String, String> {
+    let Some((culprit, later)) = undone.split_first() else {
+        return Err("there is nothing to undo".to_owned());
+    };
+    let culprit_lines = commit_lines(ctx, culprit)?;
+    let first = culprit_lines
+        .first()
+        .and_then(|line| line.split_once(' '))
+        .map_or("", |(_, subject)| subject);
     let subject: String = format!("{REVERT_PREFIX}{first}")
         .chars()
         .take(SUBJECT_CHARS)
         .collect();
-    let landed = match &landing.ticket {
+    let landed = match &culprit.ticket {
         Some(ticket) => format!("the landing of {ticket}"),
         None => "commits no landing recorded".to_owned(),
     };
-    let undone: Vec<String> = landing
-        .commits
-        .iter()
-        .zip(subjects)
-        .map(|(commit, line)| format!("{commit} {line}"))
-        .collect();
-    format!(
+    let mut text = format!(
         "{subject}\n\nThe check {} failed at {tip} with {landed}, and passed with \
          them undone. This commit undoes:\n\n{}\n",
         check.check,
-        undone.join("\n")
-    )
+        culprit_lines.join("\n")
+    );
+    if !later.is_empty() {
+        let mut lines = Vec::new();
+        for landing in later {
+            lines.extend(commit_lines(ctx, landing)?);
+        }
+        text.push_str(
+            "\nThe tree did not build with only those undone, so it also undoes these later \
+             commits, which use what they added:\n\n",
+        );
+        text.push_str(&lines.join("\n"));
+        text.push('\n');
+    }
+    Ok(text)
+}
+
+/// The report's text for a revert that does not build: what was undone, and which build
+/// checks failed at the revert.
+fn unbuildable(
+    check: &TipCheck,
+    landing: &TipLanding,
+    undone: &[TipLanding],
+    fails: &[CheckName],
+    revert: &Commit,
+) -> String {
+    let commits =
+        |l: &TipLanding| -> Vec<String> { l.commits.iter().map(ToString::to_string).collect() };
+    let mut text = format!(
+        "Ignite did not revert {} ({}) automatically. The check {} passes with it undone, but \
+         {} then fails at the revert {revert}.",
+        landing_name(landing),
+        commits(landing).join(", "),
+        check.check,
+        join(fails)
+    );
+    match undone.get(1..) {
+        Some(later) if !later.is_empty() => {
+            let names: Vec<String> = later
+                .iter()
+                .map(|l| format!("{} ({})", landing_name(l), commits(l).join(", ")))
+                .collect();
+            text.push_str(
+                " That revert also undid these later landings, which use what it added: ",
+            );
+            text.push_str(&names.join("; "));
+            text.push('.');
+        }
+        _ => {
+            text.push_str(
+                " No later landing uses a word it introduced or removes a line it added.",
+            );
+        }
+    }
+    text
+}
+
+/// Check names joined with commas.
+fn join(names: &[CheckName]) -> String {
+    names
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(", ")
 }
