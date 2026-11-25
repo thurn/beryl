@@ -1,5 +1,5 @@
-//! The Windows half of `system`: the size and free space of a disk from `GetDiskFreeSpaceExW`, and the
-//! installed memory from `GlobalMemoryStatusEx`.
+//! The Windows half of `system`: the size and free space of a disk from `GetDiskFreeSpaceExW`, the
+//! installed memory from `GlobalMemoryStatusEx`, and the boot time from `GetTickCount64`.
 
 use std::io;
 use std::os::windows::ffi::OsStrExt;
@@ -53,6 +53,19 @@ pub fn mount_points() -> Vec<PathBuf> {
         .collect()
 }
 
+/// When the machine last started, in milliseconds since the Unix epoch: now less the
+/// milliseconds `GetTickCount64` says have passed since it started.
+pub fn booted_at_millis() -> io::Result<i64> {
+    use windows_sys::Win32::System::SystemInformation::GetTickCount64;
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(io::Error::other)?;
+    // SAFETY: GetTickCount64 takes no arguments and cannot fail.
+    let up = unsafe { GetTickCount64() };
+    Ok(now.as_millis() as i64 - up as i64)
+}
+
 /// The machine's physical memory in bytes.
 pub fn total_memory_bytes() -> io::Result<u64> {
     let mut status = MEMORYSTATUSEX {
@@ -75,5 +88,6 @@ mod tests {
         let space = disk_space(&ignite_core::test_files::temp_dir()).unwrap();
         assert!(space.available > 0 && space.total >= space.available);
         assert!(total_memory_bytes().unwrap() > 1 << 30);
+        assert!(booted_at_millis().unwrap() > 1_600_000_000_000);
     }
 }

@@ -437,3 +437,36 @@ fn a_family_left_out_of_every_machines_tip_families_is_unrunnable() {
     let config = Config::parse("ignite.toml", &verified).unwrap();
     assert!(config.unrunnable_families(&platform_manifest()).is_empty());
 }
+
+#[test]
+fn a_machine_may_let_the_monitor_restart_it_when_its_storage_is_stuck() {
+    let cygnus = "[machine.cygnus]\nos = \"windows\"\n";
+    let keys = "stuck_storage_reboot_after_s = 1800\n\
+                stuck_storage_force_command = [\"schtasks\", \"/Run\", \"/TN\", \"force\"]\n";
+    let text = DOCUMENT_EXAMPLES.replace(cygnus, &format!("{cygnus}{keys}"));
+    let (config, unknown) = Config::parse_with_unknown("ignite.toml", &text).unwrap();
+    assert!(unknown.is_empty(), "{unknown:?}");
+    let machine = config.machine("cygnus").unwrap();
+    assert_eq!(machine.stuck_storage_reboot_after_s, Some(1800));
+    assert_eq!(
+        machine.stuck_storage_force_command.as_deref(),
+        Some(&["schtasks", "/Run", "/TN", "force"].map(String::from)[..])
+    );
+    // Unset, the monitor never restarts the machine.
+    let jarvis = config.machine("jarvis").unwrap();
+    assert_eq!(jarvis.stuck_storage_reboot_after_s, None);
+
+    for (bad, key) in [
+        (
+            "stuck_storage_reboot_after_s = 0\n",
+            "machine.cygnus.stuck_storage_reboot_after_s",
+        ),
+        (
+            "stuck_storage_force_command = []\n",
+            "machine.cygnus.stuck_storage_force_command",
+        ),
+    ] {
+        let text = DOCUMENT_EXAMPLES.replace(cygnus, &format!("{cygnus}{bad}"));
+        assert_eq!(Config::parse("ignite.toml", &text).unwrap_err().key, key);
+    }
+}

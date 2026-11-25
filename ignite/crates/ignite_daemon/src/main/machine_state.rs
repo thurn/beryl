@@ -88,6 +88,20 @@ impl crate::doctor::StatusSection for SnapshotSection {
     }
 }
 
+/// Keeps what a heartbeat's reply says about this machine, and records for the monitor the trees
+/// roots that the reply's fleet settings may have moved.
+fn heard(
+    pool: &crate::pool::Pool,
+    reply: &ignite_core::protocol::hub::HeartbeatReply,
+    home: &crate::update::Home,
+    trees: &crate::trees::Trees,
+) {
+    if let Err(error) = crate::fleet_notice::heard(pool, reply) {
+        eprintln!("ignite: fleet notice not saved: {error}");
+    }
+    crate::monitor::storage::record_roots_of(home, trees);
+}
+
 impl Parts {
     /// Sends the outbox, the heartbeat and any landing the hub has not heard of. After each
     /// heartbeat it compares the daemon's version with the hub's and restarts into a new
@@ -104,6 +118,7 @@ impl Parts {
             self.version.clone(),
         );
         let (scheduler, trees) = (self.scheduler.clone(), self.trees.clone());
+        let home = self.home.clone();
         let facts = self.facts.clone();
         let update = self.update.clone();
         let reporter = self.reporter.clone();
@@ -162,9 +177,7 @@ impl Parts {
                         client.heartbeat(&beat)
                     },
                 )?;
-                if let Err(error) = crate::fleet_notice::heard(pool, &reply) {
-                    eprintln!("ignite: fleet notice not saved: {error}");
-                }
+                heard(pool, &reply, &home, &trees);
                 headless_dispatch.reconciled(&ctx, &reply.reconciled);
                 *hub_version.borrow_mut() = Some(reply.hub_version);
                 emergencies.heard(reply.emergency);

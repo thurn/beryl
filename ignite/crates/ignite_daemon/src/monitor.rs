@@ -23,15 +23,18 @@
 //!
 //! - while the daemon stays down after that, on a machine that runs an app in CLI mode, starts
 //!   and then resumes a headless justiciar turn, a repair session with no person watching
-//!   ([`justiciar`]).
+//!   ([`justiciar`]);
+//! - probes each trees root the daemon uses, and while one does not answer, stops kickstarting,
+//!   asks for a repair that names the drive, tells the hub and, where the machine's
+//!   `ignite.toml` entry allows it, restarts the machine ([`storage`]).
 //!
 //! A run gives up after [`RUN_DEADLINE`] ([`with_deadline`]). The login service starts no new run
 //! while one is still running, so a run blocked on a helper process would otherwise stop every
 //! later one: on 2026-11-25 a Windows run blocked from 06:13Z, and the machine got no restart and
 //! no repair session for nearly eight hours.
 //!
-//! The justiciar turn is the monitor's only agent logic, and it calls the hub only to see that
-//! it answers. Each decision ([`decide`], [`decide_hub`], [`justiciar::decide`]) is a function
+//! The justiciar turn is the monitor's only agent logic. The monitor's only hub call is the
+//! report of a stuck trees drive. Each decision ([`decide`], [`decide_hub`], [`justiciar::decide`]) is a function
 //! of what was observed; the observations and actions are the [`Machine`] trait, so the tests
 //! run the decisions against a fake. A run reports a problem it handled and exits successfully.
 
@@ -51,6 +54,10 @@ use crate::update::{CrashLoop, Home, StartRecord, detect_crash_loop, roll_back, 
 
 #[path = "monitor_justiciar.rs"]
 pub mod justiciar;
+#[path = "monitor_storage.rs"]
+pub mod storage;
+
+use storage::{RebootPolicy, StuckStorage};
 
 /// This many runs in a row without an answer from the daemon get it kickstarted.
 pub const FAILURES_BEFORE_KICKSTART: u32 = 3;
@@ -67,6 +74,8 @@ const PROBE_TIMEOUT: Duration = Duration::from_secs(5);
 pub const RUN_DEADLINE: Duration = Duration::from_secs(100);
 /// This many runs in a row without an answer from the hub get it kickstarted.
 pub const HUB_FAILURES_BEFORE_KICKSTART: u32 = 2;
+/// The reason a repair request gives when the daemon is down and the trees drives answer.
+pub const DAEMON_REASON: &str = "the daemon does not answer and kickstarting it did not help";
 
 /// What the monitor remembers between runs: `<home>/monitor.json`.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -85,6 +94,18 @@ pub struct MonitorState {
     /// Runs in a row in which the hub, on the hub's machine, did not answer.
     pub hub_failures: u32,
     pub last_hub_kickstart: Option<Timestamp>,
+    /// Since when a trees root has not answered; `None` while every root answers.
+    pub storage_stuck_since: Option<Timestamp>,
+    /// When a repair for a stuck trees root was last asked for.
+    pub storage_escalated_at: Option<Timestamp>,
+    /// The `since` of the stuck root the hub has a report of.
+    pub storage_reported: Option<Timestamp>,
+    /// When the monitor last restarted the machine for a stuck trees root. Kept after the root
+    /// answers again, so that restarts for this reason are at least [`storage::REBOOT_GAP_S`]
+    /// apart.
+    pub storage_reboot_at: Option<Timestamp>,
+    /// Whether the force command has run since that restart.
+    pub storage_forced: bool,
 }
 
 /// What one run saw.
@@ -95,6 +116,12 @@ pub struct Observation {
     /// Whether the daemon answered the probe.
     pub answered: bool,
     pub crash_loop: Option<CrashLoop>,
+    /// A trees root that did not answer its probe.
+    pub storage: Option<StuckStorage>,
+    /// What this machine allows the monitor to do about a stuck root.
+    pub reboot: RebootPolicy,
+    /// When the machine last started, when known.
+    pub booted_at: Option<Timestamp>,
 }
 
 /// What one run does about it.
@@ -105,6 +132,14 @@ pub enum Action {
     Kickstart,
     /// Write `justiciar-needed.json` and notify.
     AskForRepair,
+    /// Write `justiciar-needed.json` naming the stuck trees root, and notify.
+    AskForStorageRepair(StuckStorage),
+    /// Tell the hub that the trees root is stuck.
+    ReportStorage(StuckStorage),
+    /// Restart the machine ([`Service::restart_machine`]).
+    Restart,
+    /// Run the operator's force command, program first.
+    ForceRestart(Vec<String>),
 }
 
 fn seconds_since(then: Timestamp, now: Timestamp) -> f64 {
@@ -125,6 +160,20 @@ pub fn decide(state: &mut MonitorState, seen: &Observation, now: Timestamp) -> V
         state.consecutive_failures += 1;
         state.failing_since.get_or_insert(now);
     }
+    if let Some(stuck) = &seen.storage {
+        // A new daemon, or a rollback's restart, would block on the drive like the old one.
+        return storage::decide(state, stuck, &seen.reboot, seen.booted_at, now);
+    }
+    if state.storage_stuck_since.take().is_some() && !(seen.running && seen.answered) {
+        // The daemon's own failures count from when the drive answered again: until then no
+        // kickstart could have helped.
+        state.failing_since = Some(now);
+        state.consecutive_failures = 1;
+        state.kickstarts = 0;
+        state.escalated_at = None;
+    }
+    state.storage_escalated_at = None;
+    state.storage_reported = None;
     if let Some(looped) = &seen.crash_loop {
         // The rollback restarts the daemon, which starts counting afresh.
         state.consecutive_failures = 0;
@@ -204,6 +253,20 @@ pub trait Machine {
     fn start_justiciar(&self, turn: &justiciar::JusticiarTurn) -> std::io::Result<()>;
     /// The last `lines` lines of the daemon's log, or an empty text when it cannot be read.
     fn daemon_log_tail(&self, lines: usize) -> String;
+    /// The trees roots the daemon uses ([`storage::roots`]).
+    fn trees_roots(&self) -> Vec<PathBuf>;
+    /// Whether the trees root `root` answers a metadata read within [`storage::PROBE_DEADLINE`].
+    fn probe_storage(&self, root: &Path) -> bool;
+    /// What this machine's `ignite.toml` entry allows the monitor to do about a stuck root.
+    fn reboot_policy(&self) -> RebootPolicy;
+    /// When the machine last started, when it can say.
+    fn booted_at(&self) -> Option<Timestamp>;
+    /// Reports the stuck root to the hub (`POST /machines/storage-stuck`).
+    fn report_storage(&self, stuck: &StuckStorage) -> Result<(), String>;
+    /// Restarts the machine now ([`Service::restart_machine`]).
+    fn restart(&self) -> std::io::Result<()>;
+    /// Runs `command`, program first, and waits for it.
+    fn run_command(&self, command: &[String]) -> std::io::Result<()>;
 }
 
 fn state_file(home: &Home) -> PathBuf {
@@ -236,6 +299,7 @@ pub fn run_once(home: &Home, machine: &dyn Machine, now: Timestamp) -> Vec<Strin
         running,
         answered: running && machine.probe(),
         crash_loop,
+        ..observe_storage(machine, &state, now)
     };
     let actions = decide(&mut state, &seen, now);
     let mut done = Vec::new();
@@ -261,20 +325,31 @@ pub fn run_once(home: &Home, machine: &dyn Machine, now: Timestamp) -> Vec<Strin
             }
             Action::AskForRepair => {
                 let evidence = evidence(&state, &seen, home, now);
-                let reason = "the daemon does not answer and kickstarting it did not help";
-                let record = serde_json::json!({"at": now, "reason": reason, "evidence": evidence});
-                let written = serde_json::to_vec_pretty(&record)
-                    .map_err(std::io::Error::other)
-                    .and_then(|bytes| fs::write(home.root.join("justiciar-needed.json"), bytes));
-                if let Err(error) = written {
-                    done.push(format!("cannot write justiciar-needed.json: {error}"));
-                }
-                machine.notify("Ignite needs a repair", reason);
-                done.push(format!("asked for a repair: {reason}"));
+                ask_for_repair(
+                    home,
+                    machine,
+                    "Ignite needs a repair",
+                    DAEMON_REASON,
+                    &evidence,
+                    now,
+                    &mut done,
+                );
+            }
+            storage_action => {
+                let evidence = evidence(&state, &seen, home, now);
+                act_on_storage(
+                    home,
+                    machine,
+                    &mut state,
+                    storage_action,
+                    &evidence,
+                    now,
+                    &mut done,
+                );
             }
         }
     }
-    if seen.running && seen.answered {
+    if seen.running && seen.answered && seen.storage.is_none() {
         let _ = fs::remove_file(home.root.join("justiciar-needed.json"));
     }
     // The monitor runs the last-good build, and writes the service as that build would. While it
@@ -312,6 +387,100 @@ pub fn run_once(home: &Home, machine: &dyn Machine, now: Timestamp) -> Vec<Strin
     }
     save(home, &state);
     done
+}
+
+/// The stuck trees root, if any, with the policy and boot time a stuck root needs, and the rest
+/// of an [`Observation`] left for the caller to fill in.
+fn observe_storage(machine: &dyn Machine, state: &MonitorState, now: Timestamp) -> Observation {
+    let storage = machine
+        .trees_roots()
+        .into_iter()
+        .find(|root| !machine.probe_storage(root))
+        .map(|root| StuckStorage {
+            root,
+            since: state.storage_stuck_since.unwrap_or(now),
+        });
+    let stuck = storage.is_some();
+    Observation {
+        running: false,
+        answered: false,
+        crash_loop: None,
+        storage,
+        reboot: if stuck {
+            machine.reboot_policy()
+        } else {
+            RebootPolicy::default()
+        },
+        booted_at: if stuck { machine.booted_at() } else { None },
+    }
+}
+
+/// Carries out one of the actions for a stuck trees root.
+fn act_on_storage(
+    home: &Home,
+    machine: &dyn Machine,
+    state: &mut MonitorState,
+    action: Action,
+    evidence: &str,
+    now: Timestamp,
+    done: &mut Vec<String>,
+) {
+    match action {
+        Action::AskForStorageRepair(stuck) => {
+            let reason = stuck.reason();
+            ask_for_repair(
+                home,
+                machine,
+                "Ignite needs a restart",
+                &reason,
+                evidence,
+                now,
+                done,
+            );
+        }
+        Action::ReportStorage(stuck) => match machine.report_storage(&stuck) {
+            Ok(()) => {
+                state.storage_reported = Some(stuck.since);
+                done.push("told the hub that a trees drive is stuck".to_owned());
+            }
+            Err(error) => done.push(format!(
+                "cannot tell the hub that a trees drive is stuck: {error}"
+            )),
+        },
+        Action::Restart => done.push(match machine.restart() {
+            Ok(()) => "restarting the machine: a trees drive is stuck".to_owned(),
+            Err(error) => format!("cannot restart the machine: {error}"),
+        }),
+        Action::ForceRestart(command) => done.push(match machine.run_command(&command) {
+            Ok(()) => format!("still up after the restart; ran {}", command.join(" ")),
+            Err(error) => format!(
+                "still up after the restart; cannot run {}: {error}",
+                command.join(" ")
+            ),
+        }),
+        Action::RollBack(_) | Action::Kickstart | Action::AskForRepair => {}
+    }
+}
+
+/// Writes `justiciar-needed.json` with `reason` and `evidence`, and posts a notification.
+fn ask_for_repair(
+    home: &Home,
+    machine: &dyn Machine,
+    title: &str,
+    reason: &str,
+    evidence: &str,
+    now: Timestamp,
+    done: &mut Vec<String>,
+) {
+    let record = serde_json::json!({"at": now, "reason": reason, "evidence": evidence});
+    let written = serde_json::to_vec_pretty(&record)
+        .map_err(std::io::Error::other)
+        .and_then(|bytes| fs::write(home.root.join("justiciar-needed.json"), bytes));
+    if let Err(error) = written {
+        done.push(format!("cannot write justiciar-needed.json: {error}"));
+    }
+    machine.notify(title, reason);
+    done.push(format!("asked for a repair: {reason}"));
 }
 
 fn kickstart(machine: &dyn Machine) -> String {
@@ -411,13 +580,11 @@ impl Machine for NativeMachine {
             wait_s: PROBE_TIMEOUT.as_secs() as u32,
             pid: Some(std::process::id()),
         };
-        let (sender, receiver) = mpsc::channel();
-        // A daemon that accepts the connection and never answers leaves this thread behind,
-        // which ends with the process.
-        std::thread::spawn(move || {
-            let _ = sender.send(crate::server::send(&socket, &request).is_ok());
-        });
-        receiver.recv_timeout(PROBE_TIMEOUT).unwrap_or(false)
+        // A daemon that accepts the connection and never answers leaves the thread behind.
+        with_deadline(PROBE_TIMEOUT, move || {
+            crate::server::send(&socket, &request).is_ok()
+        })
+        .unwrap_or(false)
     }
 
     fn kickstart(&self) -> std::io::Result<()> {
@@ -464,11 +631,7 @@ impl Machine for NativeMachine {
     }
 
     fn justiciar_app(&self) -> Option<justiciar::JusticiarApp> {
-        let home = Home {
-            root: self.home.clone(),
-        };
-        let checkout = PathBuf::from(fs::read_to_string(home.checkout_file()).ok()?.trim());
-        let config = crate::main::read_config(&checkout).ok()?;
+        let (checkout, config) = self.config()?;
         justiciar::first_cli_app(&config, &checkout)
     }
 
@@ -503,6 +666,91 @@ impl Machine for NativeMachine {
         let all: Vec<&str> = text.lines().collect();
         all[all.len().saturating_sub(lines)..].join("\n")
     }
+
+    fn trees_roots(&self) -> Vec<PathBuf> {
+        storage::roots(&self.home())
+    }
+
+    fn probe_storage(&self, root: &Path) -> bool {
+        storage::probe_detached(&self.home(), root)
+    }
+
+    fn reboot_policy(&self) -> RebootPolicy {
+        self.config()
+            .map_or_else(RebootPolicy::default, |(_, config)| {
+                RebootPolicy::of(&config, &hostname())
+            })
+    }
+
+    fn booted_at(&self) -> Option<Timestamp> {
+        ignite_os::system::booted_at_millis()
+            .ok()
+            .map(Timestamp::from_millis)
+    }
+
+    fn report_storage(&self, stuck: &StuckStorage) -> Result<(), String> {
+        let (_, config) = self
+            .config()
+            .ok_or("cannot read the main checkout's configuration")?;
+        let identity = self
+            .home()
+            .identity()
+            .load()
+            .map_err(|error| error.to_string())?
+            .ok_or("this machine has no identity")?;
+        let token = identity.token.ok_or("this machine is not registered")?;
+        let client =
+            crate::hubclient::HubClient::new(&config.hub, &token, identity.machine.as_str());
+        let report = storage::hub_report(stuck, &hostname());
+        // The hub client retries an unreachable hub; the monitor waits for it no longer than for
+        // a probe, and tries again on its next run.
+        match with_deadline(storage::PROBE_DEADLINE, move || {
+            client
+                .storage_stuck(&report)
+                .map_err(|error| error.to_string())
+        }) {
+            Some(Ok(_)) => Ok(()),
+            Some(Err(error)) => Err(error),
+            None => Err("the hub did not answer in time".to_owned()),
+        }
+    }
+
+    fn restart(&self) -> std::io::Result<()> {
+        Native.restart_machine()
+    }
+
+    fn run_command(&self, command: &[String]) -> std::io::Result<()> {
+        let (program, args) = command
+            .split_first()
+            .ok_or_else(|| std::io::Error::other("the command is empty"))?;
+        let status = std::process::Command::new(program)
+            .args(args)
+            .stdin(std::process::Stdio::null())
+            .status()?;
+        if status.success() {
+            return Ok(());
+        }
+        Err(std::io::Error::other(format!("it exited with {status}")))
+    }
+}
+
+impl NativeMachine {
+    fn home(&self) -> Home {
+        Home {
+            root: self.home.clone(),
+        }
+    }
+
+    /// The main checkout the Ignite home records, and its `ignite.toml`.
+    fn config(&self) -> Option<(PathBuf, ignite_core::config::Config)> {
+        let checkout = PathBuf::from(fs::read_to_string(self.home().checkout_file()).ok()?.trim());
+        let config = crate::main::read_config(&checkout).ok()?;
+        Some((checkout, config))
+    }
+}
+
+fn hostname() -> String {
+    crate::doctor::Host::hostname(&crate::doctor::NativeHost)
 }
 
 /// Whether the hub listening at `listen` answers an HTTP request within [`PROBE_TIMEOUT`]. Any

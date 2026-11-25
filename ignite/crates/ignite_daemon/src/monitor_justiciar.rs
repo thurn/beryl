@@ -251,20 +251,29 @@ fn evidence(home: &Home, machine: &dyn Machine) -> String {
     )
 }
 
-/// The prompt of turn `turn`.
-pub fn prompt(turn: u32, resumed: bool, evidence: &str) -> String {
+/// The reason `justiciar-needed.json` gives, or the daemon's when it gives none.
+fn reason(home: &Home) -> String {
+    fs::read(home.root.join("justiciar-needed.json"))
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+        .and_then(|request| request["reason"].as_str().map(str::to_owned))
+        .unwrap_or_else(|| super::DAEMON_REASON.to_owned())
+}
+
+/// The prompt of turn `turn`, for a repair asked for because of `reason`: the daemon's
+/// ([`super::DAEMON_REASON`]) or a stuck trees drive's.
+pub fn prompt(turn: u32, resumed: bool, reason: &str, evidence: &str) -> String {
     if resumed {
         return format!(
             "The Ignite daemon still does not answer. This is turn {turn} of at most \
-             {MAX_TURNS}. Continue the repair from what you found so far. Fresh evidence:\n\n\
-             {evidence}"
+             {MAX_TURNS}. The monitor's reason: {reason}. Continue the repair from what you \
+             found so far. Fresh evidence:\n\n{evidence}"
         );
     }
     let guide = ignite_core::guide::topic("justiciar").map_or("", |topic| topic.text);
     format!(
-        "You are this machine's justiciar, started by `ignite monitor` because the Ignite daemon \
-         does not answer and kickstarting it did not help. You run headless in the main \
-         checkout, with no person watching and no ticket held. Repair the daemon so that it \
+        "You are this machine's justiciar, started by `ignite monitor` because {reason}. You \
+         run headless in the main checkout, with no person watching and no ticket held. Repair the daemon so that it \
          answers again. `ignite monitor` runs every two minutes: while the daemon stays down it \
          resumes you, for at most {MAX_TURNS} turns, and it stops once the daemon answers. When \
          the hub answers, record what you did with `ignite ticket create` and close that \
@@ -361,7 +370,7 @@ fn start(
         effort: Some(EFFORT.to_owned()),
         transcript,
         new_transcript: None,
-        prompt: prompt(turn, resumed, &evidence(home, machine)),
+        prompt: prompt(turn, resumed, &reason(home), &evidence(home, machine)),
     };
     let launch = JusticiarTurn {
         command: adapter.command(&spec),

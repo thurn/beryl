@@ -13,6 +13,10 @@
 //! again or been set off ([`verdict`], called from `clearing_kinds.rs`). It has a signature of
 //! its own rather than sharing the one in `stuck.rs`: a new sighting moves a ticket's clearing
 //! time, and silence is not what that ticket waits on.
+//!
+//! A machine's monitor can file the same ticket sooner: when a drive holding its trees stops
+//! answering, it posts `POST /machines/storage-stuck` ([`storage_stuck`]), and the ticket names
+//! the drive as the cause at once instead of after half an hour of silence.
 
 use std::collections::BTreeMap;
 
@@ -20,13 +24,14 @@ use rusqlite::Connection;
 
 use ignite_core::fleet::{FleetSettings, MachineState};
 use ignite_core::pins::machine_label;
+use ignite_core::protocol::machine_state::StorageStuck;
 use ignite_core::protocol::tickets::{TicketFields, TicketType};
 use ignite_core::time::Timestamp;
 use ignite_store::Result;
 use ignite_store::hub::{fleet, fleet_settings, rows};
 
 use super::clearing_kinds::Verdict;
-use super::filing::{self, Filed, Filing, UPKEEP};
+use super::filing::{self, Author, Filed, Filing, UPKEEP};
 use super::parse_time;
 use super::signature::Signature;
 
@@ -96,6 +101,53 @@ pub fn machines_silent(conn: &mut Connection, now: Timestamp) -> Result<Vec<File
         filed.push(filing::file(conn, UPKEEP, &filing, now)?);
     }
     Ok(filed)
+}
+
+/// Files the machine's ticket for a person, or adds to it, because its monitor reported that
+/// the drive at `report.root` has not answered since `report.since`. `author.machine` is the
+/// reporting machine's ID, so the ticket is the one [`machines_silent`] would file for it.
+pub fn storage_stuck(
+    conn: &mut Connection,
+    author: Author,
+    report: &StorageStuck,
+    now: Timestamp,
+) -> Result<Filed> {
+    let host = &report.host;
+    let body = format!(
+        "The monitor on machine {host} ({id}) found that the drive holding its trees at {root} \
+         has not answered a metadata read since {since}. Processes that touch it block in the \
+         kernel and cannot be ended, so the monitor has stopped kickstarting the daemon: a new \
+         daemon would block too. The machine's heartbeats are likely to stop.\n\n\
+         What to do: restart the machine, and power-cycle it if an ordinary restart hangs. Then \
+         look in its system log for resets of the disk or virtual disk that holds {root}. The \
+         monitor restarts the machine itself only when its `[machine.{host}]` entry in \
+         `ignite.toml` sets `stuck_storage_reboot_after_s`. This ticket closes by itself an hour \
+         after the machine reports again.",
+        id = author.machine,
+        root = report.root,
+        since = report.since,
+    );
+    let filing = Filing {
+        signature: Signature::of_subject(author.machine, CATEGORY),
+        evidence: format!("storage-stuck {}", report.since),
+        fields: TicketFields {
+            title: Some(format!(
+                "Machine {host} has a trees drive that stopped answering"
+            )),
+            body: Some(body),
+            ticket_type: Some(TicketType::Bug),
+            priority: Some(0),
+            labels: Some(vec![
+                "fleet".to_owned(),
+                "needs:person".to_owned(),
+                machine_label(host),
+            ]),
+            ..TicketFields::default()
+        },
+        deps: Vec::new(),
+        released: true,
+    };
+    filing::file(conn, author, &filing, now)
 }
 
 /// Whether the machine `id` is still silent since the ticket last saw it at `sighted`.
@@ -235,6 +287,37 @@ mod tests {
                     .title
                     .contains("hal"))
         );
+    }
+
+    #[test]
+    fn a_stuck_drive_report_files_the_ticket_at_once_and_silence_adds_to_it() {
+        let mut conn = hub::open_in_memory().unwrap();
+        register(&conn, "m-w", "cygnus", at(0.0));
+        let report = StorageStuck {
+            host: "cygnus".to_owned(),
+            root: "E:\\trees".to_owned(),
+            since: at(60.0),
+        };
+        let author = Author {
+            actor: "ignite-monitor",
+            machine: "m-w",
+        };
+        let filed = storage_stuck(&mut conn, author, &report, at(120.0)).unwrap();
+        assert_eq!(filed.change, Change::Created);
+        let ticket = tickets::load(&conn, &filed.ticket).unwrap().unwrap();
+        assert_eq!(ticket.priority, 0);
+        assert!(ticket.title.contains("trees drive"), "{}", ticket.title);
+        assert!(ticket.body.contains("E:\\trees"), "{}", ticket.body);
+        for label in ["needs:person", "machine:cygnus"] {
+            assert!(ticket.labels.iter().any(|l| l == label), "{label}");
+        }
+        // The same report again adds nothing; the machine's silence later adds to the same
+        // ticket rather than filing a second.
+        let again = storage_stuck(&mut conn, author, &report, at(240.0)).unwrap();
+        assert_eq!(again.change, Change::Unchanged);
+        let silent = machines_silent(&mut conn, at(fleet_settings::ONLINE_SECONDS)).unwrap();
+        assert_eq!(silent.len(), 1);
+        assert_eq!(silent[0].ticket, filed.ticket);
     }
 
     #[test]

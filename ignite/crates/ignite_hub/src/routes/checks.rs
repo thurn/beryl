@@ -37,7 +37,7 @@ use ignite_store::hub::{
 
 use super::{Request, Response};
 use crate::upkeep::filing::Author;
-use crate::upkeep::{explore, justiciar, machines, regressions, reverted, stuck};
+use crate::upkeep::{explore, justiciar, machines, regressions, reverted, silent, stuck};
 
 /// Instructions are stored one by one; checks are costed in billions of them.
 const BILLION: f64 = 1e9;
@@ -73,6 +73,7 @@ pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Optio
         | "/finds"
         | "/justiciar"
         | "/justiciar/cleared"
+        | "/machines/storage-stuck"
         | "/tips/waiting"
         | "/tips/candidate/update"
         | "/tips/coverage/update"
@@ -189,7 +190,9 @@ fn route(conn: &mut Connection, request: &Request, now: Timestamp) -> Result<Res
             .map_err(|error| store_failure(&error))?;
             Ok(done())
         }
-        "/incomplete" | "/audits" | "/finds" | "/justiciar" => report(conn, request, now),
+        "/incomplete" | "/audits" | "/finds" | "/justiciar" | "/machines/storage-stuck" => {
+            report(conn, request, now)
+        }
         other => Err(failure(404, &format!("no route {other}"))),
     }
 }
@@ -609,6 +612,7 @@ fn report(conn: &mut Connection, request: &Request, now: Timestamp) -> Result<Re
         "/incomplete" => stuck::incomplete(conn, author, &body::<IncompleteReport>(request)?, now),
         "/audits" => stuck::audit(conn, author, &body::<AuditReport>(request)?, now),
         "/justiciar" => justiciar::report(conn, author, &body::<JusticiarReport>(request)?, now),
+        "/machines/storage-stuck" => silent::storage_stuck(conn, author, &body(request)?, now),
         _ => explore::find(conn, author, &body::<ExplorationFind>(request)?, now),
     }
     .map_err(|e| store_failure(&e))?;

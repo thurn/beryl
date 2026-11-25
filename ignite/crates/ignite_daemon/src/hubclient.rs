@@ -206,6 +206,14 @@ impl HubClient {
         decode(path, &self.ok(path, answer)?.body)
     }
 
+    /// Tells the hub that a drive holding this machine's trees does not answer.
+    pub fn storage_stuck(
+        &self,
+        report: &ignite_core::protocol::machine_state::StorageStuck,
+    ) -> Result<ReportFiled> {
+        self.post("/machines/storage-stuck", report)
+    }
+
     fn post<B: Serialize, R: DeserializeOwned>(&self, path: &str, body: &B) -> Result<R> {
         let answer = self.post_raw(path, body, None)?;
         decode(path, &self.ok(path, answer)?.body)

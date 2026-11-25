@@ -91,6 +91,13 @@ pub trait Service {
         let _ = name;
         Ok(None)
     }
+
+    /// Restarts the machine now, closing programs without asking them: `shutdown /r /f /t 0`
+    /// on Windows and `shutdown -r now` on macOS, where it needs the right to run `shutdown`
+    /// as the superuser. The monitor calls it when a trees drive stops answering.
+    fn restart_machine(&self) -> io::Result<()> {
+        Err(unsupported())
+    }
 }
 
 /// Seconds between two runs of the monitor.

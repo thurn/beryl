@@ -17,6 +17,22 @@ impl Trees {
         configured(db, &self.inner.config.dir)
     }
 
+    /// Every folder that holds trees: the configured root, and the folder of each tree this
+    /// machine still has, such as one under a root the fleet settings no longer name. The
+    /// monitor probes each one ([`crate::monitor::storage`]).
+    pub fn roots_in_use(&self) -> Vec<PathBuf> {
+        let locked = self.lock();
+        let mut roots = vec![self.root_in(&locked.db)];
+        for row in store::all(&locked.db).unwrap_or_default() {
+            if let Some(parent) = Path::new(&row.path).parent() {
+                roots.push(parent.to_path_buf());
+            }
+        }
+        roots.sort();
+        roots.dedup();
+        roots
+    }
+
     pub(crate) fn path(&self, tree: &TreeId) -> Option<PathBuf> {
         self.row(tree).ok().map(|row| row.path.into())
     }

@@ -31,6 +31,16 @@ pub(crate) struct FakeMachine {
     pub(crate) turn_lock: Cell<bool>,
     /// The headless justiciar turns started.
     pub(crate) turns: RefCell<Vec<justiciar::JusticiarTurn>>,
+    /// The trees roots the daemon recorded.
+    pub(crate) roots: Vec<PathBuf>,
+    /// Whether the trees roots answer their probe.
+    pub(crate) storage_answers: Cell<bool>,
+    /// This machine's `ignite.toml` policy for a stuck root.
+    pub(crate) policy: RebootPolicy,
+    /// When the machine last started.
+    pub(crate) booted: Cell<Option<Timestamp>>,
+    /// Whether the hub takes a report.
+    pub(crate) hub_takes_reports: Cell<bool>,
     log: RefCell<Vec<String>>,
 }
 
@@ -44,8 +54,24 @@ impl FakeMachine {
             cli_app: None,
             turn_lock: Cell::new(false),
             turns: RefCell::default(),
+            roots: Vec::new(),
+            storage_answers: Cell::new(true),
+            policy: RebootPolicy::default(),
+            booted: Cell::new(None),
+            hub_takes_reports: Cell::new(true),
             log: RefCell::default(),
         }
+    }
+
+    /// A machine whose daemon answers and whose trees root `/trees` does not, under `policy`.
+    pub(crate) fn stuck(policy: RebootPolicy) -> Self {
+        let machine = Self {
+            roots: vec![PathBuf::from("/trees")],
+            policy,
+            ..Self::new(true, true)
+        };
+        machine.storage_answers.set(false);
+        machine
     }
 
     fn with_hub(mut self, answers: bool) -> Self {
@@ -104,6 +130,37 @@ impl Machine for FakeMachine {
     fn daemon_log_tail(&self, lines: usize) -> String {
         format!("daemon log, last {lines} lines")
     }
+    fn trees_roots(&self) -> Vec<PathBuf> {
+        self.roots.clone()
+    }
+    fn probe_storage(&self, _root: &Path) -> bool {
+        self.storage_answers.get()
+    }
+    fn reboot_policy(&self) -> RebootPolicy {
+        self.policy.clone()
+    }
+    fn booted_at(&self) -> Option<Timestamp> {
+        self.booted.get()
+    }
+    fn report_storage(&self, stuck: &StuckStorage) -> Result<(), String> {
+        if !self.hub_takes_reports.get() {
+            return Err("the hub is down".to_owned());
+        }
+        self.log
+            .borrow_mut()
+            .push(format!("report {}", stuck.root.display()));
+        Ok(())
+    }
+    fn restart(&self) -> std::io::Result<()> {
+        self.log.borrow_mut().push("restart".to_owned());
+        Ok(())
+    }
+    fn run_command(&self, command: &[String]) -> std::io::Result<()> {
+        self.log
+            .borrow_mut()
+            .push(format!("run {}", command.join(" ")));
+        Ok(())
+    }
 }
 
 pub(crate) fn home() -> Home {
@@ -123,6 +180,9 @@ fn seen(running: bool, answered: bool) -> Observation {
         running,
         answered,
         crash_loop: None,
+        storage: None,
+        reboot: RebootPolicy::default(),
+        booted_at: None,
     }
 }
 
@@ -249,9 +309,8 @@ fn a_crash_loop_rolls_back_whether_or_not_the_daemon_answers() {
     for answered in [false, true] {
         let mut state = MonitorState::default();
         let observation = Observation {
-            running: true,
-            answered,
             crash_loop: Some(looped.clone()),
+            ..seen(true, answered)
         };
         assert_eq!(
             decide(&mut state, &observation, at(0.0)),

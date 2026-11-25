@@ -252,3 +252,22 @@ fn tell_takes_now() {
         Command::Tell { all: false, now: true, words } if words == ["T.1", "Stop"]
     ));
 }
+
+#[test]
+fn parses_the_storage_probe_command() {
+    let probe = Cli::try_parse_from([
+        "ignite",
+        "internal",
+        "probe-storage",
+        "/h/monitor/storage-E__trees.lock",
+        "E:\\trees",
+    ])
+    .unwrap();
+    assert!(matches!(
+        probe.command,
+        Command::Internal {
+            command: InternalCommand::ProbeStorage { lock, root }
+        } if lock == std::path::Path::new("/h/monitor/storage-E__trees.lock")
+            && root == std::path::Path::new("E:\\trees")
+    ));
+}

@@ -100,6 +100,21 @@ impl Service for Native {
     fn kickstart_hub(&self) -> io::Result<()> {
         kickstart(HUB_TASK)
     }
+
+    fn restart_machine(&self) -> io::Result<()> {
+        // `/f` closes programs without waiting for them; `/t 0` starts at once.
+        let output = Command::new("shutdown")
+            .args(["/r", "/f", "/t", "0"])
+            .stdin(Stdio::null())
+            .output()?;
+        if output.status.success() {
+            return Ok(());
+        }
+        Err(io::Error::other(format!(
+            "shutdown /r: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        )))
+    }
 }
 
 /// Ends the task `task` and runs it again.

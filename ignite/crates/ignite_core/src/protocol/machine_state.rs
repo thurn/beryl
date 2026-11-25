@@ -195,3 +195,16 @@ pub struct Heartbeat {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub capacity: Option<CapacityReport>,
 }
+
+/// `POST /machines/storage-stuck`: the authenticated machine's monitor found that a drive holding
+/// its trees does not answer a metadata read. The hub files the machine's "stopped reporting"
+/// ticket at once, naming the drive, rather than waiting for its heartbeats to stop.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StorageStuck {
+    /// The machine's hostname.
+    pub host: String,
+    /// The trees root that did not answer.
+    pub root: String,
+    /// When the monitor first found it stuck.
+    pub since: Timestamp,
+}

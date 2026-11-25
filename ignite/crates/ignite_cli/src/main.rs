@@ -135,6 +135,9 @@ fn answer(cli: &Cli, raw: &[String]) -> Reply {
             lock, log, command,
         )),
         Command::Internal {
+            command: InternalCommand::ProbeStorage { lock, root },
+        } => exit_reply(ignite_daemon::monitor::storage::run_probe(lock, root)),
+        Command::Internal {
             command: InternalCommand::CliTurn { home, command },
         } => exit_reply(ignite_daemon::clid::start::cli_turn(home, command)),
         _ => {

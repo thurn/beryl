@@ -279,6 +279,17 @@ impl Service for Native {
         }
         plist_variable(&path, name)
     }
+
+    fn restart_machine(&self) -> io::Result<()> {
+        let output = Command::new("/sbin/shutdown")
+            .args(["-r", "now"])
+            .output()?;
+        if output.status.success() {
+            return Ok(());
+        }
+        let error = String::from_utf8_lossy(&output.stderr);
+        Err(io::Error::other(format!("shutdown -r: {}", error.trim())))
+    }
 }
 
 /// The value of the variable `name` in the `EnvironmentVariables` of the property list at

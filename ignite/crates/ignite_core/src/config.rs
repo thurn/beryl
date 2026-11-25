@@ -456,6 +456,13 @@ pub struct Machine {
     pub tip_families: Option<Vec<String>>,
     /// Scarce resources by name, with each one's capacity.
     pub resources: BTreeMap<String, u32>,
+    /// How many seconds a trees root may go without answering the monitor's probe before the
+    /// monitor restarts the machine. Unset means the monitor never restarts it.
+    pub stuck_storage_reboot_after_s: Option<u32>,
+    /// A program and its arguments that force an immediate restart, installed by the operator
+    /// with administrator rights. The monitor runs it when the machine is still up 10 minutes
+    /// after its ordinary restart, which a stuck drive can hang.
+    pub stuck_storage_force_command: Option<Vec<String>>,
 }
 
 /// A configuration file that cannot be used, naming the file and, where known, the key.
@@ -675,6 +682,20 @@ impl Config {
         }
         self.validate_pool()?;
         self.validate_cli()?;
+        for (name, machine) in &self.machine {
+            if machine.stuck_storage_reboot_after_s == Some(0) {
+                let key = format!("machine.{name}.stuck_storage_reboot_after_s");
+                return fail(&key, "must be above zero");
+            }
+            if let Some(command) = &machine.stuck_storage_force_command
+                && command
+                    .first()
+                    .is_none_or(|program| program.trim().is_empty())
+            {
+                let key = format!("machine.{name}.stuck_storage_force_command");
+                return fail(&key, "must name a program");
+            }
+        }
         for (name, resource) in &self.resources {
             if !resource.per_core.is_finite() || resource.per_core < 0.0 {
                 return fail(

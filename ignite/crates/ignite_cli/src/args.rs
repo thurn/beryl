@@ -341,6 +341,11 @@ pub enum InternalCommand {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true, required = true)]
         command: Vec<String>,
     },
+    /// Probe one trees root for `ignite monitor`: hold `lock` while reading `root`'s metadata.
+    ProbeStorage {
+        lock: std::path::PathBuf,
+        root: std::path::PathBuf,
+    },
 }
 
 /// Arguments passed through untouched.
