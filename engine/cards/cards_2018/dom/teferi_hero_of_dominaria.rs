@@ -22,9 +22,7 @@ pub static CARD: CardDef = Printed::TeferiHeroOfDominaria
     .abilities(&[
         Ability::loyalty(1).effect(&sequence(&[draw(you(), 1), delay(UNTAP)])),
         Ability::loyalty(-3)
-            .target(&TargetSpec::permanent(Filter::Not(&Filter::Types(
-                Types::LAND,
-            ))))
+            .target(&TargetSpec::permanent(nonland()))
             .effect(&put_into_library(target(), LibraryPosition::FromTop(3))),
         Ability::loyalty(-8).effect(&get_emblem(you(), &EMBLEM)),
         Ability::triggered(&Trigger::step(TurnStep::End, Players::EachPlayer).next())
