@@ -51,13 +51,11 @@ fn completed_games_are_appended_and_counted_in_reports() {
     .with_ledger(ledger.clone());
     let mut start = StartGame {
         seed: 11,
-        decks: [
-            vec![(7, "Island".to_owned())],
-            vec![(8, "Island".to_owned())],
-        ],
+        decks: [7, 8].map(|n| vec![(n, "Island".to_owned())]),
         human: Seat::P0,
         opponent: "random".to_owned(),
         stops: StopsSetting::SMART,
+        sideboards: Default::default(),
     };
     sessions.start_game(&start, None).unwrap();
     let finished = loop {

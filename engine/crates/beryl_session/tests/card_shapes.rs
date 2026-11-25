@@ -1,7 +1,8 @@
 //! The session plays each keystone of card shapes and face-down cards: a split card cast as
 //! its second half and fused, an Adventure, a prepared creature, a modal double-faced card, a
 //! prototype, a transforming and a flipping permanent, meld, a Saga, a Class, a Case, a
-//! leveler, morph and Illusionary Mask. Each game is a deck of the keystone, its partners and
+//! leveler, morph and Illusionary Mask, and cards brought in from outside the game: Burning
+//! Wish and the companion Lurrus of the Dream-Den. Each game is a deck of the keystone, its partners and
 //! the lands that cast them against a deck of lands, with the human casting each card as the
 //! face the keystone names whenever they can and every update drawn for both seats, so each
 //! script is held to the replay check of a debug build (`script/build.rs`).
@@ -14,16 +15,20 @@
 //! The game also holds the session to sending the words of what a card's printed text has no
 //! paragraph for: a Saga's chapter, level up and turning a morph face up.
 //!
-//! The wish and the companion are not here: a session's game has no sideboards.
+//! The wish and the companion games start with a sideboard. Their views must name the
+//! sideboard card on the wish's pick, on the companion question before the game and on the
+//! {3} action that puts the revealed companion into its owner's hand, and must then show the
+//! card in the human's hand.
 
 use std::collections::BTreeSet;
 
 use beryl_cards::{CARDS, names};
-use beryl_engine::card::{CardShape, FaceIx};
+use beryl_engine::card::{CardShape, FaceIx, Purpose};
 use beryl_engine::{Layout, Seat, State};
 use beryl_session::perturb::{self, Perturbation};
 use beryl_session::protocol::{
-    Candidate, DesignationView, Facing, PlayerView, Side, StackItem, ZoneName,
+    Candidate, DecisionView, DesignationView, Facing, ObjectView, PlayerView, Side, StackItem,
+    ZoneName,
 };
 use beryl_session::{CandidateIndex, Game, ReplayFile, SessionId, StartGame, Status, StopsSetting};
 
@@ -52,6 +57,14 @@ enum Moment {
     Solved,
     /// A prepared creature.
     Prepared,
+    /// The human picks a card from their sideboard for a wish.
+    WishPick,
+    /// The human is asked, before the game, whether to reveal a companion.
+    CompanionReveal,
+    /// The human may pay {3} to put their revealed companion into their hand.
+    CompanionAction,
+    /// A card of the human's sideboard is in their hand.
+    BroughtIn,
 }
 
 /// A keystone's game: the human's deck, the face they prefer to cast each card with, and the
@@ -59,6 +72,8 @@ enum Moment {
 struct Keystone {
     card: &'static str,
     deck: &'static [(u8, &'static str)],
+    /// The human's sideboard: (count, card name).
+    sideboard: &'static [(u8, &'static str)],
     face: Option<u8>,
     /// How many mulligans the human takes before keeping a hand.
     mulligans: u8,
@@ -73,6 +88,9 @@ const DOWN: u8 = FaceIx::DOWN.get();
 /// A 2/10 creature card for {2}{W}{W}.
 const INDOMITABLE_ANCIENTS: &str = "Indomitable Ancients";
 
+/// A sorcery for {2}{R}{R}.
+const RELENTLESS_ASSAULT: &str = "Relentless Assault";
+
 const KEYSTONES: &[Keystone] = &[
     Keystone {
         card: names::FIRE_ICE,
@@ -81,6 +99,7 @@ const KEYSTONES: &[Keystone] = &[
             (10, names::ISLAND),
             (20, names::FIRE_ICE),
         ],
+        sideboard: &[],
         face: Some(FaceIx::BACK.get()),
         mulligans: 0,
         expect: &[Moment::Resolved],
@@ -95,6 +114,7 @@ const KEYSTONES: &[Keystone] = &[
             (5, names::LEONIN_SCIMITAR),
             (5, names::HOLY_STRENGTH),
         ],
+        sideboard: &[],
         face: Some(FaceIx::FUSED.get()),
         mulligans: 0,
         expect: &[Moment::Resolved],
@@ -103,6 +123,7 @@ const KEYSTONES: &[Keystone] = &[
     Keystone {
         card: names::BONECRUSHER_GIANT,
         deck: &[(20, names::MOUNTAIN), (20, names::BONECRUSHER_GIANT)],
+        sideboard: &[],
         face: Some(FaceIx::BACK.get()),
         mulligans: 0,
         expect: &[Moment::Resolved],
@@ -114,6 +135,7 @@ const KEYSTONES: &[Keystone] = &[
             (20, names::SWAMP),
             (20, names::ADVENTUROUS_EATER_HAVE_A_BITE),
         ],
+        sideboard: &[],
         face: None,
         mulligans: 0,
         expect: &[Moment::Resolved, Moment::Prepared],
@@ -122,6 +144,7 @@ const KEYSTONES: &[Keystone] = &[
     Keystone {
         card: names::VALAKUT_AWAKENING,
         deck: &[(20, names::MOUNTAIN), (20, names::VALAKUT_AWAKENING)],
+        sideboard: &[],
         face: Some(FaceIx::FRONT.get()),
         mulligans: 0,
         expect: &[Moment::Resolved],
@@ -130,6 +153,7 @@ const KEYSTONES: &[Keystone] = &[
     Keystone {
         card: names::ARCANE_PROXY,
         deck: &[(20, names::ISLAND), (20, names::ARCANE_PROXY)],
+        sideboard: &[],
         face: Some(FaceIx::PROTOTYPE.get()),
         mulligans: 0,
         expect: &[Moment::Resolved],
@@ -143,6 +167,7 @@ const KEYSTONES: &[Keystone] = &[
             (4, names::DELVER_OF_SECRETS),
             (16, names::FIRE_ICE),
         ],
+        sideboard: &[],
         face: None,
         mulligans: 0,
         expect: &[Moment::Resolved, Moment::BackFaceUp],
@@ -151,6 +176,7 @@ const KEYSTONES: &[Keystone] = &[
     Keystone {
         card: names::ERAYO_SORATAMI_ASCENDANT,
         deck: &[(20, names::ISLAND), (20, names::ERAYO_SORATAMI_ASCENDANT)],
+        sideboard: &[],
         face: None,
         mulligans: 0,
         expect: &[Moment::Resolved],
@@ -163,6 +189,7 @@ const KEYSTONES: &[Keystone] = &[
             (8, names::GISELA_THE_BROKEN_BLADE),
             (8, names::BRUNA_THE_FADING_LIGHT),
         ],
+        sideboard: &[],
         face: None,
         mulligans: 0,
         expect: &[Moment::Resolved, Moment::Melded],
@@ -171,6 +198,7 @@ const KEYSTONES: &[Keystone] = &[
     Keystone {
         card: names::THE_ELDEST_REBORN,
         deck: &[(22, names::SWAMP), (18, names::THE_ELDEST_REBORN)],
+        sideboard: &[],
         face: None,
         mulligans: 0,
         expect: &[Moment::Resolved, Moment::SecondChapter],
@@ -179,6 +207,7 @@ const KEYSTONES: &[Keystone] = &[
     Keystone {
         card: names::WIZARD_CLASS,
         deck: &[(20, names::ISLAND), (20, names::WIZARD_CLASS)],
+        sideboard: &[],
         face: None,
         mulligans: 0,
         expect: &[Moment::Resolved, Moment::Activated, Moment::Leveled],
@@ -193,6 +222,7 @@ const KEYSTONES: &[Keystone] = &[
             (6, names::CASE_OF_THE_CRIMSON_PULSE),
             (14, names::LIGHTNING_BOLT),
         ],
+        sideboard: &[],
         face: None,
         mulligans: 3,
         expect: &[Moment::Resolved, Moment::Solved],
@@ -201,6 +231,7 @@ const KEYSTONES: &[Keystone] = &[
     Keystone {
         card: names::STUDENT_OF_WARFARE,
         deck: &[(20, names::PLAINS), (20, names::STUDENT_OF_WARFARE)],
+        sideboard: &[],
         face: None,
         mulligans: 0,
         expect: &[Moment::Resolved, Moment::Activated],
@@ -209,6 +240,7 @@ const KEYSTONES: &[Keystone] = &[
     Keystone {
         card: names::EXALTED_ANGEL,
         deck: &[(20, names::PLAINS), (20, names::EXALTED_ANGEL)],
+        sideboard: &[],
         face: Some(DOWN),
         mulligans: 0,
         expect: &[
@@ -221,6 +253,7 @@ const KEYSTONES: &[Keystone] = &[
     Keystone {
         card: names::GATHAN_RAIDERS,
         deck: &[(20, names::MOUNTAIN), (20, names::GATHAN_RAIDERS)],
+        sideboard: &[],
         face: Some(DOWN),
         mulligans: 0,
         expect: &[
@@ -238,6 +271,7 @@ const KEYSTONES: &[Keystone] = &[
             (6, names::ILLUSIONARY_MASK),
             (10, INDOMITABLE_ANCIENTS),
         ],
+        sideboard: &[],
         face: Some(DOWN),
         mulligans: 0,
         expect: &[
@@ -247,18 +281,51 @@ const KEYSTONES: &[Keystone] = &[
         ],
         words: &[],
     },
+    Keystone {
+        card: names::BURNING_WISH,
+        deck: &[(20, names::MOUNTAIN), (20, names::BURNING_WISH)],
+        // An instant the wish may not bring in, and a sorcery it may.
+        sideboard: &[(1, names::LIGHTNING_BOLT), (1, RELENTLESS_ASSAULT)],
+        face: None,
+        mulligans: 0,
+        expect: &[Moment::WishPick, Moment::BroughtIn],
+        words: &[],
+    },
+    Keystone {
+        card: names::LURRUS_OF_THE_DREAM_DEN,
+        // Every permanent card has mana value 2 or less, so Lurrus may be revealed.
+        deck: &[(20, names::PLAINS), (20, names::STUDENT_OF_WARFARE)],
+        sideboard: &[(1, names::LURRUS_OF_THE_DREAM_DEN)],
+        face: None,
+        mulligans: 0,
+        expect: &[
+            Moment::CompanionReveal,
+            Moment::CompanionAction,
+            Moment::BroughtIn,
+        ],
+        words: &[],
+    },
 ];
 
 /// What the human prefers among a decision's candidates, the highest first: keep a hand, play
-/// a land, cast with the keystone's face, activate an ability or turn a permanent face up
+/// a land, put the revealed companion into their hand, cast with the keystone's face, activate an ability or turn a permanent face up
 /// once a turn, cast otherwise, then the largest number (Illusionary Mask's X). A mulligan
 /// comes first while the human has taken fewer than `mulligans`, and the opponent is the
-/// target of choice.
-fn rank(candidate: &Candidate, face: Option<u8>, mulligan: bool, activated: bool) -> i32 {
+/// target of choice. From a sideboard catalog (a wish's pick, the companion question) the
+/// human takes a card over none.
+fn rank(
+    candidate: &Candidate,
+    face: Option<u8>,
+    mulligan: bool,
+    activated: bool,
+    catalog: bool,
+) -> i32 {
     match *candidate {
+        Candidate::Number { .. } if catalog => 30,
         Candidate::Mulligan if mulligan => 70,
         Candidate::Keep => 60,
         Candidate::PlayLand { .. } => 50,
+        Candidate::Companion => 48,
         Candidate::Cast { face: f, .. } if Some(f) == face => 45,
         // A face-down cast is only ever the keystone's choice: the others would not show the
         // card's face-up states.
@@ -275,19 +342,26 @@ fn rank(candidate: &Candidate, face: Option<u8>, mulligan: bool, activated: bool
 }
 
 /// The candidate the human takes: the first of those [`rank`] puts highest.
-fn preferred(options: &[&Candidate], face: Option<u8>, mulligan: bool, activated: bool) -> usize {
+fn preferred(
+    options: &[&Candidate],
+    face: Option<u8>,
+    mulligan: bool,
+    activated: bool,
+    catalog: bool,
+) -> usize {
     (0..options.len())
         .max_by_key(|&i| {
             (
-                rank(options[i], face, mulligan, activated),
+                rank(options[i], face, mulligan, activated, catalog),
                 std::cmp::Reverse(i),
             )
         })
         .expect("a decision has a candidate")
 }
 
-/// The shape states the human's view shows.
-fn moments(view: &PlayerView) -> Vec<Moment> {
+/// The shape states the human's view shows, with `sideboard` the names of the human's
+/// sideboard cards.
+fn moments(view: &PlayerView, sideboard: &[&str]) -> Vec<Moment> {
     let mut moments = Vec::new();
     // The name of a back face that is not also its card's front, as a transformed or flipped
     // permanent shows: not a split card's or an Adventurer's.
@@ -340,7 +414,46 @@ fn moments(view: &PlayerView) -> Vec<Moment> {
     if designated(|d| *d == DesignationView::Prepared) {
         moments.push(Moment::Prepared);
     }
+    let in_hand = |o: &&ObjectView| o.zone == ZoneName::Hand && o.owner == Side::You;
+    if (view.objects.iter().filter(in_hand)).any(|o| {
+        o.name
+            .as_deref()
+            .is_some_and(|name| sideboard.contains(&name))
+    }) {
+        moments.push(Moment::BroughtIn);
+    }
+    if let Status::Deciding { decision } = &view.status {
+        moments.extend(outside_the_game(decision, sideboard));
+    }
     moments
+}
+
+/// The moments of a decision about a card outside the game, each checked to name the
+/// sideboard card it is about: the wish's pick and the companion question list the cards by
+/// name, and the {3} action names the revealed companion.
+fn outside_the_game(decision: &DecisionView, sideboard: &[&str]) -> Option<Moment> {
+    let labels = || decision.candidates.iter().map(|c| c.label.as_str());
+    let moment = match decision.prompt.purpose {
+        Purpose::Wish => Moment::WishPick,
+        Purpose::Companion => Moment::CompanionReveal,
+        _ => {
+            let action = (decision.candidates.iter()).find(|c| c.option == Candidate::Companion)?;
+            assert!(
+                sideboard
+                    .iter()
+                    .any(|name| action.label == format!("Put {name} into hand")),
+                "the companion action names no sideboard card: {:?}",
+                action.label
+            );
+            return Some(Moment::CompanionAction);
+        }
+    };
+    assert!(
+        labels().any(|label| sideboard.contains(&label)),
+        "{moment:?} names no sideboard card: {:?}",
+        labels().collect::<Vec<_>>()
+    );
+    Some(moment)
 }
 
 /// Where a game stands, as far as what a save must not depend on lets two replays agree.
@@ -407,24 +520,23 @@ fn cut(game: &Game, view: &PlayerView, card: &str, moment: Moment) {
     );
 }
 
+fn owned(list: &[(u8, &str)]) -> Vec<(u8, String)> {
+    list.iter().map(|&(n, name)| (n, name.to_owned())).collect()
+}
+
 /// Plays `keystone`'s game until it has reached and cut each moment it expects.
 fn plays(keystone: &Keystone) {
     let card = keystone.card;
     let lands = keystone.deck[0].1;
     let start = StartGame {
         seed: 7,
-        decks: [
-            keystone
-                .deck
-                .iter()
-                .map(|&(n, name)| (n, name.to_owned()))
-                .collect(),
-            vec![(40, lands.to_owned())],
-        ],
+        decks: [owned(keystone.deck), vec![(40, lands.to_owned())]],
         human: Seat::P0,
         opponent: "random".to_owned(),
         stops: StopsSetting::EXACT,
+        sideboards: [owned(keystone.sideboard), Vec::new()],
     };
+    let sideboard: Vec<&str> = keystone.sideboard.iter().map(|&(_, name)| name).collect();
     let mut game = Game::new(&CARDS, &start, SESSION).unwrap();
     let mut seen = BTreeSet::new();
     // What the stack emptying next means: a spell the human cast or an ability they activated
@@ -462,7 +574,7 @@ fn plays(keystone: &Keystone) {
                     StackItem::Spell { .. } => None,
                 })),
         );
-        let mut now = moments(&view);
+        let mut now = moments(&view, &sideboard);
         if view.stack.is_empty()
             && let Some(used) = using.take()
         {
@@ -478,11 +590,13 @@ fn plays(keystone: &Keystone) {
         };
         let options: Vec<&Candidate> = decision.candidates.iter().map(|c| &c.option).collect();
         let mulligan = view.players.you.mulligans < keystone.mulligans;
+        let catalog = matches!(decision.prompt.purpose, Purpose::Wish | Purpose::Companion);
         let index = preferred(
             &options,
             keystone.face,
             mulligan,
             activated_in == Some(view.turn.number),
+            catalog,
         );
         match options[index] {
             Candidate::Cast { .. } => using = Some(Moment::Resolved),

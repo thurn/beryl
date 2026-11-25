@@ -47,6 +47,7 @@ fn fuzz_start(seed: u64, stops: StopsSetting) -> StartGame {
         human: Seat::P0,
         opponent: "random".to_owned(),
         stops,
+        sideboards: Default::default(),
     }
 }
 

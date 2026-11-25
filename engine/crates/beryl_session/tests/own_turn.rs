@@ -18,6 +18,7 @@ fn each_players_first_turn_is_turn_one() {
         human: Seat::P0,
         opponent: "random".to_owned(),
         stops: StopsSetting::default(),
+        sideboards: Default::default(),
     };
     let mut game = Game::new(&CARDS, &start, SessionId(1)).unwrap();
     let (mut last, mut taken) = (0, [0u16; 2]);

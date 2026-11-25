@@ -298,6 +298,7 @@ fn dealt(seed: u64) -> Play {
         human: Seat::P0,
         opponent: "random".to_owned(),
         stops: StopsSetting::SMART,
+        sideboards: Default::default(),
     })
 }
 

@@ -764,6 +764,7 @@ fn to_the_bottom() -> Play {
         human: Seat::P0,
         opponent: "random".to_owned(),
         stops: StopsSetting::SMART,
+        sideboards: Default::default(),
     };
     let mut play = Play::seeded(&start);
     let mut mulligans = 0;

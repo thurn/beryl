@@ -61,6 +61,7 @@ fn played(seed: u64, answers: usize) -> (Game, PlayerView, Shown) {
         human: Seat::P0,
         opponent: "random".to_owned(),
         stops: StopsSetting::EXACT,
+        sideboards: Default::default(),
     };
     let mut game = Game::new(&CARDS, &start, SESSION).unwrap();
     let mut view = to_human(&mut game);

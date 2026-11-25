@@ -207,6 +207,7 @@ fn play(catalog: &'static Catalog, seed: u64, i: u64) -> Played {
         } else {
             StopsSetting::EXACT
         },
+        sideboards: Default::default(),
     };
     let mut game = Game::new(catalog.cards, &start, SessionId(0)).expect("a fuzz game starts");
     game.set_stand_in(AGENTS[(i % 2) as usize])

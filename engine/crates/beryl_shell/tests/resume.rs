@@ -39,6 +39,7 @@ fn a_game_dropped_mid_game_resumes_from_a_second_sessions_on_the_same_dirs() {
         human: Seat::P0,
         opponent: "random".to_owned(),
         stops: StopsSetting::EXACT,
+        sideboards: Default::default(),
     };
 
     let (sent, views) = channel();

@@ -38,6 +38,7 @@ fn new_game(seed: u64) -> Game {
         // Greedy has no random stream, so the same answers play the same game again.
         opponent: "greedy".to_owned(),
         stops: StopsSetting::SMART,
+        sideboards: Default::default(),
     };
     Game::new(&CARDS, &start, SESSION).unwrap()
 }
@@ -86,6 +87,7 @@ fn undo_groups_a_casts_automatic_payment_even_after_resume() {
         human: Seat::P0,
         opponent: "greedy".to_owned(),
         stops: StopsSetting::SMART,
+        sideboards: Default::default(),
     };
     let mut game = Game::new(&CARDS, &start, SESSION).unwrap();
     let mut view = to_human(&mut game);

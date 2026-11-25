@@ -38,6 +38,10 @@ pub struct ReplayFile {
     pub seed: u64,
     /// Each seat's decklist: (count, card name).
     pub decks: [Vec<(u8, String)>; 2],
+    /// Each seat's sideboard: (count, card name). A file without one, as every file before
+    /// sideboards came to sessions was, had none, so the field needs no format version.
+    #[serde(default, skip_serializing_if = "no_sideboards")]
+    pub sideboards: [Vec<(u8, String)>; 2],
     pub human: u8,
     /// The agent in the other seat.
     pub opponent: String,
@@ -62,6 +66,10 @@ pub const FORMAT_VERSION: u8 = 14;
 
 fn version_1() -> u8 {
     1
+}
+
+fn no_sideboards(sideboards: &[Vec<(u8, String)>; 2]) -> bool {
+    sideboards.iter().all(Vec::is_empty)
 }
 
 /// One entry of the choice log.
@@ -123,11 +131,16 @@ impl Entry {
         Ok(Some(match self {
             Entry::Reveal { player, card } => {
                 let owner = seat(*player)?;
+                // A card brought in from outside the game (a wish's pick, a companion) is
+                // revealed from the owner's sideboard.
                 let card = t
                     .deck(owner)
+                    .chain(t.sideboard(owner))
                     .find(|&c: &LargeCardIx| t.def(c).name == card)
                     .ok_or_else(|| SessionError::BadReplay {
-                        reason: format!("player {player}'s deck has no {card} to reveal"),
+                        reason: format!(
+                            "player {player}'s deck and sideboard have no {card} to reveal"
+                        ),
                     })?;
                 Random::Reveal { owner, card }
             }
@@ -153,6 +166,7 @@ impl ReplayFile {
             human,
             opponent: self.opponent.clone(),
             stops: self.stops,
+            sideboards: self.sideboards.clone(),
         })
     }
 
@@ -164,6 +178,7 @@ impl ReplayFile {
             legacy_waterbend_mana: false,
             seed: start.seed,
             decks: start.decks.clone(),
+            sideboards: start.sideboards.clone(),
             human: start.human.get(),
             opponent: start.opponent.clone(),
             stops: start.stops,
@@ -179,69 +194,76 @@ impl ReplayFile {
         &self,
         cards: &'static CardTable,
     ) -> Result<(GameTable, State), SessionError> {
-        let decks = self.decks.each_ref().map(|deck| {
-            deck.iter()
-                .map(|(count, name)| {
-                    cards
-                        .get(name)
-                        .map(|def| (*count, def.name))
-                        .ok_or_else(|| SessionError::UnknownCard { name: name.clone() })
-                })
-                .collect::<Result<Vec<_>, _>>()
-        });
-        let [a, b] = decks;
-        let decks = [a?, b?];
-        let lists = decks.each_ref().map(Vec::as_slice);
-        let table =
-            GameTable::new(Format::CONSTRUCTED, cards, lists).map_err(|error| match error {
-                TableError::UnknownCard(name) => SessionError::UnknownCard {
-                    name: name.to_owned(),
-                },
-                TableError::SideboardTooLarge { player, count } => SessionError::Deck {
-                    reason: format!(
-                        "player {} has {count} cards in their sideboard",
-                        player.get()
-                    ),
-                },
-                TableError::Cost { card, unpayable } => SessionError::Deck {
-                    reason: format!("{card} has a cost the engine cannot pay: {unpayable:?}"),
-                },
-                TableError::Trigger { card, unmatched } => SessionError::Deck {
-                    reason: format!("{card} has a trigger the engine cannot match: {unmatched:?}"),
-                },
-                TableError::Static { card, unapplied } => SessionError::Deck {
-                    reason: format!(
-                        "{card} has a static ability the engine cannot apply: {unapplied:?}"
-                    ),
-                },
-                TableError::Unlisted { card, creates } => SessionError::Deck {
-                    reason: format!("{card} creates {creates}, which it does not list"),
-                },
-                TableError::Zone { card } => SessionError::Deck {
-                    reason: format!(
-                        "{card} has an ability that works in a zone the engine does not look in"
-                    ),
-                },
-                TableError::Granted { card } => SessionError::Deck {
-                    reason: format!("{card} grants an ability the engine does not read"),
-                },
-                TableError::Players { card } => SessionError::Deck {
-                    reason: format!("{card} has a filter naming players the engine cannot read"),
-                },
-                TableError::Replacement { card, unreplaced } => SessionError::Deck {
-                    reason: format!(
-                        "{card} has a replacement effect the engine cannot apply: {unreplaced:?}"
-                    ),
-                },
-                TableError::Rule { card, unchecked } => SessionError::Deck {
-                    reason: format!(
-                        "{card} names a rule change the engine cannot check: {unchecked:?}"
-                    ),
-                },
-                TableError::Subtypes { count } => SessionError::Deck {
-                    reason: format!("the decks name {count} subtypes, more than a game can number"),
-                },
-            })?;
+        let lists = |lists: &[Vec<(u8, String)>; 2]| {
+            let [a, b] = lists.each_ref().map(|list| {
+                list.iter()
+                    .map(|(count, name)| {
+                        cards
+                            .get(name)
+                            .map(|def| (*count, def.name))
+                            .ok_or_else(|| SessionError::UnknownCard { name: name.clone() })
+                    })
+                    .collect::<Result<Vec<_>, _>>()
+            });
+            Ok::<_, SessionError>([a?, b?])
+        };
+        let decks = lists(&self.decks)?;
+        let sideboards = lists(&self.sideboards)?;
+        let table = GameTable::with_sideboards(
+            Format::CONSTRUCTED,
+            cards,
+            decks.each_ref().map(Vec::as_slice),
+            sideboards.each_ref().map(Vec::as_slice),
+        )
+        .map_err(|error| match error {
+            TableError::UnknownCard(name) => SessionError::UnknownCard {
+                name: name.to_owned(),
+            },
+            TableError::SideboardTooLarge { player, count } => SessionError::Deck {
+                reason: format!(
+                    "player {} has {count} cards in their sideboard",
+                    player.get()
+                ),
+            },
+            TableError::Cost { card, unpayable } => SessionError::Deck {
+                reason: format!("{card} has a cost the engine cannot pay: {unpayable:?}"),
+            },
+            TableError::Trigger { card, unmatched } => SessionError::Deck {
+                reason: format!("{card} has a trigger the engine cannot match: {unmatched:?}"),
+            },
+            TableError::Static { card, unapplied } => SessionError::Deck {
+                reason: format!(
+                    "{card} has a static ability the engine cannot apply: {unapplied:?}"
+                ),
+            },
+            TableError::Unlisted { card, creates } => SessionError::Deck {
+                reason: format!("{card} creates {creates}, which it does not list"),
+            },
+            TableError::Zone { card } => SessionError::Deck {
+                reason: format!(
+                    "{card} has an ability that works in a zone the engine does not look in"
+                ),
+            },
+            TableError::Granted { card } => SessionError::Deck {
+                reason: format!("{card} grants an ability the engine does not read"),
+            },
+            TableError::Players { card } => SessionError::Deck {
+                reason: format!("{card} has a filter naming players the engine cannot read"),
+            },
+            TableError::Replacement { card, unreplaced } => SessionError::Deck {
+                reason: format!(
+                    "{card} has a replacement effect the engine cannot apply: {unreplaced:?}"
+                ),
+            },
+            TableError::Rule { card, unchecked } => SessionError::Deck {
+                reason: format!(
+                    "{card} names a rule change the engine cannot check: {unchecked:?}"
+                ),
+            },
+            TableError::Subtypes { count } => SessionError::Deck {
+                reason: format!("the decks name {count} subtypes, more than a game can number"),
+            },
+        })?;
         let profile = with_stops(
             beryl_engine::Profile::SMART,
             self.stops,

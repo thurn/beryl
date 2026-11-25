@@ -807,6 +807,7 @@ fn a_save_made_through_clicks_replays() {
         human: Seat::P0,
         opponent: "random".to_owned(),
         stops: StopsSetting::SMART,
+        sideboards: Default::default(),
     };
     let mut play = Play::seeded(&start);
     let mut untapped = 0;

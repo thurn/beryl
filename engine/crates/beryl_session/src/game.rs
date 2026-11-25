@@ -343,6 +343,7 @@ impl Game {
             legacy_waterbend_mana: false,
             seed: 0,
             decks: [Vec::new(), Vec::new()],
+            sideboards: [Vec::new(), Vec::new()],
             human: human.get(),
             opponent: String::new(),
             stops,

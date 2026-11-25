@@ -55,6 +55,7 @@ fn new_game(seed: u64, opponent: Vec<(u8, String)>, stops: StopsSetting) -> Game
         human: HUMAN,
         opponent: "random".to_owned(),
         stops,
+        sideboards: Default::default(),
     };
     Game::new(&CARDS, &start, SESSION).unwrap()
 }

@@ -29,6 +29,7 @@ fn start(seed: u64, decks: [Vec<(u8, String)>; 2], human: Seat, stops: StopsSett
         human,
         opponent: "random".to_owned(),
         stops,
+        sideboards: Default::default(),
     }
 }
 

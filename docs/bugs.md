@@ -6,6 +6,17 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **A save with a wished card could not replay.** When Burning Wish brought a
+  sorcery in from outside the game, the save recorded the card's name as a
+  `Reveal` entry, as it does for every hidden card a player first learns. On
+  replay, `Entry::random` (`beryl_session/src/replay.rs`) looked for that name
+  only in the owner's main deck, so the save failed with "player 0's deck has no
+  Relentless Assault to reveal". No save had hit it, because session games had
+  no sideboards until the same change. The lookup now searches the owner's
+  sideboard after their main deck. Guard: the Burning Wish and Lurrus of the
+  Dream-Den games in `beryl_session/tests/card_shapes.rs` cut a save after the
+  card is brought in and replay it under each perturbation.
+
 - **Lurrus's graveyard permission worked on the opponent's turn.** "During each
   of your turns, you may cast one permanent spell with mana value 2 or less from
   your graveyard" let its controller cast a flash creature from their graveyard

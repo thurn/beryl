@@ -35,6 +35,7 @@ fn requested_game(request: &StartRequest) -> StartGame {
         human: Seat::P0,
         opponent: request.agent.clone(),
         stops: StopsSetting::SMART,
+        sideboards: Default::default(),
     }
 }
 

@@ -32,6 +32,7 @@ fn new_game(seed: u64, stops: StopsSetting) -> Game {
         human: HUMAN,
         opponent: "random".to_owned(),
         stops,
+        sideboards: Default::default(),
     };
     Game::new(&CARDS, &start, SESSION).unwrap()
 }

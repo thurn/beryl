@@ -42,6 +42,7 @@ fn play(answers: usize, undo: bool) -> (ReplayFile, bool) {
         human: Seat::P0,
         opponent: "greedy".to_owned(),
         stops: StopsSetting::SMART,
+        sideboards: Default::default(),
     };
     let mut game = Game::new(&CARDS, &start, SessionId(1)).unwrap();
     let mut view = to_human(&mut game);

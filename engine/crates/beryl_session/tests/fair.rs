@@ -13,6 +13,7 @@ fn start(seed: u64) -> StartGame {
         human: Seat::P0,
         opponent: "greedy".to_owned(),
         stops: StopsSetting::SMART,
+        sideboards: Default::default(),
     }
 }
 

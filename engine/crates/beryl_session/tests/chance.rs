@@ -33,6 +33,7 @@ fn played(seed: u64, decks: [&Decklist; 2]) -> (Game, PlayerView) {
         human: Seat::P0,
         opponent: "random".to_owned(),
         stops: StopsSetting::EXACT,
+        sideboards: Default::default(),
     };
     let mut game = Game::new(&CARDS, &start, SESSION).unwrap();
     game.set_stand_in("random").unwrap();

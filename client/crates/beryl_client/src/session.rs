@@ -6,8 +6,9 @@
 //! `Input::BugSaved`.
 //!
 //! When a game starts or resumes, the thread gives the client the card store's records for both
-//! decklists and the tokens their cards make (`Input::Cards`), from which the client lists the
-//! match's faces for the host's asset workers to prepare (docs/beryl-3d.md, "Preparation").
+//! decklists, both sideboards and the tokens their cards make (`Input::Cards`), from which the
+//! client lists the match's faces for the host's asset workers to prepare (docs/beryl-3d.md,
+//! "Preparation").
 //!
 //! The thread puts itself in the default scheduling class before it starts or resumes a game.
 //! The game's thread and the search threads are started from it and inherit that class, so the
@@ -160,8 +161,9 @@ pub struct Live {
     resume: Option<PathBuf>,
     /// The agents `--offer` adds after the session's own on the start screen.
     offered: Vec<AgentView>,
-    /// The decklists the client was last given card records for (`give_cards`).
-    cards_for: Option<[Vec<(u8, String)>; 2]>,
+    /// The decklists, main decks then sideboards, the client was last given card records for
+    /// (`give_cards`).
+    cards_for: Option<Vec<Vec<(u8, String)>>>,
 }
 
 impl Live {
@@ -250,6 +252,7 @@ impl Live {
             human: Seat::P0,
             opponent: opponent.to_owned(),
             stops: StopsSetting::SMART,
+            sideboards: Default::default(),
         };
         self.played_by = Some((start, agent.to_owned()));
         self
@@ -278,17 +281,20 @@ impl Live {
         let Some(replay) = self.sessions.current_replay() else {
             return;
         };
-        if self.cards_for.as_ref() == Some(&replay.decks) {
+        // A sideboard card can enter the game (a wish's pick, a companion), so it needs a
+        // record as a main deck card does.
+        let lists: Vec<_> = replay.decks.into_iter().chain(replay.sideboards).collect();
+        if self.cards_for.as_ref() == Some(&lists) {
             return;
         }
-        let records = decklist_records(&replay.decks);
+        let records = decklist_records(&lists);
         self.inbox.send(Input::Cards(Box::new(records)));
-        self.cards_for = Some(replay.decks);
+        self.cards_for = Some(lists);
     }
 }
 
-/// The card store's records for every card of `decks` and every token or emblem those cards
-/// make.
+/// The card store's records for every card of `decks`, main decks and sideboards alike, and
+/// every token or emblem those cards make.
 #[must_use]
 pub fn decklist_records(decks: &[Vec<(u8, String)>]) -> CardRecords {
     let mut names = BTreeSet::new();

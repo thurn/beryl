@@ -51,6 +51,10 @@ pub struct StartGame {
     /// The name of the agent in the other seat ([`beryl_search::AGENTS`]).
     pub opponent: String,
     pub stops: StopsSetting,
+    /// Each seat's sideboard, its cards outside the game: (count, card name). A wish such as
+    /// Burning Wish picks from it, and a companion such as Lurrus of the Dream-Den is revealed
+    /// from it before the game.
+    pub sideboards: [Vec<(u8, String)>; 2],
 }
 
 /// A game set up by hand rather than dealt from a seed (UI fixtures): its table, the state

@@ -24,6 +24,7 @@ fn new_game() -> Game {
         human: Seat::P0,
         opponent: "random".to_owned(),
         stops: StopsSetting::SMART,
+        sideboards: Default::default(),
     };
     Game::new(&CARDS, &start, SESSION).unwrap()
 }

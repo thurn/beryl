@@ -624,6 +624,7 @@ fn an_opening_hand_appears_and_a_mulligans_goes_back_first() {
         human: Seat::P0,
         opponent: "greedy".to_owned(),
         stops: StopsSetting::SMART,
+        sideboards: Default::default(),
     };
     let mut game = Game::new(&CARDS, &start, SessionId(1)).unwrap();
     let mut scripts = Vec::new();
@@ -697,6 +698,7 @@ fn game_views() -> Vec<PlayerView> {
         human: Seat::P0,
         opponent: "greedy".to_owned(),
         stops: StopsSetting::SMART,
+        sideboards: Default::default(),
     };
     let mut game = Game::new(&CARDS, &start, SessionId(1)).unwrap();
     let mut views = Vec::new();

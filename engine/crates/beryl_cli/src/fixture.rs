@@ -518,6 +518,7 @@ fn start(
                     human,
                     opponent: agents[human.opponent().index()].clone(),
                     stops,
+                    sideboards: Default::default(),
                 };
                 let stand_in = &agents[human.index()];
                 if def.clicks.is_empty() {

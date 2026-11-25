@@ -58,6 +58,7 @@ fn start() -> StartGame {
         human: Seat::P0,
         opponent: "random".to_owned(),
         stops: StopsSetting::EXACT,
+        sideboards: Default::default(),
     }
 }
 

@@ -85,6 +85,7 @@ fn setup(scenario: &Scenario) -> (Game, PlayerView) {
         legacy_waterbend_mana: false,
         seed: 1,
         decks,
+        sideboards: Default::default(),
         human: 0,
         opponent: "random".to_owned(),
         stops: StopsSetting::EXACT,
