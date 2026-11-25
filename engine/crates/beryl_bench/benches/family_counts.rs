@@ -38,6 +38,8 @@ use {
 #[bench::levels(FamilyWorkload::new("levels"))]
 #[bench::face_down(FamilyWorkload::new("face-down"))]
 #[bench::outside(FamilyWorkload::new("outside"))]
+#[bench::turn_structure(FamilyWorkload::new("turn-structure"))]
+#[bench::restart(FamilyWorkload::new("restart"))]
 fn present(w: FamilyWorkload) -> u64 {
     black_box(family::roll_paired(black_box(&w)).paired)
 }
@@ -62,6 +64,8 @@ fn present(w: FamilyWorkload) -> u64 {
 #[bench::levels(FamilyWorkload::new("levels"))]
 #[bench::face_down(FamilyWorkload::new("face-down"))]
 #[bench::outside(FamilyWorkload::new("outside"))]
+#[bench::turn_structure(FamilyWorkload::new("turn-structure"))]
+#[bench::restart(FamilyWorkload::new("restart"))]
 fn control(w: FamilyWorkload) -> u64 {
     black_box(family::roll_paired(black_box(&w)).paired)
 }

@@ -132,7 +132,10 @@ it is in play. The present-cost gate measures what it costs while one is:
   the red halves can be cast), `levels` The Eldest Reborn, Wizard Class, Case of
   the Crimson Pulse and Student of Warfare, `face-down` Exalted Angel and Gathan
   Raiders (not Illusionary Mask, whose rollouts outgrow `Small` as soon as it
-  spends mana on X), and `outside` Burning Wish and Lurrus of the Dream-Den. A
+  spends mana on X), and `outside` Burning Wish and Lurrus of the Dream-Den,
+  `turn-structure` Time Stop, Paradox Haze, Relentless Assault and Time Vault
+  (ending the turn, additional upkeep, combat phases and an extra turn), and
+  `restart` Karn Liberated, three copies. A
   stand-in drops abilities and keywords, not a card's shape, so these families
   measure what the cards' abilities cost in play; the cost of the shape itself,
   which every card pays through `State::copiable`, is in the absent-cost count.
@@ -173,6 +176,14 @@ it is in play. The present-cost gate measures what it costs while one is:
   in `Stalled(Capacity)` (a list filled, so a `Large` game would have gone on)
   and the layer recomputes per step. Ignite lists each family with a bar as
   `counts:family/<name>`.
+
+A subgame cannot be paired: only `State<Large>` suspends a game, and a state inside
+a subgame has no control with a card taken out. `just count-gate --subgame`
+(`beryl_bench::subgame`, `benches/subgame_counts.rs`) reports it unpaired, with no bar:
+instructions per rollout step in the opening turns of a subgame against the same
+turns of a plain `Large` game, both cut from seeded games with four Shahrazad in the deck.
+A step before a subgame begins has Shahrazad only as a spell, which has no static or
+triggered ability, so its control is itself.
 
 What a paired step does not see: work the mechanism did earlier that changed the
 state, such as a card exiled where it would have gone to a graveyard. Both sides

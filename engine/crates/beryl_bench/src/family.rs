@@ -209,6 +209,30 @@ pub const FAMILIES: &[Family] = &[
             (2, names::MOUNTAIN, names::PLAINS),
         ],
     },
+    // The turn-structure family: Time Stop (ends the turn during resolution, exiling the
+    // stack), Paradox Haze (an additional upkeep, CR 500.8), Relentless Assault (additional
+    // combat and main phases, CR 500.8) and Time Vault (a turn skipped, then an extra
+    // turn, CR 614.10 and 500.7). Each changes the turn plan the step order reads.
+    Family {
+        name: "turn-structure",
+        swaps: &[
+            (1, names::TIME_STOP, names::REPRIEVE),
+            (1, names::PARADOX_HAZE, names::OUST),
+            (1, names::RELENTLESS_ASSAULT, names::PORTABLE_HOLE),
+            (1, names::TIME_VAULT, names::NO_MORE_LIES),
+        ],
+    },
+    // The restart family: Karn Liberated, whose -14 restarts the game from the cards in it
+    // (CR 727). Three copies, so a game reaches one. A rollout step with Karn in play is a
+    // step before the restart; a step after it is in a game with no card of the family.
+    Family {
+        name: "restart",
+        swaps: &[
+            (1, names::KARN_LIBERATED, names::CURRENCY_CONVERTER),
+            (1, names::KARN_LIBERATED, names::STAFF_OF_THE_STORYTELLER),
+            (1, names::KARN_LIBERATED, names::TRINKET_MAGE),
+        ],
+    },
 ];
 
 /// The family called `name`.

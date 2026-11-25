@@ -68,6 +68,14 @@ harness = false
 name = "family_steps"
 harness = false
 
+[[bench]]
+name = "subgame_counts"
+harness = false
+
+[[bench]]
+name = "subgame_steps"
+harness = false
+
 [[test]]
 name = "allocations"
 harness = false

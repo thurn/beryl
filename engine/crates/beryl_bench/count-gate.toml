@@ -75,6 +75,12 @@ ratio = 1.25
 [family.outside]
 ratio = 1.25
 
+[family.turn-structure]
+ratio = 1.25
+
+[family.restart]
+ratio = 1.25
+
 # Cygnus. The rollout bar was measured twice on the recorded revision in WSL.
 [profile.m-1d943bdd]
 revision = "fdeca921562c632c35fba72703aafeb8baf8084e"
@@ -106,6 +112,8 @@ two-faced = 1.25
 levels = 1.25
 face-down = 1.25
 outside = 1.25
+turn-structure = 1.25
+restart = 1.25
 
 # Jarvis. Two runs at this revision measured 379,282,830 instructions against the existing bar.
 [profile.m-cf83bfb6]
@@ -138,3 +146,5 @@ two-faced = 1.25
 levels = 1.25
 face-down = 1.25
 outside = 1.25
+turn-structure = 1.25
+restart = 1.25

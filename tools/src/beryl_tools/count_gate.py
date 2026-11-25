@@ -291,6 +291,40 @@ def family_gate(names: list[str], bars: dict[str, FamilyBar]) -> int:
     return 1 if failed else 0
 
 
+# The subgame measurement (`beryl_bench::subgame`): instructions per rollout step inside a
+# subgame against a plain game, both in the `Large` layout. It reports; it has no bar, since
+# the plan asks for the numbers and a subgame is a game of its own.
+SUBGAME_BENCH = "subgame_counts"
+SUBGAME_STEPS = "subgame_steps"
+
+
+def subgame_report() -> int:
+    """Counts both sides, divides by the steps `subgame_steps` printed, and reports the ratio."""
+    counts = bench.cargo_bench(["--bench", SUBGAME_BENCH, "--", "--output-format=json"])
+    steps = bench.cargo_bench(["--bench", SUBGAME_STEPS])
+    code, out = bench.run_count(counts, bench.GATE_NAME, then=[steps])
+    if code != 0:
+        return vm_host.vm_failed(code, bench.VM)
+    sub = counted(out, f"{SUBGAME_BENCH}::subgame_cost::in_subgame::steps")
+    plain = counted(out, f"{SUBGAME_BENCH}::subgame_cost::in_plain_game::steps")
+    found = None
+    for line in out.splitlines():
+        if line.startswith("{") and "subgame_steps" in line:
+            found = json.loads(line)
+    if sub is None or plain is None or found is None:
+        bench.log("Gungraun or subgame_steps reported nothing for the subgame measurement")
+        return 2
+    per_sub = sub / found["subgame_steps"]
+    per_plain = plain / found["plain_steps"]
+    bench.log(
+        f"subgame: {sub:,} instructions in {found['subgame_steps']:,} steps "
+        f"({per_sub:,.0f} a step) from {found['subgame_positions']} positions; plain: "
+        f"{plain:,} in {found['plain_steps']:,} steps ({per_plain:,.0f} a step) from "
+        f"{found['plain_positions']} positions; ratio {per_sub / per_plain:.3f}"
+    )
+    return 0
+
+
 def count_gate(args: argparse.Namespace) -> int:
     try:
         if args.environment:
@@ -310,6 +344,8 @@ def count_gate(args: argparse.Namespace) -> int:
     bench.log(
         f"verifier {setup.profile.verifier}, calibration at {setup.profile.revision[:12]}"
     )
+    if args.subgame:
+        return subgame_report()
     families: list[str] | None = args.family
     if families:
         return family_gate(families, setup.families)
@@ -351,6 +387,11 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         action="append",
         help="gate this family's present cost instead (`[family.<name>]` in count-gate.toml);"
         " repeat for several",
+    )
+    p.add_argument(
+        "--subgame",
+        action="store_true",
+        help="report a rollout step's cost inside a subgame against a plain game, in `Large`",
     )
     p.add_argument(
         "--measure",
