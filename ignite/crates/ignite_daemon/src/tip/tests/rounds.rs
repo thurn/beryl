@@ -693,9 +693,13 @@ fn the_successor_reports_a_failure_on_unchanged_inputs() {
     world.work.set_checks(&tip, vec![failed.clone()]);
     world.work.set_outcome(&tip, &failed.check, Outcome::Fail);
     // The old round stores its result and reports the failed batch before it can start blame.
-    world
-        .work
-        .run(&ctx, &tip, std::slice::from_ref(&failed.check), false, false);
+    world.work.run(
+        &ctx,
+        &tip,
+        std::slice::from_ref(&failed.check),
+        false,
+        false,
+    );
     ctx.hub
         .tip_check_failures(&TipCheckFailures {
             commit: tip.clone(),

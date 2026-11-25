@@ -284,7 +284,10 @@ impl TipWork for FakeWork {
         pre_move: bool,
     ) -> Vec<TipRun> {
         self.classes.lock().unwrap().push(crate::steps::class());
-        self.pre_move.lock().unwrap().extend(checks.iter().map(|c| (c.clone(), pre_move)));
+        self.pre_move
+            .lock()
+            .unwrap()
+            .extend(checks.iter().map(|c| (c.clone(), pre_move)));
         let hook = self.on_run.lock().unwrap().remove(at);
         if let Some(hook) = hook {
             hook();

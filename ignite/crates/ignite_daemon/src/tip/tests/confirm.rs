@@ -126,9 +126,13 @@ fn cache_predecessor_failure(world: &World, ctx: &Context, tip: &Commit, check: 
     world
         .work
         .set_outcome(&predecessor, &check.check, Outcome::Fail);
-    world
-        .work
-        .run(ctx, &predecessor, std::slice::from_ref(&check.check), false, false);
+    world.work.run(
+        ctx,
+        &predecessor,
+        std::slice::from_ref(&check.check),
+        false,
+        false,
+    );
     world.git.set_changed(&predecessor, tip, &["src/unrelated"]);
 }
 

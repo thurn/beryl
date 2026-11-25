@@ -321,9 +321,14 @@ impl TipVerifier {
                                 claim: &claim,
                                 failed: &failed,
                             };
-                            let (runs, _) = self
-                                .work
-                                .run_batches(ctx, tip, &family, &batches, &callbacks, !after_master);
+                            let (runs, _) = self.work.run_batches(
+                                ctx,
+                                tip,
+                                &family,
+                                &batches,
+                                &callbacks,
+                                !after_master,
+                            );
                             lock(&round.held).remove(&family);
                             lock(&round.runs).extend(runs);
                         }
