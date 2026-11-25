@@ -1388,3 +1388,15 @@ fixed in the same session. Newest first.
   of the cost. Prevention: `beryl_search/tests/all/card_shapes.rs` plays the
   game that stalled, and every agent plays a game of each card-shape keystone
   family in `ignite check`.
+
+- **Tarmogoyf counted only the left half of a split card in a graveyard.** A
+  split card has each card type of either half in every zone but the stack (CR
+  709.4c), so an instant // sorcery split card in a graveyard counts as two
+  types. `State::card_types_in_graveyards` read the face that is up from the
+  object's definition (`State::definition`), which for a split card is its left
+  half alone, and so counted one. Fixed: in a game with a split card it reads
+  the card's copiable values (`State::copiable`), which combine both halves off
+  the stack. Prevention: `beryl_kernel/tests/queries.rs` holds the count of a
+  split card with an instant half and a sorcery half to two. No type stops a
+  reader from taking one face's characteristics directly; the review of the card
+  shapes found this one by searching for readers of `definition(..).face(..)`.

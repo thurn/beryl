@@ -150,16 +150,28 @@ impl<L: Layout> State<L> {
     /// player each graveyard belongs to is nothing to the count, so they are read in seat
     /// order. The layers read it too, for a permanent's characteristic-defining ability.
     ///
+    /// A split card has the card types of both halves there (see [CR 709.4c]): "A split card
+    /// has each card type specified on either of its halves". The effects that change the
+    /// characteristics of cards in other zones are not read here: their filters may read a
+    /// graveyard card's power, which a characteristic-defining ability of this kind defines
+    /// by this count.
+    ///
     /// [CR 300.1]: https://yawgatog.com/resources/magic-rules/#R3001
     /// [CR 108.2]: https://yawgatog.com/resources/magic-rules/#R1082
     /// [CR 111.7]: https://yawgatog.com/resources/magic-rules/#R1117
+    /// [CR 709.4c]: https://yawgatog.com/resources/magic-rules/#R7094c
     pub fn card_types_in_graveyards(&self, t: &GameTable) -> usize {
         let mut types = Types::NONE;
         for player in self.players().in_seat_order() {
             for &slot in self.graveyard(player) {
-                if !self.object(slot).is_token() {
-                    types = types.union(self.definition(slot).face(t).types);
+                if self.object(slot).is_token() {
+                    continue;
                 }
+                types = types.union(if t.can(Capability::Split) {
+                    self.copiable(slot).types(t)
+                } else {
+                    self.definition(slot).face(t).types
+                });
             }
         }
         usize::try_from(types.0.count_ones()).expect("a bit count fits in usize")

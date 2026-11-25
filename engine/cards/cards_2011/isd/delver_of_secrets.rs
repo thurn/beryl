@@ -43,6 +43,19 @@ pub mod scenarios {
     const IMAGE: &str = Card::PhantasmalImage;
     const HOLY_STRENGTH: &str = Card::HolyStrength;
 
+    /// The mana value of the `index`th permanent named `name` that the first player controls.
+    const fn mana_value(name: &'static str, index: u16, value: u8) -> Action {
+        Action::assert(Assertion::ManaValue {
+            object: SnapshotRef {
+                zone: Zone::Battlefield,
+                player: ME.seat(),
+                name: Some(name),
+                index,
+            },
+            value,
+        })
+    }
+
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("transforming keeps the counter and Aura")
             .interaction(&[BOLT, HOLY_STRENGTH])
@@ -141,6 +154,28 @@ pub mod scenarios {
             ME.picks_up_to(ABERRATION),
             ME.controls(ABERRATION, 2),
             ME.has_subtype(ABERRATION, Subtype::Illusion, true),
+            // CR 712.6d: the transformed card uses its front face's mana value, and a copy
+            // of a back face has mana value 0.
+            mana_value(ABERRATION, 0, 1),
+            mana_value(ABERRATION, 1, 0),
         ]),
+        Scenario::new("a transformed Delver that dies is Delver of Secrets in the graveyard")
+            .interaction(&[BOLT])
+            .permanents(
+                P0,
+                &[
+                    Permanent::new(DELVER).transformed(),
+                    Permanent::new(Card::Mountain),
+                ],
+            )
+            .hand(P0, &[BOLT])
+            .actions(&[
+                ME.casts(BOLT),
+                ME.targets(ABERRATION),
+                Resolve,
+                ME.controls(ABERRATION, 0),
+                ME.has(Zone::Graveyard, DELVER, 1),
+                ME.colored(Zone::Graveyard, DELVER, Colors::BLUE),
+            ]),
     ];
 }

@@ -74,7 +74,8 @@
       "hash": "b24e3972a169",
       "scenario": [
         "Adventurous Eater prepares Have a Bite as it enters",
-        "A token copy enters prepared and its original's copy ceases to exist"
+        "A token copy enters prepared and its original's copy ceases to exist",
+        "In the graveyard Adventurous Eater is not a sorcery card"
       ]
     },
     {

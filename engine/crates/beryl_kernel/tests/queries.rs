@@ -384,6 +384,8 @@ fn a_split_card_combines_its_halves_only_off_the_stack() {
     assert_eq!(s.colors(&t, card), both);
     assert_eq!(s.types(&t, card), types);
     assert_eq!(s.mana_value(&t, card), 5);
+    // Tarmogoyf's count sees both halves' card types.
+    assert_eq!(s.card_types_in_graveyards(&t), 2);
     assert_eq!(values.colors(&t), both);
     assert_eq!(values.types(&t), types);
     assert_eq!(values.mana_cost(&t).mana_value(), 5);

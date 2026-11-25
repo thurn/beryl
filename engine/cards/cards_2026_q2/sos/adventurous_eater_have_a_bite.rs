@@ -244,5 +244,20 @@ pub mod scenarios {
                 ME.chooses_named(BITE),
                 ME.controls(Card::PithingNeedle, 1),
             ]),
+        // A preparation card is a creature card in every zone, so Have a Bite's sorcery type
+        // does not make the card in the graveyard a target for Snapcaster Mage, whose trigger
+        // has no target and is removed.
+        Scenario::new("In the graveyard Adventurous Eater is not a sorcery card")
+            .interaction(&[Card::SnapcasterMage])
+            .battlefield(P0, &[ISLAND, ISLAND])
+            .hand(P0, &[Card::SnapcasterMage])
+            .graveyard(P0, &[CARD_NAME])
+            .actions(&[
+                ME.casts(Card::SnapcasterMage),
+                Resolve,
+                Action::assert(Assertion::Stack { count: 0 }),
+                ME.controls(Card::SnapcasterMage, 1),
+                ME.has(Zone::Graveyard, EATER, 1),
+            ]),
     ];
 }

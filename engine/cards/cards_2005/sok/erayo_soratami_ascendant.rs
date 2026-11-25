@@ -183,5 +183,36 @@ pub mod scenarios {
                 ME.controls(ERAYO, 1),
                 ME.has(Zone::Graveyard, ERAYO, 1),
             ]),
+        // CR 707.3: a copy's values are "as modified by the copy's status", and flipped is a
+        // status a new token does not have. So the token copy of a flipped Erayo is the
+        // unflipped creature, not Erayo's Essence.
+        Scenario::new("a token copy of a flipped Erayo is an unflipped Erayo")
+            .interaction(&[Card::FracturedIdentity, BOLT])
+            .battlefield(
+                P0,
+                &[
+                    Card::Mountain,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                ],
+            )
+            .hand(P0, &[BOLT, Card::FracturedIdentity])
+            .permanents(P1, &[Permanent::new(ERAYO).flipped()])
+            .actions(&[
+                // Erayo's Essence counters the first spell.
+                ME.casts(BOLT),
+                ME.targets_player(THEM),
+                THEM.life(20),
+                ME.casts(Card::FracturedIdentity),
+                Resolve,
+                THEM.controls(ESSENCE, 0),
+                ME.controls(ESSENCE, 0),
+                ME.controls(ERAYO, 1),
+                ME.creature(ERAYO, true),
+                ME.token_pt(ERAYO, 1, 1),
+            ]),
     ];
 }
