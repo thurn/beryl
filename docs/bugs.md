@@ -530,11 +530,11 @@ fixed in the same session. Newest first.
   `layers::elsewhere::resolve`, which reads the chosen color from the permanent.
   `parts` now uses `elsewhere::resolve` too, and a Worldgorger Dragon scenario
   returns Painter's Servant and Glorious Anthem together. Found by `just fuzz`.
-  Prevention: one function should turn a static ability's part into a layer
-  change for every caller; `LayerChange::resolve` returning `None` means two
-  different things (an amount to read later, a value to read from the
-  permanent), and an enum for the unresolved case would make each caller handle
-  both.
+  Prevention: `LayerChange::resolve` now takes the chosen color as an input, so
+  every caller (the layers, the order of permanents entering together, and the
+  kernel's reach into other zones) turns a part into a change with the one
+  function, and `None` means only an amount read as the layer applies.
+  `layers::elsewhere::resolve` is gone.
 
 - **A merged permanent lost the replacement abilities and object rule changes of
   the cards under it.** Gemrazer cast for its mutate cost over Hullbreacher made

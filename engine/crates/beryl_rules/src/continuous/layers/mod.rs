@@ -20,6 +20,7 @@ use text::reader;
 pub(crate) use entering::{entered, lost_entering};
 pub(crate) use together::order_may_matter;
 
+use beryl_card::MODIFY_PARTS;
 use beryl_kernel::derive::Rederive;
 
 use crate::bitboard::Bitboard;
@@ -556,41 +557,36 @@ fn list_static<L: Layout>(
         | Objects::Other(_) => Target::Static(index::<L>(i)),
     };
     let you = s.base_controller(slot);
-    // CR 612.3: "any abilities that are granted to an object can't be modified by
-    // text-changing effects that affect that object", so only the permanent's own ability is
-    // read through its words. A granted one reads as its granter prints it.
-    let words = if on.order & GRANTED == 0 {
-        s.words_of(slot)
-    } else {
-        Words::NONE
-    };
-    // The part in the earliest layer, where the effect begins: the first said of those.
-    let layer_of = |modification: Modification| {
-        LayerChange::resolve(modification, you, &words)
-            .map_or_else(|| read_layer(modification), LayerChange::layer)
-    };
-    let first = (0..spec.modifications.len())
-        .min_by_key(|&part| (layer_of(spec.modifications[part]), part))
-        .unwrap_or(0);
-    let mut listed = Ok(());
+    let words = text::words_for(s, slot, on.order);
     let parts = u8::try_from(spec.modifications.len())
         .expect("a layer spec has at most MODIFY_PARTS parts");
+    let mut changes = [LayerChange::SwitchPt; MODIFY_PARTS];
     for (&modification, part) in spec.modifications.iter().zip(0..parts) {
         // No static ability of the cards changes control. One that did would name
         // its source's controller as layer 2 has it, not as the permanent entered.
         debug_assert_ne!(modification, Modification::Control);
-        // An amount read as its layer applies is named by the ability that says it. The card
-        // table refuses a granted ability with one (`Unapplied::GrantedAmount`).
-        let change =
-            other_zones::resolve(s, slot, modification, you, &words).unwrap_or_else(|| {
-                debug_assert_eq!(on.order & GRANTED, 0);
-                LayerChange::Read {
-                    layer: read_layer(modification),
-                    face: on.face,
-                    ability: AbilityIx::new(on.order & !merged::MERGED),
-                    part,
-                }
-            });
+        // "The chosen color" is the one chosen for this permanent. An amount read as its
+        // layer applies is named by the ability that says it. The card table refuses a
+        // granted ability with one (`Unapplied::GrantedAmount`).
+        changes[usize::from(part)] =
+            LayerChange::resolve(modification, you, &words, || s.chosen_color(slot))
+                .unwrap_or_else(|| {
+                    debug_assert_eq!(on.order & GRANTED, 0);
+                    LayerChange::Read {
+                        layer: read_layer(modification),
+                        face: on.face,
+                        ability: AbilityIx::new(on.order & !merged::MERGED),
+                        part,
+                    }
+                });
+    }
+    let changes = &changes[..usize::from(parts)];
+    // The part in the earliest layer, where the effect begins: the first said of those.
+    let first = (0..changes.len())
+        .min_by_key(|&part| (changes[part].layer(), part))
+        .unwrap_or(0);
+    let mut listed = Ok(());
+    for (&change, part) in changes.iter().zip(0..parts) {
         let pushed = list.get_or_insert_with(Default::default).push(Apply {
             layer: change.layer(),
             timestamp: o.timestamp(),

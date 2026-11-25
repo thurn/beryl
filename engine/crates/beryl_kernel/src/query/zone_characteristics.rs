@@ -20,7 +20,7 @@
 //!
 //! [CR 613.1]: https://yawgatog.com/resources/magic-rules/#R6131
 
-use beryl_card::{Colors, Filter, Modification, Objects, Supertypes, Types};
+use beryl_card::{Colors, Filter, Objects, Supertypes, Types};
 
 use crate::chosen::ChosenValue;
 
@@ -164,16 +164,12 @@ impl<L: Layout> State<L> {
             unreachable!("the layers list only abilities that reach every zone");
         };
         let modification = spec.modifications[usize::from(reach.part)];
-        let change = if let Modification::AddChosenColor = modification {
-            LayerChange::AddColors(self.chosen_color(reach.source))
-        } else {
-            LayerChange::resolve(
-                modification,
-                self.controller(reach.source),
-                &self.words_of(reach.source),
-            )
-            .expect("the card table admits only changes of types and colors, and escape, here")
-        };
+        let you = self.controller(reach.source);
+        let words = self.words_of(reach.source);
+        let change = LayerChange::resolve(modification, you, &words, || {
+            self.chosen_color(reach.source)
+        })
+        .expect("the card table admits only changes of types and colors, and escape, here");
         (filter, change)
     }
 

@@ -17,11 +17,9 @@ use beryl_kernel::derive::Rederive;
 use beryl_kernel::query::zone_characteristics::{ELSEWHERE, Reach};
 
 use super::{Apply, GRANTED, Target, position, static_ability_of};
-use crate::card::{Modification, Objects, Words};
+use crate::card::Objects;
 use crate::fixed::Full;
-use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
-use crate::state::{LayerChange, State};
 use crate::table::Capability;
 use crate::table::GameTable;
 
@@ -81,40 +79,4 @@ fn list_reaching<L: Layout>(
         return listed;
     }
     listed.and(s.reach(reaching.iter().copied()))
-}
-
-/// A part of a static ability of the permanent in `slot` as the layers list it
-/// ([`LayerChange::resolve`] for `you` through `words`), with "the chosen color" read from
-/// that permanent ([`Modification::AddChosenColor`]). None for a part whose amount the
-/// layers read as they apply.
-pub(super) fn resolve<L: Layout>(
-    s: &State<L>,
-    slot: L::Slot,
-    modification: Modification,
-    you: Seat,
-    words: &Words,
-) -> Option<LayerChange> {
-    match modification {
-        Modification::AddChosenColor => Some(LayerChange::AddColors(s.chosen_color(slot))),
-        Modification::Control
-        | Modification::AddTypes(_)
-        | Modification::RemoveTypes(_)
-        | Modification::SetTypes(_)
-        | Modification::AddSubtypeWord(_)
-        | Modification::SetSubtypeWord(_)
-        | Modification::SetLandTypeWords(_)
-        | Modification::AddKeywords(_)
-        | Modification::Grant(_)
-        | Modification::SetPower(_)
-        | Modification::SetPt(..)
-        | Modification::ModifyPt(..)
-        | Modification::LoseAllAbilities
-        | Modification::LoseAbility(_)
-        | Modification::SetColorWords(_)
-        | Modification::AddColorWords(_)
-        | Modification::SetBasePt(..)
-        | Modification::SwitchPt
-        | Modification::AddProtection(_)
-        | Modification::GrantEscape => LayerChange::resolve(modification, you, words),
-    }
 }

@@ -204,31 +204,11 @@ fn what_it_does<L: Layout>(
     begun: Read<'_, L>,
 ) -> (Option<Bitboard<L::Slot>>, LayerChange) {
     let members = members(s, t, a, begun);
-    let change = match a.change {
-        LayerChange::Read { .. } if members.is_some() => {
-            apply::settle(s, t, a.source, a.change, super::reader(s, a))
-        }
-        change @ (LayerChange::Control(_)
-        | LayerChange::AddTypes(_)
-        | LayerChange::RemoveTypes(_)
-        | LayerChange::SetTypes(_)
-        | LayerChange::AddSubtype(_)
-        | LayerChange::SetLandTypes(_)
-        | LayerChange::AddKeywords(_)
-        | LayerChange::Grant(_)
-        | LayerChange::SetColors(_)
-        | LayerChange::AddColors(_)
-        | LayerChange::LoseAllAbilities
-        | LayerChange::LoseAbility(_)
-        | LayerChange::DefinedPower(_)
-        | LayerChange::SetBasePt(..)
-        | LayerChange::ModifyPt(..)
-        | LayerChange::SwitchPt
-        | LayerChange::Read { .. }
-        | LayerChange::SetSubtype(_)
-        | LayerChange::DefinedPt(..)
-        | LayerChange::AddProtection(_)
-        | LayerChange::GrantEscape) => change,
+    // An effect that applies to nothing settles no amount.
+    let change = if members.is_some() {
+        apply::settle(s, t, a.source, a.change, super::reader(s, a))
+    } else {
+        a.change
     };
     (members, change)
 }

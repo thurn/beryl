@@ -196,10 +196,14 @@ pub(crate) fn instruction<L: Layout>(
             | Modification::AddChosenColor
             | Modification::SwitchPt
             | Modification::AddProtection(_)
-            | Modification::GrantEscape) => match LayerChange::resolve(modification, you, &words) {
-                Some(change) => change,
-                None => no_primitive(&modification),
-            },
+            | Modification::GrantEscape) => {
+                // The definition check refuses "the chosen color" in a resolving effect.
+                let chosen = || unreachable!("a resolving effect with the chosen color");
+                match LayerChange::resolve(modification, you, &words, chosen) {
+                    Some(change) => change,
+                    None => no_primitive(&modification),
+                }
+            }
         };
         // The definition check refuses more parts than there is room for.
         changes[parts] = change;
@@ -259,8 +263,8 @@ pub(crate) fn exchange_instruction<L: Layout>(
     (game.state).start_effects(resolution.entry.card(), &exchange, Duration::Indefinite)?;
     layers::refresh(game.state, game.table, game.sink)?;
     for (permanent, player) in [(a, b_controller), (b, a_controller)] {
-        let permanent = (game.state.permanent(permanent.into()))
-            .expect("a permanent changing control");
+        let permanent =
+            (game.state.permanent(permanent.into())).expect("a permanent changing control");
         game.state.set_summoning_sick(permanent, true);
         let object = permanent.into();
         game.settle(Event::GainControl { object, player })?;

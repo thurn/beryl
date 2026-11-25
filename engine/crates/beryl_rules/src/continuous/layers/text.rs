@@ -13,7 +13,7 @@ use beryl_kernel::derive::Rederive;
 use crate::card::{AbilityIx, BasicLandTypes, Face, Types, Words};
 use crate::fixed::Full;
 use crate::layout::Layout;
-use crate::state::Flag;
+use crate::state::{Flag, State};
 use crate::table::{GameTable, is_simple};
 
 use super::granted::GRANTED;
@@ -40,21 +40,48 @@ impl Changed {
 
 /// Who reads the part `a` of a static ability as its layer applies: the controller of its
 /// permanent as the layers so far left it, and the words of the permanent's text it is read
-/// through. None for an effect of a resolved spell or ability, settled as it began. CR 612.3:
-/// "any abilities that are granted to an object can't be modified by text-changing effects
-/// that affect that object", so a granted ability reads as its granter prints it.
+/// through ([`words_for`]). None for an effect of a resolved spell or ability, settled as it
+/// began.
 pub(super) fn reader<L: Layout>(s: &Rederive<'_, L>, a: &Apply<L>) -> Option<apply::Reader> {
     a.from.map(|(from, _)| {
         let i = position::<L>(from);
         apply::Reader {
             you: s.rows()[i].controller,
-            words: if a.order & GRANTED == 0 {
-                s.words_of(s.battlefield()[i])
-            } else {
-                Words::NONE
-            },
+            words: words_for(s, s.battlefield()[i], a.order),
         }
     })
+}
+
+/// The words a static ability of the permanent in `slot`, at [`super::Apply::order`]
+/// `order`, is read through. CR 612.3: "any abilities that are granted to an object can't be
+/// modified by text-changing effects that affect that object", so only the permanent's own
+/// ability is read through its words, and a granted one reads as its granter prints it.
+pub(super) fn words_for<L: Layout>(s: &State<L>, slot: L::Slot, order: u8) -> Words {
+    if order & GRANTED == 0 {
+        s.words_of(slot)
+    } else {
+        Words::NONE
+    }
+}
+
+/// [`type_line`] for every permanent, with what they changed together and whether a mask of
+/// lost abilities ran out of room. Out of line: only a game with a text change comes here.
+#[cold]
+#[inline(never)]
+pub(super) fn type_lines<L: Layout>(
+    s: &mut Rederive<'_, L>,
+    t: &GameTable,
+) -> (Changed, Result<(), Full>) {
+    let mut text = Changed::default();
+    let mut listed = Ok(());
+    for i in 0..s.battlefield().len() {
+        let face = s.definition(s.battlefield()[i]).face(t);
+        match type_line(s, t, i, face) {
+            Ok(changed) => text = text.and(changed),
+            Err(full) => listed = Err(full),
+        }
+    }
+    (text, listed)
 }
 
 /// Reads the type line and landwalk keywords of the permanent at battlefield index `i`, whose
@@ -76,26 +103,6 @@ pub(super) fn reader<L: Layout>(s: &Rederive<'_, L>, a: &Apply<L>) -> Option<app
 ///
 /// [CR 612.1]: https://yawgatog.com/resources/magic-rules/#R6121
 /// [CR 305.6]: https://yawgatog.com/resources/magic-rules/#R3056
-/// [`type_line`] for every permanent, with what they changed together and whether a mask of
-/// lost abilities ran out of room. Out of line: only a game with a text change comes here.
-#[cold]
-#[inline(never)]
-pub(super) fn type_lines<L: Layout>(
-    s: &mut Rederive<'_, L>,
-    t: &GameTable,
-) -> (Changed, Result<(), Full>) {
-    let mut text = Changed::default();
-    let mut listed = Ok(());
-    for i in 0..s.battlefield().len() {
-        let face = s.definition(s.battlefield()[i]).face(t);
-        match type_line(s, t, i, face) {
-            Ok(changed) => text = text.and(changed),
-            Err(full) => listed = Err(full),
-        }
-    }
-    (text, listed)
-}
-
 fn type_line<L: Layout>(
     s: &mut Rederive<'_, L>,
     t: &GameTable,

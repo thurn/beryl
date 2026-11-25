@@ -423,11 +423,7 @@ fn attack_forbidden<L: Layout>(
 /// [CR 101.2]: https://yawgatog.com/resources/magic-rules/#R1012
 /// [CR 106.6]: https://yawgatog.com/resources/magic-rules/#R1066
 #[inline]
-pub(crate) fn cant_be_countered<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    spell: Spell<L>,
-) -> bool {
+pub(crate) fn cant_be_countered<L: Layout>(s: &State<L>, t: &GameTable, spell: Spell<L>) -> bool {
     let of_kind = t.rules_of(RuleKind::CantBeCountered);
     if of_kind.is_empty() {
         return false;

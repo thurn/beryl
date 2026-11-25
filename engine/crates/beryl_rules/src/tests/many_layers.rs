@@ -116,7 +116,7 @@ fn elk(t: &GameTable, s: &mut State, slot: Slot) {
     let you = Seat::P0;
     let changes: Vec<LayerChange> = ELK
         .iter()
-        .map(|&m| LayerChange::resolve(m, you, &crate::card::Words::NONE).unwrap())
+        .map(|&m| LayerChange::resolve(m, you, &crate::card::Words::NONE, || Colors::NONE).unwrap())
         .collect();
     let (card, _) = s.copiable(slot).record(t);
     let mut members = crate::bitboard::Bitboard::EMPTY;
