@@ -18,8 +18,23 @@ pub static CARD: CardDef = Printed::HorizonScholar
 pub mod scenarios {
     use crate::prelude::*;
 
-    pub const SCENARIOS: &[Scenario] = &[Scenario::new("another permanent entering does not scry")
-        .battlefield(P0, &[Card::HorizonScholar])
-        .hand(P0, &[Card::Island])
-        .actions(&[ME.plays(Card::Island), stack(0)])];
+    pub const SCENARIOS: &[Scenario] = &[
+        Scenario::new("another permanent entering does not scry")
+            .battlefield(P0, &[Card::HorizonScholar])
+            .hand(P0, &[Card::Island])
+            .actions(&[ME.plays(Card::Island), stack(0)]),
+        Scenario::new("entering scries 2: one card to the bottom, the other stays on top")
+            .hand(P0, &[Card::HorizonScholar])
+            .battlefield(P0, &[Card::Island; 6])
+            .library(P0, &[Card::Plains, Prop::Artifact, Card::Island])
+            .actions(&[
+                ME.casts(Card::HorizonScholar),
+                Resolve,
+                // The enters trigger is on the stack above nothing else; resolving it scries.
+                Resolve,
+                ME.picks_up_to(Prop::Artifact),
+                ME.done_picking(),
+                ME.library_top(&[Card::Plains, Card::Island, Prop::Artifact]),
+            ]),
+    ];
 }
