@@ -584,5 +584,57 @@ pub mod scenarios {
                 ME.has(Zone::Exile, Card::Plains, 3),
                 stack(1),
             ]),
+        // Escaping an Adventure half pays that half's mana cost plus exiling three other
+        // cards, and resolving it exiles the card on an adventure.
+        Scenario::new("an adventure half escapes for its adventure cost")
+            .interaction(&[Card::BonecrusherGiant])
+            .battlefield(P0, &[BREACH, Card::Mountain, Card::Mountain])
+            .graveyard(
+                P0,
+                &[
+                    Card::BonecrusherGiant,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                ],
+            )
+            .actions(&[
+                Action::Cast {
+                    player: P0,
+                    card: Card::BonecrusherGiant,
+                    face: FaceIx::BACK,
+                    costs: Castings::ESCAPE,
+                },
+                ME.targets_player(THEM),
+                Resolve,
+                THEM.life(18),
+                ME.has(Zone::Exile, Card::BonecrusherGiant, 1),
+                ME.has(Zone::Exile, Card::Plains, 3),
+            ]),
+        // Escaping one half of a split card pays that half's mana cost plus exiling three
+        // other cards, and the card returns to the graveyard after resolving.
+        Scenario::new("a split half escapes for its half's mana cost")
+            .interaction(&[Card::FireIce])
+            .battlefield(P0, &[BREACH, Card::Island, Card::Island])
+            .battlefield(P1, &[Card::Plains])
+            .graveyard(
+                P0,
+                &[Card::FireIce, Card::Plains, Card::Plains, Card::Plains],
+            )
+            .library(P0, &[Card::Forest])
+            .actions(&[
+                Action::Cast {
+                    player: P0,
+                    card: Card::FireIce,
+                    face: FaceIx::BACK,
+                    costs: Castings::ESCAPE,
+                },
+                ME.targets(Card::Plains),
+                Resolve,
+                THEM.tapped(Card::Plains, 1),
+                ME.has(Zone::Hand, Card::Forest, 1),
+                ME.has(Zone::Graveyard, Card::FireIce, 1),
+                ME.has(Zone::Exile, Card::Plains, 3),
+            ]),
     ];
 }

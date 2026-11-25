@@ -286,5 +286,58 @@ pub mod scenarios {
                 ME.has(Zone::Hand, Card::Island, 1),
                 ME.has(Zone::Graveyard, Card::Swamp, 1),
             ]),
+        // Fork's controller does not pay the copied spell's additional discard cost. A Bolt
+        // left in hand keeps priority after the copy resolves so the original resolves next.
+        Scenario::new("Fork copies Thrill of Possibility without discarding a card")
+            .interaction(&[Card::ThrillOfPossibility, BOLT])
+            .at(2, P1, TurnStep::PrecombatMain)
+            .battlefield(P0, &[MOUNTAIN, MOUNTAIN, MOUNTAIN])
+            .hand(P0, &[FORK, BOLT, Card::Plains])
+            .library(P0, &[ISLAND, ISLAND, ISLAND])
+            .battlefield(P1, &[MOUNTAIN, MOUNTAIN])
+            .hand(P1, &[Card::ThrillOfPossibility, Card::Swamp])
+            .library(P1, &[Card::Forest, Card::Forest, Card::Forest])
+            .actions(&[
+                THEM.casts(Card::ThrillOfPossibility),
+                ME.casts(FORK),
+                Resolve,
+                Resolve,
+                Resolve,
+                ME.has(Zone::Hand, Card::Plains, 1),
+                ME.has(Zone::Hand, BOLT, 1),
+                ME.has(Zone::Hand, ISLAND, 2),
+                ME.has_cards(Zone::Hand, 4),
+                THEM.has(Zone::Graveyard, Card::Swamp, 1),
+                THEM.has(Zone::Hand, Card::Forest, 2),
+            ]),
+        // Crystal Spray changes Deathmark's "green" to "blue" on the stack, but Fork copies
+        // the spell without that text-changing effect, so the copy still targets green or white.
+        Scenario::new("Fork does not copy a text change applied to a spell")
+            .interaction(&[Card::Deathmark, Card::CrystalSpray, Card::WildNacatl])
+            .battlefield(
+                P0,
+                &[Card::Swamp, ISLAND, ISLAND, ISLAND, MOUNTAIN, MOUNTAIN],
+            )
+            .hand(P0, &[Card::Deathmark, Card::CrystalSpray, FORK])
+            .library(P0, &[Card::Plains; 2])
+            .battlefield(P1, &[Card::WildNacatl, Prop::Flier, Prop::Vanilla])
+            .actions(&[
+                ME.casts(Card::Deathmark),
+                ME.targets(Card::WildNacatl),
+                ME.casts(Card::CrystalSpray),
+                ME.targets(Card::Deathmark),
+                Resolve,
+                ME.chooses_word(TextWord::Color(Colors::GREEN)),
+                ME.chooses_word(TextWord::Color(Colors::BLUE)),
+                ME.casts(FORK),
+                Resolve,
+                ME.deciding(DecisionKind::Target, 2),
+                ME.targets(Card::WildNacatl),
+                Resolve,
+                THEM.has(Zone::Graveyard, Card::WildNacatl, 1),
+                Resolve,
+                THEM.controls(Prop::Flier, 1),
+                THEM.controls(Prop::Vanilla, 1),
+            ]),
     ];
 }

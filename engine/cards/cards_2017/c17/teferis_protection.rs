@@ -546,5 +546,57 @@ pub mod scenarios {
                 ME.has(Zone::Graveyard, Card::Mountain, 1),
                 ME.has(Zone::Hand, Card::Island, 1),
             ]),
+        // Stomp stops prevention for the turn, so Griselbrand's combat damage is dealt even
+        // through protection from everything. P0's life total still cannot change, while P1
+        // gains 7 life from lifelink.
+        Scenario::new(
+            "unpreventable combat damage still triggers lifelink while life can't change",
+        )
+        .interaction(&[Card::BonecrusherGiant, Card::Griselbrand])
+        .at(2, P1, TurnStep::PrecombatMain)
+        .battlefield(P0, &[Card::Plains; 3])
+        .hand(P0, &[PROTECTION])
+        .battlefield(P1, &[Card::Mountain, Card::Mountain, Card::Griselbrand])
+        .hand(P1, &[Card::BonecrusherGiant])
+        .library(P0, &[Card::Plains; 3])
+        .library(P1, &[Card::Plains; 3])
+        .actions(&[
+            THEM.passes(),
+            ME.casts(PROTECTION),
+            Resolve,
+            THEM.casts_face(Card::BonecrusherGiant, FaceIx::BACK),
+            THEM.targets(Card::Griselbrand),
+            Resolve,
+            advance_to(2, TurnStep::BeginningOfCombat),
+            THEM.passes(),
+            THEM.attacks_with(Card::Griselbrand),
+            advance_to(2, TurnStep::EndOfCombat),
+            ME.life(20),
+            THEM.life(27),
+        ]),
+        // Stasis skips P0's untap step on turn 3, so P0's phased-out Plains stay phased out,
+        // while protection from everything and the life-total lock still expire as turn 3 begins.
+        Scenario::new("a skipped untap keeps permanents phased out while protection ends")
+            .interaction(&[Card::Stasis, BOLT])
+            .at(1, P0, TurnStep::PostcombatMain)
+            .hand(P0, &[PROTECTION])
+            .battlefield(P0, &[Card::Plains; 3])
+            .battlefield(P1, &[Card::Stasis, Card::Island, Card::Mountain])
+            .hand(P1, &[BOLT])
+            .library(P0, &[Card::Plains; 3])
+            .library(P1, &[Card::Plains; 3])
+            .actions(&[
+                ME.casts(PROTECTION),
+                Resolve,
+                advance_to(2, TurnStep::Upkeep),
+                Resolve,
+                THEM.yes(),
+                advance_to(3, TurnStep::Upkeep),
+                ME.controls(Card::Plains, 0),
+                ME.passes(),
+                THEM.casts(BOLT),
+                THEM.targets_player(ME),
+                ME.life(17),
+            ]),
     ];
 }

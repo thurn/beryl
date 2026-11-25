@@ -320,5 +320,19 @@
     "scenario": "Brisela exiled by Flickerwisp returns as Gisela and Bruna",
     "cr": "CR 713.8c (https://yawgatog.com/resources/magic-rules/#R7138c): \"If an effect can find the new object that a melded permanent becomes as it leaves the battlefield, it finds both cards. (See rule 400.7.) If that effect causes actions to be taken upon those cards, the same actions are taken upon each of them.\"",
     "reason": "XMage's Flickerwisp returns only one of the two cards the exiled melded permanent became, where the delayed ability finds both."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Underworld Breach",
+    "scenario": "an adventure half escapes for its adventure cost",
+    "cr": "CR 715.3 (https://yawgatog.com/resources/magic-rules/#R7153): \"Sagas use lore counters to track their progress.\"",
+    "reason": "XMage's UnderworldBreachEffect attaches EscapeAbility only to the main card object and never to an adventurer card's Adventure spell half. Beryl and Forge both allow escaping Stomp for its adventure cost plus exiling three cards."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Underworld Breach",
+    "scenario": "a split half escapes for its half's mana cost",
+    "cr": "CR 709.3 (https://yawgatog.com/resources/magic-rules/#R7093): \"A player chooses which half of a split card they are casting before putting it onto the stack.\"",
+    "reason": "XMage's UnderworldBreachEffect attaches EscapeAbility only to the main card object and never to either half of a split card. Beryl and Forge both allow escaping Ice for its half's mana cost plus exiling three cards."
   }
 ]

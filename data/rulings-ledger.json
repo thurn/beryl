@@ -1080,12 +1080,16 @@
     {
       "published_at": "2004-10-04",
       "hash": "3542921687f4",
-      "covered": "Effect::CopySpell"
+      "scenario": [
+        "Fork copies Thrill of Possibility without discarding a card"
+      ]
     },
     {
       "published_at": "2004-10-04",
       "hash": "99a05382f6b2",
-      "covered": "Effect::CopySpell"
+      "scenario": [
+        "Fork copies Braingeyser for 3 with a new target"
+      ]
     },
     {
       "published_at": "2004-10-04",
@@ -1111,7 +1115,9 @@
     {
       "published_at": "2004-10-04",
       "hash": "bce184f89154",
-      "covered": "Effect::CopySpell"
+      "scenario": [
+        "Fork copies Thrill of Possibility without discarding a card"
+      ]
     },
     {
       "published_at": "2004-10-04",
@@ -1128,7 +1134,9 @@
     {
       "published_at": "2004-10-04",
       "hash": "4fa008c4f87e",
-      "untestable": "The implemented text-changing spell Mind Bend targets permanents. The vocabulary applies its word changes to permanents on the battlefield and cannot change the text of a spell on the stack."
+      "scenario": [
+        "Fork does not copy a text change applied to a spell"
+      ]
     },
     {
       "published_at": "2004-10-04",
@@ -1152,7 +1160,9 @@
     {
       "published_at": "2009-05-01",
       "hash": "5250ee4b2a6e",
-      "covered": "Effect::CopySpell"
+      "scenario": [
+        "Fork copies Braingeyser for 3 with a new target"
+      ]
     },
     {
       "published_at": "2009-10-01",
@@ -1178,7 +1188,9 @@
     {
       "published_at": "2004-10-04",
       "hash": "13abd5740918",
-      "untestable": "The spell and ability vocabulary cannot assign portions of one damage amount to separate targets. The trample ruling has its own combat scenario."
+      "scenario": [
+        "Furnace of Rath doubles divided damage from Fire"
+      ]
     },
     {
       "published_at": "2004-10-04",
@@ -2767,7 +2779,9 @@
     {
       "published_at": "2017-08-25",
       "hash": "ab932f0f1936",
-      "untestable": "The damage vocabulary has prevention and damage replacement but cannot make damage unpreventable."
+      "scenario": [
+        "unpreventable combat damage still triggers lifelink while life can't change"
+      ]
     },
     {
       "published_at": "2017-08-25",
@@ -2779,7 +2793,9 @@
     {
       "published_at": "2017-08-25",
       "hash": "7916bee94fb4",
-      "untestable": "The turn vocabulary cannot skip an untap step."
+      "scenario": [
+        "a skipped untap keeps permanents phased out while protection ends"
+      ]
     },
     {
       "published_at": "2017-08-25",
@@ -3096,7 +3112,10 @@
     {
       "published_at": "2020-01-24",
       "hash": "36f704b2dd29",
-      "untestable": "Split cards and adventures need the two-face casting work tracked in milestone 7."
+      "scenario": [
+        "an adventure half escapes for its adventure cost",
+        "a split half escapes for its half's mana cost"
+      ]
     },
     {
       "published_at": "2020-01-24",

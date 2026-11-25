@@ -123,5 +123,21 @@ pub mod scenarios {
                 THEM.has(Zone::Graveyard, Prop::Vanilla, 1),
                 THEM.life(10),
             ]),
+        // Fire divides 2 damage into 1 to the 2/2 and 1 to P1 before Furnace of Rath doubles
+        // each share to 2, killing the 2/2 and leaving P1 at 18 life.
+        Scenario::new("Furnace of Rath doubles divided damage from Fire")
+            .interaction(&[Card::FireIce, Card::LordOfAtlantis])
+            .battlefield(P0, &[FURNACE, Card::Mountain, Card::Island])
+            .battlefield(P1, &[Card::LordOfAtlantis])
+            .hand(P0, &[Card::FireIce])
+            .actions(&[
+                ME.casts(Card::FireIce),
+                ME.target_count(2),
+                ME.targets(Card::LordOfAtlantis),
+                ME.targets_player(THEM),
+                Resolve,
+                THEM.has(Zone::Graveyard, Card::LordOfAtlantis, 1),
+                THEM.life(18),
+            ]),
     ];
 }
