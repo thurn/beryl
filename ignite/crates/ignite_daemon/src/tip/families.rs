@@ -89,6 +89,9 @@ struct Round<'a> {
     queue: Mutex<VecDeque<FamilyBatches>>,
     /// The commit that ended the round, or the error reading `staging` after promotion.
     ended: Mutex<Option<Result<Commit>>>,
+    /// Set once a required check fails before `master` moves, so no worker starts another
+    /// family or batch on a tip that can no longer promote.
+    failed_required: AtomicBool,
     runs: Mutex<Vec<TipRun>>,
     elsewhere: Mutex<Elsewhere>,
     /// The batch each family is running under a claim, which the renewer claims again.
@@ -107,6 +110,7 @@ impl Round<'_> {
     fn should_stop(&self) -> bool {
         if crate::steps::stop_requested()
             || self.verifier.machine_is_off()
+            || self.failed_required.load(Ordering::SeqCst)
             || lock(&self.ended).is_some()
         {
             return true;
@@ -296,6 +300,7 @@ impl TipVerifier {
                 .collect(),
             queue: Mutex::new(by_family(batches(&self.listed, to_run, &costs)).into()),
             ended: Mutex::new(None),
+            failed_required: AtomicBool::new(false),
             runs: Mutex::new(Vec::new()),
             elsewhere: Mutex::new(BTreeMap::new()),
             held: Mutex::new(BTreeMap::new()),
@@ -314,12 +319,18 @@ impl TipVerifier {
             .map(|check| &check.key)
             .collect();
         let failed = |keys: &[ResultKey]| {
-            let checks = keys
+            let checks: Vec<_> = keys
                 .iter()
                 .filter(|key| required.contains(*key))
                 .cloned()
                 .collect();
-            observe_failures(ctx, tip, checks);
+            if !checks.is_empty() {
+                if phase == RunPhase::BeforeMaster {
+                    self.publish_failed(ctx, tip, checks.clone());
+                    round.failed_required.store(true, Ordering::SeqCst);
+                }
+                observe_failures(ctx, tip, checks);
+            }
         };
         // Each family's thread works for the round's activity, so its builds run in the `tip`
         // class and `ignite status` shows which family it is on.

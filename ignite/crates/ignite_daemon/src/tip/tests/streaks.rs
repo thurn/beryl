@@ -1,16 +1,18 @@
 //! A check that keeps failing while landings keep replacing each candidate before its round
-//! reaches a verdict is still reported as a regression.
+//! reaches a verdict is still reported as a regression; and a runnable failure stops other
+//! families immediately so its round reaches its failed verdict and culprit search on the
+//! first try instead of waiting for a streak.
 
-use ignite_core::protocol::hub::TipVerified;
+use ignite_core::protocol::hub::{TipCheckFailures, TipVerified};
 use ignite_store::hub;
 
 use super::rounds::{in_family, running_hub, select};
 use super::*;
 
-/// Each round sees `first:a` fail, then a landing moves `staging` while the round's next
-/// family starts, and the tip loop selects the newer tip, which ends the round before its
-/// verdict and culprit search. The failure at the second candidate is reported, with the range
-/// from the last verified tip to the first candidate that failed.
+/// When a peer platform reports a required failure on a tip and a newer landing replaces the
+/// candidate while this machine's round is running another family, the round is superseded
+/// before its verdict. The hub still reports the check once it fails at two candidates in a
+/// row, with the range from the last verified tip to the first candidate that failed.
 #[test]
 fn a_check_failing_at_each_replaced_candidate_is_reported_within_two_rounds() {
     let world = World::new();
@@ -35,20 +37,29 @@ fn a_check_failing_at_each_replaced_candidate_is_reported_within_two_rounds() {
         // The check's inputs change with each landing, so its hash differs at every tip.
         let mut failing = in_family("a", "first");
         failing.key.hash = InputHash::new(format!("{:064x}", round + 1)).unwrap();
+        failing.runnable = false;
         let unfinished = in_family("b", "second");
         world
             .work
             .set_checks(tip, vec![failing.clone(), unfinished]);
-        world.work.set_outcome(tip, &failing.check, Outcome::Fail);
-        let (git, work, loop_ctx, landed) = (
+        let (git, work, loop_ctx, landed, failed_key, failed_tip) = (
             world.git.clone(),
             world.work.clone(),
             ctx.clone(),
             newer.clone(),
+            failing.key.clone(),
+            tip.clone(),
         );
         world.work.before_batches.lock().unwrap().insert(
             "second".to_owned(),
             Arc::new(move || {
+                loop_ctx
+                    .hub
+                    .tip_check_failures(&TipCheckFailures {
+                        commit: failed_tip.clone(),
+                        checks: vec![failed_key.clone()],
+                    })
+                    .unwrap();
                 git.set_tip("staging", landed.clone());
                 let selected = TipVerifier::new(work.clone(), "test")
                     .next_target(&loop_ctx)
@@ -83,6 +94,50 @@ fn a_check_failing_at_each_replaced_candidate_is_reported_within_two_rounds() {
             candidates[0].to_string(),
             master.to_string()
         )
+    );
+    assert_eq!(world.master(), master);
+}
+
+/// When a runnable required check fails during a tip round, the round stops starting further
+/// families and proceeds straight to its failed verdict and culprit search instead of letting
+/// a newer landing supersede it mid-round.
+#[test]
+fn a_runnable_failure_stops_other_families_and_reports_on_the_first_round() {
+    let world = World::new();
+    let (server, _database, ctx) = running_hub(&world, "fast-fail");
+    let master = world.master();
+    let tip = commit("bbbb000");
+    let newer = commit("cccc000");
+    world.land(&tip);
+    select(&ctx, &tip);
+    let failing = in_family("a", "first");
+    let unrelated = in_family("b", "second");
+    world
+        .work
+        .set_checks(&tip, vec![failing.clone(), unrelated.clone()]);
+    world.work.set_outcome(&tip, &failing.check, Outcome::Fail);
+    world.git.set_tip("staging", newer.clone());
+
+    let outcome = world.verifier().verify(&ctx, &tip).unwrap();
+    let ran = world.work.runs();
+    let reported = ctx.hub.open_regressions().unwrap();
+    server.stop();
+
+    assert_eq!(
+        outcome,
+        TipOutcome::Failed {
+            checks: vec![failing.check.clone()],
+            promoted: None,
+        }
+    );
+    assert!(
+        !ran.iter()
+            .any(|(_, at, checks, _)| at == &tip && checks.contains(&unrelated.check)),
+        "unrelated family should not run after a runnable required failure: {ran:?}"
+    );
+    assert_eq!(
+        reported.iter().map(|r| r.check.clone()).collect::<Vec<_>>(),
+        [failing.check]
     );
     assert_eq!(world.master(), master);
 }

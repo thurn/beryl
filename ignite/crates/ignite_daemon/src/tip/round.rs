@@ -301,7 +301,7 @@ impl TipLoop {
 }
 
 /// `master` when it has reached `target` or moved past it.
-fn master_reached(ctx: &Context, target: &Commit) -> Option<Commit> {
+pub(super) fn master_reached(ctx: &Context, target: &Commit) -> Option<Commit> {
     ctx.git
         .tip(&ctx.config.repository.master)
         .ok()

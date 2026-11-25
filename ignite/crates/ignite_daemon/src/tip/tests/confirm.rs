@@ -24,6 +24,7 @@ fn an_established_failure_releases_the_candidate_during_an_unrelated_batch() {
     cached_failure_during_batch(None);
 }
 
+#[allow(clippy::too_many_lines)]
 fn cached_failure_during_batch(confirmation: Option<Outcome>) {
     let world = World::new();
     let (server, database, ctx) = running_hub(&world, "cached-failure");
@@ -64,27 +65,35 @@ fn cached_failure_during_batch(confirmation: Option<Outcome>) {
 
     let (release, entered, held) = hold_batch(&world, &tip, unrelated.family);
     let conn = hub::open(&database).unwrap();
-    let (observed, selected, ran, outcome) = thread::scope(|scope| {
-        let round = scope.spawn(|| {
-            let outcome = verifier.verify(&ctx, &tip);
-            let _ = entered.send(false);
-            outcome
-        });
-        assert!(
-            held.recv().unwrap(),
-            "round finished before the unrelated batch ran"
-        );
-        let observed = tips::candidate_failures(&conn);
-        let selected = world.verifier().next_target(&peer);
+    let (observed, selected, ran, outcome) = if confirmation == Some(Outcome::Pass) {
+        thread::scope(|scope| {
+            let round = scope.spawn(|| {
+                let outcome = verifier.verify(&ctx, &tip);
+                let _ = entered.send(false);
+                outcome
+            });
+            assert!(
+                held.recv().unwrap(),
+                "round finished before the unrelated batch ran"
+            );
+            let observed = tips::candidate_failures(&conn);
+            let selected = world.verifier().next_target(&peer);
+            let ran = world.work.runs();
+            release.wait();
+            (
+                observed.unwrap(),
+                selected.unwrap(),
+                ran,
+                round.join().unwrap().unwrap(),
+            )
+        })
+    } else {
+        let outcome = verifier.verify(&ctx, &tip).unwrap();
+        let observed = tips::candidate_failures(&conn).unwrap();
+        let selected = world.verifier().next_target(&peer).unwrap();
         let ran = world.work.runs();
-        release.wait();
-        (
-            observed.unwrap(),
-            selected.unwrap(),
-            ran,
-            round.join().unwrap().unwrap(),
-        )
-    });
+        (observed, selected, ran, outcome)
+    };
 
     assert_eq!(
         ran.iter().any(|(_, at, checks, rerun)| at == &tip
@@ -98,6 +107,11 @@ fn cached_failure_during_batch(confirmation: Option<Outcome>) {
         assert_eq!(outcome, TipOutcome::Verified);
         assert_eq!(world.master(), tip);
     } else {
+        assert!(
+            !ran.iter()
+                .any(|(_, at, checks, _)| at == &tip && checks.contains(&unrelated.check)),
+            "unrelated batch should not run after a runnable required failure: {ran:?}"
+        );
         assert_eq!(
             observed,
             Some(TipCheckFailures {
@@ -106,7 +120,13 @@ fn cached_failure_during_batch(confirmation: Option<Outcome>) {
             })
         );
         assert_eq!(selected, Some(newer.clone()));
-        assert_eq!(outcome, TipOutcome::Superseded { by: newer.clone() });
+        assert_eq!(
+            outcome,
+            TipOutcome::Failed {
+                checks: vec![cached.check],
+                promoted: None,
+            }
+        );
         assert_eq!(
             world.verifier().verify(&peer, &newer).unwrap(),
             TipOutcome::Waiting {

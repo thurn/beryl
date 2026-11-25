@@ -436,16 +436,25 @@ fn both_platforms_start_the_successor_while_the_failed_round_is_running() {
             Some(tip.clone())
         );
     }
+    *world.work.parallel.lock().unwrap() = 2;
     let resume = Arc::new(Barrier::new(2));
     let (ready, held) = mpsc::channel();
     let release = resume.clone();
     let finished = ready.clone();
-    super::culprit::on_second_run(
-        &world,
-        &tip,
+    let work_ref = Arc::downgrade(&world.work);
+    let at_tip = tip.clone();
+    world.work.before_batches.lock().unwrap().insert(
+        "second".to_owned(),
         Arc::new(move || {
-            ready.send(true).unwrap();
-            release.wait();
+            let ready = ready.clone();
+            let release = release.clone();
+            work_ref.upgrade().unwrap().on_run.lock().unwrap().insert(
+                at_tip.clone(),
+                Arc::new(move || {
+                    ready.send(true).unwrap();
+                    release.wait();
+                }),
+            );
         }),
     );
     let conn = hub::open(&database).unwrap();
@@ -460,6 +469,15 @@ fn both_platforms_start_the_successor_while_the_failed_round_is_running() {
             held.recv().unwrap(),
             "round finished before the second batch ran"
         );
+        *world.work.parallel.lock().unwrap() = 1;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while tips::candidate_failures(&conn).unwrap().is_none() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "first family did not report its failure"
+            );
+            thread::sleep(std::time::Duration::from_millis(10));
+        }
         let hub = &ctx.config.hub;
         let observed = ureq::get(format!("{}/{}/api/tips/failures", hub.url, hub.project))
             .call()
@@ -542,9 +560,10 @@ fn a_settled_failure_retries_the_same_tip_once_all_exact_keys_pass() {
     let peer = connect_machine(world.ctx("m-2"), &server, "peer", Os::Macos);
     let tip = commit("bbbb000");
     world.land(&tip);
-    let mut first = check("first", 'a');
+    let mut first = in_family("a", "first");
     first.key.platform = Some(Os::Macos);
-    let second = check("second", 'b');
+    let mut second = in_family("b", "first");
+    second.key.platform = Some(Os::Macos);
     let checks = vec![first.clone(), second.clone()];
     for check in &checks {
         world.work.set_outcome(&tip, &check.check, Outcome::Fail);

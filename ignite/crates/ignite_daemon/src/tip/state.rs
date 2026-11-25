@@ -167,6 +167,41 @@ impl TipVerifier {
         }
     }
 
+    /// Publishes a local required failure to the saved state from a shared reference, so the
+    /// tip loop stops superseding this round for a newer candidate while in-flight batches drain
+    /// before the failed verdict and culprit search run.
+    pub(super) fn publish_failed(&self, ctx: &Context, tip: &Commit, checks: Vec<ResultKey>) {
+        if checks.is_empty() || self.saved.is_none() {
+            return;
+        }
+        let mut memory = self.memory();
+        memory.failed = Some(FailedTip {
+            commit: tip.clone(),
+            checks,
+            round: crate::steps::current().and_then(|activity| activity.handle()),
+        });
+        let body = match serde_json::to_string(&memory) {
+            Ok(body) => body,
+            Err(error) => {
+                eprintln!("ignite: the tip verifier's memory was not saved: {error}");
+                return;
+            }
+        };
+        let Some(saved) = self.saved.as_ref() else {
+            return;
+        };
+        let mut last = saved.last.lock().unwrap_or_else(PoisonError::into_inner);
+        if last.as_deref() == Some(body.as_str()) {
+            return;
+        }
+        let at = String::from(ctx.clock.now());
+        let conn = saved.conn.lock().unwrap_or_else(PoisonError::into_inner);
+        match tip_state::put(&conn, &body, &at) {
+            Ok(()) => *last = Some(body),
+            Err(error) => eprintln!("ignite: the tip verifier's memory was not saved: {error}"),
+        }
+    }
+
     /// Saves the memory when it changed since the last save. A failure is logged and never
     /// fails a round: the worst it costs is a repeated report after a restart.
     pub(super) fn save(&mut self, ctx: &Context) {

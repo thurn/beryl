@@ -10,7 +10,7 @@ use ignite_core::traits::{Push, Result};
 
 use super::coverage::{Required, Scope};
 use super::families::{RunPhase, observe_failures};
-use super::round::require_running;
+use super::round::{master_reached, require_running};
 use super::state::FailedTip;
 use super::{
     Listed, ListingPhase, TipCheck, TipOutcome, TipRun, TipSet, TipVerifier, candidate, covered,
@@ -214,11 +214,24 @@ impl TipVerifier {
         }
         let split = self.split(ctx, last, tip, &plan, scope, &regressions)?;
         require_running()?;
-        if let Some(by) = candidate::replacement(ctx, tip) {
+        let runnable_failure = |verdicts: &HashMap<ResultKey, TipRun>,
+                                regressions: &HashSet<CheckName>| {
+            last != tip
+                && checks.iter().any(|check| {
+                    check.runnable
+                        && (!split.is_after(check) || regressions.contains(&check.check))
+                        && verdicts
+                            .get(&check.key)
+                            .is_some_and(|run| run.outcome == Outcome::Fail)
+                })
+        };
+        if let Some(by) = candidate::replacement(ctx, tip)
+            && (!runnable_failure(&verdicts, &regressions) || master_reached(ctx, tip).is_some())
+        {
             return Ok(TipOutcome::Superseded { by });
         }
         tally.budget.clone_from(&split.budget);
-        if !broken {
+        if !broken && !runnable_failure(&verdicts, &regressions) {
             // Confirm cached failures before unrelated batches so a newer tip can be
             // selected as soon as the failure repeats.
             let (confirm, cache_disabled): (Vec<_>, Vec<_>) =
@@ -228,29 +241,58 @@ impl TipVerifier {
             if last != tip {
                 observe_failed_verdicts(ctx, tip, confirm.into_iter(), &verdicts);
             }
-            let phase = if scope.catch_up_only() {
-                RunPhase::AfterMaster
-            } else {
-                RunPhase::BeforeMaster
-            };
-            let (newer, runs, elsewhere) = self.run_families(ctx, tip, &split.within, phase)?;
-            split::note_elsewhere(tally, &elsewhere);
-            if let Some(by) = newer {
-                tally.ran = tally.ran.saturating_add(count(runs.len()));
-                let left = split::unrun(
-                    split
-                        .within
-                        .iter()
-                        .chain(&cache_disabled)
-                        .chain(&split.after),
-                    &runs,
-                    &elsewhere,
-                );
-                split::note_unrun(tally, left, Some(by.clone()));
-                return Ok(TipOutcome::Superseded { by });
+            if !runnable_failure(&verdicts, &regressions) {
+                let phase = if scope.catch_up_only() {
+                    RunPhase::AfterMaster
+                } else {
+                    RunPhase::BeforeMaster
+                };
+                let (newer, runs, elsewhere) = self.run_families(ctx, tip, &split.within, phase)?;
+                split::note_elsewhere(tally, &elsewhere);
+                let unrun_if_superseded = newer.as_ref().map(|_| {
+                    split::unrun(
+                        split
+                            .within
+                            .iter()
+                            .chain(&cache_disabled)
+                            .chain(&split.after),
+                        &runs,
+                        &elsewhere,
+                    )
+                });
+                self.record_runs(&checks, runs, &mut verdicts, tally);
+                if let Some(by) = newer {
+                    if !runnable_failure(&verdicts, &regressions)
+                        || master_reached(ctx, tip).is_some()
+                    {
+                        if let Some(left) = unrun_if_superseded {
+                            split::note_unrun(tally, left, Some(by.clone()));
+                        }
+                        return Ok(TipOutcome::Superseded { by });
+                    }
+                } else if !runnable_failure(&verdicts, &regressions) {
+                    self.run_rechecks(ctx, tip, &checks, &cache_disabled, &mut verdicts, tally);
+                }
             }
-            self.record_runs(&checks, runs, &mut verdicts, tally);
-            self.run_rechecks(ctx, tip, &checks, &cache_disabled, &mut verdicts, tally);
+        }
+        if runnable_failure(&verdicts, &regressions) {
+            let failed_keys: Vec<_> = checks
+                .iter()
+                .filter(|check| {
+                    check.runnable
+                        && (!split.is_after(check) || regressions.contains(&check.check))
+                        && verdicts
+                            .get(&check.key)
+                            .is_some_and(|run| run.outcome == Outcome::Fail)
+                })
+                .collect();
+            if failed_keys.iter().all(|check| check.reuse) {
+                self.failed = Some(FailedTip {
+                    commit: tip.clone(),
+                    checks: failed_keys.iter().map(|check| check.key.clone()).collect(),
+                    round: crate::steps::current().and_then(|activity| activity.handle()),
+                });
+            }
         }
         let peer_after = scope.peer_after(ctx, tip, &checks)?;
         let after_budget = |check: &TipCheck| {
@@ -294,7 +336,9 @@ impl TipVerifier {
             scope.publish_budget(ctx, tip, &split.after)?;
         }
         require_running()?;
-        if let Some(by) = candidate::replacement(ctx, tip) {
+        if let Some(by) = candidate::replacement(ctx, tip)
+            && (!runnable_failure(&verdicts, &regressions) || master_reached(ctx, tip).is_some())
+        {
             return Ok(TipOutcome::Superseded { by });
         }
         if let Some((builds, unlisted_builds)) = pending_green {

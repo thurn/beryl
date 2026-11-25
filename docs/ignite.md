@@ -3163,14 +3163,17 @@ oldest tip of the streak, says that no search ran, and names the machine and
 path of the failing run's output. A round that later finishes its search adds
 the culprit to the same ticket.
 
-Once a round has recorded its failed verdict, a newer candidate no longer stops
-it: it finishes the culprit search, any revert and the promotion of an ancestor
-before the culprits. On 2026-11-25, with a landing every 10 to 20 minutes and
-rounds of 30 minutes or more, each search was stopped for a newer tip that
-failed in turn, so for 16 hours no search finished, nothing was reverted and
-`master` did not move. The search runs between fixed commits, so a newer tip
-does not change its answer. `master` reaching the tip, or every failed check
-passing, still stops it.
+Once a round sees a runnable required check fail before `master` moves, it stops
+starting further families or batches for that tip, publishes the failed keys
+locally so the tip loop does not stop it for a newer candidate while in-flight
+batches finish, and proceeds directly to record the failed verdict, run the
+culprit search, revert when eligible and promote an ancestor before the
+culprits. Only `master` reaching the tip, or every failed check passing, stops
+it. On 2026-11-25, with a landing every 10 to 20 minutes and rounds of 30
+minutes or more, rounds kept running unrelated families after a non-build check
+failed and were superseded before reaching their failed verdict, so no search
+finished, nothing was reverted and `master` did not move. The search runs
+between fixed commits, so a newer tip does not change its answer.
 
 ### Regression tickets
 

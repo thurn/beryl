@@ -980,5 +980,10 @@
     "label": "A tip round that has recorded its failed verdict finishes its culprit search, revert and ancestor promotion when a newer staging tip appears, instead of being stopped for it. On 2026-11-25, with a landing every 10 to 20 minutes and rounds of 30 minutes or more, every search was stopped for a newer tip that failed in turn: for 16 hours no culprit was found, nothing was reverted, `master` did not move, and 75 product commits waited on `staging`",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
+  },
+  {
+    "label": "A tip round stops starting further families and batches as soon as a runnable required check fails before `master` moves, publishes the failed keys locally before telling the hub, and proceeds straight to recording the failed verdict, culprit search, revert and ancestor promotion instead of being superseded mid-round. On 2026-11-25 after the post-verdict guard landed, six consecutive tips with non-build failures were still superseded while running unrelated families before they could record a failed verdict or start a culprit search",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]
