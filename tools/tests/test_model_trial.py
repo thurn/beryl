@@ -984,5 +984,5 @@ def test_the_report_leaves_a_partial_cost_out_of_the_medians() -> None:
         )()
 
     group = [result(1.0, False), result(0.0, True), result(3.0, False)]
-    rows = dict((line, cells) for line, *cells in report.group_rows(None, group))
+    rows = dict((line, cells) for line, *cells in report.group_rows(two_arms(), group))
     assert rows["Median dollars"][0].startswith("$2.00 (n=2), 1 left out")
