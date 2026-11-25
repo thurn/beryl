@@ -153,25 +153,36 @@ fn enhanced_blends_the_edge_of_a_turned_card() {
     );
 }
 
-/// A renderer on the floor's limits has no Enhanced tier, and draws a frame in it exactly as
-/// it draws the frame in Baseline. The frame is solid-color records, as in
-/// `enhanced_blends_the_edge_of_a_turned_card`, not card faces: a face is sampled through
-/// trilinear and anisotropic filtering, whose rounding differs by one in a channel on the
-/// first frame a GPU draws, so a comparison that is exact could fail on the filter and not on
-/// the tier.
+/// A renderer on the floor's limits has no Enhanced tier, and draws a frame in it in Baseline,
+/// which blends no pixels along an edge. The frame is solid-color records, as in
+/// `enhanced_blends_the_edge_of_a_turned_card`, where Enhanced blends about 300 pixels. The test
+/// counts blended pixels in the one frame and does not compare two pictures byte for byte: a
+/// GPU's rasterization of a frame can differ by a pixel on an edge from one draw to the next,
+/// and that is not the tier.
 #[test]
 fn a_renderer_without_enhanced_draws_an_enhanced_frame_in_baseline() {
-    let turned = turned(Vec2::new(63.0, 88.0), 1.0, [200, 40, 40]);
-    let table = rectangle(Vec2::ZERO, Vec2::splat(400.0), 0.0, [0, 0, 0]);
+    let red = [200, 40, 40];
+    let black = [0, 0, 0];
+    let turned = turned(Vec2::new(63.0, 88.0), 1.0, red);
+    let table = rectangle(Vec2::ZERO, Vec2::splat(400.0), 0.0, black);
     let records = [(Band::Opaque, turned), (Band::Opaque, table)];
     let mut renderer = renderer(Limits::Downlevel);
     assert!(!renderer.enhanced_available());
-    let [baseline, enhanced] = [Tier::Baseline, Tier::Enhanced]
-        .map(|tier| draw_in(tier, &mut renderer, overhead(), (200, 200), &records).0);
-    assert!(
-        baseline.pixels == enhanced.pixels,
-        "bytes differ between the tiers"
+    let (picture, _) = draw_in(
+        Tier::Enhanced,
+        &mut renderer,
+        overhead(),
+        (200, 200),
+        &records,
     );
+    let blended = (0..200)
+        .flat_map(|y| (0..200).map(move |x| (x, y)))
+        .filter(|&(x, y)| {
+            let pixel = picture.at(x, y);
+            !within(pixel, red, 2) && !within(pixel, black, 2)
+        })
+        .count();
+    assert_eq!(blended, 0, "An Enhanced frame blended {blended} pixels");
 }
 
 /// A flat-layer panel turned 30 degrees over a card-sized rectangle is drawn after the resolve,
