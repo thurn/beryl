@@ -472,8 +472,11 @@ fn prepare_arrivals<L: Layout>(
     moves: &[PreparedMove<L>],
 ) -> Result<(), Full> {
     for &(slot, _, dest, entry) in moves {
-        if dest == Zone::Battlefield && entry.preparation == Preparation::Prepared {
-            crate::objects::preparation::prepare(s, t, sink, slot)?;
+        if dest == Zone::Battlefield
+            && entry.preparation == Preparation::Prepared
+            && let Some(permanent) = s.permanent_at(slot)
+        {
+            crate::objects::preparation::prepare(s, t, sink, permanent)?;
         }
     }
     Ok(())

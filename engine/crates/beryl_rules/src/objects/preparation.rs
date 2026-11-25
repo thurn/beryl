@@ -7,6 +7,7 @@
 //! Implements: CR 723.3a, CR 723.3b, CR 723.3c
 
 use beryl_card::Objects;
+use beryl_kernel::reference::Permanent;
 
 use crate::bitboard::Bitboard;
 use crate::continuous::layers;
@@ -26,12 +27,13 @@ pub(crate) fn prepare<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
-    permanent: L::Slot,
+    permanent: Permanent<L>,
 ) -> Result<bool, Full> {
-    if s.is_prepared(permanent) {
+    let slot = permanent.slot();
+    if s.is_prepared(slot) {
         return Ok(false);
     }
-    s.create_prepare_copy(t, sink, permanent)
+    s.create_prepare_copy(t, sink, slot)
 }
 
 /// Applies "becomes prepared" or "becomes unprepared" to the chosen permanents.
@@ -51,7 +53,7 @@ pub(crate) fn instruction<L: Layout>(
     while let Some(permanent) = game.state.next_permanent(&mut permanents) {
         let slot = permanent.slot();
         let did = if prepared {
-            prepare(game.state, game.table, game.sink, slot)?
+            prepare(game.state, game.table, game.sink, permanent)?
         } else {
             game.state.unprepare(slot)?
         };

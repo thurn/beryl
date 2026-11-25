@@ -66,7 +66,9 @@ pub(crate) fn link<L: Layout>(
     }
     let memo = match link {
         Link::ExiledWith => Memo::exiled_with(source),
-        Link::PutOntoBattlefieldWith => Memo::PutOntoBattlefieldWith(source.slot),
+        Link::PutOntoBattlefieldWith => {
+            Memo::PutOntoBattlefieldWith(beryl_kernel::memos::Link::to(source))
+        }
     };
     for &slot in game.state.in_game_order(game.table, moved)?.iter() {
         game.state.remember(slot, memo)?;

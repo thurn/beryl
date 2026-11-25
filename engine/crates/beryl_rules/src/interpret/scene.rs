@@ -294,7 +294,7 @@ impl<L: Layout> Scene<'_, L> {
             // battlefield and that are still there, whether or not the source is.
             Objects::PutOntoBattlefieldWithThis => (self.subject.of.source)
                 .map_or(Bitboard::EMPTY, |source| {
-                    s.put_onto_battlefield_with(source.slot)
+                    s.put_onto_battlefield_with(source)
                 }),
             Objects::Paid(_) => {
                 unreachable!("the card table refuses an effect that names what a cost took")

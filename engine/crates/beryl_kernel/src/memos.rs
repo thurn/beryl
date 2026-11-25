@@ -96,12 +96,13 @@ pub enum Memo<L: Layout = Small> {
     ///
     /// [CR 707.2]: https://yawgatog.com/resources/magic-rules/#R7072
     Really(L::Card),
-    /// The permanent was put onto the battlefield by an ability of the Aura in this slot,
-    /// which says so of it: Animate Dead's "enchant creature put onto the battlefield with
-    /// this Aura", and its "that creature" once the Aura has left. It names the slot, for an
-    /// ability of the Aura still on the stack after the Aura left, until a new object
-    /// arrives in that slot ([`State::forget_links_to`]).
-    PutOntoBattlefieldWith(L::Slot),
+    /// The permanent was put onto the battlefield by an ability of this Aura, which says so
+    /// of it: Animate Dead's "enchant creature put onto the battlefield with this Aura", and
+    /// its "that creature" once the Aura has left. It names one object, by its slot and
+    /// incarnation ([`Link`]), as [`Memo::ExiledWith`] does: an ability of the Aura still on
+    /// the stack after the Aura left finds the permanent, and a new object in the Aura's slot
+    /// (see [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)) never does.
+    PutOntoBattlefieldWith(Link<L>),
     /// The phased-out permanent phased out under this player's control, who is not the player
     /// who put it onto the battlefield: it phases in during that player's untap step
     /// (see [CR 702.26a]): "all phased-out permanents that had phased out under that player's
@@ -660,13 +661,16 @@ impl<L: Layout> State<L> {
             .remembering(Kinds::EXILED_UNTIL, Memo::ExiledUntil(source))
     }
 
-    /// The permanents put onto the battlefield by an ability of the Aura in `source`
-    /// ([`Memo::PutOntoBattlefieldWith`]), whether or not the Aura is still there. With no
-    /// permanent in the game that remembers one, one AND.
+    /// The permanents put onto the battlefield by an ability of the Aura `source`
+    /// ([`Memo::PutOntoBattlefieldWith`]), whether or not the Aura is still there, and never
+    /// those of a new object in its slot (see CR 400.7). With no permanent in the game that
+    /// remembers one, one AND.
     #[inline]
-    pub fn put_onto_battlefield_with(&self, source: L::Slot) -> Bitboard<L::Slot> {
-        self.memos
-            .remembering(Kinds::PUT_WITH, Memo::PutOntoBattlefieldWith(source))
+    pub fn put_onto_battlefield_with(&self, source: ObjectRef<L>) -> Bitboard<L::Slot> {
+        self.memos.remembering(
+            Kinds::PUT_WITH,
+            Memo::PutOntoBattlefieldWith(Link::to(source)),
+        )
     }
 
     /// Ends the card in `slot`'s memo of what it was exiled until, if it has one: the card
@@ -683,18 +687,18 @@ impl<L: Layout> State<L> {
         self.settle_ended(done);
     }
 
-    /// Unlinks the permanents put onto the battlefield with an earlier object in `slot`, as
-    /// a new object arrives there or a token's slot is freed: the zone move calls it. The new
-    /// object is not that object
-    /// (see [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)).
+    /// Ends the links to an earlier object in `slot` that would read as links to the new
+    /// object arriving there, or to a freed token slot: the zone move calls it. The new object
+    /// is not that object (see [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)).
     ///
     /// The cards exiled with an earlier object stay "exiled with" it
     /// (see [CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)): "The second
     /// ability refers only to cards in the exile zone that were put there as a result of an
-    /// instruction to exile them in the first ability." An ability of that object still on
-    /// the stack finds them, and the link names that object alone ([`Link`]). Only a link
-    /// whose incarnation byte is the new object's ends, so that it cannot read as a link to
-    /// the new object. With no card in the game linked either way, one AND.
+    /// instruction to exile them in the first ability." The permanents an earlier Aura put
+    /// onto the battlefield stay put there with it. An ability of that object still on the
+    /// stack finds them, and the link names that object alone ([`Link`]). Only a link whose
+    /// incarnation byte is the new object's ends, so that it cannot read as a link to the
+    /// new object. With no card in the game linked either way, one AND.
     #[inline]
     pub(crate) fn forget_links_to(&mut self, slot: L::Slot) {
         if self.memos.kinds.0 & Kinds::LINKS != 0 {
@@ -708,8 +712,9 @@ impl<L: Layout> State<L> {
     fn forget_links_to_slot(&mut self, slot: L::Slot) {
         let incarnation = self.object(slot).incarnation;
         let done = self.memos.end(|e| match e.memo {
-            Memo::ExiledWith(link) => !(link.slot == slot && link.shares_generation(incarnation)),
-            Memo::PutOntoBattlefieldWith(link) => link != slot,
+            Memo::ExiledWith(link) | Memo::PutOntoBattlefieldWith(link) => {
+                !(link.slot == slot && link.shares_generation(incarnation))
+            }
             Memo::Paid(_)
             | Memo::X(_)
             | Memo::ExiledUntil(_)

@@ -1,7 +1,7 @@
 //! What one continuous effect does as its layer applies: what it applies to, found against
 //! the results of the layers before it, and the change it makes to each.
 //!
-//! Implements: CR 613.4
+//! Implements: CR 205.1a, CR 305.7, CR 613.4
 
 use beryl_kernel::derive::Rederive;
 use beryl_kernel::static_ability::{self, LayerResults, NoResults};
@@ -383,7 +383,7 @@ fn modify<L: Layout>(
         // CR 613.1d: "Layer 4: Type-changing effects are applied. These include effects that
         // change an object's card type, subtype, and/or supertype."
         LayerChange::AddTypes(types) => d.types = d.types.union(types),
-        // see CR 205.1a: "Some effects set an object's card type. In most such cases, the new
+        // CR 205.1a: "Some effects set an object's card type. In most such cases, the new
         // card type(s) replaces any existing card types. ... If an object's card type is
         // removed, the subtypes correlated with that card type will remain if they are also
         // the subtypes of a card type the object currently has; otherwise, they are also
@@ -396,7 +396,7 @@ fn modify<L: Layout>(
             d.types = types;
             d.subtypes = d.subtypes.of_types(t.subtypes(), types);
         }
-        // see CR 305.7: "If a land gains one or more land types in addition to its own, it keeps
+        // CR 305.7: "If a land gains one or more land types in addition to its own, it keeps
         // its land types and rules text, and it gains the new land types and mana
         // abilities." A basic land type it already has gives it nothing more.
         LayerChange::AddSubtype(subtype) => {
@@ -408,14 +408,14 @@ fn modify<L: Layout>(
             }
             d.subtypes = d.subtypes.with(t.subtypes(), subtype);
         }
-        // see CR 205.1a: "when an effect sets one or more of an object's subtypes, the new
+        // CR 205.1a: "when an effect sets one or more of an object's subtypes, the new
         // subtype(s) replaces any existing subtypes from the appropriate set (creature types,
         // land types, artifact types, enchantment types, planeswalker types, or spell types)."
         LayerChange::SetSubtype(subtype) => {
             let kept = d.subtypes.without_types(t.subtypes(), subtype.card_type());
             d.subtypes = kept.with(t.subtypes(), subtype);
         }
-        // see CR 305.7: "If an effect sets a land's subtype to one or more of the basic land
+        // CR 305.7: "If an effect sets a land's subtype to one or more of the basic land
         // types, the land no longer has its old land type. It loses all abilities generated
         // from its rules text, its old land types, and any copiable effects affecting that
         // land, and it gains the appropriate mana ability for each new basic land type." Its

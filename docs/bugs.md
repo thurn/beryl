@@ -6,6 +6,30 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **An Aura that became a creature stayed attached.** An effect that made an
+  Aura a creature left it on its permanent, although "an Aura that's also a
+  creature can't enchant anything" (CR 303.4d). `attach::may_enchant` quoted the
+  rule but checked only that the Aura was not enchanting itself, and the
+  state-based action that puts an illegally attached Aura into the graveyard
+  asks `may_enchant`. Both `may_enchant` and `may_enchant_player` now refuse an
+  Aura that is a creature. Guard: the test
+  `an_aura_that_becomes_a_creature_goes_to_the_graveyard`. No mechanical check
+  can tell a quoted clause from an implemented one; the review of the module
+  passes found it while declaring the rules `actions/attach.rs` implements.
+
+- **A permanent an Aura put onto the battlefield stopped being linked to it when
+  the Aura's card returned.** `Memo::PutOntoBattlefieldWith`, which Animate
+  Dead's "enchant creature put onto the battlefield with this Aura" reads, named
+  only the Aura's slot. The zone move ended the link when a new object arrived
+  in that slot, so an ability of the old Aura still on the stack lost "that
+  creature"; before the move, the Aura's card in the graveyard read as the same
+  object. No implemented card reaches either case: Animate Dead's own leave
+  trigger carries the creature. The memo now holds a `Link`, the slot and
+  incarnation byte that `Memo::ExiledWith` already used, and
+  `State::put_onto_battlefield_with` takes an `ObjectRef`, so the type stops a
+  caller from asking by slot alone. Guard: the type, and the test
+  `a_permanent_put_onto_the_battlefield_with_an_object_is_not_linked_to_a_new_object`.
+
 - **An ability lost the cards its source exiled once a new object entered the
   source's slot.** If Knowledge Pool left the battlefield and returned while one
   of its abilities was on the stack, that ability found none of the cards the

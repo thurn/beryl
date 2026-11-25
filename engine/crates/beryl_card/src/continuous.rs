@@ -289,8 +289,9 @@ pub enum Protection {
     ColorWords(ColorWords),
     /// From the color the controller of the resolving spell or ability chooses as the effect
     /// begins, "protection from the color of your choice" ([CR 105.4]): "If a player is asked
-    /// to choose a color, they must choose one of the five colors." Only a resolving effect
-    /// can say it.
+    /// to choose a color, they must choose one of the five colors." In a static ability it is
+    /// "protection from the chosen color", the color chosen as its permanent entered
+    /// ([`Modification::AddChosenColor`] reads the same color).
     ///
     /// [CR 105.4]: https://yawgatog.com/resources/magic-rules/#R1054
     ChosenColor,

@@ -2,7 +2,7 @@
 //! resolving spell or ability creates: each is an entry of the Effects store
 //! (`beryl_kernel`'s contract, "Stores"), which the layers and the rules read by kind.
 //!
-//! Implements: CR 611.2a
+//! Implements: CR 611.2a, CR 701.12a, CR 701.12b
 
 use beryl_card::{
     Amount, ChosenKind, ExceptIx, MODIFY_PARTS, Modification, Objects, Players, Protection,
@@ -219,12 +219,12 @@ pub(crate) fn instruction<L: Layout>(
 /// [`Effect::ExchangeControl`](beryl_card::Effect::ExchangeControl): "exchange control of
 /// [first] and [second]". The outcome is the two permanents, if they were exchanged.
 ///
-/// see [CR 701.12a](https://yawgatog.com/resources/magic-rules/#R70112a): "When such a spell or
+/// [CR 701.12a](https://yawgatog.com/resources/magic-rules/#R70112a): "When such a spell or
 /// ability resolves, if the entire exchange can't be completed, no part of the exchange
 /// occurs." A side that names no permanent, as a target that has become illegal or has left
 /// the battlefield names none, exchanges nothing.
 ///
-/// see [CR 701.12b](https://yawgatog.com/resources/magic-rules/#R70112b): "When control of two
+/// [CR 701.12b](https://yawgatog.com/resources/magic-rules/#R70112b): "When control of two
 /// permanents is exchanged, if those permanents are controlled by different players, each of
 /// those players simultaneously gains control of the permanent that was controlled by the
 /// other player. If, on the other hand, those permanents are controlled by the same player,

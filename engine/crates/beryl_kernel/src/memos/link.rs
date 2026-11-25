@@ -1,7 +1,8 @@
-//! The object a card in exile was exiled with ([`Memo::ExiledWith`]): its slot and which of
-//! the slot's objects it was.
+//! The object a card in exile was exiled with ([`Memo::ExiledWith`]), or a permanent was put
+//! onto the battlefield with ([`Memo::PutOntoBattlefieldWith`]): its slot and which of the
+//! slot's objects it was.
 //!
-//! The interpreter reads it to find the cards an ability of that object refers to.
+//! The interpreter reads it to find the objects an ability of that object refers to.
 //!
 //! Implements: none. Names the object for the rules' linked abilities to read.
 
@@ -31,7 +32,7 @@ use super::Memo;
 /// in the same slot would lose its cards, which no game reaches.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Link<L: Layout = crate::layout::Small> {
-    /// The slot of the object that exiled the card.
+    /// The slot of the object that exiled the card or put the permanent onto the battlefield.
     pub slot: L::Slot,
     generation: u8,
 }

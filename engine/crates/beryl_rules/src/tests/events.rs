@@ -796,6 +796,32 @@ fn an_ability_of_a_token_that_ceased_to_exist_finds_the_cards_exiled_with_it() {
 }
 
 #[test]
+fn a_permanent_put_onto_the_battlefield_with_an_object_is_not_linked_to_a_new_object() {
+    // Animate Dead's "that creature" and "enchant creature put onto the battlefield with
+    // this Aura" name what an ability of that Aura put onto the battlefield. The land stands
+    // in for the Aura: the link is the same for any source.
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    let source = put(&t, &mut s, &mut x, p, "Test Land");
+    let bear = put(&t, &mut s, &mut x, p, "Test Bear");
+    with_game(&t, &mut s, &mut x, source, |game, resolution| {
+        let link = linked::Link::PutOntoBattlefieldWith;
+        linked::link(game, Bitboard::single(bear), resolution.source(), link).unwrap();
+    });
+    let old = s.object_ref(source);
+    assert_eq!(s.put_onto_battlefield_with(old), Bitboard::single(bear));
+
+    // The source leaves and returns as a new object (CR 400.7). An ability of the old object
+    // still on the stack finds the bear; the new object did not put it onto the battlefield.
+    for to in [Zone::Graveyard, Zone::Battlefield] {
+        event::move_one(&mut s, &t, &mut x.events, source, to, Reason::Effect).unwrap();
+    }
+    assert_eq!(s.object(source).zone(), Zone::Battlefield);
+    assert_eq!(s.put_onto_battlefield_with(old), Bitboard::single(bear));
+    assert!(s.put_onto_battlefield_with(s.object_ref(source)).is_empty());
+}
+
+#[test]
 fn an_ability_finds_the_cards_exiled_with_its_source_and_not_those_of_a_new_object() {
     let (t, mut s, p) = game();
     let mut x = Scratch::new();
@@ -1401,6 +1427,32 @@ fn an_aura_whose_permanent_leaves_is_attached_to_nothing_and_goes_to_the_graveya
     });
     decide_with(&t, &mut s, &mut x);
     assert_eq!(s.object(token).zone(), Zone::Nowhere);
+    assert_eq!(s.object(aura).zone(), Zone::Graveyard);
+}
+
+#[test]
+fn an_aura_that_becomes_a_creature_goes_to_the_graveyard() {
+    // CR 303.4d: "An Aura that's also a creature can't enchant anything", so it is attached
+    // illegally and state-based actions put it into its owner's graveyard (CR 704.5m).
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    let bear = put(&t, &mut s, &mut x, p, "Test Bear");
+    let aura = put(&t, &mut s, &mut x, p, "Test Reconfiguration");
+    s.board().attach(aura, bear);
+    crate::continuous::layers::refresh(&mut s, &t, &mut x.events).unwrap();
+    decide_with(&t, &mut s, &mut x);
+    assert_eq!(s.object(aura).zone(), Zone::Battlefield);
+    let r = s.object_ref(aura);
+    with_game(&t, &mut s, &mut x, bear, |game, resolution| {
+        continuous::start(
+            game,
+            resolution,
+            Continuous::Layer(r, LayerChange::AddTypes(Types::CREATURE)),
+            Duration::EndOfTurn,
+        )
+        .unwrap();
+    });
+    decide_with(&t, &mut s, &mut x);
     assert_eq!(s.object(aura).zone(), Zone::Graveyard);
 }
 
