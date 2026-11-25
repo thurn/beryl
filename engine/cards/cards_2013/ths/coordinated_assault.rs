@@ -28,10 +28,8 @@ pub mod scenarios {
     const ASSAULT: &str = Card::CoordinatedAssault;
 
     pub const SCENARIOS: &[Scenario] = &[
-        // [CR 514.2]: "Until end of turn" effects end as the turn's cleanup step does, so the
+        // An until-end-of-turn effect ends with the turn, so the
         // creature is its printed 2/1 again in the next turn.
-        //
-        // [CR 514.2]: https://yawgatog.com/resources/magic-rules/#R5142
         Scenario::new("Coordinated Assault's bonus ends with the turn")
             .interaction(&[Card::Mountain])
             .at(1, P0, TurnStep::PrecombatMain)

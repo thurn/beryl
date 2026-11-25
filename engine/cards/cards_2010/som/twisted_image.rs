@@ -46,10 +46,8 @@ pub mod scenarios {
                 Resolve,
                 ME.pt(Prop::Flier, 2, 4),
             ]),
-        // [CR 514.2]: "Until end of turn" effects end as the turn's cleanup step does, so the
+        // An until-end-of-turn effect ends with the turn, so the
         // creature is its printed 2/1 again in the next turn.
-        //
-        // [CR 514.2]: https://yawgatog.com/resources/magic-rules/#R5142
         Scenario::new("Twisted Image's switch ends with the turn")
             .interaction(&[Card::TwistedImage, Card::Island])
             .at(1, P0, TurnStep::PrecombatMain)
