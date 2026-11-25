@@ -48,10 +48,16 @@ each arm's commands from the efficiency store's `tool_calls` table, which keeps
 only each command's first 300 characters and no output. It reads output and the
 model's messages from the session's Claude or Antigravity (`agy`) transcript,
 whose path the store's `sources` table records, when the transcript is on the
-grading machine. An arm whose transcript is not on it gets `cost_partial`, and
-the report leaves it out of the dollar and minute medians. It reads check
-verdicts from the store's `lane_runs` table, by the tree hash of the arm's final
-commit.
+grading machine. An arm whose transcript is not on it gets `minutes_partial`,
+and the report leaves it out of the minute medians. Dollars and tokens come from
+the store's `requests` rows tagged with the ticket during the arm's claim, from
+every machine. An arm whose machine has a gap of over 30 minutes in those rows,
+or no row at all, gets `cost_partial` and is left out of the dollar medians. A
+landed source passed the landing gate; a copy's check verdict is whether the
+Ignite daemon's `verdicts` table (in `daemon.db`, passes only, kept 30 days)
+holds the tree hash of its branch head, so grade a trial within 30 days of its
+copies closing. `lane_runs` keeps no commit or tree hash for a run, so it cannot
+give a verdict.
 
 `review` runs a headless `claude -p` reviewer on each graded pair that is not
 void, twice with A and B swapped, and appends its answers to `reviews.jsonl`.

@@ -1,7 +1,8 @@
 """`model-trial report` and `model-trial list`.
 
 `report` prints a trial's table in Markdown, for all pairs and again by kind, once for each copy
-arm: every copy arm is compared with the same source arm, pair by pair. Every number
+arm and model: every copy arm is compared with the same source arm, pair by pair, and an arm
+whose pairs ran on more than one model gets one set of tables per model. Every number
 carries the count of pairs behind it. A void pair is listed but counted nowhere else. A rubric
 line goes to an arm only when every run of the pair's review picked that arm; a split is a tie.
 The cap counts the copies' sessions and the reviewer runs; the source arm's sessions are work
@@ -136,16 +137,20 @@ def count_cell(hits: int, n: int) -> str:
     return f"{hits} of {n}"
 
 
+def partial(grade: Grade, attr: str) -> bool:
+    """Whether `grade`'s measure `attr` is known to be too low: dollars the store has not
+    ingested all of, or minutes from transcripts that are on another machine."""
+    if attr == "dollars":
+        return grade.cost_partial
+    if attr == "agent_minutes":
+        return grade.minutes_partial
+    return False
+
+
 def arm_values(group: list[Result], arm: str, attr: str) -> list[float | None]:
-    """One measure of an arm over a group of pairs. The efficiency store prices an arm from its
-    transcripts, so an arm with a transcript on another machine has too low a cost: its dollars
-    and agent minutes are left out of the medians."""
+    """One measure of an arm over a group of pairs, leaving out a value that is too low."""
     return [
-        (
-            None
-            if attr != "claim_to_close_minutes" and r.arms[arm].cost_partial
-            else getattr(r.arms[arm], attr)
-        )
+        None if partial(r.arms[arm], attr) else getattr(r.arms[arm], attr)
         for r in group
     ]
 
@@ -177,9 +182,10 @@ def group_rows(spec: Spec, group: list[Result]) -> list[tuple[str, str, str]]:
         c_cell, c_m = median_cell(arm_values(group, "copy", attr), unit)
         if attr != "claim_to_close_minutes":
             for arm_name, cell in (("source", "s"), ("copy", "c")):
-                left = sum(r.arms[arm_name].cost_partial for r in group)
+                left = sum(partial(r.arms[arm_name], attr) for r in group)
                 if left:
-                    note = f", {left} left out for a partial cost"
+                    what = "cost" if attr == "dollars" else "time"
+                    note = f", {left} left out for a partial {what}"
                     if cell == "s":
                         s_cell += note
                     else:
@@ -421,19 +427,32 @@ def table(trial: Trial) -> str:
     lines = header(trial, found)
     arms = trial.spec.copy_names()
     for arm in arms:
-        mine = [r for r in counted if r.pair.arm == arm]
-        prefix: str = (
-            f"{name(trial.spec, arm)} against the source: " if len(arms) > 1 else ""
-        )
+        # An arm's tier can map to another model partway through a trial (a change to
+        # `ignite.toml`), so pairs of one arm on different models get separate tables.
+        by_model: dict[str, list[Result]] = {}
+        for r in counted:
+            if r.pair.arm == arm:
+                by_model.setdefault(r.pair.models.get("copy", ""), []).append(r)
+        for model, mine in sorted(by_model.items()) or [("", [])]:
+            label = name(trial.spec, arm)
+            if len(by_model) > 1:
+                label = f"{label.removesuffix(')')}, {model or 'model unrecorded'})"
+            prefix: str = (
+                f"{label} against the source: "
+                if len(arms) > 1 or len(by_model) > 1
+                else ""
+            )
 
-        def title(what: str) -> str:
-            return f"{prefix}{what}" if prefix else what.capitalize()
+            def title(what: str) -> str:
+                return f"{prefix}{what}" if prefix else what.capitalize()
 
-        lines += group_section(trial.spec, title("all pairs"), mine, arm)
-        for kind in KINDS:
-            group = [r for r in mine if r.pair.kind == kind]
-            if group:
-                lines += group_section(trial.spec, title(f"{kind} pairs"), group, arm)
+            lines += group_section(trial.spec, title("all pairs"), mine, arm)
+            for kind in KINDS:
+                group = [r for r in mine if r.pair.kind == kind]
+                if group:
+                    lines += group_section(
+                        trial.spec, title(f"{kind} pairs"), group, arm
+                    )
     lines += planted_section(trial.spec, found, trial.pairs)
     lines += contamination_section(found)
     lines += void_section(found)

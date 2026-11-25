@@ -1,13 +1,15 @@
 """What the trial tool reads from and writes to the world: tickets through `ignite ticket ...
 --json`, costs through `just efficiency ... --json`, commits through git in the main checkout,
-and model IDs from `ignite.toml`. Everything else in the package is pure, so that its tests
+landing-gate verdicts from the Ignite daemon's database, and model IDs from `ignite.toml`. Everything else in the package is pure, so that its tests
 pass made-up ticket JSON and never call any of these.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import re
+import sqlite3
 import subprocess
 import tarfile
 import tempfile
@@ -240,6 +242,28 @@ def sql(query: str) -> list[dict[str, Any]]:
     found = efficiency("sql", "--no-ingest", query)
     columns = [str(c) for c in found.get("columns", [])]
     return [dict(zip(columns, row)) for row in found.get("rows", [])]
+
+
+def gate_passed(tree: str) -> bool | None:
+    """Whether the landing gate (`ignite check`) passed on the git tree `tree` on this machine:
+    `None` when the Ignite daemon's database cannot be read.
+
+    The daemon keeps one `verdicts` row for each exact state of a change that passed the gate,
+    keyed by the git tree ID of the ticket tree's files, and keeps no row for a run that failed.
+    It is in `$IGNITE_HOME/daemon.db`, by default `~/.config/ignite/daemon.db`, and it deletes
+    rows older than 30 days."""
+    home = os.environ.get("IGNITE_HOME") or str(Path.home() / ".config" / "ignite")
+    path = Path(home) / "daemon.db"
+    if not path.is_file():
+        return None
+    try:
+        with sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=30) as db:
+            row = db.execute(
+                "SELECT 1 FROM verdicts WHERE tree = ? LIMIT 1", (tree,)
+            ).fetchone()
+    except sqlite3.Error:
+        return None
+    return row is not None
 
 
 def main_checkout() -> Path:

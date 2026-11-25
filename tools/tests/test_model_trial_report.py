@@ -536,3 +536,32 @@ def test_each_copy_arm_gets_its_own_tables_and_a_source_is_paid_for_once() -> No
     assert (
         "hydrogen `tier:opus` on agy-gemini at high effort (gemini-4-hydrogen)" in text
     )
+
+
+def test_an_arm_whose_pairs_ran_on_two_models_gets_tables_for_each() -> None:
+    base = trial()
+    p2 = next(p for p in base.pairs if p.pair == "p2")
+    p2.models = {"source": OPUS, "copy": "claude-sonnet-5-6"}
+    text = report.table(base)
+    assert (
+        f"## sonnet (copy, {SONNET}) against the source: all pairs (1 counted)" in text
+    )
+    assert (
+        "## sonnet (copy, claude-sonnet-5-6) against the source: all pairs (1 counted)"
+        in text
+    )
+
+
+def test_a_partial_time_leaves_only_the_minutes_out() -> None:
+    base = trial()
+    for g in base.grades:
+        if g.pair == "p1" and g.arm == "source":
+            g.minutes_partial = True
+    rows = {
+        line: cells
+        for line, *cells in report.group_rows(SPEC, report.results(base)[:2])
+    }
+    assert rows["Median dollars"][0].startswith("$5.00 (n=2)")
+    assert (
+        rows["Median agent minutes"][0] == "50.0 (n=1), 1 left out for a partial time"
+    )

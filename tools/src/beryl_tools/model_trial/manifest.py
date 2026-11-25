@@ -172,13 +172,17 @@ class Grade:
     finished: bool
     start_commit: str | None = None
     end_commit: str | None = None
-    # pass, fail or unknown: the stored `ignite check` (copy) or landing gate (source) runs
-    # on the tree of `end_commit`.
+    # pass, fail or unknown: a landed source passed the landing gate; a copy passed when the
+    # Ignite daemon stored a passing gate verdict for the tree of `end_commit`.
     check: str = "unknown"
-    # True when part of the arm's sessions ran where their transcripts are not on the grading
-    # machine, so `dollars` and `agent_minutes` are too low. The report leaves it out of those
+    # True when the efficiency store has no request of the arm's claim or misses part of its
+    # time, so `dollars` and `tokens` are too low. The report leaves it out of the dollar
     # medians.
     cost_partial: bool = False
+    # True when part of the arm's sessions ran where their transcripts are not on the grading
+    # machine, so `agent_minutes` and `model_minutes` are too low. The report leaves it out of
+    # the minute medians.
+    minutes_partial: bool = False
     dollars: float | None = None
     tokens: dict[str, int] = field(default_factory=dict)
     agent_minutes: float | None = None

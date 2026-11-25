@@ -10,10 +10,12 @@ Where each measure comes from:
   the ticket after the first was released does not count.
 - The copy's diff: the branch `trial/<copy id>` in the main checkout, against the recorded
   start commit, which must be where the branch meets `origin/staging`.
-- Dollars, tokens and minutes: `just efficiency ticket <id> --json`.
-- Check verdicts: the efficiency store's `lane_runs` table (from the hub's `records`), by
-  commit: the `check` runs of the copy's branch head and the `land` runs of the source's
-  landed commit.
+- Dollars and tokens: the efficiency store's `requests` rows tagged with the ticket, from every
+  machine, between the claim and its end (`claim_cost`). Agent minutes: the windows of `just
+  efficiency ticket <id> --json` inside the claim, which come only from the transcripts on
+  this machine. Model minutes: the same command, for the whole ticket.
+- Check verdicts: a landed source passed the landing gate. A copy passed when the Ignite
+  daemon on this machine stored a passing verdict for the tree of its branch head.
 - Commands: the store's `tool_calls` table (each command's first 300 characters). Output and
   messages: the session's Claude transcript, whose path the store's `sources` table keeps,
   read for the ticket's windows when the transcript is on this machine.
@@ -26,7 +28,7 @@ import json
 import re
 from dataclasses import dataclass
 from collections.abc import Callable, Sequence
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -112,36 +114,100 @@ def diff(start: str, end: str) -> Diff:
     return Diff(files, added, removed, test_added, [l for l in lines if l])
 
 
-def check_verdict(commit: str | None, verb: str) -> str:
-    """`pass`, `fail` or `unknown` for an arm's final `commit`, from the store's `lane_runs`.
+def check_verdict(commit: str | None, landed: bool) -> str:
+    """`pass`, `fail` or `unknown` for an arm's final `commit`.
 
-    A `lane_runs` row keeps the commit that a check ran on, and a check runs before the session
-    commits or lands, then the landing rebases: the arm's final commit is never a commit that a
-    check ran on. The store does keep each run's tree hash, and a rebase or a re-commit leaves a
-    commit's tree unchanged when nothing else moved, so the runs are matched on the tree hash of
-    `commit`. Older rows keep the verb (`check` or `land`) in `tree` instead of a hash and only
-    match by commit, so those are read as a fallback. `verb` is `land` for the source and
-    `check` for the copy. A tree with no run is `unknown`."""
+    `ignite land` refuses a change without a passing gate verdict, so a landed source is `pass`.
+    For a copy, which closes without landing, the verdict is read from the Ignite daemon's
+    stored gate verdicts by the tree hash of `commit`. The daemon stores passes only, so a copy
+    whose final tree has no stored pass is `fail`: it either never got `ignite check` to pass
+    or changed its files afterwards. Copies are pinned to the machine that grades them, so the
+    daemon there saw their checks. `unknown` means no commit, or a database that cannot be
+    read."""
+    if landed:
+        return "pass"
     if not commit or not SHA.fullmatch(commit):
         return "unknown"
     try:
         tree = io.git("rev-parse", f"{commit}^{{tree}}")
     except io.IgniteError:
-        tree = ""
-    matches = []
-    if SHA.fullmatch(tree):
-        matches.append(f"tree = '{tree}'")
-    if verb in ("land", "check"):
-        matches.append(f"(\"commit\" = '{commit}' AND tree = '{verb}')")
-    if not matches:
         return "unknown"
+    passed = io.gate_passed(tree) if SHA.fullmatch(tree) else None
+    return "unknown" if passed is None else "pass" if passed else "fail"
+
+
+# A machine whose `requests` rows have a gap longer than this inside an arm's claim has not
+# had that stretch ingested: a machine running a worker session makes requests every few
+# minutes, even while a build runs in another session.
+INGEST_GAP_MINUTES = 30.0
+TOKEN_COLUMNS = (
+    "input_tokens",
+    "cache_write_tokens",
+    "cache_read_tokens",
+    "output_tokens",
+)
+
+
+@dataclass
+class ClaimCost:
+    dollars: float | None
+    tokens: dict[str, int]
+    # True when the store has no request for the claim, or misses part of its time.
+    partial: bool
+
+
+def claim_cost(bead: str, claim: Claim) -> ClaimCost:
+    """What one claim of a ticket cost, from the store's `requests` rows tagged with the
+    ticket's store ID (`bead`), on whichever machine ran it, between the claim and its end.
+
+    `just efficiency ticket` prices a ticket from the windows of the transcripts on this
+    machine, so a source that ran on another machine came out at a fraction of its cost, and
+    it sums every claim of the ticket, where an arm is the first claim only. The `requests`
+    table holds the other machines' requests too. A minute either side of the claim covers a
+    session's first request landing just before the claim is recorded."""
+    ended_at = claim.ended_at
+    if not BEAD.fullmatch(bead) or not ended_at:
+        return ClaimCost(None, {}, True)
+    start, end = shifted(claim.claimed_at, -1), shifted(ended_at, 1)
     rows = io.sql(
-        f"SELECT SUM(fails) AS fails, COUNT(*) AS runs FROM lane_runs "
-        f"WHERE {' OR '.join(matches)}"
+        "SELECT host, SUM(dollars) AS dollars, "
+        + ", ".join(f"SUM({c}) AS {c}" for c in TOKEN_COLUMNS)
+        + f" FROM requests WHERE bead = '{bead}' AND time BETWEEN '{start}' AND '{end}'"
+        " GROUP BY host"
     )
-    if not rows or not rows[0].get("runs"):
-        return "unknown"
-    return "fail" if rows[0].get("fails") else "pass"
+    if not rows:
+        return ClaimCost(None, {}, True)
+    tokens = {c: sum(int(r.get(c) or 0) for r in rows) for c in TOKEN_COLUMNS}
+    dollars = round(sum(float(r.get("dollars") or 0) for r in rows), 2)
+    partial = any(
+        ingest_gap(str(r["host"]), claim.claimed_at, ended_at) > INGEST_GAP_MINUTES
+        for r in rows
+    )
+    return ClaimCost(dollars, tokens, partial)
+
+
+def ingest_gap(host: str, start: str, end: str) -> float:
+    """The longest stretch in minutes between `start` and `end` with no request from any
+    session on `host`."""
+    if not BEAD.fullmatch(host):
+        return 0.0
+    times = [
+        str(r["time"])
+        for r in io.sql(
+            f"SELECT time FROM requests WHERE host = '{host}' "
+            f"AND time BETWEEN '{start}' AND '{end}' ORDER BY time"
+        )
+    ]
+    edges = [start, *times, end]
+    return max(minutes_between(a, b) for a, b in zip(edges, edges[1:]))
+
+
+def shifted(at: str, minutes: int) -> str:
+    """The ISO time `at` moved by `minutes`, in the store's format."""
+    moved = datetime.fromisoformat(at.replace("Z", "+00:00")) + timedelta(
+        minutes=minutes
+    )
+    return moved.strftime("%Y-%m-%dT%H:%M:%S.") + f"{moved.microsecond // 1000:03d}Z"
 
 
 def cost(ticket_id: str) -> dict[str, Any]:
@@ -200,12 +266,45 @@ def window_transcripts(
     return read, [p for p in paths if p.is_file()]
 
 
-def cost_partial(cost_row: dict[str, Any]) -> bool:
-    """Whether `cost_row` leaves out part of the arm's work. The efficiency store prices a
+def claim_windows(cost_row: dict[str, Any], claim: Claim) -> list[dict[str, Any]]:
+    """The ticket's session windows that overlap `claim`. A ticket the pool claimed twice has
+    windows of both sessions, and an arm is its first claim only."""
+    end = claim.ended_at or "~"
+    return [
+        w
+        for w in cost_row.get("sessions") or []
+        if str(w.get("start") or "") < end
+        and str(w.get("end") or "~") > claim.claimed_at
+    ]
+
+
+def claim_minutes(cost_row: dict[str, Any], claim: Claim) -> float | None:
+    """The arm's agent minutes: its windows' time inside the claim."""
+    windows = claim_windows(cost_row, claim)
+    if not windows:
+        return None
+    end = claim.ended_at or max(str(w.get("end") or "") for w in windows)
+    return round(
+        sum(
+            max(
+                0.0,
+                minutes_between(
+                    max(str(w["start"]), claim.claimed_at),
+                    min(str(w.get("end") or end), end),
+                ),
+            )
+            for w in windows
+        ),
+        1,
+    )
+
+
+def minutes_partial(cost_row: dict[str, Any], claim: Claim) -> bool:
+    """Whether the arm's minutes leave out part of its work. The efficiency store times a
     session from its transcript, so a session that ran on another machine, whose transcript is
-    not on this one, is priced at nothing or part of its cost. An arm with no session at all is
-    partial too."""
-    windows = cost_row.get("sessions") or []
+    not on this one, is timed at nothing or part of its length, or has no window at all. An
+    arm with no window inside its claim is partial too."""
+    windows = claim_windows(cost_row, claim)
     if not windows:
         return True
     for window in windows:
@@ -415,11 +514,12 @@ def grade_pair(
         siblings,
     )
     grades: list[Grade] = []
-    for name, ticket, claim, d, start, end, verb in (
-        ("source", source, s_claim, s_diff, s_start, s_end, "land"),
-        ("copy", copy, c_claim, c_diff, start_commit, c_end, "check"),
+    for name, ticket, claim, d, start, end in (
+        ("source", source, s_claim, s_diff, s_start, s_end),
+        ("copy", copy, c_claim, c_diff, start_commit, c_end),
     ):
         row = costs[name]
+        spent = claim_cost(str(row.get("bead") or ""), claim)
         finished = (
             claim.ended == "landed"
             if name == "source"
@@ -435,11 +535,12 @@ def grade_pair(
                 finished=finished,
                 start_commit=start,
                 end_commit=end,
-                check=check_verdict(end, verb),
-                cost_partial=cost_partial(row),
-                dollars=row.get("dollars"),
-                tokens={k: int(v or 0) for k, v in (row.get("tokens") or {}).items()},
-                agent_minutes=row.get("agent_minutes"),
+                check=check_verdict(end, name == "source" and bool(claim.landed)),
+                cost_partial=spent.partial,
+                minutes_partial=minutes_partial(row, claim),
+                dollars=spent.dollars,
+                tokens=spent.tokens,
+                agent_minutes=claim_minutes(row, claim),
                 model_minutes=round(
                     sum(
                         float(t.get("minutes") or 0)

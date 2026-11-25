@@ -927,36 +927,76 @@ def test_seeing_another_arms_copy_marks_a_pair_suspect() -> None:
     assert any("another arm's copy THYDR" in f.what for f in found)
 
 
-def test_a_check_verdict_matches_the_tree_of_the_final_commit(monkeypatch: Any) -> None:
-    queries: list[str] = []
-
-    def sql(query: str) -> list[dict[str, Any]]:
-        queries.append(query)
-        return [{"fails": 0, "runs": 2}]
-
-    monkeypatch.setattr(grade.io, "git", lambda *a: "abc1234abc1234")
-    monkeypatch.setattr(grade.io, "sql", sql)
-    assert grade.check_verdict("7e595bfaed53c", "check") == "pass"
-    assert "tree = 'abc1234abc1234'" in queries[0]
+def test_a_landed_source_passed_the_gate() -> None:
+    assert grade.check_verdict(None, landed=True) == "pass"
 
 
 @pytest.mark.parametrize(
-    ("rows", "verdict"),
-    [
-        ([{"fails": 3, "runs": 2}], "fail"),
-        ([{"fails": None, "runs": 0}], "unknown"),
-        ([], "unknown"),
-    ],
+    ("stored", "verdict"), [(True, "pass"), (False, "fail"), (None, "unknown")]
 )
-def test_a_check_verdict_is_fail_with_a_failure_and_unknown_with_no_run(
-    monkeypatch: Any, rows: list[dict[str, Any]], verdict: str
+def test_a_copy_passed_when_the_daemon_stored_a_pass_for_its_tree(
+    monkeypatch: Any, stored: bool | None, verdict: str
 ) -> None:
+    asked: list[str] = []
+
+    def gate_passed(tree: str) -> bool | None:
+        asked.append(tree)
+        return stored
+
     monkeypatch.setattr(grade.io, "git", lambda *a: "abc1234abc1234")
-    monkeypatch.setattr(grade.io, "sql", lambda q: rows)
-    assert grade.check_verdict("7e595bfaed53c", "land") == verdict
+    monkeypatch.setattr(grade.io, "gate_passed", gate_passed)
+    assert grade.check_verdict("7e595bfaed53c", landed=False) == verdict
+    assert asked == ["abc1234abc1234"]
 
 
-def test_an_arm_whose_transcript_is_elsewhere_has_a_partial_cost(
+def requests_store(
+    monkeypatch: Any, bead_rows: list[dict[str, Any]], host_times: list[str]
+) -> None:
+    def sql(query: str) -> list[dict[str, Any]]:
+        return (
+            bead_rows if "GROUP BY host" in query else [{"time": t} for t in host_times]
+        )
+
+    monkeypatch.setattr(grade.io, "sql", sql)
+
+
+CLAIM = grade.Claim(
+    session="cli-claude-1",
+    claimed_at="2026-11-25T08:00:00.000Z",
+    ended="landed",
+    ended_at="2026-11-25T09:00:00.000Z",
+)
+ROW = {
+    "host": "multivac",
+    "dollars": 9.214,
+    "input_tokens": 3,
+    "cache_write_tokens": 4,
+    "cache_read_tokens": 5,
+    "output_tokens": 6,
+}
+
+
+def test_a_claim_costs_its_requests_on_any_machine(monkeypatch: Any) -> None:
+    every_ten = [f"2026-11-25T08:{m:02d}:00.000Z" for m in range(5, 60, 10)]
+    requests_store(monkeypatch, [ROW], every_ten)
+    spent = grade.claim_cost("by-k3jt.95", CLAIM)
+    assert (spent.dollars, spent.partial) == (9.21, False)
+    assert spent.tokens["cache_read_tokens"] == 5
+
+
+def test_a_claim_cost_is_partial_when_its_machine_was_not_ingested(
+    monkeypatch: Any,
+) -> None:
+    # The machine's requests stop 20 minutes in, and the claim runs 40 more.
+    requests_store(
+        monkeypatch, [ROW], ["2026-11-25T08:10:00.000Z", "2026-11-25T08:20:00.000Z"]
+    )
+    assert grade.claim_cost("by-k3jt.95", CLAIM).partial
+    requests_store(monkeypatch, [], [])
+    assert grade.claim_cost("by-k3jt.95", CLAIM) == grade.ClaimCost(None, {}, True)
+
+
+def test_an_arm_whose_transcript_is_elsewhere_has_partial_minutes(
     monkeypatch: Any, tmp_path: Any
 ) -> None:
     here = tmp_path / "here.jsonl"
@@ -967,11 +1007,36 @@ def test_an_arm_whose_transcript_is_elsewhere_has_a_partial_cost(
         "sql",
         lambda q: [{"path": v} for k, v in store.items() if f"{k}.jsonl" in q],
     )
-    window = lambda t: {"transcript": t, "provider": "claude"}  # noqa: E731
-    assert not grade.cost_partial({"sessions": [window("here")]})
-    assert grade.cost_partial({"sessions": [window("here"), window("gone")]})
-    assert grade.cost_partial({"sessions": []})
-    assert grade.cost_partial({})
+
+    def window(t: str) -> dict[str, Any]:
+        return {
+            "transcript": t,
+            "provider": "claude",
+            "start": "2026-11-25T08:10:00.000Z",
+            "end": "2026-11-25T08:40:00.000Z",
+        }
+
+    assert not grade.minutes_partial({"sessions": [window("here")]}, CLAIM)
+    assert grade.minutes_partial({"sessions": [window("here"), window("gone")]}, CLAIM)
+    assert grade.minutes_partial({"sessions": []}, CLAIM)
+    assert grade.minutes_partial({}, CLAIM)
+
+
+def test_an_arms_minutes_are_its_windows_inside_its_claim() -> None:
+    later = {
+        "start": "2026-11-25T10:00:00.000Z",
+        "end": "2026-11-25T10:10:00.000Z",
+        "transcript": "later",
+    }
+    straddles = {
+        "start": "2026-11-25T08:50:00.000Z",
+        "end": "2026-11-25T09:20:00.000Z",
+        "transcript": "first",
+    }
+    row = {"sessions": [straddles, later]}
+    assert grade.claim_minutes(row, CLAIM) == 10.0
+    assert grade.claim_minutes({"sessions": [later]}, CLAIM) is None
+    assert grade.minutes_partial({"sessions": [later]}, CLAIM)
 
 
 def test_the_report_leaves_a_partial_cost_out_of_the_medians() -> None:
