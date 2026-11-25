@@ -436,10 +436,14 @@ impl TipVerifier {
                     return Ok(TipOutcome::Recovered);
                 }
             }
+            // A platform catching up on checks deferred past an earlier promotion blames from
+            // its own last good commit. When that commit is `master` itself, the gap holds no
+            // promoted landing and the failure is like any other: refusing it the revert left
+            // a Windows lint holding `master` for hours while every tip failed it.
             let can_revert = |check: &TipCheck| {
                 last != tip
                     && check.runnable
-                    && scope.last_good_for(check).is_none()
+                    && scope.last_good_for(check).is_none_or(|good| good == last)
                     && (!split.is_after(check) || regressions.contains(&check.check))
             };
             let stall_at = failed

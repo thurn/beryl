@@ -3083,9 +3083,11 @@ With `[revert] stall_minutes = 120`, a required non-build failure also qualifies
 for a revert once the oldest landing between `master` and the tip has waited at
 least 120 minutes, measured from the committer date of the last commit in that
 landing. A settled tip with a required failure gets one more round when the
-stall threshold is reached. Checks past the tip budget and native checks
-catching up on older coverage still get regression tickets. The stall setting is
-optional and independent of `broken_build`.
+stall threshold is reached. Checks past the tip budget, and native checks
+catching up on coverage from before `master`, still get regression tickets. A
+platform catching up from `master` itself has no promoted landing to blame, so
+its failures qualify like any other. The stall setting is optional and
+independent of `broken_build`.
 
 An eligible failure reverts its culprit when all of these hold, and otherwise
 gets a regression ticket:
@@ -3127,9 +3129,12 @@ The revert commit's subject is `revert: <the landing's first subject>`, cut to
 later landings undone with the culprit listed apart. The round takes the hub's
 lease on `staging` as a landing does, waiting while a landing holds it, checks
 that the tip has not moved, and pushes. When the tip moved, it builds the revert
-again on the new tip, three times at most, then reports a regression instead. A
-new tip that changed what the check reads, such as a fix or another machine's
-revert, is left to the next round, which runs the check there first. A check is
+again on the new tip, three times at most, then reports a regression instead.
+When the new tip changed what the check reads, the round runs the check there
+first. Where it no longer fails, because a fix or another machine's revert
+landed, nothing is undone and the next round runs the check at that tip. Where
+it still fails, the revert is built on the new tip, because a check that reads
+most of the tree has its inputs changed by nearly every landing. A check is
 left to the next round this way only once until `master` moves: on a busy day
 every round's tip is overtaken before it ends, so a check that fails again is
 reported as a regression whatever the newer tip changed. The round then tells

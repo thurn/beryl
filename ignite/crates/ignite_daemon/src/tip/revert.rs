@@ -32,9 +32,10 @@
 //!   reported before, with a note naming the landings involved.
 //!
 //! The revert commit is pushed to `staging` under the hub's lease, as a landing pushes. When the
-//! tip moved meanwhile, the revert is built again on the new tip, [`MAX_ATTEMPTS`] times at most;
-//! a new tip that changed what the check reads (a fix, or another machine's revert) is left to
-//! the next round, which runs the check there first. Another check blamed on a landing
+//! tip moved meanwhile, the revert is built again on the new tip, [`MAX_ATTEMPTS`] times at most.
+//! When the new tip changed what the check reads, the check runs there first: where it no longer
+//! fails (a fix, or another machine's revert, landed), nothing is undone and the next round runs
+//! it at that tip. Another check blamed on a landing
 //! the round reverted already needs only to pass at that revert.
 //! The hub is then told with [`Hub::reverted`](ignite_core::traits::Hub::reverted), once for
 //! each landing the commit undid, which reopens each landing's ticket. A report the hub did not take is kept in the verifier's memory
@@ -83,7 +84,8 @@ pub(super) enum Handled {
     /// Its landing was reverted, now or earlier in the round, and the check passes at the
     /// revert. No regression is reported.
     Reverted,
-    /// The tip moved with a change to what the check reads. Nothing is reverted. `blame` leaves
+    /// The tip moved with a change to what the check reads, and the check does not fail there.
+    /// Nothing is reverted. `blame` leaves
     /// the check to the next round, which runs it at the new tip first, or reports it when the
     /// check was left to a later round before.
     NextRound,
@@ -101,7 +103,8 @@ enum Pushed {
     /// The revert commit is on `staging`. It undoes these landings, oldest first: the culprit,
     /// then any later landings that had to go with it for the tree to build.
     Done(Commit, Vec<TipLanding>),
-    /// The tip moved with a change to what the check reads; the next round runs it there.
+    /// The tip moved with a change to what the check reads, and the check does not fail there;
+    /// the next round runs it there.
     NextRound,
     /// The revert does not build; the text says what was tried (see [`Handled::Unbuildable`]).
     Unbuildable(String),
@@ -298,9 +301,9 @@ impl TipVerifier {
     /// When the revert conflicts or does not build, the later landings that use what `landing`
     /// added are undone in the same commit, once (see `dependents`). A revert that still does
     /// not build is not pushed ([`Pushed::Unbuildable`]). The round gives up with
-    /// [`Pushed::NextRound`] when the tip moved past `tip` with a change to the check's inputs:
-    /// a fix, or another machine's revert, may have landed, and the next round runs the check
-    /// there first, as `blame` leaves such a check.
+    /// [`Pushed::NextRound`] when the tip moved past `tip` with a change to the check's inputs
+    /// and the check does not fail at the new tip: a fix, or another machine's revert, landed,
+    /// and the next round runs the check there, as `blame` leaves such a check.
     #[allow(clippy::too_many_lines)]
     fn push_revert(
         &self,
@@ -319,10 +322,17 @@ impl TipVerifier {
             let base = ctx.git.tip(staging).map_err(|e| e.to_string())?;
             if base != *tip {
                 let changed = ctx.git.changed(tip, &base).map_err(|e| e.to_string())?;
-                if touches(&changed, &check.inputs) {
+                // The new tip may hold a fix, or another machine's revert, so the check runs
+                // there before anything is undone. Giving up on every such move instead never
+                // reverted a check that reads most of the tree, such as a test over every
+                // card: some landing touched what it reads in each of the minutes the revert
+                // took to build, and `master` stayed held while the culprit was known.
+                if touches(&changed, &check.inputs)
+                    && self.outcome_at(ctx, &base, check, false) != Some(Outcome::Fail)
+                {
                     eprintln!(
-                        "ignite: {staging} moved to {base}, which changes what {} reads; the \
-                         next round runs it there",
+                        "ignite: {staging} moved to {base}, which changes what {} reads, and \
+                         the check does not fail there; the next round runs it there",
                         check.check
                     );
                     return Ok(Pushed::NextRound);

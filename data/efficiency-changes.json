@@ -985,5 +985,10 @@
     "label": "A tip round stops starting further families and batches as soon as a runnable required check fails before `master` moves, publishes the failed keys locally before telling the hub, and proceeds straight to recording the failed verdict, culprit search, revert and ancestor promotion instead of being superseded mid-round. On 2026-11-25 after the post-verdict guard landed, six consecutive tips with non-build failures were still superseded while running unrelated families before they could record a failed verdict or start a culprit search",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
+  },
+  {
+    "label": "A tip round in a `master` stall reverts a confirmed culprit when its platform is catching up from `master` itself, and when `staging` moved with a change to what the check reads but the check still fails there. On 2026-11-25 neither revert could happen: jarvis found the culprit of a test over every card twice and gave up each time because a newer landing touched the cards, and cygnus could never revert a Windows clippy failure because Windows was catching up from `master`. `master` did not move for 20 hours while 96 product commits waited on `staging`",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]

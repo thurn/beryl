@@ -567,6 +567,31 @@ fn a_tip_that_changed_the_checks_inputs_is_left_to_the_next_round() {
     assert!(world.hub.reverted_landings().is_empty());
 }
 
+/// A check that reads most of the tree, such as a test over every card, had some landing
+/// change what it reads while each revert was built, so every revert was left to the next round
+/// and none was pushed while `master` stayed held. A new tip where the check still fails gets
+/// the revert instead.
+#[test]
+fn a_tip_that_changed_the_checks_inputs_but_still_fails_gets_the_revert() {
+    let failing = vet("a", 'a');
+    let (world, ctx, tip) = broken(&failing, &["src/a/lib.rs"], true);
+    clean_revert(&world);
+    let newer = commit("dddd000");
+    world.git.set_changed(&tip, &newer, &["src/a/lib.rs"]);
+    world.work.set_outcome(&newer, &failing.check, Outcome::Fail);
+    let git = world.git.clone();
+    let moved = newer.clone();
+    let land: fake::BeforeBatches = Arc::new(move || git.set_tip("staging", moved.clone()));
+    on_second_run(&world, &tip, land);
+
+    reverting(&world).verify(&ctx, &tip).unwrap();
+
+    assert!(world.hub.regressions().is_empty());
+    assert_eq!(staging_pushes(&world), vec![commit("cccc000")]);
+    let runs = world.work.runs();
+    assert!(runs.iter().any(|(_, at, _, _)| at == &newer), "{runs:?}");
+}
+
 /// On a busy day every round's tip is overtaken, with a change to what a failing check reads,
 /// before the round ends. Leaving each such failure to the next round never reported it, and
 /// `master` did not move for hours. The second round that finds the check failing reports it.

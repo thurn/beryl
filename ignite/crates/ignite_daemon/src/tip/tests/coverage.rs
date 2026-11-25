@@ -263,6 +263,58 @@ fn a_returning_platform_blames_from_before_the_first_deferral() {
     );
 }
 
+/// A platform catching up from `master` itself has no promoted landing in its gap, so a
+/// failure it finds during a stall reverts its culprit like any other. Refusing every
+/// catching-up platform the revert held `master` behind one Windows lint for hours.
+#[test]
+fn a_platform_catching_up_from_master_reverts_during_a_stall() {
+    use ignite_core::tipround::{DeferredPlatform, PlatformVerification, TipCoverage};
+    use ignite_core::traits::RevertOutcome;
+
+    let world = World::new();
+    let master = world.master();
+    let tip = commit("bbbb000");
+    world.land(&tip);
+    world.hub.set_tip_coverage(TipCoverage {
+        platforms: [(
+            Os::Windows,
+            PlatformVerification {
+                through: master.clone(),
+                deferred: Some(DeferredPlatform {
+                    since: tip.clone(),
+                    last_good: master.clone(),
+                }),
+            },
+        )]
+        .into(),
+        ..TipCoverage::default()
+    });
+    let failing = windows_check('b', true);
+    world
+        .work
+        .add_landing("tk.40", &[tip.as_str()], &["src/windows/lib.rs"]);
+    world.work.set_outcome(&tip, &failing.check, Outcome::Fail);
+    world.work.set_checks(&tip, vec![failing]);
+    world.git.script_revert(RevertOutcome::Clean {
+        commit: commit("cccc000"),
+    });
+    let mut ctx = world.ctx("m-2");
+    ctx.config.revert.stall_minutes = Some(120);
+    world.clock.advance(121.0 * 60.0);
+
+    world
+        .verifier()
+        .with_host("windows")
+        .pausing_with(Arc::new(|_| {}))
+        .verify(&ctx, &tip)
+        .unwrap();
+
+    let reverts = world.hub.reverted_landings();
+    assert_eq!(reverts.len(), 1, "{:?}", world.hub.regressions());
+    assert_eq!(reverts[0].revert, commit("cccc000"));
+    assert_eq!(reverts[0].ticket, Some(ticket("tk.40")));
+}
+
 #[test]
 #[allow(clippy::too_many_lines)]
 fn family_and_checks_only_deferrals_promote_before_windows_catches_up() {
