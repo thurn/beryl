@@ -216,8 +216,33 @@ fn a_provider_with_zero_share_takes_no_work_even_while_the_others_are_held() {
     explained["explain"] = json!(true);
     let reply = ask(&mut conn, &explained, at(3.0));
     let reason = reply["nothing"].as_str().unwrap();
-    assert!(reason.contains("third is off (share 0)"), "{reason}");
+    assert!(
+        reason.contains("third is pinned only (share 0)"),
+        "{reason}"
+    );
     assert_eq!(ask(&mut conn, &machine, at(5.0))["provider"], "claude");
+}
+
+#[test]
+fn a_provider_with_zero_share_takes_only_tickets_pinned_to_it() {
+    let mut conn = open();
+    set_mix(&mut conn, [100, 50, 0], true);
+    let tickets = file(
+        &mut conn,
+        &[("unpinned", &[], &[]), ("pinned", &["provider:third"], &[])],
+    );
+    let machine = machine_room("m-1", 2, &["third"]);
+    let reserved = ask(&mut conn, &machine, start());
+    assert_eq!(reserved["provider"], "third");
+    assert_eq!(reserved["ticket"], tickets[1].as_str());
+    let mut explained = machine.clone();
+    explained["explain"] = json!(true);
+    let reply = ask(&mut conn, &explained, at(1.0));
+    let reason = reply["nothing"].as_str().unwrap();
+    assert!(
+        reason.contains("third is pinned only (share 0)"),
+        "{reason}"
+    );
 }
 
 #[test]

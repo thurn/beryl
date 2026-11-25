@@ -181,8 +181,9 @@ impl fmt::Display for MachineState {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProviderSetting {
     pub enabled: bool,
-    /// The provider's weight in the mix of new work. Zero turns the provider off, like
-    /// `enabled: false`, so a provider without a setting takes no work.
+    /// The provider's weight in the mix of new work. Zero keeps the provider out of the mix, so
+    /// a provider without a setting takes no unpinned work; with the switch on it still takes
+    /// tickets pinned to it with a `provider:` label (see [`Self::takes_ticket`]).
     pub share: u32,
     pub stop_percent: u32,
     /// Keep offering work when a usage sample reaches the stop percentage.
@@ -202,16 +203,24 @@ impl Default for ProviderSetting {
 }
 
 impl ProviderSetting {
-    /// Whether new work may go to this provider: it is on and has a positive share.
+    /// Whether unpinned new work may go to this provider: it is on and has a positive share.
     pub fn takes_work(self) -> bool {
         self.enabled && self.share > 0
     }
 
-    /// `on`, or `off` with the reason when the switch is on but the share is zero.
+    /// Whether a ticket may go to this provider. `pinned` says the ticket's `provider:` label
+    /// names this provider. A provider that is on with a share of zero takes only such tickets,
+    /// so an operator can route chosen tickets to it (a model trial's arm, say) without giving it
+    /// a place in the mix. The off switch still refuses every ticket.
+    pub fn takes_ticket(self, pinned: bool) -> bool {
+        self.enabled && (self.share > 0 || pinned)
+    }
+
+    /// `on`, `off`, or `pinned only (share 0)` when the switch is on but the share is zero.
     pub fn state(self) -> &'static str {
         match (self.enabled, self.share) {
             (false, _) => "off",
-            (true, 0) => "off (share 0)",
+            (true, 0) => "pinned only (share 0)",
             (true, _) => "on",
         }
     }

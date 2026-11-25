@@ -18,6 +18,13 @@ impl Pins {
             .as_deref()
             .is_none_or(|pin| pin.eq_ignore_ascii_case(provider))
     }
+
+    /// Whether the ticket is pinned to `provider` itself, not merely admitted by having no pin.
+    pub fn pinned_to_provider(&self, provider: &str) -> bool {
+        self.provider
+            .as_deref()
+            .is_some_and(|pin| pin.eq_ignore_ascii_case(provider))
+    }
 }
 
 /// The label for a particular machine, using case-insensitive hostnames.

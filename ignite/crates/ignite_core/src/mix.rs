@@ -14,7 +14,8 @@ pub struct ProviderLoad {
     pub holds: Vec<Hold>,
 }
 
-/// Pick the least loaded provider per unit of share. A provider with a share of zero is off.
+/// Pick the least loaded provider per unit of share. A provider with a share of zero takes only
+/// tickets pinned to it.
 /// If none fits, explain each provider's blocker.
 pub fn choose<'a>(
     loads: &'a [ProviderLoad],
@@ -65,7 +66,8 @@ fn blocker(
     if pinned.is_some_and(|pin| !pin.eq_ignore_ascii_case(name)) {
         return Some(format!("{name} is excluded by the provider pin"));
     }
-    if !load.setting.takes_work() {
+    // A pin to another provider returned above, so a pin here names this provider.
+    if !load.setting.takes_ticket(pinned.is_some()) {
         return Some(format!("{name} is {}", load.setting.state()));
     }
     let Some(offer) = offer else {

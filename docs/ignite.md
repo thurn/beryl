@@ -4394,8 +4394,10 @@ Its edit commands are:
   a minimum of one.
 - `ignite fleet provider <name> [--on|--off] [--share <n>] [--stop-percent <n>]`
   edits provider policy. A share is a weight from 0 to 1,000. A share of zero
-  turns the provider off, the same as `--off`. The stop percentage is from 1 to
-  100\.
+  keeps the provider out of the mix: it takes only tickets whose `provider:`
+  label names it, which routes chosen tickets (a model trial's arm, say) to a
+  provider without giving it other work. `--off` refuses every ticket. The stop
+  percentage is from 1 to 100.
 
 An **active** machine takes tickets and verifies tips. A **checks only** machine
 verifies tips and can take one regression or justiciar ticket at a time when no
@@ -4416,10 +4418,10 @@ The hub stores versioned settings and an audit log. Each change records the
 actor, time, summary and resulting policy. A new database seeds the machines and
 providers named in `ignite.toml` with the standard defaults: active machines
 with the default tree settings, and providers with the switch on, zero share and
-a 99% stop percentage. Zero share means a provider takes no work until an
-operator gives it a share, so a provider added to `ignite.toml` never starts
-workers by itself. Missing entries use the same defaults. Saved settings persist
-across upgrades.
+a 99% stop percentage. Zero share means a provider takes no unpinned work until
+an operator gives it a share, so a provider added to `ignite.toml` never starts
+workers by itself unless a ticket's `provider:` label names it. Missing entries
+use the same defaults. Saved settings persist across upgrades.
 
 `GET /fleet` under the project API returns the view also available through
 `ignite fleet --json`. `PUT /fleet` requires a machine token with an actor or an
@@ -4509,8 +4511,9 @@ neither supplies one, it sets the reset one hour ahead. For providers that
 report no utilization, a plan-limit end is the source of usage holds.
 
 Other eligible providers divide the work while a provider is held. A provider
-with zero share never takes work, even when every other provider is held. When
-the hold ends, the provider returns to the mix at its configured share.
+with zero share never takes unpinned work, even when every other provider is
+held. When the hold ends, the provider returns to the mix at its configured
+share.
 
 ### Check families in dispatch
 

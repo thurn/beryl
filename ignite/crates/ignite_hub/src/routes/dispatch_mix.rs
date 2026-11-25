@@ -130,8 +130,12 @@ pub(super) fn continuation_blocked(
 ) -> Result<bool> {
     let settings = fleet_settings::settings(conn)?;
     // An older claim whose worker never reported its app has no provider name. Its provider is
-    // unknown rather than off, so only a named provider without a share stops the lane.
-    if !provider.is_empty() && !settings.provider(provider).takes_work() {
+    // unknown rather than off, so only a named provider that refuses the ticket stops the lane.
+    if !provider.is_empty()
+        && !settings
+            .provider(provider)
+            .takes_ticket(ticket.pins.pinned_to_provider(provider))
+    {
         return Ok(true);
     }
     let mut holds = provider_usage::held(conn, &settings, now)?;

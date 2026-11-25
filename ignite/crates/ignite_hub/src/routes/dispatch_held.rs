@@ -175,7 +175,10 @@ impl<'a> Fallback<'a> {
             }
             Providers::Legacy(names) => names.iter().any(|name| {
                 ticket.pins.admits_provider(name)
-                    && self.settings.provider(name).takes_work()
+                    && self
+                        .settings
+                        .provider(name)
+                        .takes_ticket(ticket.pins.pinned_to_provider(name))
                     && self.holds.get(name).is_none_or(|holds| {
                         let model_ids = BTreeMap::new();
                         let model = model_for_tier(name, tier, &model_ids, None);
