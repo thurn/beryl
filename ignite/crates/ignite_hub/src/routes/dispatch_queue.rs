@@ -93,11 +93,9 @@ pub fn next(
     {
         return Ok(Ok(reservation));
     }
-    // One master blocker at a time, but an active machine still takes a justiciar ticket.
-    let holds_one = paused == Paused::MasterOnly && held::holds_one(conn, machine)?;
-    let busy = || Ok(Err(HOLDS_ONE.to_owned().into()));
-    if holds_one && state != MachineState::Active {
-        return busy();
+    // A checks-only machine works one master blocker at a time; an active one takes them all.
+    if state == MachineState::ChecksOnly && held::holds_one(conn, machine)? {
+        return Ok(Err(HOLDS_ONE.to_owned().into()));
     }
     let snapshot = Snapshot::load(conn, now)?;
     // A worker holding a reservation for another machine is not idle.
@@ -120,12 +118,6 @@ pub fn next(
         .then(|| held::Fallback::load(conn, &settings, &snapshot.heard, &free, now))
         .transpose()?;
     let mut ready = snapshot.ready_tickets(conn, &history, &landed, now, fallback.as_ref())?;
-    if holds_one {
-        ready.retain(held::is_justiciar);
-        if ready.is_empty() {
-            return busy();
-        }
-    }
     let mut waiting_for_queue = Vec::new();
     if paused == Paused::MasterOnly {
         if state == MachineState::Active

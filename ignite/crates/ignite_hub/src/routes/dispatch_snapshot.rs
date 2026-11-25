@@ -208,8 +208,8 @@ fn ticket_block(
             )
             .and_then(|HandoffWait { block, reason }| block.map(|block| (block, reason)))
     };
-    // An active machine starts a justiciar ticket beside the one ticket it already works.
-    let one_at_a_time = holds_one && (fallback || !held::is_justiciar(ticket));
+    // Only a checks-only machine limits itself to one ticket holding master back.
+    let one_at_a_time = holds_one && fallback;
     if (backlog || fallback || sample.shared_failure.is_some())
         && (one_at_a_time || !master_blocker)
     {

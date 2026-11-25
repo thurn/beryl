@@ -160,8 +160,8 @@ pub struct MachineFree {
     /// a worker for the justiciar ticket that would free them.
     #[serde(default)]
     pub justiciar_only: bool,
-    /// Offer only a ticket that holds `master` back (a justiciar or regression ticket), and
-    /// none while the machine already holds one. A daemon asks this way while its own pool is
+    /// Offer only a ticket that holds `master` back (a justiciar or regression ticket). A
+    /// checks-only machine gets none while it already holds one. A daemon asks this way while its own pool is
     /// paused (`ignite pool pause`): a pause stops new feature work, but `master` must not stay
     /// stuck behind it.
     #[serde(default)]

@@ -3758,13 +3758,16 @@ A daemon asks the hub for work with its current room, provider offers and
 scheduler readings. The hub considers tickets in this order:
 
 1. A justiciar ticket for a fault in Ignite or its workflow. Like a regression,
-   it skips the test of expected cores. An active machine that already works a
-   ticket holding `master` back, and so takes no second one, still takes a
-   justiciar ticket. A checks-only machine keeps its single slot.
+   it skips the test of expected cores.
 2. A repair blocking tip verification, then other open regression tickets. These
    go ahead of allocation-controlled work, even when their Allocation is zero.
    They still need a tree on a machine that can run the check and can bypass the
    ordinary worker room and expected-core limits.
+
+An active machine takes every ticket of the first two kinds that it can, even
+while it asks only for tickets that hold `master` back, for example because a
+check fails the same way for several of its workers. A checks-only machine works
+one such ticket at a time.
 3. An eligible improvement ticket when improvements are under their default
    share of recent hand-offs. This applies to improvements outside the
    explicitly weighted Efficiency improvements pool. See

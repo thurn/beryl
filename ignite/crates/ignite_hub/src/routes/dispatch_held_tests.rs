@@ -243,7 +243,7 @@ fn a_paused_machine_gets_the_tickets_holding_master_back_one_at_a_time() {
 }
 
 #[test]
-fn an_active_machine_asking_for_master_blockers_takes_a_justiciar_beside_a_regression() {
+fn an_active_machine_asking_for_master_blockers_takes_every_one() {
     let mut conn = open();
     let ids = file(
         &mut conn,
@@ -260,11 +260,10 @@ fn an_active_machine_asking_for_master_blockers_takes_a_justiciar_beside_a_regre
     let workers = ["local_a", "local_b", "local_c"];
     let (_, first) = post(&mut conn, "/next", &ask(&workers), at(1.0));
     assert_eq!(offered(&first), Some(ids[0].as_str()), "{first}");
-    // The second regression waits for the first, but a justiciar ticket filed later does not.
     let (_, second) = post(&mut conn, "/next", &ask(&workers[1..]), at(2.0));
-    assert_eq!(second, Value::Null);
+    assert_eq!(offered(&second), Some(ids[1].as_str()), "{second}");
     let justiciar = file(&mut conn, &[("ignite is stuck", &["justiciar"], &[])]);
-    let (_, third) = post(&mut conn, "/next", &ask(&workers[1..]), at(3.0));
+    let (_, third) = post(&mut conn, "/next", &ask(&workers[2..]), at(3.0));
     assert_eq!(offered(&third), Some(justiciar[0].as_str()), "{third}");
 }
 

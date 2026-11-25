@@ -164,7 +164,7 @@ pub fn available(conn: &Connection, now: Timestamp) -> Result<Available> {
         free.free_cores = dispatch::room(&free, &held_now.cores);
         let state = settings.machine(name).state;
         let paused = held::paused(conn, &free, state, now)?;
-        let holds_one = paused == Paused::MasterOnly && held::holds_one(conn, id)?;
+        let holds_one = state == MachineState::ChecksOnly && held::holds_one(conn, id)?;
         if paused == Paused::Everything || holds_one {
             free.idle_workers.clear();
         }
