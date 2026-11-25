@@ -62,8 +62,11 @@ pub struct HomeCard {
     pub labels: Vec<String>,
     pub source: Option<ignite_core::shares::Source>,
     /// The name of the machine whose worker holds the ticket, when its assignee is a worker
-    /// that a machine has registered.
+    /// that a machine has registered, or the machine that claimed it while it is in progress.
     pub machine: Option<String>,
+    /// The provider working the ticket while it is in progress: the one chosen when it was
+    /// claimed, or else the app of the worker that holds it.
+    pub provider: Option<String>,
 }
 
 /// The forecast for each ticket with a reserve or descendants, and the default effort
@@ -246,8 +249,15 @@ fn forecasts(conn: &Connection, ids: &[String]) -> Result<Forecasts, ReadError> 
 pub fn home_data(conn: &Connection) -> Result<(Vec<HomeCard>, Forecasts), ReadError> {
     let mut statement = conn.prepare(&format!(
         "SELECT {CARD_FIELDS}, labels,
-                (SELECT m.name FROM workers w JOIN machines m ON m.id = w.machine
-                 WHERE w.session = tickets.assignee LIMIT 1), {SOURCE_FIELDS}
+                COALESCE(
+                  (SELECT m.name FROM workers w JOIN machines m ON m.id = w.machine
+                   WHERE w.session = tickets.assignee LIMIT 1),
+                  (SELECT m.name FROM machines m
+                   WHERE m.id = tickets.machine AND tickets.status = 'in_progress')),
+                CASE WHEN status = 'in_progress' THEN COALESCE(provider,
+                  (SELECT w.app FROM workers w
+                   WHERE w.session = tickets.assignee AND w.role = 'worker' LIMIT 1)) END,
+                {SOURCE_FIELDS}
          FROM tickets
          WHERE status != 'closed'
            AND (parent IS NULL OR status IN ('in_progress', 'deferred') OR labels != '[]')"
@@ -257,7 +267,8 @@ pub fn home_data(conn: &Connection) -> Result<(Vec<HomeCard>, Forecasts), ReadEr
             card: card(row)?,
             labels: labels_of(&row.get::<_, String>(9)?),
             machine: row.get(10)?,
-            source: allocation_source(row, 11)?,
+            provider: row.get(11)?,
+            source: allocation_source(row, 12)?,
         })
     })?;
     let mut cards: Vec<HomeCard> = rows.collect::<Result<_, _>>()?;

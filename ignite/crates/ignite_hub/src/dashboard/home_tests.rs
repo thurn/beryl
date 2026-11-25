@@ -1,3 +1,4 @@
+use ignite_core::config::PoolConfig;
 use ignite_core::fleet::FleetSettings;
 use ignite_core::protocol::tickets::Status;
 
@@ -19,6 +20,7 @@ fn ticket(id: &str, labels: &[&str]) -> HomeCard {
         },
         labels: labels.iter().map(|label| (*label).to_owned()).collect(),
         machine: None,
+        provider: None,
         source: None,
     }
 }
@@ -37,10 +39,65 @@ fn a_card_names_the_machine_working_it_not_the_session() {
         "0",
         &FleetSettings::default(),
         None,
+        None,
     )
     .body;
     assert!(body.contains("Multivac"), "{body}");
     assert!(!body.contains("session 012345"), "{body}");
+}
+
+/// A card tags its allocation, machine and model once each: what runs it while it is in
+/// progress, else what it is pinned to. The model is the provider's model for the ticket's tier.
+#[test]
+fn a_card_tags_its_allocation_machine_and_model_once() {
+    let mut cards = [
+        ticket("Tw1", &["tier:opus"]),
+        ticket("Tw2", &["tier:opus"]),
+        ticket("Tw3", &["tier:opus"]),
+    ];
+    cards[0].card.status = Status::InProgress;
+    cards[0].card.assignee = Some("local_0123456789abcdef".to_owned());
+    cards[0].machine = Some("multivac.local".to_owned());
+    cards[0].provider = Some("claude".to_owned());
+    cards[0].card.pins.machine = Some("multivac".to_owned());
+    cards[1].card.pins.machine = Some("jarvis".to_owned());
+    cards[1].card.pins.provider = Some("agy-gemini".to_owned());
+    let mut pool = PoolConfig::default();
+    for (provider, id) in [("claude", "claude-opus-5-5"), ("agy-gemini", "gemini-4-neon")] {
+        pool.models.insert(
+            provider.to_owned(),
+            [("opus".to_owned(), id.to_owned())].into(),
+        );
+    }
+    let body = page(
+        "/",
+        &cards,
+        &Forecasts::default(),
+        Vec::new(),
+        "0",
+        &FleetSettings::default(),
+        None,
+        Some(&pool),
+    )
+    .body;
+    let chip = |text: &str, tip: &str| {
+        format!(
+            "<span class=\"c-chip c-tone-neutral\" data-tip=\"{tip}\" tabindex=\"0\">{text}</span>"
+        )
+    };
+    // The active card shows twice: under Active and under All.
+    assert_eq!(body.matches("Multivac").count(), 2, "{body}");
+    for expected in [
+        chip("Multivac", "Running on this machine"),
+        chip("opus", "Running on this model"),
+        chip("Jarvis", "Pinned to this machine"),
+        chip("neon", "Assigned to this model"),
+        chip("opus", "Assigned to this tier"),
+        chip("200", "Allocation"),
+    ] {
+        assert!(body.contains(&expected), "{expected} in {body}");
+    }
+    assert!(!body.contains("agy-gemini"), "{body}");
 }
 
 fn group_of(labels: &[&str]) -> Option<&'static str> {
@@ -99,6 +156,7 @@ fn the_home_page_shows_justiciar_tickets_under_incidents() {
         Vec::new(),
         "0",
         &FleetSettings::default(),
+        None,
         None,
     )
     .body;

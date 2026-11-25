@@ -10,6 +10,7 @@
 use rusqlite::Connection;
 use sha2::{Digest, Sha256};
 
+use ignite_core::config::PoolConfig;
 use ignite_core::time::Timestamp;
 use ignite_store::hub::{feed, tickets};
 
@@ -277,6 +278,7 @@ pub fn serve(
         wordmark: None,
         editable: false,
         private: false,
+        pool: None,
     };
     serve_with(conn, request, &site, now)
 }
@@ -295,6 +297,9 @@ pub struct Site<'a> {
     /// session page is served only there; the public copy answers 404 for it. Ticket images
     /// are shown only there too, for the same reason.
     pub private: bool,
+    /// `[pool]` from `ignite.toml`, from which ticket cards name the model a ticket runs on.
+    /// Without it a card names the ticket's tier instead.
+    pub pool: Option<&'a PoolConfig>,
 }
 
 /// Like [`serve`], for the listener `site`.
@@ -320,6 +325,7 @@ fn serve_pages(
         wordmark,
         editable,
         private,
+        pool,
     } = *site;
     let head = request.method.eq_ignore_ascii_case("HEAD");
     if !head && !request.method.eq_ignore_ascii_case("GET") {
@@ -342,7 +348,7 @@ fn serve_pages(
                     panel().map_or_else(|error| failed(&error), |body| fragment(&seq, body, head)),
                 );
             }
-            match home::options(conn, &root, &seq, now, editable.then_some(project)).map(brand) {
+            match home::options(conn, &root, &seq, now, editable.then_some(project), pool).map(brand) {
                 Err(error) => failed(&error),
                 Ok(options) if fragment_kind == Some("all") => match panel() {
                     Err(error) => failed(&error),

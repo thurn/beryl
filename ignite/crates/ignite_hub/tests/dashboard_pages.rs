@@ -639,6 +639,7 @@ fn a_configured_wordmark_replaces_the_brand_and_the_home_page_has_no_crumb() {
                 wordmark: Some(wordmark),
                 editable: false,
                 private: false,
+                pool: None,
             },
             now,
         )

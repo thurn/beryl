@@ -8,6 +8,8 @@ use std::collections::BTreeMap;
 
 use rusqlite::Connection;
 
+use ignite_core::config::PoolConfig;
+use ignite_core::dispatch::label;
 use ignite_core::fleet::FleetSettings;
 use ignite_core::protocol::tickets::Status;
 use ignite_core::shares::{DEFAULT_GENERAL_ALLOCATION, Source};
@@ -16,12 +18,12 @@ use ignite_store::hub::fleet_settings;
 
 use super::attention;
 use super::common::{
-    SITE_ICONS, brand, status_dot, ticket_heading, work_progress, worker_unlinked,
+    SITE_ICONS, allocation_chip, brand, status_dot, work_progress, worker_unlinked,
 };
 use super::components::{self as c, Feed, PageOptions, Tone, esc};
 use super::data::{Forecasts, HomeCard, ReadError, home_data};
 use super::edit;
-use super::references::ticket_url;
+use super::references::{display_id, ticket_url};
 use crate::upkeep::filing::HUB_LABEL;
 use crate::upkeep::justiciar;
 
@@ -65,8 +67,58 @@ fn machine_label(hostname: &str) -> String {
     })
 }
 
+/// A card's tags: its allocation, the machine that runs it or else the one it is pinned to, and
+/// the model it runs on or is assigned to. Each shows once, in the allocation chip's tone.
+fn card_tags(ticket: &HomeCard, pool: Option<&PoolConfig>) -> String {
+    let card = &ticket.card;
+    let allocation =
+        allocation_chip(card.allocation.filter(|_| card.status != Status::PendingApproval));
+    let tag = |name: &str, tip: &str| c::chip(name, Tone::Neutral, Some(tip));
+    let machine = match (&ticket.machine, &card.pins.machine) {
+        (Some(name), _) => tag(&machine_label(name), "Running on this machine"),
+        (None, Some(name)) => tag(&machine_label(name), "Pinned to this machine"),
+        (None, None) => String::new(),
+    };
+    let model = model(ticket, pool).map_or_else(String::new, |(name, tip)| tag(&name, tip));
+    allocation + &machine + &model
+}
+
+/// The model a ticket runs on, or else the one it is assigned to, with the tag's tip. The
+/// provider working it, or else the one it is pinned to, maps the ticket's `tier:` label to a
+/// model ID; an untiered ticket takes the provider's `sonnet` model, as workers do. With no
+/// provider the tier is all that is known, so the tier is named.
+fn model(ticket: &HomeCard, pool: Option<&PoolConfig>) -> Option<(String, &'static str)> {
+    let tier = label(&ticket.labels, "tier:");
+    let (provider, tip) = match (&ticket.provider, &ticket.card.pins.provider) {
+        (Some(provider), _) => (provider, "Running on this model"),
+        (None, Some(provider)) => (provider, "Assigned to this model"),
+        (None, None) => return tier.map(|tier| (tier.to_owned(), "Assigned to this tier")),
+    };
+    let tier = tier.unwrap_or("sonnet");
+    let id = pool
+        .and_then(|pool| pool.model_id(provider, tier))
+        .unwrap_or_else(|| tier.to_owned());
+    Some((model_name(&id), tip))
+}
+
+/// A model ID as a tag names it: its words after the family name, without version numbers
+/// (`claude-opus-5-5` is `opus`, `gemini-4-neon` is `neon`). An ID with no such word is shown
+/// whole.
+fn model_name(id: &str) -> String {
+    let words: Vec<&str> = id
+        .split('-')
+        .skip(1)
+        .filter(|word| word.starts_with(|first: char| first.is_ascii_alphabetic()))
+        .collect();
+    if words.is_empty() {
+        id.to_owned()
+    } else {
+        words.join("-")
+    }
+}
+
 /// Builds the home page for the project at `root`, at feed position `seq`.
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, clippy::too_many_arguments)]
 fn page(
     root: &str,
     cards: &[HomeCard],
@@ -75,6 +127,7 @@ fn page(
     seq: &str,
     settings: &FleetSettings,
     editable: Option<&str>,
+    pool: Option<&PoolConfig>,
 ) -> PageOptions {
     let mut active: Vec<&HomeCard> = Vec::new();
     let mut epics: Vec<&HomeCard> = Vec::new();
@@ -129,22 +182,24 @@ fn page(
             } else {
                 String::new()
             };
-            let assignee = card.assignee.as_deref().map_or(String::new(), |name| {
-                ticket.machine.as_deref().map_or_else(
-                    || worker_unlinked(Some(name), &card.id),
-                    |machine| c::tip(&esc(&machine_label(machine)), name),
-                )
-            });
+            // A registered worker's machine shows as a tag, so the foot names only a worker
+            // no machine has registered.
+            let assignee = match (&ticket.machine, card.assignee.as_deref()) {
+                (None, Some(name)) => worker_unlinked(Some(name), &card.id),
+                _ => String::new(),
+            };
             let foot = format!(
-                "{state}{kind}{}{assignee}<span class=\"c-card-time\">{}</span>",
+                "{state}{kind}{}{assignee}<span class=\"c-card-tags\">{}</span>",
                 work_progress(forecasts.get(&card.id), forecasts.default),
-                c::time(Some(&card.updated_at), "")
+                card_tags(ticket, pool)
             );
             c::card(
                 &ticket_url(root, &card.id),
                 &format!(
-                    "{}<h3 class=\"c-card-title\">{}</h3><div class=\"c-card-foot\">{foot}</div>",
-                    ticket_heading(card),
+                    "<div class=\"c-card-top\">{}<span class=\"c-card-time\">{}</span></div>\
+                     <h3 class=\"c-card-title\">{}</h3><div class=\"c-card-foot\">{foot}</div>",
+                    c::mono(&display_id(&card.id)),
+                    c::time(Some(&card.updated_at), ""),
                     esc(&card.title)
                 ),
                 None,
@@ -339,6 +394,7 @@ pub(crate) fn options(
     seq: &str,
     now: Timestamp,
     editable: Option<&str>,
+    pool: Option<&PoolConfig>,
 ) -> Result<PageOptions, ReadError> {
     let (cards, forecasts) = home_data(conn)?;
     let attention_cards = attention::cards(conn, root, now)?;
@@ -351,6 +407,7 @@ pub(crate) fn options(
         seq,
         &settings,
         editable,
+        pool,
     ))
 }
 

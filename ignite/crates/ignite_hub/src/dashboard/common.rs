@@ -226,7 +226,7 @@ pub fn allocation_chip(allocation: Option<u32>) -> String {
 /// A card's ID and allocation.
 pub fn ticket_heading(ticket: &Card) -> String {
     format!(
-        "<div class=\"c-card-top\">{}{}</div>",
+        "<div class=\"c-card-top\">{}<span class=\"c-card-tags\">{}</span></div>",
         c::mono(&display_id(&ticket.id)),
         allocation_chip(
             ticket

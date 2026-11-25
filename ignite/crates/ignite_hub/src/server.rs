@@ -33,7 +33,7 @@ use rusqlite::Connection;
 use serde_json::json;
 use tiny_http::{Header, Server};
 
-use ignite_core::config::{Config, Rules};
+use ignite_core::config::{Config, PoolConfig, Rules};
 use ignite_core::time::{SystemClock, Timestamp};
 use ignite_core::traits::Clock;
 use ignite_store::hub;
@@ -122,6 +122,7 @@ impl HubServer {
             wordmark: self.wordmark.clone(),
             rules: self.config.rules.clone(),
             test_paths: self.config.repository.test_paths.clone(),
+            worker_pool: self.config.pool.clone(),
             database: self.database.clone(),
             attachments: AttachmentFiles::beside(
                 &self.database,
@@ -212,6 +213,8 @@ struct Shared {
     read_only: bool,
     /// Lets one evaluation of the improvement rules run at a time; see [`evaluate_rules`].
     evaluations: EvaluationGate,
+    /// `[pool]` from `ignite.toml`, which names the model each provider runs for each tier.
+    worker_pool: PoolConfig,
 }
 
 struct Pool {
@@ -530,6 +533,7 @@ fn page(
             wordmark: shared.wordmark.as_deref(),
             editable,
             private: !shared.read_only,
+            pool: Some(&shared.worker_pool),
         },
         now,
     )

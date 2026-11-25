@@ -12,7 +12,7 @@ pub(super) fn chips(pins: &Pins) -> String {
     pins.machine
         .iter()
         .chain(pins.provider.iter())
-        .map(|name| c::chip(name, Tone::Muted, None))
+        .map(|name| c::chip(name, Tone::Neutral, None))
         .collect()
 }
 

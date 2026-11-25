@@ -121,6 +121,7 @@ fn reply(
         wordmark: None,
         editable,
         private,
+        pool: None,
     };
     let reply = serve_with(conn, &request, &site, Timestamp::parse(NOW).unwrap()).unwrap();
     let location = reply

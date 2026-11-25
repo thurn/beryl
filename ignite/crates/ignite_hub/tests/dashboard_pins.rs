@@ -147,7 +147,9 @@ fn ticket_properties_show_effective_pins_and_cards_show_own_pins() {
         2
     );
     let (_, home) = send(public.address(), "GET", "/", &[], "");
-    assert!(home.contains(">cygnus</span>") && home.contains(">codex</span>"));
+    // The epic's own pins: its machine, and the model its pinned provider runs (`[pool]` is
+    // not given here, so the tier's name stands for the model).
+    assert!(home.contains(">Cygnus</span>") && home.contains(">sonnet</span>"));
 
     let (_, editable) = send(
         private.address(),
