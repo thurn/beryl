@@ -13,7 +13,8 @@ use beryl_kernel::reference::Permanent;
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    CastingOption, Cost, CostPart, FaceIx, ManaCost, Measure, Part, Prompt, Purpose, Types,
+    CastingOption, Chosen, Cost, CostAction, CostPart, FaceIx, ManaCost, Measure, Part, Prompt,
+    Purpose, Types,
 };
 use crate::casting::parts;
 use crate::continuous::layers;
@@ -169,28 +170,10 @@ fn begin_payment<L: Layout>(
     }
     if s.profile().payment != Payment::Manual {
         let greedy = s.profile().payment == Payment::Greedy;
-        let plans = mana::plans(
-            s,
-            t,
-            sink,
-            player,
-            remaining,
-            Bitboard::EMPTY,
-            greedy,
-            mana::Paying::NOTHING,
-        )?;
+        let plans = plans(s, t, sink, player, remaining, greedy)?;
         debug_assert!(!plans.is_empty(), "a cost offered is payable");
-        if plans.len() == 1 {
-            mana::pay(
-                s,
-                t,
-                sink,
-                player,
-                remaining,
-                Bitboard::EMPTY,
-                &plans.as_slice()[0],
-                mana::Paying::NOTHING,
-            )?;
+        if let [plan] = plans.as_slice() {
+            pay_plan(s, t, sink, player, remaining, plan)?;
             return pay_other_parts(s, t, sink, permanent, cost, 0);
         }
     }
@@ -229,9 +212,7 @@ pub(crate) fn decision<L: Layout>(
         }
         FaceUpPayment::Mana(remaining) => remaining,
         FaceUpPayment::Objects(paying) => {
-            let CostPart::Chosen(action, chosen) = cost.parts()[usize::from(paying.part)] else {
-                unreachable!("this part takes chosen objects");
-            };
+            let (action, chosen) = chosen_part(cost, paying.part);
             let objects = parts::candidates(s, t, player, slot, action, &chosen) & !paying.chosen;
             return Ok(Decision {
                 player,
@@ -257,16 +238,7 @@ pub(crate) fn decision<L: Layout>(
             )?,
         )
     } else {
-        let plans = mana::plans(
-            s,
-            t,
-            sink,
-            player,
-            remaining,
-            Bitboard::EMPTY,
-            false,
-            mana::Paying::NOTHING,
-        )?;
+        let plans = plans(s, t, sink, player, remaining, false)?;
         let mut list: L::Queue<Opt<L>, OPTIONS> = Default::default();
         for i in 0..plans.len() {
             list.push(Opt::Plan(index::<L>(i)))?;
@@ -323,9 +295,7 @@ pub(crate) fn perform<L: Layout>(
                 });
                 return Ok(());
             }
-            let CostPart::Chosen(action, chosen) = cost.parts()[usize::from(paying.part)] else {
-                unreachable!("this part takes chosen objects");
-            };
+            let (action, chosen) = chosen_part(cost, paying.part);
             parts::pay_with_all(s, t, sink, action, &chosen, player, paying.chosen)?;
             // The permanent may have paid for itself.
             let Some(permanent) = s.permanent(permanent.into()) else {
@@ -348,6 +318,55 @@ pub(crate) fn perform<L: Layout>(
     }
 }
 
+/// The payment plans for the special action's mana cost, `remaining`.
+fn plans<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    player: Seat,
+    remaining: ManaCost,
+    greedy: bool,
+) -> Result<L::Queue<mana::Plan<L>, 64>, Full> {
+    mana::plans(
+        s,
+        t,
+        sink,
+        player,
+        remaining,
+        Bitboard::EMPTY,
+        greedy,
+        mana::Paying::NOTHING,
+    )
+}
+
+fn pay_plan<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    player: Seat,
+    remaining: ManaCost,
+    plan: &mana::Plan<L>,
+) -> Result<(), Full> {
+    mana::pay(
+        s,
+        t,
+        sink,
+        player,
+        remaining,
+        Bitboard::EMPTY,
+        plan,
+        mana::Paying::NOTHING,
+    )
+}
+
+/// The part of the cost that takes chosen objects, at `part`.
+fn chosen_part(cost: Cost, part: u8) -> (CostAction, Chosen) {
+    let CostPart::Chosen(action, chosen) = cost.parts()[usize::from(part)] else {
+        unreachable!("this part takes chosen objects");
+    };
+    (action, chosen)
+}
+
 /// Pays a mana plan or takes one step of manual payment for the special action.
 fn pay_mana<L: Layout>(
     s: &mut State<L>,
@@ -359,26 +378,14 @@ fn pay_mana<L: Layout>(
 ) -> Result<ManaCost, Full> {
     Ok(match option {
         Opt::Plan(i) => {
-            let plans = mana::plans(
+            let plans = plans(s, t, sink, player, remaining, false)?;
+            pay_plan(
                 s,
                 t,
                 sink,
                 player,
                 remaining,
-                Bitboard::EMPTY,
-                false,
-                mana::Paying::NOTHING,
-            )?;
-            let plan = &plans.as_slice()[Into::<usize>::into(i)];
-            mana::pay(
-                s,
-                t,
-                sink,
-                player,
-                remaining,
-                Bitboard::EMPTY,
-                plan,
-                mana::Paying::NOTHING,
+                &plans.as_slice()[Into::<usize>::into(i)],
             )?;
             ManaCost::NONE
         }

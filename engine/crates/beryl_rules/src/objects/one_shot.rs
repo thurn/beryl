@@ -57,9 +57,9 @@ pub(crate) fn exile_until_this_leaves_instruction<L: Layout>(
 ) -> Result<Outcome<L>, Full> {
     let permanents = run.permanents(objects);
     run.remember(permanents.slots())?;
+    let source = run.resolution().source();
     let mut left = permanents;
     while let Some(object) = run.state().next_permanent(&mut left) {
-        let source = run.resolution().source();
         exile_until_leaves(run.game(), object, source)?;
     }
     Ok(run.left_the_battlefield(permanents.slots()))

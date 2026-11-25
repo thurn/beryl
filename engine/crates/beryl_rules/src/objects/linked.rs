@@ -11,7 +11,7 @@ use crate::fixed::Full;
 use crate::game::Game;
 use crate::interpret::{Outcome, Run};
 use crate::layout::{Layout, Queue};
-use crate::state::{Memo, ObjectRef, State, Zone};
+use crate::state::{Memo, ObjectRef, Zone};
 
 /// Exiles a card, linked to `source`, the object whose ability exiles it, so that the
 /// source's other abilities can find it among the cards "exiled with" it
@@ -72,14 +72,6 @@ pub(crate) fn link<L: Layout>(
         game.state.remember(slot, memo)?;
     }
     Ok(())
-}
-
-/// The cards exiled with `source` by [`exile_linked`] (CR 607.2a), whether or not the source
-/// is still there: an ability of an object that has left the battlefield still refers to the
-/// cards that object exiled, and never to those a new object in its slot exiled
-/// (see [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)).
-pub fn exiled_with<L: Layout>(s: &State<L>, source: ObjectRef<L>) -> Bitboard<L::Slot> {
-    s.exiled_with(source)
 }
 
 /// [`Effect::ExileLinked`](beryl_card::Effect::ExileLinked): "Exile [cards]", linked to the

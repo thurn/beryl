@@ -790,7 +790,7 @@ fn an_ability_of_a_token_that_ceased_to_exist_finds_the_cards_exiled_with_it() {
     resolve_all(&t, &mut s, &mut x);
     assert_eq!(s.object(token).zone(), Zone::Nowhere);
     assert_eq!(s.object(land).zone(), Zone::Exile);
-    assert_eq!(linked::exiled_with(&s, token_ref), Bitboard::single(land));
+    assert_eq!(s.exiled_with(token_ref), Bitboard::single(land));
     assert!(s.exiled_with(s.object_ref(token)).is_empty());
     assert_eq!(s.memos(land).exiled_with(), None);
 }
@@ -812,7 +812,7 @@ fn an_ability_finds_the_cards_exiled_with_its_source_and_not_those_of_a_new_obje
         },
         ..PendingTrigger::default()
     };
-    let found = |s: &State| linked::exiled_with(s, ability.of.source.expect("the bear"));
+    let found = |s: &State| s.exiled_with(ability.of.source.expect("the bear"));
     with_game(&t, &mut s, &mut x, bear, |game, resolution| {
         linked::exile_linked(game, land_ref, resolution.source()).unwrap();
     });
