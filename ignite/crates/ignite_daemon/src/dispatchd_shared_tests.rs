@@ -396,7 +396,7 @@ fn it_is_reported_once_when_the_hub_has_no_open_regression_for_the_check() {
 }
 
 #[test]
-fn a_grouped_regression_suppresses_the_report_but_keeps_the_local_hold() {
+fn a_grouped_regression_suppresses_the_report_and_lifts_the_hold() {
     let (rig, fake) = pool();
     let primary = "rust:beta::tests";
     let mut regression = super::tests::detail(
@@ -420,9 +420,50 @@ fn a_grouped_regression_suppresses_the_report_but_keeps_the_local_hold() {
     );
     sighting(&rig, "cli-claude-00000001", "fail", "boom", 120.0);
     sighting(&rig, "cli-claude-00000002", "fail", "boom", 60.0);
-    tick(&rig);
+    let given = messages(&rig, &fake);
+    assert_eq!(given.len(), 2, "workers are still told: {given:?}");
     rig.headless_dispatch.report_shared(&rig.ctx, "jarvis");
     assert!(rig.hub.justiciar_reports().is_empty());
+    // Landings pass a check that fails at the tip too, so ordinary tickets start.
+    assert!(!master_only(&rig, &fake));
+    assert!(rig.headless_dispatch.shared_failure().is_none());
+}
+
+fn open_regression(rig: &Rig) {
+    rig.hub.set_open_regressions(vec![OpenRegression {
+        check: CHECK.parse().unwrap(),
+        ticket: super::tests::ticket_id("R.3"),
+    }]);
+}
+
+#[test]
+fn a_regression_opened_after_the_report_lifts_the_hold() {
+    let (rig, fake) = pool();
+    rig.hub.set_open_regressions(Vec::new());
+    sighting(&rig, "cli-claude-00000001", "fail", "boom", 120.0);
+    sighting(&rig, "cli-claude-00000002", "fail", "boom", 60.0);
+    tick(&rig);
+    rig.headless_dispatch.report_shared(&rig.ctx, "jarvis");
+    assert_eq!(rig.hub.justiciar_reports().len(), 1);
+    assert!(master_only(&rig, &fake));
+
+    open_regression(&rig);
+    rig.headless_dispatch.report_shared(&rig.ctx, "jarvis");
+    assert_eq!(rig.hub.justiciar_reports().len(), 1, "reported once");
+    assert!(!master_only(&rig, &fake));
+}
+
+#[test]
+fn a_regression_does_not_lift_a_hold_on_an_unknown_tip_result() {
+    let (rig, fake) = pool();
+    open_regression(&rig);
+    sighting(&rig, "cli-claude-00000001", "fail", "boom", 60.0);
+    lock(&rig.host.sightings)[0].tip_unknown = 1;
+    rig.finish("cli-claude-00000001");
+    tick(&rig);
+    rig.headless_dispatch.report_shared(&rig.ctx, "jarvis");
+    // Such landings are refused, so starting more tickets into it wastes them.
+    assert!(rig.headless_dispatch.shared_failure().is_some());
     assert!(master_only(&rig, &fake));
 }
 

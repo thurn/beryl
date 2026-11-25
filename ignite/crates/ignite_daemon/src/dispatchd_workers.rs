@@ -140,7 +140,7 @@ impl HeadlessDispatch {
                     .shared
                     .current
                     .as_ref()
-                    .map(shared::SharedFailure::reason),
+                    .and_then(shared::SharedFailure::hold_reason),
             )
         };
         let sample = MachineSample {

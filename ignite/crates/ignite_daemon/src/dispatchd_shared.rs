@@ -24,6 +24,13 @@
 //! failure is reported once to the hub as a justiciar report, unless the check is already
 //! assigned to an open regression ticket.
 //!
+//! An open regression ticket for the check also lifts the dispatch hold, though workers are
+//! still messaged. Tip verification found the same failure, so a landing that fails the check
+//! lands past it as known-failing (`ignite guide blocked`), and holding ordinary tickets would
+//! only leave workers idle while ready tickets wait. A hold that started
+//! because the tip's result could not be found or run keeps holding, since such landings are
+//! refused.
+//!
 //! It ends when an eligible pass arrives on this machine, when the `green` branch moves, or after
 //! [`LAPSE_S`], whichever is first. Only failures seen after the end can start the next one. The
 //! daemon persists the hold with the dispatch queue (see `store`), so it survives a restart.
@@ -72,9 +79,22 @@ pub(super) struct SharedFailure {
     pub(super) messaged: BTreeSet<String>,
     /// Reported to the hub, or covered by an open regression ticket.
     pub(super) reported: bool,
+    /// The hub has an open regression ticket for the check, so tip verification saw it fail.
+    #[serde(default)]
+    pub(super) covered: bool,
 }
 
 impl SharedFailure {
+    /// Whether only tickets that hold `master` back start; see the module documentation.
+    pub(super) fn holds_dispatch(&self) -> bool {
+        self.tip_unknown || !self.covered
+    }
+
+    /// The reason for `ignite status` and the hub while the failure holds dispatch.
+    pub(super) fn hold_reason(&self) -> Option<String> {
+        self.holds_dispatch().then(|| self.reason())
+    }
+
     /// Why only tickets that hold `master` back start, for `ignite status`, `ignite pool list`
     /// and the reason the pool's idle workers got nothing.
     pub(super) fn reason(&self) -> String {
@@ -235,6 +255,7 @@ impl HeadlessDispatch {
             green,
             messaged: BTreeSet::new(),
             reported: false,
+            covered: false,
         })
     }
 
@@ -291,21 +312,28 @@ impl HeadlessDispatch {
         }
     }
 
-    /// Why only tickets that hold `master` back start while a shared failure lasts.
+    /// Why only tickets that hold `master` back start while a shared failure holds dispatch.
     pub fn shared_failure(&self) -> Option<String> {
         self.state()
             .shared
             .current
             .as_ref()
-            .map(SharedFailure::reason)
+            .and_then(SharedFailure::hold_reason)
     }
 
     /// Reports the shared failure in force to the hub as a justiciar report, once, unless its
-    /// check is already assigned to an open regression ticket. Runs in the sender loop after a
-    /// heartbeat that reached the hub (see `justiciar::Reporter`). The hub is asked with the
-    /// state unlocked.
+    /// check is already assigned to an open regression ticket, and marks it covered when it is.
+    /// Until it is covered, each call asks again, since tip verification may open the
+    /// regression after the hold started. Runs in the sender loop after a heartbeat that reached
+    /// the hub (see `justiciar::Reporter`). The hub is asked with the state unlocked.
     pub fn report_shared(&self, ctx: &Context, host: &str) {
-        let Some(current) = self.state().shared.current.clone().filter(|c| !c.reported) else {
+        let Some(current) = self
+            .state()
+            .shared
+            .current
+            .clone()
+            .filter(|c| !c.reported || !c.covered)
+        else {
             return;
         };
         let open = match ctx.hub.open_regressions() {
@@ -318,10 +346,10 @@ impl HeadlessDispatch {
                 return;
             }
         };
-        if !open
+        let covered = open
             .iter()
-            .any(|entry| entry.check.as_str() == current.check)
-        {
+            .any(|entry| entry.check.as_str() == current.check);
+        if !covered && !current.reported {
             let report = JusticiarReport {
                 subject: format!("shared:{}", current.check),
                 title: format!(
@@ -351,7 +379,17 @@ impl HeadlessDispatch {
             && still.check == current.check
             && still.since == current.since
         {
+            if still.reported && still.covered == covered {
+                return;
+            }
             still.reported = true;
+            if covered && !still.covered && !still.tip_unknown {
+                eprintln!(
+                    "ignite: {} has an open regression ticket; ordinary tickets start again",
+                    still.check
+                );
+            }
+            still.covered = covered;
         }
         self.save();
     }

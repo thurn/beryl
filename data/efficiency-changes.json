@@ -955,5 +955,10 @@
     "label": "A tree over its build ceiling deletes its incremental caches least recently compiled first, only until it is under the target, instead of all of them: jarvis's daemon log held 233 cleanups that deleted every incremental cache, about half of each tree's build output, so the next build compiled the crate being edited from scratch (2026-11-25)",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "A shared failure stops holding ordinary hand-offs once the hub has an open regression ticket for the check, because landings pass a check that fails at the tip too. Over three days, holds kept about 25 ready tickets waiting with 32 idle workers for 103 minutes on jarvis and 24 on multivac, and 11 of the 13 checks held had a regression ticket (2026-11-25)",
+    "metric": "ignite.cycle-minutes",
+    "expect": "down"
   }
 ]
