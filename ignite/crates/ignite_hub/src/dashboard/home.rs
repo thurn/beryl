@@ -71,8 +71,10 @@ fn machine_label(hostname: &str) -> String {
 /// the model it runs on or is assigned to. Each shows once, in the allocation chip's tone.
 fn card_tags(ticket: &HomeCard, pool: Option<&PoolConfig>) -> String {
     let card = &ticket.card;
-    let allocation =
-        allocation_chip(card.allocation.filter(|_| card.status != Status::PendingApproval));
+    let allocation = allocation_chip(
+        card.allocation
+            .filter(|_| card.status != Status::PendingApproval),
+    );
     let tag = |name: &str, tip: &str| c::chip(name, Tone::Neutral, Some(tip));
     let machine = match (&ticket.machine, &card.pins.machine) {
         (Some(name), _) => tag(&machine_label(name), "Running on this machine"),

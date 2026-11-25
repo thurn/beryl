@@ -63,7 +63,10 @@ fn a_card_tags_its_allocation_machine_and_model_once() {
     cards[1].card.pins.machine = Some("jarvis".to_owned());
     cards[1].card.pins.provider = Some("agy-gemini".to_owned());
     let mut pool = PoolConfig::default();
-    for (provider, id) in [("claude", "claude-opus-5-5"), ("agy-gemini", "gemini-4-neon")] {
+    for (provider, id) in [
+        ("claude", "claude-opus-5-5"),
+        ("agy-gemini", "gemini-4-neon"),
+    ] {
         pool.models.insert(
             provider.to_owned(),
             [("opus".to_owned(), id.to_owned())].into(),
