@@ -55,6 +55,7 @@ fixed in the same session. Newest first.
   `the_graveyard_permission_works_only_during_its_controllers_turn`. No check
   can tell that a permission's Oracle words name a turn its code ignores; a test
   with a flash card covers the timing words of a casting permission.
+
 - **Two different game histories hashed alike.** The hash of a `State` added the
   turns played before a restart and the turns played in ended subgames only when
   each was nonzero, with nothing to say which was which. So a game five turns
