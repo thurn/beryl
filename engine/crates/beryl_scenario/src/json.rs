@@ -341,6 +341,11 @@ enum AssertionDef {
         card: &'static str,
         count: u8,
     },
+    TappedMana {
+        #[serde(serialize_with = "seat")]
+        player: Seat,
+        count: u8,
+    },
     Decision {
         #[serde(serialize_with = "seat")]
         player: Seat,

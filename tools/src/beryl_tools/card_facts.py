@@ -18,17 +18,9 @@ from collections.abc import Iterable, Sequence
 from itertools import pairwise
 from typing import cast
 
-Json = dict[str, object]
+from .mana_symbols import SYMBOLS, tap_text
 
-# Beryl's colors of mana as XMage's mana symbols.
-SYMBOLS: dict[str, str] = {
-    "White": "{W}",
-    "Blue": "{U}",
-    "Black": "{B}",
-    "Red": "{R}",
-    "Green": "{G}",
-    "Colorless": "{C}",
-}
+Json = dict[str, object]
 
 # Counter kinds as their name in a cost's text, where it is not the kind in lower case.
 COUNTER_WORDS: dict[str, str] = {"PlusOne": "+1/+1", "MinusOne": "-1/-1"}
@@ -206,6 +198,18 @@ class Cards:
             return None
         return "Discard your hand"
 
+    def tap_mana_text(self, card: str, how: str, index: int) -> str | None:
+        """The text `{T}: Add` and what it makes of a mana ability of `card` that costs only
+        tapping it and makes one kind of mana, which a scenario activates at priority to stop
+        with its mana in the pool. None for any other, or where the Oracle text offers a
+        choice of color, "{T}: Add {W} or {U}.", which Forge writes as one ability."""
+        ability = self.ability(card, how, index)
+        text = tap_text(ability) if ability and ability["kind"] == "Mana" else None
+        written = self.paragraphs(self.written_on(card, how))
+        if text is None or any(text[-3:] + " or" in p for p in written):
+            return None
+        return text
+
     def written_on(self, card: str, how: str) -> str:
         """The card whose Oracle text has the ability a scenario activates of `card` as
         `{how: index}`: `card` itself for its own, or the one card that grants abilities for a
@@ -285,16 +289,7 @@ class Cards:
         if source in self.modal_back:
             return None
         mana = [a for a in self.abilities(source) if a["kind"] == "Mana"]
-        if len(mana) != 1:
-            return None
-        cost = cast(Json, mana[0].get("cost", {}))
-        if cost != {"parts": [{"action": "Tap", "of": "This"}]}:
-            return None
-        produces = cast(Json, mana[0]["produces"])
-        colors = cast(list[str], produces["colors"])
-        if len(colors) != 1:
-            return None
-        return "{T}: Add " + SYMBOLS[colors[0]] * cast(int, produces["amount"])
+        return tap_text(mana[0]) if len(mana) == 1 else None
 
     def taps_for_one_mana(self, source: str) -> bool:
         """Whether every mana ability of `source` costs only tapping it and makes one mana,

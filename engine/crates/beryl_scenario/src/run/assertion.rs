@@ -214,6 +214,16 @@ impl<L: Layout> Runner<L> {
                 }
                 self.permanent_fact(assertion)?
             }
+            Assertion::TappedMana { player, count } => {
+                if let Step::Over(o) = position {
+                    return Err(format!("no permanents to read: the game is over ({o:?})"));
+                }
+                let tapped = self.mana_sources(player);
+                let n = tapped
+                    .filter(|&(slot, _)| s.object(slot).is_tapped())
+                    .count();
+                (n.to_string(), count.to_string())
+            }
             Assertion::Colors { .. } | Assertion::PtIn { .. } => {
                 self.characteristic_in(position, assertion)?
             }

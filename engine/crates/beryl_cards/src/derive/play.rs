@@ -4,7 +4,7 @@
 use std::collections::BTreeSet;
 
 use beryl_engine::card::{
-    Ability, CardDef, FaceIx, ObjectAbility, TargetKind, TriggerEvent, Types,
+    Ability, AbilityKind, CardDef, FaceIx, ObjectAbility, TargetKind, TriggerEvent, Types,
 };
 
 use beryl_card::{Players, Seat};
@@ -222,6 +222,11 @@ pub(super) fn openings(
     }
     if let Place::Battlefield(f) = place {
         out.extend(
+            mana_taps(def, f)
+                .into_iter()
+                .map(|(label, stimuli)| (label, with(&stimuli))),
+        );
+        out.extend(
             awaited(def, f)
                 .into_iter()
                 .map(|(label, stimuli)| (label, with(&stimuli))),
@@ -232,6 +237,27 @@ pub(super) fn openings(
 
 /// The openings for the events the triggered abilities of face `f` of `def` wait for, on the
 /// battlefield: an attack, each step, a spell cast.
+/// Each mana ability of face `f` that makes one kind of mana, activated at player 0's
+/// priority with nothing left to pay, so that the run stops with its mana in their pool. The
+/// snapshot shows the pool, where the oracles compare the kind and amount of mana it made:
+/// a mana ability that only ever pays for a spell shows neither once the spell is paid.
+fn mana_taps(def: &'static CardDef, f: FaceIx) -> Vec<(String, Vec<Stimulus>)> {
+    def.face(f)
+        .abilities
+        .iter()
+        .enumerate()
+        .filter(|(_, a)| a.kind() == AbilityKind::Mana && a.produces().colors.is_power_of_two())
+        .map(|(i, _)| {
+            let index = u8::try_from(i).expect("a face has fewer than 256 abilities");
+            let action = Action::activate(P0, def.name, index);
+            (
+                format!("tap ability {i} for mana"),
+                vec![Stimulus::Try(action)],
+            )
+        })
+        .collect()
+}
+
 fn awaited(def: &'static CardDef, f: FaceIx) -> Vec<(String, Vec<Stimulus>)> {
     let face = def.face(f);
     let mut events: Vec<TriggerEvent> = face

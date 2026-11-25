@@ -225,10 +225,11 @@ def ability_selector(cards: Cards, card: str, how: str, index: int) -> str:
         amount = cast(int, parts[0]["amount"])
         return f"+{amount}:" if amount > 0 else f"{amount}:"
     if ability["kind"] == "Mana":
-        # A mana ability only activated at priority, selected by its first cost part.
+        # One only activated at priority, by its first cost part, or a land's, "{T}: Add {G}".
         text = cards.instant_mana_text(card, how, index)
+        text = text or cards.tap_mana_text(card, how, index)
         if text is None:
-            raise Unsupported("a mana ability that is not activated only at priority")
+            raise Unsupported("a mana ability the exporter cannot select")
         return text
     if ability["kind"] != "Activated":
         raise Unsupported("activating an ability that is not an activated ability")

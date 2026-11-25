@@ -54,11 +54,6 @@ const UNREACHED: &[(&str, &str)] = &[
          hand-written scenarios cast it during the search",
     ),
     (
-        "Spara's Headquarters: ability 0 (Mana)",
-        "no card of the pool asks for {G}, and automatic payment spends a unit that may be \
-         several kinds as the lowest of them, {W}",
-    ),
-    (
         "Student of Warfare: ability 1 (Static)",
         "its level 2-6 symbol needs two level counters, and a generated scenario levels up \
          once, since a witness adds permanents beside the card and never counters on it; the \

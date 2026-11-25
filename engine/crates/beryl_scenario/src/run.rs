@@ -272,6 +272,16 @@ struct Runner<L: Layout = beryl_engine::Small> {
     /// The permanents on the battlefield at the last position, by name: a tapped one that
     /// has since left, as a Treasure sacrificed for mana, is named as it was.
     permanents: Vec<(ObjectRef<L>, &'static str)>,
+    /// Each permanent that made mana in the game so far, for the snapshot: one that has since
+    /// left the battlefield may have paid where an oracle tapped another source, which is
+    /// still tapped.
+    made_mana: Vec<ObjectRef<L>>,
+    /// Whether a copy was tapped in the game so far, for the snapshot: an oracle replays a
+    /// payment's taps by name, and a copy has the name of what it copies, so it may tap the
+    /// copy where Beryl tapped the original, or the other way round.
+    copy_tapped: bool,
+    /// How many of the recorded events [`Runner::made_mana`] has read.
+    events_read: usize,
 }
 
 /// A copy at the same position, with fresh working memory: a [`Scratch`] is never copied
@@ -288,6 +298,9 @@ impl<L: Layout> Clone for Runner<L> {
             enter_as_copy: self.enter_as_copy,
             forced: self.forced.clone(),
             permanents: self.permanents.clone(),
+            made_mana: self.made_mana.clone(),
+            copy_tapped: self.copy_tapped,
+            events_read: 0,
         }
     }
 }
@@ -316,6 +329,9 @@ impl<L: Layout> Runner<L> {
             enter_as_copy: false,
             forced: Vec::new(),
             permanents: Vec::new(),
+            made_mana: Vec::new(),
+            copy_tapped: false,
+            events_read: 0,
         }
     }
 
@@ -342,8 +358,10 @@ impl<L: Layout> Runner<L> {
             }
             _ => None,
         };
+        let taps_mana = self.activates_mana();
         self.set_profile(Profile {
             breakpoint,
+            taps_mana,
             ..TRACED
         });
         loop {
@@ -395,6 +413,7 @@ impl<L: Layout> Runner<L> {
 
     fn answer(&mut self, c: Choice) {
         apply(&mut self.s, &self.t, &mut self.x, &mut Replay, c);
+        self.note_mana_sources();
         if let Some(comparison) = &mut self.comparison {
             comparison.apply(&self.t, c);
         }
@@ -521,6 +540,8 @@ impl<L: Layout> Runner<L> {
         let mut flips = Vec::new();
         let mut taps = Vec::new();
         let mut made = Vec::new();
+        self.note_mana_sources();
+        self.events_read = 0;
         for e in self.x.events.drain() {
             match e {
                 Event::CoinFlip { player, won, .. } => flips.push(CoinFlip { player, won }),

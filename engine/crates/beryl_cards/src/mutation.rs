@@ -101,44 +101,53 @@ const EQUIVALENT: &[(&str, &str, &str, &str)] = &[
 ];
 
 /// Mutants of cards with no hand-written scenarios that their generated scenarios kill only at
-/// scripted positions, which the oracles (`XMage` and Forge) never compare: the card and
-/// "node: neighbour" as [`generated`] reports them. The oracles' snapshot leaves out which mana sources are tapped,
-/// what a mana ability added once the pool empties, and which hidden cards a search found, so a
-/// definition with one of these neighbours in place of the real value passes every oracle check
-/// too. The list may only shrink: a scenario or snapshot fact the oracles compare removes an
-/// entry, and `every_card_has_scenarios_and_they_pass` fails for one no longer needed.
-pub const ORACLE_BLIND: &[(&str, &str)] = &[
-    ("Asphodel Wanderer", "ability 0, cost: generic 1"),
-    ("Asphodel Wanderer", "ability 0, cost: generic 3"),
-    ("Crackling Triton", "ability 0, cost: generic 1"),
-    ("Crackling Triton", "ability 0, cost: generic 3"),
-    ("Floodfarm Verge", "ability 0, mana product: White to Black"),
-    ("Forest", "ability 0, mana product: Green to White"),
-    ("Gold Myr", "ability 0, mana product: White to Blue"),
-    ("Island", "ability 0, mana product: Blue to White"),
-    ("Jace, the Mind Sculptor", "ability 0, cost: generic 1"),
-    ("Jace, the Mind Sculptor", "ability 1, cost: drop part 0"),
-    ("Jace, the Mind Sculptor", "ability 1, cost: generic 1"),
-    ("Jace, the Mind Sculptor", "ability 2, cost: generic 1"),
-    ("Jace, the Mind Sculptor", "ability 3, cost: generic 1"),
-    ("Leonin Scimitar", "ability 1, cost: generic 0"),
-    ("Leonin Scimitar", "ability 1, cost: generic 2"),
-    ("Mountain", "ability 0, mana product: Red to White"),
-    ("Plains", "ability 0, mana product: White to Blue"),
+/// scripted positions, which the oracles (`XMage` and Forge) never compare: the card, "node:
+/// neighbour" as [`generated`] reports them, and why no oracle-visible fact tells them apart.
+/// A definition with one of these neighbours in place of the real value passes every oracle
+/// check too. The list may only shrink: a scenario or snapshot fact the oracles compare removes
+/// an entry, and `every_card_has_scenarios_and_they_pass` fails for one no longer needed.
+pub const ORACLE_BLIND: &[(&str, &str, &str)] = &[
     (
-        "Sink into Stupor",
-        "Soporific Springs: ability 1, mana product: amount 2",
+        "Jace, the Mind Sculptor",
+        "ability 1, cost: drop part 0",
+        "without its loyalty cost of 0 the ability is no longer a loyalty ability, which changes \
+         only when and how often it may be activated, and the generated runs activate it once, \
+         in a main phase",
     ),
-    ("Spellseeker", "ability 0, inside: Amount::Fixed(2)"),
-    ("Strip Mine", "ability 0, mana product: Colorless to White"),
-    ("Strip Mine", "ability 1, cost: drop part 0"),
-    ("Strip Mine", "ability 1, cost: generic 1"),
-    ("Strip Mine", "ability 1, cost: part 0 sacrifice"),
-    ("Time Spiral", "ability 0, step 3: Amount::Fixed(5)"),
-    ("Time Spiral", "ability 0, step 3: Amount::Fixed(7)"),
-    ("Time Spiral", "ability 0, step 3: filter Filter::Any"),
-    ("Vampire Hexmage", "ability 0, cost: generic 1"),
+    (
+        "Strip Mine",
+        "ability 1, cost: drop part 0",
+        TAPPED_STRIP_MINE,
+    ),
+    (
+        "Strip Mine",
+        "ability 1, cost: part 0 sacrifice",
+        TAPPED_STRIP_MINE,
+    ),
+    (
+        "Time Spiral",
+        "ability 0, step 3: Amount::Fixed(5)",
+        "only a run that untaps six lands tells five from six, and the generated runs stop at \
+         three picks, where the walk of alternative answers reaches its limit of runs",
+    ),
+    (
+        "Time Spiral",
+        "ability 0, step 3: Amount::Fixed(7)",
+        "casting Time Spiral taps six lands, so at most six are tapped when it untaps, and \
+         seven untaps those six too",
+    ),
+    (
+        "Time Spiral",
+        "ability 0, step 3: filter Filter::Any",
+        "the generated runs untap only lands, which a permanent of any kind includes, and the \
+         oracles replay those picks alone",
+    ),
 ];
+
+/// Why a change to the tap in Strip Mine's cost stays in [`ORACLE_BLIND`].
+const TAPPED_STRIP_MINE: &str = "Strip Mine is sacrificed to pay the cost, so whether the cost \
+    also taps it shows only when it is already tapped, and a run that taps it for mana before \
+    activating it is one an oracle may pay differently";
 
 /// Observes transient changes that the final snapshot cannot see, such as a trigger that
 /// resolves earlier, or mana that a player spends before the scenario ends.
@@ -232,7 +241,7 @@ pub fn generated(def: &'static CardDef, scenarios: &[Scenario]) -> Report {
     let listed = |survivor: &String| {
         ORACLE_BLIND
             .iter()
-            .any(|&(card, mutant)| card == def.name && mutant == survivor)
+            .any(|&(card, mutant, _)| card == def.name && mutant == survivor)
     };
     (report.blind, report.survivors) = report.survivors.into_iter().partition(listed);
     report

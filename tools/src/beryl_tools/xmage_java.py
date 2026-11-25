@@ -296,6 +296,8 @@ def assertion_code(a: Json, player: Callable[[object], str], cards: Cards) -> st
         return f"{method}({who}, {name}, {count})"
     if what == "Tapped":
         return f"assertTappedControlled({who}, {name}, {count})"
+    if what == "TappedMana":
+        return f"assertTappedManaSources({who}, {count})"
     if what == "Controls":
         return f"assertPermanentCount({who}, {name}, {count})"
     if what == "Attacking":
@@ -468,6 +470,16 @@ def battlefield_card(
         lines.append(f"addCard(Zone.BATTLEFIELD, {who}, {quoted}, 1, {tapped});")
     if retap:
         lines.append(f"tapAtStart({who}, PhaseStep.{STEPS[start]}, {quoted});")
+    elif (
+        not permanent["tapped"]
+        and who == "playerB"
+        and "enters tapped" in cards.oracle.get(name, "")
+    ):
+        # XMage's setup applies the permanent's replacement effects, as Bojuka Bog's "enters
+        # tapped", and no untap step of player B's comes in turn 1.
+        lines.append(
+            f"untapAtStart(playerA, {who}, PhaseStep.{STEPS[start]}, {quoted});"
+        )
     if cards.chooses_as_it_enters(name, "card name"):
         lines.append(f"setChoice({who}, {java_string(ANOTHER_CARD)});")
     elif cards.chooses_as_it_enters(name, "color", "creature type"):

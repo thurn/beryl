@@ -60,13 +60,16 @@ const OPPONENT_PERMANENTS: &[Permanent] = &[
 const OPPONENT_HAND: &[&str] = &[props::INSTANT.card, props::REMOVAL.card, names::ISLAND];
 
 /// Each library, top first: lands and spells for a draw, a dig or a search to find, and few
-/// enough that drawing seven, as an ultimate may, finds it empty.
+/// enough that drawing seven, as an ultimate may, finds it empty. Two cards of distinct names
+/// pass a search for a land, and two a search for an instant or sorcery of mana value 2 or
+/// less, so that such a search for one card and the same search for two end differently: the
+/// search for two asks again, with the first card it found still in the library.
 const LIBRARY: &[&str] = &[
     names::ISLAND,
     props::ARTIFACT.card,
     names::PLAINS,
     props::FLIER.card,
-    names::ISLAND,
+    props::INSTANT.card,
     props::SORCERY.card,
 ];
 

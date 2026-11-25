@@ -218,7 +218,7 @@ fn every_card_has_scenarios_and_they_pass() {
         }
         blind.extend(report.blind.into_iter().map(|mutant| (def.name, mutant)));
     }
-    for &(card, mutant) in crate::mutation::ORACLE_BLIND {
+    for &(card, mutant, _) in crate::mutation::ORACLE_BLIND {
         if !blind.iter().any(|(c, m)| *c == card && m == mutant) {
             failures.push(format!(
                 "{card}: {mutant} is no longer oracle-blind, so drop it from `ORACLE_BLIND`"
@@ -357,11 +357,7 @@ fn every_ability_and_casting_option_is_exercised_by_a_scenario() {
     let hits = coverage::take();
     // What no scenario can exercise yet, and why. An entry a scenario exercises fails too, so
     // the list stays current.
-    let unreachable = [(
-        "Spara's Headquarters: ability 0 (Mana)",
-        "no implemented card asks for {G}, and automatic payment spends a unit that may be \
-         several kinds as the lowest of them, {W}",
-    )];
+    let unreachable: [(&str, &str); 0] = [];
     let mut missed = Vec::new();
     let mut reached = Vec::new();
     for (what, address) in crate::parts() {

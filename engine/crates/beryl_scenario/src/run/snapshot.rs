@@ -1,7 +1,9 @@
 //! The facts about a position that a scenario's own assertions may leave out.
 
-use beryl_engine::card::{AbilityKind, FaceIx, Subtypes, Types};
+use beryl_card::{Ability, Behavior, CostPart, Effect, Players};
+use beryl_engine::card::{AbilityKind, FaceIx, ObjectAbility, Subtypes, Types};
 use beryl_engine::chosen::ANOTHER;
+use beryl_engine::event::Event;
 use beryl_engine::state::Flag;
 use beryl_engine::{Choice, Decision, Layout, Seat, Step, Zone, ZoneKey};
 use beryl_scenario_types::{PermanentState, SnapshotRef};
@@ -12,11 +14,14 @@ use crate::{Action, Assertion, StackItem, script};
 impl<L: Layout> Runner<L> {
     /// Facts about the final public position, while there is an open decision. The oracle
     /// exporters compare these at the positions their harnesses can reach. The snapshot
-    /// leaves out the identity of cards drawn in secret and which mana sources paid.
+    /// leaves out the identity of cards drawn in secret and which mana sources paid: it counts
+    /// a player's tapped mana sources only where each makes one mana
+    /// ([`Assertion::TappedMana`]), so that the count is the same whichever paid.
     pub(super) fn snapshot(&mut self) -> Result<Vec<Assertion>, String> {
         if !matches!(self.position()?, Step::Decide(_)) {
             return Ok(Vec::new());
         }
+        let payments_may_differ = self.payments_may_differ();
         let s = &self.s;
         let mut out = Vec::new();
         let count = |n: usize| u8::try_from(n).unwrap_or(u8::MAX);
@@ -58,6 +63,12 @@ impl<L: Layout> Runner<L> {
         }
         for player in Seat::BOTH {
             self.battlefield_facts(player, &mut out);
+            if let Some(count) = self
+                .tapped_mana_sources(player)
+                .filter(|_| !payments_may_differ)
+            {
+                out.push(Assertion::TappedMana { player, count });
+            }
             out.push(Assertion::ManaPool {
                 player,
                 amounts: s.player(player).mana().amounts(),
@@ -151,6 +162,118 @@ impl<L: Layout> Runner<L> {
                 count: count(down_names.iter().filter(|&&n| n == card).count()),
             });
         }
+    }
+
+    /// The permanents `player` controls that have a mana ability, each with whether it pays
+    /// as any other of them would: every mana ability it has makes one mana for tapping it
+    /// and nothing else, and it is a noncreature permanent whose printed mana abilities no
+    /// effect changed. A land creature can be tapped by other means, as by regenerating, and
+    /// an oracle may not give a land that Urborg made a Swamp the same mana abilities.
+    pub(super) fn mana_sources(&self, player: Seat) -> impl Iterator<Item = (L::Slot, bool)> {
+        let s = &self.s;
+        s.battlefield()
+            .iter()
+            .copied()
+            .filter(move |&slot| s.controller(slot) == player)
+            .filter_map(move |slot| {
+                let intrinsic = s.intrinsic_mana(&self.t, slot) != 0;
+                let mut abilities = s
+                    .abilities(&self.t, slot)
+                    .map(|(_, a)| a)
+                    .filter(|a| a.kind() == AbilityKind::Mana)
+                    .peekable();
+                if !intrinsic && abilities.peek().is_none() {
+                    return None;
+                }
+                let plain =
+                    !s.derived(slot).types.contains(Types::CREATURE) && s.makes_card_mana(slot);
+                Some((slot, plain && abilities.all(makes_one_mana_for_a_tap)))
+            })
+    }
+
+    /// How many of the permanents `player` controls that have a mana ability are tapped,
+    /// where each of them pays as any other would ([`Runner::mana_sources`]): then a cost
+    /// paid with any of them taps as many, and an oracle that pays from other sources than
+    /// Beryl agrees. None where one makes more, or costs more than a tap, as a Sol Ring or a
+    /// Treasure, or is a creature, and none where `player` controls a copy.
+    fn tapped_mana_sources(&self, player: Seat) -> Option<u8> {
+        // A copy or a merged permanent, as a creature mutated onto Dryad Arbor, may have mana
+        // abilities in an oracle that it lacks in Beryl, where its copiable values say.
+        let copies = self.s.battlefield().iter().any(|&slot| {
+            self.s.controller(slot) == player && self.s.object(slot).flags().has(Flag::Copy)
+        });
+        if copies {
+            return None;
+        }
+        let mut count = 0u8;
+        for (slot, one) in self.mana_sources(player) {
+            if !one {
+                return None;
+            }
+            count += u8::from(self.s.object(slot).flags().has(Flag::Tapped));
+        }
+        Some(count)
+    }
+
+    /// The player whose next action activates a mana ability of a permanent at priority, as a
+    /// player may whenever they have priority
+    /// ([CR 605.3a](https://yawgatog.com/resources/magic-rules/#R6053a)): "A player may
+    /// activate an activated mana ability whenever they have priority". The exact profile
+    /// offers no such activation, since a payment taps for itself, so the profile that names
+    /// this player ([`Profile::taps_mana`]) holds until the action is done. A scenario stops
+    /// with that mana in the pool, where the oracles compare its color and amount.
+    pub(super) fn activates_mana(&self) -> Option<Seat> {
+        let Some(Action::Activate {
+            player,
+            card,
+            ability,
+        }) = self.upcoming
+        else {
+            return None;
+        };
+        // Read from each permanent's face, not its layer results, which may be stale here.
+        let ObjectAbility::Own(i) = ability else {
+            return None;
+        };
+        self.s
+            .battlefield()
+            .iter()
+            .any(|&slot| {
+                let face = self.s.definition(slot).face(&self.t);
+                face.name == card
+                    && (face.abilities.get(i.index()))
+                        .is_some_and(|a| a.kind() == AbilityKind::Mana)
+            })
+            .then_some(player)
+    }
+
+    /// Notes, from the events recorded since the last call, each permanent that made mana
+    /// ([`Runner::made_mana`]) and whether a copy was tapped ([`Runner::copy_tapped`]).
+    pub(super) fn note_mana_sources(&mut self) {
+        for event in &self.x.events.events()[self.events_read..] {
+            match *event {
+                Event::Mana {
+                    source: Some(object),
+                    ..
+                } if !self.made_mana.contains(&object) => self.made_mana.push(object),
+                Event::Tap { object } if self.s.is_current(object) => {
+                    self.copy_tapped |= self.s.object(object.slot).flags().has(Flag::Copy);
+                }
+                _ => {}
+            }
+        }
+        self.events_read = self.x.events.events().len();
+    }
+
+    /// Whether the payments of the game may have tapped other sources in an oracle, in a way
+    /// that the count of tapped mana sources shows: a permanent that made mana has left the
+    /// battlefield, or a copy was tapped.
+    pub(super) fn payments_may_differ(&self) -> bool {
+        self.copy_tapped
+            || self
+                .made_mana
+                .iter()
+                .any(|&object| !self.s.is_current(object))
     }
 
     fn public_name(&self, slot: L::Slot) -> Option<&'static str> {
@@ -255,6 +378,20 @@ impl<L: Layout> Runner<L> {
             .filter(|(c, action)| answer(&self.t, &self.s, d, action) == Some(*c))
             .collect()
     }
+}
+
+/// Whether the mana ability `a` adds one mana for its controller, its whole cost a tap of its
+/// source, as a basic land's does.
+fn makes_one_mana_for_a_tap(a: &Ability) -> bool {
+    let cost = a.cost();
+    let one = matches!(
+        a.body(),
+        Behavior::Data(&Effect::AddMana {
+            player: Players::You,
+            mana,
+        }) if mana.amount == 1
+    );
+    one && cost.mana.is_zero() && cost.parts() == [CostPart::TAP]
 }
 
 /// The distinct names among `names`, in their first order.

@@ -520,6 +520,22 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
     }
 
     /**
+     * Untaps one tapped permanent named `name` that `owner` controls, if there is one, at the
+     * first priority of `active`, the player whose turn the scenario starts in, in `step`.
+     * XMage puts each setup permanent onto the battlefield with its replacement effects, so a
+     * land that enters tapped starts tapped, where the scenario starts it untapped. Player
+     * A's untap step untaps it; player B's does not come in the first turn.
+     */
+    protected void untapAtStart(TestPlayer active, TestPlayer owner, PhaseStep step, String name) {
+        runCode("untap " + name + " at the start", 1, step, active, (info, who, game) -> {
+            controlled(owner, name).stream()
+                    .filter(Permanent::isTapped)
+                    .findFirst()
+                    .ifPresent(tapped -> tapped.setTapped(false));
+        });
+    }
+
+    /**
      * Whether `permanent` goes by `name` in a scenario: its own name, or for a face-down
      * permanent, which has none (CR 708.2a), its card's.
      */
@@ -555,6 +571,19 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
     protected void assertTappedControlled(Player controller, String name, int count) {
         long found = controlled(controller, name).stream().filter(Permanent::isTapped).count();
         Assert.assertEquals("tapped " + name + " of " + controller.getName(), count, found);
+    }
+
+    /**
+     * How many of the permanents `controller` controls that have a mana ability are tapped.
+     * Beryl records it only while each of them makes one mana for a tap, so it is the same
+     * whichever of them XMage chose to pay a cost with.
+     */
+    protected void assertTappedManaSources(Player controller, int count) {
+        long found = currentGame.getBattlefield().getAllActivePermanents().stream()
+                .filter(p -> p.isControlledBy(controller.getId()) && p.isTapped())
+                .filter(p -> !p.getAbilities(currentGame).getActivatedManaAbilities(Zone.BATTLEFIELD).isEmpty())
+                .count();
+        Assert.assertEquals("tapped mana sources of " + controller.getName(), count, found);
     }
 
     protected void assertFaceDownControlled(Player controller, String name, int count) {

@@ -1,6 +1,6 @@
 //! The choice a scripted action names, found among a decision's candidates.
 
-use beryl_engine::card::{ChosenKind, Purpose};
+use beryl_engine::card::{ChosenKind, ManaSet, Purpose};
 use beryl_engine::chosen::ChosenValue;
 use beryl_engine::{Choice, Decision, GameTable, Layout, Opt, State};
 
@@ -43,8 +43,18 @@ pub(super) fn takes<L: Layout>(t: &GameTable, s: &State<L>, action: &Action, o: 
             card, face, costs, ..
         } => matches!(o, Opt::Cast { slot, face: f, costs: m }
             if name(slot) == card && f == face && m == costs),
-        Action::Activate { card, ability, .. } => matches!(o, Opt::Activate { slot, ability: a }
-            if name(slot) == card && a == ability),
+        Action::Activate { card, ability, .. } => match o {
+            Opt::Activate { slot, ability: a } => name(slot) == card && a == ability,
+            // A mana ability activated at priority is offered as the mana it makes
+            // (`Profile::taps_mana`): the one kind this ability makes.
+            Opt::Mana { slot, color } => {
+                name(slot) == card
+                    && s.abilities(t, slot).any(|(ix, a)| {
+                        ix == ability && a.produces().colors == ManaSet::one(color).colors
+                    })
+            }
+            _ => false,
+        },
         Action::TurnFaceUp { card, .. } => {
             matches!(o, Opt::TurnFaceUp(slot) if name(slot) == card)
         }

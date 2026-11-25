@@ -521,7 +521,11 @@ class Exporter:
         who = self.player(action["player"])
         card = cast(str, action["card"])
         written, how, index = self.cards.ability_card(card, action["ability"])
-        if mana := self.cards.instant_mana_text(written, how, index):
+        mana = self.cards.instant_mana_text(written, how, index)
+        if mana is None and how == "Own":
+            # A land's mana ability tapped at priority, which leaves its mana in the pool.
+            mana = self.cards.tap_mana_text(written, how, index)
+        if mana:
             self.prepare(who, p, starts=True)  # off the stack (CR 605.3b)
             return self.emit(self.cards.tap_source(self.at(p), who, card, mana))
         text = self.cards.ability_text(written, how, index)

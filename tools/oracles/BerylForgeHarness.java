@@ -1187,6 +1187,18 @@ public final class BerylForgeHarness {
                         }
                         actual = count;
                     }
+                    case "TappedMana" -> {
+                        // Beryl records it only while each of these permanents makes one
+                        // mana for a tap, so Forge's choice of sources for a payment keeps it.
+                        expected = a.get("count").getAsInt();
+                        int count = 0;
+                        for (Card card : player(a).getCardsIn(ZoneType.Battlefield)) {
+                            if (card.isTapped() && !card.getManaAbilities().isEmpty()) {
+                                count++;
+                            }
+                        }
+                        actual = count;
+                    }
                     case "Controls" -> {
                         expected = a.get("count").getAsInt();
                         actual = controlled(player(a), a.get("card").getAsString()).size();

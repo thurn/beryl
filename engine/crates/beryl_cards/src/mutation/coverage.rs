@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use super::neighbours::Kind;
-use super::{expected, killed, mutants};
+use super::{Seen, expected, killed, killed_as, mutants};
 use crate::tests::fixtures;
 use crate::{CARDS, derive};
 
@@ -15,7 +15,8 @@ fn generated_for(card: &str) -> impl Iterator<Item = &'static beryl_scenario::Sc
 }
 
 enum Witness {
-    /// Varying generated answers and positions may all expose this field.
+    /// Varying generated answers and positions may all expose this field, in what the oracles
+    /// compare: a failed scenario or a different final snapshot.
     Generated(&'static str),
     /// This sequence reaches a field the generator does not exercise yet.
     Scripted(&'static str, &'static beryl_scenario::Scenario),
@@ -30,7 +31,8 @@ fn witness(kind: Kind) -> Witness {
         Kind::Amount | Kind::CopyTargets => Generated("Fork"),
         Kind::CastingOption | Kind::CastingOptionPart => Generated("Force of Will"),
         Kind::ChoiceOptional => Generated("Elite Spellbinder"),
-        Kind::ChoiceVisibility | Kind::EffectObjects => Generated("Show and Tell"),
+        Kind::ChoiceVisibility => Generated("Show and Tell"),
+        Kind::EffectObjects => Generated("Damn"),
         Kind::CopyException => Scripted("Fork", fixtures::FORK),
         Kind::CostPart | Kind::ManaProduct => Generated("Forest"),
         Kind::DamageRecipients => Generated("Lightning Bolt"),
@@ -44,7 +46,8 @@ fn witness(kind: Kind) -> Witness {
             let card = crate::names::COORDINATED_ASSAULT;
             Scripted(card, &crate::written_scenarios_for(card)[0])
         }
-        Kind::May | Kind::SearchFilter => Generated("Trinket Mage"),
+        Kind::May => Generated("Trinket Mage"),
+        Kind::SearchFilter => Generated("Liliana's Shade"),
         Kind::SearchCast => {
             let card = crate::names::PANGLACIAL_WURM;
             Scripted(card, &crate::written_scenarios_for(card)[0])
@@ -75,21 +78,28 @@ fn witness(kind: Kind) -> Witness {
 
 #[test]
 fn every_mutation_kind_has_a_witness() {
+    let mut missing = Vec::new();
     for &kind in Kind::ALL {
-        let (card, scenarios) = match witness(kind) {
-            Witness::Generated(card) => (card, generated_for(card).collect()),
-            Witness::Scripted(card, scenario) => (card, vec![scenario]),
+        // A generated witness counts only the kills the oracles see, as the generated bar for
+        // a card without hand-written scenarios does (`mutation::generated`); a scripted one
+        // has its own assertions.
+        let (card, scenarios, seen) = match witness(kind) {
+            Witness::Generated(card) => (card, generated_for(card).collect(), Seen::ByOracles),
+            Witness::Scripted(card, scenario) => (card, vec![scenario], Seen::ByBeryl),
         };
         let def = CARDS.get(card).expect("the witness card has a definition");
         let expected = expected(scenarios);
-        assert!(
-            mutants(def)
-                .into_iter()
-                .filter(|m| m.kind == kind)
-                .any(|m| killed(m.def, &expected)),
-            "{card}: no witness distinguished a {kind:?} neighbour",
-        );
+        if !mutants(def)
+            .into_iter()
+            .filter(|m| m.kind == kind)
+            .any(|m| killed_as(m.def, &expected, seen))
+        {
+            missing.push(format!(
+                "{card}: no witness distinguished a {kind:?} neighbour"
+            ));
+        }
     }
+    assert!(missing.is_empty(), "{}", missing.join("\n"));
 }
 
 /// Counts actual kills, excluding hand-written scenarios and equivalences from the score.

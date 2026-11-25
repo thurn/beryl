@@ -433,6 +433,14 @@ pub enum Assertion {
         card: &'static str,
         count: u8,
     },
+    /// How many of the permanents `player` controls that have a mana ability are tapped. The
+    /// snapshot records it only while each of those permanents makes one mana for tapping it
+    /// alone and is not a creature, so that the count is the same whichever of them paid a
+    /// cost.
+    TappedMana {
+        player: Seat,
+        count: u8,
+    },
     /// The open decision: who answers it (the player it belongs to, or the player controlling
     /// them), what, and among how many candidates.
     Decision {
