@@ -70,7 +70,7 @@ pub(crate) fn instruction<L: Layout>(
     let words = run.state().entry_words(entry);
     let departed = match spells {
         Objects::This => (entry.source())
-            .filter(|&source| !run.state().is_current(source))
+            .filter(|&source| run.state().spell(source).is_none())
             .and_then(|source| run.state().departed_spell(source))
             .cloned(),
         Objects::Target(_)

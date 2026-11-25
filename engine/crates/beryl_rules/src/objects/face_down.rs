@@ -9,6 +9,8 @@
 //!
 //! Implements: CR 116.2b, CR 701.40b, CR 701.40c, CR 702.37e, CR 712.12a
 
+use beryl_kernel::reference::Permanent;
+
 use crate::bitboard::Bitboard;
 use crate::card::{
     CastingOption, Cost, CostPart, FaceIx, ManaCost, Measure, Part, Prompt, Purpose, Types,
@@ -38,8 +40,12 @@ use crate::table::GameTable;
 /// turns up ([CR 712.12a](https://yawgatog.com/resources/magic-rules/#R71212a)): "If it's
 /// turned face up, it will have its front face up." No implemented creature card costs {0},
 /// so a cost of nothing is no mana cost.
-fn face_up_costs<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> [Option<Cost>; 2] {
-    let Some(def) = s.card_def(t, slot) else {
+fn face_up_costs<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    permanent: Permanent<L>,
+) -> [Option<Cost>; 2] {
+    let Some(def) = s.card_def(t, permanent.slot()) else {
         return [None, None];
     };
     // Only a card is turned face up: a token copy of a face-down permanent has no card
@@ -60,9 +66,10 @@ fn face_up_costs<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> [Opti
     // CR 701.40c: "If a card with morph is manifested, its controller may turn that card
     // face up using either the procedure described in rule 702.37e ... or the procedure
     // described above to turn a manifested permanent face up."
-    let manifest =
-        (!s.morphed(slot) && front.types.contains(Types::CREATURE) && !front.cost.is_zero())
-            .then(|| Cost::mana(front.cost.with_x(0)));
+    let manifest = (!s.morphed(permanent.slot())
+        && front.types.contains(Types::CREATURE)
+        && !front.cost.is_zero())
+    .then(|| Cost::mana(front.cost.with_x(0)));
     [manifest, morph]
 }
 
@@ -81,7 +88,10 @@ pub(crate) fn face_up_options<L: Layout>(
         if s.object(slot).face() != FaceIx::DOWN || s.controller(slot) != player {
             continue;
         }
-        if available_costs(s, t, player, slot)?
+        let permanent = s
+            .permanent_at(slot)
+            .expect("a slot of the battlefield list");
+        if available_costs(s, t, player, permanent)?
             .iter()
             .any(Option::is_some)
         {
@@ -95,12 +105,12 @@ fn available_costs<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     player: Seat,
-    slot: L::Slot,
+    permanent: Permanent<L>,
 ) -> Result<[Option<Cost>; 2], Full> {
-    let mut costs = face_up_costs(s, t, slot);
+    let mut costs = face_up_costs(s, t, permanent);
     for option in &mut costs {
         if let Some(cost) = *option
-            && (!other_parts_payable(s, t, player, slot, cost)
+            && (!other_parts_payable(s, t, player, permanent, cost)
                 || !mana::payable(
                     s,
                     t,
@@ -129,7 +139,8 @@ pub(crate) fn begin_turning_face_up<L: Layout>(
     slot: L::Slot,
 ) -> Result<(), Full> {
     s.give_priority(player);
-    match available_costs(s, t, player, slot)? {
+    let permanent = (s.permanent_at(slot)).expect("a permanent offered to turn face up");
+    match available_costs(s, t, player, permanent)? {
         [Some(cost), Some(morph)] => {
             s.ask(Pending::TurningFaceUp {
                 slot,
@@ -138,7 +149,7 @@ pub(crate) fn begin_turning_face_up<L: Layout>(
             });
             Ok(())
         }
-        [Some(cost), None] | [None, Some(cost)] => begin_payment(s, t, sink, slot, cost),
+        [Some(cost), None] | [None, Some(cost)] => begin_payment(s, t, sink, permanent, cost),
         [None, None] => unreachable!("a permanent offered to turn face up"),
     }
 }
@@ -147,13 +158,14 @@ fn begin_payment<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
-    slot: L::Slot,
+    permanent: Permanent<L>,
     cost: Cost,
 ) -> Result<(), Full> {
+    let slot = permanent.slot();
     let player = s.controller(slot);
     let remaining = cost.mana.with_x(0);
     if remaining.is_zero() {
-        return pay_other_parts(s, t, sink, slot, cost, 0);
+        return pay_other_parts(s, t, sink, permanent, cost, 0);
     }
     if s.profile().payment != Payment::Manual {
         let greedy = s.profile().payment == Payment::Greedy;
@@ -179,7 +191,7 @@ fn begin_payment<L: Layout>(
                 &plans.as_slice()[0],
                 mana::Paying::NOTHING,
             )?;
-            return pay_other_parts(s, t, sink, slot, cost, 0);
+            return pay_other_parts(s, t, sink, permanent, cost, 0);
         }
     }
     s.ask(Pending::TurningFaceUp {
@@ -281,6 +293,8 @@ pub(crate) fn perform<L: Layout>(
     payment: FaceUpPayment<L>,
     option: Opt<L>,
 ) -> Result<(), Full> {
+    // The question is answered in the state that asked it, where the permanent is.
+    let permanent = (s.permanent_at(slot)).expect("the permanent being turned face up");
     let player = s.controller(slot);
     let remaining = match payment {
         FaceUpPayment::ChooseCost { morph } => {
@@ -292,7 +306,7 @@ pub(crate) fn perform<L: Layout>(
             } else {
                 morph
             };
-            return begin_payment(s, t, sink, slot, selected);
+            return begin_payment(s, t, sink, permanent, selected);
         }
         FaceUpPayment::Mana(remaining) => remaining,
         FaceUpPayment::Objects(mut paying) => {
@@ -312,18 +326,18 @@ pub(crate) fn perform<L: Layout>(
             let CostPart::Chosen(action, chosen) = cost.parts()[usize::from(paying.part)] else {
                 unreachable!("this part takes chosen objects");
             };
-            let permanent = s.object_ref(slot);
             parts::pay_with_all(s, t, sink, action, &chosen, player, paying.chosen)?;
-            if !s.is_current(permanent) {
+            // The permanent may have paid for itself.
+            let Some(permanent) = s.permanent(permanent.into()) else {
                 s.settle_question();
                 return Ok(());
-            }
-            return pay_other_parts(s, t, sink, slot, cost, paying.part + 1);
+            };
+            return pay_other_parts(s, t, sink, permanent, cost, paying.part + 1);
         }
     };
     let remaining = pay_mana(s, t, sink, player, remaining, option)?;
     if remaining.is_zero() {
-        pay_other_parts(s, t, sink, slot, cost, 0)
+        pay_other_parts(s, t, sink, permanent, cost, 0)
     } else {
         s.ask(Pending::TurningFaceUp {
             slot,
@@ -401,9 +415,10 @@ fn other_parts_payable<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     player: Seat,
-    slot: L::Slot,
+    permanent: Permanent<L>,
     cost: Cost,
 ) -> bool {
+    let slot = permanent.slot();
     cost.parts().iter().all(|part| match *part {
         CostPart::Life(amount) => life::can_pay(s, t, player, amount),
         CostPart::Chosen(action, chosen) => parts::payable(s, t, player, slot, action, &chosen),
@@ -419,10 +434,11 @@ fn pay_other_parts<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
-    slot: L::Slot,
+    permanent: Permanent<L>,
     cost: Cost,
     from: u8,
 ) -> Result<(), Full> {
+    let slot = permanent.slot();
     let player = s.controller(slot);
     for (part, &part_cost) in (from..).zip(cost.parts().iter().skip(usize::from(from))) {
         match part_cost {
@@ -452,16 +468,14 @@ fn pay_other_parts<L: Layout>(
         }
     }
     s.settle_question();
-    if let Some(permanent) = s.permanent_at(slot) {
+    // A mana ability that paid the cost may have sacrificed it.
+    if let Some(permanent) = s.permanent(permanent.into()) {
         s.turn_face_up(t, permanent);
         layers::refresh(s, t, sink)?;
-        trigger::match_event(
-            s,
-            t,
-            &Event::TurnedFaceUp {
-                object: s.object_ref(slot),
-            },
-        )?;
+        let turned = Event::TurnedFaceUp {
+            object: permanent.into(),
+        };
+        trigger::match_event(s, t, &turned)?;
     }
     Ok(())
 }

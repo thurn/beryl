@@ -436,7 +436,7 @@ impl CustomBody for ExileAnOpposingCreature {
             .find(|&slot| {
                 s.controller(slot) != you && s.derived(slot).types.contains(Types::CREATURE)
             })
-            .map(|slot| s.object_ref(slot));
+            .and_then(|slot| s.permanent_at(slot));
         if let Some(target) = target {
             one_shot::exile_until_leaves(game, target, resolution.source())?;
         }
@@ -1081,7 +1081,7 @@ fn a_player_orders_their_own_triggers_only_when_they_differ() {
             .iter()
             .copied()
             .find(|&slot| s.controller(slot) == land)
-            .map(|slot| s.object_ref(slot))
+            .and_then(|slot| s.permanent_at(slot))
             .expect("a Watcher");
         one_shot::exile_until_leaves(game, theirs, resolution.source()).unwrap();
     });
@@ -1565,7 +1565,7 @@ fn a_permanent_that_exiled_a_card_until_it_leaves_is_not_interchangeable_with_it
     let q = p.opponent();
     let [theirs, another] = ["Test Bear", "Test Trainer"].map(|name| {
         let slot = put(&t, &mut s, &mut x, q, name);
-        s.object_ref(slot)
+        s.permanent_at(slot).expect("a permanent just put")
     });
     with_game(&t, &mut s, &mut x, first, |game, resolution| {
         one_shot::exile_until_leaves(game, theirs, resolution.source()).unwrap();

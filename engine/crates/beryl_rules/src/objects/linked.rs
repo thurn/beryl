@@ -25,10 +25,10 @@ pub fn exile_linked<L: Layout>(
     object: ObjectRef<L>,
     source: ObjectRef<L>,
 ) -> Result<(), Full> {
-    if !game.state.is_current(object) {
+    let Some(object) = game.state.current(object) else {
         return Ok(());
-    }
-    exile_and_link(game, Bitboard::single(object.slot), source)
+    };
+    exile_and_link(game, Bitboard::single(object.reference().slot), source)
 }
 
 fn exile_and_link<L: Layout>(
@@ -61,7 +61,7 @@ pub(crate) fn link<L: Layout>(
     source: ObjectRef<L>,
     link: Link,
 ) -> Result<(), Full> {
-    if !game.state.is_current(source) {
+    if game.state.current(source).is_none() {
         return Ok(());
     }
     let memo = match link {
