@@ -164,6 +164,28 @@ fn the_home_page_lists_the_open_tickets_with_progress() {
     }
 }
 
+/// A running ticket's card names the model its session reports, and a ticket with no
+/// allocation of its own shows the default ticket allocation it inherits.
+#[test]
+fn home_cards_show_the_reported_model_and_the_inherited_allocation() {
+    let hub = seeded();
+    hub.conn
+        .execute_batch(
+            "INSERT INTO transcript_sessions (session, model, effort, updated_at)
+             VALUES ('local_ff743711', 'claude-opus-5-5', 'high', '2026-11-16T19:32:00.000Z')",
+        )
+        .unwrap();
+    let home = hub.text("/");
+    assert!(
+        home.contains("data-tip=\"Running on this model\" tabindex=\"0\">opus</span>"),
+        "{home}"
+    );
+    assert!(
+        home.contains("data-tip=\"Allocation inherited\" tabindex=\"0\">100</span>"),
+        "{home}"
+    );
+}
+
 #[test]
 fn a_ticket_page_shows_its_sections_links_and_changelog() {
     let hub = seeded();

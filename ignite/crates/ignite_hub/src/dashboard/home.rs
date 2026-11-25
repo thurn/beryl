@@ -71,10 +71,17 @@ fn machine_label(hostname: &str) -> String {
 /// the model it runs on or is assigned to. Each shows once, in the allocation chip's tone.
 fn card_tags(ticket: &HomeCard, pool: Option<&PoolConfig>) -> String {
     let card = &ticket.card;
-    let allocation = allocation_chip(
-        card.allocation
-            .filter(|_| card.status != Status::PendingApproval),
-    );
+    let allocation = if card.status == Status::PendingApproval {
+        String::new()
+    } else if card.allocation.is_some() {
+        allocation_chip(card.allocation)
+    } else {
+        match ticket.inherited_allocation {
+            None => String::new(),
+            Some(0) => c::chip("Parked", Tone::Neutral, Some("Allocation inherited · 0")),
+            Some(n) => c::chip(&n.to_string(), Tone::Neutral, Some("Allocation inherited")),
+        }
+    };
     let tag = |name: &str, tip: &str| c::chip(name, Tone::Neutral, Some(tip));
     let machine = match (&ticket.machine, &card.pins.machine) {
         (Some(name), _) => tag(&machine_label(name), "Running on this machine"),
@@ -85,11 +92,16 @@ fn card_tags(ticket: &HomeCard, pool: Option<&PoolConfig>) -> String {
     allocation + &machine + &model
 }
 
-/// The model a ticket runs on, or else the one it is assigned to, with the tag's tip. The
-/// provider working it, or else the one it is pinned to, maps the ticket's `tier:` label to a
-/// model ID; an untiered ticket takes the provider's `sonnet` model, as workers do. With no
-/// provider the tier is all that is known, so the tier is named.
+/// The model a ticket runs on, or else the one it is assigned to, with the tag's tip. A running
+/// ticket names the model its session reports. Otherwise the provider working it, or else the
+/// one it is pinned to, maps the ticket's `tier:` label to a model ID; an untiered ticket takes
+/// the provider's `sonnet` model, as workers do. With no provider the tier is all that is known,
+/// so the tier is named. A desktop session reports no model, so a ticket it works with no tier
+/// and no provider shows none.
 fn model(ticket: &HomeCard, pool: Option<&PoolConfig>) -> Option<(String, &'static str)> {
+    if let Some(id) = &ticket.model {
+        return Some((model_name(id), "Running on this model"));
+    }
     let tier = label(&ticket.labels, "tier:");
     let (provider, tip) = match (&ticket.provider, &ticket.card.pins.provider) {
         (Some(provider), _) => (provider, "Running on this model"),

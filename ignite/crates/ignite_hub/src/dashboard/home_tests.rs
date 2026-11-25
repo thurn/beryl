@@ -21,7 +21,9 @@ fn ticket(id: &str, labels: &[&str]) -> HomeCard {
         labels: labels.iter().map(|label| (*label).to_owned()).collect(),
         machine: None,
         provider: None,
+        model: None,
         source: None,
+        inherited_allocation: None,
     }
 }
 
@@ -47,7 +49,9 @@ fn a_card_names_the_machine_working_it_not_the_session() {
 }
 
 /// A card tags its allocation, machine and model once each: what runs it while it is in
-/// progress, else what it is pinned to. The model is the provider's model for the ticket's tier.
+/// progress, else what it is pinned to. A running ticket names the model its session reports;
+/// otherwise the model is the provider's model for the ticket's tier. A ticket with no
+/// allocation of its own shows the one it inherits.
 #[test]
 fn a_card_tags_its_allocation_machine_and_model_once() {
     let mut cards = [
@@ -59,9 +63,12 @@ fn a_card_tags_its_allocation_machine_and_model_once() {
     cards[0].card.assignee = Some("local_0123456789abcdef".to_owned());
     cards[0].machine = Some("multivac.local".to_owned());
     cards[0].provider = Some("claude".to_owned());
+    cards[0].model = Some("claude-sonnet-5-5".to_owned());
     cards[0].card.pins.machine = Some("multivac".to_owned());
     cards[1].card.pins.machine = Some("jarvis".to_owned());
     cards[1].card.pins.provider = Some("agy-gemini".to_owned());
+    cards[2].card.allocation = None;
+    cards[2].inherited_allocation = Some(100);
     let mut pool = PoolConfig::default();
     for (provider, id) in [
         ("claude", "claude-opus-5-5"),
@@ -92,11 +99,12 @@ fn a_card_tags_its_allocation_machine_and_model_once() {
     assert_eq!(body.matches("Multivac").count(), 2, "{body}");
     for expected in [
         chip("Multivac", "Running on this machine"),
-        chip("opus", "Running on this model"),
+        chip("sonnet", "Running on this model"),
         chip("Jarvis", "Pinned to this machine"),
         chip("neon", "Assigned to this model"),
         chip("opus", "Assigned to this tier"),
         chip("200", "Allocation"),
+        chip("100", "Allocation inherited"),
     ] {
         assert!(body.contains(&expected), "{expected} in {body}");
     }

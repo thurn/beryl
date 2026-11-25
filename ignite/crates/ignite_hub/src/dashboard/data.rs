@@ -67,6 +67,11 @@ pub struct HomeCard {
     /// The provider working the ticket while it is in progress: the one chosen when it was
     /// claimed, or else the app of the worker that holds it.
     pub provider: Option<String>,
+    /// The model ID the session working the ticket reports, while it is in progress. Only the
+    /// daemons' CLI workers report one.
+    pub model: Option<String>,
+    /// The allocation the ticket takes when it has none of its own.
+    pub inherited_allocation: Option<u32>,
 }
 
 /// The forecast for each ticket with a reserve or descendants, and the default effort
@@ -257,6 +262,9 @@ pub fn home_data(conn: &Connection) -> Result<(Vec<HomeCard>, Forecasts), ReadEr
                 CASE WHEN status = 'in_progress' THEN COALESCE(provider,
                   (SELECT w.app FROM workers w
                    WHERE w.session = tickets.assignee AND w.role = 'worker' LIMIT 1)) END,
+                CASE WHEN status = 'in_progress' THEN
+                  (SELECT s.model FROM transcript_sessions s
+                   WHERE s.session = COALESCE(tickets.session, tickets.assignee)) END,
                 {SOURCE_FIELDS}
          FROM tickets
          WHERE status != 'closed'
@@ -268,10 +276,17 @@ pub fn home_data(conn: &Connection) -> Result<(Vec<HomeCard>, Forecasts), ReadEr
             labels: labels_of(&row.get::<_, String>(9)?),
             machine: row.get(10)?,
             provider: row.get(11)?,
-            source: allocation_source(row, 12)?,
+            model: row.get(12)?,
+            source: allocation_source(row, 13)?,
+            inherited_allocation: None,
         })
     })?;
     let mut cards: Vec<HomeCard> = rows.collect::<Result<_, _>>()?;
+    for ticket in &mut cards {
+        if ticket.card.allocation.is_none() {
+            ticket.inherited_allocation = inherited_allocation(conn, &ticket.card)?;
+        }
+    }
     cards.sort_by(|left, right| by_recency(&left.card, &right.card));
     let ids: Vec<String> = cards.iter().map(|card| card.card.id.clone()).collect();
     Ok((cards, forecasts(conn, &ids)?))
@@ -386,12 +401,19 @@ pub fn ticket_row(conn: &Connection, id: &str) -> Result<Option<TicketRow>, Read
     let Some(mut ticket) = rows.next().transpose()? else {
         return Ok(None);
     };
-    ticket.inherited_allocation = match ticket.card.ticket_type.as_str() {
-        "epic" | "milestone" => inherited_worker_share(conn, ticket.card.parent.as_deref())?,
+    ticket.inherited_allocation = inherited_allocation(conn, &ticket.card)?;
+    Ok(Some(ticket))
+}
+
+/// The allocation `card` takes without one of its own: an epic or milestone takes its nearest
+/// ancestor's share, a meta-ticket the general pool's weight, and any other ticket the default
+/// ticket weight.
+fn inherited_allocation(conn: &Connection, card: &Card) -> Result<Option<u32>, ReadError> {
+    Ok(match card.ticket_type.as_str() {
+        "epic" | "milestone" => inherited_worker_share(conn, card.parent.as_deref())?,
         "meta" => Some(ignite_core::shares::DEFAULT_GENERAL_ALLOCATION),
         _ => Some(ignite_core::shares::DEFAULT_TICKET_ALLOCATION),
-    };
-    Ok(Some(ticket))
+    })
 }
 
 /// The allocation of the nearest ancestor with its own share.
