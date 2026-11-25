@@ -136,6 +136,20 @@ def count_cell(hits: int, n: int) -> str:
     return f"{hits} of {n}"
 
 
+def arm_values(group: list[Result], arm: str, attr: str) -> list[float | None]:
+    """One measure of an arm over a group of pairs. The efficiency store prices an arm from its
+    transcripts, so an arm with a transcript on another machine has too low a cost: its dollars
+    and agent minutes are left out of the medians."""
+    return [
+        (
+            None
+            if attr != "claim_to_close_minutes" and r.arms[arm].cost_partial
+            else getattr(r.arms[arm], attr)
+        )
+        for r in group
+    ]
+
+
 def group_rows(spec: Spec, group: list[Result]) -> list[tuple[str, str, str]]:
     """The table of one group of counted pairs, as (line, source cell, copy cell)."""
     n = len(group)
@@ -159,20 +173,8 @@ def group_rows(spec: Spec, group: list[Result]) -> list[tuple[str, str, str]]:
         ("Median claim-to-close minutes", "claim_to_close_minutes", ""),
     ):
 
-        def values(arm: str) -> list[float | None]:
-            # The efficiency store prices an arm from its transcripts, so an arm with a
-            # transcript on another machine has too low a cost: leave it out of the medians.
-            return [
-                (
-                    None
-                    if attr != "claim_to_close_minutes" and r.arms[arm].cost_partial
-                    else getattr(r.arms[arm], attr)
-                )
-                for r in group
-            ]
-
-        s_cell, s_m = median_cell(values("source"), unit)
-        c_cell, c_m = median_cell(values("copy"), unit)
+        s_cell, s_m = median_cell(arm_values(group, "source", attr), unit)
+        c_cell, c_m = median_cell(arm_values(group, "copy", attr), unit)
         if attr != "claim_to_close_minutes":
             for arm_name, cell in (("source", "s"), ("copy", "c")):
                 left = sum(r.arms[arm_name].cost_partial for r in group)
