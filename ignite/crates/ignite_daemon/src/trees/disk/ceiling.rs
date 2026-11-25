@@ -109,6 +109,7 @@ enum Pass {
     Replaced,
     Unused,
     Incremental,
+    Profiles,
     All,
 }
 
@@ -118,14 +119,17 @@ impl Pass {
             Self::Replaced => "replaced objects and builds",
             Self::Unused => "unused Cargo fingerprints and outputs",
             Self::Incremental => "incremental caches",
+            Self::Profiles => "least recently built profiles",
             Self::All => "build directories",
         }
     }
 
     /// Cleans every directory. `excess` is how many bytes must go to get under the target.
     fn clean(self, dirs: &[PathBuf], used: &BTreeSet<PathBuf>, excess: u64) -> io::Result<()> {
-        if let Self::Incremental = self {
-            return trim_incremental(dirs, excess);
+        match self {
+            Self::Incremental => return trim_incremental(dirs, excess),
+            Self::Profiles => return trim_profiles(dirs, excess),
+            _ => (),
         }
         for dir in dirs {
             match self {
@@ -134,7 +138,7 @@ impl Pass {
                     sweep_superseded(dir);
                 }
                 Self::Unused => sweep_unused(dir, used)?,
-                Self::Incremental => (),
+                Self::Incremental | Self::Profiles => (),
                 Self::All => remove_output(dir)?,
             }
         }
@@ -153,7 +157,13 @@ pub(in crate::trees) fn clean(
     if before <= ceiling {
         return Ok(());
     }
-    for pass in [Pass::Replaced, Pass::Unused, Pass::Incremental, Pass::All] {
+    for pass in [
+        Pass::Replaced,
+        Pass::Unused,
+        Pass::Incremental,
+        Pass::Profiles,
+        Pass::All,
+    ] {
         if before < target {
             break;
         }
@@ -183,14 +193,40 @@ fn trim_incremental(dirs: &[PathBuf], excess: u64) -> io::Result<()> {
                 continue;
             };
             for entry in entries {
-                let path = entry?.path();
-                caches.push((last_written(&path), bytes(&path)?, path));
+                caches.push(entry?.path());
             }
         }
     }
-    caches.sort();
+    remove_oldest(caches, excess)
+}
+
+/// Deletes whole profile directories (`<target>/<profile>` or `<target>/<triple>/<profile>`),
+/// the one written longest ago first, until `excess` bytes are gone.
+///
+/// When the earlier passes left a tree above its cleaning target, the next pass used to delete
+/// every build directory, even when the tree was already back under its ceiling. A tree seeded
+/// from a donor near the ceiling then lost the copy it had just received, and its next build
+/// compiled the whole workspace from nothing. A tree's profiles are mostly independent builds
+/// (`debug`, `release`, `clippy`, an iOS simulator target), and a ticket usually builds only one
+/// or two of them, so the profiles nobody has built recently go first and the one in use is
+/// usually kept. Cargo rebuilds a deleted profile from source the next time a command needs it,
+/// so this changes how long a build takes, never what it produces.
+fn trim_profiles(dirs: &[PathBuf], excess: u64) -> io::Result<()> {
+    let profiles = dirs.iter().flat_map(|dir| profile_dirs(dir)).collect();
+    remove_oldest(profiles, excess)
+}
+
+/// Deletes `paths` in order of their [`last_written`] time, oldest first, until `excess` bytes
+/// are gone.
+fn remove_oldest(paths: Vec<PathBuf>, excess: u64) -> io::Result<()> {
+    let mut entries = Vec::new();
+    for path in paths {
+        entries.push((last_written(&path), bytes(&path)?, path));
+    }
+    entries.sort();
+    entries.dedup_by(|a, b| a.2 == b.2);
     let mut freed = 0_u64;
-    for (_, size, path) in caches {
+    for (_, size, path) in entries {
         if freed >= excess {
             break;
         }

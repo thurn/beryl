@@ -960,5 +960,10 @@
     "label": "A shared failure stops holding ordinary hand-offs once the hub has an open regression ticket for the check, because landings pass a check that fails at the tip too. Over three days, holds kept about 25 ready tickets waiting with 32 idle workers for 103 minutes on jarvis and 24 on multivac, and 11 of the 13 checks held had a regression ticket (2026-11-25)",
     "metric": "ignite.cycle-minutes",
     "expect": "down"
+  },
+  {
+    "label": "The build-ceiling cleanup deletes whole Cargo profiles, the one built longest ago first, before it falls back to deleting every build directory. Wiping everything ran even when a tree was already back under its ceiling, and it threw away a seed copy just made. On jarvis, 4 trees were wiped and rebuilt from nothing in about an hour, while CPU was at 98% (2026-11-25)",
+    "metric": "ignite.cycle-minutes",
+    "expect": "down"
   }
 ]

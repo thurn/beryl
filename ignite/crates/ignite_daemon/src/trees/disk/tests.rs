@@ -236,6 +236,17 @@ fn ceiling_cleanup_stops_after_the_first_stage_that_makes_room() {
                 "replaced objects and builds",
                 "unused Cargo fingerprints and outputs",
                 "incremental caches",
+                "least recently built profiles",
+            ],
+        ),
+        // The 130-byte file outside any profile is still over the 120-byte target.
+        (
+            150,
+            vec![
+                "replaced objects and builds",
+                "unused Cargo fingerprints and outputs",
+                "incremental caches",
+                "least recently built profiles",
                 "build directories",
             ],
         ),
@@ -289,7 +300,8 @@ fn ceiling_cleanup_stops_after_the_first_stage_that_makes_room() {
         assert_eq!(current.is_file(), stages.len() < 4);
         assert_eq!(unused.is_file(), stages.len() < 2);
         assert_eq!(profile.join("incremental/cache").exists(), stages.len() < 3);
-        assert_eq!(target.0.exists(), stages.len() < 4);
+        assert_eq!(target.0.join("other-output").exists(), stages.len() < 5);
+        assert_eq!(target.0.exists(), stages.len() < 5);
     }
 }
 
@@ -323,4 +335,41 @@ fn ceiling_cleanup_keeps_the_incremental_caches_compiled_last() {
     assert!(!incremental.join("old-aaaa").exists());
     assert!(incremental.join("middle-bbbb").exists());
     assert!(incremental.join("new-cccc").exists());
+}
+
+#[test]
+fn ceiling_cleanup_deletes_the_profile_built_longest_ago_and_keeps_the_rest() {
+    let target = Target::new();
+    // Three profiles of 100 bytes with no incremental caches, built at times 1, 2 and 3. The
+    // iOS simulator profile sits under its target triple, as Cargo writes a cross build.
+    let profiles = [
+        ("aarch64-apple-ios-sim/debug", 1),
+        ("release", 2),
+        ("debug", 3),
+    ];
+    for (profile, age) in profiles {
+        let dir = target.0.join(profile);
+        fs::create_dir_all(dir.join(".fingerprint")).unwrap();
+        fs::create_dir_all(dir.join("deps")).unwrap();
+        fs::write(dir.join("deps/libpkg.rlib"), vec![b'x'; 100]).unwrap();
+        for path in [dir.join(".fingerprint"), dir.join("deps"), dir.clone()] {
+            fs::File::open(&path)
+                .unwrap()
+                .set_modified(SystemTime::UNIX_EPOCH + Duration::from_secs(age))
+                .unwrap();
+        }
+    }
+    // 300 bytes against a ceiling of 260 and a target of 208: one profile must go.
+    let mut stages = Vec::new();
+    super::clean(
+        std::slice::from_ref(&target.0),
+        260,
+        &std::collections::BTreeSet::new(),
+        |stage| stages.push(stage.to_owned()),
+    )
+    .unwrap();
+    assert_eq!(stages, ["least recently built profiles"]);
+    assert!(!target.0.join("aarch64-apple-ios-sim/debug").exists());
+    assert!(target.0.join("release/deps/libpkg.rlib").is_file());
+    assert!(target.0.join("debug/deps/libpkg.rlib").is_file());
 }
