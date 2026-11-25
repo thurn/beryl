@@ -3767,14 +3767,13 @@ scheduler readings. The hub considers tickets in this order:
 An active machine takes every ticket of the first two kinds that it can, even
 while it asks only for tickets that hold `master` back, for example because a
 check fails the same way for several of its workers. A checks-only machine works
-one such ticket at a time.
-3. An eligible improvement ticket when improvements are under their default
-   share of recent hand-offs. This applies to improvements outside the
-   explicitly weighted Efficiency improvements pool. See
-   [Improvement tickets](#improvement-tickets).
-4. A ready ticket from the pool furthest below its allocation. Within that pool,
-   the highest ticket allocation goes first, then the longest chain of tickets
-   waiting behind it, then the oldest.
+one such ticket at a time. 3. An eligible improvement ticket when improvements
+are under their default share of recent hand-offs. This applies to improvements
+outside the explicitly weighted Efficiency improvements pool. See
+[Improvement tickets](#improvement-tickets). 4. A ready ticket from the pool
+furthest below its allocation. Within that pool, the highest ticket allocation
+goes first, then the longest chain of tickets waiting behind it, then the
+oldest.
 
 A machine can take a ticket when all of these hold:
 
