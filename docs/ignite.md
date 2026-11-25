@@ -4697,9 +4697,9 @@ waiting for it, and its platform returns with its next heartbeat. Upkeep also
 files a P0 ticket labelled `needs:person`, which the dashboard shows as an
 attention card, for each machine that is not off and has been silent for 30
 minutes. A machine silent for more than a day is taken to be retired and gets no
-ticket. An online active machine on the
-same platform keeps its native checks in the promotion gate. Checks-only
-machines can still run portable checks before promotion.
+ticket. An online active machine on the same platform keeps its native checks in
+the promotion gate. Checks-only machines can still run portable checks before
+promotion.
 
 A check family can defer just its results on named platforms, even while those
 platforms have active verifiers. For example, with
