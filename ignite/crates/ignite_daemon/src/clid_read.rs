@@ -215,8 +215,15 @@ impl CliDaemon {
             self.host
                 .release(&session, ticket, &note, ReleaseCause::TakenBack)?;
         }
-        self.close(row, turn, &TurnEnd::Interrupted, None, SlotState::Free, |_| {})
-            .map(|_| ())
+        self.close(
+            row,
+            turn,
+            &TurnEnd::Interrupted,
+            None,
+            SlotState::Free,
+            |_| {},
+        )
+        .map(|_| ())
     }
 
     /// Ends a turn that started another model than the slot asked for, releases its ticket

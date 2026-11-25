@@ -507,9 +507,16 @@ fn a_hung_turn_is_ended_and_its_ticket_released() {
     assert_eq!(lock(&rig.turns.ended).clone(), [(session.to_string(), 1)]);
     let releases = lock(&rig.host.releases).clone();
     assert_eq!(releases.len(), 1);
-    assert!(releases[0].2.contains("wrote nothing for 60 minutes"), "{}", releases[0].2);
+    assert!(
+        releases[0].2.contains("wrote nothing for 60 minutes"),
+        "{}",
+        releases[0].2
+    );
     assert!(rig.daemon.slots("fake").is_empty());
-    assert!(rig.asked().is_empty(), "a hung turn's end is not left to decide");
+    assert!(
+        rig.asked().is_empty(),
+        "a hung turn's end is not left to decide"
+    );
 }
 
 #[test]

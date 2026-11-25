@@ -258,9 +258,7 @@ impl Turns for ClockedTurns {
         let length = self.inner.output(session, turn)?.len();
         let now = self.clock.now();
         let mut seen = lock(&self.seen);
-        let entry = seen
-            .entry((session.clone(), turn))
-            .or_insert((length, now));
+        let entry = seen.entry((session.clone(), turn)).or_insert((length, now));
         if entry.0 != length {
             *entry = (length, now);
         }
