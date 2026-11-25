@@ -208,7 +208,10 @@ fn last_written(path: &Path) -> SystemTime {
             .and_then(|meta| meta.modified())
             .unwrap_or(SystemTime::UNIX_EPOCH)
     };
-    let children = fs::read_dir(path).into_iter().flatten().filter_map(Result::ok);
+    let children = fs::read_dir(path)
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok);
     children
         .map(|entry| modified(&entry.path()))
         .fold(modified(path), SystemTime::max)
