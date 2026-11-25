@@ -7,6 +7,10 @@
 //!   The badge sits over the art to leave the card's text and stats visible.
 //! - A token: a coin at the bottom left, where the web's `.card-counters` row puts its label.
 //! - A permanent its owner does not control: a violet outline, the web's `.card-stolen-edge`.
+//! - A card the hand shows from its owner's graveyard, one they may cast from there: two soft
+//!   halos, violet and pale, breathing out of step, as MTG Arena rings such a card in drifting
+//!   smoke (`tovCPHl-gOM` at 9:08 and 15:02.5). Drawn on the card wherever it is, so the ring
+//!   rides with it from the graveyard into the hand.
 //! - An attacker: a wedge along the edge facing the defender. It turns gold as the creature
 //!   becomes blocked (Arena, `IEXcjBn3BXk` at 22:23). In the Enhanced tier, this is drawn as a
 //!   procedural plasma chevron (crimson-orange unblocked, solar-gold when blocked) with looping
@@ -24,13 +28,14 @@ use std::cell::Cell;
 use std::f32::consts::PI;
 
 use beryl_protocol::protocol::{Combat, ObjectView, Side};
-use glam::{Affine3A, Quat, Vec2, Vec3};
+use glam::{Affine3A, Quat, Vec2};
 
 use super::Look;
 use kit_base::atlas::Tier;
 use kit_base::data::light::Own;
 use kit_base::tokens::{badge, color};
 use kit_frame::frame::{Band, Draw, FrameBuilder, PaintBand, Sprite, sprites};
+use kit_fx::effects::edge::{Edge, past_edge, with_opacity, write_away_halo};
 use kit_fx::effects::vfx::{FighterKind, FighterVfx, write_fighter};
 
 /// How a creature fights, as its record says.
@@ -148,6 +153,25 @@ pub(super) fn write(
         let time_s = (now % 1_000_000_000_000) as f32 / 1e9;
         let edge = Edge::toward(look.pose.rotation, defending(record.controller), card);
         marks.fight(slot, fighting, &edge, age, time_s);
+    }
+}
+
+/// Writes the halo of a card the hand shows from its owner's graveyard, drawn as `look`, at
+/// `now`, in nanoseconds since the client started.
+pub(super) fn from_graveyard(
+    (look, own): (&Look, &Own),
+    (now, band): (u64, PaintBand),
+    builder: &mut FrameBuilder,
+) {
+    if look.pose.opacity > 0.0 {
+        let place = (look.pose.upward(), own.lift);
+        let opacity = look.pose.opacity.clamp(0.0, 1.0);
+        write_away_halo(
+            builder,
+            &own.away,
+            place,
+            (now, band.records(Band::Glows), opacity),
+        );
     }
 }
 
@@ -306,29 +330,6 @@ impl<'b, 'f> Marks<'b, 'f> {
     }
 }
 
-/// The quad `size` large with its middle `out` past the middle of `edge`, turned by `turn` about
-/// the card's normal. A card in a battlefield row leans back toward the camera, so past its near
-/// edge its plane runs under the table, which would hide the quad: there the quad is folded up
-/// about the edge until it lies level, as the web's mark lies flat on the stage past the card.
-fn past_edge(card: Affine3A, lift: f32, edge: &Edge, out: f32, size: Vec2, turn: f32) -> Affine3A {
-    let axis = edge.axis.extend(0.0);
-    let outward = card.transform_vector3(axis).normalize_or_zero();
-    let normal = card.transform_vector3(Vec3::Z).normalize_or_zero();
-    // Folding by `angle` toward the normal turns the outward way into
-    // `outward * cos + normal * sin`, which is level where `tan = -outward.z / normal.z`.
-    let fold = if outward.z < 0.0 && normal.z > f32::EPSILON {
-        Quat::from_axis_angle(axis.cross(Vec3::Z), (-outward.z / normal.z).atan())
-    } else {
-        Quat::IDENTITY
-    };
-    card * Affine3A::from_rotation_translation(fold, (edge.axis * edge.reach).extend(lift))
-        * Affine3A::from_scale_rotation_translation(
-            size.extend(1.0),
-            Quat::from_rotation_z(turn),
-            (edge.axis * out).extend(0.0),
-        )
-}
-
 /// The way across the table, in the table's space, that a creature controlled by `controller`
 /// faces as it fights: an attacker toward the players it attacks, and a blocker toward the
 /// attacker it blocks, so both toward their controller's opponent. The viewer sits at -y.
@@ -337,45 +338,4 @@ fn defending(controller: Side) -> Vec2 {
         Side::You => Vec2::Y,
         Side::Opponent => -Vec2::Y,
     }
-}
-
-/// One edge of a card, in the card's own space: the way out of it (`axis`, one of its four
-/// sides), how far its middle lies from the card's centre, and how long the edge is.
-struct Edge {
-    axis: Vec2,
-    reach: f32,
-    across: f32,
-}
-
-impl Edge {
-    /// The edge of a card turned by `rotation` that faces most nearly `way`, a direction in the
-    /// table's space, on a card `card` wide and high. A tapped attacker's wedge is on its long
-    /// side, which faces the defender.
-    fn toward(rotation: Quat, way: Vec2, card: Vec2) -> Self {
-        let local = rotation.inverse() * way.extend(0.0);
-        if local.y.abs() >= local.x.abs() {
-            Self {
-                axis: Vec2::new(0.0, local.y.signum()),
-                reach: card.y / 2.0,
-                across: card.x,
-            }
-        } else {
-            Self {
-                axis: Vec2::new(local.x.signum(), 0.0),
-                reach: card.x / 2.0,
-                across: card.y,
-            }
-        }
-    }
-}
-
-/// `tint` with its opacity multiplied by `opacity`, from 0 to 1.
-fn with_opacity([red, green, blue, alpha]: [u8; 4], opacity: f32) -> [u8; 4] {
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "a share of a byte, clamped to 0 to 255"
-    )]
-    let alpha = (f32::from(alpha) * opacity.clamp(0.0, 1.0)).round() as u8;
-    [red, green, blue, alpha]
 }

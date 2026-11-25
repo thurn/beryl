@@ -231,6 +231,19 @@ restore the old behavior.
   (jD7VqaT8VC8 45:26.77, SswBO8aOOgc 21:02.75, IEXcjBn3BXk 18:06.62, jD7VqaT8VC8
   45:27.5, SswBO8aOOgc 21:02.0, pE4XSNi-nZc 34:21.0, jD7VqaT8VC8 17:34.0,
   IT6nwh6HtYk 9:17.93, IT6nwh6HtYk 9:18.2).
+- **A card you may cast from your graveyard.** While you may cast a card from
+  your graveyard (flashback, such as Snapcaster Mage gives, escape, or a
+  permanent that lets you), it lies at the right end of your hand's fan, after
+  the cards really in your hand, ringed in a soft violet halo that breathes
+  slowly, apart from the cyan outline of a card you may play. It flies from the
+  graveyard into the fan in about half a second as it becomes castable, and back
+  onto the graveyard when it no longer is. Cast, it flies from its place in the
+  fan to the stack. The opponent's castable cards stay on their graveyard. When
+  Past in Flames resolves, the cards in the graveyard that gained flashback
+  leave the graveyard together and fan into the hand within about a quarter of a
+  second, to the right of the cards already there, each wrapped in drifting
+  white and violet smoke over the cyan outline of a card that may be played. One
+  cast leaves the fan for the stack (tovCPHl-gOM 9:07.75, tovCPHl-gOM 15:02.5).
 - **The hand's fan.** Your hand's cards lie along one circle over the near edge,
   about 14 card widths across, on the desktop and the phone. A card's turn and
   how far it sinks follow its distance from the fan's middle, so a crowded hand

@@ -9,6 +9,12 @@
     "border": 0.0588,
     "icon": 0.6765
   },
+  "away": {
+    "reach": 0.92,
+    "inner": 1.0,
+    "breath": 0.03,
+    "period_ms": 2600
+  },
   "coin": {
     "size": 0.16,
     "at": [-0.34, -0.42]
