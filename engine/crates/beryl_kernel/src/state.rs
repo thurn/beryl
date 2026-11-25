@@ -275,14 +275,18 @@ pub const CAPTURED_WORDS: usize = 4;
 impl<L: Layout> std::hash::Hash for State<L> {
     fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
         self.hash_position(h, true);
+        // Each of these is hashed only when present, so that an ordinary game keeps the hash
+        // the benchmark pins. A tag names each one, or five turns before a restart and five
+        // turns in an ended subgame would hash alike.
         if self.restarted_turns != 0 {
-            self.restarted_turns.hash(h);
+            (0u8, self.restarted_turns).hash(h);
         }
         let subgame_turns = self.subgame_turns.get();
         if subgame_turns != 0 {
-            subgame_turns.hash(h);
+            (1u8, subgame_turns).hash(h);
         }
         if let Some(outer) = self.suspended_game() {
+            2u8.hash(h);
             outer.hash(h);
         }
     }

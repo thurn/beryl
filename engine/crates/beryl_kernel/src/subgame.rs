@@ -228,3 +228,6 @@ impl<L: Layout> State<L> {
         *self = outer;
     }
 }
+
+#[cfg(test)]
+mod tests;

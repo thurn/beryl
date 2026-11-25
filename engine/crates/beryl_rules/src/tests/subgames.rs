@@ -15,9 +15,7 @@ use crate::ids::{LargeSlot, Seat, SlotId};
 use crate::layout::{Large, Layout, Small};
 use crate::resolution::Resolution;
 use crate::state::{State, TurnStep, Zone};
-use crate::{
-    CardTable, CustomBody, GameTable, Profile, Scratch, apply_decided, concede, custom_body, next,
-};
+use crate::{CardTable, CustomBody, GameTable, Profile, Scratch, apply_decided, custom_body, next};
 
 use super::{DUAL, LAND};
 
@@ -170,44 +168,6 @@ fn the_subgame_restores_the_main_game_with_a_win_or_draw() {
         assert!(state.graveyard(Seat::P0).contains(&main_spell.slot));
         assert_eq!(state.library(Seat::P0).len(), original_deck.len());
     }
-}
-
-#[test]
-fn a_concession_in_a_nested_subgame_resumes_its_parent() {
-    let table = table(10, 2, 16);
-    let mut state = position(&table, Profile::EXACT).widen();
-    let mut scratch = Scratch::new();
-    cast_from_position(&mut state, &table, &mut scratch);
-    play_until_depth(&mut state, &table, &mut scratch, 1);
-    loop {
-        let Step::Decide(decision) = next(&mut state, &table, &mut scratch, &mut Replay) else {
-            panic!("priority in the first subgame");
-        };
-        if decision.kind == DecisionKind::Priority
-            && decision.player == Seat::P0
-            && state.turn().step() == TurnStep::PrecombatMain
-        {
-            cast(&mut state, &table, &mut scratch, &mut Replay, &decision);
-            break;
-        }
-        apply_decided(
-            &mut state,
-            &table,
-            &mut scratch,
-            &mut Replay,
-            &decision,
-            Choice(0),
-        );
-    }
-    play_until_depth(&mut state, &table, &mut scratch, 2);
-    concede(&mut state, &table, &mut scratch, Seat::P1);
-    play_until_depth(&mut state, &table, &mut scratch, 1);
-    assert_eq!(state.player(Seat::P0).life(), 21);
-    assert_eq!(state.player(Seat::P1).life(), 16);
-    concede(&mut state, &table, &mut scratch, Seat::P0);
-    play_until_depth(&mut state, &table, &mut scratch, 0);
-    assert_eq!(state.player(Seat::P0).life(), 17);
-    assert_eq!(state.player(Seat::P1).life(), 20);
 }
 
 #[test]

@@ -6,6 +6,17 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Two different game histories hashed alike.** The hash of a `State` added the
+  turns played before a restart and the turns played in ended subgames only when
+  each was nonzero, with nothing to say which was which. So a game five turns
+  past a Karn Liberated restart and the same position five turns after a
+  Shahrazad subgame had the same hash, although the turn limit
+  (`State::turns_for_limit`) counts subgame turns and not turns before a
+  restart. Each of these fields, and the suspended game, now hashes after a tag
+  of its own, and an ordinary game's hash is unchanged. Guard: the tests in
+  `beryl_kernel/src/subgame/tests.rs`. No check can tell that two optional
+  fields share a hash prefix; a field added to the hash later needs a tag too.
+
 - **An Aura that became a creature stayed attached.** An effect that made an
   Aura a creature left it on its permanent, although "an Aura that's also a
   creature can't enchant anything" (CR 303.4d). `attach::may_enchant` quoted the
