@@ -279,5 +279,13 @@
     "diff": [
       "Brisela, Voice of Nightmares: [-your opponents-] {+each opponent+} can't cast spells with mana value 3 or less ."
     ]
+  },
+  "Lurrus of the Dream-Den": {
+    "reason": "wording",
+    "note": "Oracle prints the companion ability before the \"Lifelink\" line; the renderer prints keywords first. The ability text is the same.",
+    "diff": [
+      "Lurrus of the Dream-Den: {+lifelink+}",
+      "Lurrus of the Dream-Den: [-lifelink-]"
+    ]
   }
 }

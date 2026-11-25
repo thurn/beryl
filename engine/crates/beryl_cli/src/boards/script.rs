@@ -113,6 +113,7 @@ impl Scripted {
                 | Action::Cast { player, .. }
                 | Action::Activate { player, .. }
                 | Action::TurnFaceUp { player, .. }
+                | Action::Companion { player }
                 | Action::Answer { player, .. } => {
                     if player == seat {
                         script.push_back((at, *action, gate));

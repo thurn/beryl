@@ -87,6 +87,14 @@ pub(super) fn use_permission<L: Layout>(
     x: u8,
 ) -> Result<(), crate::fixed::Full> {
     if let Some(permitter) = permitter(s, t, player, face, x) {
+        // The permission did what it says: a spell was cast for it.
+        #[cfg(debug_assertions)]
+        if let Some((_, ability)) = s
+            .abilities(t, permitter)
+            .find(|(_, ability)| ability.graveyard_cast().is_some())
+        {
+            crate::coverage::hit(ability);
+        }
         s.remember(permitter, Memo::CastFromGraveyard)?;
     }
     Ok(())

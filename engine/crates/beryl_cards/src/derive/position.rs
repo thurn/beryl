@@ -288,6 +288,7 @@ pub(super) fn start(def: &'static CardDef, place: Place, witness: Option<&Witnes
             graveyard: leak(graveyard),
             exile,
             sideboard: &[],
+            companion: None,
             library,
         },
         PlayerSetup {
@@ -298,6 +299,7 @@ pub(super) fn start(def: &'static CardDef, place: Place, witness: Option<&Witnes
             graveyard: leak(opponent_graveyard),
             exile: &[],
             sideboard: &[],
+            companion: None,
             library,
         },
     ];

@@ -38,6 +38,17 @@ const UNREACHED: &[(&str, &str)] = &[
          which no generated position has; the card's hand-written scenarios meld the pair",
     ),
     (
+        "Lurrus of the Dream-Den: ability 0 (Static)",
+        "the companion ability works only for a card revealed before the game, and generated \
+         positions reveal none; the card's hand-written scenarios reveal it and take the {3} \
+         special action",
+    ),
+    (
+        "Lurrus of the Dream-Den: ability 1 (Static)",
+        "no generated position puts a permanent card with mana value 2 or less into the \
+         graveyard of Lurrus's controller; the card's hand-written scenarios cast one from there",
+    ),
+    (
         "Panglacial Wurm: ability 0 (Static)",
         "the generator does not start the card in a library and play a search; the card's \
          hand-written scenarios cast it during the search",

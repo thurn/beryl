@@ -17,9 +17,10 @@ pub(super) fn option_index<L: Layout>(
 }
 
 /// The choice that answers `d` as `action` would in a scenario, if `d` offers it, for an
-/// action that answers one decision: playing a land, casting, activating, turning face up or
-/// an answer. Whose decision it is and of what kind is the caller's to check. For scripts
-/// that drive agents in place of the runner, such as the UI fixtures' boards.
+/// action that answers one decision: playing a land, casting, activating, turning face up,
+/// taking the companion action or an answer. Whose decision it is and of what kind is the
+/// caller's to check. For scripts that drive agents in place of the runner, such as the UI
+/// fixtures' boards.
 pub fn answer<L: Layout>(
     t: &GameTable,
     s: &State<L>,
@@ -47,6 +48,7 @@ pub(super) fn takes<L: Layout>(t: &GameTable, s: &State<L>, action: &Action, o: 
         Action::TurnFaceUp { card, .. } => {
             matches!(o, Opt::TurnFaceUp(slot) if name(slot) == card)
         }
+        Action::Companion { .. } => matches!(o, Opt::Companion),
         _ => false,
     }
 }
@@ -66,6 +68,7 @@ pub(super) fn taking(action: &Action) -> String {
             format!("activating {card}'s ability {ability:?}")
         }
         Action::TurnFaceUp { card, .. } => format!("turning {card} face up"),
+        Action::Companion { .. } => "putting the companion into hand".to_owned(),
         action => format!("{action:?}"),
     }
 }

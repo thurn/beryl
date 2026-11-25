@@ -21,6 +21,7 @@ pub(super) fn decides(action: &Action) -> bool {
             | Action::Cast { .. }
             | Action::Activate { .. }
             | Action::TurnFaceUp { .. }
+            | Action::Companion { .. }
             | Action::Answer { .. }
     )
 }

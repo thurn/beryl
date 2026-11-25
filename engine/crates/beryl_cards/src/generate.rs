@@ -298,6 +298,7 @@ fn player(rng: &mut SplitMix64, pools: &Pools) -> PlayerSetup {
         graveyard: leak(graveyard),
         exile: &[],
         sideboard: &[],
+        companion: None,
         library: &[names::ISLAND; 8],
     }
 }

@@ -180,7 +180,10 @@ pub mod decks {
                 names::JACE_THE_MIND_SCULPTOR,
             ],
         ),
-        ("outside-the-game", &[names::BURNING_WISH]),
+        (
+            "outside-the-game",
+            &[names::BURNING_WISH, names::LURRUS_OF_THE_DREAM_DEN],
+        ),
         ("subgames", &[names::SHAHRAZAD]),
         (
             "attachments",

@@ -532,15 +532,16 @@ class Cards:
             for choose, exile in pairwise(instructions)
         )
 
-    def refuse_flipped_setup(self, setup: Json) -> None:
-        """The oracle setup formats do not set a flip card's flipped status."""
+    def refuse_unplaceable_setup(self, setup: Json) -> None:
+        """The oracle setup formats place cards: they can't flip a flip card or record a
+        companion revealed before the game, which XMage and Forge do from deck lists."""
         for player in cast(list[Json], setup["players"]):
+            if player.get("companion"):
+                raise Unsupported("a companion revealed before the game")
             for permanent in cast(list[Json], player["battlefield"]):
                 card = cast(str, permanent["card"])
                 if self.shapes.get(card) == "Flip" and setup_face(permanent):
-                    raise Unsupported(
-                        "a flip card that starts on the battlefield already flipped"
-                    )
+                    raise Unsupported("a flip card that starts flipped")
 
     def refuse_identical_damage_replacements(self, setup: Json) -> None:
         """Refuses a scenario that starts with two permanents of one card whose replacement

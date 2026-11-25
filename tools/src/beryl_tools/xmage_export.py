@@ -37,7 +37,7 @@ def _export_one(entry: Json, index: int, faces: Faces, known: set[str]) -> Expor
         trace = cast(list[Json], entry.get("trace", []))
         if any(position.get("subgame_depth") for position in trace):
             raise Unsupported("the exporter cannot script turns in a subgame")
-        writer.cards.refuse_flipped_setup(writer.setup)
+        writer.cards.refuse_unplaceable_setup(writer.setup)
         writer.run()
     except Unsupported as e:
         export.unsupported = str(e)

@@ -229,6 +229,22 @@ fn arrange<L: Layout>(
             order.push(slot);
         }
         s.board().order_library(p, &order);
+        if let Some(card) = player.companion {
+            let index = s
+                .companion_choices(t, p)
+                .find(|&(_, c)| t.def(c).name == card)
+                .map(|(index, _)| index)
+                .ok_or_else(|| {
+                    setup_failure(
+                        scenario,
+                        format!(
+                            "{card} is not a companion this deck may reveal: it must be in the \
+                             sideboard, and the deck must fulfill its companion condition"
+                        ),
+                    )
+                })?;
+            s.reveal_companion(p, index);
+        }
     }
     Ok(s)
 }

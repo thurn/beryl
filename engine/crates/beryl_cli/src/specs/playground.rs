@@ -47,6 +47,7 @@ fn actor(action: &Action) -> Option<Seat> {
         | Action::PlayLand { player, .. }
         | Action::Activate { player, .. }
         | Action::TurnFaceUp { player, .. }
+        | Action::Companion { player }
         | Action::Answer { player, .. } => Some(player),
         _ => None,
     }

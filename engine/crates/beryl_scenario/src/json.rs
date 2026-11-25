@@ -122,6 +122,8 @@ struct PlayerSetupDef {
     exile: &'static [&'static str],
     #[serde(skip_serializing_if = "slice_is_empty")]
     sideboard: &'static [&'static str],
+    #[serde(skip_serializing_if = "Option::is_none")]
+    companion: Option<&'static str>,
     library: &'static [&'static str],
 }
 
@@ -179,6 +181,10 @@ pub(crate) enum ActionDef {
         #[serde(serialize_with = "seat")]
         player: Seat,
         card: &'static str,
+    },
+    Companion {
+        #[serde(serialize_with = "seat")]
+        player: Seat,
     },
     Resolve,
     Concede {

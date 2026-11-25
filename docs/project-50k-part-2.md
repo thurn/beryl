@@ -1136,12 +1136,16 @@ multiset of card indices. They have no slots.
   (`Pending::Companion`) before the opening hands. The condition is
   `Ability::companion(&DeckCondition { each, has })`, read of the deck's cards
   by `State::companion_choices`. Putting it into the hand is a special action
-  that costs {3} (`Opt::Companion`). Every companion card has a hybrid mana
-  cost, which the engine cannot hold yet, so the keystone, Lurrus of the
-  Dream-Den, waits for hybrid mana. Its once-each-turn graveyard permission is
+  that costs {3} (`Opt::Companion`). The keystone, Lurrus of the Dream-Den, has
+  a hybrid mana cost. Its once-each-turn graveyard permission is
   `Ability::cast_from_graveyard_each_turn` (`casting/graveyard.rs`).
-- Scenarios set a sideboard with `.sideboard(P0, &[..])`. The session's
-  best-of-three match and sideboarding between games are not part of this plan.
+- Scenarios set a sideboard with `.sideboard(P0, &[..])`, and a companion
+  revealed before the game with `.companion(P0, card)`, which fails the setup
+  unless the deck fulfills the card's condition. `Action::Companion` takes the
+  {3} special action. Neither oracle can play either: XMage's test API and
+  Forge's puzzle state both start past the reveal, with no way to record it. The
+  session's best-of-three match and sideboarding between games are not part of
+  this plan.
 
 ## The keystone cards
 

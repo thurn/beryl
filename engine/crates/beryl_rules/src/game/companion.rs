@@ -203,9 +203,20 @@ fn put_into_hand<L: Layout>(
     sink: &mut Sink<L>,
     player: Seat,
 ) -> Result<(), Full> {
-    let (index, _) = s
+    let (index, card) = s
         .companion(t, player)
         .expect("the action is offered only for a companion outside the game");
+    // The companion ability did what it says: its card comes in from outside the game. The
+    // action is taken once a game at most, so the search costs nothing worth a gate.
+    if let Some(ability) = t
+        .def(card)
+        .front()
+        .abilities
+        .iter()
+        .find(|ability| ability.companion_condition().is_some())
+    {
+        crate::coverage::hit(ability);
+    }
     let slot = s
         .prepare_sideboard_card(t, player, index)?
         .expect("the companion is an available sideboard occurrence");

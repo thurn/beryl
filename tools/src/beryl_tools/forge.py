@@ -144,7 +144,7 @@ def state_text(
     setup: JsonObject, faces: Mapping[str, Card], store: Path, cards: Cards
 ) -> str:
     """The scenario's setup as a GameState text: one `key=value` line each."""
-    cards.refuse_flipped_setup(setup)
+    cards.refuse_unplaceable_setup(setup)
     players = cast(list[JsonObject], setup["players"])
     lines = [
         f"turn={setup['turn']}",

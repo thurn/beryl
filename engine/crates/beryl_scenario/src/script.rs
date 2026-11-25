@@ -48,6 +48,7 @@ pub fn script<L: Layout>(
             player,
             card: card(slot),
         },
+        Opt::Companion => Action::Companion { player },
         _ => return None,
     })
 }
@@ -178,6 +179,9 @@ pub fn source(action: &Action) -> String {
                 seat(player)
             )
         }
+        Action::Companion { player } => {
+            format!("Action::Companion {{ player: {} }}", seat(player))
+        }
         Action::Resolve => "Action::Resolve".to_owned(),
         Action::Concede { player } => format!("Action::Concede {{ player: {} }}", seat(player)),
         Action::AdvanceTo { turn, step } => {
@@ -274,6 +278,9 @@ pub fn setup_source(scenario: &Scenario) -> String {
             if !cards.is_empty() {
                 let _ = writeln!(text, "    .{zone}(P{p}, &{cards:?})");
             }
+        }
+        if let Some(card) = player.companion {
+            let _ = writeln!(text, "    .companion(P{p}, {card:?})");
         }
     }
     text

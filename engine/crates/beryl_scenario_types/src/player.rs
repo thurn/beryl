@@ -103,6 +103,11 @@ impl Player {
         Action::activate_merged(self.0, card, place, index)
     }
 
+    /// Pays {3} to put their revealed companion into their hand ([`Action::Companion`]).
+    pub const fn takes_companion(self) -> Action {
+        Action::Companion { player: self.0 }
+    }
+
     /// Passes priority.
     pub const fn passes(self) -> Action {
         Action::pass(self.0)

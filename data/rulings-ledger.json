@@ -1581,6 +1581,157 @@
     }
   ],
   "Lord of Atlantis": [],
+  "Lurrus of the Dream-Den": [
+    {
+      "published_at": "2020-04-17",
+      "hash": "61e71228a507",
+      "scenario": [
+        "in the main deck it is an ordinary card"
+      ]
+    },
+    {
+      "published_at": "2020-04-17",
+      "hash": "9ff48b6d60b4",
+      "scenario": [
+        "instants and sorceries of any mana value let the deck reveal it"
+      ]
+    },
+    {
+      "published_at": "2020-04-17",
+      "hash": "2d54854ed54c",
+      "scenario": [
+        "a graveyard spell keeps its own timing"
+      ]
+    },
+    {
+      "published_at": "2020-04-17",
+      "hash": "70dbbd48812e",
+      "untestable": "A scenario starts after the opening hands, when the companion question has already been asked. The rules tests in beryl_rules `tests/companion.rs` play the question before the opening hands: the starting player is asked first, and a player who declines is not asked again."
+    },
+    {
+      "published_at": "2020-04-17",
+      "hash": "9093ebdbcb8a",
+      "covered": "Ability::cast_from_graveyard_each_turn"
+    },
+    {
+      "published_at": "2020-04-17",
+      "hash": "db0afcde9483",
+      "covered": "Ability::cast_from_graveyard_each_turn"
+    },
+    {
+      "published_at": "2020-04-17",
+      "hash": "d4006fa52f8c",
+      "scenario": [
+        "pay {3} to put the companion into hand, then cast it"
+      ]
+    },
+    {
+      "published_at": "2020-04-17",
+      "hash": "e4a3374c4678",
+      "scenario": [
+        "pay {3} to put the companion into hand, then cast it",
+        "the companion action waits for its player's main phase",
+        "the companion action waits for an empty stack"
+      ]
+    },
+    {
+      "published_at": "2020-04-17",
+      "hash": "1c1984994a51",
+      "untestable": "Losing control of Lurrus while a spell is being cast needs a mana ability that sacrifices it, such as Ashnod's Altar's, and no such card is implemented."
+    },
+    {
+      "published_at": "2020-04-17",
+      "hash": "80e67d8d0a07",
+      "covered": "Ability::cast_from_graveyard_each_turn"
+    },
+    {
+      "published_at": "2020-04-17",
+      "hash": "b710371a3ff1",
+      "scenario": [
+        "pay {3} to put the companion into hand, then cast it"
+      ]
+    },
+    {
+      "published_at": "2020-04-17",
+      "hash": "88507a05b8c5",
+      "scenario": [
+        "cast one small permanent spell from the graveyard a turn"
+      ]
+    },
+    {
+      "published_at": "2020-04-17",
+      "hash": "b03b4564f440",
+      "covered": "Ability::cast_from_graveyard_each_turn"
+    },
+    {
+      "published_at": "2020-04-17",
+      "hash": "3007e4c6bd76",
+      "scenario": [
+        "pay {3} to put the companion into hand, then cast it"
+      ]
+    },
+    {
+      "published_at": "2020-04-17",
+      "hash": "c130b9e73bad",
+      "scenario": [
+        "instants and sorceries of any mana value let the deck reveal it"
+      ]
+    },
+    {
+      "published_at": "2020-04-17",
+      "hash": "5dcb707b9661",
+      "covered": "Ability::companion"
+    },
+    {
+      "published_at": "2020-04-17",
+      "hash": "1dd9f9b5caf8",
+      "untestable": "Beryl plays only two-player constructed games, with no Commander variant."
+    },
+    {
+      "published_at": "2020-04-17",
+      "hash": "2ddf70ac053b",
+      "untestable": "A scenario starts after the opening hands, when the companion question has already been asked. The rules tests in beryl_rules `tests/companion.rs` play the question before the opening hands, which offers one card at most, and only when the deck fulfills its condition."
+    },
+    {
+      "published_at": "2020-04-17",
+      "hash": "d5f1c1e286a5",
+      "scenario": [
+        "a permanent card put into the graveyard can be cast again at once"
+      ]
+    },
+    {
+      "published_at": "2020-06-01",
+      "hash": "5c26ae687d67",
+      "scenario": [
+        "pay {3} to put the companion into hand, then cast it"
+      ]
+    },
+    {
+      "published_at": "2020-06-01",
+      "hash": "3007e4c6bd76",
+      "scenario": [
+        "pay {3} to put the companion into hand, then cast it"
+      ]
+    },
+    {
+      "published_at": "2020-06-01",
+      "hash": "7086ef59f979",
+      "scenario": [
+        "pay {3} to put the companion into hand, then cast it",
+        "the companion action waits for its player's main phase",
+        "the companion action waits for an empty stack"
+      ]
+    },
+    {
+      "published_at": "2020-06-01",
+      "hash": "b90093a4f0b8",
+      "scenario": [
+        "pay {3} to put the companion into hand, then cast it",
+        "the companion action waits for its player's main phase",
+        "the companion action waits for an empty stack"
+      ]
+    }
+  ],
   "Mind Bend": [
     {
       "published_at": "2004-10-04",

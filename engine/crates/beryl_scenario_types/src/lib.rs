@@ -77,6 +77,9 @@ pub struct PlayerSetup {
     pub exile: &'static [&'static str],
     /// The cards available to bring in from outside the game.
     pub sideboard: &'static [&'static str],
+    /// The card of `sideboard` this player revealed as their companion before the game
+    /// began ([`Scenario::companion`]).
+    pub companion: Option<&'static str>,
     /// Top first: the whole library, in order. A scenario that doesn't set it gets
     /// [`FILLER_LIBRARY`].
     pub library: &'static [&'static str],
@@ -241,6 +244,10 @@ pub enum Action {
     /// `player` turns the face-down permanent `card` face up at a priority decision, a
     /// special action (CR 116.2b). Its payment's questions follow as decisions.
     TurnFaceUp { player: Seat, card: &'static str },
+    /// `player` pays {3} to put their revealed companion from outside the game into their
+    /// hand at a priority decision, a special action (CR 116.2g). Its payment's questions
+    /// follow as decisions.
+    Companion { player: Seat },
     /// Players pass priority until the top of the stack resolves, or until the next decision
     /// is not a priority decision (a question its resolution asks). The game then stops at
     /// the active player's next priority, even where passing is all they can do.
@@ -561,6 +568,7 @@ const NEW_PLAYER: PlayerSetup = PlayerSetup {
     graveyard: &[],
     exile: &[],
     sideboard: &[],
+    companion: None,
     library: FILLER_LIBRARY,
 };
 
@@ -675,6 +683,17 @@ impl Scenario {
     #[must_use]
     pub const fn sideboard(mut self, player: Seat, cards: &'static [&'static str]) -> Scenario {
         self.setup.players[player.index()].sideboard = cards;
+        self
+    }
+
+    /// Records that this player revealed `card`, a card of their sideboard, as their
+    /// companion before the game began (CR 103.2b), as they could only if the setup's deck
+    /// fulfills its companion condition. The setup fails if `card` is not in the sideboard or
+    /// the deck does not fulfill the condition: a scenario about a deck that may not reveal a
+    /// companion leaves this out and finds that no companion action is offered.
+    #[must_use]
+    pub const fn companion(mut self, player: Seat, card: &'static str) -> Scenario {
+        self.setup.players[player.index()].companion = Some(card);
         self
     }
 

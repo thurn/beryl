@@ -13,6 +13,7 @@ use beryl_engine::{
 use crate::{CARDS, decks, names};
 
 mod breach_loop;
+mod companion;
 mod copies;
 mod derive;
 mod equipment;

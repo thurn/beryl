@@ -406,7 +406,8 @@ impl<L: Layout> Runner<L> {
             action @ (Action::PlayLand { player, .. }
             | Action::Cast { player, .. }
             | Action::Activate { player, .. }
-            | Action::TurnFaceUp { player, .. }) => {
+            | Action::TurnFaceUp { player, .. }
+            | Action::Companion { player }) => {
                 let what = taking(&action);
                 self.priority_option(player, &what, |r, o| takes(&r.t, &r.s, &action, o))?;
             }
