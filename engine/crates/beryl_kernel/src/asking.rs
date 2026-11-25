@@ -37,6 +37,9 @@ pub struct Asking<L: Layout = Small> {
     hidden: bool,
     /// Whether an entry copy replacement paused the run. Scenario traces read this
     /// after [`Asking::end`] to tell this choice apart from other optional picks.
+    /// [`Asking::begin`] clears it, so a mark left by an earlier run that nothing took
+    /// cannot label a later question, such as the copy's own enters trigger, as a copy
+    /// choice.
     enter_as_copy: bool,
 }
 
@@ -53,6 +56,7 @@ impl<L: Layout> Asking<L> {
         self.open = open;
         self.question = None;
         self.hidden = false;
+        self.enter_as_copy = false;
         Ok(())
     }
 
