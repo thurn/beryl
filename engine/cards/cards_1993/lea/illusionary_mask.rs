@@ -16,7 +16,7 @@ pub static CARD: CardDef = Printed::IllusionaryMask
     .abilities(&[Ability::activated(Cost::mana(ManaCost::X))
         .effect(&may_cast_face_down_within_x(
             you(),
-            cards_in(Zone::Hand, &you(), Filter::Types(Types::CREATURE)),
+            cards_in(Zone::Hand, &you(), creature()),
         ))
         .as_a_sorcery()])
     .card();
