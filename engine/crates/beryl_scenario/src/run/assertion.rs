@@ -1,12 +1,29 @@
 //! Checks the facts a scenario asserts at an open decision or at the end of the game.
 
 use beryl_engine::card::{FaceIx, Types};
-use beryl_engine::{Layout, Outcome, Step, Zone, ZoneKey, view};
+use beryl_engine::{Layout, Outcome, Seat, Step, Zone, ZoneKey, view};
 
 use super::Runner;
 use crate::{Assertion, Ending, StackItem};
 
 impl<L: Layout> Runner<L> {
+    /// The actual and expected counts of [`Assertion::TappedMana`].
+    fn tapped_mana(
+        &self,
+        position: &Step<L>,
+        player: Seat,
+        count: u8,
+    ) -> Result<(String, String), String> {
+        if let Step::Over(o) = position {
+            return Err(format!("no permanents to read: the game is over ({o:?})"));
+        }
+        let tapped = self.mana_sources(player);
+        let n = tapped
+            .filter(|&(slot, _)| self.s.object(slot).is_tapped())
+            .count();
+        Ok((n.to_string(), count.to_string()))
+    }
+
     /// The actual and expected values of an assertion about permanents.
     fn permanent_fact(&self, assertion: Assertion) -> Result<(String, String), String> {
         let s = &self.s;
@@ -214,16 +231,7 @@ impl<L: Layout> Runner<L> {
                 }
                 self.permanent_fact(assertion)?
             }
-            Assertion::TappedMana { player, count } => {
-                if let Step::Over(o) = position {
-                    return Err(format!("no permanents to read: the game is over ({o:?})"));
-                }
-                let tapped = self.mana_sources(player);
-                let n = tapped
-                    .filter(|&(slot, _)| s.object(slot).is_tapped())
-                    .count();
-                (n.to_string(), count.to_string())
-            }
+            Assertion::TappedMana { player, count } => self.tapped_mana(position, player, count)?,
             Assertion::Colors { .. } | Assertion::PtIn { .. } => {
                 self.characteristic_in(position, assertion)?
             }
