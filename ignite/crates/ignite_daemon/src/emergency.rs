@@ -20,7 +20,9 @@ use rusqlite::Connection;
 
 use ignite_core::ids::{SessionId, TicketId};
 use ignite_core::protocol::client::{Exit, Reply, Request};
-use ignite_core::protocol::emergency::{Allowance, Emergency, EmergencyChange, EmergencyScope};
+use ignite_core::protocol::emergency::{
+    Allowance, Emergency, EmergencyChange, EmergencyScope, ending_refusal,
+};
 use ignite_core::time::Timestamp;
 use ignite_core::traits::Clock;
 use ignite_store::local::{pool as settings, trees};
@@ -286,11 +288,35 @@ impl StatusSection for EmergencySection {
     }
 }
 
-/// `ignite emergency [declare <ticket> [--landings-only] | allow <ticket> [<verb>] | clear --local]`.
+/// The ticket that `--emergency <ticket>` or `--emergency=<ticket>` names among `words`, which
+/// says the caller means to end that emergency. `Err` is the refusal for a flag without a
+/// ticket.
+pub fn named_emergency(words: &[&str]) -> Result<Option<TicketId>, String> {
+    let mut named = None;
+    let mut rest = words.iter();
+    while let Some(word) = rest.next() {
+        let value = if *word == "--emergency" {
+            rest.next().copied()
+        } else {
+            word.strip_prefix("--emergency=")
+        };
+        if *word == "--emergency" || word.starts_with("--emergency=") {
+            let ticket = value
+                .and_then(|v| TicketId::new(v).ok())
+                .ok_or_else(|| "failed   `--emergency` needs the emergency's ticket".to_owned())?;
+            named = Some(ticket);
+        }
+    }
+    Ok(named)
+}
+
+/// `ignite emergency [declare <ticket> [--landings-only] | allow <ticket> [<verb>] | clear --local
+/// [--emergency <ticket>]]`.
 pub struct EmergencyVerb(pub Arc<Emergencies>);
 
 const USAGE: &str = "usage    ignite emergency [declare <ticket> [--landings-only] | allow \
-                     <ticket> [<verb>] | clear --local]; `ignite pool resume --all` ends it";
+                     <ticket> [<verb>] | clear --local \
+                     [--emergency <ticket>]]; `ignite pool resume --all [--emergency <ticket>]` ends it";
 
 impl Verb for EmergencyVerb {
     fn name(&self) -> &'static str {
@@ -316,17 +342,7 @@ impl Verb for EmergencyVerb {
             ["allow", ticket, verb @ ..] if verb.len() <= 1 => {
                 self.allow(ctx, req, ticket, verb.first().copied())
             }
-            ["clear", "--local"] => match self.0.clear_locally() {
-                Some(lifted) => Reply::text(
-                    Exit::Success,
-                    format!(
-                        "lifted   emergency {} on this machine only; other machines still enforce \
-                         it until a session runs `ignite pool resume --all`",
-                        lifted.ticket
-                    ),
-                ),
-                None => Reply::text(Exit::Success, "none     no emergency is in force"),
-            },
+            ["clear", rest @ ..] if rest.contains(&"--local") => self.clear(ctx, req, rest),
             _ => Reply::text(Exit::Usage, USAGE),
         }
     }
@@ -339,6 +355,37 @@ impl EmergencyVerb {
             return Reply::text(Exit::Success, "none     no emergency is in force");
         }
         Reply::text(Exit::Success, lines.join("\n"))
+    }
+
+    /// Lifts the emergency on this machine, unless it was declared on a ticket the caller does
+    /// not hold and does not name with `--emergency`.
+    fn clear(&self, ctx: &Context, req: &Request, words: &[&str]) -> Reply {
+        let named = match named_emergency(words) {
+            Ok(named) => named,
+            Err(refusal) => return Reply::text(Exit::Usage, refusal),
+        };
+        if let Some(current) = self.0.in_force() {
+            let caller = ctx.session.as_ref().or(req.session.as_ref());
+            let holds = caller.is_some()
+                && ctx
+                    .hub
+                    .ticket(&current.ticket)
+                    .is_ok_and(|detail| detail.ticket.session.as_ref() == caller);
+            if let Some(refusal) = ending_refusal(&current, caller, holds, named.as_ref()) {
+                return Reply::text(Exit::Usage, refusal);
+            }
+        }
+        match self.0.clear_locally() {
+            Some(lifted) => Reply::text(
+                Exit::Success,
+                format!(
+                    "lifted   emergency {} on this machine only; other machines still enforce \
+                     it until a session runs `ignite pool resume --all`",
+                    lifted.ticket
+                ),
+            ),
+            None => Reply::text(Exit::Success, "none     no emergency is in force"),
+        }
     }
 
     fn change(&self, ctx: &Context, change: &EmergencyChange) -> Result<Emergency, Reply> {

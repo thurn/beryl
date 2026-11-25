@@ -329,6 +329,47 @@ fn resuming_every_machine_ends_the_emergency_here_at_once() {
 }
 
 #[test]
+fn resuming_every_machine_refuses_an_emergency_another_session_declared() {
+    use crate::emergency::{Emergencies, EmergencyVerb};
+    let rig = rig(&[]);
+    rig.clock.set(Timestamp::EPOCH);
+    let emergencies = Arc::new(Emergencies::new(rig.clock.clone(), None));
+    let declare = request("emergency", &["declare", "TJUS1"], Some("local_j"));
+    assert_eq!(
+        EmergencyVerb(emergencies.clone())
+            .run(&rig.ctx, &declare)
+            .exit,
+        Exit::Success
+    );
+    let pool = PoolVerb::new(rig.headless_dispatch.clone()).ending(emergencies.clone());
+    let resume =
+        |session: &str, args: &[&str]| pool.run(&rig.ctx, &request("pool", args, Some(session)));
+
+    let refused = resume("local_w", &["resume", "--all"]);
+    assert_ne!(refused.exit, Exit::Success, "{}", refused.text);
+    assert!(
+        refused.text.contains("TJUS1") && refused.text.contains("local_j"),
+        "{}",
+        refused.text
+    );
+    assert!(emergencies.in_force().is_some());
+    let wrong = resume("local_w", &["resume", "--all", "--emergency", "TOTHR"]);
+    assert_ne!(wrong.exit, Exit::Success, "{}", wrong.text);
+    let missing = resume("local_w", &["resume", "--all", "--emergency"]);
+    assert_eq!(missing.exit, Exit::Usage, "{}", missing.text);
+    assert!(emergencies.in_force().is_some());
+
+    let ended = resume("local_w", &["resume", "--all", "--emergency=TJUS1"]);
+    assert_eq!(ended.exit, Exit::Success, "{}", ended.text);
+    assert!(
+        ended.text.contains("ended    emergency TJUS1"),
+        "{}",
+        ended.text
+    );
+    assert!(emergencies.in_force().is_none());
+}
+
+#[test]
 fn tell_names_the_sending_session_in_the_comment() {
     let rig = rig(&[]);
     rig.hub.insert_ticket(detail("T.1", "open", None, &[], ""));

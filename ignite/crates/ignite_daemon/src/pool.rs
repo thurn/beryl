@@ -183,8 +183,8 @@ impl Verb for PoolVerb {
             Some((&("add" | "remove" | "mode"), _)) => Err(Error::Invalid(
                 "desktop worker commands have been retired".to_owned(),
             )),
-            Some((&"pause", rest)) => self.pause(ctx, req, rest.contains(&"--all"), true),
-            Some((&"resume", rest)) => self.pause(ctx, req, rest.contains(&"--all"), false),
+            Some((&"pause", rest)) => self.pause(ctx, req, rest, true),
+            Some((&"resume", rest)) => self.pause(ctx, req, rest, false),
             Some((&"watch", rest)) => self.watch(rest),
             Some((&"usage", [])) => Ok(crate::dispatchd::usage_report(
                 self.headless_dispatch.pool(),
@@ -282,12 +282,16 @@ impl PoolVerb {
 
     /// Changes this machine's state, or pauses or resumes all hand-offs. Resuming all
     /// hand-offs also ends the emergency, if one is in force.
-    fn pause(&self, ctx: &Context, req: &Request, all: bool, paused: bool) -> Result<Reply> {
+    fn pause(&self, ctx: &Context, req: &Request, words: &[&str], paused: bool) -> Result<Reply> {
         let verb = if paused { "paused" } else { "resumed" };
-        if all {
+        if words.contains(&"--all") {
+            let emergency = crate::emergency::named_emergency(words).map_err(Error::Invalid)?;
+            // The hub refuses to end an emergency that another session's ticket holds.
             ctx.hub.pause(&Pause {
                 machine: None,
                 paused,
+                session: ctx.session.clone().or_else(|| req.session.clone()),
+                emergency,
             })?;
             // Known here at once rather than at the next heartbeat.
             self.headless_dispatch.pool().set_paused_everywhere(paused);

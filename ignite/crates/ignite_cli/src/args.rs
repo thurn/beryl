@@ -369,9 +369,13 @@ pub enum PoolCommand {
     },
     /// Start handing off tickets again.
     Resume {
-        /// On every machine.
+        /// On every machine. This also ends the emergency in force.
         #[arg(long)]
         all: bool,
+        /// With `--all`: the ticket of the emergency to end, when it was declared on a ticket
+        /// you do not hold.
+        #[arg(long, requires = "all")]
+        emergency: Option<String>,
     },
     /// Print the newest sample of each Claude plan window, and the usage hold if one is in
     /// force.

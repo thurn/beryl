@@ -9,7 +9,6 @@ use serde_json::{Map, Value, json};
 
 use ignite_core::dispatch::label;
 use ignite_core::ids::{MachineId, SessionId, TicketId};
-use ignite_core::protocol::emergency::{EmergencyChange, EmergencyReply};
 use ignite_core::protocol::hub::{
     AdhocClaim, Claim, Close, DependencyNote, FixOutcome, Heartbeat, Landed, LandedReply,
     MachineFree, NextReply, Pause, Release, SessionTitle, TicketBrief,
@@ -22,15 +21,16 @@ use ignite_core::time::Timestamp;
 use ignite_store::StoreError;
 use ignite_store::hub::batch::{self, BatchOutcome};
 use ignite_store::hub::fix_outcomes::LandingFix;
-use ignite_store::hub::{
-    edges, emergency, feed, findings, fleet, machine_asks, session_titles, tickets,
-};
+use ignite_store::hub::{edges, feed, findings, fleet, machine_asks, session_titles, tickets};
 
 use super::{Request, Response};
 use crate::upkeep::regressions;
 
 #[path = "dispatch_machines.rs"]
 mod machines;
+
+#[path = "dispatch_emergency.rs"]
+mod emergency_route;
 
 #[path = "dispatch_families.rs"]
 mod families;
@@ -191,38 +191,16 @@ fn route(
         "/pause" => {
             // Any machine may pause every machine, as `ignite pool pause --all` does, but only
             // a machine itself may pause or resume it alone.
-            let parsed: Pause = body(request)?;
+            let mut parsed: Pause = body(request)?;
             if let Some(machine) = &parsed.machine {
                 same_machine(request, machine)?;
             }
+            if let Some(named) = &parsed.emergency {
+                parsed.emergency = Some(canonical(conn, named)?);
+            }
             machines::pause(conn, &parsed, request, now)
         }
-        "/emergency" => {
-            // Tickets are stored by their canonical ID, which is how a daemon names the
-            // ticket a tree holds.
-            let mut parsed: EmergencyChange = body(request)?;
-            match &mut parsed {
-                EmergencyChange::Declare {
-                    machine, ticket, ..
-                } => {
-                    same_machine(request, machine)?;
-                    *ticket = canonical(conn, ticket)?;
-                }
-                EmergencyChange::Allow { allowance, .. } => {
-                    allowance.ticket = canonical(conn, &allowance.ticket)?;
-                }
-            }
-            let changed = emergency::change(conn, &parsed, now).map_err(|error| match error {
-                StoreError::Rejected(message) => failure(409, &message),
-                other => store_failure(&other),
-            })?;
-            Ok(Response::json(
-                200,
-                &json!(EmergencyReply {
-                    emergency: Some(changed),
-                }),
-            ))
-        }
+        "/emergency" => emergency_route::change(conn, request, now),
         other => Err(failure(404, &format!("no route {other}"))),
     }
 }

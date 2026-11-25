@@ -4189,9 +4189,14 @@ full pause for a broken build, hub or daemon fault, or resource exhaustion.
   The order names the emergency ticket and the sender's session. Before acting,
   use `ignite ticket show <emergency ticket>` to confirm the `incident` or
   `justiciar` label and that the sender holds it.
-- `ignite pool resume --all` ends the pause on every machine. An operator stuck
-  behind a flag nobody can end can lift it on one machine with
-  `ignite emergency clear --local`.
+- `ignite pool resume --all` ends the pause on every machine. The hub refuses
+  when the emergency was declared on a ticket the caller does not hold, because
+  another session may have declared a newer one. The caller then adds
+  `--emergency <ticket>` to name it on purpose. An operator stuck behind a flag
+  nobody can end can lift it on one machine with
+  `ignite emergency clear --local`, which follows the same rule.
+- When a declaration replaces another session's emergency, the earlier
+  declarer's ticket gets a comment and an `ignite tell`.
 
 ### Planning
 

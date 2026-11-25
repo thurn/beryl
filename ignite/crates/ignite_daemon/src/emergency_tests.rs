@@ -293,6 +293,33 @@ fn the_server_refuses_a_heavy_verb_until_every_machine_resumes() {
 }
 
 #[test]
+fn a_local_clear_needs_the_declaring_session_or_the_named_ticket() {
+    let hub = Arc::new(FakeHub::default());
+    let emergencies = Arc::new(Emergencies::new(clock(), None));
+    let verb = EmergencyVerb(emergencies.clone());
+    let ctx = context(hub);
+    let run = |session: &str, args: &[&str]| verb.run(&ctx, &request("emergency", args, session));
+    assert_eq!(run("local_j", &["declare", "TJUS1"]).exit, Exit::Success);
+
+    let refused = run("local_w", &["clear", "--local"]);
+    assert_eq!(refused.exit, Exit::Usage, "{}", refused.text);
+    assert!(refused.text.contains("TJUS1"), "{}", refused.text);
+    assert!(emergencies.in_force().is_some());
+    let named = run("local_w", &["clear", "--local", "--emergency", "TJUS1"]);
+    assert_eq!(named.exit, Exit::Success, "{}", named.text);
+    assert!(emergencies.in_force().is_none());
+
+    // The declaring session lifts its own emergency without naming it.
+    emergencies.heard(None);
+    let fresh = Arc::new(Emergencies::new(clock(), None));
+    let verb = EmergencyVerb(fresh.clone());
+    let own = |args: &[&str]| verb.run(&ctx, &request("emergency", args, "local_j"));
+    assert_eq!(own(&["declare", "TJUS1"]).exit, Exit::Success);
+    assert_eq!(own(&["clear", "--local"]).exit, Exit::Success);
+    assert!(fresh.in_force().is_none());
+}
+
+#[test]
 fn a_landings_only_declaration_refuses_land_until_the_ticket_is_allowed() {
     let emergencies = Arc::new(Emergencies::new(clock(), None));
     let mut registry = Registry::default();

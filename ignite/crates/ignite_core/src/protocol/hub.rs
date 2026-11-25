@@ -684,10 +684,20 @@ pub struct ReportFiled {
 
 /// `POST /pause`: stops (or restarts) hand-offs to one machine, or to every machine when
 /// `machine` is `None`. While a pause holds, `/next` answers nothing.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// Resuming every machine also ends the emergency in force. The hub refuses that unless the
+/// emergency was declared by `session` or on a ticket it holds, or `emergency` names the
+/// emergency's ticket (see `protocol::emergency::ending_refusal`).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Pause {
     pub machine: Option<MachineId>,
     pub paused: bool,
+    /// The session that asks.
+    #[serde(default)]
+    pub session: Option<SessionId>,
+    /// The ticket of the emergency the caller means to end.
+    #[serde(default)]
+    pub emergency: Option<TicketId>,
 }
 
 /// `POST /commands/rejected`: a command line the `ignite` executable refused to parse, sent so

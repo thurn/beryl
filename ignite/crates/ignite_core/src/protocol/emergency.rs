@@ -7,7 +7,8 @@
 //! emergency ticket or tickets it allows. Running commands continue.
 //!
 //! The flag lapses [`EMERGENCY_LASTS_S`] after the last declaration.
-//! `ignite pool resume --all` ends it at once.
+//! `ignite pool resume --all` ends it at once, but only for a session that holds the emergency's
+//! ticket or names it with `--emergency <ticket>` (see [`ending_refusal`]).
 
 use serde::{Deserialize, Serialize};
 
@@ -89,6 +90,27 @@ impl Emergency {
     }
 }
 
+/// Why `caller` may not end `emergency`, or `None` when it may. A session may end an emergency
+/// that it declared, or one declared on a ticket it holds (`holds_ticket`), or one whose ticket
+/// it names on purpose (`named`). Anyone else is probably ending an emergency that another
+/// session declared after the one they know of.
+pub fn ending_refusal(
+    emergency: &Emergency,
+    caller: Option<&SessionId>,
+    holds_ticket: bool,
+    named: Option<&TicketId>,
+) -> Option<String> {
+    if holds_ticket || named == Some(&emergency.ticket) || caller == Some(&emergency.session) {
+        return None;
+    }
+    Some(format!(
+        "refused  emergency {} (declared by {} on {}) is in force, and it was declared on a \
+         ticket you do not hold. It may not be the emergency you declared. To end it anyway, \
+         name its ticket: `--emergency {}`",
+        emergency.ticket, emergency.session, emergency.machine, emergency.ticket
+    ))
+}
+
 /// `POST /emergency`: one change to the emergency. The reply is an [`EmergencyReply`].
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "change", rename_all = "snake_case")]
@@ -152,8 +174,9 @@ pub fn apply(
             };
             if &emergency.session != session {
                 return Err(format!(
-                    "only the declaring session {} may allow tickets",
-                    emergency.session
+                    "only the declaring session {} may allow tickets. It declared emergency {}, \
+                     which is in force now; another session may have declared one since",
+                    emergency.session, emergency.ticket
                 ));
             }
             if !emergency.allowed.contains(allowance) {
@@ -265,6 +288,25 @@ mod tests {
         assert!(emergency.allows(&work, "land"));
         assert!(!emergency.allows(&work, "test"));
         assert!(emergency.allows(&TicketId::new("TJUS1").unwrap(), "test"));
+    }
+
+    #[test]
+    fn only_the_holder_or_a_named_ticket_ends_an_emergency() {
+        let now = Timestamp::EPOCH;
+        let emergency = apply(None, &declare("local_j", "TJUS1"), now).unwrap();
+        let other = SessionId::new("local_w").unwrap();
+        let ticket = TicketId::new("TJUS1").unwrap();
+        let refusal = ending_refusal(&emergency, Some(&other), false, None).unwrap();
+        assert!(
+            refusal.contains("TJUS1") && refusal.contains("local_j"),
+            "{refusal}"
+        );
+        assert!(ending_refusal(&emergency, None, false, None).is_some());
+        let wrong = TicketId::new("TOTHR").unwrap();
+        assert!(ending_refusal(&emergency, Some(&other), false, Some(&wrong)).is_some());
+        assert!(ending_refusal(&emergency, Some(&other), false, Some(&ticket)).is_none());
+        assert!(ending_refusal(&emergency, Some(&other), true, None).is_none());
+        assert!(ending_refusal(&emergency, Some(&emergency.session), false, None).is_none());
     }
 
     #[test]

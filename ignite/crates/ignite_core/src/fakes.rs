@@ -706,6 +706,18 @@ impl Hub for FakeHub {
 
     fn pause(&self, pause: &Pause) -> Result<()> {
         self.reachable()?;
+        if pause.machine.is_none()
+            && !pause.paused
+            && let Some(current) = lock(&self.emergency).as_ref()
+            && let Some(refusal) = crate::protocol::emergency::ending_refusal(
+                current,
+                pause.session.as_ref(),
+                false,
+                pause.emergency.as_ref(),
+            )
+        {
+            return Err(Error::Conflict(refusal));
+        }
         lock(&self.pauses).push(pause.clone());
         if pause.machine.is_none() && !pause.paused {
             *lock(&self.emergency) = None;

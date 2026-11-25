@@ -25,6 +25,10 @@ pub enum EmergencyCommand {
         /// Required: other machines go on enforcing it.
         #[arg(long, required = true)]
         local: bool,
+        /// The ticket of the emergency to lift, when it was declared on a ticket you do not
+        /// hold.
+        #[arg(long)]
+        emergency: Option<String>,
     },
 }
 

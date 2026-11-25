@@ -4,12 +4,14 @@ use rusqlite::{Connection, OptionalExtension, TransactionBehavior};
 use serde_json::json;
 
 use ignite_core::fleet::MachineState;
+use ignite_core::protocol::emergency::ending_refusal;
 use ignite_core::protocol::hub::{
     Heartbeat, HeartbeatReply, MachineRegister, MachineRegistered, Pause,
 };
+use ignite_core::protocol::tickets::Status;
 use ignite_core::time::Timestamp;
 use ignite_store::StoreError;
-use ignite_store::hub::{emergency, fleet, fleet_settings, tokens};
+use ignite_store::hub::{emergency, fleet, fleet_settings, tickets, tokens};
 
 use super::{
     Answer, HUB_VERSION, Request, Response, done, failure, sql_failure, store_failure, usage,
@@ -165,6 +167,26 @@ pub(super) fn pause(
         let tx = conn
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(sql_failure)?;
+        if !pause.paused
+            && let Some(current) = emergency::in_force(&tx, now).map_err(|e| store_failure(&e))?
+        {
+            // Another session may have declared an emergency since the caller declared its own.
+            let holds = tickets::load(&tx, current.ticket.as_str())
+                .map_err(|e| store_failure(&e))?
+                .is_some_and(|held| {
+                    held.status == Status::InProgress
+                        && pause.session.is_some()
+                        && held.session == pause.session
+                });
+            if let Some(message) = ending_refusal(
+                &current,
+                pause.session.as_ref(),
+                holds,
+                pause.emergency.as_ref(),
+            ) {
+                return Err(failure(409, &message));
+            }
+        }
         fleet::set_paused_everywhere(&tx, pause.paused, now).map_err(|e| store_failure(&e))?;
         if !pause.paused {
             emergency::clear(&tx).map_err(|e| store_failure(&e))?;
