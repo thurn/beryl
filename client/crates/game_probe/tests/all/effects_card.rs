@@ -205,8 +205,8 @@ fn a_dissolving_card_is_drawn_with_the_blended_records() {
     assert!(
         before.draws[before.opaque as usize..]
             .iter()
-            .all(|draw| draw.material != card),
-        "before the run every card is opaque"
+            .all(|draw| draw.material != card || draw.is_edge_only()),
+        "before the run every card is opaque, with only its soft edge among the blended records"
     );
     let during = frame(&mut show, &mut buffer, 400 * MS);
     assert_eq!(
