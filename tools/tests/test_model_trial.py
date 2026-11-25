@@ -731,7 +731,7 @@ def test_the_next_block_depends_on_every_arm_of_every_filed_pair() -> None:
 
 # Several copy arms.
 
-HYDROGEN = {"tier": "opus", "provider": "agy-gemini", "effort": "high"}
+HYDROGEN = {"tier": "hydrogen", "provider": "agy-gemini", "effort": "high"}
 
 
 def two_arms() -> Spec:
@@ -743,7 +743,7 @@ def test_every_arm_beside_the_source_is_a_copy_arm_in_order() -> None:
     assert found.copy_names() == ["copy", "hydrogen"]
     assert found.first_copy == "copy"
     assert found.arm("hydrogen").labels() == [
-        "tier:opus",
+        "tier:hydrogen",
         "provider:agy-gemini",
         "effort:high",
     ]
@@ -824,7 +824,7 @@ def test_another_arms_copy_clones_the_main_copys_text_with_its_own_routing() -> 
     assert fields["labels"] == [
         "trial:copy",
         "trial:pair-beef0001",
-        "tier:opus",
+        "tier:hydrogen",
         "provider:agy-gemini",
         "effort:high",
         "machine:jarvis",

@@ -207,12 +207,13 @@ light = "gpt-6.2-sol"
 
 # Antigravity CLI (`agy`) splits Gemini and Claude into separate providers because
 # they draw from independent quota pools.
-# Gemini 4 Hydrogen is the strongest Gemini model agy offers, so it runs `tier:opus`. The
-# provider has a zero share and takes only tickets pinned to it (a model trial's Gemini arm).
 [pool.models.agy-gemini]
-opus = "gemini-4-hydrogen"
+opus = "gemini-4-neon"
 sonnet = "gemini-4-neon"
 light = "gemini-3.8-flash"
+# A tier of its own for the model trial's Gemini arm (`tier:hydrogen`). No other provider
+# has this key, so only agy-gemini takes such a ticket, and the other tiers keep their models.
+hydrogen = "gemini-4-hydrogen"
 
 [pool.models.agy-claude]
 opus = "claude-opus-5-5"
