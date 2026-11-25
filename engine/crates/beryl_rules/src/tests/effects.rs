@@ -346,6 +346,7 @@ fn a_target_the_effect_moved_is_known_as_it_last_was() {
     // Its owner's opponent controls it: the controller, not the owner, loses the life.
     let stolen = s.object_ref(bear);
     with_game(&t, &mut s, &mut x, source.slot, |game, resolution| {
+        let stolen = game.state().permanent(stolen).unwrap();
         continuous::gain_control(game, resolution, stolen, crate::state::Duration::Indefinite)
             .unwrap();
     });
@@ -373,6 +374,7 @@ fn the_controllers_of_what_an_instruction_moved_are_who_controlled_each() {
     // and its controller is still who controlled it as it was destroyed (CR 608.2h).
     let stolen = s.object_ref(bear);
     with_game(&t, &mut s, &mut x, source.slot, |game, resolution| {
+        let stolen = game.state().permanent(stolen).unwrap();
         continuous::gain_control(game, resolution, stolen, crate::state::Duration::Indefinite)
             .unwrap();
     });

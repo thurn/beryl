@@ -1415,7 +1415,8 @@ fn a_stolen_creatures_dies_trigger_belongs_to_its_last_controller() {
     let thief = put(&t, &mut s, &mut x, p, "Test Bear");
     let r = s.object_ref(sphinx);
     with_game(&t, &mut s, &mut x, thief, |game, resolution| {
-        continuous::gain_control(game, resolution, r, Duration::Indefinite).unwrap();
+        let stolen = game.state().permanent(r).unwrap();
+        continuous::gain_control(game, resolution, stolen, Duration::Indefinite).unwrap();
         destroy(game, game.state().permanent(r).unwrap()).unwrap();
     });
     assert_eq!(s.triggers().len(), 1);
@@ -1697,7 +1698,8 @@ fn gaining_control_changes_the_controller_until_the_effect_ends() {
     assert_eq!(s.derived(mine).power, 1);
     let r = s.object_ref(theirs);
     with_game(&t, &mut s, &mut x, mine, |game, resolution| {
-        continuous::gain_control(game, resolution, r, Duration::Indefinite).unwrap();
+        let stolen = game.state().permanent(r).unwrap();
+        continuous::gain_control(game, resolution, stolen, Duration::Indefinite).unwrap();
     });
     assert_eq!(s.controller(theirs), p);
     assert_eq!(s.object(theirs).owner(), q);
@@ -1727,7 +1729,8 @@ fn an_effect_keeps_its_source_card_once_the_source_is_hidden_again() {
     let mine = put(&t, &mut s, &mut x, p, "Test Adeline");
     let r = s.object_ref(theirs);
     with_game(&t, &mut s, &mut x, mine, |game, resolution| {
-        continuous::gain_control(game, resolution, r, Duration::Indefinite).unwrap();
+        let stolen = game.state().permanent(r).unwrap();
+        continuous::gain_control(game, resolution, stolen, Duration::Indefinite).unwrap();
     });
     // The source goes into its owner's library, whose shuffle may put another card in its
     // slot (`zone::rebind`), as the deal decides what a hidden slot holds.

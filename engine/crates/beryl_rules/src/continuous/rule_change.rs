@@ -14,6 +14,7 @@
 //! Implements: none. Reads rule changes after continuous effects have applied.
 
 use beryl_card::{Governed, ManaCost, PlayerRules, RuleChange, SpellCost};
+use beryl_kernel::reference::Spell;
 
 use crate::bitboard::Bitboard;
 use crate::card::{Ability, AbilityKind, Face, ObjectAbility, Words};
@@ -425,7 +426,7 @@ fn attack_forbidden<L: Layout>(
 pub(crate) fn cant_be_countered<L: Layout>(
     s: &State<L>,
     t: &GameTable,
-    spell: crate::state::ObjectRef<L>,
+    spell: Spell<L>,
 ) -> bool {
     let of_kind = t.rules_of(RuleKind::CantBeCountered);
     if of_kind.is_empty() {
@@ -441,24 +442,21 @@ pub(crate) fn cant_be_countered<L: Layout>(
 fn countered_never<L: Layout>(
     s: &State<L>,
     t: &GameTable,
-    spell: crate::state::ObjectRef<L>,
+    spell: Spell<L>,
     of_kind: Rules,
 ) -> bool {
-    let on_stack = s
-        .spell(spell)
-        .and_then(|spell| s.spell_entry(spell))
-        .is_some();
-    if !on_stack {
+    if s.spell_entry(spell).is_none() {
         return false;
     }
-    if !s.effect_rules_on(spell).common(of_kind).is_empty() {
+    if !s.effect_rules_on(spell.into()).common(of_kind).is_empty() {
         return true;
     }
-    let own = s.definition(spell.slot).rules(t).common(of_kind);
+    let slot = spell.slot();
+    let own = s.definition(slot).rules(t).common(of_kind);
     own.iter().any(|id| match t.rule_condition(id) {
         None => true,
-        Some(condition) => interpret::without_a_scene(s, spell.slot, condition)
-            .unwrap_or_else(|| in_a_scene(s, t, spell.slot, id)),
+        Some(condition) => interpret::without_a_scene(s, slot, condition)
+            .unwrap_or_else(|| in_a_scene(s, t, slot, id)),
     })
 }
 

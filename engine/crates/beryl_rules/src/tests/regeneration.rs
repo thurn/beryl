@@ -100,10 +100,11 @@ fn regeneration_uses_toughness_before_equipment_detaches() {
         let shield = Continuous::Regeneration(bear_ref);
         continuous::start(game, resolution, shield, Duration::EndOfTurn).unwrap();
         game.state.attach(equipment_permanent, bear_permanent);
+        let equipment = game.state().permanents_in(Bitboard::single(equipment));
         continuous::start_on_set(
             game,
             resolution,
-            Bitboard::single(equipment),
+            equipment,
             &[
                 LayerChange::AddTypes(Types::CREATURE),
                 LayerChange::SetBasePt(2, 2),

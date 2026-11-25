@@ -9,6 +9,7 @@ use beryl_card::{
     RuleChange,
 };
 use beryl_kernel::chosen::ChosenValue;
+use beryl_kernel::reference::{Permanent, Permanents};
 
 pub(crate) mod arrival_timestamps;
 pub(crate) mod layers;
@@ -27,7 +28,7 @@ use crate::interpret::{Outcome, Run, no_primitive};
 use crate::layout::Layout;
 use crate::replacement::event::Event;
 use crate::resolution::Resolution;
-use crate::state::{Continuous, Duration, LayerChange, ObjectRef, Subject};
+use crate::state::{Continuous, Duration, LayerChange, Subject};
 
 /// Starts a continuous effect of what is resolving, on one object or as a rule changed for a
 /// player (see [CR 611.2](https://yawgatog.com/resources/magic-rules/#R6112)): "A continuous
@@ -60,11 +61,12 @@ pub fn start<L: Layout>(
 pub fn start_on_set<L: Layout>(
     game: &mut Game<'_, L>,
     resolution: &Resolution<'_, L>,
-    permanents: Bitboard<L::Slot>,
+    permanents: Permanents<L>,
     changes: &[LayerChange],
     duration: Duration,
 ) -> Result<(), Full> {
-    (game.state).start_effect_on_set(resolution.entry.card(), permanents, changes, duration)?;
+    let card = resolution.entry.card();
+    (game.state).start_effect_on_set(card, permanents.slots(), changes, duration)?;
     layers::refresh(game.state, game.table, game.sink)
 }
 
@@ -102,12 +104,10 @@ pub fn change_rule<L: Layout>(
 pub fn gain_control<L: Layout>(
     game: &mut Game<'_, L>,
     resolution: &Resolution<'_, L>,
-    object: ObjectRef<L>,
+    permanent: Permanent<L>,
     duration: Duration,
 ) -> Result<(), Full> {
-    let Some(permanent) = game.state.permanent(object) else {
-        return Ok(());
-    };
+    let object = permanent.into();
     let player = resolution.entry.controller();
     let control = Continuous::Layer(object, LayerChange::Control(player));
     start(game, resolution, control, duration)?;
@@ -142,7 +142,7 @@ pub(crate) fn instruction<L: Layout>(
         let mut left = permanents;
         while let Some(permanent) = run.next_permanent(&mut left) {
             let (game, resolution) = run.resolving();
-            gain_control(game, resolution, permanent.into(), duration)?;
+            gain_control(game, resolution, permanent, duration)?;
         }
     }
     let mut changes = [LayerChange::SwitchPt; MODIFY_PARTS];
@@ -207,13 +207,7 @@ pub(crate) fn instruction<L: Layout>(
     }
     if parts > 0 {
         let (game, resolution) = run.resolving();
-        start_on_set(
-            game,
-            resolution,
-            permanents.slots(),
-            &changes[..parts],
-            duration,
-        )?;
+        start_on_set(game, resolution, permanents, &changes[..parts], duration)?;
     }
     Ok(Outcome::acted_on(permanents.slots()))
 }
@@ -248,27 +242,31 @@ pub(crate) fn exchange_instruction<L: Layout>(
         return Ok(Outcome::NOTHING);
     };
     let (game, resolution) = run.resolving();
-    let (a_controller, b_controller) = (game.state.controller(a), game.state.controller(b));
+    let (Some(a), Some(b)) = (game.state.permanent_at(a), game.state.permanent_at(b)) else {
+        unreachable!("the permanents an instruction names are on the battlefield");
+    };
+    let (a_controller, b_controller) = (
+        game.state.controller(a.slot()),
+        game.state.controller(b.slot()),
+    );
     if a == b || a_controller == b_controller {
         return Ok(Outcome::NOTHING);
     }
-    let (a, b) = (game.state.object_ref(a), game.state.object_ref(b));
     let exchange = [
-        Continuous::Layer(a, LayerChange::Control(b_controller)),
-        Continuous::Layer(b, LayerChange::Control(a_controller)),
+        Continuous::Layer(a.into(), LayerChange::Control(b_controller)),
+        Continuous::Layer(b.into(), LayerChange::Control(a_controller)),
     ];
     (game.state).start_effects(resolution.entry.card(), &exchange, Duration::Indefinite)?;
     layers::refresh(game.state, game.table, game.sink)?;
-    for (object, player) in [(a, b_controller), (b, a_controller)] {
-        let permanent = game
-            .state
-            .permanent(object)
+    for (permanent, player) in [(a, b_controller), (b, a_controller)] {
+        let permanent = (game.state.permanent(permanent.into()))
             .expect("a permanent changing control");
         game.state.set_summoning_sick(permanent, true);
+        let object = permanent.into();
         game.settle(Event::GainControl { object, player })?;
     }
-    let mut exchanged = Bitboard::single(a.slot);
-    exchanged.insert(b.slot);
+    let mut exchanged = Bitboard::single(a.slot());
+    exchanged.insert(b.slot());
     Ok(Outcome::acted_on(exchanged))
 }
 

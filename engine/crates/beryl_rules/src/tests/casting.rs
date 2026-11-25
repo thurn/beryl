@@ -306,6 +306,7 @@ fn a_static_rule_change_follows_its_permanents_controller_and_ends_with_it() {
     // A control effect and no change to the object: layer 2 says whose opponents.
     let stolen = g.s.object_ref(raveler);
     with_game(&g.t, &mut g.s, &mut g.x, thief, |game, resolution| {
+        let stolen = game.state().permanent(stolen).unwrap();
         continuous::gain_control(game, resolution, stolen, Duration::EndOfTurn).unwrap();
     });
     assert_eq!(g.s.base_controller(raveler), g.me);
