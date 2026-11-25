@@ -34,10 +34,9 @@ MARKING_WORDS = ("trial", "copy", "sonnet", "opus", "duplicate", "pilot")
 # for its slowest source. A source is real work the pool does anyway, so moving it up costs
 # nothing.
 FILED_PRIORITY = 1
-# How long the next block ticket is deferred each time it finds an arm still unfinished. The
-# hub refuses a dependency from a ticket in the trial's epic on a ticket outside it, which
-# every source and copy is, so the next block cannot simply depend on them. A pair takes
-# hours, so a block that checks every two hours costs a few session starts.
+# How long `pair wait` defers a block ticket that finds an arm still unfinished. A block
+# normally depends on every arm (see `wait_edges`), so this happens only when an arm closed
+# without its first session ending, or an edge is missing.
 WAIT = timedelta(hours=2)
 
 
@@ -541,8 +540,25 @@ def cmd_file(args: argparse.Namespace, spec: Spec) -> int:
         print(f"{pair.source} -> copy {pair.copy}, from {start[:12]}")
     failed += file_extras(trial, spec)
     if args.then:
-        defer(args.then)
+        edges = wait_edges(args.then, manifest.read_pairs(trial))
+        if edges:
+            io.batch({"ops": edges})
+        print(f"{args.then} now waits on {len(edges)} arms of the filed pairs.")
     return 1 if failed else 0
+
+
+def wait_edges(then: str, pairs: list[Pair]) -> list[dict[str, Any]]:
+    """The dependencies that make `then`, the next block or report ticket, wait until both
+    tickets of every filed pair have closed. Every source and copy lies outside the trial's
+    epic, and the hub refuses such an edge unless it is marked `external`, which needs the
+    user's approval. The user gave a standing approval on 2026-11-24 for exactly these edges, so
+    that a waiting block starts no session until its pairs are done."""
+    return [
+        {"op": "dep_add", "id": then, "on": tid, "kind": "blocks", "external": True}
+        for p in pairs
+        if p.state == FILED and p.copy
+        for tid in (p.source, str(p.copy))
+    ]
 
 
 def unfinished(pairs: list[Pair], tickets: dict[str, dict[str, Any]]) -> list[str]:

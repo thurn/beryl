@@ -21,8 +21,8 @@ in `$BERYL_CACHE/model-trial/<this epic>/` on the machine this epic is pinned to
 
 The child tickets are the blocks, each filing the next {block_size} pairs from the list after
 grading, reviewing and reporting the ones before, and the report ticket, which writes the final
-reading. They run in order, and each block waits, by deferring itself, until both tickets of
-every pair the block before it filed have ended. The procedure is the `model-trial` skill (`.agents/skills/model-trial/SKILL.md`),
+reading. They run in order, and each block depends on both tickets of every pair filed before
+it, an external dependency the user approved for model trials, so it starts once they close. The procedure is the `model-trial` skill (`.agents/skills/model-trial/SKILL.md`),
 and the tool is described in `tools/AGENTS.md`.
 
 To stop the trial after any block, set this epic's allocation to zero

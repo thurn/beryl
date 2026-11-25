@@ -718,6 +718,17 @@ def test_the_next_block_waits_until_both_arms_of_every_pair_have_ended() -> None
     assert pair.unfinished(pairs, tickets) == []
 
 
+def test_the_next_block_depends_on_every_arm_of_every_filed_pair() -> None:
+    pairs = [
+        filed_pair(pair="p1", source="E1.1", copy="C1", state=FILED),
+        filed_pair(pair="p2", source="E1.2", state=MARKED),
+    ]
+    assert pair.wait_edges("T9.3", pairs) == [
+        {"op": "dep_add", "id": "T9.3", "on": tid, "kind": "blocks", "external": True}
+        for tid in ("E1.1", "C1")
+    ]
+
+
 # Several copy arms.
 
 HYDROGEN = {"tier": "opus", "provider": "agy-gemini", "effort": "high"}

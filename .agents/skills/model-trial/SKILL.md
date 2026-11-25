@@ -79,14 +79,20 @@ A block ticket names its trial (its parent epic) and its number. Read the trial 
 epic's notes first: the block size, cap, reserve and number to plant come from it. Run heavy
 commands through `ignite run --` and wait on them. Never wait for a pair to finish.
 
-The hub refuses a dependency from a ticket in the trial's epic on a ticket outside it, and
-every source and copy is outside it, so the next block cannot depend on this block's pairs.
-Instead `pair file --then <next>` defers the next ticket for two hours, and each block and the
-report ticket start with `pair wait`, which defers them again while any arm is unfinished.
+`pair file --then <next>` makes the next block or report ticket depend on both tickets of
+every filed pair, so the pool starts it only once they have all closed. Every source and copy
+lies outside the trial's epic, and the hub refuses such a dependency unless it is marked
+external (`ignite ticket dep add --external`), which needs the user's approval. On 2026-11-24
+the user gave a standing approval for exactly this case: a trial's block or report ticket
+depending on the sources and copies of its filed pairs. `pair file` adds these edges; add no
+other external edge without asking. An arm that its first session released or stopped
+unfinished stays open, so the next block waits until the pool finishes it, or until a session
+closes a stuck copy as step 2 would.
 
 0. **Wait.** Run `just model-trial pair wait --trial <epic> --defer <this ticket>`. It exits 0
    when both arms of every filed pair have ended (closed, or released by their first
-   session). If it exits 3, it has already deferred this ticket: run
+   session), which is the usual case now that the block depends on them. It still guards a
+   block filed before those edges existed. If it exits 3, it has already deferred this ticket: run
    `ignite release -m "<the arms it listed are not finished>"` and stop. Defer before you
    release, never after. The hub does not count the release of a ticket that is deferred to a
    later time, but it counts any other, and holds a ticket back from the pool once two
@@ -145,7 +151,7 @@ report ticket start with `pair wait`, which defers them again while any arm is u
    into harmful work. The sentence goes into the real ticket, so both arms read the same words.
 10. **File.** Run `just model-trial pair file --trial <epic> --then <next>`, where `<next>` is
     the ticket that depends on this one (`ignite ticket dep list <this ticket>`), which filing
-    defers. Filing sets
+    makes wait on every filed pair. Filing sets
     both tickets of each pair to P1, so that the trial runs as fast as its slowest source. It
     checks each source again, skips one that can no longer be an arm (no longer open and
     unclaimed, say) and gives it back its allocation; record each one skipped on this ticket.

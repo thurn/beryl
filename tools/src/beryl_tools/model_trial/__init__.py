@@ -129,7 +129,8 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     audit.add_argument("--note", required=True)
     filing = _command(steps, "file", "file every marked pair", pair.cmd_file)
     filing.add_argument(
-        "--then", help="the next block or report ticket, which filing defers"
+        "--then",
+        help="the next block or report ticket, which filing makes wait on every filed pair",
     )
     wait = _command(
         steps, "wait", "exit 3 while a filed pair has an arm unfinished", pair.cmd_wait

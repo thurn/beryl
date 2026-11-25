@@ -5,11 +5,11 @@ parent. Run it with the `model-trial` skill (`.agents/skills/model-trial/SKILL.m
 
 This block grades, reviews and reports every pair that has finished, audits any planted pair
 whose source has landed, then marks, titles, plants and files the next pairs of the list with
-`--block {block}`. It starts by checking with `pair wait` that the earlier pairs have ended, and
-is deferred and then released if not. The ticket to name in `pair file --then` is the one that
+`--block {block}`. It depends on the earlier pairs, and starts by checking with `pair wait` that
+they have ended, and is deferred and then released if not. The ticket to name in `pair file --then` is the one that
 depends on this one (`ignite ticket dep list <this ticket>`). Do not wait for the pairs to
 finish.
 === acceptance ===
 A comment on the epic holds the running table, `pairs.jsonl` holds block {block}'s pairs with
-the spec's number of planted premises recorded, and the next ticket is deferred; or this ticket and each later block ticket are closed because the
+the spec's number of planted premises recorded, and the next ticket depends on every filed pair; or this ticket and each later block ticket are closed because the
 cap was reached or the list was used up.
