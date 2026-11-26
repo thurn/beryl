@@ -344,7 +344,9 @@ pub(super) fn only_nonland_mana<L: Layout>(s: &State<L>, d: &Decision<L>) -> boo
 /// `d` without the optional mana activations offered at human priority or during waterbend
 /// ([`Profile::taps_mana`]), for an agent standing in for them: tapping ahead of a payment is
 /// dominated by tapping during it (architecture §10), and search never sees them. The engine
-/// lists them last, so every other candidate keeps its index.
+/// lists them last, so every other candidate keeps its index. The last ones include the
+/// `Opt::Activate` that sacrifices a source for mana (`SacrificeAlternative`), listed after the
+/// `Opt::Mana` of the same source.
 pub(super) fn without_floating<L: Layout>(mut d: Decision<L>) -> Decision<L> {
     let floats = d.kind == DecisionKind::Priority || d.prompt.purpose == Purpose::Waterbend;
     if let (true, Candidates::Options(list)) = (floats, &mut d.candidates) {
@@ -355,10 +357,14 @@ pub(super) fn without_floating<L: Layout>(mut d: Decision<L>) -> Decision<L> {
         debug_assert!(
             list.as_slice()[kept..]
                 .iter()
-                .all(|o| matches!(o, Opt::Mana { .. })),
+                .all(|o| matches!(o, Opt::Mana { .. } | Opt::Activate { .. })),
             "mana activations come last"
         );
-        list.retain(|o| !matches!(o, Opt::Mana { .. }));
+        let mut index = 0;
+        list.retain(|_| {
+            index += 1;
+            index <= kept
+        });
     }
     d
 }
