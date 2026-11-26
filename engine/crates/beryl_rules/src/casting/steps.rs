@@ -46,6 +46,10 @@ use super::timing::activated;
 /// alternative characteristics."
 ///
 /// [CR 716.3b]: https://yawgatog.com/resources/magic-rules/#R7163b
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads the face being cast (see CR 709.3b)"
+)]
 pub(crate) fn begin_cast<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
@@ -136,6 +140,10 @@ pub(crate) fn begin_cast<L: Layout>(
 
 /// Notes that the static ability that gives the card in `slot` escape did what it says, as the
 /// card is cast for it ([`crate::coverage`]).
+#[allow(
+    clippy::disallowed_methods,
+    reason = "marks the escape ability covered, by its place on the granting permanent's face"
+)]
 fn hit_escape<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) {
     if let Some(card) = s.card_in(s.object_ref(slot), Graveyard)
         && let Some(reach) = s.escape_from(t, card)
@@ -150,6 +158,10 @@ fn hit_escape<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) {
 /// [CR 602.2a](https://yawgatog.com/resources/magic-rules/#R6022a): "That ability is created
 /// on the stack as an object that's not a card. It becomes the topmost object on the stack.
 /// ... Its controller is the player who activated the ability."
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads an activated ability by its place on the face `activated` names"
+)]
 pub(crate) fn begin_activate<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
@@ -333,6 +345,10 @@ fn after_mana<L: Layout>(
 /// controller had priority before casting it, they get priority." see CR 608.2g: after a spell
 /// cast during a resolution, "no player receives priority". The enclosing resolution
 /// continues and gives priority when it finishes (see CR 117.3b).
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads the face being cast (see CR 709.3b)"
+)]
 pub(super) fn finish<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
@@ -468,6 +484,10 @@ pub(super) fn ability_event<L: Layout>(entry: &StackEntry<L>) -> Event<L> {
 }
 
 /// The X values the payment can still cover, from the least allowed.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads the face being cast (see CR 709.3b)"
+)]
 fn x_options<L: Layout>(
     s: &State<L>,
     t: &GameTable,

@@ -43,6 +43,10 @@ pub(crate) fn instruction<L: Layout>(run: &mut Run<'_, '_, L>, filter: Filter) -
 /// as a result will go on the stack the next time a player receives priority".
 ///
 /// [CR 728.4]: https://yawgatog.com/resources/magic-rules/#R7284
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads the front face of the card a face-down exiled object really is (see CR 712.6a)"
+)]
 pub(crate) fn finish_opening<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,

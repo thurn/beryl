@@ -336,6 +336,10 @@ fn applies<L: Layout>(s: &State<L>, t: &GameTable, p: &Damage<L>, shield: Shield
 
 /// The filter a source was chosen with for a shield of the card `card`: the `from` of the
 /// prevention instruction in the ability that made it.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads an ability by the face and place a chosen source recorded"
+)]
 fn chosen_with<L: Layout>(
     t: &GameTable,
     card: L::Card,

@@ -197,6 +197,10 @@ pub(crate) fn pay<L: Layout>(
 /// [CR 702.139c](https://yawgatog.com/resources/magic-rules/#R702139c): "Once you take the
 /// special action and put the card with companion into your hand, it remains in the game until
 /// the game ends."
+#[allow(
+    clippy::disallowed_methods,
+    reason = "marks the companion ability on the card's front face covered"
+)]
 fn put_into_hand<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,

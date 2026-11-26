@@ -24,6 +24,9 @@ module_name_repetitions = "allow"
 must_use_candidate = "allow"
 missing_errors_doc = "allow"
 missing_panics_doc = "allow"
+# Direct reads of a printed face (engine/clippy.toml says which and why). `beryl_rules` and
+# `beryl_search` deny them in their `lib.rs`; the kernel implements the queries that read faces.
+disallowed_methods = "allow"
 
 # Every set crate's build script reads the whole card store, and the scale rehearsal's one-card
 # rebuild (`just scale`) waits for one: unoptimized, the build helper took 1.5 s to read a 36 MiB

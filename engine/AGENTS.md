@@ -71,6 +71,12 @@ Each of these checks explains itself when it fails.
   `Queue::push_bounded`, which checks that claim in debug builds. Otherwise
   propagate the `Full` error, which makes the game switch to the slower `Large`
   state representation, which has room to grow.
+- `clippy`'s `disallowed_methods` (`engine/clippy.toml`): `beryl_rules` and
+  `beryl_search` read an object's characteristics through `State` queries, not
+  through `CardDef::face`, `CardDef::front`, `Definition::face` or
+  `Copiable::face`. A call that really means one printed face (the face being
+  cast, the face a card enters with, a token's definition) carries
+  `#[allow(clippy::disallowed_methods, reason = "...")]` on its function.
 
 ## Testing rules and cards
 

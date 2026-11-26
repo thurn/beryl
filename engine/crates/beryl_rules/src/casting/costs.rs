@@ -171,6 +171,10 @@ fn with_options(face: &Face, costs: Castings, free: bool) -> ManaCost {
 
 /// The mana still to pay for the spell or ability being cast, once X is announced: its total
 /// cost, less the generic mana objects paid for rather than mana ([`Casting::substituted`]).
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads the face of the stack entry being paid for"
+)]
 pub(super) fn total_cost<L: Layout>(
     s: &State<L>,
     t: &GameTable,

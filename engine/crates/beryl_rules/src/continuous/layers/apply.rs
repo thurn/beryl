@@ -68,6 +68,10 @@ pub(super) fn apply_to_members<L: Layout>(
 
 /// Whether `change` is a part of a static ability whose amounts read each permanent it
 /// changes ([`static_ability::reads_each`]).
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads a static ability by the card, face and place its layer change recorded"
+)]
 fn reads_each<L: Layout>(t: &GameTable, source: L::Card, change: LayerChange) -> bool {
     let LayerChange::Read {
         face,
@@ -131,6 +135,10 @@ pub(super) fn settle<L: Layout>(
 /// [CR 613.4a]: https://yawgatog.com/resources/magic-rules/#R6134a
 /// [CR 613.4b]: https://yawgatog.com/resources/magic-rules/#R6134b
 #[inline(never)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads a static ability by the card, face and place its layer change recorded"
+)]
 fn read<L: Layout>(
     s: &Rederive<'_, L>,
     t: &GameTable,
@@ -319,6 +327,10 @@ impl<L: Layout> LayerResults for SoFar<'_, '_, L> {
 /// Applies one change to the permanent at battlefield index `i`. [`Full`] if it removes an
 /// ability the permanent's mask has no place for ([`AbilityMask`]): all the abilities of a
 /// face with more than the mask is wide, or one past its width.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "the layers read a permanent's printed face up, by each ability's place on it"
+)]
 pub(super) fn apply<L: Layout>(
     s: &mut Rederive<'_, L>,
     t: &GameTable,

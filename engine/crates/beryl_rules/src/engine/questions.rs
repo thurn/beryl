@@ -226,6 +226,10 @@ pub(super) fn only_idle<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>)
 /// ([CR 712.9](https://yawgatog.com/resources/magic-rules/#R7129)): "A player playing a
 /// modal double-faced card ... as a land chooses one of its faces that's a land before putting
 /// it onto the battlefield." The implemented modal double-faced cards have one land face at most.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads each face the card may be played as a land with"
+)]
 pub(crate) fn land_face<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> Option<FaceIx> {
     let def = s.card_def(t, slot)?;
     def.face_ixs().find(|&face| {

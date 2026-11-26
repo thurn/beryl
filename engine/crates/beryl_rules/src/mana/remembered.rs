@@ -13,7 +13,7 @@
 //!
 //! [CR 106.6]: https://yawgatog.com/resources/magic-rules/#R1066
 
-use beryl_card::{AbilityIx, Behavior, Effect, ManaRestriction, Players};
+use beryl_card::{AbilityIx, Behavior, Effect, ManaRestriction, ObjectAbility, Players};
 
 use crate::card::{Face, FaceIx, ManaColor};
 use crate::continuous::rule_change;
@@ -94,6 +94,10 @@ impl<L: Layout> Paying<L> {
     /// Whether mana under the restriction the game numbered `restriction` may be spent on it,
     /// whose source had chosen the creature type `chosen_type`
     /// ([`RememberedMana::chosen_type`]).
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "reads the face of the spell the mana was spent on"
+    )]
     pub(crate) fn accepts(
         &self,
         t: &GameTable,
@@ -145,14 +149,16 @@ fn restricted_ability<L: Layout>(
     if !can_tap(s, player, slot, d) {
         return None;
     }
-    let abilities = s.definition(slot).face(t).abilities;
-    (0u8..).zip(abilities).find_map(|(i, a)| {
-        let index = AbilityIx::new(i);
-        (is_tap_for_mana(a)
-            && a.spend().is_some()
-            && s.has_ability(slot, index)
-            && allowed(s, t, a, player, &s.words_of(slot)))
-        .then_some((index, a))
+    // Its own abilities, which `State::abilities` gives only while it has them.
+    s.abilities(t, slot).find_map(|(ability, a)| match ability {
+        ObjectAbility::Own(index)
+            if is_tap_for_mana(a)
+                && a.spend().is_some()
+                && allowed(s, t, a, player, &s.words_of(slot)) =>
+        {
+            Some((index, a))
+        }
+        ObjectAbility::Own(_) | ObjectAbility::Granted(_) | ObjectAbility::Merged(..) => None,
     })
 }
 

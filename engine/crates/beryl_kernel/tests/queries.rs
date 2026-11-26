@@ -2,8 +2,8 @@
 //! face-down permanent and a double-faced one.
 
 use beryl_card::{
-    CardDef, Castings, ChosenKind, Colors, CopyException, ExceptIx, FACE_DOWN, Face, FaceIx,
-    Filter, ManaCost, Types, Words,
+    Ability, CardDef, Castings, ChosenKind, Colors, CopyException, ExceptIx, FACE_DOWN, Face,
+    FaceIx, Filter, Keywords, ManaCost, ObjectAbility, Types, Words,
     Zone::{self, Battlefield, Graveyard, Hand, Nowhere, Stack},
 };
 use beryl_kernel::chosen::ChosenValue;
@@ -84,7 +84,7 @@ static BLAST: CardDef = CardDef {
     tokens: &[],
 };
 
-/// A split card with a different type, color and mana value on each half.
+/// A split card with a different type, color, mana value, ability and keyword on each half.
 static SPLIT: CardDef = CardDef {
     name: "Test Red // Test Blue",
     shape: beryl_card::definition::Shape::Split { fuse: false },
@@ -94,6 +94,7 @@ static SPLIT: CardDef = CardDef {
             cost: ManaCost::new(1, [0, 0, 0, 1, 0, 0]),
             types: Types::INSTANT,
             colors: Colors::RED,
+            abilities: &[Ability::spell()],
             ..Face::EMPTY
         },
         Face {
@@ -101,6 +102,8 @@ static SPLIT: CardDef = CardDef {
             cost: ManaCost::new(2, [0, 1, 0, 0, 0, 0]),
             types: Types::SORCERY,
             colors: Colors::BLUE,
+            abilities: &[Ability::spell(), Ability::spell()],
+            keywords: Keywords::FLASH,
             ..Face::EMPTY.for_shape(
                 beryl_card::definition::Shape::Split { fuse: false },
                 FaceIx::BACK,
@@ -390,6 +393,14 @@ fn a_split_card_combines_its_halves_only_off_the_stack() {
     assert_eq!(values.types(&t), types);
     assert_eq!(values.mana_cost(&t).mana_value(), 5);
     assert_eq!(values.names(&t), [Some("Test Red"), Some("Test Blue")]);
+    // Each half's abilities, the right half's numbered after the left's (CR 709.4c).
+    let abilities: Vec<_> = s.abilities(&t, card).map(|(ability, _)| ability).collect();
+    assert_eq!(
+        abilities,
+        [0, 1, 2].map(ObjectAbility::own),
+        "a split card in a graveyard has both halves' abilities"
+    );
+    assert_eq!(s.keywords(&t, card), Keywords::FLASH);
     let names: Vec<_> = ChosenValue::<beryl_kernel::Small>::candidates(&t, ChosenKind::CardName)
         .map(|number| {
             ChosenValue::<beryl_kernel::Small>::of_number(ChosenKind::CardName, number)
@@ -430,6 +441,12 @@ fn a_split_card_combines_its_halves_only_off_the_stack() {
     assert_eq!(s.types(&t, card), Types::INSTANT);
     assert_eq!(s.mana_value(&t, card), 2);
     assert_eq!(s.copiable(card).names(&t), [Some("Test Red"), None]);
+    assert_eq!(
+        s.abilities(&t, card).count(),
+        1,
+        "a spell has its half's abilities"
+    );
+    assert_eq!(s.keywords(&t, card), Keywords::NONE);
     assert!(two_or_less.matches(&s, &t, card, Seat::P0, &Words::NONE));
 }
 

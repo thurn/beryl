@@ -54,6 +54,10 @@ pub(super) fn delves(face: &Face) -> bool {
 /// ([`mana::Paying`]). Delve may take only the cards the spell's other parts leave
 /// ([`delve_most`]).
 #[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads the face being cast (see CR 709.3b)"
+)]
 pub(super) fn delve_pays<L: Layout>(
     s: &State<L>,
     t: &GameTable,

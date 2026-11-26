@@ -7,6 +7,13 @@
 //! Never tune it. Edit it only to follow a change of the engine's API, and only so that it
 //! still plays the same: `tests/all/frozen.rs` pins its moves on seeded games.
 
+// A frozen copy reads printed faces as the live code did when it was copied, so that it plays
+// the same; engine/clippy.toml's lint is for new readers.
+#![allow(
+    clippy::disallowed_methods,
+    reason = "a frozen copy of the expert keeps the face reads it was copied with"
+)]
+
 mod expert;
 mod rollout;
 mod values;

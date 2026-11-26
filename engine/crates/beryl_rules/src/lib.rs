@@ -242,9 +242,11 @@
 //! [`custom_body`].
 
 // New enum variants must be classified by each reader, and values must fit the receiving
-// representation in either state layout. Cargo requires the rest of the workspace lint
-// settings to be inherited as a unit, so the rules add these lints here.
+// representation in either state layout. A characteristic is read through a `State` query, not
+// a printed face (engine/clippy.toml). Cargo requires the rest of the workspace lint settings to
+// be inherited as a unit, so the rules add these lints here.
 #![deny(
+    clippy::disallowed_methods,
     clippy::wildcard_enum_match_arm,
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
@@ -333,4 +335,8 @@ pub(crate) use beryl_kernel::{
 };
 
 #[cfg(test)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "tests build their positions from the printed faces of the cards they name"
+)]
 mod tests;

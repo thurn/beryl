@@ -34,6 +34,10 @@ pub(super) const MERGED: u8 = 0x40;
 ///
 /// Out of line: only a game with a card that merges comes here, for a copy.
 #[inline(never)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads each card under a merged permanent by the face it has there"
+)]
 pub(super) fn list<L: Layout>(
     s: &Rederive<'_, L>,
     t: &GameTable,
@@ -69,6 +73,10 @@ pub(super) fn list<L: Layout>(
 
 /// The static ability `a` is a part of, of a card under the merged permanent in `slot`:
 /// the ability at its index on the face of its source, the card, as the permanent has it.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads each card under a merged permanent by the face it has there"
+)]
 pub(super) fn ability<L: Layout>(
     s: &Rederive<'_, L>,
     t: &GameTable,

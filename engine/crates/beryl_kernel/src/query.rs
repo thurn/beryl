@@ -493,7 +493,8 @@ impl<L: Layout> State<L> {
 
     /// The keyword abilities of the object in `slot` that [`Keywords`] names: a permanent's
     /// after continuous effects (see [CR 613.1f]), and elsewhere those of the face it has there,
-    /// which no effect of the cards changes off the battlefield.
+    /// which no effect of the cards changes off the battlefield. A split card off the stack has
+    /// those of both halves (see CR 709.4c), read only in a game with a split card.
     ///
     /// [CR 613.1f]: https://yawgatog.com/resources/magic-rules/#R6131f
     #[inline]
@@ -501,6 +502,8 @@ impl<L: Layout> State<L> {
         let o = self.object(slot);
         if o.on_battlefield() {
             self.derived(slot).keywords
+        } else if t.can(Capability::Split) {
+            self.copiable(slot).keywords(t)
         } else {
             self.definition(slot).face(t).keywords
         }

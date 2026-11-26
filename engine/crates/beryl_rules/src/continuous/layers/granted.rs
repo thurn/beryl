@@ -81,6 +81,10 @@ pub(super) fn granted_layer_effects<L: Layout>(
 }
 
 /// The ability `grant` names: one of its card's front face's [`crate::card::Face::grants`].
+#[allow(
+    clippy::disallowed_methods,
+    reason = "a granted ability is printed on its granting card's front face"
+)]
 pub(super) fn granted_ability<L: Layout>(t: &GameTable, grant: GrantRef<L>) -> &'static Ability {
     &t.def(grant.card).front().grants[grant.grant.index()]
 }

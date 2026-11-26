@@ -44,6 +44,10 @@ impl<L: Layout> SacrificeCost<L> {
     }
 
     #[inline]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "reads the face of the spell being paid for"
+    )]
     pub(super) fn of_entry(t: &GameTable, entry: &StackEntry<L>) -> Option<Self> {
         if !t.can(Capability::SacrificeToCast) {
             return None;

@@ -14,6 +14,10 @@ use crate::card::FaceIx;
 /// [CR 723.3c]: https://yawgatog.com/resources/magic-rules/#R7233c
 #[cold]
 #[inline(never)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads the casting options printed on the prepare card's face"
+)]
 pub(super) fn casts<L: Layout, const TARGETS: bool>(
     s: &State<L>,
     t: &GameTable,
@@ -37,6 +41,10 @@ pub(super) fn casts<L: Layout, const TARGETS: bool>(
 
 #[cold]
 #[inline(never)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads the casting options printed on the prepare card's face"
+)]
 pub(super) fn refusal<L: Layout>(
     s: &State<L>,
     t: &GameTable,

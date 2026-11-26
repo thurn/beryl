@@ -745,6 +745,10 @@ impl<L: Layout> Scene<'_, L> {
     /// has been 'kicked.'" A permanent remembers each kind its spell paid
     /// ([`entered_with`]); none is overloaded, as only an instant or sorcery has overload
     /// (see [CR 702.96a](https://yawgatog.com/resources/magic-rules/#R70296a)).
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "reads the casting options printed on the face the spell was cast as"
+    )]
     fn paid(&self, kind: CastingKind) -> bool {
         if let Some(costs) = self.costs {
             let face = self.t.def(self.subject.of.card).face(self.subject.of.face);

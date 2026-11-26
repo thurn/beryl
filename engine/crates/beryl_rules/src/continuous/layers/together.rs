@@ -67,6 +67,10 @@ pub(crate) fn order_may_matter<L: Layout>(s: &State<L>, t: &GameTable, slots: &[
 /// may read, never less.
 ///
 /// [CR 613.6]: https://yawgatog.com/resources/magic-rules/#R6136
+#[allow(
+    clippy::disallowed_methods,
+    reason = "the layers read a permanent's printed face up, by each ability's place on it"
+)]
 fn parts<'a, L: Layout>(
     s: &'a State<L>,
     t: &'a GameTable,

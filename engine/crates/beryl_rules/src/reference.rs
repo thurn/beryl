@@ -192,6 +192,10 @@ fn check_payments<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Resul
 /// [`check_payments`] checks.
 ///
 /// [CR 106.6]: https://yawgatog.com/resources/magic-rules/#R1066
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads the face a reference cast pays for"
+)]
 fn check_spell_payments<L: Layout>(
     s: &State<L>,
     t: &GameTable,

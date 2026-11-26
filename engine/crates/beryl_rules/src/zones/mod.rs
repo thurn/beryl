@@ -185,8 +185,8 @@ fn onto_battlefield<L: Layout>(
     let objects = run.elsewhere_than(objects, Zone::Battlefield);
     let game = run.game();
     let objects = objects.filter(|slot| {
-        let (def, face) = game.state.definition(slot).record(game.table);
-        let types = game.table.def(def).face(face).types;
+        // A split card off the stack has both halves' card types (see CR 709.4c).
+        let types = game.state.copiable(slot).types(game.table);
         !types.intersects(Types::INSTANT.union(Types::SORCERY))
     });
     let (to, reason) = (Zone::Battlefield, Reason::Effect);

@@ -27,6 +27,10 @@ pub(crate) use waiting::{next_to_stack, put_on_stack, waiting_or_on_stack};
 /// The triggered ability a waiting trigger or stack entry names: one of its face's own, or one
 /// of its grants that a copy exception gives ([`Copiable::given_abilities`]).
 #[inline]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads a triggered ability by the card and face its trigger recorded"
+)]
 pub(crate) fn ability<L: Layout>(
     t: &GameTable,
     of: &AbilityRef<L, TriggeredAbility>,

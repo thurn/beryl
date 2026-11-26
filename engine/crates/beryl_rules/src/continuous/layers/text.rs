@@ -68,6 +68,10 @@ pub(super) fn words_for<L: Layout>(s: &State<L>, slot: L::Slot, order: u8) -> Wo
 /// lost abilities ran out of room. Out of line: only a game with a text change comes here.
 #[cold]
 #[inline(never)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "the layers read a permanent's printed face up, by each ability's place on it"
+)]
 pub(super) fn type_lines<L: Layout>(
     s: &mut Rederive<'_, L>,
     t: &GameTable,

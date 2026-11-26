@@ -1,0 +1,15 @@
+# Readers of an object's characteristics outside the kernel ask the `State` queries
+# (`State::copiable`, `colors`, `types`, `mana_value`, `abilities`, `keywords`), which give a split
+# card both halves off the stack (CR 709.4) and handle transformed, melded, face-down and
+# prototyped objects. Reading a printed face directly gave Tarmogoyf half a split card and a
+# split card in a library half its mana value (docs/bugs.md). Only `beryl_rules` and
+# `beryl_search` deny this lint (their `lib.rs`); the kernel, which implements the queries, and
+# every other crate leave it at `allow` (`[workspace.lints.clippy]` in Cargo.toml). A call that
+# really means one printed face (the face being cast, the face a card enters with, a token's
+# definition) says why in an `#[allow(clippy::disallowed_methods, reason = "...")]`.
+disallowed-methods = [
+  { path = "beryl_card::definition::CardDef::face", reason = "ask a `State` query, which reads the characteristics the object's shape gives it, or allow this with the reason it means one printed face" },
+  { path = "beryl_card::definition::CardDef::front", reason = "ask a `State` query, which reads the characteristics the object's shape gives it, or allow this with the reason it means the printed front face" },
+  { path = "beryl_kernel::definition::Definition::face", reason = "ask a `State` query (`State::abilities`, `State::types`, ...), which gives a split card both halves off the stack, or allow this with the reason it means the face up alone" },
+  { path = "beryl_kernel::copiable::Copiable::face", reason = "ask a `Copiable` or `State` query that combines a split card's halves, or allow this with the reason it means one printed face" },
+]

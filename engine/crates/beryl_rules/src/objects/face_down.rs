@@ -44,6 +44,10 @@ use crate::table::GameTable;
 /// turns up ([CR 712.12a](https://yawgatog.com/resources/magic-rules/#R71212a)): "If it's
 /// turned face up, it will have its front face up." No implemented creature card costs {0},
 /// so a cost of nothing is no mana cost.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "a face-down card turns face up with its front face"
+)]
 fn face_up_costs<L: Layout>(
     s: &State<L>,
     t: &GameTable,

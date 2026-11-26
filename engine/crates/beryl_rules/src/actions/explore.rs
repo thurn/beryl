@@ -43,9 +43,14 @@ pub fn explore<L: Layout>(
     let top = game.state.library(player).last().copied();
     if let Some(slot) = top {
         reveal(game, player, slot);
-        // A card in a library has its front face's characteristics (see CR 712.6a).
-        let face = game.state.definition(slot).face(game.table);
-        if face.types.contains(Types::LAND) {
+        // A card in a library has its front face's characteristics (see CR 712.6a), and a
+        // split card those of both halves (see CR 709.4c).
+        if game
+            .state
+            .copiable(slot)
+            .types(game.table)
+            .contains(Types::LAND)
+        {
             let card = game.state.object_ref(slot);
             zones::move_to(game, card, Zone::Hand, Reason::Effect)?;
             return Ok(());

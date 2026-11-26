@@ -346,6 +346,10 @@ struct Applied {
 /// One run of the layers over every permanent, from its copiable values to layer 7d, with
 /// the static abilities of `granted` listed with those of the permanents' faces. Returns
 /// [`Full`] if the list had no place for an effect, and what kinds of effect applied.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "the layers read a permanent's printed face up, by each ability's place on it"
+)]
 fn apply_layers<L: Layout>(
     s: &mut Rederive<'_, L>,
     t: &GameTable,
@@ -472,6 +476,10 @@ struct Listed<L: Layout> {
 
 /// The static ability `a`, a part of whose effect it is: an ability of its permanent's face,
 /// one granted to the permanent ([`GRANTED`]), or one of a card under it ([`merged::MERGED`]).
+#[allow(
+    clippy::disallowed_methods,
+    reason = "a granted ability is printed on its granting card's front face"
+)]
 fn static_ability_of<L: Layout>(
     s: &Rederive<'_, L>,
     t: &GameTable,

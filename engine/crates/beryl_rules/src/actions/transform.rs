@@ -26,6 +26,10 @@ use beryl_kernel::reference::Permanent;
 ///
 /// [CR 701.27a]: https://yawgatog.com/resources/magic-rules/#R70127a
 /// [CR 701.27d]: https://yawgatog.com/resources/magic-rules/#R70127d
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads the face a permanent would transform into (see CR 701.27e)"
+)]
 fn other_face<L: Layout>(game: &Game<'_, L>, permanent: Permanent<L>) -> Option<FaceIx> {
     let slot = permanent.slot();
     let printed = game.table.def(game.state.card_really_is(slot));
@@ -111,6 +115,10 @@ pub fn exile_and_return_transformed<L: Layout>(
 /// stays in its current zone." It returns as a new object, and one that has changed zones
 /// since it was named does not move
 /// (see [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)).
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads the back face the card would enter with (see CR 712.11b)"
+)]
 pub fn return_transformed<L: Layout>(
     game: &mut Game<'_, L>,
     card: ObjectRef<L>,

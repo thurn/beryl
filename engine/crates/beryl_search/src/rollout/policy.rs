@@ -75,6 +75,10 @@ impl<L: Layout> Policy<'_, L> {
 
     /// What a card in hand is worth keeping: a land is worth much while lands are short and
     /// little once there are six.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the policy's card knowledge reads the printed front face of a card it may play"
+    )]
     pub(crate) fn in_hand(&self, slot: L::Slot) -> i32 {
         if !self.is_land(slot) {
             return self.value(slot);
@@ -132,6 +136,10 @@ impl<L: Layout> Policy<'_, L> {
 
     /// Save instant-speed plays for the opponent's end step, except in windows
     /// where the opportunity could go away or drawing can inform this turn.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "reads the face an option casts, or the face up of a permanent"
+    )]
     fn held(&self, o: Opt<L>) -> bool {
         let (Opt::Cast { slot, .. } | Opt::Activate { slot, .. }) = o else {
             return false;
@@ -223,6 +231,10 @@ impl<L: Layout> Policy<'_, L> {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "reads the face an option casts, or the face up of a permanent"
+    )]
     pub(crate) fn cast(&self, slot: L::Slot, face: FaceIx, costs: Castings) -> i32 {
         let Some(card) = self.obs.card(slot) else {
             return 0;
@@ -308,6 +320,10 @@ impl<L: Layout> Policy<'_, L> {
         })
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "reads an ability by its place on the face up of its permanent"
+    )]
     pub(crate) fn activate(&self, slot: L::Slot, i: u8) -> i32 {
         let Some(card) = self.obs.card(slot) else {
             return 0;
@@ -347,6 +363,10 @@ impl<L: Layout> Policy<'_, L> {
 
     /// How many untapped permanents of ours have a mana ability on their face up: about the
     /// most mana we could pay now.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "reads an ability by its place on the face up of its permanent"
+    )]
     fn untapped_mana_sources(&self) -> usize {
         self.obs
             .battlefield()
@@ -395,6 +415,10 @@ impl<L: Layout> Policy<'_, L> {
     /// Whether `who` controls a permanent that wins them the game instead of the draw from an
     /// empty library, as Jace, Wielder of Mysteries: "If you would draw a card while your
     /// library has no cards in it, you win the game instead."
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "reads an ability by its place on the face up of its permanent"
+    )]
     pub(crate) fn wins_from_empty(&self, who: Seat) -> bool {
         self.obs.battlefield().iter().any(|&slot| {
             self.obs.controller(slot) == who
@@ -519,6 +543,10 @@ impl<L: Layout> Policy<'_, L> {
     /// The spec being targeted for and whether its effect helps its controller: the first
     /// spec of the spell or ability on top of the stack, which a casting or a triggered
     /// ability being put on the stack puts there first (CR 601.2a).
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "reads the face of the top stack entry"
+    )]
     pub(crate) fn targeting(&self) -> Option<(&'static TargetSpec, bool)> {
         let e: &StackEntry<L> = self.obs.stack().last()?;
         let def: &'static CardDef = self.t.def(e.card());

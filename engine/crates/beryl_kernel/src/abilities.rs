@@ -30,7 +30,10 @@ const GRANTS: usize = GRANT_LIMIT as usize;
 
 impl<L: Layout> State<L> {
     /// Every ability the object in `slot` has now, in a fixed order: the abilities of its
-    /// face up that it has not lost, by their index on the face, then, of a merged permanent,
+    /// face up that it has not lost, by their index on the face, then, of a split card off the
+    /// stack, those of its other half numbered after them (see [CR 709.4c]: "A split card has
+    /// each card type specified on either of its halves and each ability in the text box of
+    /// each half"), then, of a merged permanent,
     /// those of the cards under its top card from the top of the pile down
     /// ([`Copiable::merged_faces`]), then those other objects granted it, in the order they
     /// were granted ([`crate::object::Derived::granted`]). Its
@@ -43,12 +46,15 @@ impl<L: Layout> State<L> {
     /// games go, the face's abilities come with no test each, after one test of a flag the
     /// layers store, and in a game with no card that grants an ability
     /// ([`Capability::Grants`]) the granted part is skipped after one AND, as is the merged
-    /// part in a game with no card that merges ([`Capability::Merges`]).
+    /// part in a game with no card that merges ([`Capability::Merges`]), and the other half
+    /// in a game with no split card ([`Capability::Split`]).
     ///
     /// # Panics
     ///
     /// In debug builds, for a permanent that lost or was granted an ability while the layer
     /// results are stale.
+    ///
+    /// [CR 709.4c]: https://yawgatog.com/resources/magic-rules/#R7094c
     #[inline]
     pub fn abilities<'s>(&'s self, t: &'s GameTable, slot: L::Slot) -> Abilities<'s, L> {
         let face = self.definition(slot).face(t).abilities;
@@ -62,7 +68,10 @@ impl<L: Layout> State<L> {
             state: self,
             slot,
             own: face.iter(),
-            place: if t.can(Capability::Merges) {
+            // A split card off the stack has its other half's abilities too (see CR 709.4c),
+            // which the out-of-line part looks up in a game with a split card.
+            half_read: false,
+            place: if t.can_either(Capability::Merges, Capability::Split) {
                 0
             } else {
                 OWN_ONLY
@@ -171,11 +180,16 @@ pub struct Abilities<'s, L: Layout> {
     slot: L::Slot,
     /// The abilities yet to come of the face up, then of each merged face in turn.
     own: std::slice::Iter<'static, Ability>,
+    /// Whether `own` has been given the abilities of the other half of a split card off the
+    /// stack ([`Copiable::other_half_abilities`]), which it walks once the face's are done,
+    /// numbered after them as [`ObjectAbility::Own`], or found there is none.
+    half_read: bool,
     /// The index on its face of the next of `own`.
     index: u8,
     /// Which face `own` walks: 0 or [`OWN_ONLY`] for the face up, then `k + 1` for the
     /// merged face at place `k` ([`Copiable::merged_faces`]), and [`DONE`] once none is
-    /// left. [`OWN_ONLY`] is a game with no card that merges, where no merged face follows.
+    /// left. [`OWN_ONLY`] is a game with no card that merges and no split card, where no
+    /// merged face or other half follows.
     place: u8,
     /// Some permanent lost an ability, so each of `own` is asked whether this one has it.
     check_lost: bool,
@@ -185,19 +199,36 @@ pub struct Abilities<'s, L: Layout> {
     table: &'s GameTable,
 }
 
-/// [`Abilities::place`] in a game with no card that merges.
+/// [`Abilities::place`] in a game with no card that merges and no split card.
 const OWN_ONLY: u8 = 0x80;
 
 /// [`Abilities::place`] once no merged face is left.
 const DONE: u8 = u8::MAX;
 
 impl<L: Layout> Abilities<'_, L> {
-    /// The next ability of a card under a merged permanent, in a game with a card that
-    /// merges. Out of line: most objects are not merged permanents, and most games have no
-    /// card that merges.
+    /// The next ability of the other half of a split card off the stack, in a game with a
+    /// split card, or of a card under a merged permanent, in a game with a card that merges.
+    /// Out of line: most objects are neither, and most games have no such card.
     #[cold]
     #[inline(never)]
     fn next_merged(&mut self) -> Option<(ObjectAbility, &'static Ability)> {
+        // The other half of a split card off the stack goes on from the face's own: the card
+        // has one text box with each half's abilities in it (see CR 709.4c).
+        if self.place == 0 && !self.half_read {
+            self.half_read = true;
+            if self.table.can(Capability::Split) {
+                let half = self
+                    .state
+                    .copiable(self.slot)
+                    .other_half_abilities(self.table);
+                self.own = half.iter();
+                if let Some(ability) = self.own.next() {
+                    let index = AbilityIx::new(self.index);
+                    self.index += 1;
+                    return Some((ObjectAbility::Own(index), ability));
+                }
+            }
+        }
         if self.place == 0 && self.state.merged_values(self.table, self.slot).is_none() {
             self.place = DONE;
             return None;

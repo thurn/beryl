@@ -71,6 +71,10 @@ fn merged_player_rules<L: Layout>(
 // rollout benchmark's recomputes do, and left out of line it costs a call each.
 #[allow(clippy::inline_always)]
 #[inline(always)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "the layers read a permanent's printed face up, by each ability's place on it"
+)]
 fn player_rules_of<L: Layout>(
     s: &Rederive<'_, L>,
     t: &GameTable,

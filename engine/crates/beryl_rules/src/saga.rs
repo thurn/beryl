@@ -21,6 +21,10 @@ use beryl_kernel::reference::Permanent;
 type Chapter<L> = (<L as Layout>::Card, FaceIx, TriggeredAbility, (u8, u8));
 
 /// The chapter abilities currently on a permanent, including abilities supplied by the layers.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads a granted chapter ability by the face it was given from"
+)]
 fn chapters<'a, L: Layout>(
     s: &'a State<L>,
     t: &'a GameTable,

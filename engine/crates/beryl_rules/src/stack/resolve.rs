@@ -433,6 +433,10 @@ fn run_answered<L: Layout>(
 }
 
 /// The body of [`run`], once the entry is off the stack.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads the face of the resolving spell"
+)]
 fn body<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
@@ -549,6 +553,10 @@ fn mutating<L: Layout>(face: &Face, entry: &StackEntry<L>) -> bool {
 /// was targeting." see [CR 712.10](https://yawgatog.com/resources/magic-rules/#R71210): "a
 /// resolving double-faced spell that becomes a permanent is put onto the battlefield with the
 /// same face up that was face up on the stack."
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads the face of the resolving spell"
+)]
 fn enter_battlefield<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,

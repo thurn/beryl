@@ -4,6 +4,10 @@
 //! and the [`FrozenExpertAgent`] is a copy of it that never changes, the bar general agents
 //! are measured against. [`AGENTS`] names every agent a game can be played against.
 
+// A characteristic is read through a `State` query, not a printed face (engine/clippy.toml).
+// Cargo requires the workspace lint settings to be inherited as a unit, so this one is here.
+#![deny(clippy::disallowed_methods)]
+
 mod combat;
 mod estimate;
 mod eval;

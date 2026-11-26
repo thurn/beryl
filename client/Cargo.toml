@@ -108,6 +108,9 @@ module_name_repetitions = "allow"
 must_use_candidate = "allow"
 missing_errors_doc = "allow"
 missing_panics_doc = "allow"
+# Direct reads of a printed face (engine/clippy.toml says which and why). `beryl_rules` and
+# `beryl_search` deny them in their `lib.rs`; the kernel implements the queries that read faces.
+disallowed_methods = "allow"
 
 # Debug builds keep line tables only, and leave them in the object files, so that linking is
 # faster. After a one-line edit to `beryl_scene`, `just client tree` took a median of 11.9 s with

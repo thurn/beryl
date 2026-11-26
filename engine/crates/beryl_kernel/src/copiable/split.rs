@@ -5,7 +5,7 @@
 use std::hash::{Hash, Hasher};
 
 use beryl_card::definition::Shape;
-use beryl_card::{Colors, Face, FaceIx, ManaCost, Supertypes, Types};
+use beryl_card::{Ability, Colors, Face, FaceIx, Keywords, ManaCost, Supertypes, Types};
 
 use super::Copiable;
 use crate::layout::Layout;
@@ -44,6 +44,25 @@ impl<L: Layout> Copiable<L> {
             && self.face != FaceIx::DOWN
             && matches!(self.shape(t), Shape::Split { .. }))
         .then(|| t.def(self.card).face(FaceIx::BACK))
+    }
+
+    /// The abilities of the other half of a split card off the stack, which it has as well as
+    /// those of its face up ([CR 709.4c]): "A split card has each card type specified on
+    /// either of its halves and each ability in the text box of each half." None for any
+    /// other values. [`crate::State::abilities`] lists them after the face's own.
+    ///
+    /// [CR 709.4c]: https://yawgatog.com/resources/magic-rules/#R7094c
+    #[inline]
+    pub fn other_half_abilities(self, t: &GameTable) -> &'static [Ability] {
+        self.other_half(t).map_or(&[], |half| half.abilities)
+    }
+
+    /// The printed keyword abilities of the values, including both halves' where they exist
+    /// (see CR 709.4c).
+    pub fn keywords(self, t: &GameTable) -> Keywords {
+        let keywords = self.face(t).keywords;
+        self.other_half(t)
+            .map_or(keywords, |half| keywords.union(half.keywords))
     }
 
     /// The printed card types of the values, including both halves where they exist.

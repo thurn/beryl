@@ -35,6 +35,10 @@ use beryl_kernel::listener;
 /// [CR 702.140e]: https://yawgatog.com/resources/magic-rules/#R702140e
 #[cold]
 #[inline(never)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads each card under a merged permanent by the face it has there"
+)]
 pub(super) fn match_given<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,

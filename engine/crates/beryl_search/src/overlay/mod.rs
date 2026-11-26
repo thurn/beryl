@@ -203,6 +203,10 @@ const TUNINGS: &[Tuning] = &[
 
 /// Applies the tuning for the card `def`, if it has one, to what was derived for it. An
 /// ability that no longer has the shape its tuning expects is left as derived.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "a tuning names abilities by their place on the front face"
+)]
 pub(crate) fn apply(def: &CardDef, info: &mut CardInfo) {
     let Some(tuning) = TUNINGS.iter().find(|tuning| tuning.name == def.name) else {
         return;
@@ -231,6 +235,10 @@ pub(crate) fn apply(def: &CardDef, info: &mut CardInfo) {
 /// One line for each way `tunings` disagrees with the card definitions `lookup` finds by name:
 /// a name no card has, or a tuned ability that is missing from the card's front face or does
 /// not have the shape the tuning expects.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "a tuning names abilities by their place on the front face"
+)]
 fn mismatches(
     tunings: &[Tuning],
     lookup: impl Fn(&str) -> Option<&'static CardDef>,

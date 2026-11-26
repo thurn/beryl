@@ -155,6 +155,10 @@ pub(crate) fn info(def: &CardDef, knowledge: Knowledge) -> CardInfo {
 
 /// The flags the card's abilities' effect data states, with no value yet. A flag of ability `i` is read from the front face, as the policy
 /// reads it, and only for the first eight abilities, which the bits hold.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "card values are read from the front face, as the policy reads them"
+)]
 fn derive(def: &CardDef) -> CardInfo {
     let front = def.front();
     let bits = |fact: fn(&Ability, &Effect) -> bool| {

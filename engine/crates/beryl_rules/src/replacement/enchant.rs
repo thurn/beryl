@@ -56,6 +56,10 @@ pub(crate) enum Enchants<S> {
 /// [CR 303.4f]: https://yawgatog.com/resources/magic-rules/#R3034f
 #[cold]
 #[inline(never)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads the face the permanent enters with (see CR 614.12)"
+)]
 pub(crate) fn enchants<L: Layout>(
     s: &State<L>,
     t: &GameTable,

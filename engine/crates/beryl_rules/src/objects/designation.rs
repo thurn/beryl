@@ -37,6 +37,10 @@ pub(crate) fn available<L: Layout>(s: &State<L>, slot: L::Slot, ability: &Abilit
 ///
 /// [CR 613.1f]: https://yawgatog.com/resources/magic-rules/#R6131f
 #[cold]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "the layers read a permanent's printed face up, by each ability's place on it"
+)]
 pub(crate) fn withhold<L: Layout>(s: &mut Rederive<'_, L>, t: &GameTable) -> Result<bool, Full> {
     let mut missing = false;
     for i in 0..s.battlefield().len() {

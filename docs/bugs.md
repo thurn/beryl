@@ -6,6 +6,28 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Readers took one face's characteristics where the rules give an object
+  another face or both.** The commonest class in this file: Tarmogoyf counted
+  only the left half of a split card in a graveyard, a split card in a library
+  had half its mana value, and Pithing Needle could not name a back face. Any
+  rules function could call `CardDef::face`, `CardDef::front`,
+  `Definition::face` or `Copiable::face` and read printed characteristics,
+  instead of asking the `State` queries that handle split, fused, transformed,
+  melded, face-down and prototyped objects. Two more readers were found and
+  fixed this way: `State::abilities` and `State::keywords` gave a split card off
+  the stack only its left half's abilities, where CR 709.4c gives it "each
+  ability in the text box of each half" (now the right half's follow the left
+  half's, numbered after them), and explore, the instant-or-sorcery test of a
+  card put onto the battlefield, and the "mana cost could be paid by the mana
+  spent on {X}" test read one face of a split card. Guard: clippy's
+  `disallowed_methods` lint (`engine/clippy.toml`), denied in `beryl_rules` and
+  `beryl_search`, refuses a new direct face read unless it carries an `#[allow]`
+  with the reason it means one printed face. No printed split card yet has an
+  ability that works off the stack other than fuse and aftermath, which the
+  vocabulary models as casting options read per face, so
+  `beryl_kernel/tests/queries.rs` holds the abilities and keywords of a test
+  split card in a graveyard and on the stack.
+
 - **Memos named another object by its bare slot.** Two earlier bugs had one
   cause: `Memo::ExiledWith` and `Memo::PutOntoBattlefieldWith` held only a slot,
   so once the object in it left and a new object took the slot, the memo named

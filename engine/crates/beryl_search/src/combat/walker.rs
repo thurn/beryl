@@ -12,6 +12,10 @@ use beryl_engine::{GameTable, Layout, State, Zone, wins_instead_of_drawing};
 const FORECAST_TURNS: i32 = 5;
 const WIN_PREMIUM: i32 = 200;
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "values a permanent by the printed abilities of its face up"
+)]
 pub(super) fn value<L: Layout>(t: &GameTable, s: &State<L>, slot: L::Slot) -> i32 {
     let face = s.definition(slot).face(t);
     let abilities = (0u8..)

@@ -237,6 +237,10 @@ impl<L: Layout> Agent<L> for ExpertAgent<L> {
 /// one about to die counts for less than one about to ultimate; a permanent the other side's
 /// Swift Reconfiguration has made a Vehicle no one will crew is worth little, as is a Mana
 /// Crypt whose controller no longer needs the mana it costs them life for.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "the expert's card knowledge reads the printed face of a card it plans with, or of a stack entry"
+)]
 pub(crate) fn appraise<L: Layout>(p: &Policy<'_, L>, slot: L::Slot, base: i32) -> Option<i32> {
     let obs = p.obs;
     let o = obs.object(slot);
@@ -373,6 +377,10 @@ impl<L: Layout> Expert<'_, L> {
 
     /// Whether the creature card in `slot`, flashed in, could block one of `attackers` worth
     /// blocking and kill it or survive: flying lets it block any of them.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the expert's card knowledge reads the printed face of a card it plans with, or of a stack entry"
+    )]
     fn good_block(&self, slot: L::Slot, attackers: &[L::Slot]) -> bool {
         let Some(card) = self.obs().card(slot) else {
             return false;
@@ -592,6 +600,10 @@ impl<L: Layout> Expert<'_, L> {
     /// value, but a Mana Crypt is little to a player with lands enough, and a wheel is their
     /// way out of an emptying library. From a look at our own library, as Thundertrap
     /// Trainer's, or for the top of a scry, dying: the removal we can cast now.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the expert's card knowledge reads the printed face of a card it plans with, or of a stack entry"
+    )]
     fn take_from_hand(&self, d: &Decision<L>) -> Option<Choice> {
         let (player, zone) = match d.prompt.purpose {
             // The cards looked at lie in their owner's library or hand.
@@ -640,6 +652,10 @@ impl<L: Layout> Expert<'_, L> {
     }
 
     /// Whether our lands have the colors the card in `slot` costs.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the expert's card knowledge reads the printed face of a card it plans with, or of a stack entry"
+    )]
     fn colors_for(&self, slot: L::Slot) -> bool {
         let Some(card) = self.obs().card(slot) else {
             return false;
@@ -665,6 +681,10 @@ impl<L: Layout> Expert<'_, L> {
     /// The mana each counterspell in hand worth holding up costs: one our untapped sources
     /// have the colors for (they stay as they are through the opponent's turn), and Mana
     /// Tithe, which a player with a mana to spare pays, only when it is the only one.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the expert's card knowledge reads the printed face of a card it plans with, or of a stack entry"
+    )]
     fn least_counter_mana(&self, available: i32) -> Option<i32> {
         let (white, blue) = self.colors_up(self.me());
         let castable = move |s: L::Slot| {
@@ -718,6 +738,10 @@ impl<L: Layout> Expert<'_, L> {
     }
 
     /// The score of a priority action; passing is 0, and nothing scored 0 or less is done.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the expert's card knowledge reads the printed face of a card it plans with, or of a stack entry"
+    )]
     fn action(&self, o: Opt<L>) -> i32 {
         let v = match self.timing() {
             Timing::Respond(top) => self.respond(&top, o),
@@ -745,6 +769,10 @@ impl<L: Layout> Expert<'_, L> {
 
     /// With something on the stack, counter the opponent's spell if it is worth it, by
     /// counterspell discipline; let everything else resolve.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the expert's card knowledge reads the printed face of a card it plans with, or of a stack entry"
+    )]
     fn respond(&self, top: &StackEntry<L>, o: Opt<L>) -> i32 {
         let Opt::Cast { slot, face, costs } = o else {
             return 0;
@@ -779,6 +807,10 @@ impl<L: Layout> Expert<'_, L> {
 
     /// The score of countering the opponent's spell `top` with the card in `slot`, cast as
     /// face `face`, by counterspell discipline; 0 when it is no counter or not worth it.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the expert's card knowledge reads the printed face of a card it plans with, or of a stack entry"
+    )]
     fn counter_score(&self, top: &StackEntry<L>, slot: L::Slot, face: FaceIx) -> i32 {
         let threat = self.threat(top);
         let spare = self
@@ -835,6 +867,10 @@ impl<L: Layout> Expert<'_, L> {
     /// it on their choice of the top or bottom of their library." They draw it again, so it
     /// is tempo, behind the counterspells: in full for a spell worth a counter, for evoke
     /// (two cards for it) only for one that would win the game.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the expert's card knowledge reads the printed face of a card it plans with, or of a stack entry"
+    )]
     fn subtlety(&self, top: &StackEntry<L>, slot: L::Slot, costs: Castings) -> i32 {
         let types = self.p.t.def(top.card()).face(top.face()).types;
         if top.spell().is_none() || !types.intersects(Types::CREATURE.union(Types::PLANESWALKER)) {
@@ -1081,6 +1117,10 @@ impl<L: Layout> Expert<'_, L> {
 
     /// Whether a spell in hand costs exactly one more than we can make now, so that an
     /// untapped land drop would let us cast it.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the expert's card knowledge reads the printed face of a card it plans with, or of a stack entry"
+    )]
     fn needs_land_mana(&self) -> bool {
         let mana = self.mana(self.me());
         self.hand(self.me()).any(|s| {
@@ -1102,6 +1142,10 @@ impl<L: Layout> Expert<'_, L> {
     /// Whether casting the card in `slot` first would leave a major threat in hand too little
     /// to pay for No More Lies ("Counter target spell unless its controller pays {3}") that
     /// it could pay for now, while the opponent has the mana for No More Lies up.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the expert's card knowledge reads the printed face of a card it plans with, or of a stack entry"
+    )]
     fn spoils_tax_room(&self, slot: L::Slot, face: FaceIx, costs: Castings) -> bool {
         let (white, blue) = self.colors_up(self.opp());
         if self.sorcery_only_for_them()
@@ -1140,6 +1184,10 @@ impl<L: Layout> Expert<'_, L> {
             .any(|s| self.is(s, names::TEFERI_TIME_RAVELER))
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the expert's card knowledge reads the printed face of a card it plans with, or of a stack entry"
+    )]
     fn main_cast(&self, slot: L::Slot, face: FaceIx, costs: Castings, precombat: bool) -> i32 {
         let Some(name) = self.name(slot) else {
             return 0;
@@ -1254,6 +1302,10 @@ impl<L: Layout> Expert<'_, L> {
 
     /// The score of casting one of the cards with rules of their own in our main phase, or
     /// `None` for any other.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the expert's card knowledge reads the printed face of a card it plans with, or of a stack entry"
+    )]
     fn card_cast(&self, slot: L::Slot, name: &str, costs: Castings) -> Option<i32> {
         let sorcery_only = self.sorcery_only();
         Some(match name {
@@ -1372,6 +1424,10 @@ impl<L: Layout> Expert<'_, L> {
 
     /// Whether casting `card` would tap us out into a Mana Tithe we have not seen: the
     /// opponent holds a card and has white mana up, and no Mana Tithe is anywhere we can see.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the expert's card knowledge reads the printed face of a card it plans with, or of a stack entry"
+    )]
     fn tithe_risk(&self, card: L::Card) -> bool {
         let cost = i32::from(self.p.t.def(card).front().cost.mana_value());
         let opp = self.opp();
@@ -1403,6 +1459,10 @@ impl<L: Layout> Expert<'_, L> {
 
     /// `v`, or 0 when casting the card in `slot` would leave less mana than the cheapest
     /// counterspell in hand costs and the card is a minor one.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the expert's card knowledge reads the printed face of a card it plans with, or of a stack entry"
+    )]
     fn hold_for_counter(&self, slot: L::Slot, v: i32) -> i32 {
         let Some(card) = self.obs().card(slot) else {
             return v;
@@ -1476,6 +1536,10 @@ impl<L: Layout> Expert<'_, L> {
     /// Soporific Springs: "As this land enters, you may pay 3 life. If you don't, it enters
     /// tapped." Pay only when its mana now is the one that lets a card in hand be cast, this
     /// turn or on theirs.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the expert's card knowledge reads the printed face of a card it plans with, or of a stack entry"
+    )]
     fn pay_life(&self, d: &Decision<L>) -> Choice {
         let springs = |s: L::Slot| self.is(s, names::SINK_INTO_STUPOR);
         let others = self.mana(self.me())
@@ -1620,6 +1684,10 @@ impl<L: Layout> Expert<'_, L> {
 
     /// A player's artifacts by their cards, Mana Crypt, Staff and Maps: not a creature that
     /// Swift Reconfiguration made a Vehicle, which no one could crew.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the expert's card knowledge reads the printed face of a card it plans with, or of a stack entry"
+    )]
     fn artifacts(&self, controller: Seat) -> impl Iterator<Item = L::Slot> + '_ {
         self.permanents(controller).filter(|&s| {
             self.obs().card(s).is_some_and(|c| {
@@ -1641,6 +1709,10 @@ impl<L: Layout> Expert<'_, L> {
     /// target is a planeswalker. `None` for any other card, or a removal spell with nothing
     /// worth it: a target must be worth the card's own threshold, or `min` when that is not
     /// negative.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the expert's card knowledge reads the printed face of a card it plans with, or of a stack entry"
+    )]
     fn removal_score(
         &self,
         slot: L::Slot,
@@ -1788,6 +1860,10 @@ impl<L: Layout> Expert<'_, L> {
     /// each planeswalker of ours with a bounce it has the loyalty for and has not used (Jace,
     /// the Mind Sculptor's −1, Teferi's −3), and the removal spells in hand our mana could
     /// cast, the cheapest first. Oust is left out: its 3 life can be the 3 they survive at.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the expert's card knowledge reads the printed face of a card it plans with, or of a stack entry"
+    )]
     fn removals_now(&self) -> usize {
         let walkers = self
             .permanents(self.me())
@@ -1889,6 +1965,10 @@ impl<L: Layout> Expert<'_, L> {
 
     /// The first targeted ability of a card's front face, such as Aang's Iceberg's "When
     /// this enchantment enters, exile up to one other target nonland permanent".
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the expert's card knowledge reads the printed face of a card it plans with, or of a stack entry"
+    )]
     fn etb_targets(&self, card: L::Card) -> Option<&'static Ability> {
         self.p
             .t
@@ -1899,6 +1979,10 @@ impl<L: Layout> Expert<'_, L> {
             .find(|a| !a.targets().is_empty())
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the expert's card knowledge reads the printed face of a card it plans with, or of a stack entry"
+    )]
     fn main_activate(&self, slot: L::Slot, i: u8, precombat: bool) -> i32 {
         let o = self.obs().object(slot);
         let Some(card) = self.obs().card(slot) else {
@@ -1943,6 +2027,10 @@ impl<L: Layout> Expert<'_, L> {
     // --- Planeswalkers ----------------------------------------------------------------------
 
     /// The loyalty ability a planeswalker of ours should activate, by index, if any.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the expert's card knowledge reads the printed face of a card it plans with, or of a stack entry"
+    )]
     fn walker_ability(&self, slot: L::Slot) -> Option<u8> {
         let o = self.obs().object(slot);
         let card = self.obs().card(slot)?;
@@ -1980,6 +2068,10 @@ impl<L: Layout> Expert<'_, L> {
     }
 
     /// The loyalty ability the rules above prefer for a planeswalker of ours, by index.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the expert's card knowledge reads the printed face of a card it plans with, or of a stack entry"
+    )]
     fn preferred_ability(&self, slot: L::Slot) -> Option<u8> {
         let o = self.obs().object(slot);
         let card = self.obs().card(slot)?;
@@ -2158,6 +2250,10 @@ impl<L: Layout> Expert<'_, L> {
     }
 
     /// Whether the card in our graveyard at `s` is worth casting again now.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the expert's card knowledge reads the printed face of a card it plans with, or of a stack entry"
+    )]
     fn flashback(&self, s: L::Slot) -> bool {
         let Some(name) = self.name(s) else {
             return false;
@@ -2251,6 +2347,10 @@ impl<L: Layout> Expert<'_, L> {
     /// What to cast or activate with mana that would otherwise go unused: removal whose
     /// target is worth its threshold, or `min` when that is not negative, a flash threat,
     /// cards.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the expert's card knowledge reads the printed face of a card it plans with, or of a stack entry"
+    )]
     fn instant_speed(&self, o: Opt<L>, min: i32) -> i32 {
         match o {
             Opt::Cast { slot, face, .. } => {
@@ -2316,6 +2416,10 @@ impl<L: Layout> Expert<'_, L> {
 
     /// What the mana we have left could still cast: the values of the cards in hand our
     /// untapped sources could pay for, color by color, and a little for each mana.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the expert's card knowledge reads the printed face of a card it plans with, or of a stack entry"
+    )]
     fn castable(&self) -> i32 {
         let me = self.me();
         let pool = self.obs().player(me).mana();
@@ -2370,6 +2474,10 @@ impl<L: Layout> Expert<'_, L> {
     /// What returning the permanent in `slot` to its owner's hand takes from them, by itself:
     /// a token ceases to exist, but Mana Crypt comes back for free and a creature with an
     /// enters-the-battlefield ability comes back with it again.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the expert's card knowledge reads the printed face of a card it plans with, or of a stack entry"
+    )]
     fn returned(&self, slot: L::Slot) -> i32 {
         let v = self.value(slot);
         if self.obs().object(slot).is_token() {
@@ -2427,6 +2535,10 @@ impl<L: Layout> Expert<'_, L> {
     }
 
     /// The target spec of the bounce being cast or activated.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the expert's card knowledge reads the printed face of a card it plans with, or of a stack entry"
+    )]
     fn bounce_spec(
         &self,
     ) -> Option<(
@@ -2463,6 +2575,10 @@ impl<L: Layout> Expert<'_, L> {
     /// by [`Expert::bounce_value`]; removal by the ranking that chose to cast it; while the
     /// opponent's attackers are declared, an attacker, the one dealing most when the attack
     /// is lethal, else the most valuable.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the expert's card knowledge reads the printed face of a card it plans with, or of a stack entry"
+    )]
     fn target(&self, d: &Decision<L>) -> Option<Choice> {
         if let Some(c) = self.crypt_target(d).or_else(|| self.mill_target(d)) {
             return Some(c);
@@ -2750,6 +2866,10 @@ impl<L: Layout> Expert<'_, L> {
     }
 
     /// Thieving Skydiver's kicker X: the least that reaches the best artifact worth taking.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the expert's card knowledge reads the printed face of a card it plans with, or of a stack entry"
+    )]
     fn x(&self, d: &Decision<L>) -> Option<Choice> {
         let e = self.obs().stack().last()?;
         if self.p.t.def(e.card()).name != names::THIEVING_SKYDIVER {

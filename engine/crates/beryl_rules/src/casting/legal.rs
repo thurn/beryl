@@ -135,6 +135,10 @@ fn restricted_pays<L: Layout>(
 #[cold]
 #[inline(never)]
 #[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads the face being cast (see CR 709.3b)"
+)]
 fn pays_otherwise<L: Layout>(
     s: &State<L>,
     t: &GameTable,
@@ -169,6 +173,10 @@ fn pays_otherwise<L: Layout>(
 )]
 #[inline(always)]
 #[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads the face being cast (see CR 709.3b)"
+)]
 fn refused<L: Layout, const TARGETS: bool>(
     s: &State<L>,
     t: &GameTable,
@@ -247,6 +255,10 @@ fn keep_furthest<L: Layout>(most: &mut Option<Refusal<L>>, r: Refusal<L>) {
 /// casting it, by face and casting options, that passes the most checks, or `land`, why they
 /// may not play it as a land, if that passes as many. None if one way is legal, or if the
 /// card has no face to cast and `land` is none.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads each face the card may be cast as"
+)]
 pub(crate) fn refusal<L: Layout>(
     s: &State<L>,
     t: &GameTable,
@@ -306,6 +318,10 @@ pub(crate) fn refusal<L: Layout>(
 }
 
 /// Appends the spells `player` can cast now, by card, face and casting options.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads each face the card may be cast as"
+)]
 pub(super) fn cast_options<L: Layout, const TARGETS: bool, const SEARCH: bool>(
     s: &State<L>,
     t: &GameTable,
@@ -385,6 +401,10 @@ fn has_morph(face: &Face) -> bool {
 /// alternative costs. Out of line: only a card that has escape comes here.
 #[cold]
 #[inline(never)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads the face being cast (see CR 709.3b)"
+)]
 fn escape_options<L: Layout, const TARGETS: bool>(
     s: &State<L>,
     t: &GameTable,
@@ -427,6 +447,10 @@ fn at_previous_level<L: Layout>(s: &State<L>, slot: L::Slot, a: &Ability) -> boo
 ///
 /// [CR 602.5](https://yawgatog.com/resources/magic-rules/#R6025): "A player can't begin to
 /// activate an ability that's prohibited from being activated."
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads an activated ability by its place on the face `activated` names"
+)]
 fn activatable<L: Layout, const TARGETS: bool>(
     s: &State<L>,
     t: &GameTable,
@@ -525,6 +549,10 @@ fn activatable<L: Layout, const TARGETS: bool>(
 /// says ([`Ability::needs`]): its cost would be paid and its effect find nothing to act on.
 /// The activation is still legal (CR 602.2);
 /// [`Profile::hides_pointless`](crate::profile::Profile) says who isn't offered it.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads an activated ability by its place on the face `activated` names"
+)]
 pub fn pointless<L: Layout>(
     s: &State<L>,
     t: &GameTable,

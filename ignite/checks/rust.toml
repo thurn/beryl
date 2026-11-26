@@ -146,6 +146,7 @@ list = "uv run --quiet --project tools python -m beryl_tools.ignite.rust clippy 
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.rust clippy run {checks}"
 inputs = [
   "engine/Cargo.toml",
+  "engine/clippy.toml",
   "data/card-store.tsv",
   "data/catalogs.json",
   "data/set-groups.json",
@@ -266,6 +267,7 @@ inputs = [
   "engine/cards/**",
   "engine/Cargo.toml",
   "engine/Cargo.lock",
+  "engine/clippy.toml",
   "data/card-store.tsv",
   "data/catalogs.json",
   "data/table-commands.json",

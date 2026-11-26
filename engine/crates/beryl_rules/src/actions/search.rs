@@ -63,6 +63,10 @@ pub fn search_library<L: Layout>(
 /// [CR 608.2g]: https://yawgatog.com/resources/magic-rules/#R6082g
 #[cold]
 #[inline(never)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads each face the player may cast while searching"
+)]
 fn search_with_casts<L: Layout>(
     game: &mut Game<'_, L>,
     resolution: &mut Resolution<'_, L>,

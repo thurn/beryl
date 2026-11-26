@@ -144,6 +144,10 @@ pub(super) fn has_escape<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) 
 /// The source zone, rather than the way a cast is paid for, determines whether fuse applies.
 ///
 /// [CR 702.102a]: https://yawgatog.com/resources/magic-rules/#R702102a
+#[allow(
+    clippy::disallowed_methods,
+    reason = "fuse is printed on the combined face"
+)]
 pub(super) fn can_fuse<L: Layout>(
     s: &State<L>,
     def: &CardDef,
@@ -205,6 +209,10 @@ fn escaping<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Bitboard<L:
 /// [CR 601.3]: https://yawgatog.com/resources/magic-rules/#R6013
 /// [CR 702.34a]: https://yawgatog.com/resources/magic-rules/#R70234a
 /// [CR 702.138a]: https://yawgatog.com/resources/magic-rules/#R702138a
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads each face the card may be cast as"
+)]
 pub fn castable_from_graveyard<L: Layout>(
     s: &State<L>,
     t: &GameTable,

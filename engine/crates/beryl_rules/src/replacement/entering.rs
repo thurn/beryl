@@ -99,6 +99,10 @@ pub(super) fn entering_destinations<L: Layout>(
 ///
 /// [CR 306.5b]: https://yawgatog.com/resources/magic-rules/#R3065b
 /// [CR 614.12a]: https://yawgatog.com/resources/magic-rules/#R61412a
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads the face the permanent enters with (see CR 614.12)"
+)]
 pub(super) fn entering<L: Layout>(
     s: &State<L>,
     t: &GameTable,
@@ -214,6 +218,10 @@ pub(super) fn entering_copy<L: Layout>(
 /// [CR 614.12a]: https://yawgatog.com/resources/magic-rules/#R61412a
 #[cold]
 #[inline(never)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads the face the permanent enters with (see CR 614.12)"
+)]
 fn copy_to_enter<L: Layout>(
     s: &State<L>,
     t: &GameTable,
@@ -307,6 +315,10 @@ pub(super) fn entering_values<L: Layout>(
 /// battlefield ([`layers::lost_entering`], CR 614.12).
 ///
 /// [`Full`] if finding what it would have ran out of room.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads the face the permanent enters with (see CR 614.12)"
+)]
 fn kept_entering<L: Layout, T>(
     s: &State<L>,
     t: &GameTable,
@@ -349,6 +361,10 @@ fn life_asked(face: &crate::card::Face) -> Option<(AbilityIx, u8)> {
 /// other words, the player loses that much life."
 ///
 /// [CR 119.4]: https://yawgatog.com/resources/magic-rules/#R1194
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads the face the permanent enters with (see CR 614.12)"
+)]
 pub(crate) fn pay_life_to_enter<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,

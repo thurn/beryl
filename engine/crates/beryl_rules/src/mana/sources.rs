@@ -159,6 +159,10 @@ pub(super) fn controlled<L: Layout>(
 /// characteristics are `d`, is one: the kinds of mana, how much, whether it has another
 /// ability, and whether making it sacrifices the source.
 #[inline]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads a permanent's face up, which the table's facts describe"
+)]
 pub(super) fn source<L: Layout>(
     s: &State<L>,
     t: &GameTable,

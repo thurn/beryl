@@ -212,6 +212,10 @@ fn enters_untapped<L: Layout>(s: &State<L>, player: Seat, face: &Face) -> bool {
 ///
 /// See [CR 305.2](https://yawgatog.com/resources/magic-rules/#R3052): "A player can normally play
 /// one land during their turn".
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads each face a card in hand may be cast as"
+)]
 fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
     let mut ahead: Ahead<L> = Ahead::default();
     let sorcery = sorcery_window(s, player);

@@ -67,6 +67,10 @@ pub fn offer<L: Layout>(
 }
 
 #[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads the face an option would cast"
+)]
 fn offer_spell<L: Layout>(
     game: &mut Game<'_, L>,
     resolution: &mut Resolution<'_, L>,
@@ -414,7 +418,8 @@ fn within_spent<L: Layout>(
     spent: ManaAmounts,
 ) -> Bitboard<L::Slot> {
     cards.filter(|slot| {
-        s.card_def(t, slot)
-            .is_some_and(|def| super::pays_from_spent(def.front().cost, spent))
+        // A split card's mana cost is both halves' combined (see CR 709.4b).
+        s.card_def(t, slot).is_some()
+            && super::pays_from_spent(s.copiable(slot).mana_cost(t), spent)
     })
 }

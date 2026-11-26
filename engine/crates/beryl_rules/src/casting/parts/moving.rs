@@ -78,6 +78,10 @@ pub(super) fn payable<L: Layout>(
 /// Check each offered pick against the rest of the payment before collapsing
 /// interchangeable objects. A token can pay a sacrifice but supplies no card to
 /// exile. The same applies to a card moved elsewhere by a replacement effect.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads the face being cast (see CR 709.3b)"
+)]
 pub(super) fn completable_choices<L: Layout>(
     s: &State<L>,
     t: &GameTable,

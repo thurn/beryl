@@ -19,6 +19,10 @@ use super::{From, Situation, has_morph, refused};
 /// of the scan of potential spells in a game that has neither keyword.
 #[cold]
 #[inline(never)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "morph is printed on the front face and fuse on the combined face"
+)]
 pub(super) fn in_time<L: Layout, const TARGETS: bool>(
     s: &State<L>,
     t: &GameTable,
@@ -89,6 +93,10 @@ pub(in crate::casting) fn face_down_casts<L: Layout, const TARGETS: bool>(
 /// The face and casting options of each cast with combined or face-down characteristics that
 /// `ways` let `player` try for the card in `slot`: face down for morph, then both halves for
 /// fuse. Each is still to pass the checks of an ordinary cast.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "morph is printed on the front face"
+)]
 pub(super) fn casts<L: Layout>(
     s: &State<L>,
     t: &GameTable,

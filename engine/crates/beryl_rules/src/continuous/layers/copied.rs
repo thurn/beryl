@@ -21,6 +21,10 @@ use super::{Applying, Listed, list_static, merged};
 /// [CR 707.9d]: https://yawgatog.com/resources/magic-rules/#R7079d
 #[cold]
 #[inline(never)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "the layers read a permanent's printed face up, by each ability's place on it"
+)]
 pub(super) fn list<L: Layout>(
     s: &mut Rederive<'_, L>,
     t: &GameTable,

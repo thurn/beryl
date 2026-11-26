@@ -319,6 +319,7 @@ fn amount(count: Amount) -> i16 {
 
 /// A token's worth in [`CardFeatures::tokens`]: a creature token's power plus toughness, at
 /// least 1, and 0 for a token that is no creature, such as a Treasure.
+#[allow(clippy::disallowed_methods, reason = "a token has one face")]
 fn creature_body(token: &CardDef) -> i16 {
     let face = token.front();
     if face.types.intersects(Types::CREATURE) {

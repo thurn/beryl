@@ -39,6 +39,7 @@ mod moving;
 
 /// The part at `index` of the cost of the spell or ability `entry`, counting its parts that
 /// are not mana from 0 in the order printed; at [`DELVE_PART`], delve's.
+#[allow(clippy::disallowed_methods, reason = "the face being cast")]
 fn part_at<L: Layout>(
     t: &GameTable,
     entry: &StackEntry<L>,
@@ -405,6 +406,7 @@ pub(super) fn pay<L: Layout>(
 /// is locked in ([CR 601.2h]): "The player pays the total cost."
 ///
 /// [CR 601.2h]: https://yawgatog.com/resources/magic-rules/#R6012h
+#[allow(clippy::disallowed_methods, reason = "the face being cast")]
 pub(super) fn pay_substitutes<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
