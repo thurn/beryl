@@ -566,20 +566,7 @@ impl Table {
     ) {
         let shown = &view.objects[object.view_index as usize];
         let name = shown.name.as_deref().unwrap_or("");
-        // A card's own printing is drawn when its art is resident, else the ordinary art.
-        let (printed, layer) = match shown.printing.map(|ix| faces.listed_board_printing(ix)) {
-            Some((listed, Some(layer))) => (listed, Some(layer)),
-            _ => shown
-                .token_printing
-                .as_deref()
-                .map_or((None, None), |printing| faces.listed_board(printing)),
-        };
-        let (listed, face) = if printed.is_some() && layer.is_some() {
-            (printed, layer)
-        } else {
-            let (listed, face) = faces.listed_board(name);
-            (printed.or(listed), layer.or(face))
-        };
+        let (listed, face) = faces.listed_board_of(shown, name);
         if object.tapped {
             state |= TAPPED;
         }

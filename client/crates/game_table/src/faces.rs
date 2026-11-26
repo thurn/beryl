@@ -701,6 +701,27 @@ impl Faces {
         self.listed_board_at(self.list.printing(ix))
     }
 
+    /// The listed face and board-size layer that draw `shown`, whose name is `name`: its card
+    /// printing's once that art is resident, else its token printing's, else its name's. A
+    /// face that is listed but not yet resident still supplies its placeholder.
+    pub(crate) fn listed_board_of(
+        &self,
+        shown: &ObjectView,
+        name: &str,
+    ) -> (Option<&ListedFace>, Option<u16>) {
+        let by_printing = shown.printing.map(|ix| self.listed_board_printing(ix));
+        let (printed, layer) = match by_printing {
+            Some((listed, Some(layer))) => (listed, Some(layer)),
+            _ => (shown.token_printing.as_deref())
+                .map_or((None, None), |printing| self.listed_board(printing)),
+        };
+        if printed.is_some() && layer.is_some() {
+            return (printed, layer);
+        }
+        let (listed, face) = self.listed_board(name);
+        (printed.or(listed), layer.or(face))
+    }
+
     /// The listed face and its board-size layer, if resident, from one name lookup.
     pub(crate) fn listed_board(&self, name: &str) -> (Option<&ListedFace>, Option<u16>) {
         self.listed_board_at(self.list.find(name))
