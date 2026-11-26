@@ -1045,5 +1045,10 @@
     "label": "The daemon watches every non-resumable verb process (including `tip-round` and `idle-job`) for stalls from the moment it starts as well as across same-build or cross-build restarts, ending it after 20 minutes without progress so its loop starts a new round. On 2026-11-26, `T-2223` hung for 65 minutes under its own daemon on cygnus before an upgrade and `T-15098` hung for 48 minutes under its own daemon on jarvis before an upgrade adopted it, delaying verification of `3dd18318f` by 34 minutes while 26 product commits waited on `staging`",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
+  },
+  {
+    "label": "`ignite-platform` builds and lists only the three test targets its filter selects (`ignite_os`, `ignite_daemon`, and `ignite_cli`'s `ignite` binary) via `ignite-platform-tests` instead of building all 28+ test binaries of `ignite-tests` in Windows tip rounds",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]

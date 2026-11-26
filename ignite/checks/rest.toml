@@ -292,18 +292,23 @@ ignite_hub = ["ignite.toml", "ignite/.config/**"]
 # the daemon's modules that start processes, install releases, measure disks and write the
 # build shims, and the shim test of the `ignite` executable: 162 tests that ran in 1.9 s on
 # jarvis on 2026-11-19. They also run in the `ignite` family; that costs two seconds, and keeps
-# the `ignite` family whole. The listing's filterset is written without spaces, since Ignite
-# splits the command on whitespace; the run command names no tests (see the `rust` family).
+# the `ignite` family whole.
+#
+# Both `needs`, `list`, and `run` select only those three targets (`ignite_os`, `ignite_daemon`,
+# and `ignite_cli`'s `ignite` binary) instead of `--workspace` and `ignite-tests`, so tip
+# verification on Windows does not compile and link the other 25+ test binaries in `ignite/`.
+# The listing's filterset is written without spaces, since Ignite splits the command on
+# whitespace; the run command names no tests (see the `rust` family).
 [family.ignite-platform]
 kind = "regression"
 adapter = "nextest"
 platforms = ["macos", "windows"]
-needs = ["ignite-tests"]
-list = "cargo nextest list --locked --workspace --message-format json -E package(ignite_os)|(package(ignite_daemon)&test(/^(wrap|supervise|update|trees::disk|machine_lock|doctor)(::|_tests::)/))|(binary_id(ignite_cli::bin/ignite)&test(/^shim_tests::/))"
+needs = ["ignite-platform-tests"]
+list = "cargo nextest list --locked -p ignite_os -p ignite_daemon -p ignite_cli --lib --bin ignite --message-format json -E package(ignite_os)|(package(ignite_daemon)&test(/^(wrap|supervise|update|trees::disk|machine_lock|doctor)(::|_tests::)/))|(binary_id(ignite_cli::bin/ignite)&test(/^shim_tests::/))"
 # Test names do not depend on comments, so a change that edits only comments keeps the
 # listing and builds nothing to list (docs/ignite.md, "Declaring a family").
 listing_ignores_comments = true
-run = "cargo nextest run --locked --cargo-quiet --workspace --profile ignite --no-fail-fast --status-level=fail --final-status-level=fail --message-format libtest-json-plus"
+run = "cargo nextest run --locked --cargo-quiet -p ignite_os -p ignite_daemon -p ignite_cli --lib --bin ignite --profile ignite --no-fail-fast --status-level=fail --final-status-level=fail --message-format libtest-json-plus"
 inputs = ["crate-closure", "ignite/.config/nextest.toml"]
 
 [family.ignite-platform.package_inputs]
@@ -389,4 +394,14 @@ outputs = ["engine/target"]
 build = "cargo test --locked --no-run"
 dir = "ignite"
 inputs = ["crate-closure"]
+outputs = ["ignite/target"]
+
+# Only the three test targets `ignite-platform` selects (`ignite_os`, `ignite_daemon`, and
+# `ignite_cli`'s `ignite` binary), so tip rounds do not compile and link the rest of the
+# workspace's test binaries (`ignite_hub`, `ignite_store`, `ignite_git`, `ignite_core`, and
+# `ignite_cli`'s integration suite). Shares `ignite/target` with `ignite-tests`.
+[product.ignite-platform-tests]
+build = "cargo nextest run --no-run --locked --cargo-quiet -p ignite_os -p ignite_daemon -p ignite_cli --lib --bin ignite"
+dir = "ignite"
+inputs = ["crate:ignite_os", "crate:ignite_daemon", "crate:ignite_cli"]
 outputs = ["ignite/target"]

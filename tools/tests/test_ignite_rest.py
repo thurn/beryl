@@ -47,6 +47,7 @@ def test_the_manifest_declares_the_families_and_products() -> None:
         "fuzz-tests",
         "exhaust-tests",
         "ignite-tests",
+        "ignite-platform-tests",
         "iroh-tests",
     }
     for name, family in declared["family"].items():
