@@ -1981,14 +1981,28 @@ and an `Undo` entry, so a replay goes back too. The engine is untouched.
     masking the player's index, with no branch.
   - Membership. `ZoneKey` gets no shared variant. In a shared game the library
     and graveyard bitboards of both players hold the same set, which the zone
-    chokepoints write under one test of the state's flag. A read of
-    `ZoneKey::Of(player, Zone::Library)` is then right for either player and
-    costs a per-player game nothing.
-  - Ownership. A card in a shared zone has no owner. A card that leaves one is
-    owned by the player who takes it: who draws it, whose effect puts it into a
-    hand or exiles it, who casts it, or under whose control it enters the
-    battlefield. The zone-change pipeline claims the card for that player before
-    it moves, and a move with no taker is a bug.
+    chokepoints write under one test of the state's mask byte for each zone
+    move. A read of `ZoneKey::Of(player, Zone::Library)` is then right for
+    either player and costs a per-player game nothing. A prototype measured the
+    masked list reads and the test on each zone move at 0.01% to 0.03% of the WU
+    Control rollout's instruction count, with the state's size unchanged, so the
+    zone rule is a byte of the state and not a parameter of the layout.
+  - Ownership. A card in a shared zone has no owner: its owner field holds seat
+    0, which nothing may read as a player. A card that leaves one is owned by
+    the player who takes it: who draws it, whose effect puts it into a hand or
+    exiles it, who casts it, or under whose control it enters the battlefield.
+    The zone-change pipeline claims the card for that player before it prepares
+    the move, so everything that reads the owner while the card moves reads the
+    taker, and a move with no taker is a bug. The taker of a batch travels in
+    the sink, as the values its permanents chose do. "Its owner" of a card in a
+    shared zone is the player who performs the instruction. Once a card has
+    entered a shared zone nothing can ask whose it was, so a rule that needs
+    that player reads it before the move.
+  - Each player's zone. A card in a shared zone is in each player's zone of that
+    kind. `State::holds(player, slot)` answers whether a card is in a player's
+    zone from the membership sets, in both formats. An activated ability or a
+    permission to cast that works from a graveyard is either player's to use,
+    and a triggered ability that works there is matched once for each player.
   - Acting once. Rules that act on or count each player's library or graveyard
     walk the seats that hold distinct zones, so a shared library is shuffled
     once and a shared graveyard is counted once.
