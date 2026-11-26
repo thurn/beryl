@@ -335,7 +335,7 @@ impl CountFloats {
             );
             layer.anchor_float(
                 floats::POOL[at],
-                HudAnchor::Pool(side).at(Vec2::ZERO, Vec2::ZERO, Vec2::ZERO),
+                HudAnchor::Pool(side).at(Vec2::ZERO, table.pool_align(), Vec2::ZERO),
                 FloatLook::default(),
             );
             if let Some(number) = effect.number {

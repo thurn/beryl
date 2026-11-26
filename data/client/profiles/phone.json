@@ -126,7 +126,9 @@
         "least_step": 52
       },
       "dock_gap": 6,
-      "button_height": 44
+      "button_height": 44,
+      "pool_offset": [-30, 0],
+      "pool_align": [1, 0.5]
     }
   },
   "table_style": {

@@ -21,6 +21,11 @@ pub struct Banded {
     /// The resource pool's offset from the adjacent score, in logical points.
     #[serde(default, deserialize_with = "vector")]
     pub pool_offset: glam::Vec2,
+    /// The point of the pool's own box that stands at `pool_offset`, as fractions of its
+    /// width and height: `[0, 0]` is its top left corner, `[1, 0.5]` the middle of its
+    /// right edge.
+    #[serde(default, deserialize_with = "vector")]
+    pub pool_align: glam::Vec2,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]

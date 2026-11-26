@@ -59,6 +59,13 @@ impl Table {
             .screen(self.layout().players[side_index(side)].life)
     }
 
+    /// The point of a pool's own box that stands at its anchor, as fractions of its width and
+    /// height. A layout without a banded table puts the box's top left corner there.
+    #[must_use]
+    pub fn pool_align(&self) -> Vec2 {
+        (self.profile().data().table.banded).map_or(Vec2::ZERO, |banded| banded.pool_align)
+    }
+
     /// Registers the life positions for the screen layer and, while HUD floats are visible,
     /// the rest of their stationary anchors. Only rows with hidden cards need a count position.
     pub fn write_hud_anchors(&self, builder: &mut FrameBuilder<'_>, floats_visible: bool) {

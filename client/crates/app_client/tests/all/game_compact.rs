@@ -11,12 +11,14 @@ use app_client::driver::{Duration, Page, Recording};
 use beryl_card_records::{TokenMakers, fixture_message};
 use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::prompt::{ButtonId, Click, ClickRequest};
-use beryl_protocol::protocol::{Side, ZoneName};
-use beryl_protocol::testing::ViewBuilder;
+use beryl_protocol::protocol::{ManaPool, Side, ZoneName};
+use beryl_protocol::script::{Act, Table as Played, Tally, time_script};
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use game_table::profiles::Profile;
 use game_table::table::Window;
 use kit_frame::frame::{Frame, Role};
 use kit_probe::agent::checks::{keep_clear, minimum_sizes, on_screen, overlap, reachable};
+use kit_probe::agent::text_overlap::text_overlap;
 use kit_probe::agent::{Context, Fault};
 use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{Insets, PointerPhase, Size};
@@ -394,5 +396,73 @@ fn the_compact_fps_monitor_leaves_room_for_the_table_and_settings() {
         assert!(!has(frame, Role::Region, "FPS monitor"));
         let restored = edges(frame, find(frame, Role::Region, "opponent's orb"));
         assert_eq!(normal, restored);
+    }
+}
+
+/// A client in the phone window of `width` by `height` after a script has set the viewer's and
+/// the opponent's pools to `mana` and ended.
+fn client_with_pools(width: f32, height: f32, mana: ManaPool) -> Client {
+    let mut client = compact(width, height);
+    client.record();
+    let mut builder = ViewBuilder::sample();
+    builder.script(ScriptBuilder::reset().build());
+    let start = builder.update();
+    client.handle(Input::Update(Box::new(start.clone())));
+    client.frame(0);
+    let mut script = ScriptBuilder::default();
+    for player in [Side::You, Side::Opponent] {
+        script.beat([Act::Count {
+            tally: Tally::Pool { player, mana },
+        }]);
+    }
+    let mut script = script.build();
+    script.timing = time_script(&script, &Played::of(&start.view));
+    let mut after = start;
+    after.view.players.you.mana = mana;
+    after.view.players.opponent.mana = mana;
+    after.view.script = Some(script);
+    client.handle(Input::Update(Box::new(after)));
+    client.frame(MS);
+    let record = &client.history()[1];
+    let end = record.start.expect("the script has started")
+        + record.steps.last().expect("the script has steps").to;
+    client.frame(end + 1_000 * MS);
+    client
+}
+
+#[test]
+fn unspent_mana_stands_clear_of_the_life_totals() {
+    for (width, height) in PHONES {
+        for mana in [
+            ManaPool {
+                colorless: 3,
+                ..ManaPool::default()
+            },
+            ManaPool {
+                blue: 2,
+                green: 1,
+                ..ManaPool::default()
+            },
+        ] {
+            let mut client = client_with_pools(width, height, mana);
+            let frame = client.frame(60_000 * MS);
+            let size = window(width, height);
+            let context = Context {
+                size_class: crate::COMPACT,
+                audit: crate::test_data::data().audit,
+                checks: crate::test_data::data()
+                    .profiles
+                    .for_size_class(crate::COMPACT)
+                    .checks,
+                size: size.size,
+                safe_area: size.safe_area,
+                at: 0,
+            };
+            let faults: Vec<String> = text_overlap(frame, &context)
+                .into_iter()
+                .map(|fault| fault.message)
+                .collect();
+            assert_eq!(faults, Vec::<String>::new(), "{width}x{height} {mana:?}");
+        }
     }
 }
