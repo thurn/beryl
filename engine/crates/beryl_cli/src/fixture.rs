@@ -586,8 +586,10 @@ pub fn start_decks(
         let seed0: u64 = s0.parse().map_err(|_| format!("bad fuzz seed {s0:?}"))?;
         let seed1: u64 = s1.parse().map_err(|_| format!("bad fuzz seed {s1:?}"))?;
         let mut combined = catalog.fuzz_deck(seed0);
+        // The same name for both seats stands for `shared_deck(seed)`, which deals the second
+        // half from `seed + 2^32`, so a fuzz game's seed replays in the app.
         let second = if seed1 == seed0 {
-            seed1 ^ (1 << 40)
+            seed1.wrapping_add(1 << 32)
         } else {
             seed1
         };

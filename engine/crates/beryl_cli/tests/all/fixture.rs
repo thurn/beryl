@@ -64,6 +64,10 @@ fn deck_names_map_to_constructed_and_shared_decks() {
         80
     );
     assert!(decks[1].is_empty());
+    // The deck is the one `shared_deck` deals for the seed.
+    let expected = beryl_cards::decks::shared_deck(7, |s| TEST.fuzz_deck(s));
+    let expected: Vec<(u8, String)> = expected.iter().map(|&(n, c)| (n, c.to_owned())).collect();
+    assert_eq!(decks[0], expected);
 
     assert!(start_decks(&TEST, &["forgetful-fish".into(), "wu-control".into()]).is_err());
 }
