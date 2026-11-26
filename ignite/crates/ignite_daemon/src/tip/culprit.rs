@@ -184,20 +184,22 @@ impl TipVerifier {
             .git
             .tip(&ctx.config.repository.staging)
             .unwrap_or_else(|_| tip.clone());
-        // A newer tip that changed what the check reads may already hold a fix, so the failure
-        // is left to the next round, once. Rounds take longer than the gaps between landings
-        // on a busy day, so the next round's tip is also overtaken by the time it fails, and
-        // leaving every such failure unreported kept `master` from moving for hours with no
-        // ticket to fix it. A check that fails again is reported whatever the newer tip changed.
-        let overtaken = newest != *tip
+        // A newer tip that changed what the check reads may already hold a fix, so the check runs
+        // there before reporting (using a cached pass if one exists). Deferring blindly without
+        // checking the newer tip left a failing check unreported for hours whenever an unrelated
+        // landing moved `staging` and later tips stopped on other failing checks. Only a pass at
+        // the newer tip suppresses the report; if the check still fails there (or gives no pass),
+        // it is blamed and reported at once.
+        let repaired = newest != *tip
             && ctx
                 .git
                 .changed(tip, &newest)
-                .is_ok_and(|changed| touches(&changed, &check.inputs));
-        if overtaken && self.deferred.insert(check.check.clone()) {
+                .is_ok_and(|changed| touches(&changed, &check.inputs))
+            && self.passes_at(ctx, &newest, check);
+        super::round::require_running()?;
+        if repaired {
             eprintln!(
-                "ignite: {} fails at {tip}, but {newest} changes what it reads; the next round \
-                 reports it if it still fails",
+                "ignite: {} fails at {tip}, but passes at {newest}; not reporting",
                 check.check
             );
             return Ok(None);

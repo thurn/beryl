@@ -272,8 +272,8 @@ impl TipVerifier {
         Ok(Handled::Reverted)
     }
 
-    /// Whether `check` passes at the proposed revert. A cached pass counts.
-    fn passes_at(&self, ctx: &Context, at: &Commit, check: &TipCheck) -> bool {
+    /// Whether `check` passes at `at`. A cached pass counts.
+    pub(super) fn passes_at(&self, ctx: &Context, at: &Commit, check: &TipCheck) -> bool {
         matches!(
             self.outcome_at(ctx, at, check, false),
             Some(Outcome::Pass | Outcome::Flaky)

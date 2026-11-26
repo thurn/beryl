@@ -594,25 +594,57 @@ fn a_tip_that_changed_the_checks_inputs_but_still_fails_gets_the_revert() {
     assert!(runs.iter().any(|(_, at, _, _)| at == &newer), "{runs:?}");
 }
 
-/// On a busy day every round's tip is overtaken, with a change to what a failing check reads,
-/// before the round ends. Leaving each such failure to the next round never reported it, and
-/// `master` did not move for hours. The second round that finds the check failing reports it.
+/// On a busy day a round's tip is often overtaken by an unrelated landing that changes what a
+/// failing check reads. Deferring blindly until a later round left the failure unreported for
+/// hours when later tips stopped on other failing checks. When the check still fails at the newer
+/// tip, the first round reports it at once.
 #[test]
-fn a_check_left_to_the_next_round_is_reported_when_it_fails_again() {
+fn an_overtaken_failure_that_still_fails_at_the_newer_tip_is_reported_at_once() {
     let world = World::new();
     let ctx = world.ctx("m-1");
     let failing = check("a", 'a');
-    let mut verifier = world.verifier();
-    for (at, newer) in [("bbbb000", "cccc000"), ("cccc000", "dddd000")] {
-        world.work.add_commit(newer, &["src/a/lib.rs"]);
-        let (at, newer) = (commit(at), commit(newer));
-        world.git.set_changed(&at, &newer, &["src/a/lib.rs"]);
-        world.land(&newer);
-        world.work.set_checks(&at, vec![failing.clone()]);
-        world.work.set_outcome(&at, &failing.check, Outcome::Fail);
+    let (at, newer) = (commit("bbbb000"), commit("cccc000"));
+    world.work.add_commit("bbbb000", &["src/a/lib.rs"]);
+    world.work.add_commit("cccc000", &["src/a/lib.rs"]);
+    world.git.set_changed(&at, &newer, &["src/a/lib.rs"]);
+    world.land(&newer);
+    world.work.set_checks(&at, vec![failing.clone()]);
+    world.work.set_outcome(&at, &failing.check, Outcome::Fail);
+    world
+        .work
+        .set_outcome(&newer, &failing.check, Outcome::Fail);
 
-        verifier.verify(&ctx, &at).unwrap();
-    }
+    world.verifier().verify(&ctx, &at).unwrap();
+
+    let regressions = world.hub.regressions();
+    assert_eq!(regressions.len(), 1);
+    assert_eq!(regressions[0].check, failing.check);
+    assert_eq!(regressions[0].first_bad, at);
+    assert!(
+        world.work.runs().iter().any(|(_, c, _, _)| c == &newer),
+        "expected blame to check whether the newer tip repaired the failure"
+    );
+}
+
+/// If checking the newer tip produces no pass (for example, the newer tip does not build and
+/// returns `Incomplete`), the failure at the overtaken tip is still reported at once.
+#[test]
+fn an_overtaken_failure_is_reported_when_the_newer_tip_gives_no_pass() {
+    let world = World::new();
+    let ctx = world.ctx("m-1");
+    let failing = check("a", 'a');
+    let (at, newer) = (commit("bbbb000"), commit("cccc000"));
+    world.work.add_commit("bbbb000", &["src/a/lib.rs"]);
+    world.work.add_commit("cccc000", &["src/a/lib.rs"]);
+    world.git.set_changed(&at, &newer, &["src/a/lib.rs"]);
+    world.land(&newer);
+    world.work.set_checks(&at, vec![failing.clone()]);
+    world.work.set_outcome(&at, &failing.check, Outcome::Fail);
+    world
+        .work
+        .set_outcome(&newer, &failing.check, Outcome::Incomplete);
+
+    world.verifier().verify(&ctx, &at).unwrap();
 
     let regressions = world.hub.regressions();
     assert_eq!(regressions.len(), 1);

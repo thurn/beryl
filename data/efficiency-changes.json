@@ -1045,5 +1045,10 @@
     "label": "The daemon watches every non-resumable verb process (including `tip-round` and `idle-job`) for stalls from the moment it starts as well as across same-build or cross-build restarts, ending it after 20 minutes without progress so its loop starts a new round. On 2026-11-26, `T-2223` hung for 65 minutes under its own daemon on cygnus before an upgrade and `T-15098` hung for 48 minutes under its own daemon on jarvis before an upgrade adopted it, delaying verification of `3dd18318f` by 34 minutes while 26 product commits waited on `staging`",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
+  },
+  {
+    "label": "When a tip round sees a required check fail and a newer `staging` tip has touched what the check reads, `TipVerifier::blame` now checks whether the check passes at the newer tip instead of deferring the report blindly until a later round. On 2026-11-26, `d46088c23` failed `family_corpora_never_change` at 09:31 UTC, but an unrelated landing five minutes earlier caused `blame` to defer reporting; subsequent tips stopped on `oracle` and `pytest` failures, leaving the regression unreported for 2 h 24 min until 11:55 UTC and adding ~56 min of `master` stall across 27 waiting product commits",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]
