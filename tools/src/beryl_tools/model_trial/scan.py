@@ -69,6 +69,18 @@ QUOTED: re.Pattern[str] = re.compile(r'"(?:[^"\\]|\\.)*"|\'[^\']*\'')
 REPORT_BEAD: re.Pattern[str] = re.compile(
     r"(?:^|\\n)[ \t]*(?:[0-9]+:[ \t]*)?bead:[ \t]*[A-Za-z0-9.]+[ \t]*(?=\\n|$)", re.M
 )
+# A line of `git branch` output that holds only a branch name, with an optional `* ` or two
+# spaces before it. A copy that lists branches after committing sees every other copy's
+# `trial/` branch this way without having looked for it.
+BRANCH_LISTING: re.Pattern[str] = re.compile(r"^(?:\* |  )?trial/[A-Za-z0-9.]+[ \t]*$")
+# A line of `ignite ticket show` (`waits on:`, `waited on by:`) or `ignite start` (`needs`)
+# that lists a ticket's dependencies. The trial's next block ticket depends on every arm, so
+# the source's output can list every copy's ID there without the source looking for it.
+DEPENDENCY_LINE: re.Pattern[str] = re.compile(
+    r"^\s*(?:waits on:|waited on by:|needs\b)"
+)
+# A Claude transcript's tool output keeps its line breaks as the two characters `\n`.
+LINE_BREAK: re.Pattern[str] = re.compile(r"\r?\n|\\n")
 
 
 def unquoted(text: str) -> str:
@@ -80,6 +92,16 @@ def unquoted(text: str) -> str:
 
 def without_report_bead(trace: Trace) -> str:
     return REPORT_BEAD.sub("", trace.text) if trace.kind == "output" else trace.text
+
+
+def without_lines(trace: Trace, drop: re.Pattern[str]) -> str:
+    """An output's text without the lines that match `drop`. Only output is filtered: a
+    command that names a `trial/` branch or a ticket still counts."""
+    if trace.kind != "output":
+        return trace.text
+    return "\n".join(
+        line for line in LINE_BREAK.split(trace.text) if not drop.search(line)
+    )
 
 
 def commands(arm: Arm) -> list[Trace]:
@@ -109,7 +131,8 @@ def void_reasons(
             found.append(
                 f"the copy's {trace.kind} names the source {sid} ({trace.where})"
             )
-        for branch in TRIAL_BRANCH.findall(text):
+        # A branch listing is suspect evidence (see `suspect`), not a void reason.
+        for branch in TRIAL_BRANCH.findall(without_lines(trace, BRANCH_LISTING)):
             if branch.rstrip(".") not in (cid, "<this", ""):
                 found.append(
                     f"the copy's {trace.kind} shows trial/{branch} ({trace.where})"
@@ -140,7 +163,8 @@ def void_reasons(
                 )
     names_copy = mention(cid)
     for trace in source.traces:
-        if names_copy.search(trace.text):
+        # A dependency list is suspect evidence (see `suspect`), not a void reason.
+        if names_copy.search(without_lines(trace, DEPENDENCY_LINE)):
             found.append(
                 f"the source's {trace.kind} names the copy {cid} ({trace.where})"
             )
@@ -239,6 +263,17 @@ def suspect(
                                 trace.where,
                             )
                         )
+    cid = str(copy.ticket["id"])
+    for trace in copy.traces:
+        # Branch listings are not void reasons, so the block session reads them here.
+        for line in LINE_BREAK.split(trace.text) if trace.kind == "output" else []:
+            if BRANCH_LISTING.search(line) and f"trial/{cid}" not in line:
+                found.append(
+                    Found(
+                        f"the copy's branch listing shows {line.strip(' *')}",
+                        trace.where,
+                    )
+                )
     for this, name in ((source, "source"), (copy, "copy")):
         for ticket_id, author in this.elsewhere:
             found.append(

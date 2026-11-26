@@ -575,6 +575,37 @@ def test_words_that_only_mention_a_void_rule_do_not_void(trace: Trace) -> None:
     assert voids(arm("E1.1"), arm("C2", trace, tree="tree-04")) == []
 
 
+def test_a_branch_listing_is_suspect_not_void() -> None:
+    listing = Trace("output", "  trial/C3\n* trial/C2\n  trial/C4\n", "t:9")
+    copy = arm("C2", cmd("git branch --list 'trial/*'"), listing, tree="tree-04")
+    assert voids(arm("E1.1"), copy) == []
+    found = [f for f in scan.suspect(arm("E1.1"), copy, "x", [], "", set())]
+    assert any(
+        "branch listing shows trial/C3" in f.what and f.where == "t:9" for f in found
+    )
+    escaped = Trace("output", "  trial/C3\\n  trial/C4", "t:10")
+    assert voids(arm("E1.1"), arm("C2", escaped, tree="tree-04")) == []
+
+
+def test_a_branch_named_in_other_output_still_voids() -> None:
+    shown = Trace("output", "merged trial/C3 into master", "t:9")
+    assert voids(arm("E1.1"), arm("C2", shown, tree="tree-04"))
+
+
+def test_a_dependency_list_is_suspect_not_void() -> None:
+    shown = Trace("output", "waits on: TS986 (blocks), C2 (blocks, external)\n", "t:4")
+    source = arm("E1.1", shown)
+    assert voids(source, arm("C2")) == []
+    found = scan.suspect(source, arm("C2"), "x", [], "", set())
+    assert any(
+        "saw the other arm's ID C2" in f.what and f.where == "t:4" for f in found
+    )
+    needs = Trace("output", "needs C2 (open)", "t:5")
+    assert voids(arm("E1.1", needs), arm("C2")) == []
+    other = Trace("output", "landed with C2", "t:6")
+    assert voids(arm("E1.1", other), arm("C2"))
+
+
 def test_an_agy_command_is_its_command_line_alone() -> None:
     call = {
         "name": "run_command",

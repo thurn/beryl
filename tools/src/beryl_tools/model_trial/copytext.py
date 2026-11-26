@@ -62,7 +62,8 @@ after `ignite start`, run `git reset --hard {start_commit}` in your tree, and ne
 `ignite sync`: the work must start from that commit. Then work it as you would any ticket:
 commit in your tree and get `ignite check` to pass. Then, instead of `ignite land`, run
 `git branch trial/{THIS} HEAD` and
-`ignite close -m "<the landing note you would have written>"`.
+`ignite close -m "<the landing note you would have written>"`. After that
+`git branch`, do not list other branches.
 
 - Never run `git fetch`, and never read `origin/staging`, `origin/ignite/staging` or any commit
   that is not an ancestor of `{start_commit}` or one of your own.
