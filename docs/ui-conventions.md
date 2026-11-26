@@ -439,6 +439,11 @@ recordings do not show them.
   existing option buttons. Attacking bands carry no extra mark on the table.
   Assign Damage uses the number control to assign a share to each creature in
   turn.
+- **Why a creature can't attack.** During Choose attackers, clicking or tapping
+  a creature you control that cannot attack plays the refusal sound and opens
+  the inspector with the reason under its face: "Tapped", "Summoning sickness",
+  "Defender needs <subtype>" (reflecting text-changing effects), or "Can't
+  attack".
 - **Notes on manual cards.** A card shows its table note on one line, with an
   ellipsis when it runs out of room. Its inspection panel shows the full note.
 - **A card picked face down.** While the other player still has to pick, as for

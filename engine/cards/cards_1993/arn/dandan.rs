@@ -128,5 +128,19 @@ pub mod scenarios {
             ME.has(Zone::Graveyard, DANDAN, 1),
             THEM.has(Zone::Graveyard, DANDAN, 1),
         ]),
+        Scenario::new("Dandân is cast and enters in a shared game")
+            .shared_library(&[Card::Island, Card::Island])
+            .battlefield(P0, &[DANDAN, Card::Island, Card::Island])
+            .hand(P0, &[DANDAN])
+            .actions(&[ME.casts(DANDAN), Resolve, ME.controls(DANDAN, 2)]),
+        Scenario::new("Dandân can't attack in a shared game when the defender controls no Island")
+            .shared_library(&[Card::Island, Card::Island])
+            .battlefield(P0, &[DANDAN, Card::Island, Prop::Flier])
+            .battlefield(P1, &[Card::Plains])
+            .actions(&[
+                advance_to(1, TurnStep::BeginningOfCombat),
+                ME.passes(),
+                ME.deciding(DecisionKind::Attacker, 2),
+            ]),
     ];
 }

@@ -315,6 +315,8 @@ damn/overloaded-destroys-each-creature-targeting-none
 damn/overloaded-takes-tokens-and-face-down-creatures-at-once
 dandn/attacks-a-player-who-controls-an-island
 dandn/attacks-in-a-shared-game-when-the-defender-controls-an-island
+dandn/cant-attack-in-a-shared-game-when-the-defender-controls-no-island
+dandn/is-cast-and-enters-in-a-shared-game
 dandn/is-sacrificed-to-the-shared-graveyard-when-its-controller-controls-no-island
 dandn/is-sacrificed-when-its-controller-controls-no-island
 dandn/mind-bend-has-dandn-sacrificed-for-want-of-a-swamp
@@ -483,13 +485,12 @@ humility/an-anthems-bonus-applies-on-top-of-the-base-11
 humility/dryad-arbor-loses-the-mana-ability-of-its-land-type
 humility/every-creature-is-11-on-both-sides
 humility/tarmogoyf-under-it-is-11
+island/a-hand-with-fewer-than-two-nonland-cards-takes-a-free-mulligan
 island/drawing-takes-the-top-card-of-the-shared-library
-island/generated-1-play-from-hand
-island/generated-3-cast-wetland-sambar-paying-beside-island
-island/generated-4-cast-wetland-sambar-paying-beside-plains
+island/is-played-with-three-others-and-tapped-for-mana-in-a-shared-game
+island/is-played-with-three-others-and-tapped-for-mana-in-a-shared-game-0
 island/played-in-a-shared-game-taps-for-blue-mana
 island/players-get-one-land-play-on-their-own-turn
-island/players-get-one-land-play-on-their-own-turn-0
 island/the-player-on-the-draw-decks-first
 island/the-player-who-draws-from-an-empty-shared-library-loses
 jace-the-mind-sculptor/0-draws-three-and-puts-two-back-in-the-order-chosen

@@ -199,6 +199,7 @@ pub fn frame(face: &MatchFace, size: FaceSize) -> Vec<u8> {
             &face.colors,
             &face.text,
             size,
+            face.plate.is_none(),
         );
         if let Some(plate) = &face.plate {
             draw_plate(&mut canvas, text, plate, size, false);
@@ -242,6 +243,7 @@ fn draw_frame(
     colors: &[String],
     printed: &FaceText,
     size: FaceSize,
+    stats: bool,
 ) {
     let g = Geometry::new(size);
     let em = g.em;
@@ -309,10 +311,12 @@ fn draw_frame(
             em,
         );
     }
-    if let (Some(power), Some(toughness)) = (&printed.power, &printed.toughness) {
-        draw_stats(canvas, text, &g, palette, power, toughness);
-    } else if let Some(loyalty) = &printed.loyalty {
-        draw_loyalty(canvas, text, &g, loyalty);
+    if stats {
+        if let (Some(power), Some(toughness)) = (&printed.power, &printed.toughness) {
+            draw_stats(canvas, text, &g, palette, power, toughness);
+        } else if let Some(loyalty) = &printed.loyalty {
+            draw_loyalty(canvas, text, &g, loyalty);
+        }
     }
 }
 

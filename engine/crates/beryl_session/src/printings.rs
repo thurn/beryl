@@ -82,6 +82,36 @@ impl Printings {
         printings
     }
 
+    /// The queues of a prepared shared-deck game, cycling one of each printing of each card
+    /// before repeating so that small scenario boards show every art of a multi-art card.
+    pub(crate) fn shared_deck() -> Printings {
+        let mut by_name: BTreeMap<&'static str, Vec<(PrintingIx, u32)>> = BTreeMap::new();
+        for (i, p) in PRINTINGS.iter().enumerate() {
+            if p.deck != "forgetful-fish" {
+                continue;
+            }
+            let ix = PrintingIx(u32::try_from(i).expect("the printings fit in u32"));
+            by_name.entry(p.name).or_default().push((ix, p.copies));
+        }
+        let mut printings = Printings::default();
+        for (card, entries) in by_name {
+            let name = printings.names.entry((0, card)).or_default();
+            if entries.len() == 1 {
+                name.only = Some(entries[0].0);
+            } else {
+                let max = entries.iter().map(|&(_, c)| c).max().unwrap_or(0);
+                for round in 0..max {
+                    for &(ix, copies) in &entries {
+                        if round < copies {
+                            name.queue.push_back(ix);
+                        }
+                    }
+                }
+            }
+        }
+        printings
+    }
+
     /// Whether the game shows any printing at all.
     fn any(&self) -> bool {
         !self.names.is_empty()

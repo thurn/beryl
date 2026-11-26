@@ -14,7 +14,7 @@ use crate::layout::{Layout, Queue, Small};
 use crate::observation::Observation;
 use crate::reference::Permanent;
 use crate::state::{StackEntry, State};
-use beryl_card::{Castings, FaceIx, ManaColor, ObjectAbility, Prompt};
+use beryl_card::{Castings, FaceIx, ManaColor, ObjectAbility, Prompt, Subtype};
 
 // The kinds are vocabulary: a scenario names the kind of question it answers, and a card's
 // scenarios compile against `beryl_card` alone.
@@ -393,6 +393,15 @@ pub enum Refusal<L: Layout = Small> {
     Cost,
     /// A target it requires can't be chosen.
     Target,
+    /// The creature is tapped, so it can't attack.
+    Tapped,
+    /// The creature has summoning sickness without haste, so it can't attack.
+    SummoningSickness,
+    /// A rule forbids the creature from attacking.
+    CantAttack,
+    /// A rule forbids the creature from attacking unless the defending player controls a
+    /// permanent with this subtype (after text-changing effects).
+    DefenderNeeds(Subtype),
 }
 
 /// Which budget or capacity a stalled game exhausted.

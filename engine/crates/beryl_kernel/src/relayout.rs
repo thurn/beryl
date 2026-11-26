@@ -572,6 +572,10 @@ impl<L: Layout> Relayout for Refusal<L> {
             Refusal::Mana => Refusal::Mana,
             Refusal::Cost => Refusal::Cost,
             Refusal::Target => Refusal::Target,
+            Refusal::Tapped => Refusal::Tapped,
+            Refusal::SummoningSickness => Refusal::SummoningSickness,
+            Refusal::CantAttack => Refusal::CantAttack,
+            Refusal::DefenderNeeds(subtype) => Refusal::DefenderNeeds(subtype),
         }
     }
 }

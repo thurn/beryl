@@ -366,6 +366,9 @@ impl Game {
         let mut game = Game::assemble(table, &state, replay, human, session, opponent);
         game.stand_in = Some(stand_in);
         game.hand_over = hand_over;
+        if state.shares_zones() {
+            game.printings = Printings::shared_deck();
+        }
         game
     }
 

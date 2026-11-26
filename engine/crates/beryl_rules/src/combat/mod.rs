@@ -88,6 +88,41 @@ pub(crate) fn can_declare_attackers<L: Layout>(s: &State<L>, t: &GameTable) -> b
     eligible_attackers::<L, false>(s, t).next().is_some()
 }
 
+/// Why the viewer's creature in `slot` can't be declared as an attacker now, for a client to
+/// say why clicking it does nothing ([CR 508.1a], [CR 508.1c]; see [CR 302.6]). None if it can
+/// attack, is already attacking, or is not a creature the viewer controls on the battlefield.
+///
+/// [CR 508.1a]: https://yawgatog.com/resources/magic-rules/#R5081a
+/// [CR 508.1c]: https://yawgatog.com/resources/magic-rules/#R5081c
+/// [CR 302.6]: https://yawgatog.com/resources/magic-rules/#R3026
+pub fn attack_refusal<L: Layout>(
+    obs: crate::observation::Observation<'_, L>,
+    t: &GameTable,
+    slot: L::Slot,
+) -> Option<crate::decision::Refusal<L>> {
+    let (s, player) = (obs.shown(), obs.viewer());
+    let (_, derived) = s
+        .permanents_with_derived()
+        .find(|&(perm, _)| perm == slot)?;
+    if derived.controller != player || !derived.types.contains(Types::CREATURE) {
+        return None;
+    }
+    let o = s.object(slot);
+    if o.is_attacking() {
+        return None;
+    }
+    if o.is_tapped() {
+        return Some(crate::decision::Refusal::Tapped);
+    }
+    if o.is_summoning_sick() && !derived.keywords.contains(Keywords::HASTE) {
+        return Some(crate::decision::Refusal::SummoningSickness);
+    }
+    if rule_change::attacks_restricted(t) {
+        return rule_change::attack_refusal(s, t, slot);
+    }
+    None
+}
+
 /// Whether a later combat would offer an attack from this position. Current combat roles
 /// expire before that combat begins (see [CR 511.3]): "all creatures, battles, and planeswalkers
 /// are removed from combat."

@@ -210,14 +210,12 @@ pub(super) fn inspector(input: &CardInputs<'_>) -> Element {
         )
 }
 
-/// The line under the state that says why a click on the card was refused, as the web's
-/// `InspectRefusal` draws it (`ui/src/game/Piles.tsx`), in the words `refusal_words` gives.
-/// The web's glyph before the words, from the Mana font, is not drawn: the flat layer has no
-/// such icons.
+/// The line under the state that says why a click on the card was refused.
 fn refusal(reason: &RefusalView, by: Option<&str>, inner: f32) -> Element {
     let words = refusal_words(reason, by);
+    let kind = ["Can't play", "Can't attack"][usize::from(reason.is_attack())];
     let mut line = row()
-        .name(&format!("Can't play: {words}"))
+        .name(&format!("{kind}: {words}"))
         .justify_content(kit_ui::element::Justify::Center)
         .max_width(inner)
         .background(color::REFUSAL)
@@ -227,25 +225,28 @@ fn refusal(reason: &RefusalView, by: Option<&str>, inner: f32) -> Element {
                 .style(type_style::REFUSAL)
                 .color(color::STAT_DOWN),
         );
-    let (across, down) = (size::REFUSAL_PADDING_X, size::REFUSAL_PADDING_Y);
-    line.style.padding = [down, across, down, across];
+    let (x, y) = (size::REFUSAL_PADDING_X, size::REFUSAL_PADDING_Y);
+    line.style.padding = [y, x, y, x];
     line
 }
 
-/// Why a card can't be played, in the web's words (`REFUSAL_WORDS` in `ui/src/game/Piles.tsx`):
-/// a timing refusal names the permanent `by` that holds its controller to sorcery speed, by the
-/// part of its name before a comma.
+/// Why a card can't be played or a creature can't attack.
 #[must_use]
 pub fn refusal_words(reason: &RefusalView, by: Option<&str>) -> String {
+    use RefusalView as R;
     match (reason, by) {
-        (RefusalView::Timing { .. }, Some(by)) => {
+        (R::Timing { .. }, Some(by)) => {
             format!("Sorcery speed: {}", by.split(',').next().unwrap_or(by))
         }
-        (RefusalView::Timing { .. }, None) => "Sorcery speed".to_owned(),
-        (RefusalView::LandPlayed, _) => "Land played".to_owned(),
-        (RefusalView::Mana, _) => "No mana".to_owned(),
-        (RefusalView::Cost, _) => "Can't pay".to_owned(),
-        (RefusalView::Target, _) => "No target".to_owned(),
+        (R::Timing { .. }, None) => "Sorcery speed".to_owned(),
+        (R::LandPlayed, _) => "Land played".to_owned(),
+        (R::Mana, _) => "No mana".to_owned(),
+        (R::Cost, _) => "Can't pay".to_owned(),
+        (R::Target, _) => "No target".to_owned(),
+        (R::Tapped, _) => "Tapped".to_owned(),
+        (R::SummoningSickness, _) => "Summoning sickness".to_owned(),
+        (R::CantAttack, _) => "Can't attack".to_owned(),
+        (R::DefenderNeeds { subtype }, _) => format!("Defender needs {subtype}"),
     }
 }
 

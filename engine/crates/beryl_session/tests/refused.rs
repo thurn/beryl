@@ -4,11 +4,13 @@
 
 use beryl_cards::CARDS;
 use beryl_cards::names::{
-    COUNTERSPELL, ISLAND, TEFERI_TIME_RAVELER, THIRST_FOR_DISCOVERY, THUNDERTRAP_TRAINER,
+    COUNTERSPELL, DANDAN, ISLAND, MIND_BEND, PLAINS, SWAMP, TEFERI_TIME_RAVELER,
+    THIRST_FOR_DISCOVERY, THUNDERTRAP_TRAINER,
 };
 use beryl_engine::{
     DecisionKind, Observation, Profile, Replay, Scratch, Seat, Step, TurnStep, next,
 };
+use beryl_scenario::prelude::{ME, advance_to};
 use beryl_scenario::{Action, P0, P1, Permanent, Scenario};
 use beryl_session::protocol::ObjectId;
 use beryl_session::protocol::{Moment, PlayerView, RefusalView, player_view};
@@ -167,5 +169,75 @@ fn teferi_holds_an_instant_to_sorcery_speed() {
             RefusalView::Timing { by: None },
             None
         )
+    );
+}
+
+#[test]
+fn attacker_refusal_names_missing_defending_land_type() {
+    use beryl_engine::card::{Subtype, TextWord};
+
+    const WITHOUT_ISLAND: Scenario = Scenario::new("dandan-without-defending-island")
+        .at(3, P0, TurnStep::BeginningOfCombat)
+        .permanents(
+            P0,
+            &[
+                Permanent::new(DANDAN),
+                Permanent::new(ISLAND),
+                Permanent::new(SWAMP),
+                Permanent::new(THUNDERTRAP_TRAINER),
+            ],
+        )
+        .library(P0, LIBRARY)
+        .permanents(P1, &[Permanent::new(PLAINS)])
+        .library(P1, LIBRARY)
+        .actions(&[ME.attacks_with(THUNDERTRAP_TRAINER)]);
+    // Mind Bend changes "Island" to "Swamp" on Dandân, so the refusal names Swamp.
+    const AFTER_MIND_BEND: Scenario = Scenario::new("dandan-after-mind-bend")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .permanents(
+            P0,
+            &[
+                Permanent::new(DANDAN),
+                Permanent::new(ISLAND),
+                Permanent::new(SWAMP),
+                Permanent::new(THUNDERTRAP_TRAINER),
+            ],
+        )
+        .hand(P0, &[MIND_BEND])
+        .library(P0, LIBRARY)
+        .permanents(P1, &[Permanent::new(ISLAND)])
+        .library(P1, LIBRARY)
+        .actions(&[
+            ME.casts(MIND_BEND),
+            ME.targets(DANDAN),
+            Action::Resolve,
+            ME.chooses_word(TextWord::LandType(Subtype::Island)),
+            ME.chooses_word(TextWord::LandType(Subtype::Swamp)),
+            advance_to(3, TurnStep::BeginningOfCombat),
+            ME.passes(),
+            ME.attacks_with(THUNDERTRAP_TRAINER),
+        ]);
+
+    let at_attack = at_decisions(&WITHOUT_ISLAND);
+    assert_eq!(
+        at_attack.last(),
+        Some(&vec![(
+            DANDAN.to_owned(),
+            RefusalView::DefenderNeeds {
+                subtype: "Island".to_owned()
+            },
+            None,
+        )])
+    );
+    let after_bend = at_decisions(&AFTER_MIND_BEND);
+    assert_eq!(
+        after_bend.last(),
+        Some(&vec![(
+            DANDAN.to_owned(),
+            RefusalView::DefenderNeeds {
+                subtype: "Swamp".to_owned()
+            },
+            None,
+        )])
     );
 }

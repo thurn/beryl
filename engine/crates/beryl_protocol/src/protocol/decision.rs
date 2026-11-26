@@ -87,6 +87,27 @@ pub enum RefusalView {
     Cost,
     /// A target it requires can't be chosen.
     Target,
+    /// The creature is tapped, so it can't attack.
+    Tapped,
+    /// The creature has summoning sickness without haste, so it can't attack.
+    SummoningSickness,
+    /// A rule forbids the creature from attacking.
+    CantAttack,
+    /// A rule forbids the creature from attacking unless the defending player controls a
+    /// permanent of `subtype`.
+    DefenderNeeds { subtype: String },
+}
+
+impl RefusalView {
+    /// Whether this refusal explains why a creature can't attack rather than why a card can't
+    /// be played.
+    #[must_use]
+    pub fn is_attack(&self) -> bool {
+        matches!(
+            self,
+            Self::Tapped | Self::SummoningSickness | Self::CantAttack | Self::DefenderNeeds { .. }
+        )
+    }
 }
 
 /// Where passing priority takes the viewer if the other player passes too ([`NextStop`](beryl_engine::NextStop)).

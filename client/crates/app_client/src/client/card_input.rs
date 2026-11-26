@@ -179,11 +179,14 @@ impl Client {
     }
 
     /// A finger's tap on the card in `slot`: a click if the open prompt can use the card or the
-    /// manual table is shown, and otherwise the card shown whole.
+    /// manual table is shown, the refusal if the open decision refuses it, and otherwise the
+    /// card shown whole.
     pub(super) fn card_tapped(&mut self, slot: usize) {
         if self.features.screen != Screen::Game || self.usable(slot) {
             self.card_clicked(slot);
-        } else if let Ok(slot) = u16::try_from(slot) {
+        } else if let Ok(slot) = u16::try_from(slot)
+            && !self.refuse_click(ObjectId(slot))
+        {
             self.features.inspect(&Inspect::Pin(Some(ObjectId(slot))));
         }
     }

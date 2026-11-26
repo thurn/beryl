@@ -144,23 +144,46 @@ pub fn card_records_among<'a>(
 }
 
 /// A recorded fixture's `CARD_RECORDS` response: the records of every card or token name its
-/// views and events show, so its page draws every card with no server.
+/// views and events show, plus every printing index they name, so its page draws every card
+/// with no server.
 pub fn fixture_message(messages: &[FixtureMessage], makers: TokenMakers) -> FixtureMessage {
-    fn strings<'a>(value: &'a serde_json::Value, out: &mut Vec<&'a str>) {
+    fn collect<'a>(
+        value: &'a serde_json::Value,
+        strings: &mut Vec<&'a str>,
+        printings: &mut BTreeSet<PrintingIx>,
+    ) {
         match value {
-            serde_json::Value::String(s) => out.push(s),
-            serde_json::Value::Array(items) => items.iter().for_each(|v| strings(v, out)),
-            serde_json::Value::Object(map) => map.values().for_each(|v| strings(v, out)),
+            serde_json::Value::String(s) => strings.push(s),
+            serde_json::Value::Array(items) => {
+                for v in items {
+                    collect(v, strings, printings);
+                }
+            }
+            serde_json::Value::Object(map) => {
+                if let Some(ix) = map
+                    .get("printing")
+                    .and_then(serde_json::Value::as_u64)
+                    .and_then(|n| u32::try_from(n).ok())
+                {
+                    printings.insert(PrintingIx(ix));
+                }
+                for v in map.values() {
+                    collect(v, strings, printings);
+                }
+            }
             _ => {}
         }
     }
     let mut found = Vec::new();
+    let mut printings = BTreeSet::new();
     for message in messages {
         if let FixtureMessage::Event { payload, .. } = message {
-            strings(payload, &mut found);
+            collect(payload, &mut found, &mut printings);
         }
     }
-    FixtureMessage::response(CARD_RECORDS, &card_records_among(found, makers))
+    let mut records = card_records_among(found, makers);
+    add_printings(&mut records, printings);
+    FixtureMessage::response(CARD_RECORDS, &records)
 }
 
 /// Key the card-record lookup by exact token printing when names are shared.

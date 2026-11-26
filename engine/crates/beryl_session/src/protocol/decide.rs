@@ -5,7 +5,7 @@ use beryl_engine::layout::Queue;
 use beryl_engine::state::{StackEntry, TurnStep};
 use beryl_engine::{
     Candidates, Decision, DecisionKind, GameTable, Layout, NextStop, Observation, Refusal, SlotId,
-    Zone, ZoneKey, can_declare_blockers, next_step_stop, next_stop, refusal,
+    Zone, ZoneKey, attack_refusal, can_declare_blockers, next_step_stop, next_stop, refusal,
 };
 
 use super::ObjectId;
@@ -71,9 +71,13 @@ pub(super) fn decision_view<L: Layout>(
         cancellable: false,
         undo: 0,
         undo_depth: 0,
-        // The viewer's own hand says nothing of a priority they hold for another player.
-        refused: if d.kind == DecisionKind::Priority && d.player == obs.viewer() {
-            refused(t, obs)
+        // The viewer's own hand or creatures say nothing of a decision they make for another player.
+        refused: if d.player == obs.viewer() {
+            match d.kind {
+                DecisionKind::Priority => refused(t, obs),
+                DecisionKind::Attacker => attack_refused(t, obs),
+                _ => Vec::new(),
+            }
         } else {
             Vec::new()
         },
@@ -94,6 +98,38 @@ pub(super) fn refused<L: Layout>(t: &GameTable, obs: Observation<'_, L>) -> Vec<
                 Refusal::Mana => RefusalView::Mana,
                 Refusal::Cost => RefusalView::Cost,
                 Refusal::Target => RefusalView::Target,
+                Refusal::Tapped => RefusalView::Tapped,
+                Refusal::SummoningSickness => RefusalView::SummoningSickness,
+                Refusal::CantAttack => RefusalView::CantAttack,
+                Refusal::DefenderNeeds(subtype) => RefusalView::DefenderNeeds {
+                    subtype: format!("{subtype:?}"),
+                },
+            };
+            Some(Refused {
+                slot: ObjectId(slot.num()),
+                reason,
+            })
+        })
+        .collect()
+}
+
+/// The creatures the viewer controls that may not be declared as attackers now
+/// ([`DecisionView::refused`]).
+fn attack_refused<L: Layout>(t: &GameTable, obs: Observation<'_, L>) -> Vec<Refused> {
+    crate::protocol::slots_by_id(obs.zone(ZoneKey::Of(obs.viewer(), Zone::Battlefield)))
+        .filter_map(|slot| {
+            let reason = match attack_refusal(obs, t, slot)? {
+                Refusal::Tapped => RefusalView::Tapped,
+                Refusal::SummoningSickness => RefusalView::SummoningSickness,
+                Refusal::CantAttack => RefusalView::CantAttack,
+                Refusal::DefenderNeeds(subtype) => RefusalView::DefenderNeeds {
+                    subtype: format!("{subtype:?}"),
+                },
+                Refusal::Timing { .. }
+                | Refusal::LandPlayed
+                | Refusal::Mana
+                | Refusal::Cost
+                | Refusal::Target => return None,
             };
             Some(Refused {
                 slot: ObjectId(slot.num()),

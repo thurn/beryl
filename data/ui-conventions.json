@@ -1058,6 +1058,11 @@
     },
     {
       "kind": "not-seen",
+      "name": "Why a creature can't attack",
+      "rule": "During Choose attackers, clicking or tapping a creature you control that cannot attack plays the refusal sound and opens the inspector with the reason under its face: \"Tapped\", \"Summoning sickness\", \"Defender needs <subtype>\" (reflecting text-changing effects), or \"Can't attack\"."
+    },
+    {
+      "kind": "not-seen",
       "name": "Notes on manual cards",
       "rule": "A card shows its table note on one line, with an ellipsis when it runs out of room. Its inspection panel shows the full note."
     },

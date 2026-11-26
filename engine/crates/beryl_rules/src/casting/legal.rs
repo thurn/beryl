@@ -265,7 +265,12 @@ fn refused<L: Layout, const TARGETS: bool>(
 /// run in the order of `progress`.
 fn keep_furthest<L: Layout>(most: &mut Option<Refusal<L>>, r: Refusal<L>) {
     let progress = |r| match r {
-        Refusal::Timing { .. } | Refusal::LandPlayed => 0,
+        Refusal::Timing { .. }
+        | Refusal::LandPlayed
+        | Refusal::Tapped
+        | Refusal::SummoningSickness
+        | Refusal::CantAttack
+        | Refusal::DefenderNeeds(_) => 0,
         Refusal::Mana => 1,
         Refusal::Cost => 2,
         Refusal::Target => 3,

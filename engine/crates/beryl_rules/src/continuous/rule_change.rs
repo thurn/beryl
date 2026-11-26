@@ -417,6 +417,58 @@ fn attack_forbidden<L: Layout>(
     })
 }
 
+/// Why the creature in `slot` can't attack any defending player, if a rule change forbids it
+/// (see [CR 508.1c]): "The active player checks each creature they control to see whether it's
+/// affected by any restrictions (effects that say a creature can't attack, or that it can't
+/// attack unless some condition is met)." When the restriction requires the defending player
+/// to control a permanent of one subtype, the refusal names that subtype after text-changing
+/// effects (see [CR 612.1]).
+///
+/// [CR 508.1c]: https://yawgatog.com/resources/magic-rules/#R5081c
+/// [CR 612.1]: https://yawgatog.com/resources/magic-rules/#R6121
+#[cold]
+#[inline(never)]
+pub(crate) fn attack_refusal<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    slot: L::Slot,
+) -> Option<crate::decision::Refusal<L>> {
+    let of_kind = t.rules_of(RuleKind::CantAttack);
+    if of_kind.is_empty() {
+        return None;
+    }
+    let own = object_rules(s, t, slot).common(of_kind);
+    let mut reason = None;
+    for defending in s.defending_players().in_seat_order() {
+        let against = own.iter().find_map(|id| {
+            let Governed::Attack {
+                unless_defender_controls,
+                ..
+            } = t.rule(id).what
+            else {
+                unreachable!("a rule change of the kind that forbids attacking");
+            };
+            let words = s.words_of(slot);
+            let allowed = unless_defender_controls.is_some_and(|filter| {
+                let you = s.controller(slot);
+                s.permanents_with_derived().any(|(permanent, d)| {
+                    d.controller == defending && filter.matches(s, t, permanent, you, &words)
+                })
+            });
+            (!allowed && own_condition_holds(s, t, slot, id)).then(
+                || match unless_defender_controls {
+                    Some(Filter::SubtypeWord(word)) => {
+                        crate::decision::Refusal::DefenderNeeds(word.read(&words))
+                    }
+                    _ => crate::decision::Refusal::CantAttack,
+                },
+            )
+        });
+        reason.get_or_insert(against?);
+    }
+    reason
+}
+
 /// Whether the spell `spell` can't be countered (see [CR 701.6a]): "To counter a spell or ability
 /// means to cancel it, removing it from the stack." A prohibition beats what would counter
 /// it (see [CR 101.2]): "When a rule or effect allows or directs something to happen, and another
