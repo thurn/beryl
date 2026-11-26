@@ -415,9 +415,8 @@ fn enters_choosing<L: Layout>(s: &State<L>, t: &GameTable, entry: &StackEntry<L>
         return true;
     };
     s.copiable(spell.slot).face(t).abilities.iter().any(|a| {
-        a.replacement().is_some_and(|r| {
-            matches!(r.rewrite, Rewrite::Choose(_) | Rewrite::EnterAsCopy { .. })
-        })
+        a.replacement()
+            .is_some_and(|r| matches!(r.rewrite, Rewrite::Choose(_) | Rewrite::EnterAsCopy { .. }))
     })
 }
 
