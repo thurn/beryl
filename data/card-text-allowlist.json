@@ -1,4 +1,11 @@
 {
+  "Accumulated Knowledge": {
+    "reason": "wording",
+    "note": "Oracle says \"then draw cards equal to the number of cards named ~ in all graveyards\"; the renderer says \"draw a card for each card named ~\" as a second sentence and leaves out \"in all graveyards\", which the count's zone filter still reads across every graveyard. Same two draws in the same order, and the count is read after the first draw either way.",
+    "diff": [
+      "Accumulated Knowledge: draw a card [-, then-] {+.+} draw [-cards equal to the number of cards-] {+a card for each card+} named ~ [-in all graveyards-] ."
+    ]
+  },
   "Animate Dead": {
     "reason": "wording",
     "note": "The renderer names the Aura where Oracle says \"it\" for the same object, ends the quoted granted ability without its period and puts it before the next sentence, and splits \"return ... and attach this Aura to it\" into two sentences. Same instructions in the same order.",

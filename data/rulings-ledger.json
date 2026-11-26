@@ -1,4 +1,13 @@
 {
+  "Accumulated Knowledge": [
+    {
+      "published_at": "2018-03-16",
+      "hash": "8775d24883c8",
+      "scenario": [
+        "draws a card plus one for each copy in every graveyard"
+      ]
+    }
+  ],
   "Adventurous Eater // Have a Bite": [
     {
       "published_at": "2026-03-20",
