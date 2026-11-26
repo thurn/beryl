@@ -593,8 +593,8 @@ in the worlds both were scored in, exceeds 3 standard errors of that paired
 difference (`RACE_ERRORS`). The default's root and the leader are never dropped,
 and a dropped root is never chosen. The roots still in the race are scored in
 every later world with that world's seed, so their rewards stay paired, and the
-work saved becomes more worlds for them. When only the default is left,
-scoring stops. `race` requires `turnbudget72`.
+work saved becomes more worlds for them. When only the default is left, scoring
+stops. `race` requires `turnbudget72`.
 
 - **Claims:** more scoring worlds for the roots that matter at the same budget.
 - **Measure:** the suite and a 3M match against the champion, `stronger`.
