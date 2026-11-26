@@ -21,8 +21,8 @@ use crate::protocol::{CandidateIndex, DecisionId, PlayerView, SessionId, Status,
 use crate::replay::ReplayFile;
 use crate::session::GameSession;
 use crate::{
-    Format, GameUpdate, HandOver, Prepared, Seat, SessionError, SessionIds, StartGame, StartRequest, bugs,
-    journal,
+    Format, GameUpdate, HandOver, Prepared, Seat, SessionError, SessionIds, StartGame,
+    StartRequest, bugs, journal,
 };
 
 /// The game the UI's request starts: the default deck's mirror against the agent it names,
