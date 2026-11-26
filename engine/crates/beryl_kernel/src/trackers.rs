@@ -138,13 +138,27 @@ pub struct Trackers<L: Layout = Small> {
     counts: L::PerPlayer<[u8; Count::ALL.len()]>,
 }
 
-/// Hashes the original two sets, and includes counts and attack history when present so
-/// states from games without those facts keep their saved hashes.
+/// Hashes the original two sets, and includes the original three counts, later counts and
+/// attack history when present so states from games without those facts keep their saved
+/// hashes.
 impl<L: Layout> Hash for Trackers<L> {
     fn hash<H: Hasher>(&self, h: &mut H) {
         self.sets[..2].hash(h);
-        if self.counts.iter().flatten().any(|&n| n > 0) {
-            self.counts.hash(h);
+        if self.counts.iter().flat_map(|c| &c[..3]).any(|&n| n > 0) {
+            Seat::BOTH
+                .map(|p| {
+                    let c = &self.counts[p.index()];
+                    [c[0], c[1], c[2]]
+                })
+                .hash(h);
+        }
+        for count in &Count::ALL[3..] {
+            if self.counts.iter().any(|c| c[count.index()] > 0) {
+                count.hash(h);
+                for c in self.counts.iter() {
+                    c[count.index()].hash(h);
+                }
+            }
         }
         let attacked = self.sets[Tracker::AttackedThisTurn.index()];
         if !attacked.is_empty() {
