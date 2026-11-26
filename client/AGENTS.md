@@ -69,10 +69,10 @@ For phone host changes, `just ios-smoke` and `just android-smoke` replay a
 recording headlessly and save a screenshot and frame log under
 `$BERYL_CACHE/b3d/phone`. Use the documented touch and lifecycle options for
 host input and suspend or resume, and `just ios-smoke --game wu-control` or
-`--game forgetful-fish` to play a whole seeded game of that deck against the AI. Install on a paired iPhone with
-`just ios-device --user-asked` only when the user asks. `just mobile-bugs` pulls
-the bug reports the phone smokes saved into the desktop's bugs folder, and
-`--device` also pulls from a paired iPhone.
+`--game forgetful-fish` to play a whole seeded game of that deck against the AI.
+Install on a paired iPhone with `just ios-device --user-asked` only when the
+user asks. `just mobile-bugs` pulls the bug reports the phone smokes saved into
+the desktop's bugs folder, and `--device` also pulls from a paired iPhone.
 
 ## Frame budgets
 

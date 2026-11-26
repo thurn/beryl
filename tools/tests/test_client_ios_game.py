@@ -2,7 +2,12 @@
 
 from beryl_tools.client import ios_game
 
-DONE = {"result": "You won (life)", "turns": 9, "faceless_cards": 0, "missing_glyphs": 0}
+DONE = {
+    "result": "You won (life)",
+    "turns": 9,
+    "faceless_cards": 0,
+    "missing_glyphs": 0,
+}
 
 
 def test_a_finished_game_with_every_face_and_no_error_has_no_faults() -> None:

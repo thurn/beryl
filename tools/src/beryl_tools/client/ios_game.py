@@ -115,7 +115,10 @@ def run_ios_game(deck: str) -> int:
                 ],
                 env={
                     **os.environ,
-                    **{f"SIMCTL_CHILD_{key}": value for key, value in environment.items()},
+                    **{
+                        f"SIMCTL_CHILD_{key}": value
+                        for key, value in environment.items()
+                    },
                 },
                 capture_output=True,
                 text=True,
@@ -149,9 +152,7 @@ def run_ios_game(deck: str) -> int:
 
                 def suspend() -> None:
                     # The screenshot shows the table, not the app that replaces it.
-                    mobile.run(
-                        "xcrun", "simctl", "io", udid, "screenshot", str(png)
-                    )
+                    mobile.run("xcrun", "simctl", "io", udid, "screenshot", str(png))
                     # Opening another app sends the client to the background, which makes it
                     # write a summary.
                     mobile.run(
