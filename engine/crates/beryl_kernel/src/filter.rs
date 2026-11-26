@@ -71,10 +71,7 @@ pub trait Evaluate {
         words: &Words,
         x: u8,
     ) -> Bitboard<L::Slot> {
-        within
-            .iter()
-            .filter(|&slot| self.matches_x(s, t, slot, you, words, x))
-            .collect()
+        within.filter(|slot| self.matches_x(s, t, slot, you, words, x))
     }
 }
 

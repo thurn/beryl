@@ -59,27 +59,105 @@ impl<S: SlotId> Bitboard<S> {
     /// Whether `f` holds for some member.
     #[inline]
     pub fn any(self, f: impl Fn(S) -> bool) -> bool {
-        self.iter().any(f)
+        for (i, &w) in self.0.as_ref().iter().enumerate() {
+            let mut word = w;
+            if word == 0 {
+                continue;
+            }
+            let base = i * 64;
+            while word != 0 {
+                let bit = word.trailing_zeros();
+                word &= word - 1;
+                if f(S::from_index(
+                    base + usize::try_from(bit).expect("a bit index fits in usize"),
+                )) {
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     /// Whether `f` holds for every member.
     #[inline]
     pub fn all(self, f: impl Fn(S) -> bool) -> bool {
-        self.iter().all(f)
+        !self.any(|slot| !f(slot))
     }
 
     /// Whether `f` holds for at least `n` members. It stops counting at `n`, which
     /// `filter(f).count() >= n` would not.
     #[inline]
     pub fn at_least(self, n: usize, f: impl Fn(S) -> bool) -> bool {
-        self.iter().filter(|&slot| f(slot)).take(n).count() >= n
+        if n == 0 {
+            return true;
+        }
+        let mut found = 0;
+        for (i, &w) in self.0.as_ref().iter().enumerate() {
+            let mut word = w;
+            if word == 0 {
+                continue;
+            }
+            let base = i * 64;
+            while word != 0 {
+                let bit = word.trailing_zeros();
+                word &= word - 1;
+                if f(S::from_index(
+                    base + usize::try_from(bit).expect("a bit index fits in usize"),
+                )) {
+                    found += 1;
+                    if found >= n {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
     }
 
     /// The members `f` holds for.
     #[inline]
     #[must_use]
     pub fn filter(self, f: impl Fn(S) -> bool) -> Self {
-        self.iter().filter(|&slot| f(slot)).collect()
+        let mut out = Self::EMPTY;
+        for (i, &w) in self.0.as_ref().iter().enumerate() {
+            let mut word = w;
+            if word == 0 {
+                continue;
+            }
+            let mut kept = 0u64;
+            let base = i * 64;
+            while word != 0 {
+                let bit = word.trailing_zeros();
+                word &= word - 1;
+                if f(S::from_index(
+                    base + usize::try_from(bit).expect("a bit index fits in usize"),
+                )) {
+                    kept |= 1u64 << bit;
+                }
+            }
+            out.0.as_mut()[i] = kept;
+        }
+        out
+    }
+
+    /// Runs `f` on each member in ascending slot order, stopping at the first error.
+    #[inline]
+    pub(crate) fn try_for_each<E>(self, mut f: impl FnMut(S) -> Result<(), E>) -> Result<(), E> {
+        for (i, &w) in self.0.as_ref().iter().enumerate() {
+            let mut word = w;
+            if word == 0 {
+                continue;
+            }
+            let base = i * 64;
+            while word != 0 {
+                let bit = word.trailing_zeros();
+                word &= word - 1;
+                f(S::from_index(
+                    base + usize::try_from(bit).expect("a bit index fits in usize"),
+                ))?;
+            }
+        }
+        Ok(())
     }
 
     /// The sum of `f` over the members: of numbers that add exactly, so that the order they
@@ -182,6 +260,29 @@ impl<S: SlotId> Iterator for Slots<S> {
             }
         }
         None
+    }
+
+    #[inline]
+    fn fold<B, F>(self, mut init: B, mut f: F) -> B
+    where
+        F: FnMut(B, S) -> B,
+    {
+        for (i, &w) in self.0.0.as_ref().iter().enumerate() {
+            let mut word = w;
+            if word == 0 {
+                continue;
+            }
+            let base = i * 64;
+            while word != 0 {
+                let bit = word.trailing_zeros();
+                word &= word - 1;
+                init = f(
+                    init,
+                    S::from_index(base + usize::try_from(bit).expect("a bit index fits in usize")),
+                );
+            }
+        }
+        init
     }
 }
 

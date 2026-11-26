@@ -191,10 +191,7 @@ impl<L: Layout> Candidates<L> {
         objects: Bitboard<L::Slot>,
         add: impl Fn(&mut L::Queue<Opt<L>, OPTIONS>, L::Slot) -> Result<(), Full>,
     ) -> Result<(), Full> {
-        for slot in objects.iter() {
-            add(out, slot)?;
-        }
-        Ok(())
+        objects.try_for_each(|slot| add(out, slot))
     }
 
     pub fn len(&self) -> usize {
