@@ -9,7 +9,7 @@ use crate::chance;
 use crate::event::{Listens, Replaces};
 use crate::fit::Misfit;
 use crate::fixed::Full;
-use crate::format::{Format, StartingPlayer};
+use crate::format::{Format, StartingPlayer, ZoneRule};
 use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Table};
 use crate::object::{Derived, Object};
@@ -57,7 +57,8 @@ impl<L: Layout> State<L> {
     /// deck with more cards than the layout has slots for one is refused
     /// ([`Misfit::DeckTooLarge`]), and so is a table of more distinct cards than the layout's
     /// game index numbers ([`Misfit::TooManyCards`]): the game is dealt in a layout that has
-    /// them.
+    /// them. A table of the shared-deck format is refused in every layout
+    /// ([`Misfit::SharedZones`]) until the kernel stores a shared library.
     ///
     /// Each deck's cards are dealt into its slots by a permutation drawn from the hidden shuffle
     /// stream (architecture §4.2), so a slot number says nothing about the card in it. That
@@ -67,6 +68,9 @@ impl<L: Layout> State<L> {
     ///
     /// [CR 103.3]: https://yawgatog.com/resources/magic-rules/#R1033
     pub fn deal(t: &GameTable, seed: u64, profile: Profile) -> Result<State<L>, Misfit> {
+        if t.format().zones() != ZoneRule::PerPlayer {
+            return Err(Misfit::SharedZones);
+        }
         t.fits::<L>()?;
         for player in Seat::BOTH {
             let cards = t.deck_len(player);

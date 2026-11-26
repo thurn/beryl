@@ -38,7 +38,16 @@
 //! zone move marks the cache stale for a graveyard only while one is in that set. The counter
 //! mutators take whether the layers read the counters as an argument, which
 //! [`State::layers_read_counters`] answers from the same set. A zone is named by a
-//! [`state::ZoneKey`], whose rustdoc says how a shared zone and a command zone would join it.
+//! [`state::ZoneKey`], whose rustdoc says how a command zone would join it. In the shared-deck
+//! format ([`format::Format::SHARED_DECK`]) the players share one library and one graveyard,
+//! and `ZoneKey` gets no variant for them: each player's bitboard of a shared zone holds the
+//! same cards, so `ZoneKey::Of(player, Zone::Library)` names the shared library for either
+//! player. [`State::shares_zones`] says whether a game's zones are shared,
+//! [`State::zone_owners`] gives the seats whose zones of a kind are distinct, and
+//! [`State::holds`] asks whether a card is in one of a player's zones, which a card in a
+//! shared zone is for every player. A card at rest in a shared zone has no owner
+//! ([`State::has_owner`]). No layout stores a shared library yet, so [`State::deal`] refuses
+//! a shared-deck table.
 //!
 //! The players, the turn, the random streams, the profile, the budgets and the outcome are
 //! private as well, with a mutator for each thing the rules do to them. The kernel moves the
@@ -50,6 +59,7 @@
 //! | The rules | Mutators | What each leaves consistent |
 //! | --- | --- | --- |
 //! | move an object between zones (see CR 400.7), draw, order or shuffle a library, end a token | [`State::move_object`], [`State::draw`], [`State::reorder_library`], [`State::shuffle_library`], [`State::rebind_at_random`], [`State::cease_to_exist`] | the new incarnation and its reset fields; both zones' membership bitboards; the ordered library, graveyard and stack; the battlefield queue and every permanent's index into it; `derived_dirty`, for a graveyard while a permanent reads the graveyards; the attachments, combat references and exile links that named it; what the stores held about it, which ends ("Stores"); its identity, settled before anyone sees it ([`chance`]); both players' knowledge |
+//! | give a card in a shared library or graveyard to the player who takes it out, or take it back from a move that did not happen | [`State::claim`], [`State::disown`] | its owner and base controller change together; not built yet, so both panic |
 //! | change a permanent's status, damage or counters | [`State::set_tapped`], [`State::set_summoning_sick`], [`State::reset_permanents_for_turn`], [`State::turn_face_up`], [`State::transform_permanent`], [`State::flip_permanent`], [`State::mark_damage`], [`State::clear_damage`], [`State::add_counters`], [`State::remove_counters`], [`State::order_timestamps`] | a face with its timestamp and who knows it; permanents reordered keep the timestamps they had among them; `derived_dirty` where the kernel can tell the layers read the field |
 //! | phase permanents out and in (see CR 702.26) | [`State::phase_out`], [`State::phase_in`] ([`phasing`]) | the zone, incarnation and stores untouched; the battlefield queue, the owner's battlefield bitboard and the set of phased-out permanents; what is attached phases with its permanent, and what phased out alone phases in unattached once its permanent left; combat references to it end; who it phases in for, where that is not its base controller ([`memos::Memo::PhasedOutUnder`]); `derived_dirty` |
 //! | put a spell on the stack, make a token, have a permanent enter, merge a mutating spell with a permanent (see CR 731), put a meld card under the permanent its partner melded into (see CR 713.6) | [`State::become_spell`], [`State::make_token`], [`State::arrive`] with a [`mutate::Arrival`], [`State::remember`], [`State::merge`], [`State::meld_under`] | what a permanent enters with (tapped, attacking, its face, controller, counters and what it is attached to) is set as one change, before anything reads it; a merged permanent stays the object it was, its other cards in [`beryl_card::Zone::Merged`] with a [`memos::Memo::PartOf`], its values a copy effect's: the top card's face and every ability of each other card ([`copiable::additions::Addition::every_ability`]); its cards leave with it ([`State::move_object`], see CR 731.3) |

@@ -402,3 +402,47 @@ fn a_restart_redeals_sideboard_cards_that_entered_the_game() {
     assert_eq!(state.elapsed_turns(), 9);
     assert_eq!(state.check_invariants(&table), Ok(()));
 }
+
+#[test]
+fn a_shared_deck_table_takes_one_list_and_refuses_a_second_or_a_sideboard() {
+    use crate::State;
+    use crate::profile::Profile;
+
+    let t = GameTable::new(
+        Format::SHARED_DECK,
+        &TABLE,
+        [&[(3, "Alpha"), (2, "Beta")], &[]],
+    )
+    .unwrap();
+    assert_eq!(t.deck_len(Seat::P0), 5);
+    assert_eq!(t.deck::<CardIx>(Seat::P1).len(), 0);
+    assert_eq!(t.sideboard::<CardIx>(Seat::P0).len(), 0);
+
+    assert_eq!(
+        GameTable::new(
+            Format::SHARED_DECK,
+            &TABLE,
+            [&[(3, "Alpha")], &[(2, "Beta")]]
+        )
+        .err(),
+        Some(TableError::SecondDeck { count: 2 })
+    );
+    assert_eq!(
+        GameTable::with_sideboards(
+            Format::SHARED_DECK,
+            &TABLE,
+            [&[(3, "Alpha")], &[]],
+            [&[], &[(1, "Beta")]],
+        )
+        .err(),
+        Some(TableError::SideboardTooLarge {
+            player: Seat::P1,
+            count: 1
+        })
+    );
+
+    assert_eq!(
+        State::new(&t, 0, Profile::EXACT).err(),
+        Some(crate::Misfit::SharedZones)
+    );
+}

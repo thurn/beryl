@@ -329,6 +329,30 @@ impl<L: Layout> State<L> {
         Ok(())
     }
 
+    /// Gives the card in `slot`, which is in a shared library or graveyard, to `player`, who is
+    /// about to take it out: from then on `player` is its owner and its base controller, until it
+    /// goes back to a shared zone. The shared-deck format: "The 'owner' of a card on the stack or
+    /// permanent on the battlefield is considered to be the person who cast it."
+    ///
+    /// No game has shared zones yet, so this panics.
+    #[cold]
+    #[inline(never)]
+    pub fn claim(&mut self, slot: L::Slot, player: Seat) {
+        let _ = (slot, player);
+        panic!("shared zones are not built");
+    }
+
+    /// Undoes [`State::claim`] for a card whose move out of a shared zone was prepared and did
+    /// not happen: it has no owner again.
+    ///
+    /// No game has shared zones yet, so this panics.
+    #[cold]
+    #[inline(never)]
+    pub fn disown(&mut self, slot: L::Slot) {
+        let _ = slot;
+        panic!("shared zones are not built");
+    }
+
     /// Moves a card within its owner's library to its top or bottom. Not a zone change, so the
     /// card stays the same object and whoever knew it still does: a player who scries or looks
     /// knows where they put each card.

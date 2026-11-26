@@ -6,7 +6,7 @@ use beryl_engine::card::{CardDef, Supertypes};
 use beryl_engine::rng::SplitMix64;
 
 pub use beryl_card_names::decks::{
-    KEYSTONE_FAMILIES, VINTAGE_WU_CONTROL, WU_CONTROL, default_deck,
+    FORGETFUL_FISH, KEYSTONE_FAMILIES, VINTAGE_WU_CONTROL, WU_CONTROL, default_deck,
 };
 
 use crate::CARDS;
@@ -210,6 +210,17 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// The shared deck is the 80 cards of the published list, 23 of them distinct.
+    #[test]
+    fn the_shared_deck_holds_eighty_cards() {
+        let total: usize = FORGETFUL_FISH.iter().map(|&(n, _)| usize::from(n)).sum();
+        assert_eq!(total, 80);
+        let mut names: Vec<_> = FORGETFUL_FISH.iter().map(|&(_, name)| name).collect();
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), 23);
     }
 
     /// Each keystone family's cards are dealt from: every card it names, which a fuzz deck holds

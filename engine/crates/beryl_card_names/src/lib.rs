@@ -97,6 +97,35 @@ pub mod decks {
         (1, names::TIMETWISTER),
     ];
 
+    /// The 80-card shared library of the Secret Lair Dandân deck ("From the Chaos Vault: Secret
+    /// Lair Dandân Decklist", magic.wizards.com, 2026-03-15), which both players draw from in
+    /// the shared-deck format (`Format::SHARED_DECK`). Deck key `forgetful-fish`.
+    pub const FORGETFUL_FISH: &[(u8, &str)] = &[
+        (10, names::DANDAN),
+        (20, names::ISLAND),
+        (8, names::MEMORY_LAPSE),
+        (4, names::ACCUMULATED_KNOWLEDGE),
+        (2, names::MAGICAL_HACK),
+        (2, names::MYSTIC_SANCTUARY),
+        (2, names::BRAINSTORM),
+        (2, names::CAPTURE_OF_JINGZHOU),
+        (2, names::CHART_A_COURSE),
+        (2, names::CONTROL_MAGIC),
+        (2, names::CRYSTAL_SPRAY),
+        (2, names::DAYS_UNDOING),
+        (2, names::MENTAL_NOTE),
+        (2, names::METAMORPHOSE),
+        (2, names::PREDICT),
+        (2, names::TELLING_TIME),
+        (2, names::UNSUBSTANTIATE),
+        (2, names::HALIMAR_DEPTHS),
+        (2, names::HAUNTED_FENGRAF),
+        (2, names::LONELY_SANDBAR),
+        (2, names::REMOTE_ISLE),
+        (2, names::THE_SURGICAL_BAY),
+        (2, names::SVYELUNITE_TEMPLE),
+    ];
+
     /// The keystone cards (`docs/engine-architecture.md`, "The keystone cards") by family,
     /// each a name and the keystones and partners played together in it. The names match the
     /// present-cost benchmarks where those exist. Random and agent games deal fuzz decks

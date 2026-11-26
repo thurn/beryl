@@ -44,6 +44,9 @@ pub enum Misfit {
     /// The layout cannot represent a recorded answer or option, or has no matching slot
     /// for a hidden pick.
     IndexTooWide { index: usize },
+    /// The table is of a format whose players share a library and a graveyard
+    /// ([`crate::format::ZoneRule::SharedLibraryAndGraveyard`]), which no layout stores yet.
+    SharedZones,
     /// An active subgame or its completed turns require Large.
     Subgame,
     /// An ability on the stack remembers the mana spent on its X, which only Large holds
@@ -55,6 +58,7 @@ impl fmt::Display for Misfit {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             Misfit::Subgame => f.write_str("subgames require the Large layout"),
+            Misfit::SharedZones => f.write_str("no layout stores a shared library yet"),
             Misfit::SpentOnX => f.write_str("mana spent on X requires the Large layout"),
             Misfit::DeckTooLarge {
                 player,

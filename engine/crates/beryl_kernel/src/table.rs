@@ -9,7 +9,7 @@ use beryl_card::{
 };
 
 use crate::event::{Listens, Replaces};
-use crate::format::{DeckRole, Format};
+use crate::format::Format;
 use crate::ids::{CardId, CardIx, LargeCardIx, Seat};
 use crate::layout::{Layout, PerLayout, PerSeat};
 use crate::listener::{self, Listener, Unmatched};
@@ -20,7 +20,7 @@ use crate::rule_changes::{self, RuleChanges, RuleId, RuleKind, Rules, Unchecked}
 use crate::static_ability::{self, Inputs, Unapplied};
 use crate::subtypes::{GameSubtypes, SubtypeNumbers};
 use listeners::{Indexed, found_where_they_work};
-use lists::{gather_extra, gather_role};
+use lists::{gather_extra, gather_lists};
 
 mod capability;
 mod cards;
@@ -40,8 +40,11 @@ pub type Decklist = [(u8, &'static str)];
 pub enum TableError {
     /// A decklist names a card the [`CardTable`] does not have.
     UnknownCard(&'static str),
-    /// A constructed sideboard has more cards than the format allows.
+    /// A sideboard has more cards than the format allows: in the shared-deck format, any.
     SideboardTooLarge { player: Seat, count: usize },
+    /// The shared-deck format takes one list, the shared library, as the first player's deck,
+    /// and was given a second player's deck as well.
+    SecondDeck { count: usize },
     /// A card of the game, or a token or emblem one makes, has a triggered ability the engine
     /// has no code to match ([`listener::listens_to`]): it would never trigger, so no game
     /// is played with it.
@@ -256,22 +259,7 @@ impl GameTable {
         extra: &[&'static CardDef],
     ) -> Result<Self, TableError> {
         let mut defs = Vec::new();
-        let mut indices = Default::default();
-        let mut outside = Default::default();
-        for &role in format.decks() {
-            match role {
-                DeckRole::Library => indices = gather_role(cards, decks, &mut defs)?,
-                DeckRole::Sideboard => {
-                    for (player, list) in Seat::BOTH.into_iter().zip(sideboards) {
-                        let count = list.iter().map(|&(n, _)| usize::from(n)).sum();
-                        if count > format.maximum_sideboard() {
-                            return Err(TableError::SideboardTooLarge { player, count });
-                        }
-                    }
-                    outside = gather_role(cards, sideboards, &mut defs)?;
-                }
-            }
-        }
+        let (indices, outside) = gather_lists(format, cards, decks, sideboards, &mut defs)?;
         gather_extra(&mut defs, cards, extra);
         let last = defs.len() - 1;
         let face_down_copy = (
@@ -562,7 +550,8 @@ impl GameTable {
         (0..self.defs.len()).map(C::from_index)
     }
 
-    /// A player's deck as game indices, in decklist order.
+    /// A player's deck as game indices, in decklist order. In the shared-deck format the first
+    /// player's is the shared library and the second player's is empty.
     #[inline]
     pub fn deck<C: CardId>(&self, player: Seat) -> impl ExactSizeIterator<Item = C> + '_ {
         self.decks[player.index()].iter().map(|&i| C::from_index(i))

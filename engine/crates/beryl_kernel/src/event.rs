@@ -420,6 +420,12 @@ pub struct Sink<L: Layout = Small> {
     ///
     /// [CR 614.5]: https://yawgatog.com/resources/magic-rules/#R6145
     pub applied: L::Queue<(ObjectRef<L>, ObjectAbility), 8>,
+    /// The player who takes the cards of the batch of moves under way out of a shared library
+    /// or graveyard and owns them from then on, where the move is to somewhere other than the
+    /// battlefield: the player an instruction names as doing it, or else the controller of the
+    /// spell or ability. Set for the length of one batch, as `chosen` is. Nothing reads it
+    /// yet, and a game whose zones are not shared never will.
+    pub taker: Option<Seat>,
 }
 
 /// The scopes a sink had open, which [`Sink::save_scopes`] took.
@@ -528,6 +534,7 @@ impl<L: Layout> Sink<L> {
             chosen: Default::default(),
             copies: Default::default(),
             applied: Default::default(),
+            taker: None,
         }
     }
 

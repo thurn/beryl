@@ -42,6 +42,7 @@ use crate::fixed::Full;
 use crate::ids::{Seat, Slot, SlotId};
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::object::OFF_BATTLEFIELD;
+use crate::player_set::PlayerSet;
 use crate::profile::{Limits, Profile};
 use crate::repeats::Repeats;
 use crate::rng::Rng;
@@ -57,9 +58,11 @@ pub const BATTLEFIELD: usize = 128;
 /// Names a zone, or a player's part of one, for [`State::zone`] (see [CR 400.1]): "Each player has
 /// their own library, hand, and graveyard. The other zones are shared by all players."
 ///
-/// Today the kernel keeps every zone but the stack by owner, so the battlefield and exile
-/// are named a player's part at a time. Two zones the key can name and the kernel does not
-/// yet keep:
+/// The kernel keeps every zone but the stack by owner, so the battlefield and exile are named
+/// a player's part at a time. A library or graveyard the players share (the shared-deck
+/// format, [`crate::format::ZoneRule::SharedLibraryAndGraveyard`]) needs no variant: each
+/// player's bitboard of it holds the same cards, so `Of(player, zone)` names it for either
+/// player. Two zones the key can name and the kernel does not yet keep:
 ///
 /// - A zone shared by all players, as the rules see the battlefield and exile, is a variant
 ///   with no player, as [`ZoneKey::Stack`] is: add the variant, keep its membership once in
@@ -488,6 +491,43 @@ impl<L: Layout> State<L> {
     /// A player's graveyard as slots, bottom first.
     pub fn graveyard(&self, player: Seat) -> &[L::Slot] {
         self.zones.graveyard[player.index()].as_slice()
+    }
+
+    /// Whether the players share a library and a graveyard ([`crate::format::ZoneRule`]). Copied
+    /// into the state at the deal, so a rollout never reads the format for it. No state is a
+    /// shared one yet: [`State::deal`] refuses a shared-deck table.
+    #[inline]
+    pub fn shares_zones(&self) -> bool {
+        false
+    }
+
+    /// The seats that hold distinct zones of kind `zone`: every player, or only [`Seat::P0`]
+    /// for a shared library or graveyard. Rules that act on or count each player's library or
+    /// graveyard walk these, so a shared library is shuffled once and a shared graveyard is
+    /// counted once.
+    #[inline]
+    pub fn zone_owners(&self, zone: Zone) -> PlayerSet {
+        let _ = zone;
+        self.players()
+    }
+
+    /// Whether the object in `slot` has an owner. A card at rest in a shared library or
+    /// graveyard has none: its `owner` field holds [`Seat::P0`], which nothing may read as a
+    /// player. Every object has one in a game whose zones are not shared.
+    #[inline]
+    pub fn has_owner(&self, slot: L::Slot) -> bool {
+        let _ = slot;
+        true
+    }
+
+    /// Whether the object in `slot` is in one of `player`'s zones: their library, hand or
+    /// graveyard, or their part of the battlefield or exile. A card in a shared zone is in
+    /// each player's zone of that kind (the shared-deck format: "Anything referring to 'your'
+    /// graveyard or library is referencing the shared zone"), so rules that ask whether a
+    /// card is in a player's graveyard or library ask this, never its owner.
+    #[inline]
+    pub fn holds(&self, player: Seat, slot: L::Slot) -> bool {
+        self.object(slot).owner() == player
     }
 
     /// Slots on the battlefield, in the order they entered.

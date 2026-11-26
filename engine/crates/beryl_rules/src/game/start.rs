@@ -139,7 +139,9 @@ fn advance_mulligans<L: Layout>(
     sink: &mut Sink<L>,
 ) -> Result<bool, Full> {
     let format = t.format();
-    let Mulligan::London = format.mulligan();
+    // The free mulligan of the shared-deck format is not offered yet: no shared-deck table
+    // can be dealt until the kernel stores a shared library.
+    let (Mulligan::London | Mulligan::LondonWithFreeRedraw) = format.mulligan();
     let opening_hand = format.opening_hand();
     let order = turn_order(s);
     loop {

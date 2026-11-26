@@ -225,6 +225,9 @@ impl ReplayFile {
                     player.get()
                 ),
             },
+            TableError::SecondDeck { count } => SessionError::Deck {
+                reason: format!("a shared deck was given a second deck of {count} cards"),
+            },
             TableError::Cost { card, unpayable } => SessionError::Deck {
                 reason: format!("{card} has a cost the engine cannot pay: {unpayable:?}"),
             },
