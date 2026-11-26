@@ -713,6 +713,11 @@ recordings do not show them.
   rising path as a per-player mill. The cards a player looks at lie beside the
   shared library, toward the middle of the table and half a card toward that
   player.
+- **A spell that ends the turn.** When a resolving spell ends the turn, play
+  goes on to the cleanup step with no banner of its own: the turn is cut short
+  as any turn ends, and the spell goes to its owner's pile (a shared-deck game's
+  shared exile pile) in the move it would make at any other time. Arena's
+  recordings show no spell that ends the turn.
 
 ## Verbs
 
