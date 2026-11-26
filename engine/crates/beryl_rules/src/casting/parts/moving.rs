@@ -1,18 +1,21 @@
-//! Checks spell costs that can supply cards for later parts of the same payment.
+//! Pays the cost parts that move the objects chosen for them (sacrifice, discard, exile), and
+//! checks spell costs that can supply cards for later parts of the same payment.
 //!
-//! Implements: none. Checks the payment order of the enclosing casting module.
+//! Implements: none. The rules for these parts are implemented in their own modules.
+
+use beryl_kernel::reference::{Graveyard, Hand};
 
 use crate::bitboard::Bitboard;
 use crate::card::{Castings, CostAction, CostPart, Face, Measure};
 use crate::fixed::Full;
-use crate::game::life;
+use crate::game::{Game, life};
 use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue};
-use crate::replacement::event::Sink;
+use crate::replacement::event::{Reason, Sink};
 use crate::state::{PayingObjects, StackEntry, StackItem, State, Zone};
 use crate::table::GameTable;
 
-use super::{candidates, graveyard_start, itself, pay_with_all, remember_cost_pick};
+use super::{Chosen, candidates, graveyard_start, itself, remember_cost_pick};
 
 const INLINE_COST_PARTS: usize = 8;
 
@@ -285,4 +288,43 @@ fn subsets_fit<S: SlotId>(
                 other_zone != zone
                     || subsets_fit(&tail[index + 1..], zone, needed + more, cards | others)
             })
+}
+
+/// Does the part's action to all the objects chosen for it, at once.
+pub(crate) fn pay_with_all<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    action: CostAction,
+    chosen: &Chosen,
+    player: Seat,
+    objects: Bitboard<L::Slot>,
+) -> Result<(), Full> {
+    let mut game = Game::new(s, t, sink);
+    match (action, chosen.zone) {
+        (CostAction::Sacrifice, Zone::Battlefield) => {
+            let permanents = game.state().permanents_in(objects);
+            crate::actions::sacrifice::sacrifice_all(&mut game, permanents)
+        }
+        (CostAction::Discard, Zone::Hand) => {
+            // See CR 701.9a: "To discard a card, move it from its owner's hand to
+            // that player's graveyard."
+            crate::zones::move_all_by(&mut game, player, objects, Zone::Graveyard, Reason::Discard)
+        }
+        (CostAction::Exile, Zone::Graveyard) => {
+            let cards = game.state().cards_in(player, Graveyard).intersect(objects);
+            assert_eq!(
+                cards.slots(),
+                objects,
+                "every exile pick is a graveyard card"
+            );
+            crate::zones::exile_cards_for_cost(&mut game, player, cards)
+        }
+        (CostAction::Exile, Zone::Hand) => {
+            let cards = game.state().cards_in(player, Hand).intersect(objects);
+            assert_eq!(cards.slots(), objects, "every exile pick is a card in hand");
+            crate::zones::exile_cards_for_cost(&mut game, player, cards)
+        }
+        _ => unreachable!("the card table refuses a cost the engine cannot pay"),
+    }
 }

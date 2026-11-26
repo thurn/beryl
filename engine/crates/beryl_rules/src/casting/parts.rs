@@ -8,8 +8,6 @@
 //! cost." A cost's parts are data ([`CostPart`]), and a card table holds only the parts paid
 //! here (`beryl_kernel`'s `payable`), so every other arm is unreachable.
 
-use beryl_kernel::reference::{Graveyard, Hand};
-
 use crate::bitboard::Bitboard;
 use crate::card::{
     Castings, Chosen, CostAction, CostPart, Face, ManaCost, Measure, Prompt, Purpose,
@@ -36,6 +34,8 @@ use super::delve::{DELVE, DELVE_PART, delve_candidates, delve_most, delves};
 use super::steps::{finish, pay_mana, top};
 
 mod moving;
+
+pub(crate) use moving::pay_with_all;
 
 /// The part at `index` of the cost of the spell or ability `entry`, counting its parts that
 /// are not mana from 0 in the order printed; at [`DELVE_PART`], delve's.
@@ -669,45 +669,6 @@ fn pay_with<L: Layout>(
         | CostAction::RemoveCounter(_) => {
             unreachable!("the card table refuses a cost the engine cannot pay")
         }
-    }
-}
-
-/// Does the part's action to all the objects chosen for it, at once.
-pub(crate) fn pay_with_all<L: Layout>(
-    s: &mut State<L>,
-    t: &GameTable,
-    sink: &mut Sink<L>,
-    action: CostAction,
-    chosen: &Chosen,
-    player: Seat,
-    objects: Bitboard<L::Slot>,
-) -> Result<(), Full> {
-    let mut game = Game::new(s, t, sink);
-    match (action, chosen.zone) {
-        (CostAction::Sacrifice, Zone::Battlefield) => {
-            let permanents = game.state().permanents_in(objects);
-            crate::actions::sacrifice::sacrifice_all(&mut game, permanents)
-        }
-        (CostAction::Discard, Zone::Hand) => {
-            // See CR 701.9a: "To discard a card, move it from its owner's hand to
-            // that player's graveyard."
-            crate::zones::move_all_by(&mut game, player, objects, Zone::Graveyard, Reason::Discard)
-        }
-        (CostAction::Exile, Zone::Graveyard) => {
-            let cards = game.state().cards_in(player, Graveyard).intersect(objects);
-            assert_eq!(
-                cards.slots(),
-                objects,
-                "every exile pick is a graveyard card"
-            );
-            crate::zones::exile_cards_for_cost(&mut game, player, cards)
-        }
-        (CostAction::Exile, Zone::Hand) => {
-            let cards = game.state().cards_in(player, Hand).intersect(objects);
-            assert_eq!(cards.slots(), objects, "every exile pick is a card in hand");
-            crate::zones::exile_cards_for_cost(&mut game, player, cards)
-        }
-        _ => unreachable!("the card table refuses a cost the engine cannot pay"),
     }
 }
 
