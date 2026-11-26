@@ -1080,5 +1080,10 @@
     "label": "`just client corpus --update <prefix>...` now updates only the requested card prefixes in `data/client/corpus.txt` (recording only that prefix when one is given) and unknown-corpus errors print the exact scoped command, preventing unrelated cards from entering `corpus.txt` and causing spurious `client-interface` check loops",
     "metric": "bead.minutes",
     "expect": "down"
+  },
+  {
+    "label": "Culprit searches now probe `master` first when a platform gap puts `last_good` before `master` (narrowing post-master regressions to `master..tip` and unlocking stall reverts, and shrinking pre-master regressions' upper bound to `master`), gallop backwards from the newest landing on wide ranges instead of jumping to the midpoint, and reuse a previous check's culprit boundary within the same tip round. On 2026-11-26, jarvis spent 42.4 minutes in two 21-minute tip-loop culprit searches across a 51-commit macOS gap (`20858ac` and `cae7b99`, 22 probes total) for culprits 1 to 3 landings back",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]

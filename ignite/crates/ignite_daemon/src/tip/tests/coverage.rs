@@ -360,6 +360,10 @@ fn a_check_that_passed_at_master_reverts_despite_an_older_gap() {
                     areas: Vec::new(),
                 }])
                 .unwrap();
+        } else {
+            world
+                .work
+                .set_outcome(&master, &failing.check, Outcome::Fail);
         }
         world
             .work

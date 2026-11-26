@@ -475,7 +475,6 @@ impl TipVerifier {
             let can_revert = |check: &TipCheck| {
                 last != tip
                     && check.runnable
-                    && prior_for(check).is_none_or(|good| good == last)
                     && (!split.is_after(check) || regressions.contains(&check.check))
             };
             let stall_at = failed
@@ -493,13 +492,15 @@ impl TipVerifier {
                 .retain(|build| !failed.iter().any(|check| check.check == build.check));
             let mut culprits = HashSet::new();
             let mut blame_complete = true;
+            let mut hint = None;
             for check in &failed {
                 let output = verdicts.get(&check.key).and_then(|v| v.output.clone());
                 // If this search is interrupted and the check still fails, the next round reports it.
                 let prior = prior_for(check);
                 match self.blame(
                     ctx,
-                    prior.unwrap_or(last),
+                    last,
+                    prior,
                     tip,
                     check,
                     output.as_deref(),
@@ -509,8 +510,14 @@ impl TipVerifier {
                         } else {
                             stalled
                         },
+                    hint.as_ref(),
                 ) {
-                    Ok(culprit) => culprits.extend(culprit),
+                    Ok((culprit, found_hint)) => {
+                        culprits.extend(culprit);
+                        if found_hint.is_some() {
+                            hint = found_hint;
+                        }
+                    }
                     Err(error) => {
                         blame_complete = false;
                         eprintln!(

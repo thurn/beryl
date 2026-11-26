@@ -678,3 +678,95 @@ fn a_second_check_on_a_reverted_landing_must_pass_at_the_revert() {
     assert_eq!(regressions.len(), 1);
     assert_eq!(regressions[0].check, other.check);
 }
+
+/// On a wide candidate range, galloping backwards from the newest landing finds a recent culprit
+/// in one probe instead of jumping dozens of landings into the past.
+#[test]
+fn wide_search_gallops_from_newest_and_reuses_culprit_hint_for_second_check() {
+    let world = World::new();
+    let ctx = world.ctx("m-1");
+    let commits: Vec<String> = (1..=20).map(|i| format!("{i:07x}")).collect();
+    for (idx, sha) in commits.iter().enumerate() {
+        world.work.add_landing(
+            &format!("tk.{idx}"),
+            &[sha.as_str()],
+            &["src/a/lib.rs", "src/b/lib.rs"],
+        );
+    }
+    let tip = commit(commits.last().unwrap());
+    let prev = commit(&commits[commits.len() - 2]);
+    world.land(&tip);
+    let first = check("a", 'a');
+    let second = check("b", 'b');
+    world
+        .work
+        .set_checks(&tip, vec![first.clone(), second.clone()]);
+    world.work.set_outcome(&tip, &first.check, Outcome::Fail);
+    world.work.set_outcome(&tip, &second.check, Outcome::Fail);
+
+    world.verifier().verify(&ctx, &tip).unwrap();
+
+    let reports = world.hub.regressions();
+    assert_eq!(reports.len(), 2);
+    assert_eq!(reports[0].first_bad, tip);
+    assert_eq!(reports[0].last_good, prev);
+    assert_eq!(reports[0].search, Some(CulpritSearch::Bisected { runs: 1 }));
+    assert_eq!(reports[1].first_bad, tip);
+    assert_eq!(reports[1].last_good, prev);
+    assert_eq!(reports[1].search, Some(CulpritSearch::Bisected { runs: 1 }));
+}
+
+/// When a platform gap puts `prior` far before `master` and a failing check has no cached pass at
+/// `master`, probing `master` first narrows a post-master regression to `master..tip` and allows
+/// a stall revert instead of bisecting across the gap.
+#[test]
+fn an_uncached_check_that_passes_at_master_narrows_and_reverts_despite_an_older_gap() {
+    use ignite_core::tipround::{DeferredPlatform, PlatformVerification, TipCoverage};
+
+    let world = World::new();
+    let master = world.master();
+    let old = commit("9999000");
+    let tip = commit("bbbb000");
+    world.land(&tip);
+    world.hub.set_tip_coverage(TipCoverage {
+        platforms: [(
+            Os::Windows,
+            PlatformVerification {
+                through: master.clone(),
+                deferred: Some(DeferredPlatform {
+                    since: commit("9999111"),
+                    last_good: old,
+                }),
+            },
+        )]
+        .into(),
+        ..TipCoverage::default()
+    });
+    let mut failing = check("windows", 'b');
+    failing.key.platform = Some(Os::Windows);
+    world
+        .work
+        .add_landing("tk.42", &[tip.as_str()], &["src/windows/lib.rs"]);
+    world.work.set_outcome(&tip, &failing.check, Outcome::Fail);
+    world
+        .work
+        .set_outcome(&master, &failing.check, Outcome::Pass);
+    world.work.set_checks(&tip, vec![failing]);
+    world.git.script_revert(RevertOutcome::Clean {
+        commit: commit("cccc000"),
+    });
+    let mut ctx = world.ctx("m-2");
+    ctx.config.revert.stall_minutes = Some(120);
+    world.clock.advance(121.0 * 60.0);
+
+    world
+        .verifier()
+        .with_host("windows")
+        .pausing_with(Arc::new(|_| {}))
+        .verify(&ctx, &tip)
+        .unwrap();
+
+    let reverts = world.hub.reverted_landings();
+    assert_eq!(reverts.len(), 1, "{:?}", world.hub.regressions());
+    assert_eq!(reverts[0].ticket, Some(ticket("tk.42")));
+}

@@ -18,12 +18,117 @@ use super::revert::Handled;
 use super::{Culprit, MAX_RUNS, TipCheck, TipLanding, TipRun, TipVerifier, tail, touches};
 use crate::server::Context;
 
+/// The first bad commit a previous check in the same round narrowed to. Checks that fail
+/// together often share one culprit, so probing that boundary first avoids repeating a full
+/// search on commits the tip tree just built.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct CulpritHint {
+    pub first_bad: Commit,
+}
+
+/// Outcome of probing `master` before searching across an older platform gap.
+enum MasterProbe {
+    /// The check passed at `master`, so the culprit is in `master..tip` and may revert.
+    Passed,
+    /// The check already failed at `master`, so the culprit is in `gap_good..master`.
+    Failed,
+    /// The probe was incomplete or missing, so keep searching `gap_good..tip`.
+    Unknown,
+}
+
 /// Narrows the landings between a pass at `good` and a known failure at the end of
 /// `landings` by running one check at candidate commits.
 pub(crate) fn bisect(
     landings: &[TipLanding],
     inputs: &[String],
     good: &Commit,
+    probe: impl FnMut(&Commit) -> Option<Outcome>,
+) -> Option<Culprit> {
+    bisect_with_hint(landings, inputs, good, None, probe)
+}
+
+struct SearchBounds<'a> {
+    landings: &'a [TipLanding],
+    candidates: &'a [usize],
+    low: usize,
+    high: usize,
+    runs: u32,
+    stopped: Option<String>,
+}
+
+impl<'a> SearchBounds<'a> {
+    fn new(landings: &'a [TipLanding], candidates: &'a [usize]) -> Self {
+        Self {
+            landings,
+            candidates,
+            low: 0,
+            high: candidates.len(),
+            runs: 0,
+            stopped: None,
+        }
+    }
+
+    fn after(&self, pos: usize) -> Option<Commit> {
+        self.landings[self.candidates[pos - 1]].last().cloned()
+    }
+
+    fn probe_at(
+        &mut self,
+        pos: usize,
+        probe: &mut impl FnMut(&Commit) -> Option<Outcome>,
+    ) -> Option<Outcome> {
+        let Some(at) = self.after(pos) else {
+            self.stopped = Some("a landing in the range has no commits".to_owned());
+            return None;
+        };
+        let outcome = probe(&at);
+        self.runs += 1;
+        match outcome {
+            Some(Outcome::Pass | Outcome::Flaky) => self.low = pos,
+            Some(Outcome::Fail) => self.high = pos,
+            // A run that says nothing cannot narrow the range.
+            Some(Outcome::Incomplete) => {
+                self.stopped = Some(format!("the run at {at} was incomplete"));
+            }
+            None => {
+                self.stopped = Some(format!("the run at {at} did not report the check"));
+            }
+        }
+        outcome
+    }
+
+    fn try_hint(&mut self, hint: &CulpritHint, probe: &mut impl FnMut(&Commit) -> Option<Outcome>) {
+        let Some(idx) = self
+            .candidates
+            .iter()
+            .position(|&c| self.landings[c].last() == Some(&hint.first_bad))
+        else {
+            return;
+        };
+        let (good_pos, bad_pos) = (idx, idx + 1);
+        if good_pos > self.low && good_pos < self.high && self.runs < MAX_RUNS {
+            self.probe_at(good_pos, probe);
+        }
+        if self.stopped.is_none()
+            && self.high - self.low > 1
+            && self.low == good_pos
+            && bad_pos > self.low
+            && bad_pos < self.high
+            && self.runs < MAX_RUNS
+        {
+            self.probe_at(bad_pos, probe);
+        }
+    }
+}
+
+/// Like [`bisect`], but checks `hint`'s boundary first when present and gallops backwards from
+/// the newest landing on wide ranges (more than four candidates) so recent culprits are found
+/// in one to three probes instead of jumping dozens of landings into the past.
+pub(super) fn bisect_with_hint(
+    landings: &[TipLanding],
+    inputs: &[String],
+    good: &Commit,
+    hint: Option<&CulpritHint>,
     mut probe: impl FnMut(&Commit) -> Option<Outcome>,
 ) -> Option<Culprit> {
     if landings.is_empty() {
@@ -38,40 +143,43 @@ pub(crate) fn bisect(
     } else {
         touching
     };
-    // Only candidates change what the check reads, so its result can change only at a
-    // candidate's last commit. Position `i` is "after the i-th candidate": 0 passes, as
-    // `good` did, and `candidates.len()` fails, as `bad` did.
-    let after = |i: usize| -> Option<Commit> { landings[candidates[i - 1]].last().cloned() };
-    let (mut low, mut high, mut runs) = (0, candidates.len(), 0);
-    // What ended the search before it reached one landing, for the ticket to say.
-    let mut stopped = None;
-    while high - low > 1 {
-        if runs >= MAX_RUNS {
-            stopped = Some(format!("it reached its limit of {MAX_RUNS} runs"));
+    let mut bounds = SearchBounds::new(landings, &candidates);
+    if bounds.high - bounds.low > 1
+        && let Some(hint) = hint
+    {
+        bounds.try_hint(hint, &mut probe);
+    }
+    // On wide ranges (such as a platform gap), gallop backwards from the newest candidate by
+    // powers of two until a passing commit brackets the culprit, then binary search inside it.
+    let mut gallop = (bounds.low == 0 && bounds.high > 4).then_some(1usize);
+    while bounds.stopped.is_none() && bounds.high - bounds.low > 1 {
+        if bounds.runs >= MAX_RUNS {
+            bounds.stopped = Some(format!("it reached its limit of {MAX_RUNS} runs"));
             break;
         }
-        let middle = usize::midpoint(low, high);
-        let Some(at) = after(middle) else {
-            stopped = Some("a landing in the range has no commits".to_owned());
-            break;
+        let pos = if let Some(step) = gallop {
+            let candidate = bounds.high.saturating_sub(step);
+            if candidate > bounds.low {
+                candidate
+            } else {
+                gallop = None;
+                usize::midpoint(bounds.low, bounds.high)
+            }
+        } else {
+            usize::midpoint(bounds.low, bounds.high)
         };
-        let outcome = probe(&at);
-        runs += 1;
-        match outcome {
-            Some(Outcome::Pass | Outcome::Flaky) => low = middle,
-            Some(Outcome::Fail) => high = middle,
-            // A run that says nothing cannot narrow the range.
-            Some(Outcome::Incomplete) => {
-                stopped = Some(format!("the run at {at} was incomplete"));
-                break;
+        match bounds.probe_at(pos, &mut probe) {
+            Some(Outcome::Pass | Outcome::Flaky) => gallop = None,
+            Some(Outcome::Fail) => {
+                if let Some(step) = &mut gallop {
+                    *step = step.saturating_mul(2);
+                }
             }
-            None => {
-                stopped = Some(format!("the run at {at} did not report the check"));
-                break;
-            }
+            _ => break,
         }
     }
-    let search = match stopped {
+    let (low, high, runs) = (bounds.low, bounds.high, bounds.runs);
+    let search = match bounds.stopped.take() {
         Some(why) => CulpritSearch::EndedEarly {
             runs,
             candidates: u32::try_from(high - low).unwrap_or(u32::MAX),
@@ -85,7 +193,7 @@ pub(crate) fn bisect(
         Some(previous) => landings[previous].last().cloned(),
         None => Some(good.clone()),
     };
-    let (Some(first_bad), Some(last_good)) = (after(high), last_good) else {
+    let (Some(first_bad), Some(last_good)) = (bounds.after(high), last_good) else {
         return None;
     };
     let suspects = candidates[low..high]
@@ -166,13 +274,43 @@ impl TipVerifier {
         good: &Commit,
         bad: &Commit,
     ) -> Result<Option<Culprit>> {
+        self.find_culprit_with_hint(ctx, check, good, bad, None)
+    }
+
+    fn find_culprit_with_hint(
+        &self,
+        ctx: &Context,
+        check: &TipCheck,
+        good: &Commit,
+        bad: &Commit,
+        hint: Option<&CulpritHint>,
+    ) -> Result<Option<Culprit>> {
         let landings = self.work.landings(ctx, good, bad)?;
-        Ok(bisect(&landings, &check.inputs, good, |at| {
-            self.probe(ctx, at, std::slice::from_ref(&check.check), false)
-                .into_iter()
-                .find(|run| run.check == check.check)
-                .map(|run| run.outcome)
-        }))
+        Ok(bisect_with_hint(
+            &landings,
+            &check.inputs,
+            good,
+            hint,
+            |at| {
+                self.probe(ctx, at, std::slice::from_ref(&check.check), false)
+                    .into_iter()
+                    .find(|run| run.check == check.check)
+                    .map(|run| run.outcome)
+            },
+        ))
+    }
+
+    fn probe_master(&self, ctx: &Context, master: &Commit, check: &TipCheck) -> MasterProbe {
+        match self
+            .probe(ctx, master, std::slice::from_ref(&check.check), false)
+            .into_iter()
+            .find(|run| run.check == check.check)
+            .map(|run| run.outcome)
+        {
+            Some(Outcome::Pass | Outcome::Flaky) => MasterProbe::Passed,
+            Some(Outcome::Fail) => MasterProbe::Failed,
+            Some(Outcome::Incomplete) | None => MasterProbe::Unknown,
+        }
     }
 
     /// Finds the culprit of a check that failed at `tip` and reports the regression, or reverts
@@ -180,22 +318,29 @@ impl TipVerifier {
     /// already reported can qualify for a revert once the stall threshold is reached. A newer
     /// tip that changed the check's inputs gets one chance to run the check first.
     ///
+    /// When `prior` is before `master` (a platform gap) and the check had no cached pass at
+    /// `master`, probes `master` first: a pass narrows the search to `master..tip` and allows
+    /// automatic reverts, while a failure shrinks the search's upper bound to `master`.
+    ///
     /// A check only another platform can run is left to that platform's machines: a search here
     /// would run this platform's version of the check, which passes at every commit, and blame
     /// the newest candidate whatever the real culprit.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn blame(
         &mut self,
         ctx: &Context,
-        last: &Commit,
+        master: &Commit,
+        prior: Option<&Commit>,
         tip: &Commit,
         check: &TipCheck,
         output: Option<&str>,
         allow_revert: bool,
-    ) -> Result<Option<Commit>> {
+        hint: Option<&CulpritHint>,
+    ) -> Result<(Option<Commit>, Option<CulpritHint>)> {
         super::round::require_running()?;
         let reported = self.reported.contains(&check.key);
         if !check.runnable || (reported && (check.is_build() || !allow_revert)) {
-            return Ok(None);
+            return Ok((None, None));
         }
         // Where git cannot say, the failure is reported, which at worst repeats a report.
         let newest = ctx
@@ -220,13 +365,33 @@ impl TipVerifier {
                 "ignite: {} fails at {tip}, but passes at {newest}; not reporting",
                 check.check
             );
-            return Ok(None);
+            return Ok((None, None));
         }
+        let (good, search_bad, allow_revert) = if let Some(gap_good) =
+            prior.filter(|good| *good != master)
+            && master != tip
+        {
+            match self.probe_master(ctx, master, check) {
+                MasterProbe::Passed => (master, tip, allow_revert),
+                MasterProbe::Failed => (gap_good, master, false),
+                MasterProbe::Unknown => (gap_good, tip, false),
+            }
+        } else {
+            let at_or_no_gap = prior.is_none_or(|good| good == master);
+            (prior.unwrap_or(master), tip, at_or_no_gap && allow_revert)
+        };
+        super::round::require_running()?;
         // A failing check at a tip is always reported. With no landing to blame (the hub
         // recorded none between the commits), the report names the whole range since the last
         // verified commit and no ticket.
-        let culprit = self.find_culprit(ctx, check, last, tip);
+        let culprit = self.find_culprit_with_hint(ctx, check, good, search_bad, hint);
         super::round::require_running()?;
+        let found_hint = culprit.as_ref().ok().and_then(|found| {
+            let found = found.as_ref()?;
+            (found.suspects.len() == 1).then(|| CulpritHint {
+                first_bad: found.first_bad.clone(),
+            })
+        });
         // The last suspect in the narrowed range is known to fail by its end. Promotion
         // must stop before that landing, including when the search ended with one suspect.
         let cutoff = culprit
@@ -239,12 +404,12 @@ impl TipVerifier {
             match self.try_revert(ctx, tip, check, found, output) {
                 Handled::Reverted => {
                     self.reported.insert(check.key.clone());
-                    return Ok(cutoff);
+                    return Ok((cutoff, found_hint));
                 }
                 // The revert gave up because the tip moved with a change to what the check
                 // reads; as above, only once per check.
                 Handled::NextRound if self.deferred.insert(check.check.clone()) => {
-                    return Ok(cutoff);
+                    return Ok((cutoff, found_hint));
                 }
                 // The revert would not build. The failure may have been reported before, but
                 // without saying why no revert came, so it is reported again with the note.
@@ -254,15 +419,15 @@ impl TipVerifier {
         }
         super::round::require_running()?;
         if reported && note.is_none() {
-            return Ok(cutoff);
+            return Ok((cutoff, found_hint));
         }
         let output = output
             .map(|o| tail(o, &self.own_outputs))
             .unwrap_or_default();
         let report = RegressionReport {
             check: check.check.clone(),
-            first_bad: tip.clone(),
-            last_good: last.clone(),
+            first_bad: search_bad.clone(),
+            last_good: good.clone(),
             caused_by: None,
             output: match note {
                 Some(note) => format!("{note}\n\n{output}"),
@@ -276,6 +441,6 @@ impl TipVerifier {
         };
         ctx.hub.regression(&with_culprit(report, culprit))?;
         self.reported.insert(check.key.clone());
-        Ok(cutoff)
+        Ok((cutoff, found_hint))
     }
 }
