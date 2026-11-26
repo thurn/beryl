@@ -125,6 +125,13 @@ inputs = [
 # `exhaust:<card>/depth<d>-nodes<n>`. A card's own input is its file, so editing one card
 # replays only that card; the family's inputs are the crates the search reads, without the card
 # files (the list is the `script` family's, which reads the same crates).
+#
+# Each round also yields one pool check, `exhaust:pool/<first seed>+<games>`: it plays that many
+# games between decks of every keystone family together, each game in `Small` to a quiet priority
+# of turns three to eight, then searches from that position in `Large`, running the `exhaust`
+# test `pool_positions_keep_the_invariants_to_a_depth`. The seeds are reserved as `fuzz` reserves
+# them, so no two rounds replay a game. A pool check has no card file of its own, so its inputs
+# are the family's.
 [family.exhaust]
 kind = "exploration"
 adapter = "jsonl"
