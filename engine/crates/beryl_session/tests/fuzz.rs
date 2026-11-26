@@ -19,7 +19,9 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use beryl_cards::CARDS;
-use beryl_cards::decks::{FORGETFUL_FISH, fuzz_deck, fuzz_deck_from, keystone_family, pool_deck};
+use beryl_cards::decks::{
+    FORGETFUL_FISH, fuzz_deck, fuzz_deck_from, keystone_family, pool_deck, shared_deck,
+};
 use beryl_engine::{
     Choice, Decision, Format, GameTable, Layout, Observation, Profile, Seat, State,
 };
@@ -381,6 +383,22 @@ fn forgetful_fish(_: u64) -> Vec<(u8, &'static str)> {
 #[ignore = "a handful of session games: `just fuzz` plays them"]
 fn shared_deck_games_keep_the_script_checks() {
     if let Some((game, why)) = shrink_games(games(3), MOST_CHOICES, rng(), forgetful_fish, true) {
+        panic!("{}", report(&game, &why));
+    }
+}
+
+/// The shared library of a pool game: the two decks a per-player game of the seed deals from
+/// every keystone family together, joined ([`shared_deck`]).
+fn shared_pool_deck(seed: u64) -> Vec<(u8, &'static str)> {
+    shared_deck(seed, pool_deck)
+}
+
+/// The same, with shared-deck games dealt from every keystone family together, so that the
+/// views and scripts meet cards of every family leaving and entering the shared piles.
+#[test]
+#[ignore = "a handful of session games: `just fuzz` plays them"]
+fn shared_pool_games_keep_the_script_checks() {
+    if let Some((game, why)) = shrink_games(games(3), MOST_CHOICES, rng(), shared_pool_deck, true) {
         panic!("{}", report(&game, &why));
     }
 }

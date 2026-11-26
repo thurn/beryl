@@ -56,16 +56,29 @@ fn bounds() -> Bounds {
 }
 
 /// The scenarios to search: every card's, hand-written and generated
-/// ([`beryl_cards::derive`]), or the one card's `BERYL_EXHAUST_CARD` names.
+/// ([`beryl_cards::derive`]), and the rules library's scenarios of the shared-deck format by
+/// the card that has the effect, so that the search also starts from positions with one shared
+/// library and graveyard; or those of the one card `BERYL_EXHAUST_CARD` names.
 fn scenarios() -> Vec<(&'static str, &'static Scenario)> {
     let card = var("BERYL_EXHAUST_CARD");
     let mut chosen = Vec::new();
+    let wanted = |name: &str| card.as_deref().is_none_or(|c| c.eq_ignore_ascii_case(name));
     for &(name, scenarios) in beryl_cards::scenarios()
         .iter()
         .chain(beryl_cards::derive::all())
     {
-        if card.as_deref().is_none_or(|c| c.eq_ignore_ascii_case(name)) {
+        if wanted(name) {
             chosen.extend(scenarios.iter().map(|scenario| (name, scenario)));
+        }
+    }
+    for (name, scenarios) in beryl_cards::library::by_card() {
+        if wanted(name) {
+            chosen.extend(
+                scenarios
+                    .iter()
+                    .filter(|scenario| scenario.setup.shared.is_some())
+                    .map(|scenario| (name, scenario)),
+            );
         }
     }
     assert!(!chosen.is_empty(), "no card named {card:?}");

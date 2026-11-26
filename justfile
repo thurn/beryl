@@ -202,7 +202,7 @@ test-rust *args:
 workspace-hack:
     {{ by }} workspace-hack
 
-# Random-game fuzzing at length: N engine games (and N/4 per keystone family), then N session games with every script checked, optimized but with debug assertions on (with the fuzz tests no check runs, which are ignored)
+# Random-game fuzzing at length: N engine games (and N/4 per keystone family), per-player and with one shared deck, then N session games with every script checked, optimized but with debug assertions on (with the fuzz tests no check runs, which are ignored)
 [group('test')]
 fuzz games="10000":
     cd engine && export BERYL_FUZZ_GAMES="$1" CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS=true && \

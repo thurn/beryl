@@ -11,7 +11,10 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use crate::common::widening::{Watch, Widened, compares_layouts, play_watched, play_widening};
 use crate::common::{agents, games, seeds};
 use beryl_cards::CARDS;
-use beryl_cards::decks::{fuzz_deck_from, keystone_family, keystone_pool, pool_deck};
+use beryl_cards::decks::{
+    KEYSTONE_FAMILIES, fuzz_deck, fuzz_deck_from, keystone_family, keystone_pool, pool_deck,
+    shared_deck,
+};
 use beryl_engine::card::Supertypes;
 use beryl_engine::{Decklist, Format, GameTable, Outcome, Profile, StallReason, State};
 
@@ -28,13 +31,36 @@ fn family_with_sideboard(name: &str, sideboard: &Decklist) {
     let played = play(
         name,
         n,
-        |seed| fuzz_deck_from(seed, &cards),
-        sideboard,
+        |seed| per_player(|seed| fuzz_deck_from(seed, &cards), sideboard, seed),
         compares_layouts,
         None,
         |_| {},
     );
     println!("{name}: {played}");
+}
+
+/// The table of a per-player game: two decks dealt by `deal`, the second from the seed plus
+/// 2^32, each with `sideboard`.
+fn per_player(
+    deal: impl Fn(u64) -> Vec<(u8, &'static str)>,
+    sideboard: &Decklist,
+    seed: u64,
+) -> GameTable {
+    let decks = [deal(seed), deal(seed.wrapping_add(1 << 32))];
+    GameTable::with_sideboards(
+        Format::CONSTRUCTED,
+        &CARDS,
+        decks.each_ref().map(Vec::as_slice),
+        [sideboard; 2],
+    )
+    .unwrap()
+}
+
+/// The table of a shared-deck game (`Format::SHARED_DECK`): the two decks a per-player game of
+/// the seed deals, joined into one library ([`shared_deck`]). The format has no sideboard.
+fn shared(deal: impl Fn(u64) -> Vec<(u8, &'static str)>, seed: u64) -> GameTable {
+    let deck = shared_deck(seed, deal);
+    GameTable::new(Format::SHARED_DECK, &CARDS, [deck.as_slice(), &[]]).unwrap()
 }
 
 /// What a run of [`play`] saw.
@@ -69,16 +95,15 @@ impl std::fmt::Display for Played {
     }
 }
 
-/// Plays `n` games from the run's first seed, both decks dealt by `deal` (the second from the
-/// seed plus 2^32), under the exact profile on even seeds and smart stops on odd ones, with
+/// Plays `n` games from the run's first seed, each on the table `table` makes for its seed,
+/// under the exact profile on even seeds and smart stops on odd ones, with
 /// the layouts compared where `compare` says, every decision shown to `watch` and each game
 /// to `finished` once it ends. No game may panic, break an invariant or run out of a capacity
 /// in `Large`.
 fn play(
     name: &str,
     n: u64,
-    deal: impl Fn(u64) -> Vec<(u8, &'static str)>,
-    sideboard: &Decklist,
+    table: impl Fn(u64) -> GameTable,
     compare: impl Fn(u64) -> bool,
     mut watch: Option<Watch<'_>>,
     mut finished: impl FnMut(&Widened),
@@ -89,14 +114,7 @@ fn play(
     };
     let mut kinds: HashMap<String, u64> = HashMap::new();
     for seed in seeds(n) {
-        let decks = [deal(seed), deal(seed.wrapping_add(1 << 32))];
-        let t = GameTable::with_sideboards(
-            Format::CONSTRUCTED,
-            &CARDS,
-            decks.each_ref().map(Vec::as_slice),
-            [sideboard; 2],
-        )
-        .unwrap();
+        let t = table(seed);
         let profile = if seed.is_multiple_of(2) {
             Profile::EXACT
         } else {
@@ -170,8 +188,7 @@ fn every_family_together() {
     let played = play(
         "every family",
         n,
-        pool_deck,
-        &[(1, beryl_cards::names::BURNING_WISH)],
+        |seed| per_player(pool_deck, &[(1, beryl_cards::names::BURNING_WISH)], seed),
         |_| true,
         Some(&mut watch),
         |_| {
@@ -275,6 +292,79 @@ fn outside_the_game() {
 #[ignore = "random games of one family: `just fuzz` plays them"]
 fn subgames() {
     family("subgames");
+}
+
+/// The keystone families whose shared-deck games are not played, each with why. Every family
+/// of [`KEYSTONE_FAMILIES`] not named here is played by [`shared_games_of_every_family`].
+const SHARED_LEFT_OUT: &[(&str, &str)] = &[];
+
+/// Random shared-deck games (`Format::SHARED_DECK`) of each keystone family in turn: one
+/// library and one graveyard for both players, dealt from the two decks a per-player game of
+/// the family deals ([`shared_deck`]), with the invariants checked at every decision as in the
+/// per-player games. No game may panic, break an invariant or run out of a capacity in
+/// `Large`. A family that is added to the list is played here too.
+#[test]
+#[ignore = "random shared-deck games of every family: `just fuzz` plays them"]
+fn shared_games_of_every_family() {
+    let n = games(8).div_ceil(4).max(2);
+    for &(name, _) in KEYSTONE_FAMILIES {
+        if let Some((_, why)) = SHARED_LEFT_OUT.iter().find(|(n, _)| *n == name) {
+            println!("shared {name}: left out, because {why}");
+            continue;
+        }
+        let cards = keystone_family(name).expect("a keystone family");
+        let played = play(
+            name,
+            n,
+            |seed| shared(|seed| fuzz_deck_from(seed, &cards), seed),
+            compares_layouts,
+            None,
+            |_| {},
+        );
+        println!("shared {name}: {played}");
+    }
+}
+
+/// Random shared-deck games dealt from every keystone family together ([`pool_deck`]) and from
+/// every implemented card ([`fuzz_deck`]), with the layouts compared at every decision of the
+/// pool's games.
+#[test]
+#[ignore = "random shared-deck games of the pool and of every card: `just fuzz` plays them"]
+fn shared_games_of_the_pool_and_every_card() {
+    let n = games(8).div_ceil(4).max(2);
+    let pool = play(
+        "shared pool",
+        n,
+        |seed| shared(pool_deck, seed),
+        |_| true,
+        None,
+        |_| {},
+    );
+    println!("shared pool: {pool}");
+    let every = play(
+        "shared fuzz",
+        n,
+        |seed| shared(fuzz_deck, seed),
+        compares_layouts,
+        None,
+        |_| {},
+    );
+    println!("shared fuzz decks: {every}");
+}
+
+/// A shared-deck game of the identity family in which Worldgorger Dragon and Animate Dead
+/// loop above a triggered ability waiting on the stack, which names the looping card from
+/// before the loop. The loop check once read that reference as staler each time around, so no
+/// position repeated and the game ran out of the looping card's incarnations in `Large`. The
+/// loop is mandatory, so the game ends (see CR 104.4b).
+#[test]
+fn a_loop_above_a_waiting_trigger_is_a_draw() {
+    let seed = 1959;
+    let cards = keystone_family("identity").expect("the identity family");
+    let t = shared(|seed| fuzz_deck_from(seed, &cards), seed);
+    let s: State = State::new(&t, seed, Profile::SMART).unwrap();
+    let played = play_widening(&t, s, seed, &mut HashMap::new(), false, &mut agents(seed));
+    assert_eq!(played.outcome, Outcome::Draw);
 }
 
 /// Worldgorger Dragon's enters ability exiles 33 Mountains, linking each to the Dragon with a

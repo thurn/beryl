@@ -171,6 +171,20 @@ pub fn fuzz_deck_from(seed: u64, cards: &[&CardDef]) -> Vec<(u8, &'static str)> 
     deck
 }
 
+/// The one library of a shared-deck game (`Format::SHARED_DECK`) that `deal` gives for `seed`:
+/// the two decks a per-player game of the same seed deals, from `seed` and from `seed + 2^32`,
+/// one after the other. With 40-card fuzz decks it is 80 cards, the size of the format's own
+/// deck. The fixture deck names `shared-fuzz:<seed>` and `shared-fuzz:<seed + 2^32>` give the
+/// same list for `fuzz_deck`, so a fuzz game's seed replays in the app.
+pub fn shared_deck(
+    seed: u64,
+    deal: impl Fn(u64) -> Vec<(u8, &'static str)>,
+) -> Vec<(u8, &'static str)> {
+    let mut deck = deal(seed);
+    deck.extend(deal(seed.wrapping_add(1 << 32)));
+    deck
+}
+
 /// A card's place in `seed`'s fuzz deck order: a 64-bit FNV-1a hash of its name, mixed with
 /// `seed` through `SplitMix64` so that every seed orders the cards differently.
 fn rank(seed: u64, name: &str) -> u64 {

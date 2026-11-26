@@ -84,8 +84,8 @@ impl<L: Layout> State<L> {
     /// A hash of the game that is the same for two positions that differ only in names the
     /// game gives as it goes: every field `Hash` feeds but the budgets, with each object's
     /// incarnation left out and each reference to one read as how many zone changes ago it was
-    /// current, and each timestamp read as its rank among the live ones (an object off the
-    /// battlefield keeps a stale one, read as none). A loop that returns its cards to where
+    /// current (up to [`STALEST`]), and each timestamp read as its rank among the live ones
+    /// (an object off the battlefield keeps a stale one, read as none). A loop that returns its cards to where
     /// they were changes their incarnations and timestamps each time around, and nothing else.
     ///
     /// The random streams are hashed, so a loop that shuffles is not a repeat. Both layouts
@@ -161,9 +161,23 @@ impl Drop for Canonical {
     }
 }
 
+/// The most zone changes ago a canonical hash tells a reference's object was current. A
+/// reference staler than this reads as this, however stale it is.
+///
+/// A loop can leave behind a reference to an object of its own: a triggered ability waiting
+/// on the stack under the loop names the object that triggered it, and the loop moves that
+/// card on each time around. Counted exactly, the reference grows one loop staler each time,
+/// so no position would ever repeat and the loop would run until the card's incarnation ran
+/// out. A stale reference names no object in the game. All it still says is which row of
+/// last-known information it reads, and that row is keyed by a reference read the same way.
+/// Reading the stalest alike could hide only whether such a reference and such a row match
+/// when both are more than this many zone changes stale, and going round a loop does not
+/// change that.
+const STALEST: u16 = 255;
+
 /// What a `Hash` feeds for a reference to incarnation `incarnation` of the object in the slot
 /// at `slot`: the incarnation itself, or in a canonical hash how many zone changes ago it was
-/// current.
+/// current, at most [`STALEST`].
 #[inline]
 pub(crate) fn reference(slot: usize, incarnation: u16) -> u16 {
     if !ACTIVE.get() {
@@ -171,7 +185,14 @@ pub(crate) fn reference(slot: usize, incarnation: u16) -> u16 {
     }
     NAMES.with_borrow(|n| {
         n.as_ref().map_or(incarnation, |n| {
-            n.incarnations[slot].wrapping_sub(incarnation)
+            let ago = n.incarnations[slot].wrapping_sub(incarnation);
+            // A reference ahead of the object's incarnation, which wraps to past half the
+            // range, keeps its distance.
+            if (STALEST..=u16::MAX / 2).contains(&ago) {
+                STALEST
+            } else {
+                ago
+            }
         })
     })
 }
@@ -258,6 +279,22 @@ mod tests {
         let mut stale = r;
         stale.objects[0].incarnation += 1;
         assert_ne!(s.canonical_hash(), stale.canonical_hash());
+    }
+
+    /// A reference more than `STALEST` zone changes stale reads the same however stale it is,
+    /// so a loop that moves on the card a waiting trigger names still repeats. One a few zone
+    /// changes stale is still told apart from one a few more.
+    #[test]
+    fn the_canonical_hash_reads_the_stalest_references_alike() {
+        let stale_by = |n: u16| {
+            let mut s = referring(0, 0);
+            s.objects[0].incarnation += n;
+            s.canonical_hash()
+        };
+        assert_ne!(stale_by(1), stale_by(2));
+        assert_eq!(stale_by(super::STALEST), stale_by(super::STALEST + 2));
+        assert_eq!(stale_by(super::STALEST), stale_by(1000));
+        assert_ne!(stale_by(super::STALEST - 1), stale_by(super::STALEST));
     }
 
     #[test]

@@ -6,6 +6,23 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **A mandatory loop above a waiting trigger was never found, so the game
+  stalled instead of ending in a draw.** In a shared-deck fuzz game of the
+  identity keystone family (seed 1959), Worldgorger Dragon and Animate Dead
+  looped with a triggered ability waiting under them on the stack. The game ran
+  out of a capacity in the `Large` layout, because the looping card's
+  `incarnation` counter overflowed after 65,535 zone changes. The loop check
+  (`repeats.rs`, CR 104.4b) compares a canonical hash of the state, which reads
+  each reference as how many zone changes ago its object was current. The
+  waiting trigger named the looping card from before the loop, so that reference
+  grew two changes staler each time round and no position ever repeated. Fixed:
+  the canonical hash reads a reference more than `STALEST` (255) zone changes
+  stale as `STALEST`. Guard: the kernel test
+  `the_canonical_hash_reads_the_stalest_references_alike`, and
+  `families::a_loop_above_a_waiting_trigger_is_a_draw`, which plays the game
+  from its seed. The shared-deck fuzzers found it because a joined deck holds
+  two copies of each keystone, where a per-player fuzz deck holds one.
+
 - **A replay took a different copy of a card picked at random.** In a
   shared-deck game, Haunted Fengraf returned one of two Dandâns from the
   graveyard at random; the replay returned the other one, so the two cards

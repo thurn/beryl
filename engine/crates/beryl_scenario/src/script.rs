@@ -294,6 +294,12 @@ pub fn setup_source(scenario: &Scenario) -> String {
             let _ = writeln!(text, "    .companion(P{p}, {card:?})");
         }
     }
+    if let Some(shared) = setup.shared {
+        let _ = writeln!(text, "    .shared_library(&{:?})", shared.library);
+        if !shared.graveyard.is_empty() {
+            let _ = writeln!(text, "    .shared_graveyard(&{:?})", shared.graveyard);
+        }
+    }
     text
 }
 

@@ -16,7 +16,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use crate::common::{first_seed, games};
 use beryl_cards::CARDS;
-use beryl_cards::decks::{fuzz_deck, pool_deck};
+use beryl_cards::decks::{fuzz_deck, pool_deck, shared_deck};
 use beryl_engine::{
     Choice, Decision, DecisionKind, Format, GameTable, Profile, Replay, Scratch, Seat, State, Step,
     Stops, Zone, ZoneKey, apply, next,
@@ -37,12 +37,13 @@ const TRACED: Profile = Profile {
 /// The most choices a game is generated with: past most random games' ends.
 const MOST_CHOICES: usize = 600;
 
-/// A fuzz game: its seed, the cards its decks are dealt from, and the choice at each decision,
-/// by index modulo the candidates.
+/// A fuzz game: its seed, the cards its decks are dealt from, its format, and the choice at
+/// each decision, by index modulo the candidates.
 #[derive(Clone, Debug)]
 struct Game {
     seed: u64,
     deck: Deck,
+    format: Format,
     choices: Vec<u16>,
 }
 
@@ -51,7 +52,13 @@ struct Game {
 type Deck = fn(u64) -> Vec<(u8, &'static str)>;
 
 impl Game {
+    /// The game's table: two decks dealt by `deck`, the second from the seed plus 2^32, or in
+    /// the shared-deck format the two joined into its one library ([`shared_deck`]).
     fn table(&self) -> GameTable {
+        if self.format == Format::SHARED_DECK {
+            let deck = shared_deck(self.seed, self.deck);
+            return GameTable::new(Format::SHARED_DECK, &CARDS, [deck.as_slice(), &[]]).unwrap();
+        }
         let decks = [
             (self.deck)(self.seed),
             (self.deck)(self.seed.wrapping_add(1 << 32)),
@@ -119,6 +126,7 @@ impl Game {
         Game {
             seed: self.seed,
             deck: self.deck,
+            format: self.format,
             choices,
         }
     }
@@ -187,7 +195,8 @@ fn forced(d: &Decision) -> bool {
 }
 
 /// The setup of a scenario at position `s` of a game's first priority: each player's life,
-/// hand and library, top first. Nothing else is anywhere yet.
+/// hand and library, top first, or the one shared library of a shared-deck game. Nothing else
+/// is anywhere yet.
 fn position(t: &GameTable, s: &State, seed: u64) -> Scenario {
     let names = |p, zone| -> &'static [&'static str] {
         // The names of a hand, which has no order.
@@ -209,18 +218,26 @@ fn position(t: &GameTable, s: &State, seed: u64) -> Scenario {
     let mut scenario = Scenario::new("")
         .seed(seed)
         .at(turn.number(), turn.active(), turn.step());
-    for p in Seat::BOTH {
-        // The state lists a library bottom first.
-        let library: Vec<&'static str> = s
-            .library(p)
+    // The state lists a library bottom first.
+    let library = |p| -> &'static [&'static str] {
+        s.library(p)
             .iter()
             .rev()
             .map(|&slot| s.name(t, slot))
-            .collect();
+            .collect::<Vec<_>>()
+            .leak()
+    };
+    for p in Seat::BOTH {
         scenario = scenario
             .life(p, s.player(p).life())
-            .hand(p, names(p, Zone::Hand))
-            .library(p, library.leak());
+            .hand(p, names(p, Zone::Hand));
+        if !s.shares_zones() {
+            scenario = scenario.library(p, library(p));
+        }
+    }
+    if s.shares_zones() {
+        // Either player's library is the one shared library.
+        scenario = scenario.shared_library(library(Seat::P0));
     }
     scenario
 }
@@ -240,7 +257,7 @@ fn rng() -> TestRng {
 
 /// Runs `cases` fuzz games of `deck` under `check`, deterministically, and returns the game
 /// proptest shrank a failure to, with why it fails.
-fn shrink(cases: u32, deck: Deck, check: Check) -> Option<(Game, String)> {
+fn shrink(cases: u32, deck: Deck, format: Format, check: Check) -> Option<(Game, String)> {
     let config = Config {
         cases,
         failure_persistence: None,
@@ -252,6 +269,7 @@ fn shrink(cases: u32, deck: Deck, check: Check) -> Option<(Game, String)> {
         move |(seed, choices)| Game {
             seed,
             deck,
+            format,
             choices,
         },
     );
@@ -271,7 +289,7 @@ fn shrink(cases: u32, deck: Deck, check: Check) -> Option<(Game, String)> {
 #[ignore = "12 shrinking fuzz games, about 11 CPU seconds in a debug build: `just fuzz` plays it"]
 fn fuzz_games_keep_the_invariants() {
     let cases = u32::try_from(games(12)).expect("a game count");
-    if let Some((game, why)) = shrink(cases, fuzz_deck, invariants) {
+    if let Some((game, why)) = shrink(cases, fuzz_deck, Format::CONSTRUCTED, invariants) {
         let (text, _) = game.scenario(invariants, &why);
         panic!(
             "seed {}, choices {:?}: {why}\n{text}",
@@ -303,12 +321,30 @@ fn pool_games_keep_the_invariants() {
         return;
     }
     let cases = u32::try_from(games(12)).expect("a game count");
-    if let Some((game, why)) = shrink(cases, pool_deck, invariants) {
+    if let Some((game, why)) = shrink(cases, pool_deck, Format::CONSTRUCTED, invariants) {
         let (text, _) = game.scenario(invariants, &why);
         panic!(
             "pool seed {}, choices {:?}: {why}\n{text}",
             game.seed, game.choices
         );
+    }
+}
+
+/// The same in the shared-deck format (`Format::SHARED_DECK`), with the two decks of a game
+/// joined into one library ([`shared_deck`]): from every implemented card, then from every
+/// keystone family together. A failure prints as a scenario with a shared library.
+#[test]
+#[ignore = "shrinking shared-deck fuzz games: `just fuzz` plays them"]
+fn shared_games_keep_the_invariants() {
+    let cases = u32::try_from(games(12)).expect("a game count");
+    for (name, deck) in [("fuzz", fuzz_deck as Deck), ("pool", pool_deck)] {
+        if let Some((game, why)) = shrink(cases, deck, Format::SHARED_DECK, invariants) {
+            let (text, _) = game.scenario(invariants, &why);
+            panic!(
+                "shared {name} seed {}, choices {:?}: {why}\n{text}",
+                game.seed, game.choices
+            );
+        }
     }
 }
 
@@ -326,6 +362,7 @@ fn pool_game(spec: &str) -> Game {
     Game {
         seed: seed.trim().parse().expect("a seed"),
         deck: pool_deck,
+        format: Format::CONSTRUCTED,
         choices,
     }
 }
@@ -346,8 +383,8 @@ fn a_broken_invariant_shrinks_to_a_scenario() {
         }
         Ok(())
     }
-    let (game, why) =
-        shrink(4, fuzz_deck, graveyards_stay_empty).expect("a card reaches a graveyard");
+    let (game, why) = shrink(4, fuzz_deck, Format::CONSTRUCTED, graveyards_stay_empty)
+        .expect("a card reaches a graveyard");
     let (text, scenario) = game.scenario(graveyards_stay_empty, &why);
     println!("seed {}, choices {:?}\n{text}", game.seed, game.choices);
     // A handful, not a game's hundreds: how few depends on the fuzz decks' opening hands.
