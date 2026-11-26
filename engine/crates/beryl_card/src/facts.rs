@@ -149,6 +149,7 @@ impl Effect {
             | Effect::RemoveAllCounters(_)
             | Effect::AddMana { .. }
             | Effect::AddManaOfKind { .. }
+            | Effect::AddProduct { .. }
             | Effect::ChangeText { .. }
             | Effect::ExchangeControl(..)
             | Effect::Attach { .. }

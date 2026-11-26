@@ -6,6 +6,8 @@
 //! - The layer results and the caches found with them, against a recompute from scratch.
 //! - Payability: the prefilter, the cached funds and the solver's plans, against a matching
 //!   of each mana symbol to a unit of mana from the pool or a mana ability read off the cards.
+//! - In a game whose cards have priced mana abilities or products of several terms, the cached
+//!   funds and the solver's plans against every sequence of mana abilities ([`sequences`]).
 //!
 //! Implements: none. Checks optimized implementations against reference calculations.
 
@@ -23,6 +25,10 @@ use crate::state::State;
 use crate::table::{Capability, GameTable};
 use beryl_kernel::chosen::ChosenValue;
 use beryl_kernel::mana_memory::RememberedMana;
+
+mod sequences;
+
+pub(crate) use sequences::reference_sequences;
 
 fn check(ok: bool, what: &'static str, at: Option<At>) -> Result<(), Violation> {
     if ok {
@@ -180,8 +186,68 @@ fn check_payments<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Resul
                 )?;
             }
         }
+        if t.can_either(Capability::PricedMana, Capability::ManaChanges) {
+            check_sequences(s, t, player, &funds, cost)?;
+        }
     }
     check_spell_payments(s, t, player, &funds)
+}
+
+/// Whether `player` can pay `cost` for no spell, as the cached funds and the solver's plans
+/// say, against every sequence of their mana abilities ([`reference_sequences`]): in a game
+/// whose cards have priced mana abilities or products of several terms, which only a payment
+/// that activates them in order can use.
+fn check_sequences<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+    funds: &Funds<L>,
+    cost: ManaCost,
+) -> Result<(), Violation> {
+    let Some(expected) = reference_sequences(s, t, player, cost) else {
+        return Ok(());
+    };
+    let at = Some(At::Player(player));
+    let none = Bitboard::EMPTY;
+    check(
+        funds.pays_for(s, t, cost, none, Paying::NOTHING) == expected,
+        "the cached funds disagree with the sequence reference",
+        at,
+    )?;
+    for greedy in [false, true] {
+        let plans = mana::plans(
+            s,
+            t,
+            &mut Sink::default(),
+            player,
+            cost,
+            none,
+            greedy,
+            Paying::NOTHING,
+        );
+        if let Ok(plans) = plans {
+            check(
+                plans.is_empty() != expected,
+                "the payment solver disagrees with the sequence reference",
+                at,
+            )?;
+        }
+    }
+    Ok(())
+}
+
+/// Whether `player` can pay `cost` (X announced) for no spell from their pool and one tap of
+/// each of their sources, as [`reference_pays`] matches it: `None` where [`reference_units`]
+/// cannot say the units.
+#[cfg(test)]
+pub(crate) fn reference_payable<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+    cost: ManaCost,
+) -> Option<bool> {
+    let units = reference_units(s, t, player, Paying::NOTHING)?;
+    Some(reference_pays(units.as_slice(), cost))
 }
 
 /// Whether `player` can pay the mana cost of each card in their hand for casting it, as the

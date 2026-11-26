@@ -15,6 +15,7 @@ use crate::table::{Capability, GameTable, ManaFace, has_other_ability, is_sacrif
 use crate::{filter::Evaluate, fixed::Full};
 
 use super::remembered::{self, Paying};
+use super::rich::Extra;
 use super::solver::Plan;
 use super::{CLASSES, KINDS, Taps, units::Units};
 
@@ -42,6 +43,10 @@ pub(super) struct Class<L: Layout = Small> {
     /// copies.
     twin: u8,
 }
+
+// A plan's search copies classes: they stay 40 bytes, and what the rich path needs of a
+// source goes in [`Sources::extras`].
+const _: () = assert!(size_of::<Class<Small>>() == 40);
 
 const CLASS_CONSUMED: u8 = 1;
 const CLASS_RESTRICTED: u8 = 2;
@@ -113,6 +118,9 @@ pub(crate) struct Sources<L: Layout = Small> {
     rider_remembered: u8,
     /// Bit `i` is set if `classes[i]` has a rider (for `i < 32`).
     rider_classes: u32,
+    /// What the rich path plans with beside the classes (`mana::rich`): empty in a game whose
+    /// cards have no priced mana ability and no product of several terms.
+    pub(super) extras: Vec<Extra<L>>,
 }
 
 /// Whether `player` may activate a mana ability now: one restricted to "Activate only if you
@@ -230,6 +238,10 @@ pub(super) fn source<L: Layout>(
             "a plain source's mana, as the table has it"
         );
         return plain;
+    }
+    // Past the plain faces, which most sources are: the rich path plans a priced face.
+    if mana == ManaFace::Priced && card_mana() {
+        return None;
     }
     read_source(s, t, player, slot, face(), mana)
 }

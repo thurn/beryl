@@ -11,7 +11,7 @@ use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::replacement::event::Sink;
 use crate::state::State;
-use crate::table::GameTable;
+use crate::table::{Capability, GameTable};
 
 use super::lookahead::{Later, later_costs, looking_ahead, still_payable};
 use super::remembered::Paying;
@@ -592,6 +592,7 @@ pub(crate) fn plans_accepting<L: Layout, const CHECK: bool>(
     };
     let pool = s.player(player).mana().amounts();
     let mut out: L::Queue<Plan<L>, 64> = Default::default();
+    let rich = t.can_either(Capability::PricedMana, Capability::ManaChanges);
     if greedy {
         let mut best: Option<(u8, Plan<L>)> = None;
         each_plan(cost, pool, &sources, &mut |p| {
@@ -609,8 +610,19 @@ pub(crate) fn plans_accepting<L: Layout, const CHECK: bool>(
         }
         if let Some((_, p)) = best {
             out.push(p)?;
+        } else if rich {
+            super::rich::plans(
+                s,
+                t,
+                sink,
+                (player, cost, exclude, paying),
+                true,
+                &mut accepted,
+                &sources,
+                &mut out,
+            )?;
         }
-        return Ok(out);
+        return if failed.get() { Err(Full) } else { Ok(out) };
     }
     let max_outcomes = if pool == [0; KINDS]
         && !sources.has_consumed()
@@ -709,6 +721,22 @@ pub(crate) fn plans_accepting<L: Layout, const CHECK: bool>(
     }
     if full || failed.get() {
         return Err(Full);
+    }
+    // The sequences of priced mana abilities, beside the plans of the classes.
+    if rich {
+        super::rich::plans(
+            s,
+            t,
+            sink,
+            (player, cost, exclude, paying),
+            false,
+            &mut accepted,
+            &sources,
+            &mut out,
+        )?;
+        if failed.get() {
+            return Err(Full);
+        }
     }
     // A plan is dominated only by one sacrificing fewer, so with one number sacrificed among
     // them all no score is needed and every plan is kept.

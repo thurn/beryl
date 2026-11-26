@@ -120,7 +120,12 @@ fn with_cost_or_product(ability: &Ability, cost: Cost, product: ManaSet) -> Abil
         }
         return preserve(ability, Ability::activated(cost));
     }
-    let mut changed = Ability::mana(cost, product);
+    // A product no `ManaSet` says keeps its terms: its neighbours change the cost alone.
+    let mut changed = if ability.produces() == ManaSet::NONE {
+        Ability::mana_of(cost, ability.product())
+    } else {
+        Ability::mana(cost, product)
+    };
     if let Some(filter) = ability.only_if_you_control() {
         changed = changed.if_you_control(filter);
     }
@@ -173,6 +178,9 @@ pub(super) fn preserve(ability: &Ability, mut changed: Ability) -> Ability {
 
 fn products(ability: &Ability, siblings: &[Ability], face: Option<&Face>) -> Neighbours<ManaSet> {
     let product = ability.produces();
+    if product == ManaSet::NONE {
+        return Vec::new();
+    }
     let native = face.map_or(0, |face| {
         BasicLandTypes::of(face.subtypes.read(&Words::NONE))
             .mana()

@@ -429,6 +429,7 @@ fn prevention_filter(effect: &'static Effect) -> Option<&'static Filter> {
         | Effect::RemoveAllCounters(_)
         | Effect::AddMana { .. }
         | Effect::AddManaOfKind { .. }
+        | Effect::AddProduct { .. }
         | Effect::Modify { .. }
         | Effect::ChangeText { .. }
         | Effect::ExchangeControl(..)

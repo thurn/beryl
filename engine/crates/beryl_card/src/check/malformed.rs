@@ -49,7 +49,8 @@ pub enum Malformed {
     /// replacement naming a copy exception its face does not list ([`Face::excepts`]), or an
     /// exception giving an ability the face does not list in [`Face::grants`].
     Copy,
-    /// [`Effect::AddMana`] outside a mana ability, whose activator chooses the kind
+    /// [`Effect::AddMana`] or [`Effect::AddProduct`] outside a mana ability, whose activator
+    /// chooses the kind
     /// ([CR 605.1a](https://yawgatog.com/resources/magic-rules/#R6051a)): any other ability
     /// names the kind it adds ([`Effect::AddManaOfKind`]).
     AddMana,
@@ -167,7 +168,7 @@ impl Malformed {
                 "a copy names a `CopyException` past the face's `.excepts(...)`, or a `CopyChange::Has(ix)` names an ability past its `.grants(...)`: add the exception or the ability to the face, or fix the index"
             }
             Malformed::AddMana => {
-                "`Effect::AddMana` lets the activator choose the kind, which only a mana ability (`Ability::mana`) can do: in any other spell or ability, use `Effect::AddManaOfKind` with the kind it adds"
+                "`Effect::AddMana` and `Effect::AddProduct` let the activator choose the kind, which only a mana ability (`Ability::mana`, `Ability::mana_of`) can do: in any other spell or ability, use `Effect::AddManaOfKind` with the kind it adds"
             }
             Malformed::NewGame => {
                 "`Effect::RestartGame` and `Effect::Subgame` belong in a spell or an activated or triggered ability: move them out of the replacement or mana ability"

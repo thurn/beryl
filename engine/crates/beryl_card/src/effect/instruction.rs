@@ -487,6 +487,16 @@ pub enum Effect {
         kind: ManaColor,
         amount: Amount,
     },
+    /// "[Player] adds [the mana ability's product]": the effect of a mana ability whose
+    /// product is more than one fixed amount of one kind or one color
+    /// ([`crate::Ability::mana_of`]), as "Add {W}{U}.", "Add {B} for each Swamp you
+    /// control." or "Add {W}{W}, {W}{U}, or {U}{U}." say
+    /// ([CR 106.3](https://yawgatog.com/resources/magic-rules/#R1063)): "A spell or ability
+    /// that produces mana instructs a player to add that mana." The terms are the ability's
+    /// ([`crate::Ability::product`]), each of whose kinds is chosen as [`crate::Term`] says:
+    /// an effect is held by reference, and a `const fn` cannot make a reference to an effect
+    /// that holds its argument, so the effect names no terms of its own.
+    AddProduct { player: Players },
     /// "[Objects] get, gain or become [modifications] [duration]": a continuous effect from a
     /// resolving spell or ability
     /// ([CR 611.2a](https://yawgatog.com/resources/magic-rules/#R6112a)): it "lasts as long as

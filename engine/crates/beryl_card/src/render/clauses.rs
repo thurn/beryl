@@ -583,6 +583,7 @@ pub(super) fn subject_of(effect: &Effect) -> Option<Players> {
         | Effect::CreateCopies { player, .. }
         | Effect::AddMana { player, .. }
         | Effect::AddManaOfKind { player, .. }
+        | Effect::AddProduct { player, .. }
         | Effect::PermitCast { player, .. }
         | Effect::MayCast { player, .. }
         | Effect::UntapUpTo { player, .. }

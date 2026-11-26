@@ -81,6 +81,7 @@ impl Effect {
             | Effect::RemoveAllCounters(_)
             | Effect::AddMana { .. }
             | Effect::AddManaOfKind { .. }
+            | Effect::AddProduct { .. }
             | Effect::Modify { .. }
             | Effect::ChangeText { .. }
             | Effect::Explore(_)

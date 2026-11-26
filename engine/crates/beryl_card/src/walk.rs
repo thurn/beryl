@@ -137,14 +137,19 @@ impl Ability {
 
     /// Calls `visit` with every filter, amount and condition of the ability: what it may
     /// target, what pays its cost, what triggers it, what it needs to be activated, its
-    /// conditions, its continuous effect, what it replaces, the rule change it names and its
-    /// effect data. A Rust body holds none anything can read.
+    /// conditions, its continuous effect, what it replaces, the rule change it names, the
+    /// amounts of what a mana ability makes and its effect data. A Rust body holds none
+    /// anything can read.
     pub fn walk(&self, visit: Visit) {
         for spec in self.targets() {
             spec.filter.walk(visit);
         }
         for part in self.cost().parts() {
             part.walk(visit);
+        }
+        // What a mana ability makes: an amount a term counts.
+        for term in self.product() {
+            term.amount.walk(visit);
         }
         if let Some(trigger) = self.trigger() {
             if let Subject::A(filter) = &trigger.subject {
@@ -478,6 +483,7 @@ impl Effect {
                 | Effect::RemoveAllCounters(_)
                 | Effect::AddMana { .. }
                 | Effect::AddManaOfKind { .. }
+                | Effect::AddProduct { .. }
                 | Effect::ExchangeControl(..)
                 | Effect::Attach { .. }
                 | Effect::ChangeRule { .. }

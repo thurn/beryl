@@ -1,6 +1,7 @@
 //! Mana: costs, the kinds of mana, and what a mana ability produces.
 
 use crate::continuous::RuleChange;
+use crate::effect::Amount;
 use crate::filter::Filter;
 
 /// A mana cost: generic mana plus colored and colorless symbols, hybrid symbols, and any {X}.
@@ -397,6 +398,89 @@ impl ManaSet {
 
     pub fn includes(self, color: ManaColor) -> bool {
         self.colors & (1 << color.index()) != 0
+    }
+}
+
+/// One part of what a mana ability makes: `amount` units of mana of the kinds in `kinds`. A
+/// mana ability's product is a list of terms ([`crate::Ability::product`]), so "Add {W}{U}."
+/// is a term of {W} and a term of {U}, and "Add {B} for each Swamp you control." is one term
+/// whose amount counts the Swamps.
+///
+/// Where `kinds` has more than one kind, `uniform` says how the kinds are chosen
+/// ([CR 106.1b]): "There are six types of mana: white, blue, black, red, green, and
+/// colorless." With
+/// `uniform` false each unit may be any kind of `kinds`, chosen apart, as "Add {W}{W}, {W}{U},
+/// or {U}{U}." makes two units each white or blue. With `uniform` true all its units are one
+/// kind chosen from `kinds`, as "Add three mana of any one color." says. Of a term of one
+/// kind, `uniform` says nothing, and the builders set it false.
+///
+/// [CR 106.1b]: https://yawgatog.com/resources/magic-rules/#R1061b
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Term {
+    /// A bit per [`ManaColor`].
+    pub kinds: u8,
+    pub amount: Amount,
+    pub uniform: bool,
+}
+
+impl Term {
+    /// `amount` mana of one kind, as "{U}{U}" in "Add {U}{U}." says.
+    pub const fn of(color: ManaColor, amount: u8) -> Term {
+        Term {
+            kinds: 1 << color.index(),
+            amount: Amount::Fixed(amount),
+            uniform: false,
+        }
+    }
+
+    /// One mana of one kind, as "{W}" in "Add {W}{U}." says.
+    pub const fn one(color: ManaColor) -> Term {
+        Term::of(color, 1)
+    }
+
+    /// `amount` mana of one kind for each of what `amount` counts, as "Add {B} for each Swamp
+    /// you control." says.
+    pub const fn counted(color: ManaColor, amount: Amount) -> Term {
+        Term {
+            kinds: 1 << color.index(),
+            amount,
+            uniform: false,
+        }
+    }
+
+    /// `amount` units, each of any kind of `kinds` chosen apart, as "Add {W}{W}, {W}{U}, or
+    /// {U}{U}." says of two units of {W} and {U}.
+    pub const fn each_of(kinds: u8, amount: u8) -> Term {
+        Term {
+            kinds,
+            amount: Amount::Fixed(amount),
+            uniform: false,
+        }
+    }
+
+    /// The term of a [`ManaSet`]: `amount` mana of one kind of its colors.
+    pub const fn of_set(set: ManaSet) -> Term {
+        Term {
+            kinds: set.colors,
+            amount: Amount::Fixed(set.amount),
+            uniform: set.colors.count_ones() > 1,
+        }
+    }
+
+    /// The [`ManaSet`] that says the same as this term, if one does: a fixed amount, of one
+    /// kind, of units of one kind together ([`Term::uniform`]), or a single unit.
+    pub const fn as_set(self) -> Option<ManaSet> {
+        let Amount::Fixed(amount) = self.amount else {
+            return None;
+        };
+        if self.kinds.is_power_of_two() || self.uniform || amount == 1 {
+            Some(ManaSet {
+                colors: self.kinds,
+                amount,
+            })
+        } else {
+            None
+        }
     }
 }
 

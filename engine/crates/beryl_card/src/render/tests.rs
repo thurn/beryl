@@ -335,3 +335,34 @@ fn a_counter_total_across_permanents_is_said_among_them() {
     let on = render_ability(&Ability::spell().effect(&ON));
     assert!(on.contains("counter on "), "{on}");
 }
+
+/// A mana ability's product of several terms ([`Ability::mana_of`]), as Oracle text writes
+/// each: fixed symbols run together, a counted term says what it counts, and units chosen
+/// apart list every choice.
+#[test]
+fn a_product_of_terms_renders_as_oracle_text() {
+    use crate::ManaColor::{Black, Blue, White};
+    use crate::Term;
+    use crate::effect::build::{permanents, yours};
+    use crate::filter::Filter;
+    use crate::mana::mana;
+    static SWAMPS: Objects = permanents(Filter::All(&[
+        Filter::Subtype(crate::Subtype::Swamp),
+        yours(),
+    ]));
+    static SIGNET: [Term; 2] = [Term::one(White), Term::one(Blue)];
+    static COFFERS: [Term; 1] = [Term::counted(Black, Amount::Count(&SWAMPS))];
+    static GATE: [Term; 1] = [Term::each_of(0b11, 2)];
+    let signet = Ability::mana_of(Cost::of(mana("{1}"), &[CostPart::TAP]), &SIGNET);
+    assert_eq!(render_ability(&signet), "{1}, {T}: Add {W}{U}.");
+    let coffers = Ability::mana_of(Cost::of(mana("{2}"), &[CostPart::TAP]), &COFFERS);
+    assert_eq!(
+        render_ability(&coffers),
+        "{2}, {T}: Add {B} for each Swamp you control."
+    );
+    let gate = Ability::mana_of(Cost::of(mana("{W/U}"), &[CostPart::TAP]), &GATE);
+    assert_eq!(
+        render_ability(&gate),
+        "{W/U}, {T}: Add {W}{W}, {W}{U}, or {U}{U}."
+    );
+}

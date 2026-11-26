@@ -139,7 +139,10 @@ pub fn render_casting_option(def: &CardDef, face: FaceIx, option: CastingOption)
 /// ([CR 106.3](https://yawgatog.com/resources/magic-rules/#R1063)).
 fn one_mana_line(run: ManaSet, before: &Ability, ability: &Ability) -> Option<ManaSet> {
     let plain = |a: &Ability| {
-        a.kind() == AbilityKind::Mana && a.only_if_you_control().is_none() && a.spend().is_none()
+        a.kind() == AbilityKind::Mana
+            && a.produces() != ManaSet::NONE
+            && a.only_if_you_control().is_none()
+            && a.spend().is_none()
     };
     let produces = ability.produces();
     (plain(before)

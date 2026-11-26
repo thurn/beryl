@@ -213,6 +213,7 @@ impl Ctx {
             } => self.counters(objects, kind, count, false),
             Effect::RemoveAllCounters(objects) => self.remove_all_counters(objects),
             Effect::AddMana { player, mana } => self.add_mana(player, mana),
+            Effect::AddProduct { player } => self.add_product(player),
             Effect::AddManaOfKind {
                 player,
                 kind,

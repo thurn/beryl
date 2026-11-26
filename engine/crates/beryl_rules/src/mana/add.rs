@@ -48,6 +48,35 @@ pub(crate) fn add_instruction<L: Layout>(
     Outcome::of(Bitboard::EMPTY, added)
 }
 
+/// [`Effect::AddProduct`](beryl_card::Effect::AddProduct): "[Player] adds [the mana ability's
+/// terms]" (see CR 106.3), each term's amount as it is now. A term of one kind adds that kind.
+/// A term of several kinds adds the kind its activator chose as they activated the ability,
+/// which must be one of them: the payments that choose a kind for each unit apart plan with
+/// the terms themselves. The outcome is the mana added.
+pub(crate) fn add_product_instruction<L: Layout>(
+    run: &mut Run<'_, '_, L>,
+    players: Players,
+) -> Outcome<L> {
+    let resolution = run.resolution();
+    let (source, chosen) = (resolution.entry.object(), resolution.mana);
+    let terms = resolution.ability.product();
+    let mut added = 0;
+    for term in terms {
+        let kind = if term.kinds.is_power_of_two() {
+            beryl_card::ManaColor::ALL[term.kinds.trailing_zeros() as usize]
+        } else {
+            debug_assert!(term.kinds & (1 << chosen.index()) != 0);
+            chosen
+        };
+        let amount = run.scene().amount(term.amount);
+        for player in run.in_turn_order(players) {
+            add(run.game(), player, source, kind, amount);
+            added += u32::from(amount);
+        }
+    }
+    Outcome::of(Bitboard::EMPTY, added)
+}
+
 /// [`Effect::AddManaOfKind`](beryl_card::Effect::AddManaOfKind): "[Player] adds [amount]
 /// mana of [kind]" (CR 106.4), by a spell or an ability that is no mana ability, of the one
 /// kind it names. The outcome is the mana added.

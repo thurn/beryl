@@ -106,6 +106,7 @@ impl Effect {
             | Effect::RemoveAllCounters(_)
             | Effect::AddMana { .. }
             | Effect::AddManaOfKind { .. }
+            | Effect::AddProduct { .. }
             | Effect::ExchangeControl(..)
             | Effect::Attach { .. }
             | Effect::Subgame
@@ -217,6 +218,7 @@ impl Effect {
             | Effect::RemoveAllCounters(_)
             | Effect::AddMana { .. }
             | Effect::AddManaOfKind { .. }
+            | Effect::AddProduct { .. }
             | Effect::Modify { .. }
             | Effect::ChangeText { .. }
             | Effect::ExchangeControl(..)

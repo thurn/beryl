@@ -57,7 +57,9 @@ impl Scope<'_> {
             | Effect::CopySpell {
                 except: Some(ix), ..
             } if ix.index() >= self.face.excepts.len() => Err(Malformed::Copy),
-            Effect::AddMana { .. } if !matches!(self.ability.kind(), AbilityKind::Mana) => {
+            Effect::AddMana { .. } | Effect::AddProduct { .. }
+                if !matches!(self.ability.kind(), AbilityKind::Mana) =>
+            {
                 Err(Malformed::AddMana)
             }
             Effect::RestartGame { .. } | Effect::Subgame
@@ -243,6 +245,7 @@ impl Scope<'_> {
             | Effect::RemoveAllCounters(_)
             | Effect::AddMana { .. }
             | Effect::AddManaOfKind { .. }
+            | Effect::AddProduct { .. }
             | Effect::ChangeText { .. }
             | Effect::ExchangeControl(..)
             | Effect::Attach { .. }

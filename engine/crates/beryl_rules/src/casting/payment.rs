@@ -275,6 +275,7 @@ fn unless_discards<L: Layout>(
         | Effect::RemoveAllCounters(_)
         | Effect::AddMana { .. }
         | Effect::AddManaOfKind { .. }
+        | Effect::AddProduct { .. }
         | Effect::Modify { .. }
         | Effect::ChangeText { .. }
         | Effect::ExchangeControl(..)

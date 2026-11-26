@@ -74,6 +74,7 @@ pub(super) const fn moved_by(effect: &Effect) -> Option<&Objects> {
         | Effect::RemoveAllCounters(_)
         | Effect::AddMana { .. }
         | Effect::AddManaOfKind { .. }
+        | Effect::AddProduct { .. }
         | Effect::Modify { .. }
         | Effect::ChangeText { .. }
         | Effect::ExchangeControl(..)

@@ -7,7 +7,7 @@ use crate::characteristics::Types;
 use crate::counter::CounterKind;
 use crate::definition::CardDef;
 use crate::effect::{Amount, Objects, Players};
-use crate::mana::ManaColor;
+use crate::mana::{ManaColor, Term};
 
 impl Ctx {
     /// "Discard two cards", or "discard your hand".
@@ -112,6 +112,66 @@ impl Ctx {
         vec![self.clause(player, ("add", "adds"), |_| mana_set(mana))]
     }
 
+    /// "Add {W}{U}", "add {B} for each Swamp you control" or "add {W}{W}, {W}{U}, or {U}{U}":
+    /// the terms of the mana ability being written ([`crate::Ability::product`]).
+    pub(super) fn add_product(&mut self, player: Players) -> Vec<String> {
+        let terms = self.ability.map_or(&[][..], |a| a.product());
+        let mut parts: Vec<String> = Vec::new();
+        for term in terms {
+            let text = self.term(*term);
+            // Fixed symbols run together, as "{W}{U}" does.
+            match parts.last_mut() {
+                Some(last)
+                    if last.ends_with('}') && text.starts_with('{') && !text.contains(' ') =>
+                {
+                    last.push_str(&text);
+                }
+                _ => parts.push(text),
+            }
+        }
+        let text = parts.join(" and ");
+        vec![self.clause(player, ("add", "adds"), |_| text.clone())]
+    }
+
+    /// One term of a mana ability's product ([`Term`]).
+    fn term(&mut self, term: Term) -> String {
+        let kinds: Vec<ManaColor> = ManaColor::ALL
+            .into_iter()
+            .filter(|&color| term.kinds & (1 << color.index()) != 0)
+            .collect();
+        match (term.amount, kinds.as_slice()) {
+            (Amount::Fixed(n), [kind]) => symbol(*kind).repeat(usize::from(n)),
+            (Amount::Fixed(n), _) if term.uniform => mana_set(crate::ManaSet {
+                colors: term.kinds,
+                amount: n,
+            }),
+            // Each unit of its own kind: every choice, as "{W}{W}, {W}{U}, or {U}{U}" lists.
+            (Amount::Fixed(n), _) => {
+                let each: Vec<String> = choices(&kinds, usize::from(n))
+                    .iter()
+                    .map(|choice| choice.iter().map(|&k| symbol(k)).collect::<String>())
+                    .collect();
+                super::words::list(&each, "or")
+            }
+            (Amount::Count(objects), [kind]) => {
+                format!(
+                    "{} for each {}",
+                    symbol(*kind),
+                    self.one_of_counted(*objects)
+                )
+            }
+            (other, _) => format!(
+                "an amount of {} equal to {}",
+                kinds
+                    .iter()
+                    .map(|&k| symbol(k))
+                    .collect::<Vec<_>>()
+                    .join(" or "),
+                self.amount(other)
+            ),
+        }
+    }
+
     /// "Untap up to two lands".
     pub(super) fn untap_up_to(
         &mut self,
@@ -205,4 +265,20 @@ impl Ctx {
         };
         self.count_of(count, &one, &many)
     }
+}
+
+/// Every way to choose `n` of `kinds` with repeats, each in the order of `kinds` and the
+/// choices in that order too: {W}{W}, {W}{U}, {U}{U}.
+fn choices(kinds: &[ManaColor], n: usize) -> Vec<Vec<ManaColor>> {
+    if n == 0 {
+        return vec![Vec::new()];
+    }
+    let mut out = Vec::new();
+    for (i, &kind) in kinds.iter().enumerate() {
+        for mut rest in choices(&kinds[i..], n - 1) {
+            rest.insert(0, kind);
+            out.push(rest);
+        }
+    }
+    out
 }

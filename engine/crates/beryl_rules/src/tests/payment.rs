@@ -392,8 +392,9 @@ fn pay_and_check(
     )
 }
 
-#[test]
-fn the_solver_pays_exactly_the_costs_brute_force_can_pay() {
+/// Calls `each` with 300 random positions of the test sources: a game whose `g.me` controls
+/// some of them, under the names given, with up to one {W}, {U} and {C} floating, and a cost.
+fn random_positions(mut each: impl FnMut(&Game, &[Slot], &[&str], [u8; 6], ManaCost)) {
     const SOURCES: [&str; 7] = [
         "Test Land",
         "Test Island",
@@ -404,7 +405,6 @@ fn the_solver_pays_exactly_the_costs_brute_force_can_pay() {
         "Test Treasure",
     ];
     let mut rng = SplitMix64::new(17);
-    let mut payable_positions = 0;
     for _ in 0..300 {
         let mut g = Game::new(Profile::EXACT);
         let mut names = Vec::new();
@@ -425,13 +425,20 @@ fn the_solver_pays_exactly_the_costs_brute_force_can_pay() {
             pool[color] = rng.below(2) as u8;
         }
         g.s.board().set_mana(g.me, pool);
-        let pool = pool.amounts();
         crate::continuous::layers::refresh(&mut g.s, &g.t, &mut Sink::default()).unwrap();
         let cost = ManaCost::new(
             rng.below(4) as u8,
             [rng.below(3) as u8, rng.below(3) as u8, 0, 0, 0, 0],
         );
-        let expected = brute_force_pays(cost, pool, &names);
+        each(&g, &slots, &names, pool.amounts(), cost);
+    }
+}
+
+#[test]
+fn the_solver_pays_exactly_the_costs_brute_force_can_pay() {
+    let mut payable_positions = 0;
+    random_positions(|g, slots, names, pool, cost| {
+        let expected = brute_force_pays(cost, pool, names);
         let context = format!("{cost:?} from {pool:?} and {names:?}");
         let payable = crate::mana::payable(
             &g.s,
@@ -458,7 +465,7 @@ fn the_solver_pays_exactly_the_costs_brute_force_can_pay() {
             assert_eq!(!plans.is_empty(), payable, "{context}");
             let mut outcomes = Vec::new();
             for plan in &plans {
-                let outcome = pay_and_check(&g, &slots, &names, cost, plan, &context);
+                let outcome = pay_and_check(g, slots, names, cost, plan, &context);
                 assert!(
                     !outcomes.contains(&outcome),
                     "two plans leave {:?} and sacrifice {}: {context}",
@@ -469,7 +476,24 @@ fn the_solver_pays_exactly_the_costs_brute_force_can_pay() {
             }
         }
         payable_positions += usize::from(payable);
-    }
+    });
+    assert!(payable_positions > 50, "only {payable_positions} payable");
+}
+
+/// With no priced mana ability in play, every order of the mana abilities pays what one tap of
+/// each source pays: the reference of sequences answers as the reference of units does, at
+/// every position of the brute-force test above.
+#[test]
+fn the_sequence_reference_agrees_with_the_unit_reference() {
+    let mut payable_positions = 0;
+    random_positions(|g, _, names, pool, cost| {
+        let context = format!("{cost:?} from {pool:?} and {names:?}");
+        let units = crate::reference::reference_payable(&g.s, &g.t, g.me, cost);
+        let sequences = crate::reference::reference_sequences(&g.s, &g.t, g.me, cost);
+        assert!(units.is_some(), "{context}");
+        assert_eq!(sequences, units, "{context}");
+        payable_positions += usize::from(units == Some(true));
+    });
     assert!(payable_positions > 50, "only {payable_positions} payable");
 }
 

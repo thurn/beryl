@@ -18,7 +18,8 @@ use crate::table::{is_sacrificed, is_tap_for_mana};
 pub enum Unpayable {
     /// A part of a cost that no code pays.
     Part(CostPart),
-    /// A mana ability whose cost is neither {T} nor {T} and sacrificing its source: the
+    /// A mana ability whose cost is neither {T} nor {T} and sacrificing its source, or whose
+    /// product one [`beryl_card::ManaSet`] cannot say ([`beryl_card::Ability::mana_of`]): the
     /// mana solver activates no other.
     ManaAbility,
     /// An effect or an intervening "if" names what a cost took
@@ -92,6 +93,10 @@ fn ability(a: &Ability) -> Result<(), Unpayable> {
         return Ok(());
     }
     if a.kind() == AbilityKind::Mana && !is_tap_for_mana(a) && !is_sacrificed(a) {
+        return Err(Unpayable::ManaAbility);
+    }
+    // Several terms, or an amount that counts: no payment adds them yet.
+    if a.kind() == AbilityKind::Mana && a.produces() == beryl_card::ManaSet::NONE {
         return Err(Unpayable::ManaAbility);
     }
     if let Some(part) = a.cost().parts().iter().find(|part| !pays_for_ability(part)) {
@@ -286,6 +291,22 @@ mod tests {
         }],
         tokens: &[],
     };
+    /// "{T}: Add {W}{U}.": two terms, which no payment adds yet.
+    static KAROO: CardDef = CardDef {
+        name: "Karoo",
+        shape: beryl_card::definition::Shape::Single,
+        faces: &[Face {
+            abilities: &[Ability::mana_of(
+                Cost::TAP,
+                &[
+                    beryl_card::Term::one(ManaColor::White),
+                    beryl_card::Term::one(ManaColor::Blue),
+                ],
+            )],
+            ..Face::EMPTY
+        }],
+        tokens: &[],
+    };
     /// Its effect reads the creature its crew cost tapped, which the engine does not keep.
     static REMEMBERER: CardDef = CardDef {
         name: "Rememberer",
@@ -309,6 +330,7 @@ mod tests {
         &FORAGER,
         &TWICE_BENT,
         &FILTER_LAND,
+        &KAROO,
         &REMEMBERER,
     ]);
 
@@ -356,6 +378,10 @@ mod tests {
         assert_eq!(
             table("Filter Land").err(),
             refused("Filter Land", Unpayable::ManaAbility)
+        );
+        assert_eq!(
+            table("Karoo").err(),
+            refused("Karoo", Unpayable::ManaAbility)
         );
     }
 

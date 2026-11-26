@@ -44,3 +44,32 @@ fn custom_gives_back_only_the_type_it_was_made_of() {
     assert_eq!(custom.get::<fn() -> u8>().map(|body| body()), Some(7));
     assert!(custom.get::<u8>().is_none());
 }
+
+/// An ability [`Ability::mana`] makes has the one term its set says, and one
+/// [`Ability::mana_of`] makes has its terms and no set.
+#[test]
+fn a_mana_ability_holds_its_product_as_terms() {
+    use crate::ManaColor::{Blue, Colorless, White};
+    static SIGNET: [Term; 2] = [Term::one(White), Term::one(Blue)];
+    let crypt = Ability::tap_for_mana(ManaSet::of(Colorless, 2));
+    assert_eq!(crypt.product(), &[Term::of(Colorless, 2)]);
+    assert_eq!(crypt.produces(), ManaSet::of(Colorless, 2));
+    assert_eq!(crypt.product()[0].as_set(), Some(crypt.produces()));
+    let signet = Ability::mana_of(Cost::TAP, &SIGNET);
+    assert_eq!(signet.product().len(), 2);
+    assert_eq!(signet.produces(), ManaSet::NONE);
+    assert!(signet.targets().is_empty());
+    assert!(matches!(
+        signet.body(),
+        Behavior::Data(Effect::AddProduct { .. })
+    ));
+    // No ability but a mana ability has a product.
+    assert!(Ability::spell().product().is_empty());
+}
+
+#[test]
+#[should_panic(expected = "use `Ability::mana`")]
+fn a_product_one_set_says_is_refused() {
+    static TWO_BLUE: [Term; 1] = [Term::of(crate::ManaColor::Blue, 2)];
+    let _ = Ability::mana_of(Cost::TAP, &TWO_BLUE);
+}

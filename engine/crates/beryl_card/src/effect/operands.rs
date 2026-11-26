@@ -130,6 +130,7 @@ impl Effect {
             }
             | Effect::PutAnyOnBottom { player }
             | Effect::AddMana { player, .. }
+            | Effect::AddProduct { player, .. }
             | Effect::GetEmblem { player, .. }
             | Effect::ManifestDread(player)
             | Effect::ChooseValue { player, .. }

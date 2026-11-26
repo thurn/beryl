@@ -5,7 +5,7 @@ use crate::cost::Cost;
 use crate::effect::{Condition, Effect, Objects, Players};
 use crate::ids::ZoneSet;
 use crate::index::SpecIx;
-use crate::mana::ManaSet;
+use crate::mana::{ManaSet, Term};
 use crate::target::{Takes, TargetKind, TargetSpec};
 use crate::trigger::Trigger;
 
@@ -98,6 +98,51 @@ const fn add_mana(mana: ManaSet) -> &'static Effect {
     &ADD_MANA[mana.amount as usize - 1][mana.colors as usize]
 }
 
+/// The one term of every [`ManaSet`] [`ADD_MANA`] adds, in its order: the product
+/// ([`Ability::product`]) of an ability [`Ability::mana`] makes, for the same reason.
+static ONE_TERM: [[[Term; 1]; 64]; MOST_MANA as usize] = {
+    let mut table = [[[Term::of_set(ManaSet::NONE)]; 64]; MOST_MANA as usize];
+    let mut amount = 0;
+    while amount < MOST_MANA {
+        let mut colors = 0;
+        while colors < 64 {
+            table[amount as usize][colors as usize] = [Term::of_set(ManaSet {
+                colors,
+                amount: amount + 1,
+            })];
+            colors += 1;
+        }
+        amount += 1;
+    }
+    table
+};
+
+/// The most terms a mana ability's product has ([`Ability::mana_of`]).
+const MOST_TERMS: usize = 3;
+
+/// "Add [terms]", for the controller of a mana ability ([`Ability::mana_of`]), whose terms
+/// the ability holds.
+static ADD_PRODUCT: Effect = Effect::AddProduct {
+    player: Players::You,
+};
+
+/// What an ability takes or makes, which no ability does both of: a spell's, activated or
+/// triggered ability's targets, or what a mana ability produces. A mana ability has no
+/// targets ([CR 605.1a]): "it doesn't require a target". One field for both keeps the
+/// ability's size a power of two.
+///
+/// [CR 605.1a]: https://yawgatog.com/resources/magic-rules/#R6051a
+#[derive(Clone, Copy, Debug)]
+enum Interface {
+    Targets(&'static [TargetSpec]),
+    /// A mana ability's terms, and the [`ManaSet`] that says the same where one does, which
+    /// the mana solver reads of every source ([`Ability::produces`]).
+    Product {
+        terms: &'static [Term],
+        set: ManaSet,
+    },
+}
+
 /// One ability of a face: its interface as data, and what it does.
 ///
 /// Its fields are private: an ability is made by the builder for its kind and the methods
@@ -124,9 +169,8 @@ pub struct Ability {
     kind: AbilityKind,
     cost: Cost,
     timing: Timing,
-    targets: &'static [TargetSpec],
-    /// Mana abilities: what they produce.
-    produces: ManaSet,
+    /// Its targets, or a mana ability's product ([`Interface`]).
+    interface: Interface,
     /// Whether its effect data needs something to do anything ([`Ability::needs`]), settled
     /// as the effect is given: the engine asks of every activated ability at every priority.
     needy: bool,
@@ -172,8 +216,7 @@ impl Ability {
             kind,
             cost: Cost::NONE,
             timing: Timing::Instant,
-            targets: &[],
-            produces: ManaSet::NONE,
+            interface: Interface::Targets(&[]),
             needy: false,
             body: Behavior::Data(&Effect::NOTHING),
             condition: None,
@@ -219,8 +262,47 @@ impl Ability {
     pub const fn mana(cost: Cost, produces: ManaSet) -> Ability {
         Ability {
             cost,
-            produces,
+            interface: Interface::Product {
+                terms: &ONE_TERM[produces.amount as usize - 1][produces.colors as usize],
+                set: produces,
+            },
             body: Behavior::Data(add_mana(produces)),
+            ..Ability::of(AbilityKind::Mana)
+        }
+    }
+
+    /// A mana ability whose product is up to [`MOST_TERMS`] terms, where one [`ManaSet`]
+    /// cannot say it ([CR 106.3]): "A spell or ability that produces mana instructs a player
+    /// to add that mana." "{1}, {T}: Add {W}{U}." is two terms of one mana, and "{2}, {T}: Add
+    /// {B} for each Swamp you control." one term whose amount counts. Its effect is to add
+    /// the terms ([`Effect::AddProduct`]). A product one [`ManaSet`] says is
+    /// [`Ability::mana`]'s, so that each product has one form.
+    ///
+    /// [CR 106.3]: https://yawgatog.com/resources/magic-rules/#R1063
+    pub const fn mana_of(cost: Cost, terms: &'static [Term]) -> Ability {
+        assert!(
+            !terms.is_empty() && terms.len() <= MOST_TERMS,
+            "a mana ability's product is one to three terms"
+        );
+        assert!(
+            terms.len() > 1 || terms[0].as_set().is_none(),
+            "one term a `ManaSet` says: use `Ability::mana`"
+        );
+        let mut i = 0;
+        while i < terms.len() {
+            assert!(
+                terms[i].kinds != 0 && terms[i].kinds < 64,
+                "a term makes kinds of mana"
+            );
+            i += 1;
+        }
+        Ability {
+            cost,
+            interface: Interface::Product {
+                terms,
+                set: ManaSet::NONE,
+            },
+            body: Behavior::Data(&ADD_PRODUCT),
             ..Ability::of(AbilityKind::Mana)
         }
     }
@@ -299,7 +381,10 @@ impl Ability {
             self.resolves(),
             "only a spell, activated or triggered ability has targets"
         );
-        Ability { targets, ..self }
+        Ability {
+            interface: Interface::Targets(targets),
+            ..self
+        }
     }
 
     /// Its one target: [`Ability::targeting`] with one spec, as
@@ -457,13 +542,32 @@ impl Ability {
 
     #[inline]
     pub const fn targets(&self) -> &'static [TargetSpec] {
-        self.targets
+        match self.interface {
+            Interface::Targets(targets) => targets,
+            Interface::Product { .. } => &[],
+        }
     }
 
-    /// A mana ability: what it produces.
+    /// A mana ability made by [`Ability::mana`]: what it produces, the one term of its
+    /// product as a [`ManaSet`]. [`ManaSet::NONE`] for one whose product a set cannot say
+    /// ([`Ability::mana_of`]), and for any other kind of ability.
     #[inline]
     pub const fn produces(&self) -> ManaSet {
-        self.produces
+        match self.interface {
+            Interface::Product { set, .. } => set,
+            Interface::Targets(_) => ManaSet::NONE,
+        }
+    }
+
+    /// A mana ability: what it produces, as its terms ([`Term`]). One term for an ability
+    /// [`Ability::mana`] makes, the one [`Ability::produces`] says. Empty for any other kind
+    /// of ability.
+    #[inline]
+    pub const fn product(&self) -> &'static [Term] {
+        match self.interface {
+            Interface::Product { terms, .. } => terms,
+            Interface::Targets(_) => &[],
+        }
     }
 
     #[inline]
@@ -543,7 +647,7 @@ impl Ability {
     /// ([`Effect::takes`]), or for a Rust body what its registration says
     /// ([`Says::takes`]).
     pub fn takes_target(&self, target: SpecIx, how: Takes) -> bool {
-        let Some(spec) = self.targets.get(target.index()) else {
+        let Some(spec) = self.targets().get(target.index()) else {
             return false;
         };
         match self.body {

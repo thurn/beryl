@@ -105,7 +105,9 @@ impl<L: Layout> Funds<L> {
 
     /// Whether the player can pay `cost` with none of `exclude` for what `paying` is for:
     /// [`Funds::pays`], or, where that fails for a spell in a game whose cards make restricted
-    /// mana, [`Funds::pays_restricted`]. Restricted mana only adds to what pays.
+    /// mana, [`Funds::pays_restricted`], or, where both fail in a game whose cards have priced
+    /// mana abilities or products of several terms, the rich path's answer
+    /// (`mana::rich::pays`). Restricted mana and those sources only add to what pays.
     #[inline]
     pub(crate) fn pays_for(
         &self,
@@ -117,6 +119,8 @@ impl<L: Layout> Funds<L> {
     ) -> bool {
         self.pays(s, t, cost, exclude)
             || (paying.reads_restrictions(t) && self.pays_restricted(s, t, cost, exclude, paying))
+            || (t.can_either(Capability::PricedMana, Capability::ManaChanges)
+                && super::rich::pays(self, s, t, cost, exclude, paying))
     }
 
     /// [`Funds::pays`] for a spell, in a game whose cards make restricted mana: a source of

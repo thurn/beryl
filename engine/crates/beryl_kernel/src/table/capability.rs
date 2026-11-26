@@ -184,10 +184,21 @@ pub enum Capability {
     /// the layers change are found at each state-based action check
     /// ([`crate::State::note_control_changes`]).
     StaticControl,
+    /// A card has a priced mana ability ([`crate::table::is_priced`]): one whose cost has mana
+    /// or a part that chooses what pays it. The mana solver plans such abilities in sequence,
+    /// each paying its price from the mana in the pool as it then stands, on a path of its own
+    /// (`beryl_rules`' `mana::rich`).
+    PricedMana,
+    /// A card changes what a source makes, or has a mana ability whose product one
+    /// [`beryl_card::ManaSet`] cannot say: several terms, as "Add {W}{U}.", or an amount that
+    /// counts, as "Add {B} for each Swamp you control." ([`beryl_card::Ability::product`]).
+    /// The mana solver then plans with what each source makes on the same path as for
+    /// [`Capability::PricedMana`].
+    ManaChanges,
 }
 
 // The game keeps its capabilities in a `u64`.
-const _: () = assert!((Capability::StaticControl as u32) < u64::BITS);
+const _: () = assert!((Capability::ManaChanges as u32) < u64::BITS);
 
 impl Capability {
     /// The capabilities of every face and subtype the game can contain.
@@ -308,12 +319,7 @@ impl Capability {
             if a.cost().is_loyalty() {
                 found |= Capability::LoyaltyActivated.bit();
             }
-            if a.kind() == AbilityKind::Mana && a.asks() {
-                found |= Capability::ManaAbilityChoices.bit();
-            }
-            if crate::table::is_instant_mana(a) {
-                found |= Capability::InstantMana.bit();
-            }
+            found |= mana_capabilities(a);
             if a.kind() == AbilityKind::Activated
                 && (a.zones().contains(Zone::Graveyard) || a.zones().contains(Zone::Exile))
             {
@@ -349,6 +355,28 @@ impl super::GameTable {
             ..self.clone()
         }
     }
+}
+
+/// The capabilities a mana ability gives a game: none for any other ability.
+fn mana_capabilities(a: &Ability) -> u64 {
+    if a.kind() != AbilityKind::Mana {
+        return 0;
+    }
+    let mut found = 0;
+    if a.asks() {
+        found |= Capability::ManaAbilityChoices.bit();
+    }
+    if crate::table::is_instant_mana(a) {
+        found |= Capability::InstantMana.bit();
+    }
+    if crate::table::is_priced(a) {
+        found |= Capability::PricedMana.bit();
+    }
+    // Only an ability `Ability::mana_of` makes has a product no set says.
+    if a.produces() == beryl_card::ManaSet::NONE {
+        found |= Capability::ManaChanges.bit();
+    }
+    found
 }
 
 /// The capabilities a replacement effect gives a game. Each test reads a different field of the

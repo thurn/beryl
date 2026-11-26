@@ -4,8 +4,8 @@
 //! Implements: none. Builds card and deck indexes for a game.
 
 use beryl_card::{
-    Ability, AbilityIx, AbilityKind, BasicLandTypes, CardDef, Condition, CostAction, CostPart,
-    Face, FaceIx, ManaRestriction, RuleChange, Words, Zone, ZoneSet,
+    AbilityIx, AbilityKind, BasicLandTypes, CardDef, Condition, Face, FaceIx, ManaRestriction,
+    RuleChange, Words, Zone, ZoneSet,
 };
 
 use crate::event::{Listens, Replaces};
@@ -26,11 +26,13 @@ mod capability;
 mod cards;
 mod listeners;
 mod lists;
+mod mana_abilities;
 mod names;
 
 pub use crate::payable::{ANY_COLOR, is_instant_mana};
 pub use capability::Capability;
 pub use cards::CardTable;
+pub use mana_abilities::{has_other_ability, is_priced, is_sacrificed, is_simple, is_tap_for_mana};
 
 /// A decklist: how many of each card, by name.
 pub type Decklist = [(u8, &'static str)];
@@ -672,16 +674,21 @@ pub enum ManaFace {
     /// Anything else, which the solver reads from the face, and whether the face has another
     /// ability ([`has_other_ability`]), which reading it would find each time.
     Read { other: bool },
+    /// A face with a priced mana ability ([`is_priced`]), which only the solver's path for
+    /// mana abilities with a price plans (`beryl_rules`' `mana::rich`): the plain path leaves
+    /// it after one test.
+    Priced,
 }
 
 impl ManaFace {
     /// Whether the face has an ability other than those the solver taps for
-    /// ([`has_other_ability`]), when this says: `None` for a face that is no source.
+    /// ([`has_other_ability`]), when this says: `None` for a face that is no source, and for
+    /// a priced one, which the plain path does not read.
     #[inline]
     pub fn other(self) -> Option<bool> {
         match self {
             ManaFace::Plain { other, .. } | ManaFace::Read { other } => Some(other),
-            ManaFace::Not => None,
+            ManaFace::Not | ManaFace::Priced => None,
         }
     }
 }
@@ -689,6 +696,9 @@ impl ManaFace {
 impl ManaFace {
     /// What `face` makes as a source, with its basic land types' mana ([`land_mana`]).
     pub fn of(face: &Face) -> ManaFace {
+        if face.abilities.iter().any(is_priced) {
+            return ManaFace::Priced;
+        }
         let intrinsic = land_mana(face, &Words::NONE);
         let simple = || face.abilities.iter().filter(|a| is_simple(a));
         if intrinsic == 0
@@ -739,54 +749,6 @@ pub fn land_mana(face: &Face, words: &Words) -> u8 {
     }
     let printed = BasicLandTypes::of(face.subtypes.read(&Words::NONE));
     printed.mana().intrinsic_mana() & !written
-}
-
-/// Whether a face has an ability other than those the solver taps for, which tapping it for
-/// mana would cost. Abilities that work only from a hand, such as cycling, don't count.
-pub fn has_other_ability(face: &Face) -> bool {
-    face.abilities.iter().any(|a| {
-        matches!(a.kind(), AbilityKind::Activated | AbilityKind::Mana)
-            && !is_simple(a)
-            && !a.cost().does(CostAction::Discard)
-    })
-}
-
-/// Whether an ability is one the solver taps for: a mana ability whose whole cost is {T}, and
-/// whose mana may be spent on anything.
-#[inline]
-pub fn is_simple(a: &Ability) -> bool {
-    is_tap_for_mana(a) && a.spend().is_none()
-}
-
-/// Whether an ability is a mana ability whose whole cost is {T}: [`is_simple`], or one whose
-/// mana is restricted, which the solver taps only for a payment the restriction accepts.
-#[inline]
-pub fn is_tap_for_mana(a: &Ability) -> bool {
-    a.kind() == AbilityKind::Mana
-        && a.cost().mana.is_zero()
-        && matches!(a.cost().parts(), [CostPart::This(CostAction::Tap)])
-}
-
-/// Whether an ability is a mana ability whose whole cost is {T} and sacrificing its source, as a
-/// Treasure's (see [CR 111.10a]): "{T}, Sacrifice this token: Add one mana of any color." Spending the
-/// permanent is a resource a plan consumes (§10): the solver taps such a source only when the cost
-/// needs it, or when sacrificing it keeps more later costs payable.
-///
-/// [CR 111.10a]: https://yawgatog.com/resources/magic-rules/#R11110a
-#[inline]
-pub fn is_sacrificed(a: &Ability) -> bool {
-    a.kind() == AbilityKind::Mana
-        && a.cost().mana.is_zero()
-        && matches!(
-            a.cost().parts(),
-            [
-                CostPart::This(CostAction::Tap),
-                CostPart::This(CostAction::Sacrifice)
-            ] | [
-                CostPart::This(CostAction::Sacrifice),
-                CostPart::This(CostAction::Tap)
-            ]
-        )
 }
 
 #[cfg(test)]

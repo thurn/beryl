@@ -588,7 +588,7 @@ impl Ctx {
     }
 
     /// One of the objects counted, without its article: "creature you control".
-    fn one_of_counted(&mut self, objects: Objects) -> String {
+    pub(super) fn one_of_counted(&mut self, objects: Objects) -> String {
         match objects {
             Objects::All { zone, filter } => {
                 let kind = Kind::of_zone(zone);
