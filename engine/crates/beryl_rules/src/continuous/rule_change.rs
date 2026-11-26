@@ -184,7 +184,8 @@ fn spells_of(rule: &RuleChange) -> Filter {
         | Governed::SpellCosts { .. }
         | Governed::PreventDamage
         | Governed::TakeStep(_)
-        | Governed::Player(_) => unreachable!("a rule change about casting"),
+        | Governed::Player(_)
+        | Governed::SpendAsAnyColor(_) => unreachable!("a rule change about casting"),
     }
 }
 
@@ -314,6 +315,50 @@ pub(crate) fn unprohibited<L: Layout>(
         }
     }
     allowed
+}
+
+/// Whether a rule change in force lets `player` spend mana as though it were mana of any
+/// color to activate abilities of `source`, as "You may spend mana as though it were mana of
+/// any color to activate abilities of creatures you control." does. One test while no card in
+/// the game makes such a change.
+#[inline]
+pub(crate) fn spends_as_any_color<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+    source: L::Slot,
+) -> bool {
+    let of_kind = t.rules_of(RuleKind::SpendAsAnyColor);
+    !of_kind.is_empty() && spends_as_any_color_slow(s, t, of_kind, player, source)
+}
+
+/// Out of line: only a game with a spend-as-any-color rule comes here.
+#[cold]
+#[inline(never)]
+fn spends_as_any_color_slow<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    of_kind: Rules,
+    player: Seat,
+    source: L::Slot,
+) -> bool {
+    let active = s.rules_for(player).common(of_kind);
+    if active.is_empty() {
+        return false;
+    }
+    let lost = s.any_abilities_lost();
+    s.permanents_with_derived().any(|(maker, d)| {
+        let made = player_rules_of(s, t, maker).common(active);
+        made.iter().any(|id| {
+            let rule = t.rule(id);
+            let Governed::SpendAsAnyColor(filter) = rule.what else {
+                unreachable!("a rule change of the kind that spends mana as any color");
+            };
+            filter::is_for(&rule.players, player, d.controller)
+                && (!lost || maker_of(s, t, maker, id).is_some())
+                && filter.matches(s, t, source, d.controller, &s.words_of(maker))
+        })
+    })
 }
 
 /// Whether the loyalty abilities of the permanent in `slot` may be activated any time its

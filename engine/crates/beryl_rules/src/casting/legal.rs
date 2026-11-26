@@ -558,7 +558,10 @@ fn activatable<L: Layout, const TARGETS: bool>(
         return false;
     }
     // The mana before the targets, which read the battlefield: both checks are pure.
-    let cost = a.cost().mana.with_x(0);
+    let mut cost = a.cost().mana.with_x(0);
+    if rule_change::spends_as_any_color(s, t, player, slot) && o.on_battlefield() {
+        cost = cost.as_any_color();
+    }
     let spent = spent_by_cost(slot, a);
     let substitute = if a.cost().chooses() {
         parts::substitute(a.cost().parts())

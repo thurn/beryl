@@ -216,7 +216,11 @@ fn activation_on<L: Layout>(
         }
     }
     terms.extend_from_slice(extra_terms);
-    Some(Activation::of(a.cost().mana, &terms))
+    let mut price = a.cost().mana;
+    if super::reference_spends_as_any_color(s, t, s.controller(slot), slot) {
+        price = price.as_any_color();
+    }
+    Some(Activation::of(price, &terms))
 }
 
 #[cfg(test)]

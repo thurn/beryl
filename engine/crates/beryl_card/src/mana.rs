@@ -136,6 +136,33 @@ impl ManaCost {
         }
         bits
     }
+
+    /// This cost with every colored and hybrid symbol moved into its generic part, leaving
+    /// `{C}` symbols untouched: what a player pays when they may spend mana as though it were
+    /// mana of any color (see [CR 107.4c], see [CR 107.4e]).
+    ///
+    /// [CR 107.4c]: https://yawgatog.com/resources/magic-rules/#R1074c
+    /// [CR 107.4e]: https://yawgatog.com/resources/magic-rules/#R1074e
+    #[must_use]
+    pub fn as_any_color(self) -> ManaCost {
+        let colored = self.symbols[..5]
+            .iter()
+            .copied()
+            .fold(0u8, u8::saturating_add);
+        let hybrid = if self.hybrid.is_empty() {
+            0
+        } else {
+            u8::try_from(self.hybrid.total_cold()).unwrap_or(u8::MAX)
+        };
+        let mut symbols = [0u8; 6];
+        symbols[5] = self.symbols[5];
+        ManaCost {
+            generic: self.generic.saturating_add(colored).saturating_add(hybrid),
+            symbols,
+            x: self.x,
+            hybrid: Hybrid::NONE,
+        }
+    }
 }
 
 /// Every field, but `hybrid` only where the cost has a hybrid symbol: a cost of none hashes as

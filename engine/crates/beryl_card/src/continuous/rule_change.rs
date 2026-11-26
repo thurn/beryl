@@ -104,6 +104,14 @@ pub enum Governed {
     /// you gain protection from everything" says. Made with [`When::AsUsual`]: the change is to
     /// the players, not to when they do something.
     Player(PlayerRules),
+    /// Spending mana as though it were mana of any color to activate abilities of the
+    /// permanents a filter accepts, as "You may spend mana as though it were mana of any color
+    /// to activate abilities of creatures you control." says. Made with [`When::AsUsual`]:
+    /// colored and hybrid symbols in those activation costs may be paid with mana of any type,
+    /// while `{C}` symbols still require colorless mana (see [CR 107.4c]).
+    ///
+    /// [CR 107.4c]: https://yawgatog.com/resources/magic-rules/#R1074c
+    SpendAsAnyColor(Filter),
 }
 
 /// How a [`Governed::SpellCosts`] changes a spell's total cost ([CR 601.2f]).
@@ -298,6 +306,10 @@ impl RuleChange {
             (Governed::TakeStep(step), When::Never) => format!("skipping their {step:?} steps"),
             (Governed::TakeStep(step), When::OnlyAsSorcery | When::AsInstant) => {
                 format!("taking their {step:?} steps at a changed time")
+            }
+            (Governed::SpendAsAnyColor(_), _) => {
+                "spending mana as though it were mana of any color to activate some abilities"
+                    .to_owned()
             }
             (_, When::AsUsual) => "with a rule changed in no way".to_owned(),
         }

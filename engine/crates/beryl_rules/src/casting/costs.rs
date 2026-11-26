@@ -203,7 +203,14 @@ pub(super) fn total_cost<L: Layout>(
             cost
         }
         (_, Some(ability)) => {
-            let mut cost = face.ability(ability).cost().mana.with_x(entry.x);
+            let a = face.ability(ability);
+            let mut cost = a.cost().mana.with_x(entry.x);
+            if a.zones().contains(crate::state::Zone::Battlefield)
+                && let Some(source) = source_of(entry)
+                && rule_change::spends_as_any_color(s, t, c.player, source)
+            {
+                cost = cost.as_any_color();
+            }
             cost.generic -= c.substituted;
             cost
         }

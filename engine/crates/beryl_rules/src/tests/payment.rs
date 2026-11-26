@@ -1577,3 +1577,199 @@ fn table_refuses_unimplemented_mana_changes() {
         );
     }
 }
+
+static CREATURES_YOU_CONTROL: &[beryl_card::Filter] = &[
+    beryl_card::Filter::Types(Types::CREATURE),
+    beryl_card::Filter::Whose(&beryl_card::Players::You),
+];
+static SPEND_AS_ANY_COLOR_RULE: beryl_card::RuleChange = beryl_card::RuleChange {
+    players: beryl_card::Players::You,
+    what: beryl_card::Governed::SpendAsAnyColor(beryl_card::Filter::All(CREATURES_YOU_CONTROL)),
+    when: beryl_card::When::AsUsual,
+};
+static DRAW_ONE_EFFECT: beryl_card::Effect = draw(you(), 1);
+static COLOR_CAULDRON: CardDef = CardDef {
+    name: "Test Color Cauldron",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::ARTIFACT,
+        abilities: &[Ability::rule_change(&SPEND_AS_ANY_COLOR_RULE)],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+static COLORED_CREATURE: CardDef = CardDef {
+    name: "Test White Activator",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::CREATURE,
+        power: Some(2),
+        toughness: Some(2),
+        abilities: &[
+            // Ability 0: {W}: Draw a card.
+            Ability::activated(Cost::mana(ManaCost::new(0, [1, 0, 0, 0, 0, 0])))
+                .effect(&DRAW_ONE_EFFECT),
+            // Ability 1: {W/B}: Draw a card.
+            Ability::activated(Cost::mana(ManaCost {
+                hybrid: beryl_card::Hybrid::NONE.with_count(
+                    beryl_card::Hybrid::pair(
+                        (1 << ManaColor::White.index()) | (1 << ManaColor::Black.index()),
+                    )
+                    .unwrap(),
+                    1,
+                ),
+                ..ManaCost::NONE
+            }))
+            .effect(&DRAW_ONE_EFFECT),
+            // Ability 2: {C}: Draw a card.
+            Ability::activated(Cost::mana(ManaCost::new(0, [0, 0, 0, 0, 0, 1])))
+                .effect(&DRAW_ONE_EFFECT),
+        ],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+static COLORED_ARTIFACT: CardDef = CardDef {
+    name: "Test White Relic",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::ARTIFACT,
+        abilities: &[
+            Ability::activated(Cost::mana(ManaCost::new(0, [1, 0, 0, 0, 0, 0])))
+                .effect(&DRAW_ONE_EFFECT),
+        ],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+static WHITE_SPELL: CardDef = CardDef {
+    name: "Test White Cantrip",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::SORCERY,
+        cost: ManaCost::new(0, [1, 0, 0, 0, 0, 0]),
+        abilities: &[Ability::spell().effect(&DRAW_ONE_EFFECT)],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+static WASTES: CardDef = CardDef {
+    name: "Test Wastes",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::LAND,
+        abilities: &[Ability::tap_for_mana(crate::card::ManaSet {
+            colors: 1 << ManaColor::Colorless.index(),
+            amount: 1,
+        })],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+#[test]
+fn spend_as_any_color_covers_matching_activations_only() {
+    use beryl_card::ObjectAbility;
+
+    static CARDS: CardTable = CardTable::new(&[
+        &COLOR_CAULDRON,
+        &COLORED_CREATURE,
+        &COLORED_ARTIFACT,
+        &WHITE_SPELL,
+        &ISLAND,
+        &WASTES,
+    ]);
+    let deck: &[(u8, &str)] = &[
+        (4, "Test Color Cauldron"),
+        (4, "Test White Activator"),
+        (4, "Test White Relic"),
+        (4, "Test White Cantrip"),
+        (4, "Test Wastes"),
+        (20, "Test Island"),
+    ];
+    let t = crate::GameTable::new(
+        beryl_kernel::format::Format::CONSTRUCTED,
+        &CARDS,
+        [deck, deck],
+    )
+    .unwrap();
+    let mut s = crate::State::new(&t, 7, Profile::EXACT).unwrap();
+    super::begin(&t, &mut s);
+    let me = s.turn().starting_player();
+    let them = s.opponents_of(me).in_seat_order().next().unwrap();
+
+    let cauldron = super::chosen::to_hand(&t, &mut s, me, "Test Color Cauldron");
+    let creature = super::chosen::to_hand(&t, &mut s, me, "Test White Activator");
+    let relic = super::chosen::to_hand(&t, &mut s, me, "Test White Relic");
+    let spell = super::chosen::to_hand(&t, &mut s, me, "Test White Cantrip");
+    let island = super::chosen::to_hand(&t, &mut s, me, "Test Island");
+    let opp_creature = super::chosen::to_hand(&t, &mut s, them, "Test White Activator");
+    let opp_island = super::chosen::to_hand(&t, &mut s, them, "Test Island");
+
+    for slot in [cauldron, creature, relic, island, opp_creature, opp_island] {
+        s.board().place(slot, Zone::Battlefield).unwrap();
+        s.board().set_sick(slot, false);
+    }
+    s.board().set_step(TurnStep::PrecombatMain);
+    s.board().set_priority(me);
+    crate::continuous::layers::refresh(&mut s, &t, &mut Sink::off()).unwrap();
+
+    let mut x = crate::Scratch::default();
+    let options = |s: &mut crate::State, x: &mut crate::Scratch| -> Vec<Opt> {
+        let crate::Step::Decide(d) = crate::next(s, &t, x, &mut crate::Replay) else {
+            panic!("expected priority decision");
+        };
+        (0..d.len())
+            .filter_map(|i| d.candidates.option(crate::Choice(i as u16)))
+            .collect()
+    };
+    let opts = options(&mut s, &mut x);
+    let act = |slot, i| Opt::Activate {
+        slot,
+        ability: ObjectAbility::Own(beryl_card::AbilityIx::new(i)),
+    };
+    let act_white = act(creature, 0);
+    let act_hybrid = act(creature, 1);
+    let act_colorless = act(creature, 2);
+
+    assert!(opts.contains(&act_white), "{{W}} payable with an Island");
+    assert!(opts.contains(&act_hybrid), "{{W/B}} payable with an Island");
+    assert!(!opts.contains(&act_colorless), "{{C}} needs colorless mana");
+    assert!(!opts.contains(&act(relic, 0)), "noncreature not covered");
+    assert!(!opts.contains(&cast(spell)), "spell is not covered");
+
+    // Activating the creature's {W} ability taps the Island and puts it on the stack.
+    let pick = opts.iter().position(|o| *o == act_white).unwrap();
+    let mut paid = s;
+    crate::apply(
+        &mut paid,
+        &t,
+        &mut x,
+        &mut crate::Replay,
+        crate::Choice(pick as u16),
+    );
+    assert!(paid.object(island).is_tapped());
+    assert_eq!(paid.stack().len(), 1);
+
+    // With colorless mana (Wastes), the creature's {C} ability is payable.
+    let mut with_wastes = s;
+    let wastes = super::chosen::to_hand(&t, &mut with_wastes, me, "Test Wastes");
+    with_wastes
+        .board()
+        .place(wastes, Zone::Battlefield)
+        .unwrap();
+    crate::continuous::layers::refresh(&mut with_wastes, &t, &mut Sink::off()).unwrap();
+    assert!(options(&mut with_wastes, &mut x).contains(&act_colorless));
+
+    // The opponent's creature gets nothing from `me`'s Cauldron.
+    s.board().set_priority(them);
+    crate::reference::check_references(&s, &t).unwrap();
+    if let crate::Step::Decide(d_opp) = crate::next(&mut s, &t, &mut x, &mut crate::Replay)
+        && d_opp.player == them
+    {
+        let opp_opts: Vec<_> = (0..d_opp.len())
+            .filter_map(|i| d_opp.candidates.option(crate::Choice(i as u16)))
+            .collect();
+        assert!(!opp_opts.contains(&act(opp_creature, 0)));
+    }
+}

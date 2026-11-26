@@ -101,6 +101,12 @@ impl Ctx {
             Governed::SpellCosts { spells, change } => {
                 return self.spell_cost_change(spells, change, rule.players, &who);
             }
+            Governed::SpendAsAnyColor(filter) => {
+                let permanents = self.noun(filter, Kind::Permanent).plural(Kind::Permanent);
+                return format!(
+                    "{who} may spend mana as though it were mana of any color to activate abilities of {permanents}"
+                );
+            }
         };
         match (rule.when, rule.what) {
             (When::Never, _) => format!("{who} can't {what}"),

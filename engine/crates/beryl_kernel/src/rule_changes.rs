@@ -190,6 +190,9 @@ pub enum RuleKind {
     SkipStep,
     /// The permanent with this ability stays tapped during its controller's untap step.
     StaysTapped,
+    /// The affected player may spend mana as though it were mana of any color to activate
+    /// abilities of permanents accepted by the rule's filter.
+    SpendAsAnyColor,
 }
 
 impl RuleKind {
@@ -197,7 +200,7 @@ impl RuleKind {
         self as usize
     }
 
-    const COUNT: usize = Self::StaysTapped as usize + 1;
+    const COUNT: usize = Self::SpendAsAnyColor as usize + 1;
 
     /// The kind of change `rule` is, or the part of it no code reads.
     pub fn of(rule: &RuleChange) -> Result<RuleKind, Unchecked> {
@@ -290,6 +293,9 @@ impl RuleKind {
                 Governed::TakeStep(TurnStep::Untap | TurnStep::Upkeep | TurnStep::Draw),
                 When::Never,
             ) => for_players(RuleKind::SkipStep),
+            (Governed::SpendAsAnyColor(_), When::AsUsual) => {
+                for_controller(RuleKind::SpendAsAnyColor)
+            }
             // A change to players said with a time, other permanents' loyalty abilities, attacks
             // or blocks, a restriction to the
             // timing the rules have already, a change to when a creature attacks or blocks, mana
@@ -307,7 +313,8 @@ impl RuleKind {
                 | Governed::SpellCosts { .. }
                 | Governed::Player(_)
                 | Governed::PreventDamage
-                | Governed::TakeStep(_),
+                | Governed::TakeStep(_)
+                | Governed::SpendAsAnyColor(_),
                 _,
             ) => Err(Unchecked::Rule),
         }
@@ -326,6 +333,7 @@ impl RuleKind {
                 | RuleKind::Player
                 | RuleKind::CantPreventDamage
                 | RuleKind::SkipStep
+                | RuleKind::SpendAsAnyColor
         )
     }
 
@@ -743,5 +751,28 @@ mod tests {
             ..rule
         };
         assert_eq!(RuleKind::of(&cast_as_usual), Err(Unchecked::Rule));
+    }
+
+    /// Spending mana as any color for activations applies to its maker's controller as a player
+    /// rule with `When::AsUsual`, and rejects other players or timing changes.
+    #[test]
+    fn spend_as_any_color_is_a_player_rule_for_you_as_usual() {
+        let rule = RuleChange {
+            players: Players::You,
+            what: Governed::SpendAsAnyColor(Filter::Types(beryl_card::Types::CREATURE)),
+            when: When::AsUsual,
+        };
+        assert_eq!(RuleKind::of(&rule), Ok(RuleKind::SpendAsAnyColor));
+        assert!(RuleKind::SpendAsAnyColor.of_players());
+        let opponent = RuleChange {
+            players: Players::EachOpponent,
+            ..rule
+        };
+        assert_eq!(RuleKind::of(&opponent), Err(Unchecked::Players));
+        let never = RuleChange {
+            when: When::Never,
+            ..rule
+        };
+        assert_eq!(RuleKind::of(&never), Err(Unchecked::Rule));
     }
 }

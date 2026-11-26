@@ -309,6 +309,22 @@ fn a_card_in_a_graveyard_calls_itself_this_card_and_a_creature_can_be_unable_to_
     );
 }
 
+#[test]
+fn spend_as_any_color_renders_as_a_rule_sentence() {
+    static CREATURES_YOU_CONTROL: &[Filter] =
+        &[Filter::Types(Types::CREATURE), Filter::Whose(&Players::You)];
+    static RULE: RuleChange = RuleChange {
+        players: Players::You,
+        what: Governed::SpendAsAnyColor(Filter::All(CREATURES_YOU_CONTROL)),
+        when: When::AsUsual,
+    };
+    assert_eq!(
+        render_ability(&Ability::rule_change(&RULE)),
+        "You may spend mana as though it were mana of any color to activate abilities of \
+         creatures you control."
+    );
+}
+
 /// A counter total across a set of permanents, as in Chronicler of Heroes' "When this creature
 /// enters, if you control a creature with a +1/+1 counter on it, draw a card." It must not
 /// read as a counter on every creature, while a single permanent still says "on".

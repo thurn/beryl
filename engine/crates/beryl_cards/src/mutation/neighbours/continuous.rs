@@ -468,6 +468,10 @@ fn governed(what: Governed) -> Neighbours<Governed> {
         }
         G::PreventDamage => Vec::new(),
         G::Player(changes) => player_rule_neighbours(changes),
+        G::SpendAsAnyColor(filter) => filters(filter)
+            .into_iter()
+            .map(|(name, f)| (name, G::SpendAsAnyColor(f)))
+            .collect(),
     }
 }
 

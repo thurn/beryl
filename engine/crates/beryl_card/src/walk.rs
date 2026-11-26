@@ -218,7 +218,9 @@ impl Ability {
         if let Some(rule) = self.rule() {
             rule.players.walk(visit);
             match &rule.what {
-                Governed::CastSpells(filter) | Governed::SpellCosts { spells: filter, .. } => {
+                Governed::CastSpells(filter)
+                | Governed::SpellCosts { spells: filter, .. }
+                | Governed::SpendAsAnyColor(filter) => {
                     filter.walk(visit);
                 }
                 Governed::ActivateLoyaltyAbilities(objects)

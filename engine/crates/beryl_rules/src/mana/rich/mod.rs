@@ -352,9 +352,13 @@ fn eval_activation<L: Layout>(
     if a.cost().does(CostAction::Tap) {
         super::changes::append_extra_mana(&mut terms, &mut count, extra_mana)?;
     }
+    let mut price = a.cost().mana;
+    if crate::continuous::rule_change::spends_as_any_color(s, t, s.controller(slot), slot) {
+        price = price.as_any_color();
+    }
     Ok(Some(RichActivation {
         ability: Some(obj_ability),
-        price: a.cost().mana,
+        price,
         terms,
         term_count: u8::try_from(count).expect("fits u8"),
         consumed: sacrificed,

@@ -59,30 +59,31 @@ pub(super) fn later_costs<L: Layout>(
             }
         }
     }
-    for (a, taps) in activations(s, t, player) {
-        add(Later {
-            cost: a.cost().mana.with_x(0),
-            taps,
-        });
+    for (slot, a, taps) in activations(s, t, player) {
+        let mut cost = a.cost().mana.with_x(0);
+        if crate::continuous::rule_change::spends_as_any_color(s, t, player, slot) {
+            cost = cost.as_any_color();
+        }
+        add(Later { cost, taps });
     }
     later
 }
 
 /// The activated abilities other than loyalty abilities of the permanents `player`
-/// controls, each with the permanent its {T} cost taps, if it has one. An ability with {T}
-/// in its cost is listed only where [`can_tap`] says the player may tap its permanent now,
-/// and one without it is listed whether its permanent is tapped or not.
+/// controls, each with its permanent and the permanent its {T} cost taps, if it has one. An
+/// ability with {T} in its cost is listed only where [`can_tap`] says the player may tap its
+/// permanent now, and one without it is listed whether its permanent is tapped or not.
 fn activations<'s, L: Layout>(
     s: &'s State<L>,
     t: &'s GameTable,
     player: Seat,
-) -> impl Iterator<Item = (&'static Ability, Option<L::Slot>)> + 's {
+) -> impl Iterator<Item = (L::Slot, &'static Ability, Option<L::Slot>)> + 's {
     controlled(s, player).flat_map(move |(slot, d)| {
         let tappable = can_tap(s, player, slot, d);
         s.abilities(t, slot).filter_map(move |(_, a)| {
             let taps = a.cost().does(CostAction::Tap);
             (a.kind() == AbilityKind::Activated && !a.is_loyalty() && (tappable || !taps))
-                .then_some((a, taps.then_some(slot)))
+                .then_some((slot, a, taps.then_some(slot)))
         })
     })
 }
@@ -292,8 +293,12 @@ fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
             }
         }
     }
-    for (a, taps) in activations(s, t, player).filter(|&(a, _)| activatable(a)) {
-        ahead.add(a.cost().mana, taps);
+    for (slot, a, taps) in activations(s, t, player).filter(|&(_, a, _)| activatable(a)) {
+        let mut cost = a.cost().mana;
+        if crate::continuous::rule_change::spends_as_any_color(s, t, player, slot) {
+            cost = cost.as_any_color();
+        }
+        ahead.add(cost, taps);
     }
     ahead
 }

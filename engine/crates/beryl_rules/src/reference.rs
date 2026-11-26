@@ -192,7 +192,8 @@ fn check_payments<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Resul
             }
         }
     }
-    check_spell_payments(s, t, player, &funds)
+    check_spell_payments(s, t, player, &funds)?;
+    check_ability_payments(s, t, player, &funds, units.as_slice())
 }
 
 /// Whether `player` can pay `cost` for no spell, as the cached funds and the solver's plans
@@ -334,6 +335,112 @@ fn check_spell_payments<L: Layout>(
         }
     }
     Ok(())
+}
+
+/// Whether `player` can pay the mana cost of each activated ability on a permanent they control,
+/// as the prefilter, the cached funds and the solver say, against [`reference_pays`] when a
+/// spend-as-any-color rule covers the permanent. Only in a game whose cards have such a rule: in
+/// any other, every activation's cost is unchanged and [`check_payments`] checks it.
+fn check_ability_payments<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+    funds: &Funds<L>,
+    units: &[u8],
+) -> Result<(), Violation> {
+    if t.rules_of(crate::state::RuleKind::SpendAsAnyColor)
+        .is_empty()
+    {
+        return Ok(());
+    }
+    let at = Some(At::Player(player));
+    let none = Bitboard::EMPTY;
+    for &slot in s.battlefield() {
+        if s.controller(slot) != player {
+            continue;
+        }
+        let ref_any = reference_spends_as_any_color(s, t, player, slot);
+        let eng_any = crate::continuous::rule_change::spends_as_any_color(s, t, player, slot);
+        check(
+            eng_any == ref_any,
+            "spend-as-any-color disagrees with the reference",
+            at,
+        )?;
+        for (_, a) in s.abilities(t, slot) {
+            if a.kind() != AbilityKind::Activated {
+                continue;
+            }
+            let base = ManaCost {
+                x: 0,
+                ..a.cost().mana
+            };
+            let cost = if ref_any { base.as_any_color() } else { base };
+            let expected = reference_pays(units, cost);
+            let Ok(prefilter) = mana::payable(s, t, player, cost, none, Paying::NOTHING) else {
+                continue;
+            };
+            check(
+                prefilter == expected,
+                "the payability prefilter disagrees with the reference for an ability",
+                at,
+            )?;
+            check(
+                funds.pays(s, t, cost, none) == expected,
+                "the cached funds disagree with the reference for an ability",
+                at,
+            )?;
+            for greedy in [false, true] {
+                let plans = mana::plans(
+                    s,
+                    t,
+                    &mut Sink::default(),
+                    player,
+                    cost,
+                    none,
+                    greedy,
+                    Paying::NOTHING,
+                );
+                if let Ok(plans) = plans {
+                    check(
+                        plans.is_empty() != expected,
+                        "the payment solver disagrees with the reference for an ability",
+                        at,
+                    )?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Whether any permanent on the battlefield has a static ability letting `player` spend mana
+/// as though it were mana of any color to activate abilities of `source`, read directly from
+/// the permanents' abilities without [`State::rules_for`].
+fn reference_spends_as_any_color<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+    source: L::Slot,
+) -> bool {
+    use crate::filter::Evaluate;
+    s.battlefield().iter().any(|&maker| {
+        let controller = s.controller(maker);
+        let words = s.words_of(maker);
+        s.abilities(t, maker).any(|(_, a)| {
+            if a.kind() != AbilityKind::Static {
+                return false;
+            }
+            let Some(rule) = a.rule() else {
+                return false;
+            };
+            let beryl_card::Governed::SpendAsAnyColor(filter) = rule.what else {
+                return false;
+            };
+            rule.when == beryl_card::When::AsUsual
+                && crate::filter::is_for(&rule.players, player, controller)
+                && filter.matches(s, t, source, controller, &words)
+        })
+    })
 }
 
 /// The most units of mana the reference matches: the debug builds of `next` and `apply` check
