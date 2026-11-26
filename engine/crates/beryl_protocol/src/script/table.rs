@@ -208,10 +208,17 @@ impl Table {
 
     /// [`Table::piles`], to change.
     pub fn piles_mut(&mut self, player: Side) -> &mut Piles {
-        if self.shared.is_some() {
-            return self.shared.as_mut().expect("checked above");
+        let Table {
+            shared,
+            you,
+            opponent,
+            ..
+        } = self;
+        match (shared, player) {
+            (Some(shared), _) => shared,
+            (None, Side::You) => you,
+            (None, Side::Opponent) => opponent,
         }
-        self.player_mut(player)
     }
 
     /// `player`'s own numbers (life, mana, counters), and their own piles in a game with no

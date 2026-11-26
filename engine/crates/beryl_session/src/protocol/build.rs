@@ -48,6 +48,36 @@ pub enum Moment<'a, L: Layout = Small> {
     },
 }
 
+/// The status of the view: the viewer's decision, or what the game is doing instead.
+fn status_view<L: Layout>(
+    t: &GameTable,
+    obs: Observation<'_, L>,
+    moment: Moment<'_, L>,
+    stops: StopsSetting,
+) -> Status {
+    match moment {
+        Moment::Deciding(id, d, resolving) => {
+            debug_assert_eq!(
+                d.decider,
+                obs.viewer(),
+                "a view shows only its viewer's decision"
+            );
+            Status::Deciding {
+                decision: decision_view(t, obs, id, d, resolving, stops),
+            }
+        }
+        Moment::Halted(id) => Status::Deciding {
+            decision: halt_view(t, obs, id, stops),
+        },
+        Moment::Thinking { .. } => Status::Thinking,
+        Moment::Playing => Status::Playing,
+        Moment::Stopped => Status::Stopped,
+        Moment::Over { .. } => Status::Over {
+            outcome: outcome_view(t, obs, moment),
+        },
+    }
+}
+
 /// Builds the viewer's view of `obs`'s position (the position the open decision is made in,
 /// `beryl_engine::view`) at `moment`, with `events`, the engine's events since the previous view.
 /// Everything in it, events included, comes through `obs`.
@@ -118,23 +148,7 @@ pub fn player_view<L: Layout>(
         stack.push(stack_item(t, obs, entry));
     }
     finish_objects(t, obs, &mut objects);
-    let status = match moment {
-        Moment::Deciding(id, d, resolving) => {
-            debug_assert_eq!(d.decider, viewer, "a view shows only its viewer's decision");
-            Status::Deciding {
-                decision: decision_view(t, obs, id, d, resolving, stops),
-            }
-        }
-        Moment::Halted(id) => Status::Deciding {
-            decision: halt_view(t, obs, id, stops),
-        },
-        Moment::Thinking { .. } => Status::Thinking,
-        Moment::Playing => Status::Playing,
-        Moment::Stopped => Status::Stopped,
-        Moment::Over { .. } => Status::Over {
-            outcome: outcome_view(t, obs, moment),
-        },
-    };
+    let status = status_view(t, obs, moment, stops);
     let handling = match moment {
         Moment::Thinking {
             decision: Some(d), ..
@@ -144,8 +158,7 @@ pub fn player_view<L: Layout>(
     PlayerView {
         status,
         handling,
-        // No game is dealt with shared piles yet.
-        shared: None,
+        shared: None, // No game is dealt with shared piles yet.
         pending_attackers: pending_attackers(moment),
         turn: TurnView {
             number: turn.number(),
