@@ -31,7 +31,7 @@ use beryl_protocol::ipc::{
 };
 use beryl_session::ai::AgentMove;
 use beryl_session::card_records::{CardRecords, CardRecordsRequest, card_records};
-use beryl_session::{Seat, Sessions, StartGame, StopsSetting};
+use beryl_session::{Sessions, StartGame};
 use beryl_shell::Dirs;
 use beryl_table_session::TableEvent;
 use beryl_table_session::connections::TableConnections;
@@ -241,37 +241,58 @@ impl Live {
         self
     }
 
-    /// The same sessions, which start a fresh game of the web app's decks between `opponent`
-    /// and `agent`, which answers for the viewer, dealt from `seed`, instead of resuming one.
-    #[must_use]
-    pub fn played_by(mut self, agent: &str, opponent: &str, seed: u64) -> Self {
-        let deck = beryl_cards::decks::default_deck();
-        let start = StartGame {
-            seed,
-            format: beryl_session::Format::CONSTRUCTED,
-            decks: [deck.clone(), deck],
-            human: Seat::P0,
-            opponent: opponent.to_owned(),
-            stops: StopsSetting::SMART,
-            sideboards: Default::default(),
-        };
+    /// The same sessions, which start a fresh game of `deck` (a key in `beryl_protocol::DECKS`)
+    /// between `opponent` and `agent`, which answers for the viewer, dealt from `seed`, instead
+    /// of resuming one.
+    ///
+    /// # Errors
+    ///
+    /// When `deck` is not a known key, naming the valid keys.
+    pub fn played_by(
+        mut self,
+        agent: &str,
+        opponent: &str,
+        deck: &str,
+        seed: u64,
+    ) -> Result<Self, String> {
+        let start =
+            beryl_session::start_game(deck, opponent, seed).map_err(|error| error.to_string())?;
         self.played_by = Some((start, agent.to_owned()));
-        self
+        Ok(self)
     }
 
-    /// The same sessions, which start a fresh game against the searching agent `--agent`
-    /// plays against (`options::OPPONENT`), with the agent `name` answering the person's
+    /// The same sessions, which start a fresh game of `deck` (default `options::DECK`) against
+    /// `opponent` (default `options::OPPONENT`), with the agent `name` answering the person's
     /// decisions in their place: for a phone's unattended runs, which measure drawing while
-    /// the AI searches. (The expert, which this once played, plays by rules and never searches,
-    /// so a game between it and a stand-in ended in a tenth of a second.) The seed is the
-    /// clock's, as `Sessions::start` deals one.
-    #[must_use]
-    pub fn with_stand_in(self, name: &str) -> Self {
-        let seed = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |since| since.as_nanos() as u64);
-        self.played_by(name, crate::options::OPPONENT, seed)
+    /// the AI searches. The seed is `seed`, or the clock's when `None`, as `Sessions::start`
+    /// deals one.
+    ///
+    /// # Errors
+    ///
+    /// When `deck` is not a known key, naming the valid keys.
+    pub fn with_stand_in(
+        self,
+        name: &str,
+        deck: Option<&str>,
+        opponent: Option<&str>,
+        seed: Option<u64>,
+    ) -> Result<Self, String> {
+        let seed = seed.unwrap_or_else(clock_seed);
+        self.played_by(
+            name,
+            opponent.unwrap_or(crate::options::OPPONENT),
+            deck.unwrap_or(crate::options::DECK),
+            seed,
+        )
     }
+}
+
+/// A seed from the system clock, as `Sessions::start` deals one.
+#[must_use]
+pub(crate) fn clock_seed() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |since| since.as_nanos() as u64)
 }
 
 impl Live {

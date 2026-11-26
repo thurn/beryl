@@ -66,6 +66,7 @@ fn what_the_writer_writes_the_reader_reads() {
     log.frame(&ticked(100, Some(17), true), &[], false);
     log.frame(&ticked(200, None, true), &[], false);
     log.unbuilt("tap");
+    log.result("You won (life)".to_owned(), 11);
     let path = log.path().to_owned();
     let summary = log.finish().expect("the log is finished");
 
@@ -74,6 +75,8 @@ fn what_the_writer_writes_the_reader_reads() {
     assert!(read.timing_windows.is_empty());
     assert!(read.pacing_changes.is_empty());
     assert_eq!(read.summary.as_ref(), Some(&summary));
+    assert_eq!(summary.result.as_deref(), Some("You won (life)"));
+    assert_eq!(summary.turns, Some(11));
     assert_eq!(summary.frames, 7);
     assert_eq!(summary.skipped, 1);
     assert_eq!(

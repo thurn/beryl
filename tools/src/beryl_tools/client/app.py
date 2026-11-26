@@ -5,7 +5,7 @@ window, and `just client frames` prints a frame log's summary and its worst fram
 The app is built with cargo's `test` profile, as the workspace's tests are: optimized enough to
 measure frames, it shares the dependencies `just client cargo-test` built, and the `tools` feature
 gives it `--fixture`, `--pause-at`, `--drive`, `--watch`, `--load`, `--slow-gpu`, `--fixed-hz`, `--offer`, `--tier`,
-`--probe` and `--agent` with its `--opponent`, `--seed` and `--search-class`, which a release
+`--probe` and `--agent` with its `--opponent`, `--deck`, `--seed` and `--search-class`, which a release
 build leaves off.
 """
 
@@ -236,6 +236,7 @@ def app_arguments(parser: argparse.ArgumentParser) -> None:
         help="start a new game this agent plays for the viewer; the run ends when it is over",
     )
     parser.add_argument("--opponent", help="--agent's opponent (mcts-hidden)")
+    parser.add_argument("--deck", help="--agent's deck (wu-control)")
     parser.add_argument("--seed", help="--agent's game's seed")
     parser.add_argument(
         "--search-class",
@@ -290,6 +291,7 @@ def run_app(args: argparse.Namespace) -> int:
         ("--fixed-hz", args.fixed_hz),
         ("--agent", args.agent),
         ("--opponent", args.opponent),
+        ("--deck", args.deck),
         ("--seed", args.seed),
         ("--search-class", args.search_class),
         ("--tier", args.tier),

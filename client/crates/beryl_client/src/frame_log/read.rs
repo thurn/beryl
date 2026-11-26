@@ -197,6 +197,12 @@ impl Summary {
                 self.unplaced
             ));
         }
+        if let Some(result) = &self.result {
+            match self.turns {
+                Some(turns) => lines.push(format!("game result: {result} in {turns} turns")),
+                None => lines.push(format!("game result: {result}")),
+            }
+        }
         lines.join("\n")
     }
 }

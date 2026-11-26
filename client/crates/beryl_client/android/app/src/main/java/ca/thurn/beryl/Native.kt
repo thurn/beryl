@@ -11,13 +11,17 @@ object Native {
     /**
      * Starts the app replaying `fixture` from `dataDir`, or a live game when it is null; 0
      * when the recording cannot be read. `standIn` names an agent that plays for the person
-     * (debug builds only), `displayHz` is the display's highest rate, and `waker.wake()` is
+     * (debug builds only), with optional `standInDeck`, `standInOpponent` and `standInSeed`
+     * (0 for the clock). `displayHz` is the display's highest rate, and `waker.wake()` is
      * called from any thread when the app wants a frame soon.
      */
     external fun create(
         fixture: String?,
         dataDir: String,
         standIn: String?,
+        standInDeck: String?,
+        standInOpponent: String?,
+        standInSeed: Long,
         displayHz: Float,
         waker: Any,
     ): Long

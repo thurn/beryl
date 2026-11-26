@@ -25,7 +25,7 @@ use kit_ui::input::Lifecycle;
 
 pub use types::*;
 
-use crate::app::{surface_fixture_feed, surface_live_feed};
+use crate::app::{StandIn, surface_fixture_feed, surface_live_feed};
 use crate::fixture::Fixture;
 
 /// The app's error log, `beryl.log` in its data folder: an Android app's standard error goes
@@ -114,7 +114,7 @@ struct Start {
     fixture: Option<String>,
     data_dir: PathBuf,
     /// The agent that answers the person's decisions, in a debug build.
-    stand_in: Option<String>,
+    stand_in: Option<StandIn>,
     display_hz: f32,
     wake: Option<Wakeup>,
 }
@@ -154,7 +154,10 @@ impl BerylClient {
         log_errors_in(&data_dir);
         // An agent stands in for the person only in a debug build.
         #[cfg(not(debug_assertions))]
-        let stand_in: Option<String> = stand_in.and(None);
+        let stand_in: Option<StandIn> = stand_in.and(None);
+        if let Some(deck) = stand_in.as_ref().and_then(|s| s.deck.as_deref()) {
+            crate::options::deck(deck)?;
+        }
         let mut client = Client::new(crate::data::embedded()?, Config::LARGEST);
         client.handle(app_client::Input::Stories(app_client::stories::embedded()));
         let surface_host = match fixture {
@@ -237,13 +240,15 @@ impl BerylClient {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn beryl_client_new(config: *const BerylConfig) -> *mut BerylClient {
     // SAFETY: the host passes a config and strings that live for the call, as documented.
-    let (config, fixture, data_dir, stand_in) = unsafe {
+    let (config, fixture, data_dir, stand_in, stand_in_deck, stand_in_opponent) = unsafe {
         let config = &*config;
         (
             config,
             optional(config.fixture),
             optional(config.data_dir).unwrap_or_default(),
             optional(config.stand_in),
+            optional(config.stand_in_deck),
+            optional(config.stand_in_opponent),
         )
     };
     let wake = config.wake.map(|wake| {
@@ -252,6 +257,12 @@ pub unsafe extern "C" fn beryl_client_new(config: *const BerylConfig) -> *mut Be
             context: config.context,
         };
         Arc::new(move || host.call()) as Wakeup
+    });
+    let stand_in = stand_in.map(|agent| StandIn {
+        agent,
+        deck: stand_in_deck,
+        opponent: stand_in_opponent,
+        seed: (config.stand_in_seed != 0).then_some(config.stand_in_seed),
     });
     new(Start {
         fixture,

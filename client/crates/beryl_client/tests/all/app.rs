@@ -247,8 +247,17 @@ fn a_release_build_has_no_fixture_option() {
     .expect("a debug build plays a game for the viewer");
     assert_eq!(played.agent.as_deref(), Some("expert"));
     assert_eq!(played.opponent, beryl_client::options::OPPONENT);
+    assert_eq!(played.deck, beryl_client::options::DECK);
     assert_eq!(played.seed, 7);
     assert_eq!(played.search_class, beryl_host::Class::Default);
+    let fish = agent(&["--agent", "expert", "--deck", "forgetful-fish"], true)
+        .expect("a debug build plays forgetful-fish");
+    assert_eq!(fish.deck, "forgetful-fish");
+    assert!(agent(&["--deck", "forgetful-fish"], false).is_err());
+    assert!(
+        agent(&["--deck", "unknown-deck"], true)
+            .is_err_and(|error| error.contains("wu-control") && error.contains("forgetful-fish"))
+    );
     let plain = agent(&["--agent", "expert"], true).expect("a game for the viewer");
     assert_eq!(
         plain.search_class,

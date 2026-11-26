@@ -26,12 +26,25 @@ use crate::{
     StartRequest, bugs, journal,
 };
 
-/// The game the UI's request starts: the deck it names against the agent it names, the human
-/// in seat 0 under the smart stops. A constructed deck is the mirror; a shared deck is the one
-/// library both players draw from (`decks[0]`, with `decks[1]` empty).
-fn requested_game(request: &StartRequest) -> Result<StartGame, SessionError> {
-    let named = decks::named(&request.deck).ok_or_else(|| SessionError::Deck {
-        reason: format!("no deck is named {:?}", request.deck),
+/// Builds the [`StartGame`] for `deck` (a key in `beryl_protocol::DECKS`) against `opponent`,
+/// dealt from `seed`. A constructed deck is the mirror; a shared deck is the one library both
+/// players draw from (`decks[0]`, with `decks[1]` empty).
+///
+/// # Errors
+///
+/// When `deck` is not a known key, naming the valid keys.
+pub fn start_game(deck: &str, opponent: &str, seed: u64) -> Result<StartGame, SessionError> {
+    let named = decks::named(deck).ok_or_else(|| {
+        let keys: Vec<&str> = beryl_protocol::DECKS
+            .iter()
+            .map(|choice| choice.key)
+            .collect();
+        SessionError::Deck {
+            reason: format!(
+                "no deck is named {deck:?}; the decks are {}",
+                keys.join(", ")
+            ),
+        }
     })?;
     let list: Vec<(u8, String)> = named
         .list
@@ -44,14 +57,24 @@ fn requested_game(request: &StartRequest) -> Result<StartGame, SessionError> {
         (Format::CONSTRUCTED, [list.clone(), list])
     };
     Ok(StartGame {
-        seed: request.seed.map_or_else(clock_seed, u64::from),
+        seed,
         format,
         decks,
         human: Seat::P0,
-        opponent: request.agent.clone(),
+        opponent: opponent.to_owned(),
         stops: StopsSetting::SMART,
         sideboards: Default::default(),
     })
+}
+
+/// The game the UI's request starts: the deck it names against the agent it names, the human
+/// in seat 0 under the smart stops.
+fn requested_game(request: &StartRequest) -> Result<StartGame, SessionError> {
+    start_game(
+        &request.deck,
+        &request.agent,
+        request.seed.map_or_else(clock_seed, u64::from),
+    )
 }
 
 type Emit = dyn Fn(GameUpdate) + Send + Sync;

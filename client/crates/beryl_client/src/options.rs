@@ -82,6 +82,8 @@ pub struct Options {
     pub agent: Option<String>,
     /// With `agent`, the agent in the other seat.
     pub opponent: String,
+    /// With `agent`, the deck's key (`beryl_protocol::DECKS`).
+    pub deck: String,
     /// With `agent`, the game's seed.
     pub seed: u64,
     /// The scheduling class the session thread, and through it the AI's search threads, run
@@ -99,6 +101,8 @@ pub struct Options {
 /// The agent across the table in a game `--agent` starts: the searching agent the prototype
 /// measured, with the budget the web app gives it.
 pub const OPPONENT: &str = "mcts-hidden";
+/// The deck of a game `--agent` starts, unless `--deck` gives another.
+pub const DECK: &str = beryl_protocol::DECKS[0].key;
 /// The seed of a game `--agent` starts, unless `--seed` gives another: the prototype's.
 pub const SEED: u64 = 20_261_114;
 
@@ -106,7 +110,7 @@ pub const SEED: u64 = 20_261_114;
 pub const WINDOWLESS_SCALE: u8 = if cfg!(target_os = "macos") { 2 } else { 1 };
 
 /// Whether this build has the options only a debug build has (`--fixture`, `--replay`,
-/// `--pause-at`, `--drive`, `--watch`, `--load`, `--slow-gpu`, `--fixed-hz`, `--agent`, `--opponent`, `--seed`,
+/// `--pause-at`, `--drive`, `--watch`, `--load`, `--slow-gpu`, `--fixed-hz`, `--agent`, `--opponent`, `--deck`, `--seed`,
 /// `--search-class`, `--offer`, `--tier` and `--probe`).
 pub const TOOLS: bool = cfg!(feature = "tools");
 
@@ -133,6 +137,7 @@ impl Options {
             write_fixture: None,
             agent: None,
             opponent: OPPONENT.to_owned(),
+            deck: DECK.to_owned(),
             seed: SEED,
             search_class: Class::Default,
             offer: Vec::new(),
@@ -164,6 +169,7 @@ impl Options {
                 "--write-fixture" if tools => options.write_fixture = Some(value()?),
                 "--agent" if tools => options.agent = Some(value()?),
                 "--opponent" if tools => options.opponent = value()?,
+                "--deck" if tools => options.deck = deck(&value()?)?,
                 "--seed" if tools => options.seed = seed(&value()?)?,
                 "--search-class" if tools => {
                     let word = value()?;
@@ -255,6 +261,8 @@ pub fn usage(tools: bool) -> String {
         lines.push(
             "  --opponent <name>                                --agent's opponent (mcts-hidden)",
         );
+        lines
+            .push("  --deck <key>                                     --agent's deck (wu-control)");
         lines.push("  --seed <number>                                  --agent's game's seed");
         lines.push(
             "  --search-class <class>                           the AI's threads' class (default)",
@@ -309,6 +317,18 @@ fn scale(text: &str) -> Result<u8, String> {
         .ok()
         .filter(|scale| (1..=4).contains(scale))
         .ok_or_else(|| format!("--scale {text}: a scale is a whole number from 1 to 4"))
+}
+
+/// A deck key (`--deck`): one of `beryl_protocol::DECKS`.
+pub(crate) fn deck(key: &str) -> Result<String, String> {
+    if beryl_protocol::DECKS.iter().any(|choice| choice.key == key) {
+        return Ok(key.to_owned());
+    }
+    let keys: Vec<&str> = beryl_protocol::DECKS
+        .iter()
+        .map(|choice| choice.key)
+        .collect();
+    Err(format!("--deck {key}: a deck is {}", keys.join(", ")))
 }
 
 /// A game's seed (`--seed`).

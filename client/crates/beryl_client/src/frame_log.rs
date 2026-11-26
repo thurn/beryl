@@ -81,8 +81,9 @@ pub struct Run {
     /// How long each finished frame was held back, in milliseconds, if it was (`--slow-gpu`).
     #[serde(default)]
     pub slow_gpu_ms: Option<f64>,
-    /// The game `--agent` started, if it did: who plays it, its seed and the AI's scheduling
-    /// class (`expert against mcts-hidden, seed 20261114, search class default`).
+    /// The game `--agent` asked for, if it did: who plays it, its deck, its seed and the AI's
+    /// scheduling class
+    /// (`expert against mcts-hidden, deck wu-control, seed 20261114, search class default`).
     #[serde(default)]
     pub game: Option<String>,
 }
@@ -203,6 +204,12 @@ pub struct Summary {
     /// `data/audio/manifest.json`. A run with no window sends them to a silent output.
     #[serde(default)]
     pub sounds: BTreeMap<String, u32>,
+    /// How a live game ended, when one did.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub result: Option<String>,
+    /// The turn number (`TurnView::number`) when the live game ended.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub turns: Option<u32>,
 }
 
 /// The frames drawn while the AI searched: whether its search threads delayed drawing
@@ -692,6 +699,12 @@ impl FrameLog {
     /// Notes how many script steps the client's table has failed to take so far.
     pub fn unplaced(&mut self, steps: usize) {
         self.summary.unplaced = steps;
+    }
+
+    /// Notes how a live game ended and on which turn.
+    pub fn result(&mut self, result: String, turns: u32) {
+        self.summary.result = Some(result);
+        self.summary.turns = Some(turns);
     }
 
     /// Writes a summary while keeping the log open for input after the replay ends.

@@ -66,12 +66,19 @@ class MainActivity : Activity(), SurfaceHolder.Callback, Choreographer.FrameCall
         super.onCreate(savedInstanceState)
         val fixture = intent.getStringExtra("fixture")
         val standIn = if (BuildConfig.DEBUG) intent.getStringExtra("standIn") else null
+        val standInDeck = if (BuildConfig.DEBUG) intent.getStringExtra("standInDeck") else null
+        val standInOpponent =
+            if (BuildConfig.DEBUG) intent.getStringExtra("standInOpponent") else null
+        val standInSeed = if (BuildConfig.DEBUG) intent.getLongExtra("standInSeed", 0L) else 0L
         traceFrames = BuildConfig.DEBUG && intent.getBooleanExtra("traceFrames", false)
         val modes = windowManager.defaultDisplay.supportedModes
         val displayHz = modes.maxOfOrNull { it.refreshRate } ?: 60f
         Library.activity = this
         if (Library.app == 0L) {
-            Library.app = Native.create(fixture, filesDir.path, standIn, displayHz, Library.waker)
+            Library.app = Native.create(
+                fixture, filesDir.path, standIn, standInDeck, standInOpponent, standInSeed,
+                displayHz, Library.waker,
+            )
         }
 
         if (Build.VERSION.SDK_INT >= 30) {

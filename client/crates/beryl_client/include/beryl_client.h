@@ -26,6 +26,13 @@ typedef struct {
     /* Debug builds only: the name of an agent that answers the person's
      * decisions in a fresh live game, for unattended runs. NULL for a person. */
     const char *stand_in;
+    /* Debug builds only: the deck key for stand_in ("wu-control" or
+     * "forgetful-fish"). NULL for the default. */
+    const char *stand_in_deck;
+    /* Debug builds only: the opponent agent for stand_in. NULL for the default. */
+    const char *stand_in_opponent;
+    /* Debug builds only: the seed for stand_in's game. 0 for the clock. */
+    uint64_t stand_in_seed;
     /* The display's highest refresh rate, in frames a second. */
     float display_hz;
     /* Called with context, from any thread, when an input arrives from another

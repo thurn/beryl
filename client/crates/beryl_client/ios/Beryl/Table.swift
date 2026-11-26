@@ -33,30 +33,42 @@ final class TableController: UIViewController {
         // none, the app plays a live game.
         let fixture = environment["BERYL_CLIENT_FIXTURE"]
         // Debug builds only: the agent that answers the player's decisions in an unattended
-        // run.
+        // run, with optional deck, opponent and seed.
         #if DEBUG
             let standIn = environment["BERYL_CLIENT_STAND_IN"]
+            let standInDeck = environment["BERYL_CLIENT_STAND_IN_DECK"]
+            let standInOpponent = environment["BERYL_CLIENT_STAND_IN_OPPONENT"]
+            let standInSeed = environment["BERYL_CLIENT_STAND_IN_SEED"].flatMap(UInt64.init) ?? 0
         #else
             let standIn: String? = nil
+            let standInDeck: String? = nil
+            let standInOpponent: String? = nil
+            let standInSeed: UInt64 = 0
         #endif
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let context = Unmanaged.passUnretained(self).toOpaque()
         app = withOptionalCString(fixture) { fixture in
             withOptionalCString(standIn) { standIn in
-                documents.path.withCString { dir in
-                    var config = BerylConfig(
-                        fixture: fixture, data_dir: dir, stand_in: standIn,
-                        display_hz: Float(UIScreen.main.maximumFramesPerSecond),
-                        wake: { context in
-                            // Any thread: ask for a frame soon, on the main thread. The
-                            // controller lives as long as the app.
-                            guard let context else { return }
-                            let controller = Unmanaged<TableController>.fromOpaque(context)
-                                .takeUnretainedValue()
-                            DispatchQueue.main.async { controller.resume() }
-                        },
-                        context: context)
-                    return beryl_client_new(&config)
+                withOptionalCString(standInDeck) { standInDeck in
+                    withOptionalCString(standInOpponent) { standInOpponent in
+                        documents.path.withCString { dir in
+                            var config = BerylConfig(
+                                fixture: fixture, data_dir: dir, stand_in: standIn,
+                                stand_in_deck: standInDeck, stand_in_opponent: standInOpponent,
+                                stand_in_seed: standInSeed,
+                                display_hz: Float(UIScreen.main.maximumFramesPerSecond),
+                                wake: { context in
+                                    // Any thread: ask for a frame soon, on the main thread. The
+                                    // controller lives as long as the app.
+                                    guard let context else { return }
+                                    let controller = Unmanaged<TableController>.fromOpaque(context)
+                                        .takeUnretainedValue()
+                                    DispatchQueue.main.async { controller.resume() }
+                                },
+                                context: context)
+                            return beryl_client_new(&config)
+                        }
+                    }
                 }
             }
         }

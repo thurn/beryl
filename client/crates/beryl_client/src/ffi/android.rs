@@ -226,19 +226,30 @@ pub unsafe extern "C" fn Java_ca_thurn_beryl_Native_create(
     fixture: jstring,
     data_dir: jstring,
     stand_in: jstring,
+    stand_in_deck: jstring,
+    stand_in_opponent: jstring,
+    stand_in_seed: jlong,
     display_hz: jfloat,
     waker: jobject,
 ) -> jlong {
     // SAFETY: the JVM's call, as documented.
-    let (fixture, data_dir, stand_in, waker) = unsafe {
+    let (fixture, data_dir, stand_in, stand_in_deck, stand_in_opponent, waker) = unsafe {
         (
             optional(env, fixture),
             string(env, data_dir),
             optional(env, stand_in),
+            optional(env, stand_in_deck),
+            optional(env, stand_in_opponent),
             Waker::new(env, waker),
         )
     };
     let wake = waker.map(|waker| Arc::new(move || waker.wake()) as Wakeup);
+    let stand_in = stand_in.map(|agent| crate::app::StandIn {
+        agent,
+        deck: stand_in_deck,
+        opponent: stand_in_opponent,
+        seed: (stand_in_seed != 0).then_some(stand_in_seed as u64),
+    });
     super::new(Start {
         fixture,
         data_dir: PathBuf::from(data_dir),

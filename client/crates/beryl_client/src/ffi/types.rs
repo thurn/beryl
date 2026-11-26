@@ -24,6 +24,15 @@ pub struct BerylConfig {
     /// person's decisions in a fresh live game, for unattended runs. NULL for a person.
     /// Ignored in a release build.
     pub stand_in: *const c_char,
+    /// In a debug build, the deck key for `stand_in` (`beryl_protocol::DECKS`). NULL for the
+    /// default (`wu-control`). Ignored in a release build.
+    pub stand_in_deck: *const c_char,
+    /// In a debug build, the opponent agent for `stand_in`. NULL for the default
+    /// (`options::OPPONENT`). Ignored in a release build.
+    pub stand_in_opponent: *const c_char,
+    /// In a debug build, the seed for `stand_in`'s game. 0 for the clock. Ignored in a release
+    /// build.
+    pub stand_in_seed: u64,
     /// The display's highest refresh rate, in frames a second.
     pub display_hz: f32,
     /// Called with `context`, from any thread, when an input arrives from another thread while

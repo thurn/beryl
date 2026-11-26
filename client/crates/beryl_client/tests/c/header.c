@@ -53,6 +53,9 @@ int beryl_client_header_test(const char *data_dir) {
     config.fixture = "verbs-zones";
     config.data_dir = data_dir;
     config.stand_in = NULL;
+    config.stand_in_deck = NULL;
+    config.stand_in_opponent = NULL;
+    config.stand_in_seed = 0;
     config.display_hz = 120.0f;
     config.wake = NULL;
     config.context = NULL;

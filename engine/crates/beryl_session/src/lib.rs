@@ -38,7 +38,7 @@ pub use prompt::trigger_to_stack;
 pub use protocol::{CandidateIndex, DecisionId, PlayerView, SessionId, Status, StopsSetting};
 pub use replay::ReplayFile;
 pub use session::THREAD as SESSION_THREAD;
-pub use sessions::Sessions;
+pub use sessions::{Sessions, start_game};
 
 /// How to start a game.
 #[derive(Clone, Debug, PartialEq, Eq)]

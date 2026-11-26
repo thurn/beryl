@@ -31,8 +31,11 @@ use crate::places::{checkout, frames_dir, now_ms};
 use crate::session::{self, Commands, Live};
 use crate::settings::Saver;
 
+mod game;
 mod saved;
 mod timing;
+
+pub(crate) use game::StandIn;
 
 /// The window the app opens, and the windowless host stands in for, in logical points: the
 /// size `just client` draws a recording at unless told otherwise.
@@ -211,9 +214,18 @@ impl Feed for AppFeed {
             self.searching = matches!(update.view.status, Status::Thinking);
             // A replayed recording ends when its last script has played, not at its game's end.
             let live = matches!(self.source, Some(Source::Live(_)));
-            if live && !self.ended && matches!(update.view.status, Status::Over { .. }) {
+            if live
+                && !self.ended
+                && let Status::Over { outcome } = &update.view.status
+            {
                 self.ended = true;
                 summarize = self.finish == Finish::AtSuspend;
+                if let Some(Ok(log)) = self.log.borrow_mut().as_mut() {
+                    log.result(
+                        game::outcome_text(outcome),
+                        u32::from(update.view.turn.number),
+                    );
+                }
                 println!("{GAME_OVER}");
             }
         }
@@ -408,6 +420,7 @@ pub(crate) fn surface_fixture_feed(
     surface_app_feed(
         Source::Fixture(Box::new(fixture)),
         Some(name.to_owned()),
+        None,
         log_dir,
         display_hz,
         (Finish::AtFixtureEnd, Bugs::new(beryl_session::bugs::dir())),
@@ -421,7 +434,7 @@ pub(crate) fn surface_fixture_feed(
 /// `surface_fixture_feed`'s does.
 pub(crate) fn surface_live_feed(
     data_dir: PathBuf,
-    stand_in: Option<String>,
+    stand_in: Option<StandIn>,
     display_hz: f32,
     inbox: Inbox,
 ) -> Box<dyn Feed> {
@@ -432,14 +445,29 @@ pub(crate) fn surface_live_feed(
     );
     let mut bugs = Bugs::new(dirs.bugs.clone());
     bugs.attach(inbox.clone());
+    let resolved = stand_in.map(|stand_in| {
+        let deck = stand_in
+            .deck
+            .unwrap_or_else(|| crate::options::DECK.to_owned());
+        let opponent = stand_in
+            .opponent
+            .unwrap_or_else(|| crate::options::OPPONENT.to_owned());
+        let seed = stand_in.seed.unwrap_or_else(session::clock_seed);
+        (stand_in.agent, deck, opponent, seed)
+    });
+    let game = resolved.as_ref().map(|(agent, deck, opponent, seed)| {
+        game::description(agent, opponent, deck, *seed, beryl_host::Class::Default)
+    });
     let commands = session::spawn(
         beryl_host::Class::Default,
         {
             let inbox = inbox.clone();
             move || {
                 let live = Live::new(Some(dirs), inbox);
-                match stand_in {
-                    Some(name) => live.with_stand_in(&name),
+                match resolved {
+                    Some((agent, deck, opponent, seed)) => live
+                        .with_stand_in(&agent, Some(&deck), Some(&opponent), Some(seed))
+                        .expect("validated stand-in deck"),
                     None => live,
                 }
             }
@@ -449,6 +477,7 @@ pub(crate) fn surface_live_feed(
     surface_app_feed(
         Source::Live(commands),
         None,
+        game,
         data_dir,
         display_hz,
         (Finish::AtSuspend, bugs),
@@ -460,6 +489,7 @@ pub(crate) fn surface_live_feed(
 fn surface_app_feed(
     source: Source,
     fixture: Option<String>,
+    game: Option<String>,
     log_dir: PathBuf,
     display_hz: f32,
     (finish, bugs): (Finish, Bugs),
@@ -484,7 +514,7 @@ fn surface_app_feed(
             drive: None,
             load_threads: None,
             slow_gpu_ms: None,
-            game: None,
+            game,
         },
         searching: false,
         shown_first: false,
@@ -657,7 +687,12 @@ fn source(options: &Options, inbox: Inbox) -> Result<Source, String> {
     let (data, played_by) = match &options.agent {
         Some(agent) => (
             None,
-            Some((agent.clone(), options.opponent.clone(), options.seed)),
+            Some((
+                agent.clone(),
+                options.opponent.clone(),
+                options.deck.clone(),
+                options.seed,
+            )),
         ),
         None if resume.is_some() => (None, None),
         None => (data_dirs(), None),
@@ -673,7 +708,9 @@ fn source(options: &Options, inbox: Inbox) -> Result<Source, String> {
                     live = live.resuming(path);
                 }
                 match played_by {
-                    Some((agent, opponent, seed)) => live.played_by(&agent, &opponent, seed),
+                    Some((agent, opponent, deck, seed)) => live
+                        .played_by(&agent, &opponent, &deck, seed)
+                        .expect("validated deck"),
                     None => live,
                 }
             }
@@ -684,30 +721,7 @@ fn source(options: &Options, inbox: Inbox) -> Result<Source, String> {
 
 /// What the frame log says of a run `options` describe, stopped at `pause_at`.
 fn run_of(options: &Options, pause_at: Option<u64>) -> Run {
-    Run {
-        checkout: checkout(),
-        pid: std::process::id(),
-        started_ms: now_ms(),
-        window: options.window.word().to_owned(),
-        display_hz: 0.0,
-        adapter: String::new(),
-        load: crate::load::averages(),
-        fixture: options.fixture.clone(),
-        pause_at_ms: pause_at.map(|at| at as f64 / 1e6),
-        drive: options.drive.clone(),
-        load_threads: options
-            .load
-            .map(|(threads, class)| format!("{threads}:{}", class.word())),
-        slow_gpu_ms: options.slow_gpu.map(|slow| slow.as_secs_f64() * 1e3),
-        game: options.agent.as_ref().map(|agent| {
-            format!(
-                "{agent} against {}, seed {}, search class {}",
-                options.opponent,
-                options.seed,
-                options.search_class.word()
-            )
-        }),
-    }
+    game::run_of(options, pause_at)
 }
 
 /// The audio thread, at the levels `settings` give. A run with no window plays no sound, so
