@@ -176,7 +176,7 @@ fn paired_checks_are_budgeted_and_thread_independent() {
     let mut scratch = Scratch::new();
     let obs = observe(&at.s, &at.t, &mut scratch, at.d.decider);
     let policy = DEEP_SEARCHER.rollout_policy(&at.t);
-    let pairs = beryl_search::PairedRollouts::new(&at.t, &policy, obs, DEEP_SEARCHER.sight, 0);
+    let pairs = beryl_search::PairedRollouts::new(&at.t, &policy, obs, DEEP_SEARCHER, 0);
     let [a, b] = [beryl_engine::Choice(0), beryl_engine::Choice(1)];
     let budget = 150_000;
     let (check, spent) = pairs.check([a, b], budget, 1);

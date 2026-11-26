@@ -20,7 +20,8 @@
 //! - **Knowledge.** The card values the rollout policy and the evaluation read
 //!   ([`Knowledge`]).
 //! - **Scores.** A win scores more the sooner it comes and a loss more the later
-//!   ([`TURN_DISCOUNT`]), in every family, so that a decided position still has a best move.
+//!   ([`TURN_DISCOUNT`]), so that a decided position still has a best move. With
+//!   [`Options::bonus`] speed is worth at most [`SPEED_WEIGHT`]` / 2` of a win instead.
 //! - **Work.** A budget is engine steps, not iterations: every decision `next` returns or
 //!   settles itself, in the tree or a rollout, plus what copying the root, dealing a world
 //!   and an evaluation cost in steps' time ([`ITERATION_STEPS`], [`WORLD_STEPS`],
@@ -163,6 +164,11 @@ pub struct Options {
     pub walker: bool,
     /// Explore tree children using softmax priors from the rollout policy.
     pub prior: bool,
+    /// Score a finished game, and an evaluation, mostly by who wins: only [`SPEED_WEIGHT`] of
+    /// the score is discounted by the turns it took ([`TURN_DISCOUNT`]), so speed is worth at
+    /// most 0.01 of a win. Without it the whole score is discounted, and a search drags out a
+    /// lost game rather than play to a small chance of winning.
+    pub bonus: bool,
 }
 
 /// A searcher's settings.
@@ -243,6 +249,15 @@ const NONE: u32 = u32::MAX;
 /// 60% in 8.
 pub const TURN_DISCOUNT: f64 = 0.98;
 
+/// With [`Options::bonus`], the share of a game's score that [`TURN_DISCOUNT`] discounts; the
+/// rest is who won. The whole discount moves a score by up to 0.5, so speed moves it by up to
+/// 0.01. Without the option the whole score is discounted, and a loss on turn 13 scores 0.115
+/// where one on turn 3 scores 0.029: stalling ten turns was worth more than a line that wins
+/// one game in twenty, and when ahead, winning six turns sooner was worth risking five games in
+/// a hundred. The `paired` test now keeps noise from choosing among moves in a decided
+/// position, which was the reason for the full discount. Not yet measured by a match.
+pub const SPEED_WEIGHT: f64 = 0.02;
+
 impl fmt::Display for Family {
     /// `ismcts18/hidden/rollout/tuned`: method, sight, leaf, knowledge, then any options, as
     /// `pimc18/omniscient/rollout/tuned/anchor+mid`.
@@ -289,7 +304,8 @@ impl FromStr for Family {
                  ismcts18/hidden/rollout/tuned (pimcN, ismctsN, turn72 or turnbudget72; \
                  hidden, hands or omniscient; \
                  rollout, cutN or eval; estimate or tuned; options anchor, expert, guard, mid, \
-                 means, hold, waste, combat, order, sure, paired, first, walker and prior joined by + in \
+                 means, hold, waste, combat, order, sure, paired, first, walker, prior and bonus \
+                 joined by + in \
                  that order; expert, guard, sure and paired require anchor; first requires paired; \
                  walker requires combat)"
             )
@@ -319,6 +335,7 @@ impl FromStr for Family {
                         "first" => &mut o.first,
                         "walker" => &mut o.walker,
                         "prior" => &mut o.prior,
+                        "bonus" => &mut o.bonus,
                         _ => return Err(bad()),
                     };
                     if *flag {
@@ -382,7 +399,8 @@ impl FromStr for Family {
 
 impl Options {
     /// The options as a family's name spells them, joined by `+` in this order:
-    /// `anchor+expert+guard+mid+means+hold+waste+combat+order+sure+paired+first+walker+prior`; empty for none.
+    /// `anchor+expert+guard+mid+means+hold+waste+combat+order+sure+paired+first+walker+prior+bonus`;
+    /// empty for none.
     fn to_name(self) -> String {
         [
             (self.anchor, "anchor"),
@@ -399,6 +417,7 @@ impl Options {
             (self.first, "first"),
             (self.walker, "walker"),
             (self.prior, "prior"),
+            (self.bonus, "bonus"),
         ]
         .into_iter()
         .filter_map(|(on, name)| on.then_some(name))
@@ -1418,7 +1437,9 @@ impl<L: Layout> Tree<L> {
                 break self.leaf(&mut s, t, policy);
             }
             match next(&mut s, t, &mut self.x, &mut Replay) {
-                Step::Over(outcome) => break value(outcome, self.turns(&s)),
+                Step::Over(outcome) => {
+                    break value(outcome, self.turns(&s), self.family.options.bonus);
+                }
                 Step::Decide(below) => {
                     d = below;
                     node = child;
@@ -1541,6 +1562,7 @@ impl<L: Layout> Tree<L> {
     fn leaf(&mut self, s: &mut State<L>, t: &GameTable, policy: &RolloutPolicy) -> f64 {
         let at = Scoring {
             leaf: self.family.leaf,
+            bonus: self.family.options.bonus,
             origin: self.origin,
             extra: &mut self.extra,
         };
@@ -1553,10 +1575,12 @@ impl<L: Layout> Tree<L> {
     }
 }
 
-/// How a tree scores a new node, in a state of either layout: its kind of leaf, the turn its
-/// first root was asked in, and where it charges the steps its scratch does not count.
+/// How a tree scores a new node, in a state of either layout: its kind of leaf, whether
+/// speed is only a bonus ([`Options::bonus`]), the turn its first root was asked in, and where
+/// it charges the steps its scratch does not count.
 struct Scoring<'a> {
     leaf: Leaf,
+    bonus: bool,
     origin: u16,
     extra: &'a mut u64,
 }
@@ -1580,28 +1604,28 @@ impl Scoring<'_> {
         match self.leaf {
             Leaf::Rollout => {
                 let outcome = soft_rollout(s, t, x, policy, &mut soft);
-                value(outcome, turns(s))
+                value(outcome, turns(s), self.bonus)
             }
             Leaf::Cutoff { turns: cut } => {
                 let turn = s.elapsed_turns().saturating_add(u16::from(cut));
                 if let Some(outcome) = soft_rollout_to(s, t, x, policy, &mut soft, turn) {
-                    value(outcome, turns(s))
+                    value(outcome, turns(s), self.bonus)
                 } else {
                     *self.extra += EVAL_STEPS;
-                    discounted(evaluate(s, policy.values()), turns(s))
+                    discounted(evaluate(s, policy.values()), turns(s), self.bonus)
                 }
             }
             Leaf::Eval => match next(s, t, x, &mut Replay) {
-                Step::Over(outcome) => value(outcome, turns(s)),
+                Step::Over(outcome) => value(outcome, turns(s), self.bonus),
                 // A subgame's position is of another game than the leaves it is compared with:
                 // play it out instead.
                 Step::Decide(_) if s.in_subgame() => {
                     let outcome = soft_rollout(s, t, x, policy, &mut soft);
-                    value(outcome, turns(s))
+                    value(outcome, turns(s), self.bonus)
                 }
                 Step::Decide(_) => {
                     *self.extra += EVAL_STEPS;
-                    discounted(evaluate(s, policy.values()), turns(s))
+                    discounted(evaluate(s, policy.values()), turns(s), self.bonus)
                 }
             },
         }
@@ -1734,22 +1758,39 @@ fn answered_by_policy<L: Layout>(d: &Decision<L>) -> bool {
 }
 
 /// A finished game's score for the first seat, `turns` turns after the tree's first root: a
-/// win 1 and a loss 0, discounted toward an even game by [`TURN_DISCOUNT`] each turn; a draw
-/// or a stall 0.5. A tree's game that runs out of `Small`'s room is scored as it goes on in
-/// `Large` ([`crate::wide`]), so a stall here is one `Large` could not play past either.
-pub fn value(outcome: Outcome, turns: u16) -> f64 {
+/// win 1 and a loss 0, discounted toward an even game by [`TURN_DISCOUNT`] each turn (with
+/// `bonus`, [`Options::bonus`], only [`SPEED_WEIGHT`] of it); a draw or a stall 0.5. A tree's
+/// game that runs out of `Small`'s room is scored as it goes on in `Large` ([`crate::wide`]),
+/// so a stall here is one `Large` could not play past either.
+pub fn value(outcome: Outcome, turns: u16, bonus: bool) -> f64 {
     let p0 = match outcome {
         Outcome::Win(Seat::P0) => 1.0,
         Outcome::Win(_) => 0.0,
         Outcome::Draw | Outcome::Stalled(_) => 0.5,
     };
-    discounted(p0, turns)
+    discounted(p0, turns, bonus)
 }
 
-/// A score for the first seat, `p0`, discounted toward an even game for `turns` turns: an
-/// evaluation as a finished game is, so the two compare on one scale.
-fn discounted(p0: f64, turns: u16) -> f64 {
+/// A score for the first seat, `p0`, discounted toward an even game for `turns` turns (with
+/// `bonus`, [`Options::bonus`], only [`SPEED_WEIGHT`] of it): an evaluation as a finished game
+/// is, so the two compare on one scale.
+fn discounted(p0: f64, turns: u16, bonus: bool) -> f64 {
+    if bonus {
+        return speed_bonus(p0, turns);
+    }
+    turn_discounted(p0, turns)
+}
+
+/// `p0` discounted toward an even game by [`TURN_DISCOUNT`] for each of `turns` turns.
+fn turn_discounted(p0: f64, turns: u16) -> f64 {
     0.5 + (p0 - 0.5) * TURN_DISCOUNT.powi(i32::from(turns))
+}
+
+/// [`discounted`] with [`Options::bonus`]: [`SPEED_WEIGHT`] of the score discounted, the rest
+/// `p0` itself. Out of line, so that a family without the option runs none of it.
+#[inline(never)]
+fn speed_bonus(p0: f64, turns: u16) -> f64 {
+    SPEED_WEIGHT * turn_discounted(p0, turns) + (1.0 - SPEED_WEIGHT) * p0
 }
 
 /// Each candidate's key: its player, the decision's kind and the option with the card it
@@ -1960,6 +2001,8 @@ mod tests {
             "pimc72/hidden/rollout/tuned/anchor+expert+guard+mid+means+hold+waste+combat+order+sure+paired+first+walker",
             "pimc72/hidden/rollout/tuned/prior",
             "pimc72/hidden/rollout/tuned/anchor+expert+guard+mid+means+hold+waste+combat+order+sure+paired+first+walker+prior",
+            "pimc72/hidden/rollout/tuned/bonus",
+            "pimc72/hidden/rollout/tuned/anchor+expert+guard+mid+means+hold+waste+combat+order+sure+paired+first+walker+prior+bonus",
         ] {
             let f: Family = s.parse().unwrap();
             assert_eq!(f.to_string(), s);
@@ -1987,6 +2030,8 @@ mod tests {
             "pimc18/hidden/rollout/tuned/order+sure",
             "pimc18/hidden/rollout/tuned/guard+paired",
             "pimc18/hidden/rollout/tuned/paired",
+            "pimc18/hidden/rollout/tuned/bonus+prior",
+            "pimc18/hidden/rollout/tuned/bonus+bonus",
             "pimc18/hidden/rollout/tuned/anchor+first",
             "pimc18/hidden/rollout/tuned/paired+first",
             "pimc18/hidden/rollout/tuned/anchor+first+paired",
@@ -2054,6 +2099,7 @@ mod tests {
     /// evaluation on the same scale.
     #[test]
     fn sooner_wins_and_later_losses_score_higher() {
+        let value = |outcome, turns| value(outcome, turns, false);
         let (win, loss) = (Outcome::Win(Seat::P0), Outcome::Win(Seat::P1));
         assert!((value(win, 0) - 1.0).abs() < 1e-12 && value(loss, 0).abs() < 1e-12);
         assert!(value(win, 3) > value(win, 8));
@@ -2064,7 +2110,30 @@ mod tests {
             (value(win, 5) + value(loss, 5) - 1.0).abs() < 1e-12,
             "zero-sum"
         );
-        assert!((discounted(0.8, 5) - (0.5 + 0.3 * TURN_DISCOUNT.powi(5))).abs() < 1e-12);
-        assert!(discounted(0.8, 5) < value(win, 5));
+        let eval = discounted(0.8, 5, false);
+        assert!((eval - (0.5 + 0.3 * TURN_DISCOUNT.powi(5))).abs() < 1e-12);
+        assert!(eval < value(win, 5));
+    }
+
+    /// With the speed bonus, who wins decides the score and speed only breaks ties: a win
+    /// scores at least 0.99 and a loss at most 0.01 however late, a sooner win and a later
+    /// loss still score higher, and a line that plays to a 5% out scores above a certain loss
+    /// put off longer, which it does not under the full discount.
+    #[test]
+    fn the_speed_bonus_is_worth_at_most_a_hundredth_of_a_win() {
+        let (win, loss) = (Outcome::Win(Seat::P0), Outcome::Win(Seat::P1));
+        for turns in [0, 1, 5, 40, 400, u16::MAX] {
+            assert!(value(win, turns, true) >= 0.99, "a win on turn {turns}");
+            assert!(value(loss, turns, true) <= 0.01, "a loss on turn {turns}");
+        }
+        assert!(value(win, 3, true) > value(win, 8, true));
+        assert!(value(loss, 8, true) > value(loss, 3, true));
+        assert!((value(Outcome::Draw, 7, true) - 0.5).abs() < 1e-12);
+        assert!((value(win, 5, true) + value(loss, 5, true) - 1.0).abs() < 1e-12);
+        let outs = |bonus| 0.05 * value(win, 10, bonus) + 0.95 * value(loss, 3, bonus);
+        assert!(outs(true) > value(loss, 8, true));
+        assert!(outs(false) < value(loss, 8, false));
+        let eval = discounted(0.8, 5, true);
+        assert!(eval > 0.79 && eval < 0.8 && eval > discounted(0.8, 5, false));
     }
 }

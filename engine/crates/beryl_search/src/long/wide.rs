@@ -76,7 +76,8 @@ impl<L: Layout> Tree<L> {
                 && let Step::Over(outcome) = next(&mut s, t, &mut x, &mut Replay)
             {
                 charge(&mut self.x, &x);
-                return Some(value(outcome, self.turns_wide(s.elapsed_turns())));
+                let turns = self.turns_wide(s.elapsed_turns());
+                return Some(value(outcome, turns, self.family.options.bonus));
             }
             apply(&mut s, t, &mut x, &mut Replay, c);
             if depth == 0 {
@@ -87,6 +88,7 @@ impl<L: Layout> Tree<L> {
         s.reseed(rng.next_u64());
         let scoring = Scoring {
             leaf: self.family.leaf,
+            bonus: self.family.options.bonus,
             origin: self.origin,
             extra: &mut self.extra,
         };

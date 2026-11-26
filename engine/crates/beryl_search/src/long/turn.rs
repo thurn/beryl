@@ -79,6 +79,7 @@ fn search<L: Layout>(
         table: &agent.table,
         policy: &agent.policy,
         viewer: d.decider,
+        bonus: agent.settings.family.options.bonus,
         turn: obs.shown().elapsed_turns(),
         known: L::Slot::all().filter(|&slot| obs.knows(slot)).collect(),
         scratch: Scratch::unchecked(),
@@ -265,6 +266,8 @@ struct TurnSearch<'a, L: Layout> {
     table: &'a GameTable,
     policy: &'a RolloutPolicy,
     viewer: Seat,
+    /// Whether speed is only a bonus in the scores ([`super::Options::bonus`]).
+    bonus: bool,
     /// The turns started across the playthrough at the root ([`State::elapsed_turns`]): a
     /// turn's number starts again in a restarted game and in a subgame, and these do not.
     turn: u16,
@@ -571,7 +574,7 @@ impl<L: Layout> TurnSearch<'_, L> {
         self.extra += EVAL_STEPS;
         let p0 = line.state.outcome().map_or_else(
             || evaluate(&line.state, self.policy.values()),
-            |outcome| value(outcome, 0),
+            |outcome| value(outcome, 0, self.bonus),
         );
         let chance = if self.viewer == Seat::P0 {
             p0
@@ -752,13 +755,13 @@ impl<L: Layout> TurnSearch<'_, L> {
         };
         let turns = s.elapsed_turns().saturating_sub(self.turn);
         let reward = if let Some(outcome) = outcome {
-            value(outcome, turns)
+            value(outcome, turns, self.bonus)
         } else {
             if !self.room(limit, EVAL_STEPS) {
                 return None;
             }
             self.extra += EVAL_STEPS;
-            discounted(evaluate(s, self.policy.values()), turns)
+            discounted(evaluate(s, self.policy.values()), turns, self.bonus)
         };
         Some(if self.viewer == Seat::P0 {
             reward

@@ -60,7 +60,8 @@ impl Choices {
 }
 
 impl<'a, L: Layout> TurnSearch<'a, L> {
-    /// Builds a fresh `TurnSearch<Large>` with the same root viewer, turn and known slots.
+    /// Builds a fresh `TurnSearch<Large>` with the same root viewer, scoring, turn and
+    /// known slots.
     fn wide_search(&self) -> TurnSearch<'a, Large> {
         let known = L::Slot::all()
             .filter(|&slot| self.known.contains(slot))
@@ -70,6 +71,7 @@ impl<'a, L: Layout> TurnSearch<'a, L> {
             table: self.table,
             policy: self.policy,
             viewer: self.viewer,
+            bonus: self.bonus,
             turn: self.turn,
             known,
             scratch: Scratch::unchecked(),

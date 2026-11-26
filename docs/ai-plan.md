@@ -357,6 +357,7 @@ may reorder rungs when a result suggests it, and says why in the ticket.
 | 6     | `fit`                      | Strength | Numbers         | No     |
 | 7     | `walker`                   | Blunders | Planner         | Yes    |
 | 8     | `turn72`                   | Strength | Method          | Yes    |
+| 9     | `bonus`                    | Strength | Scores          | Yes    |
 
 ### 6.1 Tools
 
@@ -580,6 +581,25 @@ configuration is the 3M family:
 ```text
 turnbudget72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker@3M
 ```
+
+### 6.10 Rung 9: `bonus`, speed as a bounded bonus
+
+Built (`Options::bonus`), not yet measured. Every family scores a win
+`0.5 + 0.5 * 0.98^t` and a loss `0.5 - 0.5 * 0.98^t`, `t` the turns since the
+root (`TURN_DISCOUNT`). So a certain loss on turn 13 scores 0.115 and one on
+turn 3 scores 0.029: stalling ten turns is worth more than a line that wins one
+game in twenty. When ahead, winning six turns sooner is worth risking five games
+in a hundred. The discount was added so that noise would not choose among moves
+in a decided position, and the `paired` test now does that job.
+
+With `bonus`, a finished game scores
+`SPEED_WEIGHT * discounted(p0, t) + (1 - SPEED_WEIGHT) * p0`, with
+`SPEED_WEIGHT` 0.02 and `discounted` the full discount above. So speed is worth
+at most 0.01 of a win, and a win scores at least 0.99 however late. An
+evaluation leaf is scored the same way from its estimate.
+
+- **Claims:** none.
+- **Measure:** the numbers, 3M, `stronger`.
 
 ## 7. Speed
 

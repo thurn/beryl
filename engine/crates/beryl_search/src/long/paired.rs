@@ -6,8 +6,8 @@ use beryl_engine::{
 };
 
 use super::{
-    AgentDecision, AnchorCheck, FREE_ROUNDS, ITERATION_STEPS, LongSearch, ROLLOUT_TEMPERATURE,
-    ROUNDS, RolloutPolicy, Sight, Tree, WORLD_STEPS, check, deal, value,
+    AgentDecision, AnchorCheck, FREE_ROUNDS, Family, ITERATION_STEPS, LongSearch,
+    ROLLOUT_TEMPERATURE, ROUNDS, RolloutPolicy, Sight, Tree, WORLD_STEPS, check, deal, value,
 };
 use crate::rollout::{Softmax, soft_rollout_after_within};
 use crate::wide::{charge, ran_out, widened};
@@ -29,13 +29,7 @@ impl<L: Layout> LongSearch<L> {
     ) -> PairedRollouts<'a, L> {
         let seed =
             self.seed.wrapping_add(u64::from(decision.0) * 0x9E37_79B9) ^ 0xA396_749C_8712_CB7D;
-        PairedRollouts::new(
-            &self.table,
-            &self.policy,
-            obs,
-            self.settings.family.sight,
-            seed,
-        )
+        PairedRollouts::new(&self.table, &self.policy, obs, self.settings.family, seed)
     }
 
     pub(super) fn check_challenger(
@@ -65,22 +59,26 @@ pub struct PairedRollouts<'a, L: Layout> {
     policy: &'a RolloutPolicy,
     observation: Observation<'a, L>,
     sight: Sight,
+    /// Whether speed is only a bonus in the scores ([`super::Options::bonus`]).
+    bonus: bool,
     seed: u64,
 }
 
 impl<'a, L: Layout> PairedRollouts<'a, L> {
+    /// Worlds dealt as `family` deals them, and scored as it scores a game.
     pub fn new(
         table: &'a GameTable,
         policy: &'a RolloutPolicy,
         observation: Observation<'a, L>,
-        sight: Sight,
+        family: Family,
         seed: u64,
     ) -> Self {
         Self {
             table,
             policy,
             observation,
-            sight,
+            sight: family.sight,
+            bonus: family.options.bonus,
             seed,
         }
     }
@@ -95,6 +93,7 @@ impl<'a, L: Layout> PairedRollouts<'a, L> {
             world,
             rng,
             viewer: self.observation.viewer(),
+            bonus: self.bonus,
         }
     }
 
@@ -182,6 +181,7 @@ pub struct RolloutPair<'a, L: Layout> {
     world: State<L>,
     rng: SplitMix64,
     viewer: Seat,
+    bonus: bool,
 }
 
 impl<L: Layout> RolloutPair<'_, L> {
@@ -282,14 +282,14 @@ impl<L: Layout> RolloutPair<'_, L> {
         elapsed.saturating_sub(self.world.elapsed_turns())
     }
 
-    /// The search's time-discounted reward for the player at the root.
+    /// The search's reward for the player at the root, scored as its family scores a game.
     pub fn score(&self, state: &State<L>, outcome: Outcome) -> f64 {
         self.score_at(state.elapsed_turns(), outcome)
     }
 
     /// [`Self::score`] for a game `elapsed` turns in.
     fn score_at(&self, elapsed: u16, outcome: Outcome) -> f64 {
-        let p0 = value(outcome, self.turns_at(elapsed));
+        let p0 = value(outcome, self.turns_at(elapsed), self.bonus);
         if self.viewer == Seat::P0 {
             p0
         } else {

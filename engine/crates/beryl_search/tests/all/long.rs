@@ -9,7 +9,8 @@ use beryl_engine::{
     Zone, ZoneKey, apply, next, observe,
 };
 use beryl_search::{
-    Agent, AgentDecision, Budget, Family, GreedyAgent, LongSearch, Mcts, Search, Settings, Sight,
+    Agent, AgentDecision, Budget, DEEP_SEARCHER, Family, GreedyAgent, LongSearch, Mcts, Options,
+    Search, Settings, Sight,
 };
 
 /// Positions from a greedy mirror game with more than two candidates, `from_end` such
@@ -195,10 +196,27 @@ fn expert_anchored_search_replays_a_game_from_its_seed() {
     assert!(checked > 0, "the game must exercise the anchor");
 }
 
+/// A family's name parses and prints back unchanged, the champion's with the speed bonus too,
+/// and the champion itself scores with the full turn discount.
 #[test]
 fn families_name_themselves() {
     let f: Family = "ismcts18/hidden/rollout/estimate".parse().unwrap();
     assert_eq!(f.to_string(), "ismcts18/hidden/rollout/estimate");
+    const { assert!(!DEEP_SEARCHER.options.bonus) };
+    let name = format!("{DEEP_SEARCHER}+bonus");
+    let f: Family = name.parse().unwrap();
+    assert!(f.options.bonus);
+    assert_eq!(f.to_string(), name);
+    assert_eq!(
+        Family {
+            options: Options {
+                bonus: false,
+                ..f.options
+            },
+            ..f
+        },
+        DEEP_SEARCHER
+    );
 }
 
 /// The opponent's Stock Up took five seconds of thinking, half of it ordering the three cards

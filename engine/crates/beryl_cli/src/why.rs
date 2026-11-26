@@ -122,7 +122,7 @@ fn compare(at: &Reached, choices: [Choice; 2], family: Family, rollouts: u32) ->
     let policy = family.rollout_policy(&at.t);
     let mut view_scratch = Scratch::new();
     let obs = observe(&at.s, &at.t, &mut view_scratch, at.d.decider);
-    let paired = PairedRollouts::new(&at.t, &policy, obs, family.sight, 0);
+    let paired = PairedRollouts::new(&at.t, &policy, obs, family, 0);
     let mut scratch = Scratch::unchecked();
     let mut summary = RolloutSummary::default();
     let mut events = BTreeMap::<Event, [u64; 2]>::new();
