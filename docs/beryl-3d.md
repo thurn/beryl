@@ -626,6 +626,40 @@ the zero-allocation and native rank assertions.
   itself, so the macOS host keeps asking the link for the rate it chose. The
   1.9% of late frames at 30 Hz in the earlier sessions did not recur.
 
+- **Fullscreen Space against the composed window, 2026-11-25.** Six pairs of
+  runs played `just client app --agent expert --tier baseline` to the end of its
+  game (23 to 46 s), once in the composed fullscreen window and once in a
+  fullscreen Space (winit's `Fullscreen::Borderless`), back to back. Pairs 4 to
+  6 added `--load 16:default`. Other work kept the load average at 30 to 59 in
+  every run except the first. Late frames at 120 Hz for each minute after the
+  first three seconds, and the late frames waiting for a drawable in the first
+  three seconds:
+
+  | Pair | Load, composed | Composed    | Startup | Load, Space | Space       | Startup |
+  | ---- | -------------- | ----------- | ------- | ----------- | ----------- | ------- |
+  | 1    | 15.5           | 36.7 (12)   | 15      | 42.8        | 212.8 (131) | 25      |
+  | 2    | 46.8           | 130.1 (65)  | 11      | 43.8        | 174.1 (103) | 4       |
+  | 3    | 40.2           | 115.3 (75)  | 12      | 37.0        | 252.3 (144) | 0       |
+  | 4    | 30.3           | 154.8 (85)  | 0       | 33.3        | 337.2 (244) | 28      |
+  | 5    | 51.4           | 161.9 (111) | 11      | 42.3        | 193.1 (117) | 33      |
+  | 6    | 46.3           | 145.4 (77)  | 14      | 59.2        | 243.8 (137) | 24      |
+
+  The Space had more late frames than the composed window in all six pairs. The
+  rule was to switch only if the Space had at most half the composed window's
+  count in five pairs, so macOS fullscreen stays a composed window (C15) and the
+  Space mode was removed. After startup the composed runs had 243 `handler`, 171
+  `link skipped`, 7 `handling only`, 2 `callback late` and 2 `drawable` late
+  frames. The Space runs had 104 `drawable` in one run, and `link skipped` was
+  their largest cause. Neither mode was free of `drawable` late frames in the
+  first three seconds in all of its runs. In 149 of the `handler` frames the
+  stalled frame spent longest in render encoding and submission, and 46 of those
+  had 2 or more buffer sets in flight, where `Slots::write`
+  (`client/crates/beryl_render/src/slots.rs`) can wait for the GPU while the
+  frame holds a drawable. A ticket under the "Hold 120 Hz" epic moves that write
+  before the drawable is taken. These figures predate the change to the
+  `scene GPU timing` thread in the entry on late ticks, whose lock waits also
+  show up as `handler` frames.
+
 ## Checks and isolation
 
 Ignite declares source, replay, interface, corpus and frame checks in

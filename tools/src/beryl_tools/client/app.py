@@ -130,6 +130,9 @@ def package_macos(bundle: Path) -> None:
                     "CFBundlePackageType": "APPL",
                     "CFBundleShortVersionString": version,
                     "CFBundleVersion": version,
+                    # What the app is, and that macOS's Game Mode may run it.
+                    "LSApplicationCategoryType": "public.app-category.card-games",
+                    "LSSupportsGameMode": True,
                     "NSHighResolutionCapable": True,
                 },
                 info,
