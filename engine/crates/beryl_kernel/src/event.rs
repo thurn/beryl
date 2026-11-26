@@ -423,8 +423,8 @@ pub struct Sink<L: Layout = Small> {
     /// The player who takes the cards of the batch of moves under way out of a shared library
     /// or graveyard and owns them from then on, where the move is to somewhere other than the
     /// battlefield: the player an instruction names as doing it, or else the controller of the
-    /// spell or ability. Set for the length of one batch, as `chosen` is. Nothing reads it
-    /// yet, and a game whose zones are not shared never will.
+    /// spell or ability. Set for the length of one batch, as `chosen` is, and read only in a
+    /// game whose zones are shared.
     pub taker: Option<Seat>,
 }
 

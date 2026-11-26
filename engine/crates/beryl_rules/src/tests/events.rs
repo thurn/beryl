@@ -778,7 +778,7 @@ fn an_ability_of_a_token_that_ceased_to_exist_finds_the_cards_exiled_with_it() {
     let land = find(&s, &t, p, "Test Land");
     let land_ref = s.object_ref(land);
     with_game(&t, &mut s, &mut x, token, |game, resolution| {
-        linked::exile_linked(game, land_ref, resolution.source()).unwrap();
+        linked::exile_linked(game, resolution.controller(), land_ref, resolution.source()).unwrap();
     });
     assert_eq!(s.memos(land).exiled_with(), Some(token));
     let token_ref = s.object_ref(token);
@@ -856,7 +856,7 @@ fn an_ability_finds_the_cards_exiled_with_its_source_and_not_those_of_a_new_obje
     };
     let found = |s: &State| s.linked(LinkKind::ExiledWith, ability.of.source.expect("the bear"));
     with_game(&t, &mut s, &mut x, bear, |game, resolution| {
-        linked::exile_linked(game, land_ref, resolution.source()).unwrap();
+        linked::exile_linked(game, resolution.controller(), land_ref, resolution.source()).unwrap();
     });
     assert_eq!(found(&s), Bitboard::single(land));
 
@@ -891,7 +891,13 @@ fn an_ability_finds_the_cards_exiled_with_its_source_and_not_those_of_a_new_obje
     let coast = find(&s, &t, p, "Test Coast");
     let coast_ref = s.object_ref(coast);
     with_game(&t, &mut s, &mut x, bear, |game, resolution| {
-        linked::exile_linked(game, coast_ref, resolution.source()).unwrap();
+        linked::exile_linked(
+            game,
+            resolution.controller(),
+            coast_ref,
+            resolution.source(),
+        )
+        .unwrap();
     });
     assert_eq!(found(&s), Bitboard::single(land));
     assert_eq!(
@@ -1666,7 +1672,7 @@ fn a_permanent_with_a_card_exiled_with_it_is_not_interchangeable_with_its_twin()
         s.object_ref(slot)
     });
     with_game(&t, &mut s, &mut x, first, |game, resolution| {
-        linked::exile_linked(game, land, resolution.source()).unwrap();
+        linked::exile_linked(game, resolution.controller(), land, resolution.source()).unwrap();
     });
     assert_eq!(
         s.linked(LinkKind::ExiledWith, s.object_ref(first)).count(),
@@ -1675,7 +1681,7 @@ fn a_permanent_with_a_card_exiled_with_it_is_not_interchangeable_with_its_twin()
     assert_eq!(s.signature(first), s.signature(second));
     assert!(!crate::engine::interchangeable(&s, first, second));
     with_game(&t, &mut s, &mut x, second, |game, resolution| {
-        linked::exile_linked(game, another, resolution.source()).unwrap();
+        linked::exile_linked(game, resolution.controller(), another, resolution.source()).unwrap();
     });
     assert!(!crate::engine::interchangeable(&s, first, second));
 }

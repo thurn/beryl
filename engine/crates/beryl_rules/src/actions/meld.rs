@@ -91,7 +91,7 @@ pub(crate) fn instruction<L: Layout>(
     let you = run.scene().subject.of.controller.seat();
     let them = Bitboard::single(source) | Bitboard::single(other);
     run.remember(them)?;
-    exile(run.game(), them)?;
+    exile(run.game(), you, them)?;
     let game = run.game();
     let s = &*game.state;
     if s.object(source).zone() != Zone::Exile || s.object(other).zone() != Zone::Exile {

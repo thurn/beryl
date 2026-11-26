@@ -321,7 +321,16 @@ fn pay_with_source<L: Layout>(
             event::move_one(s, t, sink, source.slot, Zone::Graveyard, Reason::Sacrifice)
         }
         CostAction::Discard => {
-            event::move_one(s, t, sink, source.slot, Zone::Graveyard, Reason::Discard)
+            let discarder = s.object(source.slot).owner();
+            event::move_one_by(
+                s,
+                t,
+                sink,
+                discarder,
+                source.slot,
+                Zone::Graveyard,
+                Reason::Discard,
+            )
         }
         CostAction::RemoveCounter(kind) => {
             counters::remove_from_object(&mut Game::new(s, t, sink), source, kind, 1)
@@ -682,7 +691,7 @@ pub(crate) fn pay_with_all<L: Layout>(
         (CostAction::Discard, Zone::Hand) => {
             // See CR 701.9a: "To discard a card, move it from its owner's hand to
             // that player's graveyard."
-            crate::zones::move_all(&mut game, objects, Zone::Graveyard, Reason::Discard)
+            crate::zones::move_all_by(&mut game, player, objects, Zone::Graveyard, Reason::Discard)
         }
         (CostAction::Exile, Zone::Graveyard) => {
             let cards = game.state().cards_in(player, Graveyard).intersect(objects);
@@ -691,12 +700,12 @@ pub(crate) fn pay_with_all<L: Layout>(
                 objects,
                 "every exile pick is a graveyard card"
             );
-            crate::zones::exile_cards_for_cost(&mut game, cards)
+            crate::zones::exile_cards_for_cost(&mut game, player, cards)
         }
         (CostAction::Exile, Zone::Hand) => {
             let cards = game.state().cards_in(player, Hand).intersect(objects);
             assert_eq!(cards.slots(), objects, "every exile pick is a card in hand");
-            crate::zones::exile_cards_for_cost(&mut game, cards)
+            crate::zones::exile_cards_for_cost(&mut game, player, cards)
         }
         _ => unreachable!("the card table refuses a cost the engine cannot pay"),
     }

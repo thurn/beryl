@@ -87,6 +87,7 @@ fn top_cards_and_draws_skip_objects_waiting_to_cease_to_exist() {
     let object = s.object_ref(token);
     library::put_into(
         &mut Game::new(&mut s, &t, &mut scratch.events),
+        player,
         object,
         Place::Top,
     )
@@ -111,6 +112,7 @@ fn top_cards_and_draws_skip_objects_waiting_to_cease_to_exist() {
     s.put_on_stack(&mut scratch.events, entry).unwrap();
     library::put_into(
         &mut Game::new(&mut s, &t, &mut scratch.events),
+        player,
         object,
         Place::Top,
     )
@@ -533,8 +535,8 @@ fn any_object_is_put_into_its_owners_library_at_any_position() {
     let [buried_card, held_card, top_card] = [buried, held, top].map(|slot| s.object_ref(slot));
 
     let mut game = Game::new(&mut s, &t, &mut x.events);
-    library::put_into(&mut game, held_card, Place::UnderTop(2)).unwrap();
-    library::put_into(&mut game, buried_card, Place::Bottom).unwrap();
+    library::put_into(&mut game, p, held_card, Place::UnderTop(2)).unwrap();
+    library::put_into(&mut game, p, buried_card, Place::Bottom).unwrap();
     let cards = s.library(p);
     assert_eq!(cards[cards.len() - 3], held, "third from the top");
     assert_eq!((cards[0], *cards.last().unwrap()), (buried, top));
@@ -542,13 +544,13 @@ fn any_object_is_put_into_its_owners_library_at_any_position() {
 
     // A card already in the library moves within it, and is the object it was.
     let mut game = Game::new(&mut s, &t, &mut x.events);
-    library::put_into(&mut game, top_card, Place::Bottom).unwrap();
+    library::put_into(&mut game, p, top_card, Place::Bottom).unwrap();
     assert_eq!(s.library(p)[..2], [top, buried]);
     assert!(s.is_current(top_card));
     // One that has changed zones since goes nowhere (CR 400.7).
     let before = s.library(p).len();
     let mut game = Game::new(&mut s, &t, &mut x.events);
-    library::put_into(&mut game, held_card, Place::Top).unwrap();
+    library::put_into(&mut game, p, held_card, Place::Top).unwrap();
     assert_eq!(s.library(p).len(), before);
 }
 

@@ -258,8 +258,10 @@ pub(crate) fn dredge<L: Layout>(game: &mut Game<'_, L>, player: Seat) -> Result<
     crate::coverage::hit(ability);
     let s = &*game.state;
     game.sink.enter_source(|| s.object_ref(card));
-    let done = actions::mill::mill(game, player, n)
-        .and_then(|_| zones::move_all(game, Bitboard::single(card), Zone::Hand, Reason::Effect));
+    let done = actions::mill::mill(game, player, n).and_then(|_| {
+        let card = Bitboard::single(card);
+        zones::move_all_by(game, player, card, Zone::Hand, Reason::Effect)
+    });
     game.sink.leave();
     done.map(|()| true)
 }

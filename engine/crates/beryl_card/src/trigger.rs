@@ -167,6 +167,12 @@ impl TriggerEvent {
         matches!(self, Self::Casts | Self::CastsFrom(_))
     }
 
+    /// Whether this trigger is about one player who acted, whom its effect may call "that
+    /// player": the player who cast the spell, or who discarded the card.
+    pub const fn names_a_player(self) -> bool {
+        self.is_cast() || matches!(self, Self::Discards)
+    }
+
     /// Whether this cast trigger accepts a spell cast from `origin`.
     pub fn matches_cast_from(self, origin: Zone) -> bool {
         matches!(self, Self::Casts) || matches!(self, Self::CastsFrom(zone) if zone == origin)

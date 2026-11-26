@@ -77,7 +77,8 @@ pub(crate) fn begin_cast<L: Layout>(
     // onto the stack". The stack record carries only the public characteristics.
     let from = s.object(slot).zone();
     let down = (face == FaceIx::DOWN).then(|| s.who_knows(slot));
-    event::move_one(s, t, sink, slot, Zone::Stack, Reason::Cast)?;
+    // The player who casts a card from a shared library or graveyard takes it.
+    event::move_one_by(s, t, sink, player, slot, Zone::Stack, Reason::Cast)?;
     let card = if let Some(knew) = down {
         if from == Zone::Hand {
             s.hide_choice_from_hand(slot);

@@ -195,7 +195,8 @@ pub enum Players {
     /// in the game is the player who started the game with it in their deck."
     OwnerOf(Objects),
     /// "That player", "they": the player an [`crate::Effect::ForEachPlayer`] is being done
-    /// for, or the player who cast the spell that triggered this ability.
+    /// for, the player who cast the spell that triggered this ability, or the player who
+    /// discarded the card that triggered it.
     ThatPlayer,
     /// "Each player who doesn't win the subgame": the nonwinners recorded by the previous
     /// instruction, [`crate::Effect::Subgame`]. Every player is included when it ends in a draw.

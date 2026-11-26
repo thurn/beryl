@@ -24,7 +24,16 @@ use beryl_kernel::reference::{CardIn, Hand};
 /// is not discarded (see CR 400.7).
 #[inline]
 pub fn discard<L: Layout>(game: &mut Game<'_, L>, card: CardIn<Hand, L>) -> Result<(), Full> {
-    zones::move_to(game, card.into(), Zone::Graveyard, Reason::Discard)
+    // In a game whose players share a graveyard, a discarded card has no owner once it is
+    // there, so the move names its discarder for the discard triggers to read.
+    let discarder = game.state.object(card.slot()).owner();
+    zones::move_to_by(
+        game,
+        discarder,
+        card.into(),
+        Zone::Graveyard,
+        Reason::Discard,
+    )
 }
 
 /// `player` discards `n` cards of their choice, or their whole hand if it has fewer
@@ -100,16 +109,11 @@ pub(crate) fn instruction<L: Layout>(
         let cards = run
             .scene()
             .objects(beryl_card::prelude::hand_of(&Players::You));
+        let you = run.you();
         let game = run.game();
-        event::move_batch(
-            game.state,
-            game.table,
-            game.sink,
-            cards,
-            Zone::Graveyard,
-            Reason::Discard,
-            Entry::default(),
-        )?;
+        let (s, t, sink) = (&mut *game.state, game.table, &mut *game.sink);
+        let (to, reason, entry) = (Zone::Graveyard, Reason::Discard, Entry::default());
+        event::move_batch_by(s, t, sink, you, cards, to, reason, entry)?;
         return Ok(Outcome::acted_on(cards));
     }
     let count = run.scene().amount(count);

@@ -4,6 +4,9 @@
 //! player's graveyard: either player may cast it from there or have its ability trigger for
 //! them, and an effect on each player's library or graveyard acts on the shared one once.
 //!
+//! A card in the shared library or graveyard has no owner: the player who takes it owns it from
+//! then on, and "its owner" of a card still there is the player who performs the instruction.
+//!
 //! Each game is built with the kernel's `Board` from a deck of the cards named, all of them in
 //! the shared library at first.
 
@@ -13,8 +16,10 @@ use beryl_engine::state::StackEntry;
 use beryl_engine::two_player::TwoPlayerSeat;
 use beryl_engine::{
     Candidates, Choice, Decision, DecisionKind, Format, GameTable, Opt, Profile, Replay, Scratch,
-    Seat, Slot, State, Step, TurnStep, Zone, apply, next,
+    Seat, Slot, State, Step, TurnStep, Zone, ZoneKey, apply, next,
 };
+use beryl_scenario::Live;
+use beryl_scenario::prelude::{ME, Resolve, THEM};
 
 struct Game {
     t: GameTable,
@@ -129,6 +134,8 @@ fn either_player_casts_a_card_given_flashback_from_the_shared_graveyard() {
             |s| Game::spell_controller(s, bolt).is_some(),
         );
         assert_eq!(Game::spell_controller(&g.s, bolt), Some(player));
+        // The caster took the card out of the shared graveyard, and owns it on the stack.
+        assert_eq!(g.s.object(bolt).owner(), player);
     }
 }
 
@@ -151,19 +158,23 @@ fn either_player_casts_a_card_with_escape_from_the_shared_graveyard() {
             g.put(ISLAND, player, Zone::Graveyard);
         }
         let bolt = g.put(LIGHTNING_BOLT, player, Zone::Graveyard);
-        let mut caster = None;
+        let (mut caster, mut owner) = (None, None);
         g.play(
             |_, d| Game::cast(d, bolt),
             |s| {
                 caster = caster.or(Game::spell_controller(s, bolt));
+                owner = owner.or(caster.map(|_| s.object(bolt).owner()));
                 caster.is_some() && s.stack().is_empty()
             },
         );
         assert_eq!(caster, Some(player));
-        let exiled = (g.s.in_zone(Zone::Exile))
-            .filter(|slot| g.s.definition_name(&g.t, slot) == ISLAND)
-            .count();
-        assert_eq!(exiled, 3);
+        // The caster took the card out of the shared graveyard, and owned it on the stack.
+        assert_eq!(owner, Some(player));
+        let exiled =
+            (g.s.in_zone(Zone::Exile)).filter(|slot| g.s.definition_name(&g.t, slot) == ISLAND);
+        assert_eq!(exiled.count(), 3);
+        // The cards exiled to pay the escape cost are the payer's.
+        assert!(exiled.all(|slot| g.s.object(slot).owner() == player));
     }
 }
 
@@ -282,4 +293,208 @@ fn a_count_of_cards_in_all_graveyards_counts_the_shared_graveyard_once() {
         );
         assert_eq!(hand(&g.s), 1 + 2, "one card, then one for each other copy");
     }
+}
+
+/// Every card the tests put somewhere, and Islands for the library to draw from.
+const DECK: &[(u8, &str)] = &[
+    (6, names::FOREST),
+    (6, names::SWAMP),
+    (20, names::ISLAND),
+    (1, names::HAUNTED_FENGRAF),
+    (1, names::SYLVAN_SCRYING),
+    (1, names::CAVERN_OF_SOULS),
+    (1, names::MISTER_IMMORTAL),
+    (1, names::LURRUS_OF_THE_DREAM_DEN),
+    (1, names::TORMODS_CRYPT),
+    (1, names::UNSUBSTANTIATE),
+    (1, names::REST_IN_PEACE),
+    (1, names::MENTAL_NOTE),
+    (1, names::MEGRIM),
+    (1, names::CHART_A_COURSE),
+    (1, names::DANDAN),
+];
+
+/// A shared game in `active`'s first main phase, and a way to put its cards where a test wants
+/// them before it is played.
+struct Position {
+    t: GameTable,
+    s: State,
+}
+
+impl Position {
+    fn new(active: Seat) -> Position {
+        let t = GameTable::new(Format::SHARED_DECK, &CARDS, [DECK, &[]]).unwrap();
+        let mut s = State::deal(&t, 7, Profile::EXACT).unwrap();
+        assert!(s.shares_zones());
+        let turn = if active == Seat::P0 { 1 } else { 2 };
+        s.board().begin_at(turn, active, TurnStep::PrecombatMain);
+        Position { t, s }
+    }
+
+    /// A card named `name` still in the shared library.
+    fn in_library(&self, name: &str) -> Slot {
+        let s = &self.s;
+        *s.library(Seat::P0)
+            .iter()
+            .find(|&&slot| s.name(&self.t, slot) == name)
+            .unwrap_or_else(|| panic!("{name} in the shared library"))
+    }
+
+    /// Puts a card named `name` from the shared library into `zone`: for a zone with owners,
+    /// owned by `owner`, and into the shared one for the shared graveyard.
+    fn put(&mut self, owner: Seat, name: &str, zone: Zone) -> Slot {
+        let slot = self.in_library(name);
+        if !matches!(zone, Zone::Graveyard | Zone::Library) {
+            self.s.claim(slot, owner);
+        }
+        self.s.board().place(slot, zone).unwrap();
+        slot
+    }
+
+    fn lands(&mut self, owner: Seat, name: &str, n: usize) {
+        for _ in 0..n {
+            self.put(owner, name, Zone::Battlefield);
+        }
+    }
+
+    fn live(self) -> Live {
+        Live::from_position(self.t, self.s)
+    }
+}
+
+/// The owner of the card in `slot`, which must have one.
+fn owner(s: &State, slot: Slot) -> Seat {
+    assert!(s.has_owner(slot), "the card has an owner");
+    s.object(slot).owner()
+}
+
+#[test]
+fn a_card_returned_from_the_shared_graveyard_to_a_hand_belongs_to_that_hand() {
+    let mut p = Position::new(Seat::P1);
+    p.lands(Seat::P1, names::FOREST, 3);
+    let fengraf = p.put(Seat::P1, names::HAUNTED_FENGRAF, Zone::Battlefield);
+    let dandan = p.put(Seat::P0, names::DANDAN, Zone::Graveyard);
+    assert!(!p.s.has_owner(dandan));
+    let mut live = p.live();
+    live.act(THEM.activates(names::HAUNTED_FENGRAF, 1)).unwrap();
+    live.act(Resolve).unwrap();
+    let s = live.state();
+    assert!(s.zone(ZoneKey::Of(Seat::P1, Zone::Hand)).contains(dandan));
+    assert_eq!(owner(s, dandan), Seat::P1);
+    // The land sacrificed for the cost went to the shared graveyard, and has no owner there.
+    assert_eq!(s.object(fengraf).zone(), Zone::Graveyard);
+    assert!(!s.has_owner(fengraf));
+}
+
+#[test]
+fn a_land_found_in_the_shared_library_asks_its_new_owner_as_it_enters() {
+    let mut p = Position::new(Seat::P1);
+    p.lands(Seat::P1, names::FOREST, 2);
+    p.put(Seat::P1, names::SYLVAN_SCRYING, Zone::Hand);
+    let cavern = p.in_library(names::CAVERN_OF_SOULS);
+    let mut live = p.live();
+    live.act(THEM.casts(names::SYLVAN_SCRYING)).unwrap();
+    live.act(Resolve).unwrap();
+    live.act(THEM.picks_up_to(names::CAVERN_OF_SOULS)).unwrap();
+    assert_eq!(owner(live.state(), cavern), Seat::P1);
+    live.act(THEM.plays(names::CAVERN_OF_SOULS)).unwrap();
+    // Cavern of Souls asks for a creature type as it enters: its owner and controller answer.
+    live.act(THEM.chooses_named("Fish")).unwrap();
+    let s = live.state();
+    assert_eq!(owner(s, cavern), Seat::P1);
+    assert_eq!(s.controller(cavern), Seat::P1);
+}
+
+#[test]
+fn a_card_put_from_the_shared_graveyard_under_its_owners_control_is_the_performers() {
+    let mut p = Position::new(Seat::P1);
+    p.lands(Seat::P1, names::FOREST, 3);
+    let immortal = p.put(Seat::P0, names::MISTER_IMMORTAL, Zone::Graveyard);
+    let mut live = p.live();
+    live.act(THEM.activates(names::MISTER_IMMORTAL, 0)).unwrap();
+    live.act(Resolve).unwrap();
+    live.act(THEM.controls(names::MISTER_IMMORTAL, 1)).unwrap();
+    assert_eq!(owner(live.state(), immortal), Seat::P1);
+}
+
+#[test]
+fn a_spell_cast_from_the_shared_graveyard_belongs_to_its_caster() {
+    let mut p = Position::new(Seat::P1);
+    p.lands(Seat::P1, names::FOREST, 2);
+    p.put(Seat::P1, names::LURRUS_OF_THE_DREAM_DEN, Zone::Battlefield);
+    let immortal = p.put(Seat::P0, names::MISTER_IMMORTAL, Zone::Graveyard);
+    let mut live = p.live();
+    live.act(THEM.casts(names::MISTER_IMMORTAL)).unwrap();
+    assert_eq!(live.state().object(immortal).zone(), Zone::Stack);
+    assert_eq!(owner(live.state(), immortal), Seat::P1);
+    live.act(Resolve).unwrap();
+    live.act(THEM.controls(names::MISTER_IMMORTAL, 1)).unwrap();
+    assert_eq!(owner(live.state(), immortal), Seat::P1);
+}
+
+#[test]
+fn a_card_exiled_from_the_shared_graveyard_returns_to_its_exilers_hand() {
+    let mut p = Position::new(Seat::P1);
+    p.lands(Seat::P1, names::FOREST, 3);
+    p.put(Seat::P1, names::TORMODS_CRYPT, Zone::Battlefield);
+    let immortal = p.put(Seat::P0, names::MISTER_IMMORTAL, Zone::Graveyard);
+    p.lands(Seat::P0, names::ISLAND, 2);
+    p.put(Seat::P0, names::UNSUBSTANTIATE, Zone::Hand);
+    let mut live = p.live();
+    // Tormod's Crypt exiles the shared graveyard for the player who sacrificed it.
+    live.act(THEM.activates(names::TORMODS_CRYPT, 0)).unwrap();
+    live.act(THEM.targets_player(THEM)).unwrap();
+    live.act(Resolve).unwrap();
+    assert_eq!(live.state().object(immortal).zone(), Zone::Exile);
+    assert_eq!(owner(live.state(), immortal), Seat::P1);
+    live.act(THEM.activates(names::MISTER_IMMORTAL, 0)).unwrap();
+    live.act(Resolve).unwrap();
+    // P0 answers the pass with Unsubstantiate, whose one target is Mister Immortal: no player
+    // could do anything but pass, so it resolves, and returns Mister Immortal to its owner's
+    // hand, the hand of the player who exiled it.
+    live.act(THEM.passes()).unwrap();
+    live.act(ME.casts(names::UNSUBSTANTIATE)).unwrap();
+    live.act(THEM.has(Zone::Hand, names::MISTER_IMMORTAL, 1))
+        .unwrap();
+    let s = live.state();
+    assert!(s.zone(ZoneKey::Of(Seat::P1, Zone::Hand)).contains(immortal));
+}
+
+#[test]
+fn a_milled_card_that_rest_in_peace_exiles_belongs_to_the_player_who_milled() {
+    let mut p = Position::new(Seat::P1);
+    p.put(Seat::P0, names::REST_IN_PEACE, Zone::Battlefield);
+    p.lands(Seat::P1, names::ISLAND, 2);
+    p.put(Seat::P1, names::MENTAL_NOTE, Zone::Hand);
+    let top: Vec<Slot> =
+        p.s.library(Seat::P0)
+            .iter()
+            .rev()
+            .take(2)
+            .copied()
+            .collect();
+    let mut live = p.live();
+    live.act(THEM.casts(names::MENTAL_NOTE)).unwrap();
+    live.act(Resolve).unwrap();
+    let s = live.state();
+    for slot in top {
+        assert_eq!(s.object(slot).zone(), Zone::Exile);
+        assert_eq!(owner(s, slot), Seat::P1);
+    }
+}
+
+#[test]
+fn a_discard_by_seat_one_triggers_whenever_an_opponent_discards() {
+    let mut p = Position::new(Seat::P1);
+    p.put(Seat::P0, names::MEGRIM, Zone::Battlefield);
+    p.lands(Seat::P1, names::ISLAND, 2);
+    p.put(Seat::P1, names::CHART_A_COURSE, Zone::Hand);
+    p.put(Seat::P1, names::DANDAN, Zone::Hand);
+    let mut live = p.live();
+    live.act(THEM.casts(names::CHART_A_COURSE)).unwrap();
+    live.act(Resolve).unwrap();
+    live.act(THEM.picks(names::DANDAN)).unwrap();
+    live.act(Resolve).unwrap();
+    live.act(THEM.life(18)).unwrap();
+    live.act(ME.life(20)).unwrap();
 }

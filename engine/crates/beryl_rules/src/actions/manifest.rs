@@ -43,7 +43,16 @@ pub fn manifest<L: Layout>(
         ..Entry::default()
     };
     let (cards, to) = (Bitboard::single(card), Zone::Battlefield);
-    event::move_batch(s, game.table, game.sink, cards, to, Reason::Effect, entry)?;
+    event::move_batch_by(
+        s,
+        game.table,
+        game.sink,
+        player,
+        cards,
+        to,
+        Reason::Effect,
+        entry,
+    )?;
     // A replacement effect may have put it elsewhere, such as exile ("if a nontoken creature
     // would enter and it wasn't cast, exile it instead"): then it is no face-down permanent,
     // and every player saw it go to a public zone.

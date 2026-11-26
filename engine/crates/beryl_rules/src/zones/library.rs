@@ -45,6 +45,7 @@ pub fn top<L: Layout>(s: &State<L>, player: Seat, n: u8) -> Bitboard<L::Slot> {
 /// stays the object it was, so whoever knew it still does.
 pub fn put_into<L: Layout>(
     game: &mut Game<'_, L>,
+    player: Seat,
     object: ObjectRef<L>,
     place: Place,
 ) -> Result<(), Full> {
@@ -77,9 +78,8 @@ pub fn put_into<L: Layout>(
     }
     let (cards, to) = (Bitboard::single(object.slot), Zone::Library);
     let (reason, entry) = (Reason::Effect, Entry::default());
-    event::move_batch_to(
-        game.state, game.table, game.sink, cards, to, place, reason, entry,
-    )
+    let (s, t, sink) = (&mut *game.state, game.table, &mut *game.sink);
+    event::move_batch_to_by(s, t, sink, player, cards, to, place, reason, entry)
 }
 
 /// Puts cards on the bottom of their owners' libraries in a random order. Their identities
@@ -89,16 +89,15 @@ pub fn put_into<L: Layout>(
 /// the game's stream for everything but shuffles ([`crate::chance`]).
 pub fn put_on_bottom_in_random_order<L: Layout>(
     game: &mut Game<'_, L>,
+    player: Seat,
     cards: Bitboard<L::Slot>,
 ) -> Result<(), Full> {
     let (to, place) = (Zone::Library, Place::Bottom);
     let (reason, entry) = (Reason::Effect, Entry::default());
-    event::move_batch_to(
-        game.state, game.table, game.sink, cards, to, place, reason, entry,
-    )?;
+    let (s, t, sink) = (&mut *game.state, game.table, &mut *game.sink);
+    event::move_batch_to_by(s, t, sink, player, cards, to, place, reason, entry)?;
     // Rebound within each owner's library, among the slots that went there. Each takes
     // from the one random stream, by seat. A shared library is rebound once.
-    let s = &mut *game.state;
     for owner in s.zone_owners(to).in_seat_order() {
         let mut moved: L::Queue<L::Slot, 64> = Default::default();
         for &slot in s.library(owner) {
@@ -278,7 +277,7 @@ pub fn dig<L: Layout>(
                     taken.insert(slot);
                 }
             }
-            zones::move_all(game, taken, Zone::Hand, Reason::Effect)?;
+            zones::move_all_by(game, player, taken, Zone::Hand, Reason::Effect)?;
         }
         Taken::MayReveal(filter) => {
             let words = resolution.words(game);
@@ -290,7 +289,7 @@ pub fn dig<L: Layout>(
             if let Some(slot) = choices::may_pick(game, resolution, player, accepted, look)? {
                 reveal::reveal(game, player, slot);
                 let card = game.state.object_ref(slot);
-                zones::move_to(game, card, Zone::Hand, Reason::Effect)?;
+                zones::move_to_by(game, player, card, Zone::Hand, Reason::Effect)?;
                 taken.insert(slot);
             }
         }
@@ -323,13 +322,13 @@ pub fn dig<L: Layout>(
             while !left.is_empty() {
                 let bottom = bottom_arrange.count(cards(left)).part(Part::Second);
                 let slot = choices::pick(game, resolution, player, left, bottom)?;
-                put_into(game, game.state.object_ref(slot), Place::Bottom)?;
+                put_into(game, player, game.state.object_ref(slot), Place::Bottom)?;
                 left.remove(slot);
             }
         }
         LibraryRest::Bottom(LibraryOrder::Random) => {
             if !left.is_empty() {
-                put_on_bottom_in_random_order(game, left)?;
+                put_on_bottom_in_random_order(game, player, left)?;
             }
         }
         LibraryRest::Top => {
@@ -375,7 +374,7 @@ fn order_on_top<L: Layout>(
         }
     }
     for &slot in order.iter().rev() {
-        put_into(game, game.state.object_ref(slot), Place::Top)?;
+        put_into(game, player, game.state.object_ref(slot), Place::Top)?;
     }
     Ok(())
 }
@@ -394,9 +393,10 @@ pub(crate) fn put_instruction<L: Layout>(
             let cards = run.elsewhere_than(objects, Zone::Library);
             if !cards.is_empty() {
                 run.remember(cards)?;
+                let you = run.you();
                 let game = run.game();
                 let rest = crate::stack::unstack(game, cards, Zone::Library)?;
-                put_on_bottom_in_random_order(game, rest)?;
+                put_on_bottom_in_random_order(game, you, rest)?;
             }
             return Ok(run.now_in(cards, Zone::Library));
         }
@@ -411,8 +411,9 @@ pub(crate) fn put_instruction<L: Layout>(
 /// [`LibraryPosition::TopOrBottom`]: "Its owner puts it on their choice of the top or bottom
 /// of their library." Each card's owner is asked as the instruction is reached
 /// (see [CR 608.2d](https://yawgatog.com/resources/magic-rules/#R6082d)), a yes for the top, and
-/// the card goes there before the next is asked about. The outcome is the cards that are in
-/// a library.
+/// the card goes there before the next is asked about. A card in a shared graveyard has no
+/// owner, and the player who performs the instruction is asked instead. The outcome is the
+/// cards that are in a library.
 fn put_at_owners_choice<L: Layout>(
     run: &mut Run<'_, '_, L>,
     objects: Objects,
@@ -421,12 +422,23 @@ fn put_at_owners_choice<L: Layout>(
     run.remember(objects)?;
     let top_or_bottom =
         Prompt::new(Purpose::TopOrBottom).places(prompt::Place::Top, prompt::Place::Bottom);
+    let you = run.you();
     for &slot in run.in_game_order(objects)?.iter() {
         let (game, resolution) = run.resolving();
-        let (object, owner) = (game.state.object_ref(slot), game.state.object(slot).owner());
+        let object = game.state.object_ref(slot);
+        let owner = if game.state.has_owner(slot) {
+            game.state.object(slot).owner()
+        } else {
+            you
+        };
         let about = Bitboard::single(slot);
         let top = choices::yes_no(game, resolution, owner, top_or_bottom, about)?;
-        put_into(game, object, if top { Place::Top } else { Place::Bottom })?;
+        put_into(
+            game,
+            owner,
+            object,
+            if top { Place::Top } else { Place::Bottom },
+        )?;
         game.sink.note(Event::TopOrBottom { player: owner, top });
     }
     Ok(run.now_in(objects, Zone::Library))

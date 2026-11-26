@@ -26,7 +26,9 @@ impl Live {
 }
 
 impl<L: Layout> Live<L> {
-    pub(crate) fn from_position(table: GameTable, state: State<L>) -> Self {
+    /// A game played live from `state`, a position its caller built, such as one in a format
+    /// a scenario's setup cannot say.
+    pub fn from_position(table: GameTable, state: State<L>) -> Self {
         Self {
             runner: Runner::from_position(table, state),
             actions: Vec::new(),

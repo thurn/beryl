@@ -78,6 +78,12 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
         self
     }
 
+    /// "You": the controller of the spell or ability. An instruction that takes a card out of
+    /// a shared library or graveyard names this player as its taker unless it names another.
+    pub(crate) fn you(&self) -> Seat {
+        self.subject.of.controller.seat()
+    }
+
     /// The game the ability resolves in, to change.
     pub(crate) fn game(&mut self) -> &mut Game<'a, L> {
         &mut *self.game

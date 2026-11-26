@@ -26,7 +26,7 @@ pub fn mill<L: Layout>(
     n: u8,
 ) -> Result<Bitboard<L::Slot>, Full> {
     let top = library::top(game.state, player, n);
-    zones::move_all(game, top, Zone::Graveyard, Reason::Effect)?;
+    zones::move_all_by(game, player, top, Zone::Graveyard, Reason::Effect)?;
     Ok(top)
 }
 

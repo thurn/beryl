@@ -42,7 +42,10 @@ pub(crate) fn into_instruction<L: Layout>(
     cards: Objects,
 ) -> Result<Outcome<L>, Full> {
     let cards = run.elsewhere_than(cards, Zone::Library);
-    zones::move_all(run.game(), cards, Zone::Library, Reason::Effect)?;
+    // A card that leaves a shared graveyard is taken by the player who shuffles it in, or by
+    // the controller of the spell or ability when several players do.
+    let taker = (run.scene().players(players).sole()).unwrap_or_else(|| run.you());
+    zones::move_all_by(run.game(), taker, cards, Zone::Library, Reason::Effect)?;
     let libraries = run.state().zone_owners(Zone::Library).count();
     let libraries = usize::try_from(libraries).unwrap_or(usize::MAX);
     for player in run.in_turn_order(players).take(libraries) {

@@ -561,7 +561,7 @@ impl Scope<'_> {
             Players::EachOther(players) => self.players(players),
             Players::ThatPlayer if self.for_a_player => Ok(()),
             Players::ThatPlayer => match self.ability.trigger() {
-                Some(trigger) if trigger.event.is_cast() => Ok(()),
+                Some(trigger) if trigger.event.names_a_player() => Ok(()),
                 _ => Err(Malformed::ThatPlayer),
             },
         }

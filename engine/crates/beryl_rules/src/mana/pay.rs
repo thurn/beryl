@@ -454,7 +454,7 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
         if !hand.is_empty() {
             let entry = event::Entry::default();
             let reason = event::Reason::Discard;
-            event::move_batch(s, t, sink, hand, Zone::Graveyard, reason, entry)?;
+            event::move_batch_by(s, t, sink, controller, hand, Zone::Graveyard, reason, entry)?;
         }
     }
     if ability.cost().does(CostAction::Sacrifice) {

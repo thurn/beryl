@@ -45,6 +45,26 @@ pub fn move_to<L: Layout>(
     event::move_one(game.state, game.table, game.sink, object.slot, to, reason)
 }
 
+/// [`move_to`] by `player`, who takes the object if it leaves a shared library or graveyard
+/// and owns it from then on ([`Sink::taker`](event::Sink::taker)).
+// Always inline: the move of every game of another format runs through here, and
+// the test of the format must cost it no call.
+#[inline(always)]
+#[allow(clippy::inline_always)]
+pub fn move_to_by<L: Layout>(
+    game: &mut Game<'_, L>,
+    player: Seat,
+    object: ObjectRef<L>,
+    to: Zone,
+    reason: Reason,
+) -> Result<(), Full> {
+    if !game.state.is_current(object) {
+        return Ok(());
+    }
+    let (s, t, sink) = (&mut *game.state, game.table, &mut *game.sink);
+    event::move_one_by(s, t, sink, player, object.slot, to, reason)
+}
+
 /// Moves a set of objects to one zone simultaneously, each to its owner's
 /// ([CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003)): "If an object would go to
 /// any library, graveyard, or hand other than its owner's, it goes to its owner's
@@ -62,7 +82,25 @@ pub fn move_all<L: Layout>(
     )
 }
 
-/// Exiles cards chosen for a cost together. A token does not represent a card
+/// [`move_all`] by `player`, who takes the objects that leave a shared library or graveyard and
+/// owns them from then on ([`Sink::taker`](event::Sink::taker)).
+// Always inline: the move of every game of another format runs through here, and
+// the test of the format must cost it no call.
+#[inline(always)]
+#[allow(clippy::inline_always)]
+pub fn move_all_by<L: Layout>(
+    game: &mut Game<'_, L>,
+    player: Seat,
+    objects: Bitboard<L::Slot>,
+    to: Zone,
+    reason: Reason,
+) -> Result<(), Full> {
+    let (s, t, sink) = (&mut *game.state, game.table, &mut *game.sink);
+    event::move_batch_by(s, t, sink, player, objects, to, reason, Entry::default())
+}
+
+/// `payer` exiles cards chosen for a cost together, and takes those that leave a shared
+/// graveyard. A token does not represent a card
 /// (see [CR 111.6]) and cannot enter the payment's checked set.
 ///
 /// ```compile_fail,E0308
@@ -70,7 +108,8 @@ pub fn move_all<L: Layout>(
 /// use beryl_rules::{Game, zones::exile_cards_for_cost};
 ///
 /// fn pay(game: &mut Game<'_>, tokens: Permanents) {
-///     let _ = exile_cards_for_cost::<Graveyard, _>(game, tokens.slots());
+///     let payer = beryl_kernel::ids::Seat::P0;
+///     let _ = exile_cards_for_cost::<Graveyard, _>(game, payer, tokens.slots());
 /// }
 /// ```
 ///
@@ -78,9 +117,10 @@ pub fn move_all<L: Layout>(
 #[inline]
 pub fn exile_cards_for_cost<Z: ZoneMark, L: Layout>(
     game: &mut Game<'_, L>,
+    payer: Seat,
     cards: Cards<Z, L>,
 ) -> Result<(), Full> {
-    move_all(game, cards.slots(), Zone::Exile, Reason::Exile)
+    move_all_by(game, payer, cards.slots(), Zone::Exile, Reason::Exile)
 }
 
 /// Puts a permanent card onto the battlefield under `controller`'s control, with the face up
@@ -105,15 +145,9 @@ pub fn put_onto_battlefield<L: Layout>(
         ..Entry::default()
     };
     let (objects, to) = (Bitboard::single(object.slot), Zone::Battlefield);
-    event::move_batch(
-        game.state,
-        game.table,
-        game.sink,
-        objects,
-        to,
-        Reason::Effect,
-        entry,
-    )
+    let (s, t, sink) = (&mut *game.state, game.table, &mut *game.sink);
+    // A card that leaves a shared library or graveyard is taken by the player it enters under.
+    event::move_batch_by(s, t, sink, controller, objects, to, Reason::Effect, entry)
 }
 
 /// [`Effect::ReturnToBattlefield`](beryl_card::Effect::ReturnToBattlefield): "Return
@@ -183,6 +217,9 @@ fn onto_battlefield<L: Layout>(
     entry: Entry<L>,
 ) -> Result<Outcome<L>, Full> {
     let objects = run.elsewhere_than(objects, Zone::Battlefield);
+    // "Under its owner's control" of a card in a shared zone, which has no owner, is under the
+    // control of the player who performs the instruction.
+    let you = run.you();
     let game = run.game();
     let objects = objects.filter(|slot| {
         // A split card off the stack has both halves' card types (see CR 709.4c).
@@ -190,16 +227,17 @@ fn onto_battlefield<L: Layout>(
         !types.intersects(Types::INSTANT.union(Types::SORCERY))
     });
     let (to, reason) = (Zone::Battlefield, Reason::Effect);
-    event::move_batch(
-        game.state, game.table, game.sink, objects, to, reason, entry,
-    )?;
+    let (s, t, sink) = (&mut *game.state, game.table, &mut *game.sink);
+    event::move_batch_by(s, t, sink, you, objects, to, reason, entry)?;
     Ok(run.now_in(objects, Zone::Battlefield))
 }
 
-/// Puts cards onto the battlefield tapped, each under its owner's control, simultaneously:
-/// "Those cards enter tapped."
+/// `player` puts cards onto the battlefield tapped, each under its owner's control,
+/// simultaneously: "Those cards enter tapped." A card that leaves a shared library or graveyard
+/// has no owner, and enters under `player`'s control and owned by them.
 pub fn put_onto_battlefield_tapped<L: Layout>(
     game: &mut Game<'_, L>,
+    player: Seat,
     cards: Bitboard<L::Slot>,
 ) -> Result<(), Full> {
     let entry = Entry {
@@ -207,7 +245,8 @@ pub fn put_onto_battlefield_tapped<L: Layout>(
         ..Entry::default()
     };
     let (to, reason) = (Zone::Battlefield, Reason::Effect);
-    event::move_batch(game.state, game.table, game.sink, cards, to, reason, entry)
+    let (s, t, sink) = (&mut *game.state, game.table, &mut *game.sink);
+    event::move_batch_by(s, t, sink, player, cards, to, reason, entry)
 }
 
 /// `player` looks at the cards in `cards` and from then on knows them (architecture §13): a
@@ -259,10 +298,11 @@ pub(crate) fn put_into_graveyard_instruction<L: Layout>(
     // instead has moved already.
     let rest = stack::unstack(run.game(), objects, Zone::Graveyard)?;
     let mut moved = objects & !rest;
+    let you = run.you();
     for &slot in run.in_game_order(rest)?.iter() {
         let object = run.state().object_ref(slot);
         let pile = run.with_piles(Bitboard::single(slot));
-        move_to(run.game(), object, Zone::Graveyard, Reason::Effect)?;
+        move_to_by(run.game(), you, object, Zone::Graveyard, Reason::Effect)?;
         if !run.state().is_current(object) {
             moved |= pile;
         }
@@ -286,11 +326,13 @@ pub(crate) fn put_instruction<L: Layout>(
     }
     run.remember(objects)?;
     let found = run.with_piles(objects);
+    // "Its owner's hand" of a card in a shared zone is the hand of the player who performs the
+    // instruction, who takes it.
+    let you = run.you();
     let game = run.game();
     let rest = stack::unstack(game, objects, to)?;
     let (reason, entry) = (Reason::Effect, Entry::default());
-    event::move_batch_to(
-        game.state, game.table, game.sink, rest, to, place, reason, entry,
-    )?;
+    let (s, t, sink) = (&mut *game.state, game.table, &mut *game.sink);
+    event::move_batch_to_by(s, t, sink, you, rest, to, place, reason, entry)?;
     Ok(run.now_in(found, to))
 }

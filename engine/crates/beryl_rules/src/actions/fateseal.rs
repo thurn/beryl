@@ -41,7 +41,7 @@ pub fn fateseal<L: Layout>(
         .count(1)
         .places(prompt::Place::Bottom, prompt::Place::Top);
     if choices::yes_no(game, resolution, player, fateseal, looked)? {
-        library::put_into(game, top, Place::Bottom)?;
+        library::put_into(game, player, top, Place::Bottom)?;
     }
     Ok(looked)
 }

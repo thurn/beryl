@@ -42,6 +42,7 @@ mod replace;
 mod replay;
 mod rules;
 mod saga;
+mod shared_zones;
 mod spell_costs;
 mod static_abilities;
 mod subgames;

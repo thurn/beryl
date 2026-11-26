@@ -26,7 +26,7 @@ pub enum Malformed {
     /// targets an object ([CR 115.1](https://yawgatog.com/resources/magic-rules/#R1151)).
     Target,
     /// [`Players::ThatPlayer`] outside an [`Effect::ForEachPlayer`] and the body (not the
-    /// condition) of a replacement of draws, or a cast trigger: no player the
+    /// condition) of a replacement of draws, or a cast or discard trigger: no player the
     /// instruction is being done for.
     ThatPlayer,
     /// [`Condition::Paid`] of a kind of cost its face has no [`crate::CastingOption`] for:
@@ -143,7 +143,7 @@ impl Malformed {
                 "an `Objects::Target(n)` or `Players::Target(n)` has no matching target: give the ability a `TargetSpec` at index n in `.targeting(...)`, of a player kind for `Players::Target` and an object kind for `Objects::Target`, with `count` at least the number required; an ability target's filter is `Filter::Any`, and damage divided between targets needs one `TargetSpec` of count two"
             }
             Malformed::ThatPlayer => {
-                "`Players::ThatPlayer` names no player here: use it only inside `for_each_player(...)`, in the effect of a replacement of draws or in a cast trigger, and otherwise name the player (`you()`, `Players::Target(n)`, `Players::ControllerOf(...)`)"
+                "`Players::ThatPlayer` names no player here: use it only inside `for_each_player(...)`, in the effect of a replacement of draws or in a cast or discard trigger, and otherwise name the player (`you()`, `Players::Target(n)`, `Players::ControllerOf(...)`)"
             }
             Malformed::Paid => {
                 "`Condition::Paid` asks about a cost the face cannot be cast with: add the matching `CastingOption` to the face's `.casting(...)`, or remove the condition"

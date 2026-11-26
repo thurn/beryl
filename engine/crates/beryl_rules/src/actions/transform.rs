@@ -10,6 +10,7 @@ use crate::card::{FaceIx, Types};
 use crate::continuous::layers;
 use crate::fixed::Full;
 use crate::game::Game;
+use crate::ids::Seat;
 use crate::interpret::{Outcome, Run};
 use crate::layout::{Layout, Queue};
 use crate::replacement::event::{self, Entry, Reason};
@@ -104,7 +105,8 @@ pub fn exile_and_return_transformed<L: Layout>(
     if game.state.object(slot).zone() != Zone::Exile {
         return Ok(());
     }
-    return_transformed(game, game.state.object_ref(slot))
+    let owner = game.state.object(slot).owner();
+    return_transformed(game, owner, game.state.object_ref(slot))
 }
 
 /// Returns a card to the battlefield transformed under its owner's control
@@ -114,19 +116,25 @@ pub fn exile_and_return_transformed<L: Layout>(
 /// that isn't a double-faced card onto the battlefield transformed or converted, that card
 /// stays in its current zone." It returns as a new object, and one that has changed zones
 /// since it was named does not move
-/// (see [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)).
+/// (see [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)). A card in a shared
+/// graveyard has no owner, and `player`, who performs the instruction, takes it.
 #[allow(
     clippy::disallowed_methods,
     reason = "reads the back face the card would enter with (see CR 712.11b)"
 )]
 pub fn return_transformed<L: Layout>(
     game: &mut Game<'_, L>,
+    player: Seat,
     card: ObjectRef<L>,
 ) -> Result<(), Full> {
     if !game.state.is_current(card) {
         return Ok(());
     }
-    let owner = game.state.object(card.slot).owner();
+    let owner = if game.state.has_owner(card.slot) {
+        game.state.object(card.slot).owner()
+    } else {
+        player
+    };
     let values = game.state.copiable(card.slot);
     if !values.shape(game.table).is_double_faced() {
         return Ok(());
@@ -148,15 +156,8 @@ pub fn return_transformed<L: Layout>(
         ..Entry::default()
     };
     let (card, to) = (Bitboard::single(card.slot), Zone::Battlefield);
-    event::move_batch(
-        game.state,
-        game.table,
-        game.sink,
-        card,
-        to,
-        Reason::Effect,
-        entry,
-    )
+    let (s, t, sink) = (&mut *game.state, game.table, &mut *game.sink);
+    event::move_batch_by(s, t, sink, owner, card, to, Reason::Effect, entry)
 }
 
 /// [`Effect::ReturnTransformed`](beryl_card::Effect::ReturnTransformed): "Return [cards] to
@@ -168,9 +169,10 @@ pub(crate) fn return_instruction<L: Layout>(
     cards: Objects,
 ) -> Result<Outcome<L>, Full> {
     let cards = run.elsewhere_than(cards, Zone::Battlefield);
+    let you = run.you();
     for &slot in run.in_game_order(cards)?.iter() {
         let card = run.state().object_ref(slot);
-        return_transformed(run.game(), card)?;
+        return_transformed(run.game(), you, card)?;
     }
     Ok(run.now_in(cards, Zone::Battlefield))
 }

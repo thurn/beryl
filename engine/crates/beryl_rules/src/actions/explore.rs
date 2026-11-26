@@ -52,7 +52,7 @@ pub fn explore<L: Layout>(
             .contains(Types::LAND)
         {
             let card = game.state.object_ref(slot);
-            zones::move_to(game, card, Zone::Hand, Reason::Effect)?;
+            zones::move_to_by(game, player, card, Zone::Hand, Reason::Effect)?;
             return Ok(());
         }
     }
@@ -67,7 +67,7 @@ pub fn explore<L: Layout>(
         && choices::yes_no(game, resolution, player, prompt, Bitboard::single(slot))?
     {
         let card = game.state.object_ref(slot);
-        zones::move_to(game, card, Zone::Graveyard, Reason::Effect)?;
+        zones::move_to_by(game, player, card, Zone::Graveyard, Reason::Effect)?;
     }
     Ok(())
 }

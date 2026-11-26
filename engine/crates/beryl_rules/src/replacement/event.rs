@@ -32,6 +32,11 @@ use crate::table::{Capability, GameTable};
 use crate::zone::Place;
 use crate::zones::piles;
 
+mod shared;
+
+use shared::{assert_none_taken, claim_taken, discarders, disown_unmoved, match_shared};
+pub(crate) use shared::{move_batch_by, move_batch_to_by, move_one_by};
+
 /// How a permanent enters, as decided by whatever puts it onto the battlefield, before the
 /// replacement effects of §8.2 apply.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -221,7 +226,7 @@ pub(crate) fn move_batch_to<L: Layout>(
     reason: Reason,
     entry: Entry<L>,
 ) -> Result<(), Full> {
-    move_batch_with_reasons(
+    move_batch_with_reasons::<L, false>(
         s,
         t,
         sink,
@@ -258,9 +263,11 @@ impl<S: SlotId> MoveReasons<'_, S> {
     }
 }
 
-/// Moves objects together while preserving each object's reason for moving.
+/// Moves objects together while preserving each object's reason for moving. With `SHARED`, the
+/// batch names its taker, in a game whose players share a library and a graveyard
+/// ([`shared`]); without, a debug build checks that it takes no card from a shared zone.
 #[allow(clippy::too_many_arguments)]
-fn move_batch_with_reasons<L: Layout>(
+fn move_batch_with_reasons<L: Layout, const SHARED: bool>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
@@ -271,12 +278,15 @@ fn move_batch_with_reasons<L: Layout>(
     entry: Entry<L>,
 ) -> Result<(), Full> {
     layers::refresh(s, t, sink)?;
+    if !SHARED && cfg!(debug_assertions) {
+        assert_none_taken(s, objects);
+    }
     // Moving one object needs neither sorting nor scratch space for a full batch.
     if let Some(slot) = objects.sole() {
-        return move_ordered::<L, 1>(s, t, sink, &[slot], to, place, reasons, entry);
+        return move_ordered::<L, 1, SHARED>(s, t, sink, &[slot], to, place, reasons, entry);
     }
     let ordered = s.in_game_order(t, objects)?;
-    move_ordered::<L, 128>(s, t, sink, ordered.as_slice(), to, place, reasons, entry)
+    move_ordered::<L, 128, SHARED>(s, t, sink, ordered.as_slice(), to, place, reasons, entry)
 }
 
 /// Moves permanents simultaneously as state-based actions, preserving which were sacrificed.
@@ -289,7 +299,7 @@ pub(crate) fn move_state_based<L: Layout>(
     graveyard: Bitboard<L::Slot>,
     sacrifices: Bitboard<L::Slot>,
 ) -> Result<(), Full> {
-    move_batch_with_reasons(
+    move_batch_with_reasons::<L, false>(
         s,
         t,
         sink,
@@ -307,9 +317,17 @@ pub(crate) fn move_state_based<L: Layout>(
 /// A prepared move: the slot, the old and new zones, and how it enters.
 type PreparedMove<L> = (<L as Layout>::Slot, Zone, Zone, Entry<L>);
 
-/// Runs the zone-change pipeline for `ordered`, in the steps [`move_batch`] describes.
-#[allow(clippy::too_many_arguments)]
-fn move_ordered<L: Layout, const N: usize>(
+/// Runs the zone-change pipeline for `ordered`, in the steps [`move_batch`] describes. With
+/// `SHARED`, in a game whose players share a library and a graveyard, it first makes the
+/// batch's taker the owner of each card it takes out of a shared zone, gives back the cards a
+/// replacement effect kept there, and matches the discard triggers with each discarder, read
+/// before the move ([`shared`]).
+#[allow(
+    clippy::too_many_arguments,
+    clippy::too_many_lines,
+    reason = "the pipeline's steps in order, each a few lines, with the shared-deck format's"
+)]
+fn move_ordered<L: Layout, const N: usize, const SHARED: bool>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
@@ -324,6 +342,9 @@ fn move_ordered<L: Layout, const N: usize>(
     // filling it with `replacement::Move`s cost the rollout benchmark 1% more instructions.
     let mut moves: L::Queue<PreparedMove<L>, N> = Default::default();
     let mut returning = Bitboard::EMPTY;
+    if SHARED {
+        claim_taken(s, sink, ordered, entry);
+    }
     // Whether the game has an Aura, which may choose what it enchants as it enters and may be
     // attached to a card in a graveyard: a game with none asks neither below.
     let auras = t.subtypes().has(Subtype::Aura).possible();
@@ -354,6 +375,9 @@ fn move_ordered<L: Layout, const N: usize>(
             }
         }
     }
+    if SHARED {
+        disown_unmoved(s, ordered, moves.as_slice());
+    }
     // The permanents of the batch, each with where it goes. Read from the moves rather than
     // kept in a queue of their own, which every zone move would fill even in a game where
     // nothing looks back.
@@ -366,6 +390,9 @@ fn move_ordered<L: Layout, const N: usize>(
     // owners arrange once the batch has moved ([`piles`]): one AND while no permanent is made
     // of several cards, read before the moves end what the stores hold of them.
     let piles = leaving_piles(s, moves.as_slice());
+    // A discarded card that enters a shared graveyard has no owner after the move, so the
+    // player who discarded it is read now.
+    let discarders = SHARED.then(|| discarders::<L, N>(s, moves.as_slice(), reasons));
     let changed = |slot, object, from, to| zone_change(reasons, place, slot, object, from, to);
     let first = moves.as_slice().as_ptr();
     // The permanents the batch puts onto the battlefield, in the order they move.
@@ -419,8 +446,22 @@ fn move_ordered<L: Layout, const N: usize>(
     if t.can(Capability::Preparation) && !arrived.is_empty() {
         prepare_arrivals(s, t, sink, moves.as_slice())?;
     }
-    for &(slot, from, dest, _) in moves.iter() {
-        trigger::match_event(s, t, &changed(slot, s.object_ref(slot), from, dest))?;
+    match &discarders {
+        None => {
+            for &(slot, from, dest, _) in moves.iter() {
+                trigger::match_event(s, t, &changed(slot, s.object_ref(slot), from, dest))?;
+            }
+        }
+        Some(discarders) => {
+            match_shared(
+                s,
+                t,
+                moves.as_slice(),
+                discarders.as_slice(),
+                reasons,
+                place,
+            )?;
+        }
     }
     if !arrived.is_empty() && t.can(Capability::Saga) {
         crate::saga::match_arrivals(s, t, arrived.as_slice())?;

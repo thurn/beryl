@@ -9,6 +9,7 @@ use crate::actions::exile;
 use crate::bitboard::Bitboard;
 use crate::fixed::Full;
 use crate::game::Game;
+use crate::ids::Seat;
 use crate::interpret::{Outcome, Run};
 use crate::layout::{Layout, Queue};
 use crate::state::{Memo, ObjectRef, Zone};
@@ -23,21 +24,30 @@ use beryl_kernel::memos::LinkKind;
 /// its zone since is gone, and so is the link: nothing can refer to it any more.
 pub fn exile_linked<L: Layout>(
     game: &mut Game<'_, L>,
+    player: Seat,
     object: ObjectRef<L>,
     source: ObjectRef<L>,
 ) -> Result<(), Full> {
     let Some(object) = game.state.current(object) else {
         return Ok(());
     };
-    exile_and_link(game, Bitboard::single(object.reference().slot), source)
+    exile_and_link(
+        game,
+        player,
+        Bitboard::single(object.reference().slot),
+        source,
+    )
 }
 
+/// Exiles `objects`, which `player` takes out of a shared library or graveyard, and links them
+/// to `source`.
 fn exile_and_link<L: Layout>(
     game: &mut Game<'_, L>,
+    player: Seat,
     objects: Bitboard<L::Slot>,
     source: ObjectRef<L>,
 ) -> Result<(), Full> {
-    exile::exile(game, objects)?;
+    exile::exile(game, player, objects)?;
     let exiled = objects & game.state.in_zone(Zone::Exile);
     link(game, exiled, source, LinkKind::ExiledWith)
 }
@@ -75,6 +85,7 @@ pub(crate) fn exile_instruction<L: Layout>(
     let cards = run.elsewhere_than(cards, Zone::Exile);
     run.remember(cards)?;
     let source = run.resolution().source();
-    exile_and_link(run.game(), cards, source)?;
+    let you = run.you();
+    exile_and_link(run.game(), you, cards, source)?;
     Ok(run.now_in(cards, Zone::Exile))
 }

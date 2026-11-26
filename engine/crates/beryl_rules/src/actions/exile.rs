@@ -19,10 +19,15 @@ use beryl_kernel::reference::Library;
 /// Exiles a set of objects simultaneously
 /// ([CR 701.13a](https://yawgatog.com/resources/magic-rules/#R70113a)): "To exile an object,
 /// move it to the exile zone from wherever it is." A spell among them leaves the stack
-/// without resolving.
-pub fn exile<L: Layout>(game: &mut Game<'_, L>, objects: Bitboard<L::Slot>) -> Result<(), Full> {
+/// without resolving. `player`, who performs the instruction, takes those that leave a shared
+/// library or graveyard.
+pub fn exile<L: Layout>(
+    game: &mut Game<'_, L>,
+    player: Seat,
+    objects: Bitboard<L::Slot>,
+) -> Result<(), Full> {
     let rest = stack::unstack(game, objects, Zone::Exile)?;
-    zones::move_all(game, rest, Zone::Exile, Reason::Exile)
+    zones::move_all_by(game, player, rest, Zone::Exile, Reason::Exile)
 }
 
 type ExiledCards<L> = <L as Layout>::Queue<ObjectRef<L>, 128>;
@@ -44,7 +49,7 @@ pub(crate) fn from_top_until<L: Layout>(
             return Ok((cards, None));
         };
         let card = game.state.object_ref(slot);
-        zones::move_to(game, card, Zone::Exile, Reason::Exile)?;
+        zones::move_to_by(game, player, card, Zone::Exile, Reason::Exile)?;
         if game.state.object(slot).zone() == Zone::Exile {
             cards.push(game.state.object_ref(slot))?;
             if stop(game, slot) {
@@ -68,6 +73,7 @@ pub(crate) fn instruction<L: Layout>(
     }
     run.remember(objects)?;
     let found = run.with_piles(objects);
-    exile(run.game(), objects)?;
+    let you = run.you();
+    exile(run.game(), you, objects)?;
     Ok(run.now_in(found, Zone::Exile))
 }

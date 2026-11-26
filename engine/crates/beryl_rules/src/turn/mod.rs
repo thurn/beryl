@@ -494,7 +494,16 @@ pub(crate) fn cleanup_discard<L: Layout>(
     sink: &mut Sink<L>,
     slot: L::Slot,
 ) -> Result<(), Full> {
-    event::move_one(s, t, sink, slot, Zone::Graveyard, Reason::Discard)?;
+    let discarder = s.object(slot).owner();
+    event::move_one_by(
+        s,
+        t,
+        sink,
+        discarder,
+        slot,
+        Zone::Graveyard,
+        Reason::Discard,
+    )?;
     if cleanup_discards(s, t) == 0 {
         s.settle_question();
         finish_cleanup(s);

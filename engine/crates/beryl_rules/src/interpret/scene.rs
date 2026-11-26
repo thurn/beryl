@@ -463,17 +463,26 @@ impl<L: Layout> Scene<'_, L> {
                 who
             }
             // See CR 108.3: "The owner of a card in the game is the player who started the game
-            // with it in their deck." A slot keeps its owner through every move.
+            // with it in their deck." A slot keeps its owner through every move. A card in a
+            // shared library or graveyard has none, and "its owner" there is the player who
+            // performs the instruction.
             Players::OwnerOf(objects) => {
+                let owner = |slot| {
+                    if self.s.has_owner(slot) {
+                        self.s.object(slot).owner()
+                    } else {
+                        self.you()
+                    }
+                };
                 let mut who = self
                     .objects(objects)
                     .fold(PlayerSet::NOBODY, |mut who, slot| {
-                        who.insert(self.s.object(slot).owner());
+                        who.insert(owner(slot));
                         who
                     });
                 if let Objects::Target(spec) = objects {
                     for object in self.targets(spec).filter_map(|(_, t)| t.as_object()) {
-                        who.insert(self.s.object(object.slot).owner());
+                        who.insert(owner(object.slot));
                     }
                 }
                 who
@@ -488,7 +497,8 @@ impl<L: Layout> Scene<'_, L> {
             }
             Players::SubgameNonwinners => self.registers.outcome.subgame_nonwinners,
             // An instruction under "each player" uses that player. Otherwise a cast
-            // trigger refers to the player who cast the spell (see CR 601.2a).
+            // trigger refers to the player who cast the spell (see CR 601.2a), and a discard
+            // trigger to the player who discarded the card.
             Players::ThatPlayer => PlayerSet::only(
                 self.registers
                     .that_player

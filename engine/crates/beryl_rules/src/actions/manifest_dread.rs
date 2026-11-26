@@ -41,7 +41,7 @@ pub fn manifest_dread<L: Layout>(
     manifest(game, chosen, player)?;
     let mut rest = top;
     rest.remove(chosen);
-    zones::move_all(game, rest, Zone::Graveyard, Reason::Effect)?;
+    zones::move_all_by(game, player, rest, Zone::Graveyard, Reason::Effect)?;
     Ok(Some(chosen))
 }
 

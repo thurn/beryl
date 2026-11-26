@@ -144,17 +144,19 @@ pub(crate) fn instruction<L: Layout>(
             Found::ToHand => {
                 for &slot in game.state.in_game_order(game.table, cards)?.iter() {
                     let card = game.state.object_ref(slot);
-                    zones::move_to(game, card, Zone::Hand, Reason::Effect)?;
+                    zones::move_to_by(game, player, card, Zone::Hand, Reason::Effect)?;
                 }
             }
             Found::RevealToHand => {
                 for &slot in game.state.in_game_order(game.table, cards)?.iter() {
                     reveal::reveal(game, player, slot);
                     let card = game.state.object_ref(slot);
-                    zones::move_to(game, card, Zone::Hand, Reason::Effect)?;
+                    zones::move_to_by(game, player, card, Zone::Hand, Reason::Effect)?;
                 }
             }
-            Found::OntoBattlefieldTapped => zones::put_onto_battlefield_tapped(game, cards)?,
+            Found::OntoBattlefieldTapped => {
+                zones::put_onto_battlefield_tapped(game, player, cards)?;
+            }
         }
         shuffle::shuffle(game, player)?;
         all |= cards;
