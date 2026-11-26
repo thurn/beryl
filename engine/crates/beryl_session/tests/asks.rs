@@ -20,8 +20,8 @@ use beryl_session::prompt::{Lies, PlaceName, PromptView, ShapeBody, shape_name};
 use beryl_session::protocol::{CardHandling, DecisionView, Moment, Side, player_view};
 use beryl_session::{DecisionId, SessionId, Status, StopsSetting};
 use scenarios::{
-    ICEBERG_BOTTOM, ICEBERG_MANA_SOURCES, ICEBERG_SCRY, SUBTLETY_PITCH, THUNDERTRAP_TRAINER,
-    TRINKET_KNOWN_TOP, WINDS_OVERLOAD, WINDS_SINGLE,
+    ICEBERG_BOTTOM, ICEBERG_MANA_SOURCES, ICEBERG_SCRY, METAMORPHOSE_PUT, SUBTLETY_PITCH,
+    THUNDERTRAP_TRAINER, TRINKET_KNOWN_TOP, WINDS_OVERLOAD, WINDS_SINGLE,
 };
 
 mod scenarios;
@@ -586,4 +586,22 @@ fn the_observer_does_not_see_handling_for_a_graveyard_exile_cost() {
     })
     .unwrap();
     assert!(checked, "Oculus reached the graveyard exile payment");
+}
+
+/// Metamorphose's controller may put a permanent card from their hand onto the battlefield,
+/// a pick that may end with none. Its title is the sentence as a question over Decline, as
+/// Arena's Show and Tell asks "Put an artifact, creature, enchantment, or land card onto the
+/// battlefield?" (`sybcO8S7x6A 26:33.5`): the question form once came only with a yes or no
+/// asked first, and this pick read "Put one of them onto the battlefield.".
+#[test]
+fn a_look_that_may_take_nothing_is_titled_as_a_question() {
+    let titles: BTreeSet<String> = decisions(&[METAMORPHOSE_PUT])
+        .into_iter()
+        .filter(|d| d.prompt.is(Purpose::Look))
+        .map(|d| d.prompt.title)
+        .collect();
+    assert_eq!(
+        titles,
+        BTreeSet::from(["Put one of them onto the battlefield?".to_owned()])
+    );
 }

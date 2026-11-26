@@ -1,8 +1,8 @@
 //! A decision's prompt as its seat is sent it ([`PromptView`]): the record the decision
 //! carries ([`Prompt`]) by public slot and relative to the viewer, worded by the table.
 
-use beryl_engine::card::{ManaCost, Prompt, Purpose};
-use beryl_engine::{Decision, GameTable, Layout, Observation, Zone};
+use beryl_engine::card::{ManaCost, Part, Prompt, Purpose};
+use beryl_engine::{Choice, Decision, GameTable, Layout, Observation, Opt, Zone};
 
 use super::wording::{Holes, cancel_word, end_words, pile_word, wording};
 use super::{Lies, PromptView, ShapeBody, Words};
@@ -34,7 +34,27 @@ pub(crate) fn prompt_view<L: Layout>(
         name: about.and_then(|slot| name(t, obs, slot)),
         from: about.map(|slot| obs.object(slot).zone()),
     };
+    // A look that may take nothing is its sentence as a question, whether the run opens by
+    // asking (`Part::Whether`) or ends with none picked, as Arena's "Put an artifact,
+    // creature, enchantment, or land card onto the battlefield?" over Decline and Submit 0
+    // (`sybcO8S7x6A 26:33.5`, `nBj2ikeYCtk 17:02.5`).
+    let takes_none = d.prompt.purpose == Purpose::Look
+        && (0..d.len()).any(|i| {
+            u16::try_from(i).is_ok_and(|i| d.candidates.option(Choice(i)) == Some(Opt::Done))
+        });
+    let worded_as = if takes_none {
+        d.prompt.part(Part::Whether)
+    } else {
+        d.prompt
+    };
+    let title = worded(
+        &worded_as,
+        shown.as_ref().map(beryl_engine::state::Object::zone),
+        &holes,
+    )
+    .title;
     PromptView {
+        title,
         about: slots(crate::protocol::slots_by_id(d.about)),
         from: shown_slot.zip(shown.as_ref()).map(|(slot, card)| Lies {
             // A card in a shared library or graveyard has no owner: the pile is named for the

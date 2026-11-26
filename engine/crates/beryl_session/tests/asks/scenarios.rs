@@ -242,3 +242,19 @@ pub const SUBTLETY_PITCH: Scenario =
             THEM.library_top(&[Prop::Flier, names::ISLAND]),
             ME.has(Zone::Graveyard, names::SUBTLETY, 1),
         ]);
+
+/// Metamorphose puts the opponent's creature on top of its owner's library, and the
+/// opponent may put an artifact from their hand onto the battlefield.
+pub const METAMORPHOSE_PUT: Scenario = Scenario::new("Metamorphose offers the artifact")
+    .hand(P0, &[names::METAMORPHOSE])
+    .battlefield(P0, &[names::ISLAND, names::ISLAND])
+    .battlefield(P1, &[Prop::Vanilla])
+    .hand(P1, &[Prop::Instant, Prop::Artifact])
+    .library(P0, &[names::PLAINS])
+    .library(P1, &[names::PLAINS])
+    .actions(&[
+        ME.casts(names::METAMORPHOSE),
+        Resolve,
+        THEM.picks_up_to(Prop::Artifact),
+        THEM.controls(Prop::Artifact, 1),
+    ]);
