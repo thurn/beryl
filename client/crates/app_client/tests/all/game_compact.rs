@@ -500,7 +500,7 @@ fn has_lands_count(frame: &Frame) -> bool {
 
 #[test]
 fn a_prompt_that_holds_cards_up_hides_the_rows_counts() {
-    let phone = window(375.0, 647.0);
+    let shown = window(375.0, 647.0);
     let mut client = compact(375.0, 647.0);
     let mut view = ViewBuilder::new();
     // Lands of one name stack, so each has a name of its own for the row to run past the screen.
@@ -530,8 +530,8 @@ fn a_prompt_that_holds_cards_up_hides_the_rows_counts() {
             .profiles
             .for_size_class(crate::COMPACT)
             .checks,
-        size: phone.size,
-        safe_area: phone.safe_area,
+        size: shown.size,
+        safe_area: shown.safe_area,
         at: 0,
     };
     assert!(kit_probe::agent::text_overlap::text_overlap(frame, &context).is_empty());
