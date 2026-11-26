@@ -261,3 +261,23 @@ fn a_state_trigger_that_compares_counters_reads_them() {
     assert_eq!(Inputs::of(&face), Inputs::COUNTERS);
     assert!(state_condition(&ABILITIES[0]).is_some_and(watched));
 }
+
+/// Dandân's "When you control no Islands" reads the same for each of its controller's copies,
+/// and Dark Depths's "When this has no ice counters on it" reads the counters on each one.
+#[test]
+fn a_state_trigger_not_reading_counters_has_one_answer_for_its_controllers_copies() {
+    static NO_ISLANDS: Condition = Condition::Compare(
+        Amount::Count(&Objects::All {
+            zone: Zone::Battlefield,
+            filter: Filter::All(&[
+                Filter::Subtype(beryl_card::Subtype::Island),
+                Filter::Whose(&Players::You),
+            ]),
+        }),
+        Comparison::Equal,
+        Amount::Fixed(0),
+    );
+    assert!(shared(&NO_ISLANDS));
+    assert!(!shared(&NO_ICE));
+    assert!(!shared(&Condition::TurnOf(Players::You)));
+}

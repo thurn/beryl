@@ -41,6 +41,7 @@ pub mod scenarios {
 
     const DANDAN: &str = Card::Dandan;
     const MIND_BEND: &str = Card::MindBend;
+    const HACK: &str = Card::MagicalHack;
     const ISLAND: TextWord = TextWord::LandType(Subtype::Island);
     const SWAMP: TextWord = TextWord::LandType(Subtype::Swamp);
 
@@ -83,6 +84,37 @@ pub mod scenarios {
                 ME.chooses_word(SWAMP),
                 Resolve,
                 ME.has(Zone::Graveyard, DANDAN, 1),
+            ]),
+        // One condition answers for both Dandâns of a player, except where a text change is in
+        // force: Magical Hack makes one of them need a Swamp, so only that one is sacrificed.
+        Scenario::new("Magical Hack has one of two Dandâns sacrificed for want of a Swamp")
+            .interaction(&[HACK])
+            .battlefield(P0, &[DANDAN, DANDAN, Card::Island])
+            .hand(P0, &[HACK])
+            .actions(&[
+                ME.casts(HACK),
+                ME.targets(DANDAN),
+                Resolve,
+                ME.chooses_word(ISLAND),
+                ME.chooses_word(SWAMP),
+                Resolve,
+                ME.has(Zone::Graveyard, DANDAN, 1),
+                ME.controls(DANDAN, 1),
+            ]),
+        // Both Dandâns share one answer: P0's only Island is a Swamp, so both are sacrificed.
+        Scenario::new("Both Dandâns are sacrificed when their controller controls no Island")
+            .interaction(&[MIND_BEND])
+            .battlefield(P0, &[DANDAN, DANDAN, Card::Island])
+            .hand(P0, &[MIND_BEND])
+            .actions(&[
+                ME.casts(MIND_BEND),
+                ME.targets(Card::Island),
+                Resolve,
+                ME.chooses_word(ISLAND),
+                ME.chooses_word(SWAMP),
+                Resolve,
+                Resolve,
+                ME.has(Zone::Graveyard, DANDAN, 2),
             ]),
         // A flier keeps the attacker decision available after Mind Bend disqualifies Dandân.
         Scenario::new("Mind Bend keeps Dandân from attacking a player with only an Island")

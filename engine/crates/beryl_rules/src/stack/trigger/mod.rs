@@ -14,14 +14,18 @@ use crate::layout::{Layout, Queue};
 use crate::query::Copiable;
 use crate::replacement::event::{Event, EventKind, Listens, Recipient};
 use crate::state::TriggeredAbility;
-use crate::state::{AbilityRef, ObjectRef, PendingTrigger, State, TriggerInfo, Zone, ZoneKey};
+use crate::state::{
+    AbilityController, AbilityRef, ObjectRef, PendingTrigger, State, TriggerInfo, Zone, ZoneKey,
+};
 use crate::table::{Capability, GameTable};
 
 mod cast_number;
 mod other_zones;
+mod state;
 mod step;
 mod waiting;
 
+pub(crate) use state::match_states;
 pub(super) use step::begins;
 pub(crate) use waiting::{next_to_stack, put_on_stack, waiting_or_on_stack};
 
@@ -567,187 +571,6 @@ fn keep_last_known<L: Layout>(
         s.record_last_known(permanent)?;
     }
     Ok(())
-}
-
-/// Triggers each state-triggered ability whose condition holds now and that is neither waiting to
-/// be put on the stack nor on it ([CR 603.8]): "These abilities trigger as soon as the game state
-/// matches the condition. ... A state-triggered ability doesn't trigger again until the ability has
-/// resolved, has been countered, or has otherwise left the stack. Then, if the object with the
-/// ability is still in the same zone and the game state still matches its trigger condition, the
-/// ability will trigger again." Whether one is waiting or on the stack is found there, by its source
-/// and ability, so nothing else records it; a source that changed zones is a new object, whose
-/// ability is another.
-///
-/// Checked as state-based actions are, behind the game's [`EventKind::State`] listeners: a game
-/// none of whose cards has a state trigger pays one AND, and the rest is out of line.
-///
-/// The permanents' state triggers are read only when they are due ([`State::states_due`]): after
-/// the layer results were stored, or while one of them waits or is on the stack. A condition the
-/// kernel calls [`watched`] reads only what marks the layer results stale when it changes, so it
-/// cannot begin to hold between two recomputes. One that waits or is on the stack keeps them due,
-/// because leaving the stack marks nothing stale and the check after it must trigger the ability
-/// again if its condition still holds. A game with a state trigger that is not watched
-/// ([`Capability::UnwatchedStateTrigger`]) reads them at every check. In debug builds, a check
-/// that skips them asserts that none would have triggered.
-///
-/// [CR 603.8]: https://yawgatog.com/resources/magic-rules/#R6038
-/// [`watched`]: beryl_kernel::static_ability::watched
-#[inline]
-pub(crate) fn match_states<L: Layout>(s: &mut State<L>, t: &GameTable) -> Result<(), Full> {
-    if t.listens_anywhere().hears(EventKind::State) {
-        match_states_out_of_line(s, t)?;
-    }
-    Ok(())
-}
-
-#[cold]
-#[inline(never)]
-fn match_states_out_of_line<L: Layout>(s: &mut State<L>, t: &GameTable) -> Result<(), Full> {
-    let kind = EventKind::State;
-    if t.listens_any().hears(kind) && s.listening().unwrap_or(t.listens_any()).hears(kind) {
-        if s.states_due() || t.can(Capability::UnwatchedStateTrigger) {
-            let mut pending = false;
-            for i in 0..s.battlefield().len() {
-                let slot = s.battlefield()[i];
-                let what = s.definition(slot);
-                if !what.may_listen(t).hears(kind) {
-                    continue;
-                }
-                let (card, face) = what.record(t);
-                for l in t.listeners(card, face, kind) {
-                    if s.has_ability(slot, l.ability) {
-                        pending |= state_trigger(s, t, slot, card, face, l.ability, l.trigger)?;
-                    }
-                }
-            }
-            s.set_states_due(pending);
-        } else {
-            #[cfg(debug_assertions)]
-            none_would_trigger(s, t);
-        }
-    }
-    if t.listens_away().hears(kind) {
-        for &slot in s.in_game_order(t, away(s, t))?.iter() {
-            let zone = s.object(slot).zone();
-            let (card, face) = s.definition(slot).record(t);
-            for controller in away_controllers(s, slot).in_seat_order() {
-                for l in t.away_listeners(card, face, kind) {
-                    if l.zones.contains(zone) && s.has_ability(slot, l.ability) {
-                        let ability = TriggeredAbility::own(l.ability);
-                        let of = AbilityRef {
-                            controller: controller.into(),
-                            ..of_object(s, slot, card, face, ability)
-                        };
-                        state_trigger_of(s, t, of, l.trigger)?;
-                    }
-                }
-            }
-        }
-    }
-    Ok(())
-}
-
-/// Asserts that no state trigger on the battlefield would trigger now: [`match_states`] skipped
-/// them because nothing marked the layer results stale and none was waiting or on the stack, so
-/// a condition that holds now began to hold through a change the kernel does not watch
-/// ([`beryl_kernel::static_ability::watched`], [`beryl_kernel::static_ability::Inputs`]).
-#[cfg(debug_assertions)]
-fn none_would_trigger<L: Layout>(s: &State<L>, t: &GameTable) {
-    let kind = EventKind::State;
-    for &slot in s.battlefield() {
-        let what = s.definition(slot);
-        if !what.may_listen(t).hears(kind) {
-            continue;
-        }
-        let (card, face) = what.record(t);
-        for l in t.listeners(card, face, kind) {
-            if s.has_ability(slot, l.ability) {
-                let of = of_object(s, slot, card, face, TriggeredAbility::own(l.ability));
-                assert!(
-                    matches!(due(s, t, of, l.trigger), Due::No),
-                    "a state trigger began to hold with nothing marking the layer results stale"
-                );
-            }
-        }
-    }
-}
-
-/// Triggers the state-triggered ability `ability` of the object in `slot`, if its condition
-/// holds and it is neither waiting nor on the stack ([`match_states`]). Returns whether it is
-/// now waiting or on the stack.
-fn state_trigger<L: Layout>(
-    s: &mut State<L>,
-    t: &GameTable,
-    slot: L::Slot,
-    card: L::Card,
-    face: FaceIx,
-    ability: AbilityIx,
-    trigger: &Trigger,
-) -> Result<bool, Full> {
-    let of = of_object(s, slot, card, face, TriggeredAbility::own(ability));
-    state_trigger_of(s, t, of, trigger)
-}
-
-/// [`state_trigger`] for the ability `of`, whose controller the caller chose: one of the
-/// players of [`away_controllers`]. Each player's instance of a card's ability in a shared
-/// zone waits or is on the stack apart from the other's. Returns whether it is now waiting or
-/// on the stack, or may be: an intervening "if" may still have refused it.
-fn state_trigger_of<L: Layout>(
-    s: &mut State<L>,
-    t: &GameTable,
-    of: AbilityRef<L, TriggeredAbility>,
-    trigger: &Trigger,
-) -> Result<bool, Full> {
-    match due(s, t, of, trigger) {
-        Due::Pending => Ok(true),
-        Due::Holds(pending) => enqueue(s, t, pending).map(|()| true),
-        Due::No => Ok(false),
-    }
-}
-
-/// Where a state-triggered ability stands at a check ([`match_states`]).
-enum Due<L: Layout> {
-    /// It is waiting or on the stack, so it does not trigger again (CR 603.8).
-    Pending,
-    /// Its condition holds and it is neither waiting nor on the stack: this triggers.
-    Holds(PendingTrigger<L>),
-    /// Its condition does not hold.
-    No,
-}
-
-/// Where the state-triggered ability `of`, whose trigger is `trigger`, stands now.
-fn due<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    of: AbilityRef<L, TriggeredAbility>,
-    trigger: &Trigger,
-) -> Due<L> {
-    let TriggerEvent::State(condition) = trigger.event else {
-        unreachable!("a listener of state triggers is a state trigger");
-    };
-    let same = |other: &AbilityRef<L, TriggeredAbility>| {
-        (
-            other.source,
-            other.card,
-            other.face,
-            other.ability,
-            other.controller,
-        ) == (of.source, of.card, of.face, of.ability, of.controller)
-    };
-    if waiting_or_on_stack(s, same) {
-        return Due::Pending;
-    }
-    let info = TriggerInfo {
-        object: None,
-        player: of.controller.seat(),
-        amount: 0,
-    };
-    let pending = PendingTrigger { of, info };
-    if crate::interpret::holds(s, t, &pending, condition) {
-        Due::Holds(pending)
-    } else {
-        Due::No
-    }
 }
 
 /// Records a triggered ability, if its intervening "if" holds now ([CR 603.4]): "When the trigger
