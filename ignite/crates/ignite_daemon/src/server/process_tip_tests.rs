@@ -706,7 +706,9 @@ fn an_adopted_tip_round_that_makes_no_progress_is_ended_and_a_new_round_starts()
     // lock and does nothing.
     let (first, _) = machine.daemon();
     let request = TipRoundVerb::request(&tip, Seq(0), &ctx.repo);
-    let hung = first.handles.create_for(ROUND_VERB, None, None, Some(&request));
+    let hung = first
+        .handles
+        .create_for(ROUND_VERB, None, None, Some(&request));
     let process = handle_store::Process {
         pid: 999_999,
         executable: "87631b5".to_owned(),
@@ -723,11 +725,16 @@ fn an_adopted_tip_round_that_makes_no_progress_is_ended_and_a_new_round_starts()
     assert!(lock(&machine.hung.lock).is_some(), "ended before the limit");
     assert_eq!(machine.threads.started.load(Ordering::SeqCst), 0);
 
-    machine.clock.advance(crate::server::process::STALL_LIMIT.as_secs_f64() + 1.0);
+    machine
+        .clock
+        .advance(crate::server::process::STALL_LIMIT.as_secs_f64() + 1.0);
     let (mut tips, turn) = waiting.join().unwrap();
     let error = turn.unwrap_err().to_string();
     assert!(error.contains("cannot be run again safely"), "{error}");
-    assert!(lock(&machine.hung.lock).is_none(), "the hung process was ended");
+    assert!(
+        lock(&machine.hung.lock).is_none(),
+        "the hung process was ended"
+    );
     let row = handle_store::get(&lock(&machine.db), hung.as_str())
         .unwrap()
         .unwrap();

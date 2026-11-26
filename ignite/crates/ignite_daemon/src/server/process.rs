@@ -52,8 +52,8 @@ use crate::stop::{EndVerbProcess, StopVerb};
 
 #[path = "stalled.rs"]
 pub(super) mod stalled;
-use stalled::Stall;
 pub use stalled::STALL_LIMIT;
+use stalled::Stall;
 
 /// The verbs that run in verb processes, the internal ones included: `idle-job` runs one idle
 /// job (see `crate::idle`) and `tip-round` one round of tip verification (see
