@@ -249,6 +249,12 @@ fn key(game: u32) -> String {
     format!("pair{:04}-seat{}", game / 2, game % 2)
 }
 
+/// The game a line of `decisions.jsonl` belongs to, which is all [`Shared::open`] reads.
+#[derive(serde::Deserialize)]
+struct OfGame {
+    game: String,
+}
+
 /// What the workers share.
 struct Shared {
     /// Each finished game's challenger half points, by game.
@@ -279,13 +285,9 @@ impl Shared {
         // A run stopped between a game's decisions and its record leaves decisions of a game
         // with no record at the end of the file. The game replays to its end and writes them
         // again, so they are cut off here.
-        #[derive(serde::Deserialize)]
-        struct Of {
-            game: String,
-        }
         let recorded: BTreeSet<&str> = records.iter().map(|r| r.game.as_str()).collect();
         let decisions = out.join("decisions.jsonl");
-        files::cut_last(&decisions, |d: &Of| !recorded.contains(d.game.as_str()))?;
+        files::cut_last(&decisions, |d: &OfGame| !recorded.contains(d.game.as_str()))?;
         Ok(Self {
             halves,
             pairs: Pairs::default(),

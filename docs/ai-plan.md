@@ -223,8 +223,8 @@ omniscient twin) and the search anchored to the expert (`anchor+expert+guard`).
 4. **The match.**
    `just ladder CHALLENGER --work WORK --bar BAR --positions D:\beryl-cache\ladder\positions --cap 2000`.
    Every seed is played twice with seats swapped. Four pairs in five start from
-   the position set. A sequential test ends the match when the evidence is in.
-   A match stopped by a crash, a kill or a power cut continues when the same
+   the position set. A sequential test ends the match when the evidence is in. A
+   match stopped by a crash, a kill or a power cut continues when the same
    command is run again: finished games are kept, and a game in flight goes on
    from its last logged decision. `--cap` may be raised the same way.
 

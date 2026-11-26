@@ -212,12 +212,13 @@ fn lines_in(out: &Path, file: &str) -> Vec<String> {
 /// Drops the lines of game `game` from `file` in `out`.
 fn drop_game(out: &Path, file: &str, game: &str) {
     let path = out.join(file);
-    let kept: String = fs::read_to_string(&path)
-        .unwrap()
-        .lines()
-        .filter(|l| !l.contains(&format!("\"game\":\"{game}\"")))
-        .map(|l| format!("{l}\n"))
-        .collect();
+    let mut kept = String::new();
+    for line in fs::read_to_string(&path).unwrap().lines() {
+        if !line.contains(&format!("\"game\":\"{game}\"")) {
+            kept += line;
+            kept.push('\n');
+        }
+    }
     fs::write(&path, kept).unwrap();
 }
 
