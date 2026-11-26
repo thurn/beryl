@@ -270,6 +270,7 @@ impl RolloutPolicy {
 
     /// The rules' answer to `d`, its scores made a choice by `pick`. The policy picks
     /// one answer directly for yes/no decisions and numbers, even in a softmax rollout.
+    #[allow(clippy::too_many_lines)] // One exhaustive match, an arm per decision kind.
     fn decide_by<L: Layout>(
         &self,
         t: &GameTable,
