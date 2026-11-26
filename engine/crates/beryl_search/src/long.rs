@@ -199,7 +199,7 @@ pub struct Options {
     /// keeps the tuned ones. Requires `tuned` knowledge; see [`Options::fitroll`].
     pub fitroot: bool,
     /// The budgeted turn search ([`Method::TurnBudget`]) stops scoring a root move once the
-    /// leader clearly beats it in the worlds both were scored in ([`turn::RACE_ERRORS`]), so
+    /// leader clearly beats it in the worlds both were scored in (three standard errors), so
     /// the work saved scores more worlds for the roots still in the race. The default's root
     /// and the leader are never dropped. Requires `turnbudget72`.
     pub race: bool,
