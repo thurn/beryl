@@ -1040,5 +1040,10 @@
     "label": "Whole-workspace families (`client-clippy` and `clippy`) declare `single_batch = true` so tip verification runs all of their checks in one batch instead of repeating `cargo clippy --workspace` once per 60-second cost slice (9-10 sequential ~35 s runs = 300-400 s per round on cygnus), and build-slot eviction clears free ticket trees before free landing trees so landing trees keep their warm build directories",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
+  },
+  {
+    "label": "The daemon watches every non-resumable verb process (including `tip-round` and `idle-job`) for stalls from the moment it starts as well as across same-build or cross-build restarts, ending it after 20 minutes without progress so its loop starts a new round. On 2026-11-26, `T-2223` hung for 65 minutes under its own daemon on cygnus before an upgrade and `T-15098` hung for 48 minutes under its own daemon on jarvis before an upgrade adopted it, delaying verification of `3dd18318f` by 34 minutes while 26 product commits waited on `staging`",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]

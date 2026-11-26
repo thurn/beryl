@@ -2,6 +2,8 @@
 //! fakes of the long verbs' tests: the tip loop starts the round, the daemon restarts while the
 //! round's batch runs, and the restarted loop waits for that round instead of starting one.
 
+use std::sync::atomic::AtomicBool;
+
 use ignite_core::config::Os;
 use ignite_core::ids::{CheckName, InputHash, RecordId, Seq};
 use ignite_core::protocol::Outcome;
@@ -145,11 +147,25 @@ struct RoundThreads {
     ctx: Context,
     work: Arc<OneCheck>,
     started: AtomicUsize,
+    hang_first: AtomicBool,
+    hung: Arc<Hung>,
+}
+
+struct HungChild(Arc<Hung>);
+
+impl VerbChild for HungChild {
+    fn exited(&mut self) -> bool {
+        lock(&self.0.lock).is_none()
+    }
 }
 
 impl VerbStarter for RoundThreads {
     fn start(&self, handle: &Handle) -> io::Result<Box<dyn VerbChild>> {
         self.started.fetch_add(1, Ordering::SeqCst);
+        if self.hang_first.swap(false, Ordering::SeqCst) {
+            *lock(&self.hung.lock) = crate::verbproc::hold(&self.home, handle).unwrap();
+            return Ok(Box::new(HungChild(self.hung.clone())));
+        }
         let process = Process {
             handle: handle.clone(),
             home: self.home.clone(),
@@ -278,6 +294,7 @@ impl TipMachine {
         ctx.hub = hub.clone();
         ctx.git = git.clone();
         let switch = Arc::new(Switch::default());
+        let hung = Arc::new(Hung::default());
         TipMachine {
             commands: Arc::new(Commands {
                 runs: scratch.home.join("runs"),
@@ -290,6 +307,8 @@ impl TipMachine {
                 ctx,
                 work: Arc::new(work),
                 started: AtomicUsize::new(0),
+                hang_first: AtomicBool::new(false),
+                hung: hung.clone(),
             }),
             scratch,
             db,
@@ -299,7 +318,7 @@ impl TipMachine {
             git,
             in_daemon: Arc::new(OneCheck::default()),
             clock,
-            hung: Arc::new(Hung::default()),
+            hung,
         }
     }
 
@@ -692,6 +711,41 @@ fn a_newer_tip_does_not_stop_a_running_culprit_search() {
     );
 }
 
+type TurnHandle = std::thread::JoinHandle<(TipLoop, Result<Option<(Commit, TipOutcome)>>)>;
+
+fn assert_hung_round_recovers(
+    machine: &TipMachine,
+    ctx: Context,
+    tip: Commit,
+    waiting: TurnHandle,
+    starts_before: usize,
+) {
+    std::thread::sleep(Duration::from_millis(200));
+    assert!(lock(&machine.hung.lock).is_some(), "ended before the limit");
+    assert_eq!(
+        machine.threads.started.load(Ordering::SeqCst),
+        starts_before
+    );
+    machine
+        .clock
+        .advance(crate::server::process::STALL_LIMIT.as_secs_f64() + 1.0);
+    let (mut tips, turn) = waiting.join().unwrap();
+    let error = turn.unwrap_err().to_string();
+    assert!(error.contains("cannot be run again safely"), "{error}");
+    assert!(lock(&machine.hung.lock).is_none(), "hung process ended");
+    let checking = std::thread::spawn(move || tips.turn(&ctx, 0));
+    assert!(until(|| machine.commands.begun() == 1));
+    machine.commands.finish_all();
+    assert_eq!(
+        checking.join().unwrap().unwrap(),
+        Some((tip, TipOutcome::Verified))
+    );
+    assert_eq!(
+        machine.threads.started.load(Ordering::SeqCst),
+        starts_before + 1
+    );
+}
+
 /// On 2026-11-26 a restarted daemon adopted a tip round whose verb process, started by the
 /// build before, had hung: it reported no step and wrote nothing for two hours, and the tip loop
 /// waited on it all that time. An adopted round that makes no progress for the stall limit is
@@ -699,11 +753,10 @@ fn a_newer_tip_does_not_stop_a_running_culprit_search() {
 #[test]
 fn an_adopted_tip_round_that_makes_no_progress_is_ended_and_a_new_round_starts() {
     let machine = TipMachine::new("stalled-tip-round");
-    let ctx = machine.threads.ctx.clone();
-    let tip = machine.git.tip("staging").unwrap();
-
-    // The previous daemon, under build `87631b5`, started a round whose verb process holds its
-    // lock and does nothing.
+    let (ctx, tip) = (
+        machine.threads.ctx.clone(),
+        machine.git.tip("staging").unwrap(),
+    );
     let (first, _) = machine.daemon();
     let request = TipRoundVerb::request(&tip, Seq(0), &ctx.repo);
     let hung = first
@@ -721,35 +774,27 @@ fn an_adopted_tip_round_that_makes_no_progress_is_ended_and_a_new_round_starts()
     let (second, tips) = machine.daemon();
     machine.switch.set(Some(second));
     let waiting = turn_on_a_thread(tips, ctx.clone());
-    std::thread::sleep(Duration::from_millis(200));
-    assert!(lock(&machine.hung.lock).is_some(), "ended before the limit");
-    assert_eq!(machine.threads.started.load(Ordering::SeqCst), 0);
-
-    machine
-        .clock
-        .advance(crate::server::process::STALL_LIMIT.as_secs_f64() + 1.0);
-    let (mut tips, turn) = waiting.join().unwrap();
-    let error = turn.unwrap_err().to_string();
-    assert!(error.contains("cannot be run again safely"), "{error}");
-    assert!(
-        lock(&machine.hung.lock).is_none(),
-        "the hung process was ended"
-    );
+    assert_hung_round_recovers(&machine, ctx, tip, waiting, 0);
     let row = handle_store::get(&lock(&machine.db), hung.as_str())
         .unwrap()
         .unwrap();
     assert_eq!(row.state, "incomplete");
+}
 
-    // The loop's next turn starts a new round, which verifies the tip.
-    let checking = std::thread::spawn(move || tips.turn(&ctx, 0));
-    assert!(
-        until(|| machine.commands.begun() == 1),
-        "a new round started"
+/// On 2026-11-26 a tip round hung under its own daemon for 48 minutes on jarvis (and 65 minutes
+/// on cygnus) before an unrelated daemon upgrade adopted it. A started tip round that makes no
+/// progress for the stall limit is now ended by the same daemon, and the loop starts a new round.
+#[test]
+fn a_started_tip_round_that_makes_no_progress_is_ended_and_a_new_round_starts() {
+    let machine = TipMachine::new("started-stalled-tip-round");
+    machine.threads.hang_first.store(true, Ordering::SeqCst);
+    let (ctx, tip) = (
+        machine.threads.ctx.clone(),
+        machine.git.tip("staging").unwrap(),
     );
-    machine.commands.finish_all();
-    assert_eq!(
-        checking.join().unwrap().unwrap(),
-        Some((tip, TipOutcome::Verified))
-    );
-    assert_eq!(machine.threads.started.load(Ordering::SeqCst), 1);
+    let (server, tips) = machine.daemon();
+    machine.switch.set(Some(server));
+    let waiting = turn_on_a_thread(tips, ctx.clone());
+    assert!(until(|| lock(&machine.hung.lock).is_some()));
+    assert_hung_round_recovers(&machine, ctx, tip, waiting, 1);
 }

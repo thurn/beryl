@@ -205,8 +205,8 @@ pub struct Processes {
     /// How long a landing asked to stop, so that it runs again under a new build, has to end
     /// before its verb process is ended ([`crate::stop::STOP_WAIT`]).
     pub stop_wait: Duration,
-    /// How long a verb process adopted from an older build, whose verb cannot be run again,
-    /// may go without progress before it is ended ([`STALL_LIMIT`], see `server/stalled.rs`).
+    /// How long a non-resumable verb process may go without progress before it is ended
+    /// ([`STALL_LIMIT`], see `server/stalled.rs`).
     pub stall_limit: Duration,
 }
 
@@ -354,13 +354,16 @@ impl Server {
             }
         };
         processes.host.track(ctx, &handle);
-        watch(
-            self.shared(),
+        let shared = self.shared();
+        let rerun = self.registry.resumable(&req.verb);
+        let stall = Stall::for_verb(
+            &shared,
             &handle,
-            Some(child),
-            self.registry.resumable(&req.verb),
-            None,
+            rerun.is_some(),
+            processes.stall_limit,
+            processes.ender.clone(),
         );
+        watch(shared, &handle, Some(child), rerun, stall);
 
         let wait = Duration::from_secs(u64::from(req.wait_s));
         let deadline = Instant::now() + wait;
@@ -439,10 +442,18 @@ impl Server {
         if self.runs_in_process(&req.verb) {
             match self.start_process(&handle) {
                 Ok(child) => {
-                    if let Some(processes) = &self.processes {
+                    let shared = self.shared();
+                    let stall = self.processes.as_ref().and_then(|processes| {
                         processes.host.track(&self.ctx, &handle);
-                    }
-                    watch(self.shared(), &handle, Some(child), None, None);
+                        Stall::for_verb(
+                            &shared,
+                            &handle,
+                            false,
+                            processes.stall_limit,
+                            processes.ender.clone(),
+                        )
+                    });
+                    watch(shared, &handle, Some(child), None, stall);
                     return handle;
                 }
                 Err(error) => eprintln!(
@@ -523,8 +534,8 @@ impl Server {
     /// true. False when the process died, or none was started: the caller runs the verb again
     /// or ends it. A landing that runs under an older build than the daemon's is stopped and run
     /// again under the daemon's instead, unless its push has begun (see `server/outdated.rs`). A
-    /// verb that cannot be run again, started under another build, is ended if it makes no
-    /// progress for [`Processes::stall_limit`] (see `server/stalled.rs`).
+    /// verb that cannot be run again is ended if it makes no progress for
+    /// [`Processes::stall_limit`] (see `server/stalled.rs`).
     pub(super) fn adopt_process(
         &self,
         handle: &Handle,
@@ -542,11 +553,10 @@ impl Server {
                 return true;
             }
             let rerun = self.registry.resumable(verb);
-            let stall = Stall::for_adopted(
+            let stall = Stall::for_verb(
                 &shared,
                 handle,
                 rerun.is_some(),
-                processes.version.as_deref(),
                 processes.stall_limit,
                 processes.ender.clone(),
             );

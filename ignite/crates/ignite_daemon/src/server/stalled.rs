@@ -1,18 +1,19 @@
-//! Ending a stuck verb process that a restarted daemon took over from an older build.
+//! Ending a stuck verb process whose verb cannot be run again safely.
 //!
-//! A restarted daemon goes on watching every verb process that outlived the daemon before it
-//! (see `server/process.rs`), for as long as the process lives. On 2026-11-26 the Windows
-//! machine's tip loop waited more than two hours on a `tip-round` verb process started by the
-//! previous build: it reported no step, wrote nothing to its `verb.log` and used 23 s of CPU in
-//! those two hours, and no tip round ran on the machine until someone ended it by hand. The
-//! daemon then ended the handle `incomplete` and started a new round within seconds.
+//! A daemon watches every verb process it starts or adopts across a restart (see
+//! `server/process.rs`), for as long as the process lives. On 2026-11-26 the Windows machine's
+//! tip loop waited more than two hours on a `tip-round` verb process (`T-2223`) that hung under
+//! its own daemon for 65 minutes and then outlived a daemon upgrade for another 55 minutes. Later
+//! the same day, jarvis's tip loop waited 67 minutes on a `tip-round` verb process (`T-15098`)
+//! that hung under its own daemon for 48 minutes before an unrelated daemon upgrade adopted it
+//! and waited another 20 minutes to end it.
 //!
-//! So a restarted daemon that adopts the live verb process of a verb it cannot run again
-//! safely (one that `Registry::resumable` does not return, such as `tip-round`), started under
-//! another build than its own, also watches it for progress. Progress is any of: a new step or
-//! a change in what it waits for, through the host protocol's `host-step`; more text in
-//! `verbs/<handle>/verb.log`; or the daemon doing something for it ([`Host::busy`]: one of its
-//! commands runs, or the daemon is still working out a `host-run` or `host-build` it keeps
+//! So the daemon watches every live verb process of a verb it cannot run again safely (one that
+//! `Registry::resumable` does not return, such as `tip-round` or `idle-job`), whether this daemon
+//! started it or adopted it across a restart under the same or an older build. Progress is any
+//! of: a new step or a change in what it waits for, through the host protocol's `host-step`; more
+//! text in `verbs/<handle>/verb.log`; or the daemon doing something for it ([`Host::busy`]: one
+//! of its commands runs, or the daemon is still working out a `host-run` or `host-build` it keeps
 //! asking about). The `host-poll` calls a process sends about once a second do not count: they
 //! come from a thread of their own, which goes on while the verb itself is stuck. A process that
 //! makes no progress for [`STALL_LIMIT`] is ended with its process group, as `ignite stop` ends
@@ -20,7 +21,7 @@
 //! loop that waits on it starts afresh.
 //!
 //! A verb the daemon can run again, such as a landing, is left alone: `server/outdated.rs`
-//! decides whether it runs again under the new build, and a stuck one that is not run again is
+//! decides whether it runs again under a new build, and a stuck one that is not run again is
 //! the job of `ignite stop`.
 
 use std::path::PathBuf;
@@ -34,18 +35,10 @@ use super::Shared;
 use crate::host::Host;
 use crate::stop::EndVerbProcess;
 
-/// How long an adopted verb process may go without progress before it is ended. A tip round
+/// How long a non-resumable verb process may go without progress before it is ended. A tip round
 /// between commands only lists checks and reads results, which takes seconds to minutes, so
 /// twenty minutes without a step, output or command is a stuck process.
 pub const STALL_LIMIT: Duration = Duration::from_mins(20);
-
-/// The version an executable outside the executable store reports.
-const UNKNOWN_VERSION: &str = "unknown";
-
-/// `version`, unless it is missing or says nothing about the code.
-fn known(version: Option<&str>) -> Option<&str> {
-    version.filter(|v| *v != UNKNOWN_VERSION)
-}
 
 /// What the watch of a stuck verb process needs: the limit, how to end the process, and the
 /// host that says whether the daemon is doing something for it.
@@ -70,24 +63,16 @@ struct Progress {
 }
 
 impl Stall {
-    /// The watch for a verb process the restarted daemon adopted, or `None` when it needs none:
-    /// the verb can be run again (`resumable`), the process runs the daemon's own build
-    /// (`own` and the row's `executable` name the same commit), or nothing can end it.
-    pub(super) fn for_adopted(
+    /// The watch for a started or adopted verb process, or `None` when it needs none: the verb
+    /// can be run again (`resumable`) or nothing can end it.
+    pub(super) fn for_verb(
         shared: &Shared,
         handle: &Handle,
         resumable: bool,
-        own: Option<&str>,
         limit: Duration,
         ender: Option<Arc<dyn EndVerbProcess>>,
     ) -> Option<Stall> {
         if resumable {
-            return None;
-        }
-        let executable = shared.row(handle).and_then(|row| row.executable);
-        if let (Some(own), Some(old)) = (known(own), known(executable.as_deref()))
-            && own == old
-        {
             return None;
         }
         let stall = Stall {
@@ -139,13 +124,12 @@ impl Stall {
         let verb = shared.row(handle).map_or_else(String::new, |row| row.verb);
         match self.ender.end(handle) {
             Ok(Some(what)) => eprintln!(
-                "ignite: ended {what}: `{verb}` ({handle}), adopted from an older build, made no \
-                 progress for {idle:.0} s"
+                "ignite: ended {what}: `{verb}` ({handle}) made no progress for {idle:.0} s"
             ),
             Ok(None) => {}
             Err(reason) => eprintln!(
-                "ignite: `{verb}` ({handle}), adopted from an older build, made no progress for \
-                 {idle:.0} s and could not be ended: {reason}"
+                "ignite: `{verb}` ({handle}) made no progress for {idle:.0} s and could not be \
+                 ended: {reason}"
             ),
         }
     }
