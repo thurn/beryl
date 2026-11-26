@@ -273,6 +273,26 @@ impl Host {
         }
     }
 
+    /// Whether the daemon is doing something for `handle`'s verb process: one of its commands
+    /// runs (its supervisor ends it at its own hang limit), or the daemon is still working out
+    /// the answer to a `host-run` or `host-build` call that the process keeps asking about.
+    /// A verb process waiting on any of these is not stuck, however long it goes without a new
+    /// step.
+    pub fn busy(&self, handle: &Handle) -> bool {
+        fn waited_on<T: Clone>(
+            calls: &Mutex<HashMap<RequestId, Arc<Pending<T>>>>,
+            handle: &Handle,
+            abandon: Duration,
+        ) -> bool {
+            crate::handles::lock(calls).iter().any(|(id, pending)| {
+                id.handle() == handle && pending.unsettled() && !pending.abandoned(abandon)
+            })
+        }
+        !self.starter.runs_of(handle).is_empty()
+            || waited_on(&self.runs, handle, self.timing.abandon)
+            || waited_on(&self.built, handle, self.timing.abandon)
+    }
+
     /// The verb process of `handle` has ended and the daemon runs its verb again itself, under
     /// the same handle: returns the cores the process borrowed and forgets its activity, its
     /// stop state and its watch, so that a stop asked of the process does not end the commands
@@ -350,6 +370,11 @@ impl<T: Clone> Pending<T> {
     /// The verb process has not asked about it for `abandon`.
     fn abandoned(&self, abandon: Duration) -> bool {
         crate::handles::lock(&self.state).asked.elapsed() > abandon
+    }
+
+    /// Whether its outcome is still being worked out.
+    fn unsettled(&self) -> bool {
+        crate::handles::lock(&self.state).outcome.is_none()
     }
 
     /// Settled long enough ago to be forgotten.

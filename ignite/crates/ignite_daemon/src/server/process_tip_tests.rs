@@ -233,6 +233,27 @@ struct TipMachine {
     git: Arc<FakeGit>,
     /// The round as the daemon would run it itself, which it never should here.
     in_daemon: Arc<OneCheck>,
+    /// The daemons' clock, which only the test moves.
+    clock: Arc<FakeClock>,
+    /// What ends a verb process that does not stop: the hung one, if the test made one.
+    hung: Arc<Hung>,
+}
+
+/// A verb process that took its lock and then hung, until it is ended; counts the verb
+/// processes the daemon asked to end.
+#[derive(Default)]
+struct Hung {
+    lock: Mutex<Option<crate::verbproc::VerbLock>>,
+    ends: AtomicUsize,
+}
+
+impl EndVerbProcess for Hung {
+    fn end(&self, _handle: &Handle) -> std::result::Result<Option<String>, String> {
+        self.ends.fetch_add(1, Ordering::SeqCst);
+        Ok(lock(&self.lock)
+            .take()
+            .map(|_| "the hung verb process".to_owned()))
+    }
 }
 
 impl TipMachine {
@@ -251,7 +272,9 @@ impl TipMachine {
         git.set_not_ancestor(&staging, &master);
         git.set_tip("master", master);
         git.set_tip("staging", staging);
+        let clock = Arc::new(FakeClock::new(T0));
         let mut ctx = context();
+        ctx.clock = clock.clone();
         ctx.hub = hub.clone();
         ctx.git = git.clone();
         let switch = Arc::new(Switch::default());
@@ -275,6 +298,8 @@ impl TipMachine {
             hub,
             git,
             in_daemon: Arc::new(OneCheck::default()),
+            clock,
+            hung: Arc::new(Hung::default()),
         }
     }
 
@@ -308,8 +333,9 @@ impl TipMachine {
             watch: Duration::from_millis(20),
             version: None,
             git: None,
-            ender: Some(Arc::new(EndsNothing)),
+            ender: Some(self.hung.clone()),
             stop_wait: crate::stop::STOP_WAIT,
+            stall_limit: crate::server::process::STALL_LIMIT,
         };
         let server = Arc::new(
             Server::with_processes(
@@ -369,6 +395,12 @@ fn a_tip_round_survives_a_restart_and_the_new_loop_waits_for_it() {
     machine.switch.set(Some(second.clone()));
     let waiting = turn_on_a_thread(second_loop, ctx.clone());
     std::thread::sleep(Duration::from_millis(300));
+    // The round's command runs, so the round is not stuck however long it takes.
+    machine
+        .clock
+        .advance(crate::server::process::STALL_LIMIT.as_secs_f64() + 1.0);
+    std::thread::sleep(Duration::from_millis(100));
+    assert_eq!(machine.hung.ends.load(Ordering::SeqCst), 0);
     assert_eq!(machine.threads.started.load(Ordering::SeqCst), 1);
     assert_eq!(machine.commands.begun(), 1, "no second round started");
 
@@ -658,4 +690,59 @@ fn a_newer_tip_does_not_stop_a_running_culprit_search() {
         matches!(outcome, TipOutcome::Failed { .. }),
         "the search finished with {outcome:?}"
     );
+}
+
+/// On 2026-11-26 a restarted daemon adopted a tip round whose verb process, started by the
+/// build before, had hung: it reported no step and wrote nothing for two hours, and the tip loop
+/// waited on it all that time. An adopted round that makes no progress for the stall limit is
+/// now ended, its handle ends `incomplete`, and the loop starts a new round.
+#[test]
+fn an_adopted_tip_round_that_makes_no_progress_is_ended_and_a_new_round_starts() {
+    let machine = TipMachine::new("stalled-tip-round");
+    let ctx = machine.threads.ctx.clone();
+    let tip = machine.git.tip("staging").unwrap();
+
+    // The previous daemon, under build `87631b5`, started a round whose verb process holds its
+    // lock and does nothing.
+    let (first, _) = machine.daemon();
+    let request = TipRoundVerb::request(&tip, Seq(0), &ctx.repo);
+    let hung = first.handles.create_for(ROUND_VERB, None, None, Some(&request));
+    let process = handle_store::Process {
+        pid: 999_999,
+        executable: "87631b5".to_owned(),
+        protocol: 1,
+    };
+    handle_store::set_process(&lock(&machine.db), hung.as_str(), &process).unwrap();
+    *lock(&machine.hung.lock) = crate::verbproc::hold(&machine.scratch.home, &hung).unwrap();
+    drop(first);
+
+    let (second, tips) = machine.daemon();
+    machine.switch.set(Some(second));
+    let waiting = turn_on_a_thread(tips, ctx.clone());
+    std::thread::sleep(Duration::from_millis(200));
+    assert!(lock(&machine.hung.lock).is_some(), "ended before the limit");
+    assert_eq!(machine.threads.started.load(Ordering::SeqCst), 0);
+
+    machine.clock.advance(crate::server::process::STALL_LIMIT.as_secs_f64() + 1.0);
+    let (mut tips, turn) = waiting.join().unwrap();
+    let error = turn.unwrap_err().to_string();
+    assert!(error.contains("cannot be run again safely"), "{error}");
+    assert!(lock(&machine.hung.lock).is_none(), "the hung process was ended");
+    let row = handle_store::get(&lock(&machine.db), hung.as_str())
+        .unwrap()
+        .unwrap();
+    assert_eq!(row.state, "incomplete");
+
+    // The loop's next turn starts a new round, which verifies the tip.
+    let checking = std::thread::spawn(move || tips.turn(&ctx, 0));
+    assert!(
+        until(|| machine.commands.begun() == 1),
+        "a new round started"
+    );
+    machine.commands.finish_all();
+    assert_eq!(
+        checking.join().unwrap().unwrap(),
+        Some((tip, TipOutcome::Verified))
+    );
+    assert_eq!(machine.threads.started.load(Ordering::SeqCst), 1);
 }

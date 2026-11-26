@@ -111,7 +111,7 @@ pub(super) fn run_again(
                     );
                     host.track(&ctx, handle);
                 }
-                super::process::watch(shared.clone(), handle, Some(child), Some(runs));
+                super::process::watch(shared.clone(), handle, Some(child), Some(runs), None);
                 return;
             }
             Some(Err(error)) => {

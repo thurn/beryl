@@ -515,6 +515,7 @@ impl Machine {
                 .map(|git| git as Arc<dyn ignite_core::traits::Git>),
             ender: Some(ender),
             stop_wait,
+            stall_limit: super::STALL_LIMIT,
         };
         let server = Server::with_processes(
             context(),

@@ -50,6 +50,11 @@ use crate::host::Host;
 use crate::steps::Steps;
 use crate::stop::{EndVerbProcess, StopVerb};
 
+#[path = "stalled.rs"]
+pub(super) mod stalled;
+use stalled::Stall;
+pub use stalled::STALL_LIMIT;
+
 /// The verbs that run in verb processes, the internal ones included: `idle-job` runs one idle
 /// job (see `crate::idle`) and `tip-round` one round of tip verification (see
 /// [`crate::tip::TipLoop`]).
@@ -200,6 +205,9 @@ pub struct Processes {
     /// How long a landing asked to stop, so that it runs again under a new build, has to end
     /// before its verb process is ended ([`crate::stop::STOP_WAIT`]).
     pub stop_wait: Duration,
+    /// How long a verb process adopted from an older build, whose verb cannot be run again,
+    /// may go without progress before it is ended ([`STALL_LIMIT`], see `server/stalled.rs`).
+    pub stall_limit: Duration,
 }
 
 impl Processes {
@@ -214,6 +222,7 @@ impl Processes {
             git: None,
             ender: None,
             stop_wait: crate::stop::STOP_WAIT,
+            stall_limit: STALL_LIMIT,
         }
     }
 
@@ -350,6 +359,7 @@ impl Server {
             &handle,
             Some(child),
             self.registry.resumable(&req.verb),
+            None,
         );
 
         let wait = Duration::from_secs(u64::from(req.wait_s));
@@ -432,7 +442,7 @@ impl Server {
                     if let Some(processes) = &self.processes {
                         processes.host.track(&self.ctx, &handle);
                     }
-                    watch(self.shared(), &handle, Some(child), None);
+                    watch(self.shared(), &handle, Some(child), None, None);
                     return handle;
                 }
                 Err(error) => eprintln!(
@@ -512,7 +522,9 @@ impl Server {
     /// process that ended after writing its reply has its reply handed on, and also returns
     /// true. False when the process died, or none was started: the caller runs the verb again
     /// or ends it. A landing that runs under an older build than the daemon's is stopped and run
-    /// again under the daemon's instead, unless its push has begun (see `server/outdated.rs`).
+    /// again under the daemon's instead, unless its push has begun (see `server/outdated.rs`). A
+    /// verb that cannot be run again, started under another build, is ended if it makes no
+    /// progress for [`Processes::stall_limit`] (see `server/stalled.rs`).
     pub(super) fn adopt_process(
         &self,
         handle: &Handle,
@@ -529,7 +541,16 @@ impl Server {
             if self.restart_if_outdated(handle, verb, request) {
                 return true;
             }
-            watch(shared, handle, None, self.registry.resumable(verb));
+            let rerun = self.registry.resumable(verb);
+            let stall = Stall::for_adopted(
+                &shared,
+                handle,
+                rerun.is_some(),
+                processes.version.as_deref(),
+                processes.stall_limit,
+                processes.ender.clone(),
+            );
+            watch(shared, handle, None, rerun, stall);
             return true;
         }
         shared.deliver_if_finished(handle)
@@ -651,12 +672,14 @@ impl Shared {
 }
 
 /// Watches `handle`'s verb process until its handle finishes; runs the verb again with `rerun`,
-/// or ends it `incomplete` without one, if the process ends first.
+/// or ends it `incomplete` without one, if the process ends first. With `stall`, ends the
+/// process once it makes no progress for the stall's limit (see `server/stalled.rs`).
 pub(super) fn watch(
     shared: Shared,
     handle: &Handle,
     mut child: Option<Box<dyn VerbChild>>,
     rerun: Option<Arc<dyn Verb>>,
+    mut stall: Option<Stall>,
 ) {
     let name = format!("ignite-watch-{handle}");
     let watched = handle.clone();
@@ -675,6 +698,9 @@ pub(super) fn watch(
                 None => !crate::verbproc::alive(&shared.home, &handle),
             };
             if !ended {
+                if let Some(stall) = stall.as_mut() {
+                    stall.look(&shared, &handle);
+                }
                 continue;
             }
             // The process writes its reply before it exits.
