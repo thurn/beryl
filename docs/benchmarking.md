@@ -125,9 +125,12 @@ it is in play. The present-cost gate measures what it costs while one is:
   question is left out when such a copy was in the group. `identity` swaps in
   Animate Dead, Gemrazer, Teferi's Protection and Stifle (and Swamps and
   Forests, so the first two can be cast). Its positions also count a merged
-  permanent or a phased-out permanent as the family being in play, which its
-  control leaves as they are: it swaps cards for their stand-ins and cannot
-  un-merge or phase in. `two-faced` swaps in Fire // Ice, Wear // Tear,
+  permanent or a phased-out permanent as the family being in play. Its control
+  swaps cards for their stand-ins and cannot un-merge or phase in, so it leaves
+  a phased-out permanent as it is, and a step while a card of the family is
+  merged with a permanent is left out: ending Gemrazer's merge would leave the
+  cards under the permanent behind in the merged zone once it left the
+  battlefield. `two-faced` swaps in Fire // Ice, Wear // Tear,
   Bonecrusher Giant, Valakut Awakening and Delver of Secrets (and Mountains, so
   the red halves can be cast), `levels` The Eldest Reborn, Wizard Class, Case of
   the Crimson Pulse and Student of Warfare, `face-down` Exalted Angel and Gathan
@@ -169,8 +172,7 @@ it is in play. The present-cost gate measures what it costs while one is:
   and activated abilities: Time Stop's stand-in still ends the turn. S' forgets
   the trackers and counts the control's table does not keep, and a debug build
   checks every control step against the engine's invariants on that table
-  (`families_pair_their_steps`). The `identity` family's control is not checked:
-  one of its states holds a memo whose object has gone, on either table.
+  (`families_pair_their_steps`).
 - **Why the control is rebuilt at every step.** Rolling the same positions out
   with and without the family plays different games from the first decision.
   Glorious Anthem makes games with more combat and more creatures dying, which

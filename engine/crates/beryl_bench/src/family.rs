@@ -31,6 +31,7 @@ use beryl_cards::CARDS;
 use beryl_cards::decks::WU_CONTROL;
 use beryl_cards::names;
 use beryl_engine::card::{Ability, AbilityIx, AbilityKind, CardDef, CastingOption, Face, Keywords};
+use beryl_engine::state::{Affects, Payload};
 use beryl_engine::{
     CardIx, Choice, Decision, Format, GameTable, Observation, Outcome, Profile, Replay, Scratch,
     StallReason, State, Step, Stops, Zone, apply, apply_decided, next, observe, rederive,
@@ -147,8 +148,9 @@ pub const FAMILIES: &[Family] = &[
     // CR 729 and 730), Teferi's Protection (phases out every permanent its controller has,
     // CR 702.26) and Stifle (a counterspell for an ability on the stack, an object that is not
     // a spell). Swamps and Forests stand in for basics so Animate Dead and Gemrazer can be cast.
-    // Its positions also keep a merged permanent or a phased-out permanent (`in_play`), which
-    // the control cannot undo and so leaves as they are.
+    // Its positions also keep a merged permanent or a phased-out permanent (`in_play`). The
+    // control leaves a phased-out permanent as it is, and makes no step while a card of the
+    // family is merged with a permanent, since it cannot undo a merge (`control`).
     Family {
         name: "identity",
         swaps: &[
@@ -509,6 +511,20 @@ pub fn control(s: &State, t: &GameTable, tc: &GameTable, family: &InTable) -> Op
     {
         return None;
     }
+    // A merged permanent (CR 731.2) is held together by a copy effect whose source is the card
+    // that merged with it, such as Gemrazer cast for mutate. Its other cards wait in the merged
+    // zone, each with a `Memo::PartOf` naming it. Ending that effect, as `end_effects_from`
+    // below does, clears the permanent's `Flag::Copy` but leaves those memos, and the kernel
+    // moves a leaving permanent's other cards with it only while that flag is set. Once the
+    // permanent left the battlefield, its cards would stay in the merged zone as part of a
+    // permanent that has gone. The control cannot undo a merge, so such a state has none.
+    if s.effects().iter().any(|e| {
+        family.stand_in_of(e.source).is_some()
+            && matches!(e.payload, Payload::Copy(_))
+            && matches!(e.affected, Affects::Object { slot, .. } if s.pile(slot).next().is_some())
+    }) {
+        return None;
+    }
     let mut c = *s;
     let mut board = c.board();
     for &(card, _) in &family.pairs {
@@ -697,14 +713,7 @@ pub fn roll_paired(w: &FamilyWorkload) -> Pairing {
     // The control side is checked in a debug build ([`Scratch::new`]): its states run on a
     // table with fewer capabilities than the game they were cut from, and a step that reaches
     // a path the table switched off would be counted wrong. A release build checks neither.
-    // The identity family's control is left unchecked: it keeps merged and phased-out
-    // permanents as they are, and one of its states holds a memo whose object has gone, on the
-    // present table as on the control's.
-    let mut xc = if w.in_table.identity {
-        Scratch::unchecked()
-    } else {
-        Scratch::new()
-    };
+    let mut xc = Scratch::new();
     let mut x = Scratch::unchecked();
     let mut pairing = Pairing::default();
     for start in &w.starts {
