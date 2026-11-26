@@ -25,6 +25,9 @@ def _export_one(entry: Json, index: int, faces: Faces, known: set[str]) -> Expor
     if "failure" in entry:
         export.unsupported = f"Beryl fails it: {entry['failure']}"
         return export
+    if cast(Json, entry["setup"]).get("shared") is not None:
+        export.unsupported = "no oracle plays a shared library"
+        return export
     try:
         writer = Exporter(entry, faces, export)
         missing = sorted(

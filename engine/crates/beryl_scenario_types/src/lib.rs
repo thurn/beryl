@@ -60,6 +60,18 @@ pub struct Setup {
     /// turn-based actions already done.
     pub step: TurnStep,
     pub players: [PlayerSetup; 2],
+    /// The shared library and graveyard of a `Format::SHARED_DECK` game, when set.
+    pub shared: Option<SharedSetup>,
+}
+
+/// The shared zones of a `Format::SHARED_DECK` setup.
+#[derive(Clone, Copy, Debug)]
+pub struct SharedSetup {
+    /// Top first: the whole shared library, in order. A shared setup that doesn't set it gets
+    /// [`FILLER_LIBRARY`].
+    pub library: &'static [&'static str],
+    /// Top first.
+    pub graveyard: &'static [&'static str],
 }
 
 /// One player's part of the setup.
@@ -581,6 +593,11 @@ const NEW_PLAYER: PlayerSetup = PlayerSetup {
     library: FILLER_LIBRARY,
 };
 
+const NEW_SHARED: SharedSetup = SharedSetup {
+    library: FILLER_LIBRARY,
+    graveyard: &[],
+};
+
 /// The builder: `Scenario::new(name)` starts at turn 1's precombat main phase, player 0
 /// active, both at 20 life with no cards anywhere; each method sets one part.
 impl Scenario {
@@ -593,6 +610,7 @@ impl Scenario {
                 active: P0,
                 step: TurnStep::PrecombatMain,
                 players: [NEW_PLAYER; 2],
+                shared: None,
             },
             actions: &[],
             interaction: &[],
@@ -625,6 +643,15 @@ impl Scenario {
         self.setup.turn = turn;
         self.setup.active = active;
         self.setup.step = step;
+        self
+    }
+
+    /// Starts before turn 1, with `starting` choosing to play and opening hands dealt from the
+    /// ordered libraries, so the actions begin at mulligans.
+    #[must_use]
+    pub const fn pregame(mut self, starting: Seat) -> Scenario {
+        self.setup.turn = 0;
+        self.setup.active = starting;
         self
     }
 
@@ -685,6 +712,41 @@ impl Scenario {
     #[must_use]
     pub const fn library(mut self, player: Seat, cards: &'static [&'static str]) -> Scenario {
         self.setup.players[player.index()].library = cards;
+        self
+    }
+
+    /// Marks this scenario as a `Format::SHARED_DECK` game, using [`FILLER_LIBRARY`] and an
+    /// empty shared graveyard unless set otherwise.
+    #[must_use]
+    pub const fn shared(mut self) -> Scenario {
+        if self.setup.shared.is_none() {
+            self.setup.shared = Some(NEW_SHARED);
+        }
+        self
+    }
+
+    /// The shared library of a `Format::SHARED_DECK` game, top first, in place of
+    /// [`FILLER_LIBRARY`].
+    #[must_use]
+    pub const fn shared_library(mut self, cards: &'static [&'static str]) -> Scenario {
+        let mut shared = match self.setup.shared {
+            Some(s) => s,
+            None => NEW_SHARED,
+        };
+        shared.library = cards;
+        self.setup.shared = Some(shared);
+        self
+    }
+
+    /// The shared graveyard of a `Format::SHARED_DECK` game, top first.
+    #[must_use]
+    pub const fn shared_graveyard(mut self, cards: &'static [&'static str]) -> Scenario {
+        let mut shared = match self.setup.shared {
+            Some(s) => s,
+            None => NEW_SHARED,
+        };
+        shared.graveyard = cards;
+        self.setup.shared = Some(shared);
         self
     }
 

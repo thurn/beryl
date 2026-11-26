@@ -14,7 +14,7 @@ use beryl_engine::state::CounterKind;
 use beryl_engine::{CardTable, DecisionKind, Seat, TurnStep, Zone};
 use beryl_scenario_types::{
     Action, Assertion, Counters, Ending, Permanent, PermanentState, Pick, PlayerSetup, Scenario,
-    Setup, SnapshotRef,
+    Setup, SharedSetup, SnapshotRef,
 };
 use serde::{Serialize, Serializer};
 
@@ -51,6 +51,7 @@ mirrored! {
     Permanent => PermanentDef,
     PlayerSetup => PlayerSetupDef,
     Scenario => ScenarioDef,
+    SharedSetup => SharedSetupDef,
 }
 
 /// A list of mirrored values.
@@ -108,6 +109,15 @@ struct SetupDef {
     step: TurnStep,
     #[serde(serialize_with = "players")]
     players: [PlayerSetup; 2],
+    #[serde(skip_serializing_if = "Option::is_none", serialize_with = "optional")]
+    shared: Option<SharedSetup>,
+}
+
+#[derive(Serialize)]
+#[serde(remote = "SharedSetup")]
+struct SharedSetupDef {
+    library: &'static [&'static str],
+    graveyard: &'static [&'static str],
 }
 
 #[derive(Serialize)]

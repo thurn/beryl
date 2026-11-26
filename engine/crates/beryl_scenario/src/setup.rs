@@ -7,8 +7,10 @@ use beryl_engine::state::LinkKind;
 use beryl_engine::state::{CounterKind, Memo, Tracker};
 use beryl_engine::table::Capability;
 use beryl_engine::{
-    CardId, CardTable, Format, GameTable, Large, LargeCardIx, Layout, Profile, Seat, State, Zone,
+    CardId, CardTable, Choice, DecisionKind, Format, GameTable, Large, LargeCardIx, Layout, Opt,
+    Profile, Replay, Scratch, Seat, State, Step, Zone, apply, next,
 };
+use beryl_scenario_types::{FILLER_LIBRARY, PlayerSetup};
 
 use crate::{Failure, Scenario};
 
@@ -113,7 +115,25 @@ fn setup_failure(scenario: &Scenario, message: String) -> Failure {
 }
 
 fn table(cards: &'static CardTable, scenario: &Scenario) -> Result<GameTable, Failure> {
-    let decks = decks(scenario);
+    let (format, decks) = if let Some(shared) = scenario.setup.shared {
+        for p in &scenario.setup.players {
+            if !p.graveyard.is_empty() || p.library != FILLER_LIBRARY {
+                return Err(setup_failure(
+                    scenario,
+                    "a shared setup leaves each player's library and graveyard unset".to_owned(),
+                ));
+            }
+        }
+        let shared_deck = player_owned_cards(&scenario.setup.players[0])
+            .chain(player_owned_cards(&scenario.setup.players[1]))
+            .chain(shared.library.iter().copied())
+            .chain(shared.graveyard.iter().copied())
+            .map(|name| (1, name))
+            .collect();
+        (Format::SHARED_DECK, [shared_deck, Vec::new()])
+    } else {
+        (Format::CONSTRUCTED, decks(scenario))
+    };
     let sideboards = scenario.setup.players.map(|p| {
         p.sideboard
             .iter()
@@ -121,7 +141,7 @@ fn table(cards: &'static CardTable, scenario: &Scenario) -> Result<GameTable, Fa
             .collect::<Vec<_>>()
     });
     GameTable::with_sideboards(
-        Format::CONSTRUCTED,
+        format,
         cards,
         decks.each_ref().map(Vec::as_slice),
         sideboards.each_ref().map(Vec::as_slice),
@@ -129,20 +149,28 @@ fn table(cards: &'static CardTable, scenario: &Scenario) -> Result<GameTable, Fa
     .map_err(|error| setup_failure(scenario, format!("{error:?}")))
 }
 
+fn player_owned_cards(p: &PlayerSetup) -> impl Iterator<Item = &'static str> + '_ {
+    p.hand
+        .iter()
+        .chain(p.battlefield)
+        .chain(p.permanents.iter().filter(|b| !b.token).map(|b| &b.card))
+        .chain(p.permanents.iter().flat_map(|b| b.exiled_with))
+        .chain(p.exile)
+        .copied()
+}
+
+fn player_cards(p: &PlayerSetup) -> impl Iterator<Item = &'static str> + '_ {
+    player_owned_cards(p)
+        .chain(p.graveyard.iter().copied())
+        .chain(p.library.iter().copied())
+}
+
 /// Every card the setup names, by owner: the decks the game is built from.
 fn decks(scenario: &Scenario) -> [Vec<(u8, &'static str)>; 2] {
-    scenario.setup.players.map(|p| {
-        p.hand
-            .iter()
-            .chain(p.battlefield)
-            .chain(p.permanents.iter().filter(|b| !b.token).map(|b| &b.card))
-            .chain(p.permanents.iter().flat_map(|b| b.exiled_with))
-            .chain(p.graveyard)
-            .chain(p.exile)
-            .chain(p.library)
-            .map(|&name| (1, name))
-            .collect()
-    })
+    scenario
+        .setup
+        .players
+        .map(|p| player_cards(&p).map(|name| (1, name)).collect())
 }
 
 /// The setup's position: every card starts in its owner's library and moves to its zone.
@@ -153,84 +181,46 @@ fn arrange<L: Layout>(
     slots: Slots,
 ) -> Result<State<L>, Failure> {
     let setup = &scenario.setup;
+    let shared = setup.shared.is_some();
     slots.apply(&mut s);
-    s.board().begin_at(setup.turn, setup.active, setup.step);
-    if t.can(beryl_engine::table::Capability::TurnStructure) {
-        s.plan_from_current_step(t.format())
-            .map_err(|_| setup_failure(scenario, "the initial turn plan is full".to_string()))?;
+    if setup.turn > 0 {
+        s.board().begin_at(setup.turn, setup.active, setup.step);
+        if t.can(beryl_engine::table::Capability::TurnStructure) {
+            s.plan_from_current_step(t.format()).map_err(|_| {
+                setup_failure(scenario, "the initial turn plan is full".to_string())
+            })?;
+        }
     }
+    let full = |_| setup_failure(scenario, "a zone is full".to_string());
     for (p, player) in Seat::BOTH.into_iter().zip(&setup.players) {
         s.board().set_life(p, player.life);
-        let full = |_| setup_failure(scenario, "a zone is full".to_string());
         for &name in player.hand {
             let slot = library_slot(&s, t, p, name);
+            if shared {
+                s.claim(slot, p);
+            }
             s.board().place(slot, Zone::Hand).map_err(full)?;
         }
         for b in player.all_permanents() {
-            let slot = if b.token {
-                s.board()
-                    .place_token(
-                        p,
-                        token_index(t, b.card)
-                            .map_err(|message| setup_failure(scenario, message))?,
-                        b.face,
-                        &[],
-                    )
-                    .map_err(full)?
-            } else {
-                let slot = library_slot(&s, t, p, b.card);
-                s.board().place(slot, Zone::Battlefield).map_err(full)?;
-                s.board().set_face(slot, b.face);
-                slot
-            };
-            if b.face == FaceIx::BACK && s.copiable(slot).shape(t) == CardShape::Flip {
-                let permanent = s.permanent_at(slot).expect("a permanent in the scenario");
-                s.flip_permanent(permanent, true);
-            }
-            s.board().set_tapped(slot, b.tapped);
-            s.board().set_sick(slot, b.sick);
-            // A scenario's permanents entered the battlefield the turn it begins in, as its
-            // setup has always had them: a permanent whose abilities are faster that turn
-            // may use them so, and the scripts recorded from scenarios stop where it may.
-            let permanent = s.permanent_at(slot).expect("a permanent in the scenario");
-            s.track(t, Tracker::EnteredThisTurn, permanent);
-            // CR 306.5b: a planeswalker "enters with a number of loyalty counters on it equal
-            // to its printed loyalty number."
-            let printed = s.copiable(slot).turned(t, b.face).face(t).loyalty;
-            let counters = b
-                .counters
-                .map(|c| (c.kind, c.count))
-                .or(printed.map(|n| (CounterKind::Loyalty, n)));
-            if let Some((kind, n)) = counters {
-                s.board().set_counters(slot, kind, n).map_err(full)?;
-            }
-            for &name in b.exiled_with {
-                let card = library_slot(&s, t, p, name);
-                s.board().place(card, Zone::Exile).map_err(full)?;
-                let with = Memo::linked(LinkKind::ExiledWith, s.object_ref(slot));
-                s.board().remember(card, with).map_err(full)?;
-            }
+            place_permanent(&mut s, t, scenario, p, b, shared)?;
         }
         // Top first: the last placed is on top.
-        for &name in player.graveyard.iter().rev() {
-            let slot = library_slot(&s, t, p, name);
-            s.board().place(slot, Zone::Graveyard).map_err(full)?;
+        if !shared {
+            for &name in player.graveyard.iter().rev() {
+                let slot = library_slot(&s, t, p, name);
+                s.board().place(slot, Zone::Graveyard).map_err(full)?;
+            }
         }
         for &name in player.exile {
             let slot = library_slot(&s, t, p, name);
+            if shared {
+                s.claim(slot, p);
+            }
             s.board().place(slot, Zone::Exile).map_err(full)?;
         }
-        let mut order = Vec::new();
-        for &name in player.library {
-            let slot = s
-                .library(p)
-                .iter()
-                .copied()
-                .find(|&slot| matches_name(&s, t, slot, name) && !order.contains(&slot))
-                .expect("the library holds the cards it lists");
-            order.push(slot);
+        if !shared {
+            order_library_from(&mut s, t, p, player.library);
         }
-        s.board().order_library(p, &order);
         if let Some(card) = player.companion {
             let index = s
                 .companion_choices(t, p)
@@ -248,7 +238,105 @@ fn arrange<L: Layout>(
             s.reveal_companion(p, index);
         }
     }
+    if let Some(shared_setup) = setup.shared {
+        // Top first: the last placed is on top.
+        for &name in shared_setup.graveyard.iter().rev() {
+            let slot = library_slot(&s, t, Seat::P0, name);
+            s.board().place(slot, Zone::Graveyard).map_err(full)?;
+        }
+        order_library_from(&mut s, t, Seat::P0, shared_setup.library);
+    }
+    if setup.turn == 0 {
+        s.board().set_flip_winner(setup.active);
+        let mut x = Scratch::new();
+        let Step::Decide(d) = next(&mut s, t, &mut x, &mut Replay) else {
+            return Err(setup_failure(
+                scenario,
+                "pregame setup expected PlayOrDraw decision".to_owned(),
+            ));
+        };
+        debug_assert_eq!(d.kind, DecisionKind::PlayOrDraw);
+        let play = (0..d.len())
+            .map(|i| Choice(u16::try_from(i).expect("choice fits in u16")))
+            .find(|&c| d.candidates.option(c) == Some(Opt::Play))
+            .expect("PlayOrDraw offers Play");
+        apply(&mut s, t, &mut x, &mut Replay, play);
+    }
     Ok(s)
+}
+
+fn place_permanent<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    scenario: &Scenario,
+    p: Seat,
+    b: beryl_scenario_types::Permanent,
+    shared: bool,
+) -> Result<(), Failure> {
+    let full = |_| setup_failure(scenario, "a zone is full".to_string());
+    let slot = if b.token {
+        s.board()
+            .place_token(
+                p,
+                token_index(t, b.card).map_err(|message| setup_failure(scenario, message))?,
+                b.face,
+                &[],
+            )
+            .map_err(full)?
+    } else {
+        let slot = library_slot(s, t, p, b.card);
+        if shared {
+            s.claim(slot, p);
+        }
+        s.board().place(slot, Zone::Battlefield).map_err(full)?;
+        s.board().set_face(slot, b.face);
+        slot
+    };
+    if b.face == FaceIx::BACK && s.copiable(slot).shape(t) == CardShape::Flip {
+        let permanent = s.permanent_at(slot).expect("a permanent in the scenario");
+        s.flip_permanent(permanent, true);
+    }
+    s.board().set_tapped(slot, b.tapped);
+    s.board().set_sick(slot, b.sick);
+    // A scenario's permanents entered the battlefield the turn it begins in, as its
+    // setup has always had them: a permanent whose abilities are faster that turn
+    // may use them so, and the scripts recorded from scenarios stop where it may.
+    let permanent = s.permanent_at(slot).expect("a permanent in the scenario");
+    s.track(t, Tracker::EnteredThisTurn, permanent);
+    // CR 306.5b: a planeswalker "enters with a number of loyalty counters on it equal
+    // to its printed loyalty number."
+    let printed = s.copiable(slot).turned(t, b.face).face(t).loyalty;
+    let counters = b
+        .counters
+        .map(|c| (c.kind, c.count))
+        .or(printed.map(|n| (CounterKind::Loyalty, n)));
+    if let Some((kind, n)) = counters {
+        s.board().set_counters(slot, kind, n).map_err(full)?;
+    }
+    for &name in b.exiled_with {
+        let card = library_slot(s, t, p, name);
+        if shared {
+            s.claim(card, p);
+        }
+        s.board().place(card, Zone::Exile).map_err(full)?;
+        let with = Memo::linked(LinkKind::ExiledWith, s.object_ref(slot));
+        s.board().remember(card, with).map_err(full)?;
+    }
+    Ok(())
+}
+
+fn order_library_from<L: Layout>(s: &mut State<L>, t: &GameTable, player: Seat, names: &[&str]) {
+    let mut order = Vec::new();
+    for &name in names {
+        let slot = s
+            .library(player)
+            .iter()
+            .copied()
+            .find(|&slot| matches_name(s, t, slot, name) && !order.contains(&slot))
+            .expect("the library holds the cards it lists");
+        order.push(slot);
+    }
+    s.board().order_library(player, &order);
 }
 
 /// The game index of the token named `name`: one a card of the decks creates.

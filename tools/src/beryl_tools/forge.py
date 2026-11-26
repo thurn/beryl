@@ -535,6 +535,8 @@ def export(
         try:
             if "failure" in entry:
                 raise Unsupported(f"Beryl fails it: {entry['failure']}")
+            if cast(JsonObject, entry["setup"]).get("shared") is not None:
+                raise Unsupported("no oracle plays a shared library")
             described = Cards(cast(JsonObject, entry.get("cards", {})), oracle)
             if "Prepared" in described.shapes.values():
                 raise Unsupported(

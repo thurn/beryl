@@ -25,6 +25,7 @@ pub mod library;
 pub mod linked;
 pub mod mana;
 pub mod replacement;
+pub mod shared;
 pub mod tokens;
 pub mod triggers;
 pub mod turn;
@@ -303,6 +304,14 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
         zones::PAY_LIFE_TO_ENTER_UNTAPPED,
     ),
     ("zones", names::SPARAS_HEADQUARTERS, zones::ENTERS_TAPPED),
+    ("shared", names::ISLAND, shared::DRAW),
+    ("shared", names::MENTAL_NOTE, shared::MILL),
+    ("shared", names::OUST, shared::RETURN_TO_TOP),
+    ("shared", names::TIMETWISTER, shared::SHUFFLE),
+    ("shared", names::TIMETWISTER, shared::SIMULTANEOUS_DRAW),
+    ("shared", names::ISLAND, shared::FREE_MULLIGAN),
+    ("shared", names::ISLAND, shared::DECKING),
+    ("shared", names::SNAPCASTER_MAGE, shared::FLASHBACK),
 ];
 
 /// The scenarios by the card that has the effect, as a card's own are listed

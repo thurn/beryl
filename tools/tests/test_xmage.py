@@ -911,3 +911,14 @@ def test_payments_with_mana_choice_replay_recorded_taps_when_made_text_matches()
     assert export.unsupported is None, export.unsupported
     tap = 'tapSource(1, PhaseStep.PRECOMBAT_MAIN, playerB, "Plains", "{T}: Add {W}");'
     assert export.body.count(tap) == 2
+
+
+def test_shared_scenario_is_unsupported() -> None:
+    entry: dict[str, object] = {
+        "card": "Island",
+        "name": "shared",
+        "setup": {"shared": {"library": ["Island"], "graveyard": []}},
+    }
+    faces = xmage_java.Faces.load(card_store.STORE)
+    export = xmage_export.export_one(entry, 1, faces, XMAGE_CARDS)
+    assert export.unsupported == "no oracle plays a shared library"

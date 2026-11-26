@@ -17,7 +17,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvError, RecvTimeoutError, channel};
 use std::sync::{Arc, Mutex, PoisonError};
 
-use beryl_card_names::decks::WU_CONTROL;
+use beryl_card_names::decks::{FORGETFUL_FISH, WU_CONTROL};
 use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_search::GameAgent;
 use beryl_session::ipc::{Fixture, FixtureMessage};
@@ -49,7 +49,7 @@ pub struct Definition {
     pub name: String,
     /// A seeded game's seed, with `decks`; or none, with `board`.
     seed: Option<u64>,
-    /// Each seat's deck: `wu-control` (the mirror) or `fuzz:<seed>` for a fuzz deck.
+    /// Each seat's deck: `wu-control`, `fuzz:<seed>`, `forgetful-fish`, or `shared-fuzz:<seed>`.
     decks: Option<[String; 2]>,
     /// The board the game starts from, by its name in [`crate::boards::BOARDS`], in place of
     /// a seeded deal.
@@ -512,10 +512,11 @@ fn start(
     let started: Result<SessionId, SessionError> =
         match (&def.board, def.seed, &def.decks, &def.agents) {
             (None, Some(seed), Some(decks), Some(agents)) => {
+                let (format, decks) = start_decks(catalog, decks)?;
                 let start = StartGame {
-                    format: beryl_session::Format::CONSTRUCTED,
+                    format,
                     seed,
-                    decks: [deck(catalog, &decks[0])?, deck(catalog, &decks[1])?],
+                    decks,
                     human,
                     opponent: agents[human.opponent().index()].clone(),
                     stops,
@@ -564,6 +565,56 @@ fn start(
     Ok((started.map_err(|e| e.to_string())?, guard))
 }
 
+/// Each seat's decklist as `StartGame` takes it.
+pub type SeatDecks = [Vec<(u8, String)>; 2];
+
+/// Maps the fixture's two deck names to the format and each seat's decklist.
+pub fn start_decks(
+    catalog: &'static Catalog,
+    names: &[String; 2],
+) -> Result<(beryl_session::Format, SeatDecks), String> {
+    if names[0] == "forgetful-fish" && names[1] == "forgetful-fish" {
+        return Ok((
+            beryl_session::Format::SHARED_DECK,
+            [owned_deck(FORGETFUL_FISH), Vec::new()],
+        ));
+    }
+    if let (Some(s0), Some(s1)) = (
+        names[0].strip_prefix("shared-fuzz:"),
+        names[1].strip_prefix("shared-fuzz:"),
+    ) {
+        let seed0: u64 = s0.parse().map_err(|_| format!("bad fuzz seed {s0:?}"))?;
+        let seed1: u64 = s1.parse().map_err(|_| format!("bad fuzz seed {s1:?}"))?;
+        let mut combined = catalog.fuzz_deck(seed0);
+        let second = if seed1 == seed0 {
+            seed1 ^ (1 << 40)
+        } else {
+            seed1
+        };
+        combined.extend(catalog.fuzz_deck(second));
+        return Ok((
+            beryl_session::Format::SHARED_DECK,
+            [owned_deck(&combined), Vec::new()],
+        ));
+    }
+    if names
+        .iter()
+        .any(|n| n == "forgetful-fish" || n.starts_with("shared-fuzz:"))
+    {
+        return Err(format!(
+            "a shared deck must be used for both seats: {names:?}"
+        ));
+    }
+    Ok((
+        beryl_session::Format::CONSTRUCTED,
+        [deck(catalog, &names[0])?, deck(catalog, &names[1])?],
+    ))
+}
+
+fn owned_deck(list: &[(u8, &str)]) -> Vec<(u8, String)> {
+    list.iter().map(|&(n, c)| (n, c.to_owned())).collect()
+}
+
 fn deck(catalog: &'static Catalog, name: &str) -> Result<Vec<(u8, String)>, String> {
     let list = if name == "wu-control" {
         WU_CONTROL.to_vec()
@@ -575,7 +626,7 @@ fn deck(catalog: &'static Catalog, name: &str) -> Result<Vec<(u8, String)>, Stri
     } else {
         return Err(format!("no deck is named {name:?}"));
     };
-    Ok(list.into_iter().map(|(n, c)| (n, c.to_owned())).collect())
+    Ok(owned_deck(&list))
 }
 
 fn number<T: std::str::FromStr>(text: &str, n: &str) -> Result<T, String> {

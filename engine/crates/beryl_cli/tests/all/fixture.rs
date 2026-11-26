@@ -30,6 +30,44 @@ fn a_recording_stops_at_its_condition() {
     assert_eq!(decision.kind, Kind::Target);
 }
 
+#[test]
+fn deck_names_map_to_constructed_and_shared_decks() {
+    let (format, decks) = start_decks(&TEST, &["wu-control".into(), "wu-control".into()]).unwrap();
+    assert_eq!(format, beryl_session::Format::CONSTRUCTED);
+    assert!(!decks[0].is_empty() && !decks[1].is_empty());
+
+    let (format, decks) = start_decks(&TEST, &["fuzz:7".into(), "fuzz:8".into()]).unwrap();
+    assert_eq!(format, beryl_session::Format::CONSTRUCTED);
+    assert_eq!(
+        decks[0].iter().map(|(n, _)| usize::from(*n)).sum::<usize>(),
+        40
+    );
+    assert_eq!(
+        decks[1].iter().map(|(n, _)| usize::from(*n)).sum::<usize>(),
+        40
+    );
+
+    let (format, decks) =
+        start_decks(&TEST, &["forgetful-fish".into(), "forgetful-fish".into()]).unwrap();
+    assert_eq!(format, beryl_session::Format::SHARED_DECK);
+    assert_eq!(
+        decks[0].iter().map(|(n, _)| usize::from(*n)).sum::<usize>(),
+        80
+    );
+    assert!(decks[1].is_empty());
+
+    let (format, decks) =
+        start_decks(&TEST, &["shared-fuzz:7".into(), "shared-fuzz:7".into()]).unwrap();
+    assert_eq!(format, beryl_session::Format::SHARED_DECK);
+    assert_eq!(
+        decks[0].iter().map(|(n, _)| usize::from(*n)).sum::<usize>(),
+        80
+    );
+    assert!(decks[1].is_empty());
+
+    assert!(start_decks(&TEST, &["forgetful-fish".into(), "wu-control".into()]).is_err());
+}
+
 /// The views of `messages`, a recording.
 fn views(messages: &[FixtureMessage]) -> Vec<PlayerView> {
     (messages.iter())

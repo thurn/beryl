@@ -569,3 +569,14 @@ def test_exact_mana_values_reach_the_harness_with_both_snapshot_references() -> 
     scenarios, skipped = forge.export([entry], card_store.STORE)
     assert scenarios == []
     assert skipped[0]["reason"] == "a mana value assertion outside the battlefield"
+
+
+def test_shared_scenario_is_unsupported() -> None:
+    entry: Json = {
+        "card": "Island",
+        "name": "shared",
+        "setup": {"shared": {"library": ["Island"], "graveyard": []}},
+    }
+    scenarios, skipped = forge.export([entry], card_store.STORE)
+    assert scenarios == []
+    assert skipped[0]["reason"] == "no oracle plays a shared library"

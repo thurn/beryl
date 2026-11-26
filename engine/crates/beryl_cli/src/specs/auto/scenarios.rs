@@ -137,22 +137,31 @@ const FILLER: &[&str] = &[
 /// library needs its original size in both the spec and the playable example.
 pub(in crate::specs) fn with_libraries(scenario: &Scenario) -> Scenario {
     let mut d = *scenario;
+    let empty_library_asserted = |seat: Option<beryl_engine::Seat>| {
+        scenario.actions.iter().any(|action| {
+            matches!(
+                action,
+                Action::Assert {
+                    assertion: Assertion::Count {
+                        player,
+                        zone: beryl_engine::Zone::Library,
+                        card: None,
+                        count: 0,
+                    },
+                } if seat.is_none_or(|s| *player == s)
+            )
+        })
+    };
+    if let Some(shared) = d.setup.shared {
+        let needs_short_library = shared.library.len() <= 1 && empty_library_asserted(None);
+        if !needs_short_library {
+            d = d.shared_library(leak([shared.library, FILLER].concat()));
+        }
+        return d;
+    }
     for seat in [P0, P1] {
         let library = d.setup.players[seat.index()].library;
-        let needs_short_library = library.len() <= 1
-            && scenario.actions.iter().any(|action| {
-                matches!(
-                    action,
-                    Action::Assert {
-                        assertion: Assertion::Count {
-                            player,
-                            zone: beryl_engine::Zone::Library,
-                            card: None,
-                            count: 0,
-                        },
-                    } if *player == seat
-                )
-            });
+        let needs_short_library = library.len() <= 1 && empty_library_asserted(Some(seat));
         if !needs_short_library {
             d = d.library(seat, leak([library, FILLER].concat()));
         }
@@ -181,11 +190,13 @@ fn with_table(scenario: &Scenario) -> Scenario {
         d = d.life(P0, 17).life(P1, 14);
     }
     let [mine, theirs] = d.setup.players;
-    if mine.graveyard.is_empty() {
-        d = d.graveyard(P0, &[STOCK_UP, REPRIEVE]);
-    }
-    if theirs.graveyard.is_empty() {
-        d = d.graveyard(P1, &[OUST, MANA_DRAIN]);
+    if d.setup.shared.is_none() {
+        if mine.graveyard.is_empty() {
+            d = d.graveyard(P0, &[STOCK_UP, REPRIEVE]);
+        }
+        if theirs.graveyard.is_empty() {
+            d = d.graveyard(P1, &[OUST, MANA_DRAIN]);
+        }
     }
     if theirs.battlefield.is_empty() && theirs.permanents.is_empty() {
         d = d.permanents(P1, THEIRS);
