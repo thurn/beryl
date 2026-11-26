@@ -7,7 +7,7 @@ use super::Motion;
 use crate::play::index;
 use game_table::table::{
     Group, HandFits, NameIds, PileRules, Placement, Rest, RowChange, Table, Zones, Zooms, blocked,
-    blocking_rows, reposed,
+    blocking_rows, names_host, reposed,
 };
 
 impl<'a> Motion<'a> {
@@ -101,7 +101,11 @@ impl<'a> Motion<'a> {
             // or lets them go to their own groups, though the act names none of them
             // (`place::under`).
             let row = |index: usize| matches!(Group::ALL[index], Group::Row { .. });
-            if was != now.map(Group::index)
+            // A permanent that lies under another (a card exiled by a permanent) hosts nothing,
+            // so one that goes under another in the row it is already in (a creature exiled by
+            // a Dragon's trigger) lets go of the cards that lay under it too, in its own row.
+            let tucks = zones.get(slot).is_some_and(names_host);
+            if (was != now.map(Group::index) || tucks)
                 && (was.is_some_and(row) || now.is_some_and(|g| row(g.index())))
             {
                 for object in zones.naming_as_host(slot) {
