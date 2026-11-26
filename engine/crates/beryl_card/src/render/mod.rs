@@ -107,6 +107,15 @@ struct Ctx {
     /// Set from `discarded` once the text names this object after the discard, so "it" would
     /// mean this object: "those" is then "the discarded card".
     those_named: Option<bool>,
+    /// What the instruction before did to the cards it acted on, when a condition after it
+    /// may say "[a card] was [done] this way" of them: "milled".
+    done_this_way: Option<&'static str>,
+    /// Whether a clause of the ability so far had a player other than "you" as its subject,
+    /// so that the outcome of a condition about something else says "you": "target player
+    /// mills a card. If a card with the chosen name was milled this way, you draw two cards."
+    other_subject: bool,
+    /// Whether the clauses being written say "you" as their subject ([`Ctx::clause`]).
+    state_you: bool,
     /// Whether the ability being written works only in a graveyard, so that "this card" is
     /// in its owner's graveyard.
     in_graveyard: bool,
@@ -189,6 +198,9 @@ impl Ctx {
             this_is_it: false,
             discarded: None,
             those_named: None,
+            done_this_way: None,
+            other_subject: false,
+            state_you: false,
             in_graveyard: false,
             words: Words::NONE,
             ability: None,
@@ -209,6 +221,9 @@ impl Ctx {
         self.this_is_it = false;
         self.discarded = None;
         self.those_named = None;
+        self.done_this_way = None;
+        self.other_subject = false;
+        self.state_you = false;
     }
 }
 

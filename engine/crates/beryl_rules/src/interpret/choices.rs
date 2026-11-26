@@ -460,6 +460,7 @@ const MAY_SEARCH: Prompt = Prompt::new(Purpose::MaySearch);
 /// question is about them ([`Purpose::Move`]), and with none to exile there is nothing to
 /// ask; where it is a search, the question is whether to search ([`Purpose::MaySearch`]).
 /// The outcome is the effect's, or nothing when it was declined.
+#[allow(clippy::too_many_lines)] // One exhaustive match, a line per instruction.
 pub(crate) fn may_instruction<L: Layout>(
     run: &mut Run<'_, '_, L>,
     player: Players,
@@ -488,6 +489,7 @@ pub(crate) fn may_instruction<L: Layout>(
         | Effect::ForEachPlayer { .. }
         | Effect::Choose { .. }
         | Effect::LookAt { .. }
+        | Effect::ChooseValue { .. }
         | Effect::Counter(_)
         | Effect::CounterInto { .. }
         | Effect::CopySpell { .. }

@@ -9,6 +9,7 @@
 //! Implements: CR 107.1a, CR 107.1b, CR 109.5, CR 608.2h
 
 use beryl_card::{Amount, CastingKind, Condition, Objects, Players, SpecIx, Types, Words};
+use beryl_kernel::chosen::ChosenValue;
 use beryl_kernel::memos::LinkKind;
 use beryl_kernel::reference::Current;
 
@@ -113,6 +114,8 @@ pub(crate) struct Registers<L: Layout> {
     /// [`Objects::Those`], CR 608.2h). Under an [`beryl_card::Effect::ForEachPlayer`], what
     /// each player's turn at the instruction moved, together.
     pub(crate) controlled: PerPlayer<L, Bitboard<L::Slot>>,
+    /// The value an [`beryl_card::Effect::ChooseValue`] chose, until the resolution ends.
+    pub(crate) chosen: Option<ChosenValue<L>>,
 }
 
 impl<L: Layout> Default for Registers<L> {
@@ -124,6 +127,7 @@ impl<L: Layout> Default for Registers<L> {
             outcome: Outcome::default(),
             that_player: None,
             controlled: Table::filled(Bitboard::EMPTY),
+            chosen: None,
         }
     }
 }
@@ -713,6 +717,7 @@ impl<L: Layout> Scene<'_, L> {
             }
             // See CR 701.42a (`actions::meld`).
             Condition::MeldPair(partner) => self.meld_pair(partner).is_some(),
+            Condition::HasChosenName(names) => self.has_chosen_name(names),
             Condition::Not(condition) => !self.holds(condition),
             Condition::All(conditions) => conditions.iter().all(|c| self.holds(c)),
             Condition::Any(conditions) => conditions.iter().any(|c| self.holds(c)),

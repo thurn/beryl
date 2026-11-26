@@ -97,6 +97,16 @@ pub(crate) fn pick<L: Layout>(
         Opt::Number(n) if d.prompt.purpose == Purpose::Wish => Pick::Card {
             card: t.def(t.sideboard_card::<L::Card>(d.player, n)?).name,
         },
+        // A card name of the game is a card, which the oracles name; "another card" stays a
+        // number, which they read as a name no card of the scenario has.
+        Opt::Number(n) if d.prompt.purpose == Purpose::CardName => {
+            match ChosenValue::<L>::of_number(ChosenKind::CardName, n)
+                .and_then(|value| value.card_name(t))
+            {
+                Some(card) => Pick::Card { card },
+                None => Pick::Number { n },
+            }
+        }
         Opt::Number(n) => {
             value_name(t, d, n).map_or(Pick::Number { n }, |name| Pick::Named { name })
         }

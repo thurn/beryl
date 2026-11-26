@@ -374,6 +374,7 @@ fn prevention_filter(effect: &'static Effect) -> Option<&'static Filter> {
         | Effect::ForEachPlayer { effect, .. } => prevention_filter(effect),
         Effect::Choose { .. }
         | Effect::LookAt { .. }
+        | Effect::ChooseValue { .. }
         | Effect::Counter(_)
         | Effect::CounterInto { .. }
         | Effect::CopySpell { .. }

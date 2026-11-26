@@ -22,6 +22,7 @@ impl Ctx {
         let may = std::mem::take(&mut self.may);
         let continued = std::mem::take(&mut self.continued);
         let subject = (player != Players::You).then(|| self.player(player));
+        self.other_subject |= subject.is_some();
         let saved = self.subject.replace(player);
         let rest = rest(self);
         self.subject = saved;
@@ -32,6 +33,7 @@ impl Ctx {
         };
         match (subject, may) {
             (Some(_), false) if continued => format!("{third}{rest}"),
+            (None, false) if self.state_you => format!("you {base}{rest}"),
             (None, false) => format!("{base}{rest}"),
             (None, true) => format!("you may {base}{rest}"),
             (Some(who), false) => format!("{who} {third}{rest}"),
@@ -47,7 +49,7 @@ impl Ctx {
         verb: (&str, &str),
         rest: impl FnOnce(&mut Ctx) -> String,
     ) -> String {
-        let plain = player == Players::You && !self.may && !self.continued;
+        let plain = player == Players::You && !self.may && !self.continued && !self.state_you;
         let clause = self.clause(player, verb, rest);
         if plain {
             format!("you {clause}")
@@ -91,7 +93,11 @@ impl Ctx {
     ) -> Vec<String> {
         let cast_trigger = self.trigger.is_some_and(|trigger| trigger.event.is_cast());
         let did = matches!(condition, Condition::Did);
+        // After a clause about another player, the outcome of a condition about a card says
+        // who acts: "If a card with the chosen name was milled this way, you draw two cards."
+        let state_you = self.other_subject && matches!(condition, Condition::HasChosenName(_));
         let condition = self.condition(condition);
+        let saved = std::mem::replace(&mut self.state_you, state_you);
         let mut clauses = self.effect(then);
         if did
             && cast_trigger
@@ -111,6 +117,7 @@ impl Ctx {
             prefix(&mut more, "otherwise, ");
             clauses.extend(more);
         }
+        self.state_you = saved;
         clauses
     }
 
@@ -467,6 +474,10 @@ fn joined_by_then(before: &Effect, after: &Effect) -> bool {
             Effect::Exile(Objects::InZoneOf { .. }),
             Effect::ShuffleInto { .. }
         ) | (
+            // "Choose a card name, then target player mills a card".
+            Effect::ChooseValue { .. },
+            Effect::Mill { .. }
+        ) | (
             // "Exile Jace, then return him to the battlefield transformed".
             Effect::Exile(Objects::This),
             Effect::ReturnTransformed(Objects::This | Objects::Those)
@@ -496,6 +507,7 @@ pub(super) fn subject_of(effect: &Effect) -> Option<Players> {
         Effect::May { effect, .. } | Effect::Unless { effect, .. } => subject_of(effect),
         Effect::If { then, .. } => subject_of(then),
         Effect::Choose { player, .. }
+        | Effect::ChooseValue { player, .. }
         | Effect::LookAt { player, .. }
         | Effect::PutBack { player, .. }
         | Effect::PutAnyOnBottom { player }

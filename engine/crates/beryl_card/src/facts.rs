@@ -94,6 +94,7 @@ impl Effect {
             | Effect::ForEachPlayer { .. }
             | Effect::Choose { .. }
             | Effect::LookAt { .. }
+            | Effect::ChooseValue { .. }
             | Effect::Counter(_)
             | Effect::CounterInto { .. }
             | Effect::CopySpell { .. }

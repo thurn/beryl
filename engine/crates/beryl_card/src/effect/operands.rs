@@ -132,6 +132,7 @@ impl Effect {
             | Effect::AddMana { player, .. }
             | Effect::GetEmblem { player, .. }
             | Effect::ManifestDread(player)
+            | Effect::ChooseValue { player, .. }
             | Effect::FlipCoin(player)
             | Effect::WinGame(player)
             | Effect::LoseGame(player)

@@ -24,6 +24,7 @@ impl Effect {
             | Effect::ManifestDread(_)
             | Effect::CreateAttackingTokens { .. }
             | Effect::Choose { .. }
+            | Effect::ChooseValue { .. }
             // The two words are chosen as it resolves.
             | Effect::ChangeText { .. }
             | Effect::PutBack { .. }
@@ -160,6 +161,7 @@ impl Effect {
             | Effect::Unless { .. }
             | Effect::ForEachPlayer { .. }
             | Effect::LookAt { .. }
+            | Effect::ChooseValue { .. }
             | Effect::Counter(_)
             | Effect::CounterInto { .. }
             | Effect::CopySpell { .. }

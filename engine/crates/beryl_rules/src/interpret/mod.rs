@@ -9,6 +9,7 @@
 
 pub(crate) mod catalog;
 pub mod choices;
+mod named;
 mod run;
 mod scene;
 
@@ -287,6 +288,7 @@ pub(crate) fn without_a_scene<L: Layout>(
         | Condition::OnBattlefield(_)
         | Condition::Token(_)
         | Condition::Cast(_)
+        | Condition::HasChosenName(_)
         | Condition::WonFlip
         | Condition::DrewInDrawStep(_)
         | Condition::MeldPair(_)

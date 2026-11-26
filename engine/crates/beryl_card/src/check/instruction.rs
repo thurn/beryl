@@ -190,6 +190,7 @@ impl Scope<'_> {
             | Effect::ForEachPlayer { .. }
             | Effect::Choose { .. }
             | Effect::LookAt { .. }
+            | Effect::ChooseValue { .. }
             | Effect::Counter(_)
             | Effect::CopySpell { .. }
             | Effect::Destroy { .. }

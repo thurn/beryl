@@ -35,15 +35,9 @@ impl Ctx {
                 format!("as {this} enters, you may pay {n} life"),
                 "if you don't, it enters tapped".to_owned(),
             ],
-            (_, Rewrite::Choose(kind)) => vec![format!(
-                "as {this} enters, choose {}",
-                match kind {
-                    ChosenKind::Color => "a color",
-                    ChosenKind::CreatureType => "a creature type",
-                    ChosenKind::CardName => "a card name",
-                    ChosenKind::Word => "a color word or a basic land type",
-                }
-            )],
+            (_, Rewrite::Choose(kind)) => {
+                vec![format!("as {this} enters, choose {}", chosen_kind(kind))]
+            }
             (_, Rewrite::EnterAsCopy { of, except }) => vec![self.enter_as_copy(*of, except)],
             (Replaced::PutInto(&objects, zone), Rewrite::ToZone(instead)) => {
                 let what = if objects == Filter::Any {
@@ -160,5 +154,15 @@ fn replacement_destination(zone: Zone) -> String {
         | Zone::Merged) => {
             format!("put it into its owner's {} instead", zone_name(zone))
         }
+    }
+}
+
+/// What a player chooses a value of `kind` as: "a color", "a card name".
+pub(super) const fn chosen_kind(kind: ChosenKind) -> &'static str {
+    match kind {
+        ChosenKind::Color => "a color",
+        ChosenKind::CreatureType => "a creature type",
+        ChosenKind::CardName => "a card name",
+        ChosenKind::Word => "a color word or a basic land type",
     }
 }

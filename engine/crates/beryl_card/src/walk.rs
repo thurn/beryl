@@ -379,7 +379,8 @@ impl Condition {
             Condition::EnteredThisTurn(objects)
             | Condition::Token(objects)
             | Condition::OnBattlefield(objects)
-            | Condition::Cast(objects) => {
+            | Condition::Cast(objects)
+            | Condition::HasChosenName(objects) => {
                 objects.walk(visit);
             }
             Condition::MeldPair(partner) => partner.walk(visit),
@@ -420,6 +421,7 @@ impl Effect {
                 | Effect::ForEachPlayer { .. }
                 | Effect::Choose { .. }
                 | Effect::LookAt { .. }
+                | Effect::ChooseValue { .. }
                 | Effect::Counter(_)
                 | Effect::CounterInto { .. }
                 | Effect::CopySpell { .. }

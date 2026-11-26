@@ -1,6 +1,7 @@
 //! Builders for the order of instructions and the choices between them: sequences,
 //! "if", "may", "unless", choosing objects, and delayed abilities.
 
+use crate::continuous::ChosenKind;
 use crate::cost::Cost;
 use crate::effect::{Amount, Condition, Effect, Objects, Players};
 use crate::index::AbilityIx;
@@ -91,6 +92,12 @@ pub const fn may_choose_hidden(player: Players, among: Objects, prompt: Prompt) 
         optional: true,
         hidden: true,
     }
+}
+
+/// [`Effect::ChooseValue`]: "[player] chooses [a card name]", "choose a color", remembered
+/// for the rest of the resolution.
+pub const fn choose_value(player: Players, kind: ChosenKind) -> Effect {
+    Effect::ChooseValue { player, kind }
 }
 
 /// [`Effect::LookAt`]: "[player] looks at [cards]".

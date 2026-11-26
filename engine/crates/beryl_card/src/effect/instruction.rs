@@ -1,6 +1,6 @@
 //! The [`Effect`] enum: every instruction a spell or ability can give as it resolves.
 
-use crate::continuous::{Duration, Modification, RuleChange};
+use crate::continuous::{ChosenKind, Duration, Modification, RuleChange};
 use crate::cost::Cost;
 use crate::counter::CounterKind;
 use crate::definition::CardDef;
@@ -90,6 +90,14 @@ pub enum Effect {
         optional: bool,
         hidden: bool,
     },
+    /// "[Player] chooses a [kind]", as the instruction is reached (CR 608.2d), as in "Choose a
+    /// card name, then target player mills a card". The resolution remembers the value until it
+    /// ends, and a later instruction of it reads "the chosen name"
+    /// ([`Condition::HasChosenName`]). A card name is one of the game's cards or "another
+    /// card" ([CR 201.4](https://yawgatog.com/resources/magic-rules/#R2014)): "If an effect
+    /// instructs a player to choose a card name, the player must choose the name of a card in
+    /// the Oracle card reference." The choice is made in public.
+    ChooseValue { player: Players, kind: ChosenKind },
     /// "[Player] looks at [cards]", cards of a hidden zone
     /// ([CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002)): "Hidden zones are
     /// zones in which not all players can be expected to see the cards' faces." The player

@@ -133,6 +133,12 @@ pub(super) fn local(effect: &'static Effect) -> Vec<(Kind, String, Effect)> {
                 add(Kind::EffectPlayers, name, Effect::LookAt { player, cards });
             }
         }
+        Effect::ChooseValue { player, kind } => {
+            for (name, player) in chooser(player) {
+                let changed = Effect::ChooseValue { player, kind };
+                add(Kind::EffectPlayers, name, changed);
+            }
+        }
         Effect::CounterInto { spells, zone } => {
             for (name, zone) in zones(zone) {
                 add(

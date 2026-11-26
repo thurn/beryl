@@ -77,6 +77,17 @@ pub enum Condition {
     ///
     /// [CR 701.42a]: https://yawgatog.com/resources/magic-rules/#R70142a
     MeldPair(Filter),
+    /// "If a card with the chosen name was milled this way": at least one of the objects has
+    /// the card name an [`crate::Effect::ChooseValue`] earlier in the same resolution chose
+    /// ([CR 201.2a](https://yawgatog.com/resources/magic-rules/#R2012a)): "Two or more objects
+    /// have the same name if they have at least one name in common". A milled card is found
+    /// wherever it went, as long as that zone is public ([CR 701.17c]): "An effect that refers
+    /// to a milled card can find that card in the zone it moved to from the library, as long
+    /// as that zone is a public zone." With no name chosen, or "another card" chosen, no object
+    /// has it.
+    ///
+    /// [CR 701.17c]: https://yawgatog.com/resources/magic-rules/#R70117c
+    HasChosenName(Objects),
     Not(&'static Condition),
     /// Every one of them: "if ... and ...".
     All(&'static [Condition]),
@@ -91,7 +102,7 @@ impl Condition {
     /// paid.
     pub const fn needs_a_resolution(&self) -> bool {
         match self {
-            Condition::Did | Condition::WonFlip => true,
+            Condition::Did | Condition::WonFlip | Condition::HasChosenName(_) => true,
             Condition::Paid(_) => false,
             Condition::MeldPair(partner) => partner.needs_a_resolution(),
             Condition::DrewInDrawStep(players) => players.needs_a_resolution(),
@@ -133,7 +144,8 @@ impl Condition {
             | Condition::EnteredThisTurn(objects)
             | Condition::Token(objects)
             | Condition::OnBattlefield(objects)
-            | Condition::Cast(objects) => objects.names_paid(),
+            | Condition::Cast(objects)
+            | Condition::HasChosenName(objects) => objects.names_paid(),
             Condition::Not(condition) => condition.names_paid(),
             Condition::All(conditions) | Condition::Any(conditions) => {
                 let mut i = 0;
@@ -166,6 +178,7 @@ impl Condition {
                 | Condition::OnBattlefield(_)
                 | Condition::Token(_)
                 | Condition::Cast(_)
+                | Condition::HasChosenName(_)
                 | Condition::WonFlip
                 | Condition::MeldPair(_)
                 | Condition::DrewInDrawStep(_) => false,

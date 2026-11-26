@@ -41,6 +41,10 @@ impl Ctx {
                 optional,
                 ..
             } => self.choose(player, among, optional),
+            Effect::ChooseValue { player, kind } => {
+                let what = super::replacements::chosen_kind(kind);
+                vec![self.clause(player, ("choose", "chooses"), |_| what.to_owned())]
+            }
             // Spells on the stack.
             Effect::Counter(spells) => vec![self.acts(("counter", "counters"), spells, "")],
             Effect::CounterInto { spells, zone } => self.counter_into(spells, zone),
@@ -167,7 +171,11 @@ impl Ctx {
             // What a player gets, loses or counts out.
             Effect::Draw { player, count } => vec![self.cards(player, ("draw", "draws"), count)],
             Effect::Discard { player, count } => self.discard(player, count),
-            Effect::Mill { player, count } => vec![self.cards(player, ("mill", "mills"), count)],
+            Effect::Mill { player, count } => {
+                let clause = self.cards(player, ("mill", "mills"), count);
+                self.done_this_way = Some("milled");
+                vec![clause]
+            }
             Effect::Scry { player, count } => {
                 vec![self.clause(player, ("scry", "scries"), |c| c.amount(count))]
             }

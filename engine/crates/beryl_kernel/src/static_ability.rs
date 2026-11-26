@@ -156,6 +156,7 @@ fn condition_reads_tapped(condition: &Condition) -> bool {
         | Condition::EnteredThisTurn(_)
         | Condition::OnBattlefield(_)
         | Condition::Cast(_)
+        | Condition::HasChosenName(_)
         | Condition::DrewInDrawStep(_)
         | Condition::MeldPair(_)
         | Condition::Token(_) => false,
@@ -178,6 +179,7 @@ fn compares(condition: &Condition, read: &dyn Fn(&Counted) -> bool) -> bool {
         | Condition::EnteredThisTurn(_)
         | Condition::OnBattlefield(_)
         | Condition::Cast(_)
+        | Condition::HasChosenName(_)
         | Condition::MeldPair(_)
         | Condition::Token(_)
         | Condition::WonFlip
@@ -532,6 +534,7 @@ fn reads(condition: &Condition) -> bool {
         | Condition::EnteredThisTurn(_)
         | Condition::OnBattlefield(_)
         | Condition::Cast(_)
+        | Condition::HasChosenName(_)
         | Condition::DrewInDrawStep(_)
         | Condition::MeldPair(_)
         | Condition::Token(_) => false,
@@ -561,6 +564,7 @@ pub fn reads_results(condition: &Condition) -> bool {
         | Condition::EnteredThisTurn(_)
         | Condition::OnBattlefield(_)
         | Condition::Cast(_)
+        | Condition::HasChosenName(_)
         | Condition::DrewInDrawStep(_)
         | Condition::MeldPair(_)
         | Condition::Token(_) => false,
@@ -711,6 +715,7 @@ pub fn holds<L: Layout>(
         | Condition::EnteredThisTurn(_)
         | Condition::OnBattlefield(_)
         | Condition::Cast(_)
+        | Condition::HasChosenName(_)
         | Condition::DrewInDrawStep(_)
         | Condition::MeldPair(_)
         | Condition::Token(_) => {

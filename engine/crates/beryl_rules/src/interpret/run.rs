@@ -10,6 +10,7 @@
 //! Implements: CR 400.7j, CR 608.2f
 
 use beryl_card::{Effect, ExileMatch, Objects, Players, Types};
+use beryl_kernel::chosen::ChosenValue;
 use beryl_kernel::reference::Permanents;
 
 use crate::actions::{
@@ -85,6 +86,12 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     /// The game and the resolution, for a library function that asks.
     pub(crate) fn resolving(&mut self) -> (&mut Game<'a, L>, &mut Resolution<'a, L>) {
         (&mut *self.game, &mut *self.resolving)
+    }
+
+    /// Keeps `value` as what this resolution chose, for the instructions after the one that
+    /// chose it ([`beryl_card::Condition::HasChosenName`]).
+    pub(crate) fn remember_chosen(&mut self, value: ChosenValue<L>) {
+        self.registers.chosen = Some(value);
     }
 
     /// What is resolving, to read.
@@ -177,6 +184,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             }
             Effect::Choose { .. }
             | Effect::LookAt { .. }
+            | Effect::ChooseValue { .. }
             | Effect::Counter(_)
             | Effect::CounterInto { .. }
             | Effect::CopySpell { .. }
@@ -285,6 +293,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 hidden,
             } => choices::choose_instruction(self, player, among, prompt, (optional, hidden))?,
             Effect::LookAt { player, cards } => zones::look_at_instruction(self, player, cards),
+            Effect::ChooseValue { player, kind } => super::named::instruction(self, player, kind)?,
             Effect::Counter(objects) => counter::instruction(self, objects)?,
             Effect::CounterInto { spells, zone } => counter::into_instruction(self, spells, zone)?,
             Effect::CopySpell {

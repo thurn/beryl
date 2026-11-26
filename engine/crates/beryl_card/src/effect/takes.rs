@@ -86,6 +86,7 @@ impl Effect {
             | Effect::Explore(_)
             | Effect::Choose { .. }
             | Effect::LookAt { .. }
+            | Effect::ChooseValue { .. }
             | Effect::ManifestDread(_)
             | Effect::CreateAttackingTokens { .. }
             | Effect::ReturnToBattlefield(_)

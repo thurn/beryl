@@ -40,6 +40,7 @@ impl Effect {
             Effect::ExileUntil { when_found, .. } => Branches::WhenFound(when_found),
             Effect::Choose { .. }
             | Effect::LookAt { .. }
+            | Effect::ChooseValue { .. }
             | Effect::Counter(_)
             | Effect::CounterInto { .. }
             | Effect::CopySpell { .. }
@@ -155,6 +156,7 @@ impl Effect {
             | Effect::ForEachPlayer { .. }
             | Effect::Choose { .. }
             | Effect::LookAt { .. }
+            | Effect::ChooseValue { .. }
             | Effect::Counter(_)
             | Effect::CounterInto { .. }
             | Effect::CopySpell { .. }
@@ -301,6 +303,7 @@ impl Effect {
             | Effect::ForEachPlayer { .. }
             | Effect::Choose { .. }
             | Effect::LookAt { .. }
+            | Effect::ChooseValue { .. }
             | Effect::Counter(_)
             | Effect::CounterInto { .. }
             | Effect::CopySpell { .. }

@@ -78,6 +78,19 @@ impl Ctx {
                 format!("you cast {}", self.condition_subject(objects))
             }
             Condition::WonFlip => "you win the flip".to_owned(),
+            Condition::HasChosenName(Objects::Those) if self.done_this_way.is_some() => format!(
+                "a card with the chosen name was {} this way",
+                self.done_this_way.unwrap_or_default()
+            ),
+            // At least one of them: "one of them has the chosen name".
+            Condition::HasChosenName(objects) => {
+                let what = self.objects(objects);
+                if self.is_plural(objects) {
+                    format!("one of {what} has the chosen name")
+                } else {
+                    format!("{what} has the chosen name")
+                }
+            }
             Condition::DrewInDrawStep(players) => format!(
                 "{} drew a card in their draw step this turn",
                 self.player(players)
@@ -163,7 +176,14 @@ impl Ctx {
                 self.player(players)
             ),
             Condition::Not(inner) => self.condition(*inner),
+            Condition::HasChosenName(Objects::Those) if self.done_this_way.is_some() => {
+                format!(
+                    "no card with the chosen name was {} this way",
+                    self.done_this_way.unwrap_or_default()
+                )
+            }
             Condition::Compare(..)
+            | Condition::HasChosenName(_)
             | Condition::All(_)
             | Condition::Any(_)
             | Condition::MeldPair(_) => {
