@@ -84,10 +84,10 @@ impl TrayMotion {
             movement: 0,
             over: None,
             waiting: None,
-            letting: Vec::new(),
+            letting: Vec::with_capacity(OBJECTS),
             curve: Curve::EASE_OUT,
             leaving: false,
-            handed: Vec::new(),
+            handed: Vec::with_capacity(OBJECTS),
             now: 0,
         }
     }
@@ -265,8 +265,7 @@ impl Table {
     /// way. The move begins at the next frame, or, where `script` names the script that answers
     /// the closed prompt, when that script's start places it (`start_let_go`); until then each
     /// card is drawn where the tray held it. A card a script moves meanwhile starts from the
-    /// tray instead (`Show::hand_over_tray`). Allocates nothing once the tray has let go of as
-    /// many cards before.
+    /// tray instead (`Show::hand_over_tray`). Allocates nothing.
     pub fn let_go(
         &mut self,
         rests: &[(ObjectId, Pose, bool)],
@@ -387,12 +386,20 @@ impl Table {
         self.tray.leaving
     }
 
-    /// A script has taken over the cards the tray let go: those in `handed` wait where the tray
-    /// held them up until the script's tracks move them.
-    pub fn handed_over_tray(&mut self, handed: &[usize]) {
+    /// The list the tray keeps of the cards a script took over, emptied, for the caller to fill
+    /// and give back with `handed_over_tray`. It has room for every slot, so that filling it
+    /// allocates nothing during a frame.
+    pub fn take_handed(&mut self) -> Vec<usize> {
+        let mut handed = std::mem::take(&mut self.tray.handed);
+        handed.clear();
+        handed
+    }
+
+    /// A script has taken over the cards the tray let go: those in `handed` (the list from
+    /// `take_handed`) wait where the tray held them up until the script's tracks move them.
+    pub fn handed_over_tray(&mut self, handed: Vec<usize>) {
         self.tray.leaving = false;
-        self.tray.handed.clear();
-        self.tray.handed.extend_from_slice(handed);
+        self.tray.handed = handed;
     }
 
     /// Where the card in `slot` was drawn as the tray began to let it go, while no script has

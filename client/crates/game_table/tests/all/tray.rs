@@ -28,7 +28,7 @@ fn a_new_tray_cannot_replay_the_movement_of_a_card_from_an_old_tray() {
     let rests = table.zone_rests(&hand);
     table.let_go(&rests, (200, Some(1)), Curve::EASE_OUT);
     table.start_let_go(300);
-    table.handed_over_tray(&[]);
+    table.handed_over_tray(Vec::new());
 
     // The Island is played to the battlefield before the player opens another tray.
     // Its slot still belongs to the same card, but its earlier tray pose is obsolete.

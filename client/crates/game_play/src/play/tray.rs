@@ -127,7 +127,7 @@ impl Show {
         if !self.table.tray_leaving() {
             return;
         }
-        let mut handed = Vec::new();
+        let mut handed = self.table.take_handed();
         for (slot, track) in playing.compiled.tracks.iter_mut().enumerate() {
             let (Some(from), Some(resting), Some(last)) = (
                 self.table.letting_go(slot),
@@ -157,10 +157,9 @@ impl Show {
             }
         }
         // Only the first script to start after the tray let its cards go takes them over.
-        self.table.handed_over_tray(&handed);
-        if !handed.is_empty()
-            && let Some(playing) = self.playing.take()
-        {
+        let any = !handed.is_empty();
+        self.table.handed_over_tray(handed);
+        if any && let Some(playing) = self.playing.take() {
             self.write_record(playing.number, &playing.compiled);
             self.playing = Some(playing);
         }
