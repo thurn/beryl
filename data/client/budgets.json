@@ -296,6 +296,96 @@
         "why": "Documented Enhanced ceiling of four screens across its render passes."
       }
     },
+    "shared-verbs-lapse": {
+      "worst_frame_elements": {
+        "max": 120,
+        "why": "Measured 80 with 50% headroom, rounded up."
+      },
+      "total_elements": {
+        "max": 52802,
+        "why": "Measured 35,201 with 50% headroom, rounded up."
+      },
+      "worst_frame_segments": {
+        "max": 8,
+        "why": "Measured 5 with 50% headroom, rounded up."
+      },
+      "total_segments": {
+        "max": 1416,
+        "why": "Measured 944 with 50% headroom, rounded up."
+      },
+      "worst_frame_records": {
+        "max": 162,
+        "why": "Measured 108 with 50% headroom, rounded up."
+      },
+      "total_records": {
+        "max": 33624,
+        "why": "Measured 22,416 with 50% headroom, rounded up."
+      },
+      "worst_frame_layout_nodes": {
+        "max": 149,
+        "why": "Measured 99 with 50% headroom, rounded up."
+      },
+      "total_layout_nodes": {
+        "max": 216,
+        "why": "Measured 144 with 50% headroom, rounded up."
+      },
+      "worst_frame_text_runs": {
+        "max": 30,
+        "why": "Measured 20 with 50% headroom, rounded up."
+      },
+      "total_text_runs": {
+        "max": 48,
+        "why": "Measured 32 with 50% headroom, rounded up."
+      },
+      "worst_frame_draw_calls": {
+        "max": 16,
+        "why": "Documented Baseline draw-call ceiling for the floor renderer; measured 8."
+      },
+      "worst_frame_upload_bytes": {
+        "max": 327680,
+        "why": "Documented Baseline upload ceiling, enough for 4,096 records of 80 bytes; measured 8,640."
+      },
+      "worst_frame_shadow_blended_area": {
+        "max": 0.0385,
+        "why": "Measured 0.02563379 screens with 50% headroom, rounded up."
+      },
+      "worst_frame_scene_blended_area": {
+        "max": 0.9966,
+        "why": "Measured 0.66434151 screens with 50% headroom, rounded up."
+      },
+      "worst_frame_layer_blended_area": {
+        "max": 0.6743,
+        "why": "Measured 0.44948265 screens with 50% headroom, rounded up."
+      },
+      "handle_allocations": {
+        "max": 41748,
+        "why": "Measured 27,832 with 50% headroom, rounded up."
+      },
+      "worst_frame_placed": {
+        "max": 483,
+        "why": "Measured 322 with 50% headroom, rounded up."
+      },
+      "total_placed": {
+        "max": 1197,
+        "why": "Measured 798 with 50% headroom, rounded up."
+      },
+      "worst_frame_steps": {
+        "max": 14,
+        "why": "Measured 9 with 50% headroom, rounded up."
+      },
+      "total_steps": {
+        "max": 86,
+        "why": "Measured 57 with 50% headroom, rounded up."
+      },
+      "baseline_fragment_screens": {
+        "max": 1.75,
+        "why": "The floor GPU shades at least 300 million pixels per second. A 1080p screen at 60 Hz costs about 124 million per screen, leaving headroom at 1.75 screens."
+      },
+      "enhanced_fragment_screens": {
+        "max": 4.0,
+        "why": "Documented Enhanced ceiling of four screens across its render passes."
+      }
+    },
     "pay-default": {
       "worst_frame_elements": {
         "max": 498,

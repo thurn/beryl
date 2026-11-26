@@ -3,9 +3,16 @@
 //! players' libraries made one, so that the client's draws, mills, looks, reveals and cards put
 //! back into a library start or end at the shared piles, from both seats.
 
-use beryl_card_names::names::{ELITE_SPELLBINDER, MEMORY_LAPSE, PLAINS};
-use beryl_engine::TurnStep;
-use beryl_scenario::{Action, P0, P1, Scenario};
+use beryl_card_names::names::{
+    COUNTERSPELL, CURRENCY_CONVERTER, DAMN, ELITE_SPELLBINDER, FRACTURED_IDENTITY, GET_LOST,
+    ISLAND, JACE_THE_MIND_SCULPTOR, MALCOLM_ALLURING_SCOUNDREL, MANA_DRAIN, MEMORY_LAPSE,
+    NO_MORE_LIES, OUST, PLAINS, REPRIEVE, SEACHROME_COAST, SINK_INTO_STUPOR, SNAPCASTER_MAGE,
+    STAFF_OF_THE_STORYTELLER, STOCK_UP, SUBTLETY, SWIFT_RECONFIGURATION, TEFERI_HERO_OF_DOMINARIA,
+    TEFERI_TIME_RAVELER, THE_WANDERING_EMPEROR, THIEVING_SKYDIVER, THIRST_FOR_DISCOVERY,
+    TIME_SPIRAL, TRINKET_MAGE, TUNDRA, WINDS_OF_ABANDON,
+};
+use beryl_engine::{DecisionKind, TurnStep};
+use beryl_scenario::{Action, P0, P1, Permanent, Pick, Scenario};
 
 use super::shorthand::{ISLAND_, LANDS, PLAINS_};
 use super::verbs::{
@@ -76,5 +83,99 @@ pub(super) const SHARED: &[Scenario] = &[
         .actions(&[
             Action::cast(P1, ELITE_SPELLBINDER),
             Action::cast(P0, MEMORY_LAPSE),
+        ]),
+    // Mirrors `piles-crowded` on the shared table: 70 cards between the shared graveyard (12)
+    // and shared library (58), with six other permanents a side and exiles on both sides.
+    Scenario::new("shared-piles-crowded")
+        .at(5, P0, TurnStep::PrecombatMain)
+        .permanents(
+            P0,
+            &[
+                Permanent::new(SNAPCASTER_MAGE),
+                Permanent::new(STAFF_OF_THE_STORYTELLER),
+                Permanent::new(CURRENCY_CONVERTER),
+                Permanent::new(JACE_THE_MIND_SCULPTOR),
+                Permanent::new(THE_WANDERING_EMPEROR),
+                Permanent::new(TEFERI_HERO_OF_DOMINARIA),
+                Permanent::new(TEFERI_TIME_RAVELER),
+                ISLAND_,
+                ISLAND_,
+                PLAINS_,
+                Permanent::new(TUNDRA),
+                Permanent::new(SEACHROME_COAST),
+            ],
+        )
+        .hand(P0, &[COUNTERSPELL, OUST])
+        .exile(
+            P0,
+            &[TIME_SPIRAL, SUBTLETY, MALCOLM_ALLURING_SCOUNDREL, GET_LOST],
+        )
+        .permanents(
+            P1,
+            &[
+                Permanent::new(TRINKET_MAGE),
+                Permanent::new(STAFF_OF_THE_STORYTELLER),
+                Permanent::new(CURRENCY_CONVERTER),
+                Permanent::new(JACE_THE_MIND_SCULPTOR),
+                Permanent::new(THE_WANDERING_EMPEROR),
+                Permanent::new(TEFERI_HERO_OF_DOMINARIA),
+                Permanent::new(TEFERI_TIME_RAVELER),
+                ISLAND_,
+                ISLAND_,
+                PLAINS_,
+                Permanent::new(TUNDRA),
+            ],
+        )
+        .exile(P1, &[SNAPCASTER_MAGE, OUST, TIME_SPIRAL, WINDS_OF_ABANDON])
+        .shared_graveyard(&[
+            MANA_DRAIN,
+            STOCK_UP,
+            DAMN,
+            REPRIEVE,
+            THIRST_FOR_DISCOVERY,
+            NO_MORE_LIES,
+            SWIFT_RECONFIGURATION,
+            STOCK_UP,
+            DAMN,
+            COUNTERSPELL,
+            FRACTURED_IDENTITY,
+            REPRIEVE,
+        ])
+        .shared_library(&[ISLAND; 58]),
+    // Mirrors `target-graveyard` on the shared table: Snapcaster Mage's trigger targets an
+    // instant or sorcery card in the shared graveyard beside a creature card it can't target.
+    Scenario::new("shared-target-graveyard")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .permanents(P0, &[ISLAND_, ISLAND_, PLAINS_])
+        .hand(P0, &[SNAPCASTER_MAGE])
+        .permanents(P1, &[ISLAND_, PLAINS_])
+        .shared_graveyard(&[COUNTERSPELL, TRINKET_MAGE, THIRST_FOR_DISCOVERY, STOCK_UP])
+        .shared_library(LANDS)
+        .actions(&[Action::cast(P0, SNAPCASTER_MAGE)]),
+    // Mirrors `exile-cast` on the shared table: the opponent's Elite Spellbinder exiles the
+    // human's Teferi, Time Raveler; Sink into Stupor returns the Spellbinder to their hand,
+    // and the human may cast Teferi from exile.
+    Scenario::new("shared-exile-cast")
+        .at(4, P1, TurnStep::PrecombatMain)
+        .permanents(
+            P0,
+            &[
+                ISLAND_,
+                ISLAND_,
+                ISLAND_,
+                PLAINS_,
+                PLAINS_,
+                Permanent::new(TUNDRA),
+            ],
+        )
+        .hand(P0, &[TEFERI_TIME_RAVELER, SINK_INTO_STUPOR, ISLAND])
+        .permanents(P1, &[PLAINS_, PLAINS_, ISLAND_, ISLAND_])
+        .hand(P1, &[ELITE_SPELLBINDER, THIEVING_SKYDIVER, OUST])
+        .shared_library(LANDS)
+        .actions(&[
+            Action::cast(P1, ELITE_SPELLBINDER),
+            Action::pass(P0),
+            Action::cast(P0, SINK_INTO_STUPOR),
+            Action::answer(P1, DecisionKind::YesNo, Pick::Yes),
         ]),
 ];

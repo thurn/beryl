@@ -668,6 +668,29 @@
       "until": "first priority decision for seat 1 from turn 3"
     },
     {
+      "name": "shared-piles-crowded",
+      "board": "shared-piles-crowded",
+      "until": "first priority decision for seat 0"
+    },
+    {
+      "name": "shared-target-graveyard",
+      "board": "shared-target-graveyard",
+      "until": "first target decision for seat 0"
+    },
+    {
+      "name": "shared-exile-cast",
+      "board": "shared-exile-cast",
+      "until": "first priority decision for seat 0",
+      "where": ["castable from exile", "known card in the opponent's hand"]
+    },
+    {
+      "name": "forgetful-fish",
+      "seed": 1,
+      "decks": ["forgetful-fish", "forgetful-fish"],
+      "agents": ["greedy", "greedy"],
+      "until": "game over"
+    },
+    {
       "name": "verbs-tuck",
       "board": "verbs-tuck",
       "until": "first priority decision for seat 0 from turn 3"

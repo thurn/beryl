@@ -26,18 +26,19 @@ use crate::pages::recording;
 use crate::stress::{Board, Drive, pointer_moves};
 
 /// The boards the frame gates hold, in the order they are played: the five stress boards, and
-/// two recorded games from the first seat. `verbs-zones` moves cards between every zone, and
-/// `pay-default` opens prompts, so that its worst frame includes one in which `handle` lays out
-/// a prompt bar and its text.
-pub const BOARDS: [&str; 7] = {
-    let mut names = ["verbs-zones"; 7];
+/// three recorded games from the first seat. `verbs-zones` moves cards between every zone,
+/// `shared-verbs-piles` moves cards between the shared piles, and `pay-default` opens prompts, so
+/// that its worst frame includes one in which `handle` lays out a prompt bar and its text.
+pub const BOARDS: [&str; 8] = {
+    let mut names = ["verbs-zones"; 8];
     let mut index = 0;
     while index < Board::ALL.len() {
         names[index] = Board::ALL[index].name();
         index += 1;
     }
     names[5] = "verbs-zones";
-    names[6] = "pay-default";
+    names[6] = "shared-verbs-lapse";
+    names[7] = "pay-default";
     names
 };
 

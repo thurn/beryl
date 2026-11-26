@@ -22,6 +22,7 @@ abhorrent-oculus/manifest-dread-with-an-empty-library-does-nothing
 abhorrent-oculus/manifest-dread-with-one-card-in-the-library-manifests-it
 abhorrent-oculus/manifests-dread-on-each-opponents-upkeep-only
 abhorrent-oculus/manifests-dread-on-each-opponents-upkeep-only-ask-1
+accumulated-knowledge/counts-copies-in-the-shared-graveyard-once
 adeline-resplendent-cathar/a-token-created-attacking-deals-combat-damage
 adeline-resplendent-cathar/adelines-human-arrives-attacking
 adeline-resplendent-cathar/adelines-human-attacks-a-planeswalker
@@ -145,9 +146,12 @@ braingeyser/generated-6-cast-from-hand
 braingeyser/generated-7-cast-from-hand
 braingeyser/generated-8-cast-from-hand
 braingeyser/generated-9-cast-from-hand
+brainstorm/in-a-shared-game-puts-two-cards-on-top-that-the-opponent-draws
+brainstorm/in-a-shared-game-puts-two-cards-on-top-that-the-opponent-draws-0
 builders-blessing/generated-1-cast-from-hand
 builders-blessing/generated-2-cast-from-hand-with-a-creature-of-ones-own
 builders-blessing/generated-3-cast-from-hand-with-filter-partners
+capture-of-jingzhou/s-extra-turn-draws-from-the-shared-library
 cast-evoke
 cast-exile-choice
 cast-kicker
@@ -170,6 +174,7 @@ chains-of-mephistopheles/dredge-before-chains
 chains-of-mephistopheles/the-draw-steps-first-draw-is-not-replaced-the-next-one-is
 chains-of-mephistopheles/timetwisters-draws-with-empty-hands-mill-seven-each
 chains-of-mephistopheles/two-chains-discard-then-mill
+chart-a-course/does-not-discard-after-attacking-with-dandn-in-a-shared-game
 choice-cleanup
 choice-cycling
 choice-enter-order
@@ -267,6 +272,7 @@ crystal-spray/changes-a-permanents-text-until-end-of-turn-ask-2
 crystal-spray/changes-a-permanents-text-until-end-of-turn-ask-3
 crystal-spray/leaves-a-granted-landwalk-ability-alone
 crystal-spray/makes-a-forest-an-island
+crystal-spray/on-dandn-in-a-shared-game-causes-it-to-be-sacrificed-and-draws-from-the-shared-library
 currency-converter/a-card-exiled-by-another-permanent-is-not-exiled-with-this-one
 currency-converter/a-card-exiled-by-another-permanent-is-not-exiled-with-this-one-next-turn
 currency-converter/a-card-exiled-by-another-permanent-is-not-exiled-with-this-one-pass
@@ -309,6 +315,8 @@ damn/overloaded-destroys-a-creature-with-a-regeneration-shield
 damn/overloaded-destroys-each-creature-targeting-none
 damn/overloaded-takes-tokens-and-face-down-creatures-at-once
 dandn/attacks-a-player-who-controls-an-island
+dandn/attacks-in-a-shared-game-when-the-defender-controls-an-island
+dandn/is-sacrificed-to-the-shared-graveyard-when-its-controller-controls-no-island
 dandn/is-sacrificed-when-its-controller-controls-no-island
 dandn/mind-bend-has-dandn-sacrificed-for-want-of-a-swamp
 dandn/mind-bend-keeps-dandn-from-attacking-a-player-with-only-an-island
@@ -323,6 +331,7 @@ dark-depths/it-makes-one-marit-lage
 dark-depths/lands-tapped
 dark-depths/stops-main
 dark-depths/stops-their-end
+days-undoing/shuffles-both-hands-and-the-shared-graveyard-draws-alternately-and-exiles-itself
 death-ward/saves-a-creature-from-get-lost
 death-ward/saves-a-creature-from-get-lost-0
 death-ward/saves-a-land-creature-from-strip-mine
@@ -375,6 +384,7 @@ force-of-will/for-mana-under-thalia-costs-one-more
 force-of-will/for-mana-under-thalia-costs-one-more-ways-1
 forest/generated-1-play-from-hand
 forest/generated-3-cast-wetland-sambar-paying-beside-island
+forgetful-fish
 fork/copies-braingeyser-for-3-with-a-new-target
 fork/copies-lightning-bolt-with-a-new-target
 fork/copies-lightning-bolt-with-a-new-target-2
@@ -448,9 +458,11 @@ gurmag-angler/the-caster-chooses-which-cards-to-exile
 gurmag-angler/the-caster-chooses-which-cards-to-exile-0
 gurmag-angler/under-trinisphere-with-a-full-graveyard
 gurmag-angler/with-seven-cards-in-the-graveyard-costs-b
+halimar-depths/in-a-shared-game-reorders-the-top-of-the-shared-library-for-the-opponent
 hand-pair
 hand-pair-twin
 hand-ten
+haunted-fengraf/returns-a-creature-card-from-the-shared-graveyard-whoever-cast-it
 helm-of-awakening/a-spell-costs-one-generic-less
 helm-of-awakening/an-opponents-spell-costs-one-less
 helm-of-awakening/and-thalia-the-increase-and-reduction-cancel
@@ -474,12 +486,15 @@ humility/an-anthems-bonus-applies-on-top-of-the-base-11
 humility/dryad-arbor-loses-the-mana-ability-of-its-land-type
 humility/every-creature-is-11-on-both-sides
 humility/tarmogoyf-under-it-is-11
+island/drawing-takes-the-top-card-of-the-shared-library
 island/generated-1-play-from-hand
 island/generated-3-cast-wetland-sambar-paying-beside-island
 island/generated-4-cast-wetland-sambar-paying-beside-plains
+island/played-in-a-shared-game-taps-for-blue-mana
 island/players-get-one-land-play-on-their-own-turn
 island/players-get-one-land-play-on-their-own-turn-0
 island/the-player-on-the-draw-decks-first
+island/the-player-who-draws-from-an-empty-shared-library-loses
 jace-the-mind-sculptor/0-draws-three-and-puts-two-back-in-the-order-chosen
 jace-the-mind-sculptor/0-draws-three-and-puts-two-back-in-the-order-chosen-bounced-0
 jace-the-mind-sculptor/0-draws-three-and-puts-two-back-in-the-order-chosen-pass
@@ -631,8 +646,11 @@ lions-eye-diamond/it-cant-pay-for-a-spell-cast-from-the-hand
 lions-eye-diamond/it-discards-the-hand-for-three-mana-of-one-color
 lions-eye-diamond/it-discards-the-hand-for-three-mana-of-one-color-0
 lions-eye-diamond/it-discards-the-hand-for-three-mana-of-one-color-bounced-0
+lonely-sandbar/cycling-lonely-sandbar-puts-it-into-the-shared-graveyard-and-draws-from-the-shared-library
+lonely-sandbar/cycling-lonely-sandbar-puts-it-into-the-shared-graveyard-and-draws-from-the-shared-library-ways-0
 lord-of-atlantis/mind-bend-on-the-lord-gives-other-merfolk-swampwalk
 lord-of-atlantis/mind-bend-on-the-lord-takes-islandwalk-from-other-merfolk
+magical-hack/on-dandn-in-a-shared-game-causes-it-to-be-sacrificed-to-the-shared-graveyard
 malcolm-alluring-scoundrel/an-effect-that-lets-a-player-cast-a-card-offers-no-land
 malcolm-alluring-scoundrel/malcolms-fourth-chorus-counter-casts-the-discard
 malcolm-alluring-scoundrel/malcolms-fourth-chorus-counter-casts-the-discard-ask-12
@@ -656,10 +674,15 @@ mana-tithe/the-controller-pays-1-1
 mana-tithe/the-controller-pays-1-no-2
 marks
 marks-damage
+memory-lapse/puts-a-countered-spell-on-top-of-the-shared-library-for-the-opponent-to-draw
+memory-lapse/puts-a-countered-spell-on-top-of-the-shared-library-for-the-opponent-to-draw-1
 mending-hands/prevents-4-of-two-lightning-bolts-6-damage
 mending-hands/prevents-4-of-two-lightning-bolts-6-damage-0
 mending-hands/saves-a-creature-from-lightning-bolt
+mental-note/milling-puts-cards-into-the-shared-graveyard
 menu-choices
+metamorphose/puts-an-opponents-permanent-on-top-of-the-shared-library
+metamorphose/puts-an-opponents-permanent-on-top-of-the-shared-library-ask-2
 mind-bend/a-text-change-ends-when-the-permanent-leaves-and-returns
 mind-bend/an-ability-on-the-stack-keeps-the-words-its-source-had
 mind-bend/can-target-a-permanent-with-no-matching-words
@@ -705,6 +728,9 @@ mother-of-runes/protection-from-white-makes-a-white-aura-fall-off-ask-4
 mother-of-runes/protection-from-white-makes-a-white-aura-fall-off-bounced-2
 mountain/generated-1-play-from-hand
 mountain/generated-3-cast-wetland-sambar-paying-beside-island
+mystic-sanctuary/in-a-shared-game-puts-an-instant-the-opponent-cast-onto-the-shared-library
+mystic-sanctuary/in-a-shared-game-puts-an-instant-the-opponent-cast-onto-the-shared-library-ask-2
+mystic-sanctuary/in-a-shared-game-puts-an-instant-the-opponent-cast-onto-the-shared-library-no-2
 namesake-target
 nights-whisper/generated-1-cast-from-hand
 no-more-lies/a-spell-countered-into-exile-is-in-no-graveyard
@@ -767,6 +793,7 @@ opening-opponent-play
 opening-play
 opponent-turn
 order-long
+oust/a-permanent-put-on-top-of-the-shared-library-is-drawn-and-owned-by-the-other-player
 oust/beneath-an-opposing-counterspell
 oust/beneath-an-opposing-counterspell-0
 oust/generated-1-cast-from-hand
@@ -846,6 +873,7 @@ portable-hole/a-triggered-ability-with-no-legal-target-leaves-the-stack
 portable-hole/exiles-until-it-leaves-the-battlefield
 portable-hole/exiles-until-it-leaves-the-battlefield-0
 portable-hole/gone-before-its-trigger-resolves
+predict/targeting-the-opponent-mills-the-shared-library-into-the-shared-graveyard
 quicksilver-gargantuan/a-copy-of-painters-servant-chooses-a-color-as-it-enters
 quicksilver-gargantuan/a-copy-of-painters-servant-chooses-a-color-as-it-enters-ask-2
 quicksilver-gargantuan/a-gargantuan-of-an-image-keeps-the-images-illusion-type
@@ -858,6 +886,8 @@ quicksilver-gargantuan/the-gargantuan-enters-as-a-77-copy-0
 reki-the-history-of-kamigawa/generated-1-cast-from-hand
 reki-the-history-of-kamigawa/generated-2-cast-a-matching-spell-on-the-battlefield
 reki-the-history-of-kamigawa/generated-3-cast-from-hand-with-filter-partners
+remote-isle/cycling-remote-isle-puts-it-into-the-shared-graveyard-and-draws-from-the-shared-library
+remote-isle/cycling-remote-isle-puts-it-into-the-shared-graveyard-and-draws-from-the-shared-library-ways-0
 reprieve-target
 reprieve/on-a-counterspell-saves-the-spell-it-targets
 reprieve/on-a-counterspell-saves-the-spell-it-targets-2
@@ -894,6 +924,9 @@ shape-yes
 shape-yes-theirs
 shape-zone
 shape-zone-theirs
+shared-exile-cast
+shared-piles-crowded
+shared-target-graveyard
 shared-verbs-lapse
 shared-verbs-lapse-theirs
 shared-verbs-look
@@ -940,6 +973,7 @@ sink-into-stupor/soporific-springs-enters-tapped-when-its-controller-cannot-pay
 sink-into-stupor/soporific-springs-enters-untapped-after-its-controller-pays-life
 sink-into-stupor/soporific-springs-no-life-paid-it-enters-tapped
 sink-into-stupor/soporific-springs-no-life-paid-it-enters-tapped-0
+snapcaster-mage/a-player-casts-a-card-with-flashback-from-the-shared-graveyard-put-there-by-the-opponent
 snapcaster-mage/a-sorcery-that-gains-flashback-is-cast-from-the-graveyard-and-exiled
 snapcaster-mage/flashback-a-counterspell-then-exile-it
 snapcaster-mage/flashback-is-the-one-alternative-cost
@@ -1114,6 +1148,8 @@ teferis-protection/phasing-portable-hole-keeps-its-exiled-card-in-exile
 teferis-protection/prevents-paying-force-of-wills-alternative-cost
 teferis-protection/stops-bezas-life-gain-while-other-effects-resolve
 teferis-protection/stops-nights-whispers-life-loss-but-allows-the-draw
+telling-time/in-a-shared-game-leaves-a-card-on-top-that-the-opponent-draws
+telling-time/in-a-shared-game-leaves-a-card-on-top-that-the-opponent-draws-ask-2
 tendrils-of-agony/countered-under-its-storm-trigger-is-still-copied
 tendrils-of-agony/countered-under-its-storm-trigger-is-still-copied-ask-4
 tendrils-of-agony/countering-tendrils-of-agonys-storm-trigger-prevents-every-copy
@@ -1129,6 +1165,8 @@ thalia-guardian-of-thraben/thalia-an-opponents-counterspell-costs-one-more
 thalia-guardian-of-thraben/thalia-and-helm-adjust-force-of-wills-alternative-cost
 thalia-guardian-of-thraben/thalia-increases-the-cost-without-changing-mana-value
 thalia-guardian-of-thraben/thalia-lightning-bolt-costs-one-more
+the-surgical-bay/is-sacrificed-to-the-shared-graveyard-and-draws-from-the-shared-library
+the-surgical-bay/is-sacrificed-to-the-shared-graveyard-and-draws-from-the-shared-library-pass
 the-wandering-emperor/1-grows-a-creature-and-gives-it-first-strike
 the-wandering-emperor/1-grows-a-creature-and-gives-it-first-strike-pass
 the-wandering-emperor/ability-1
@@ -1199,6 +1237,7 @@ time-warp/generated-1-cast-from-hand-0
 time-warp/generated-2-cast-from-hand
 timetwister/each-players-hand-and-graveyard-are-shuffled-into-their-own-library
 timetwister/generated-1-cast-from-hand
+timetwister/shuffling-both-hands-and-the-shared-graveyard-into-the-shared-library
 timetwister/with-empty-graveyards
 tokens
 tormods-crypt/ability-0
