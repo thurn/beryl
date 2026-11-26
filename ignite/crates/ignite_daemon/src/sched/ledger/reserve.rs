@@ -18,6 +18,13 @@
 //!   in its own class, `tip`, below agents. On 2026-11-25 one machine kept 2 cores for build
 //!   checks only, and its other tip commands waited up to 1,500 s for cores behind agent work,
 //!   so its tip rounds took 12 to 150 minutes and `master` stood still for hours.
+//! - A shared resource that a waiting request on the tip reserve wants goes to that request
+//!   before any request of any class that is not on the reserve ([`Ledger::kept_for_tip`]).
+//!   Classes are served in order, so without this a `tip` check waited behind every `land` and
+//!   `agent` request for the same resource, including ones asked for after it. On 2026-11-26
+//!   jarvis was the only Mac with a calibrated count guest, and its tip round's `counts` and
+//!   `client-frame-counts` checks waited 120 to 763 s for the `bench-vm` resource while landings
+//!   and agents' checks of the same families took turns holding it for about five minutes each.
 //! - Express runs and release builds can borrow idle tip cores. Agents can borrow from either
 //!   reserve while its owner has no work. Neither kind of loan delays the reserve owner.
 //! - The reserve's cores come back when the grant is released, also for a grant a restarted
@@ -39,6 +46,23 @@ impl Ledger {
     /// `Reserve::TipRound` ones, each kind in the order the requests were first asked for. A
     /// request that cannot start for its resources or memory keeps its part until the next
     /// step. None while the machine is `pressed` for memory, when nothing new starts.
+    /// How many units of the resource `name` that `waiter` must leave free for requests on the
+    /// tip reserve: one for each such request still waiting for `name`, other than those already
+    /// `picked` in this step. Zero when `waiter` is itself on the reserve, so tip round requests
+    /// share the resource in their usual order. A running grant is never stopped for this: the
+    /// tip request waits at most for the current holders to finish.
+    pub(super) fn kept_for_tip(&self, name: &str, waiter: &Waiter, picked: &[u64]) -> u32 {
+        if waiter.request.reserve.is_some() {
+            return 0;
+        }
+        let kept = self.waiting.iter().filter(|w| {
+            w.request.reserve.is_some()
+                && !picked.contains(&w.id)
+                && w.request.resources.iter().any(|r| r == name)
+        });
+        u32::try_from(kept.count()).unwrap_or(u32::MAX)
+    }
+
     pub(super) fn reserve_parts(&self, pressed: bool) -> BTreeMap<u64, u32> {
         let mut free = if pressed { 0 } else { self.tip_reserve_free() };
         let mut parts = BTreeMap::new();

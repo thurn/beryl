@@ -18,7 +18,8 @@
 //! - `tip` and `batch` have derived floors that higher classes cannot take while the class
 //!   has work running or waiting.
 //! - Each named resource is held by at most its capacity of grants at once. A resource the
-//!   machine does not declare has capacity 1.
+//!   machine does not declare has capacity 1. A request on the tip reserve that waits for a
+//!   resource gets it before requests of every class that are not on the reserve.
 //! - CPU busy beyond what Ignite uses belongs to processes outside Ignite and is not granted.
 //!   Ignite's use is everything the daemon's process tree uses, express runs and verb processes
 //!   included, not only its grants' commands (see `Ledger::observe`).

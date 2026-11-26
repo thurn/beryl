@@ -1055,5 +1055,10 @@
     "label": "`repository.test_paths` in `ignite.toml` now includes `tools/**`, `engine/crates/beryl_bench/**` and `engine/crates/beryl_scenario/**` so benchmark corpus repins and test-harness fixes are classified `test-only` instead of `product` (which blinded `unproven_holds` from switching off `family_corpora_never_change` at 10:10 UTC on 2026-11-26, adding ~57 min of `master` stall across 27 waiting product commits), and `unproven_holds` now ignores failing tips older than a check's latest switch to `on` and clears holds when a newer failed tip records the check passing in `regression_passes`",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
+  },
+  {
+    "label": "A shared resource such as `bench-vm` goes to a waiting tip round request (`Reserve::TipRound` or `Reserve::TipBuild`) before landings and agents, so a tip round's `counts` and `client-frame-counts` checks on jarvis no longer wait 120 to 763 s behind other classes' count runs",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]

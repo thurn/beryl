@@ -420,7 +420,8 @@ impl Ledger {
     /// The waiters of `class` that can start now, by ID in the order they are served
     /// ([`Ledger::served_order`]), at most `usable` of them (each needs at least one core), and
     /// the IDs of those that could start but found no core. A request whose resources are all
-    /// held, or whose memory is not free, is neither. A waiter that takes cores from the tip
+    /// held or kept for a waiting tip round request ([`Ledger::kept_for_tip`]), or whose memory
+    /// is not free, is neither. A waiter that takes cores from the tip
     /// reserve (`from_reserve`) needs no usable core to start.
     fn pick(
         &self,
@@ -444,7 +445,9 @@ impl Ledger {
         let mut sharing = 0;
         for waiter in self.served_order(class, now) {
             let fits = waiter.request.resources.iter().all(|name| {
-                let taken = self.resource_held(name) + resources.get(name.as_str()).unwrap_or(&0);
+                let taken = self.resource_held(name)
+                    + resources.get(name.as_str()).unwrap_or(&0)
+                    + self.kept_for_tip(name, waiter, &picked);
                 taken < self.limits.capacity(name)
             });
             // Memory delays a command only while something else runs that could free some:

@@ -10,7 +10,7 @@ use ignite_core::ids::TicketId;
 use ignite_core::protocol::Class;
 use ignite_core::traits::Reserve;
 
-use super::{FakeHost, T0, ask, at, derived_limits, limits};
+use super::{FakeHost, T0, ask, at, derived_limits, limits, with_resource};
 use crate::sched::{Adoption, GrantRequest, Ledger, Limits, Scheduler};
 
 /// 28 logical cores: 24 shared and 4 kept for the tip round's builds.
@@ -483,4 +483,35 @@ fn an_agent_only_borrows_reserve_cores_that_outside_work_leaves_idle() {
     assert_eq!(ledger.status().agent_borrowed, 2);
     ledger.enqueue(ask(Class::Agent, 1), at(2.0));
     assert!(ledger.step(at(2.0)).granted.is_empty());
+}
+
+/// On jarvis on 2026-11-26 a landing held the `bench-vm` resource when a tip round's `counts`
+/// check asked for it, and an agent's `counts` check asked a few seconds later. The agent's
+/// class is served before `tip`, so it took the resource when the landing released it, and the
+/// tip check, which `master` was waiting for, ran six minutes later. A request on the tip
+/// reserve now gets the resource first, and the agent takes it after the tip check.
+#[test]
+fn a_resource_goes_to_a_waiting_tip_round_check_before_a_higher_class() {
+    let mut ledger = Ledger::new(Limits {
+        resources: BTreeMap::from([("bench-vm".to_owned(), 1)]),
+        ..with_reserve()
+    });
+    let landing = ledger.enqueue(with_resource(Class::Land, 4, "bench-vm"), T0);
+    assert_eq!(ledger.step(T0).granted[0].id, landing);
+
+    let mut check = tip_round(4);
+    check.resources.push("bench-vm".to_owned());
+    let check = ledger.enqueue(check, at(1.0));
+    let agent = ledger.enqueue(with_resource(Class::Agent, 4, "bench-vm"), at(2.0));
+    let later_landing = ledger.enqueue(with_resource(Class::Land, 4, "bench-vm"), at(3.0));
+    assert!(ledger.step(at(3.0)).granted.is_empty());
+
+    ledger.release(landing);
+    let ids = |step: crate::sched::Step| step.granted.iter().map(|g| g.id).collect::<Vec<_>>();
+    assert_eq!(ids(ledger.step(at(4.0))), [check]);
+    ledger.release(check);
+    // Without a tip request waiting, the classes take turns in their usual order.
+    assert_eq!(ids(ledger.step(at(5.0))), [later_landing]);
+    ledger.release(later_landing);
+    assert_eq!(ids(ledger.step(at(6.0))), [agent]);
 }
