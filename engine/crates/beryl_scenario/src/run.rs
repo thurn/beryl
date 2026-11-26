@@ -479,7 +479,10 @@ impl<L: Layout> Runner<L> {
                 if here.is_gt()
                     && !(now.number() == turn
                         && self.s.has_turn_plan()
-                        && self.s.later_steps().any(|(later, _)| later == step))
+                        && self
+                            .s
+                            .later_steps(self.t.format())
+                            .any(|(later, _)| later == step))
                 {
                     return Err(format!(
                         "the game passed turn {turn} {step:?} without stopping there; now {}",

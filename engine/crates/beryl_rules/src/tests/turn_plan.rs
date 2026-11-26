@@ -242,7 +242,7 @@ fn a_full_phase_insertion_can_retry_after_widening() {
     s.board().begin_at(3, Seat::P0, TurnStep::PrecombatMain);
     s.plan_from_current_step(t.format()).unwrap();
     let (_, end) = s
-        .later_steps()
+        .later_steps(t.format())
         .find(|(step, _)| *step == TurnStep::End)
         .unwrap();
     assert!(
@@ -251,7 +251,7 @@ fn a_full_phase_insertion_can_retry_after_widening() {
             .is_some()
     );
     let ends: Vec<_> = s
-        .later_steps()
+        .later_steps(t.format())
         .filter_map(|(step, target)| (step == TurnStep::End).then_some(target))
         .collect();
     assert_eq!(ends.len(), 2);
@@ -267,27 +267,29 @@ fn a_full_phase_insertion_can_retry_after_widening() {
                 .is_some()
         );
     }
-    let before: Vec<_> = s.later_steps().collect();
+    let before: Vec<_> = s.later_steps(t.format()).collect();
     let phases = &[TurnPhase::Main, TurnPhase::Combat];
     assert!(
         s.insert_phases_after_current(TurnPhase::Main, phases)
             .is_err()
     );
-    assert_eq!(s.later_steps().collect::<Vec<_>>(), before);
+    assert_eq!(s.later_steps(t.format()).collect::<Vec<_>>(), before);
     let mut wide = s.widen();
-    assert_eq!(wide.later_steps().collect::<Vec<_>>(), before);
+    assert_eq!(wide.later_steps(t.format()).collect::<Vec<_>>(), before);
     assert!(
         wide.insert_phases_after_current(TurnPhase::Main, phases)
             .unwrap()
     );
-    let after: Vec<_> = wide.later_steps().collect();
+    let after: Vec<_> = wide.later_steps(t.format()).collect();
     assert_eq!(after[0].0, TurnStep::PostcombatMain);
     assert_eq!(after[1].0, TurnStep::BeginningOfCombat);
     assert_eq!(after[7..], before);
     assert!(wide.remove_phase(TurnPhase::Combat).is_some());
     let _cut = wide.cut_to_cleanup().unwrap();
     assert_eq!(
-        wide.later_steps().map(|(step, _)| step).collect::<Vec<_>>(),
+        wide.later_steps(t.format())
+            .map(|(step, _)| step)
+            .collect::<Vec<_>>(),
         [TurnStep::Cleanup]
     );
 }

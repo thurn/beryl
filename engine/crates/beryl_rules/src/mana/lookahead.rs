@@ -157,13 +157,17 @@ impl<L: Layout> Ahead<L> {
 /// - see [CR 502.3](https://yawgatog.com/resources/magic-rules/#R5023): "the active player
 ///   determines which permanents they control will untap. Then they untap them all
 ///   simultaneously."
-fn sorcery_window<L: Layout>(s: &State<L>, player: Seat) -> bool {
+fn sorcery_window<L: Layout>(
+    s: &State<L>,
+    format: beryl_kernel::format::Format,
+    player: Seat,
+) -> bool {
     s.turn().active() == player
         && (matches!(
             s.turn().step(),
             TurnStep::PrecombatMain | TurnStep::PostcombatMain
         ) || s
-            .later_steps()
+            .later_steps(format)
             .take_while(|(step, _)| *step != TurnStep::Untap)
             .any(|(step, _)| matches!(step, TurnStep::PrecombatMain | TurnStep::PostcombatMain)))
 }
@@ -218,7 +222,7 @@ fn enters_untapped<L: Layout>(s: &State<L>, player: Seat, face: &Face) -> bool {
 )]
 fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
     let mut ahead: Ahead<L> = Ahead::default();
-    let sorcery = sorcery_window(s, player);
+    let sorcery = sorcery_window(s, t.format(), player);
     let land_drop = sorcery && s.player(player).lands_played() < t.format().lands_each_turn();
     // A transforming card's back face is never cast: "A double-faced spell is cast with its
     // front face up by default" (see [CR 712.8](https://yawgatog.com/resources/magic-rules/#R7128)).

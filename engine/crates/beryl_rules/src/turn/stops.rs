@@ -82,7 +82,7 @@ pub fn next_stop<L: Layout>(
         return NextStop::CombatDamage;
     }
     if stops != Stops::Smart {
-        return s.later_steps().next().map_or_else(
+        return s.later_steps(t.format()).next().map_or_else(
             || {
                 NextStop::Step(
                     TurnStep::Untap,
@@ -127,7 +127,7 @@ pub fn next_step_stop<L: Layout>(
     let active = s.turn().active() == obs.viewer();
     let mut after = after;
     let mut attacking = any_attacking(s);
-    for (step, target) in s.later_steps() {
+    for (step, target) in s.later_steps(t.format()) {
         let declares = step == TurnStep::BeginningOfCombat
             && active
             && combat::can_attack_in_later_combat(s, t);

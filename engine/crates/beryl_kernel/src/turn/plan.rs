@@ -196,10 +196,21 @@ impl<L: Layout> State<L> {
     }
 
     /// The names of the remaining steps, each with a target for its occurrence.
-    pub fn later_steps(&self) -> impl Iterator<Item = (TurnStep, StepTarget)> + '_ {
+    pub fn later_steps(&self, format: Format) -> impl Iterator<Item = (TurnStep, StepTarget)> + '_ {
         let turn = self.turn.number;
         let planned = self.has_turn_plan();
-        let rest = &TurnStep::ALL[self.turn.step.index() + 1..];
+        let steps = format.turn();
+        let index = self.turn.step.index();
+        // Fast path when the format's turn steps match `TurnStep`'s declaration order.
+        let at = if steps.get(index) == Some(&self.turn.step) {
+            index + 1
+        } else {
+            steps
+                .iter()
+                .position(|&step| step == self.turn.step)
+                .map_or(steps.len(), |i| i + 1)
+        };
+        let rest = &steps[at..];
         self.turn_plan
             .remaining
             .iter()

@@ -1,8 +1,9 @@
-//! Rules that define a game's format. The rules engine applies them.
+//! Rules that define a game's format. The rules engine applies them. A format adds
+//! zone rules and a poison loss threshold when the engine has shared zones or tracks poison.
 //!
 //! Implements: none. The format supplies the defaults used by the rules.
 
-use beryl_card::{TurnStep, Zone};
+use beryl_card::TurnStep;
 
 use crate::decision::Outcome;
 use crate::player_set::PlayerSet;
@@ -36,13 +37,6 @@ pub enum FirstDraw {
     SkippedByStartingPlayer,
 }
 
-/// Whether each player has their own zone or the entire game shares it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ZoneRule {
-    PerPlayer(Zone),
-    Shared(Zone),
-}
-
 /// How a card list is used when setting up the game.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DeckRole {
@@ -57,9 +51,6 @@ pub struct Losses {
     pub life: i16,
     /// Attempting to draw from an empty library causes a loss.
     pub empty_library: bool,
-    /// At or above this number of poison counters, the player loses.
-    /// The engine does not track poison yet.
-    pub poison: u8,
 }
 
 impl Format {
@@ -138,24 +129,9 @@ impl Format {
     /// into steps, which proceed in order.").
     ///
     /// [CR 500.1]: https://yawgatog.com/resources/magic-rules/#R5001
+    #[inline]
     pub const fn turn(self) -> &'static [TurnStep] {
         &TurnStep::ALL
-    }
-
-    /// The engine's card zones (see [CR 400.1]: "Each player has their own library, hand,
-    /// and graveyard. The other zones are shared by all players."). The command zone's
-    /// emblems have their own storage.
-    ///
-    /// [CR 400.1]: https://yawgatog.com/resources/magic-rules/#R4001
-    pub const fn zones(self) -> &'static [ZoneRule] {
-        &[
-            ZoneRule::PerPlayer(Zone::Library),
-            ZoneRule::PerPlayer(Zone::Hand),
-            ZoneRule::PerPlayer(Zone::Graveyard),
-            ZoneRule::Shared(Zone::Battlefield),
-            ZoneRule::Shared(Zone::Exile),
-            ZoneRule::Shared(Zone::Stack),
-        ]
     }
 
     /// The deck supplies the library at setup. A constructed sideboard is a separate list
@@ -167,27 +143,27 @@ impl Format {
         &[DeckRole::Library, DeckRole::Sideboard]
     }
 
+    /// Upper bound on sideboard size across formats, for stack-allocated determinization buffers.
+    pub const MAX_SIDEBOARD: usize = 15;
+
     /// See [CR 100.4a]: "In constructed play, a sideboard may contain no more than fifteen cards."
     ///
     /// [CR 100.4a]: https://yawgatog.com/resources/magic-rules/#R1004a
     pub const fn maximum_sideboard(self) -> usize {
-        15
+        Self::MAX_SIDEBOARD
     }
 
     /// See [CR 704.5a]: "If a player has 0 or less life, that player loses the game."
     /// See [CR 704.5b]: "If a player attempted to draw a card from a library with no cards
     /// in it since the last time state-based actions were checked, that player loses the game."
-    /// See [CR 704.5c]: "If a player has ten or more poison counters, that player loses the game."
     ///
     /// [CR 704.5a]: https://yawgatog.com/resources/magic-rules/#R7045a
     /// [CR 704.5b]: https://yawgatog.com/resources/magic-rules/#R7045b
-    /// [CR 704.5c]: https://yawgatog.com/resources/magic-rules/#R7045c
     #[inline]
     pub const fn losses(self) -> Losses {
         Losses {
             life: 0,
             empty_library: true,
-            poison: 10,
         }
     }
 

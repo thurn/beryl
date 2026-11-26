@@ -246,8 +246,12 @@ impl<'a, L: Layout> Observation<'a, L> {
     fn redeal(&self, t: &GameTable, rng: &mut SplitMix64, show_hands: bool, s: &mut State<L>) {
         let picks = self.unseen_hidden_picks(t);
         for player in Seat::BOTH {
-            const IN_GAME: usize =
-                Slot::DECK_SLOTS + crate::format::Format::CONSTRUCTED.maximum_sideboard();
+            const IN_GAME: usize = Slot::DECK_SLOTS + crate::format::Format::MAX_SIDEBOARD;
+            debug_assert!(
+                t.format().maximum_sideboard() <= crate::format::Format::MAX_SIDEBOARD,
+                "Small's determinization buffer fits at most {} sideboard cards",
+                crate::format::Format::MAX_SIDEBOARD,
+            );
             let mut remainder: L::Queue<L::Card, IN_GAME> = Default::default();
             let slots = || self.root.in_game_card_slots(t, player);
             if self.root.in_subgame() {
