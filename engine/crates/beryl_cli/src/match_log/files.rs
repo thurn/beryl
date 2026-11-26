@@ -154,17 +154,16 @@ pub fn write_whole(path: &Path, contents: &[u8]) -> Result<(), String> {
 /// The run's lock, held while this process plays it.
 pub struct Lock {
     _file: File,
-    /// The file the lock is on, where that is not `file` ([`GUARD`]).
+    /// The file the lock is on, where that is not `file` ([`guard`]).
     _guard: Option<File>,
 }
 
 /// On Windows a file locked by one process cannot be read by another, so there the lock is
-/// taken on a file of its own, leaving `lock`'s text readable; elsewhere on `lock` itself.
-const GUARD: Option<&str> = if cfg!(windows) {
-    Some("lock.guard")
-} else {
-    None
-};
+/// taken on a file of its own beside it (`lock.guard` for `lock`), leaving the locked file's
+/// text, the holder's process id, readable; elsewhere on the file itself.
+fn guard(path: &Path) -> Option<std::path::PathBuf> {
+    cfg!(windows).then(|| path.with_extension("guard"))
+}
 
 fn open_rw(path: &Path) -> std::io::Result<File> {
     OpenOptions::new()
@@ -177,11 +176,21 @@ fn open_rw(path: &Path) -> std::io::Result<File> {
 
 /// Takes the exclusive lock on run directory `dir`, or names the process that holds it.
 pub fn lock(dir: &Path) -> Result<Lock, String> {
-    let path = dir.join("lock");
+    lock_file(&dir.join("lock"))?.map_err(|holder| {
+        format!(
+            "{} is already being played by process {holder}",
+            dir.display()
+        )
+    })
+}
+
+/// Takes the exclusive lock on the file at `path`, writing this process's id into it. The
+/// inner error is the id of the process that holds it.
+pub fn lock_file(path: &Path) -> Result<Result<Lock, String>, String> {
     let at = |e: std::io::Error| format!("{}: {e}", path.display());
-    let mut file = open_rw(&path).map_err(at)?;
-    let guard = match GUARD {
-        Some(name) => Some(open_rw(&dir.join(name)).map_err(at)?),
+    let mut file = open_rw(path).map_err(at)?;
+    let guard = match guard(path) {
+        Some(g) => Some(open_rw(&g).map_err(at)?),
         None => None,
     };
     match guard.as_ref().unwrap_or(&file).try_lock() {
@@ -189,19 +198,15 @@ pub fn lock(dir: &Path) -> Result<Lock, String> {
             file.set_len(0).map_err(at)?;
             file.seek(SeekFrom::Start(0)).map_err(at)?;
             writeln!(file, "{}", std::process::id()).map_err(at)?;
-            Ok(Lock {
+            Ok(Ok(Lock {
                 _file: file,
                 _guard: guard,
-            })
+            }))
         }
         Err(TryLockError::WouldBlock) => {
             let mut holder = String::new();
             file.read_to_string(&mut holder).map_err(at)?;
-            Err(format!(
-                "{} is already being played by process {}",
-                dir.display(),
-                holder.lines().next().unwrap_or_default()
-            ))
+            Ok(Err(holder.lines().next().unwrap_or_default().to_owned()))
         }
         Err(TryLockError::Error(e)) => Err(at(e)),
     }

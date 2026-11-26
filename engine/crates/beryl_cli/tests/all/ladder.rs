@@ -29,6 +29,7 @@ fn a_pair_shares_its_seed_and_swaps_seats() {
         seed: 11,
         out: out.clone(),
         positions: Vec::new(),
+        runner: Runner::Threads,
     };
     let r = run(&TEST, &m, |_, _| {}).unwrap();
     assert_eq!(
@@ -109,6 +110,7 @@ fn positions_start_four_pairs_in_five() {
         seed: 4,
         out: out.clone(),
         positions: set.clone(),
+        runner: Runner::Threads,
     };
     let names: Vec<Option<&str>> = (0..6)
         .map(|p| m.position(p).map(|(n, _)| n.as_str()))
@@ -141,6 +143,7 @@ fn small(challenger: &str, champion: &str, cap: u32, out: PathBuf) -> Match {
         seed: 5,
         out,
         positions: Vec::new(),
+        runner: Runner::Threads,
     }
 }
 

@@ -1,11 +1,13 @@
 //! A match to play and its result, as `match.json` and `docs/ladder.md` keep it.
 
+use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
 use super::sprt::{Bar, Pairs, Sprt, Verdict, elo_of_swept_share, spread};
+use crate::match_log::game::GameDecision;
 use crate::positions::Position;
 use crate::tournament::wilson;
 
@@ -23,6 +25,19 @@ pub struct Match {
     pub out: PathBuf,
     /// The start positions, by file name; none to start every pair from the shuffle.
     pub positions: Vec<(String, Position)>,
+    /// How the games are played.
+    pub runner: Runner,
+}
+
+/// How a match plays its games.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Runner {
+    /// On threads of the match's own process, as the library's tests play: a game that
+    /// crashes the process ends the match.
+    Threads,
+    /// Each game in a child process of this executable, `beryl_cli ladder-game`
+    /// ([`super::game`]), so that a game that crashes is played again or skipped.
+    Processes(PathBuf),
 }
 
 impl Match {
@@ -120,6 +135,9 @@ pub struct Report {
     pub llr: Option<f64>,
     pub bounds: Option<[f64; 2]>,
     pub verdict: Verdict,
+    /// The games whose process died twice at the same decision, by name, with that decision.
+    /// Their pairs are not counted.
+    pub crashed: BTreeMap<String, GameDecision>,
     pub out: String,
 }
 
@@ -235,6 +253,19 @@ impl Report {
                 self.verdict
             );
         }
+        if !self.crashed.is_empty() {
+            let games: Vec<String> = self
+                .crashed
+                .iter()
+                .map(|(game, at)| format!("{game} at decision {at}"))
+                .collect();
+            let _ = writeln!(
+                out,
+                "crashed {}, their pairs not counted: {}",
+                games.len(),
+                games.join(", ")
+            );
+        }
         let _ = writeln!(out, "games in {}\n\n{ROW_HEADER}\n{}", self.out, self.row());
         out
     }
@@ -296,6 +327,7 @@ mod tests {
             llr: None,
             bounds: None,
             verdict: Verdict::Pass,
+            crashed: BTreeMap::new(),
             out: "/tmp/x".to_owned(),
         };
         r.tally();

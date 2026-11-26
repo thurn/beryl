@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::common::TEST;
-use beryl_cli::ladder::{Bar, Match, run};
+use beryl_cli::ladder::{Bar, Match, Runner, run};
 use beryl_cli::screen::*;
 
 const CHAMPION: &str = "pimc2/hidden/rollout/tuned@2k";
@@ -22,6 +22,7 @@ fn match_dir(name: &str) -> PathBuf {
         seed: 6,
         out: out.clone(),
         positions: Vec::new(),
+        runner: Runner::Threads,
     };
     run(&TEST, &m, |_, _| {}).unwrap();
     out

@@ -14,6 +14,13 @@ pub enum Bar {
 }
 
 impl Bar {
+    /// The bar [`Bar::name`] names.
+    pub fn named(name: &str) -> Option<Bar> {
+        [Bar::Stronger, Bar::Plausible, Bar::Audit]
+            .into_iter()
+            .find(|b| b.name() == name)
+    }
+
     pub fn name(self) -> &'static str {
         match self {
             Bar::Stronger => "stronger",

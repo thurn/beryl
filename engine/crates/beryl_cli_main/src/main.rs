@@ -12,7 +12,8 @@
 //! - `beryl_cli ladder <challenger> [--vs NAME] [--work 3M] [--bar stronger|plausible|audit]
 //!   [--cap N] [--seed N] [--positions DIR] [--out DIR]` plays a paired match against the
 //!   champion up to the cap, with a sequential test for stronger and plausible, and prints a
-//!   `docs/ladder.md` row ([`ladder`], `just ladder`).
+//!   `docs/ladder.md` row ([`ladder`], `just ladder`). Each game is a child process,
+//!   `beryl_cli ladder-game --match DIR --game N` ([`ladder::game`]).
 //! - `beryl_cli positions build [--games N] [--seed N] [--work 3M] [--out DIR]` cuts the
 //!   ladder's balanced start positions from champion games; `beryl_cli positions sample
 //!   [--count N] DIR` prints some as transcripts ([`positions`], `just positions`).
@@ -65,6 +66,7 @@ const USAGE: &str = "usage:
       (an agent is a registered one or a long-think entrant, family@budget)
   beryl_cli ladder <challenger> [--vs NAME] [--work 3M] [--bar stronger|plausible|audit]
       [--cap N] [--seed N] [--positions DIR] [--out DIR]
+  beryl_cli ladder-game --match DIR --game N
   beryl_cli positions build [--games N] [--seed N] [--work 3M] [--out DIR]
   beryl_cli positions sample [--count N] DIR
   beryl_cli screen <challenger> <match-dir> [--vs NAME] [--recheck N] [--work 3M] [--games N]
@@ -110,6 +112,12 @@ fn main() -> ExitCode {
                 ExitCode::from(2)
             }
         };
+    }
+    // A ladder game's exit code tells its match how it ended.
+    if let [command, rest @ ..] = args.as_slice()
+        && command == "ladder-game"
+    {
+        return ladder::game::main(c, rest);
     }
     let result = match args.as_slice() {
         [command, definitions, out, names @ ..] if command == "record-fixture" => {

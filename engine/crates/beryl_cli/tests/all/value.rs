@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use beryl_cli::ladder::{Bar, Match, run};
+use beryl_cli::ladder::{Bar, Match, Runner, run};
 use beryl_cli::value::report::Report;
 use beryl_cli::value::{PREDICTORS, Sample, folds, main, predict};
 use beryl_engine::rng::SplitMix64;
@@ -73,6 +73,7 @@ fn value_test_runs_over_a_match_and_repeats() {
         seed: 3,
         out: dir.clone(),
         positions: Vec::new(),
+        runner: Runner::Threads,
     };
     run(&TEST, &m, |_, _| {}).unwrap();
     let written = |name: &str| -> serde_json::Value {
