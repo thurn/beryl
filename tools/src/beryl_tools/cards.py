@@ -43,9 +43,10 @@ from collections import Counter, defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import NamedTuple, cast
+from typing import cast
 
 from . import card_store, catalogs, paths, scryfall, set_groups
+from .deck_printings import DeckPrinting, deck_printings
 
 # Scryfall's card back images: /<size>/<id[0]>/<id[1]>/<card_back_id>.jpg.
 DATA: Path = paths.REPO / "data"
@@ -95,7 +96,6 @@ TREATMENTS: frozenset[str] = frozenset(
     {"showcase", "extendedart", "etched", "inverted", "shatteredglass", "fullart"}
 )
 PRINTINGS: Path = DATA / "card-printings.csv"
-DECK_PRINTINGS: Path = DATA / "deck-printings.csv"
 EXCLUSIONS: Path = DATA / "card-pool-exclusions.json"
 IMAGE_VERSIONS = ("art_crop", "normal", "large")
 # The characteristics a store record's face keeps (CR 109.3), less name, colors and color
@@ -204,38 +204,6 @@ def printings(path: Path) -> dict[str, Printing]:
             for row in csv.DictReader(f):
                 pins[row["name"]] = (row["set"], row["collector_number"])
     return pins
-
-
-class DeckPrinting(NamedTuple):
-    """A row of data/deck-printings.csv: `copies` of the deck's `name` show this printing."""
-
-    deck: str
-    name: str
-    set: str
-    collector_number: str
-    copies: int
-
-    @property
-    def where(self) -> Printing:
-        return (self.set, self.collector_number)
-
-
-def deck_printings(path: Path = DECK_PRINTINGS) -> list[DeckPrinting]:
-    """The rows of `path`, in order; a LookupError names a printing listed twice."""
-    if not path.exists():
-        return []
-    with path.open(newline="") as f:
-        rows = [
-            DeckPrinting(
-                r["deck"], r["name"], r["set"], r["collector_number"], int(r["copies"])
-            )
-            for r in csv.DictReader(f)
-        ]
-    seen = Counter(r.where for r in rows)
-    twice = [where for where, n in seen.items() if n > 1]
-    if twice:
-        raise LookupError(f"{path.name} lists {twice} twice")
-    return rows
 
 
 def exclusions(path: Path) -> dict[str, str]:

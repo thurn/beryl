@@ -56,7 +56,6 @@
     "tools/src/beryl_tools/cards.py": [
       "data/card-pool-exclusions.json",
       "data/card-printings.csv",
-      "data/deck-printings.csv",
       "docs/sample-decks/2025-11-18-17lands-cb8d5d5f-wu-control.txt",
       "docs/sample-decks/2026-10-17-PrinceJools-wu-control.txt"
     ],
@@ -70,6 +69,9 @@
       "data/arena-motion.json",
       "data/ui-conventions.json",
       "docs/ui-conventions.md"
+    ],
+    "tools/src/beryl_tools/deck_printings.py": [
+      "data/deck-printings.csv"
     ],
     "tools/src/beryl_tools/disk_usage.py": [
       "tools/src/beryl_tools/disk_usage_apfs.cc"
