@@ -29,9 +29,9 @@
 
 mod amount;
 mod asks;
-mod enters;
 pub mod build;
 mod condition;
+mod enters;
 mod instruction;
 mod operands;
 mod reference;
