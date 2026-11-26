@@ -208,9 +208,16 @@ fn observe(
             });
         mapped
     });
-    // Check the fence for this submission without holding wgpu's resource guard while the
-    // GPU is still working. The worker sleeps between checks; the observed time includes that
-    // sampling delay as well as CPU submission and GPU queueing.
+    // Sleep until 4 ms after `submit_ns` before the first poll, then poll every millisecond.
+    // The main pass takes about 4.7 ms of GPU time at the median and a submission finishes
+    // 10.8 ms after it is submitted at the median, so this costs the measurement nothing in
+    // most frames while taking wgpu's lock less often. Check the fence without holding wgpu's
+    // resource guard while the GPU is still working; the observed time includes the sampling
+    // delay as well as CPU submission and GPU queueing.
+    let first_poll = Duration::from_nanos(item.submit_ns) + Duration::from_millis(4);
+    if let Some(delay) = first_poll.checked_sub(epoch.elapsed()) {
+        std::thread::sleep(delay);
+    }
     loop {
         match device.poll(wgpu::PollType::Wait {
             submission_index: Some(item.index.clone()),

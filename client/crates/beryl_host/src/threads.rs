@@ -21,7 +21,8 @@ pub enum Class {
     /// Above the AI and below drawing: the asset workers, which decode, compress and
     /// rasterize card faces and glyphs ahead of the search.
     Initiated,
-    /// The highest: the frame thread, which the system runs ahead of the others when it wakes.
+    /// The highest: the frame thread and the `scene GPU timing` worker, which the system runs
+    /// ahead of the others when they wake.
     Interactive,
 }
 
@@ -87,7 +88,8 @@ pub fn current_class() -> Option<Class> {
 }
 
 /// Puts the calling thread in the user-interactive class, the highest, so that the operating
-/// system runs it ahead of the AI's search threads when it wakes: the frame thread.
+/// system runs it ahead of the AI's search threads when it wakes: the frame thread and the
+/// `scene GPU timing` worker.
 pub fn interactive_thread() {
     set_class(Class::Interactive);
 }

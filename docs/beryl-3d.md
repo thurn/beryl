@@ -606,9 +606,16 @@ the zero-allocation and native rank assertions.
   calls `device.poll` every millisecond and runs in the utility class, below the
   AI's search threads, so the AI can preempt it while it holds the lock. In two
   runs with that thread in the interactive class, `handler` late frames after
-  startup fell from 1.7 to 0.9 per 1,000 frames. A ticket under the "Hold 120
-  Hz" epic moves the thread to the interactive class and makes it poll less
-  often.
+  startup fell from 1.7 to 0.9 per 1,000 frames. In five background runs
+  (`--window background --for 120s`) at a load average of 40 to 49 before the
+  change, 16,216 frames had 51 late frames after the first three seconds
+  (`handler` 35, `link skipped` 6, `handling only` 5, `drawable` 4,
+  `callback late` 1; 2.16 `handler` late frames per 1,000 frames). Moving
+  `scene GPU timing` to the interactive class and sleeping until 4 ms after
+  `submit_ns` before the first poll reduced this across five background runs at
+  a load average of 33 to 58 (15,646 frames) to 2 late frames after the first
+  three seconds (`handler` 1, `callback late` 1; 0.06 `handler` late frames per
+  1,000 frames).
 
 - **A fixed 60 Hz on the development Mac, 2026-11-25.** Three pairs of runs, as
   above, asked the display link for a fixed 120 Hz and then a fixed 60 Hz

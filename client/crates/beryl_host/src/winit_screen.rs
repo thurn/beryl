@@ -41,7 +41,8 @@ impl Screen {
         slow_gpu: Duration,
         epoch: Option<Instant>,
     ) -> Self {
-        let gpu = epoch.and_then(|epoch| renderer.gpu_timer(epoch, crate::threads::utility_thread));
+        let gpu =
+            epoch.and_then(|epoch| renderer.gpu_timer(epoch, crate::threads::interactive_thread));
         Self {
             renderer,
             surface,
