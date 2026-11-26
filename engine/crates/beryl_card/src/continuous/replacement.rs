@@ -169,6 +169,15 @@ impl Replacement {
             rewrite: Rewrite::Multiply(n),
         }
     }
+
+    /// "If an effect would create one or more tokens under [players'] control, it creates
+    /// [rewrite] instead." (Parallel Lives)
+    pub const fn tokens_created(players: Players, rewrite: Rewrite) -> Replacement {
+        Replacement {
+            replaces: Replaced::Tokens { players },
+            rewrite,
+        }
+    }
 }
 
 /// The event a replacement effect replaces.
@@ -212,6 +221,11 @@ pub enum Replaced {
     /// recipient ([CR 614.1a](https://yawgatog.com/resources/magic-rules/#R6141a)): "Effects
     /// that use the word 'instead' are replacement effects."
     Damage,
+    /// One or more tokens an effect would create under the control of `players`, "you" being
+    /// the permanent's controller
+    /// ([CR 614.1a](https://yawgatog.com/resources/magic-rules/#R6141a)): "Effects that use the
+    /// word 'instead' are replacement effects."
+    Tokens { players: Players },
 }
 
 impl crate::Ability {
@@ -274,9 +288,11 @@ pub enum Rewrite {
     /// Its controller chooses a value of this kind as it enters, which the permanent
     /// remembers ([`Replacement::choose_as_enters`]).
     Choose(ChosenKind),
-    /// The damage is multiplied by N: "it deals double that damage to that permanent or
-    /// player instead" is 2. The damage still comes from its source.
+    /// Multiplies the replaced number by N, whatever it counts (damage dealt, tokens created or
+    /// counters placed): "twice that many" or "double that damage" is 2.
     Multiply(u8),
+    /// Adds N to the replaced number (tokens created or counters placed).
+    Plus(u8),
     /// "You may have this enter as a copy of [a permanent the filter accepts] on the
     /// battlefield", with the exception at `except` of the face's list
     /// ([`crate::Face::excepts`]) if it has one ([`Replacement::enter_as_copy`]).

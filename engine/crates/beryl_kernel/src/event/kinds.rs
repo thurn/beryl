@@ -132,6 +132,8 @@ pub enum ReplacementKind {
     Damage,
     /// A player beginning a turn (`beryl_card`'s `Replaced::BeginTurn`).
     BeginTurn,
+    /// Token creation (`beryl_card`'s `Replaced::Tokens`).
+    Tokens,
 }
 
 impl ReplacementKind {

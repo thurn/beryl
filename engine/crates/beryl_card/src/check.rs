@@ -260,6 +260,7 @@ impl Scope<'_> {
                 | Rewrite::Choose(_)
                 | Rewrite::MaySkipTurnToUntap
                 | Rewrite::Multiply(_)
+                | Rewrite::Plus(_)
                 | Rewrite::EnterAsCopy { .. } => Ok(()),
             },
             None => Ok(()),

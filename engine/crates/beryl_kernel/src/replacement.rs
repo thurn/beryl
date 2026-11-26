@@ -118,6 +118,18 @@ pub(crate) fn check(def: &CardDef) -> Result<Replaces, Unreplaced> {
             (Replaced::Damage, Rewrite::Multiply(n)) if n > 1 => {
                 mask = mask | ReplacementKind::Damage;
             }
+            (Replaced::Tokens { players }, Rewrite::Multiply(n)) if n > 1 => {
+                if !reads(&players) {
+                    return Err(Unreplaced::Players);
+                }
+                mask = mask | ReplacementKind::Tokens;
+            }
+            (Replaced::Tokens { players }, Rewrite::Plus(n)) if n > 0 => {
+                if !reads(&players) {
+                    return Err(Unreplaced::Players);
+                }
+                mask = mask | ReplacementKind::Tokens;
+            }
             (
                 Replaced::None
                 | Replaced::ThisEnters
@@ -125,7 +137,8 @@ pub(crate) fn check(def: &CardDef) -> Result<Replaces, Unreplaced> {
                 | Replaced::PutInto(..)
                 | Replaced::Enters { .. }
                 | Replaced::BeginTurn
-                | Replaced::Damage,
+                | Replaced::Damage
+                | Replaced::Tokens { .. },
                 Rewrite::None
                 | Rewrite::ToZone(_)
                 | Rewrite::EntersTapped
@@ -139,6 +152,7 @@ pub(crate) fn check(def: &CardDef) -> Result<Replaces, Unreplaced> {
                 | Rewrite::Dredge(_)
                 | Rewrite::Choose(_)
                 | Rewrite::Multiply(_)
+                | Rewrite::Plus(_)
                 | Rewrite::EnterAsCopy { .. },
             ) => return Err(Unreplaced::Rewrite),
         }

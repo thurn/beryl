@@ -64,6 +64,17 @@ pub fn create<L: Layout>(
     count: u8,
     how: TokenEntry,
 ) -> Result<Bitboard<L::Slot>, Full> {
+    // Every caller (`create_instruction`, `create_attacking` and `create_copies_instruction`)
+    // creates tokens from an effect and reaches `create`, so `by_effect` is true and those
+    // callers need no replacement call of their own.
+    let count = crate::replacement::tokens(
+        game,
+        crate::replacement::Tokens {
+            controller,
+            count,
+            by_effect: true,
+        },
+    )?;
     let (s, t) = (&mut *game.state, game.table);
     let mut tokens = Bitboard::EMPTY;
     let mut free = L::Slot::pool().filter(|&slot| s.object(slot).zone() == Zone::Nowhere);

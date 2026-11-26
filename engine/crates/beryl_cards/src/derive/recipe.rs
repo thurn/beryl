@@ -183,6 +183,7 @@ fn replacement(event: Replaced) -> Vec<Recipe> {
             Recipe::Attack(P0),
             Recipe::Attack(P1),
         ],
+        Replaced::Tokens { .. } => vec![Recipe::CreateTokens(P0), Recipe::CreateTokens(P1)],
     }
 }
 
@@ -384,6 +385,9 @@ mod tests {
             },
             Replaced::BeginTurn,
             Replaced::Damage,
+            Replaced::Tokens {
+                players: Players::You,
+            },
         ];
         for event in events {
             assert!(!replacement(event).is_empty(), "{event:?}");

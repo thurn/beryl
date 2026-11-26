@@ -237,8 +237,10 @@ fn modifications_of(modification: Modification) -> Neighbours<Modification> {
     out
 }
 
-fn replacements(replacement: &Replacement) -> Vec<(&'static str, Kind, String, Replacement)> {
-    let mut out = Vec::new();
+fn replacement_events(
+    replacement: &Replacement,
+    out: &mut Vec<(&'static str, Kind, String, Replacement)>,
+) {
     if replacement.replaces != Replaced::None {
         out.push((
             "replacement event",
@@ -275,6 +277,24 @@ fn replacements(replacement: &Replacement) -> Vec<(&'static str, Kind, String, R
             },
         ));
     }
+    if let Replaced::Tokens { players } = replacement.replaces {
+        for (name, players) in operands::players(players) {
+            out.push((
+                "replacement event",
+                Kind::ReplacementEvent,
+                name,
+                Replacement {
+                    replaces: Replaced::Tokens { players },
+                    ..*replacement
+                },
+            ));
+        }
+    }
+}
+
+fn replacements(replacement: &Replacement) -> Vec<(&'static str, Kind, String, Replacement)> {
+    let mut out = Vec::new();
+    replacement_events(replacement, &mut out);
     let rewrite = |rewrite| Replacement {
         rewrite,
         ..*replacement
@@ -302,6 +322,7 @@ fn replacements(replacement: &Replacement) -> Vec<(&'static str, Kind, String, R
         Rewrite::EntersTappedUnlessPayLife(n) => numbers(n, Rewrite::EntersTappedUnlessPayLife),
         Rewrite::Dredge(n) => numbers(n, Rewrite::Dredge),
         Rewrite::Multiply(n) => numbers(n, Rewrite::Multiply),
+        Rewrite::Plus(n) => numbers(n, Rewrite::Plus),
         _ => {}
     }
     if let Rewrite::EntersTappedUnlessYouControl(n, filter) = replacement.rewrite {

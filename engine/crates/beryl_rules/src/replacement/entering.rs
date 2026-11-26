@@ -167,7 +167,8 @@ pub(super) fn entering<L: Layout>(
             | Rewrite::Instead
             | Rewrite::Dredge(_)
             | Rewrite::MaySkipTurnToUntap
-            | Rewrite::Multiply(_) => continue,
+            | Rewrite::Multiply(_)
+            | Rewrite::Plus(_) => continue,
         }
         crate::coverage::hit(ability);
     }
@@ -253,7 +254,8 @@ fn copy_to_enter<L: Layout>(
                 | Rewrite::Dredge(_)
                 | Rewrite::Choose(_)
                 | Rewrite::MaySkipTurnToUntap
-                | Rewrite::Multiply(_) => None,
+                | Rewrite::Multiply(_)
+                | Rewrite::Plus(_) => None,
             })
     else {
         return Ok(None);
@@ -359,6 +361,7 @@ fn life_asked(face: &crate::card::Face) -> Option<(AbilityIx, u8)> {
             | Rewrite::Choose(_)
             | Rewrite::MaySkipTurnToUntap
             | Rewrite::Multiply(_)
+            | Rewrite::Plus(_)
             | Rewrite::EnterAsCopy { .. } => None,
         })
 }
@@ -443,6 +446,7 @@ fn chooses(face: &crate::card::Face) -> Option<(AbilityIx, ChosenKind)> {
             | Rewrite::Dredge(_)
             | Rewrite::MaySkipTurnToUntap
             | Rewrite::Multiply(_)
+            | Rewrite::Plus(_)
             | Rewrite::EnterAsCopy { .. } => None,
         })
 }

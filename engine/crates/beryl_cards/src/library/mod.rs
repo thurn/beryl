@@ -279,6 +279,7 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
         tokens::ATTACKING,
     ),
     ("tokens", names::FRACTURED_IDENTITY, tokens::COPIES),
+    ("tokens", names::PARALLEL_LIVES, tokens::DOUBLED),
     ("triggers", names::THIEVING_SKYDIVER, triggers::X_FROM_SPELL),
     (
         "triggers",

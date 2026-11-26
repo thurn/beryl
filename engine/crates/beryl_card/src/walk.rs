@@ -218,7 +218,7 @@ impl Ability {
             }
         }
         match self.replacement().map(|r| &r.replaces) {
-            Some(Replaced::Draw(players, _)) => players.walk(visit),
+            Some(Replaced::Draw(players, _) | Replaced::Tokens { players }) => players.walk(visit),
             Some(
                 Replaced::PutInto(filter, _)
                 | Replaced::Enters {

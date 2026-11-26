@@ -212,6 +212,7 @@ fn enters_untapped<L: Layout>(s: &State<L>, t: &GameTable, player: Seat, face: &
             | Rewrite::Choose(_)
             | Rewrite::MaySkipTurnToUntap
             | Rewrite::Multiply(_)
+            | Rewrite::Plus(_)
             | Rewrite::EnterAsCopy { .. } => true,
         })
 }

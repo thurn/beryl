@@ -5,14 +5,18 @@
 //!
 //! [CR 616.1]: https://yawgatog.com/resources/magic-rules/#R6161
 
-use beryl_card::effect::build::{win_game, you};
+use beryl_card::effect::build::{create_tokens, win_game, you};
 
 use crate::actions::destroy::destroy;
 use crate::actions::manifest::manifest;
 use crate::bitboard::Bitboard;
-use crate::card::{Ability, CardDef, Face, Players, Replaced, Replacement, Rewrite, Types};
+use crate::card::{
+    Ability, CardDef, Face, Players, Purpose, Replaced, Replacement, Rewrite, Types,
+};
 use crate::continuous;
+use crate::decision::{Choice, DecisionKind, Opt};
 use crate::filter::Filter;
+use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::replacement::event::{Reason, Sink, TokenEntry};
@@ -20,14 +24,14 @@ use crate::state::{Continuous, Duration, LayerChange, MoveReplacement, TurnStep,
 use crate::table::TableError;
 use crate::zones::drawing;
 use crate::{
-    CardTable, GameTable, Outcome, Profile, Scratch, State, continuous::layers, zones,
-    zones::library, zones::tokens,
+    CardTable, GameTable, Outcome, Profile, Replay, Scratch, State, apply, continuous::layers,
+    zones, zones::library, zones::tokens,
 };
 use beryl_kernel::format::Format;
 use beryl_kernel::replacement::Unreplaced;
 
-use super::LAND;
 use super::events::{put, with_game};
+use super::{LAND, decide};
 
 /// "If a card or token would be put into a graveyard from anywhere, exile it instead."
 static REST: CardDef = CardDef {
@@ -119,7 +123,75 @@ static PRIEST: CardDef = CardDef {
     tokens: &[],
 };
 
-static CARDS: CardTable = CardTable::new(&[&LAND, &REST, &BEAR, &WATCH, &TANGLE, &ECHO, &PRIEST]);
+/// A 1/1 token created by [`MAKE_TOKEN`].
+static TOKEN: CardDef = CardDef {
+    name: "Test Token",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::CREATURE,
+        power: Some(1),
+        toughness: Some(1),
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+/// "If an effect would create one or more tokens under your control, it creates twice that many
+/// of those tokens instead."
+static DOUBLE_TOKENS: CardDef = CardDef {
+    name: "Test Double Tokens",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::ENCHANTMENT,
+        abilities: &[Ability::replacing(&Replacement::tokens_created(
+            Players::You,
+            Rewrite::Multiply(2),
+        ))],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+/// "If an effect would create one or more tokens under your control, it creates those tokens
+/// plus an additional token instead."
+static PLUS_ONE_TOKEN: CardDef = CardDef {
+    name: "Test Plus One Token",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::ENCHANTMENT,
+        abilities: &[Ability::replacing(&Replacement::tokens_created(
+            Players::You,
+            Rewrite::Plus(1),
+        ))],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+/// Free sorcery that creates one [`TOKEN`].
+static MAKE_TOKEN: CardDef = CardDef {
+    name: "Test Make Token",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::SORCERY,
+        abilities: &[Ability::spell().effect(&create_tokens(you(), &TOKEN, 1))],
+        ..Face::EMPTY
+    }],
+    tokens: &[&TOKEN],
+};
+
+static CARDS: CardTable = CardTable::new(&[
+    &LAND,
+    &REST,
+    &BEAR,
+    &WATCH,
+    &TANGLE,
+    &ECHO,
+    &PRIEST,
+    &DOUBLE_TOKENS,
+    &PLUS_ONE_TOKEN,
+    &MAKE_TOKEN,
+]);
 
 /// A game in the first player's main phase, each deck holding two Rests, three Bears, a Watch
 /// and a Priest.
@@ -268,4 +340,103 @@ fn a_card_manifested_under_a_priest_is_exiled_face_up() {
     });
     assert_eq!(s.object(card).zone(), Zone::Exile);
     assert_eq!(s.who_knows(card), s.players());
+}
+
+/// With both a multiplier (`Multiply(2)`) and an addition (`Plus(1)`), the player who would
+/// control the tokens chooses which applies first (CR 616.1), giving 3 (`1 * 2 + 1`) or 4
+/// (`(1 + 1) * 2`).
+#[test]
+fn multiply_and_plus_token_replacements_ask_and_give_both_answers() {
+    let deck: &[(u8, &str)] = &[
+        (1, "Test Double Tokens"),
+        (1, "Test Plus One Token"),
+        (1, "Test Make Token"),
+        (9, "Test Land"),
+    ];
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [deck, deck]).unwrap();
+    let mut s = State::new(&t, 3, Profile::EXACT).unwrap();
+    s.board().begin_at(1, Seat::P0, TurnStep::PrecombatMain);
+    let mut x = Scratch::new();
+    let doubler = put(&t, &mut s, &mut x, Seat::P0, "Test Double Tokens");
+    let adder = put(&t, &mut s, &mut x, Seat::P0, "Test Plus One Token");
+    let spell = s
+        .library(Seat::P0)
+        .iter()
+        .copied()
+        .find(|&slot| t.def(s.definition(slot).record(&t).0).name == "Test Make Token")
+        .unwrap();
+    s.move_object(&mut Sink::off(), spell, Zone::Hand, crate::zone::Place::Top)
+        .unwrap();
+    layers::refresh(&mut s, &t, &mut Sink::off()).unwrap();
+
+    // Cast the free sorcery and let it resolve up to the replacement order choice.
+    let d = decide(&t, &mut s);
+    let cast = (0..d.len() as u16)
+        .find(|&i| {
+            matches!(
+                d.candidates.option(Choice(i)),
+                Some(Opt::Cast { slot, .. }) if slot == spell
+            )
+        })
+        .unwrap();
+    apply(&mut s, &t, &mut x, &mut Replay, Choice(cast));
+    let d = loop {
+        let d = decide(&t, &mut s);
+        if d.kind != DecisionKind::Priority {
+            break d;
+        }
+        let pass = (0..d.len() as u16)
+            .find(|&i| matches!(d.candidates.option(Choice(i)), Some(Opt::Pass)))
+            .unwrap();
+        apply(&mut s, &t, &mut x, &mut Replay, Choice(pass));
+    };
+    assert_eq!(
+        (d.kind, d.prompt.purpose, d.player, d.len()),
+        (DecisionKind::ChooseObject, Purpose::Replace, Seat::P0, 2)
+    );
+
+    let count_tokens = |s: &State| {
+        s.battlefield()
+            .iter()
+            .filter(|&&slot| t.def(s.definition(slot).record(&t).0).name == "Test Token")
+            .count()
+    };
+
+    // Doubler first: 1 * 2 + 1 = 3.
+    let mut s_mul = s;
+    let pick_mul = (0..d.len() as u16)
+        .find(|&i| d.candidates.option(Choice(i)) == Some(Opt::Object(doubler)))
+        .unwrap();
+    apply(&mut s_mul, &t, &mut x, &mut Replay, Choice(pick_mul));
+    assert_eq!(count_tokens(&s_mul), 3);
+
+    // Adder first: (1 + 1) * 2 = 4.
+    let mut s_add = s;
+    let pick_add = (0..d.len() as u16)
+        .find(|&i| d.candidates.option(Choice(i)) == Some(Opt::Object(adder)))
+        .unwrap();
+    apply(&mut s_add, &t, &mut x, &mut Replay, Choice(pick_add));
+    assert_eq!(count_tokens(&s_add), 4);
+}
+
+/// Doubling 200 tokens overflows `u8` and returns [`Full`] in `Small` instead of saturating.
+#[test]
+fn doubling_two_hundred_tokens_is_full_in_small() {
+    let deck: &[(u8, &str)] = &[
+        (1, "Test Double Tokens"),
+        (1, "Test Bear"),
+        (9, "Test Land"),
+    ];
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [deck, deck]).unwrap();
+    let mut s = State::new(&t, 3, Profile::EXACT).unwrap();
+    s.board().begin_at(1, Seat::P0, TurnStep::PrecombatMain);
+    let mut x = Scratch::new();
+    put(&t, &mut s, &mut x, Seat::P0, "Test Double Tokens");
+    let bear = put(&t, &mut s, &mut x, Seat::P0, "Test Bear");
+    let values = s.copiable(bear);
+    let mut result = Ok(Bitboard::EMPTY);
+    with_game(&t, &mut s, &mut x, bear, |game, _| {
+        result = tokens::create(game, Seat::P0, values, 200, TokenEntry::default());
+    });
+    assert_eq!(result, Err(Full));
 }

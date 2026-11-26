@@ -103,7 +103,7 @@ pub mod prelude {
         Keywords, LayerSpec, LibraryOrder, LibraryPosition, LibraryRest, ManaChange, ManaColor,
         ManaCost, ManaRestriction, ManaSet, Modification, Named, Objects, Place, PlayerRules,
         Players, Prevention, Prompt, Protection, Purpose, PutOnto, Recipients, Replacement,
-        RuleChange, SpellCost, Subtype, Subtypes, Supertypes, Taken, Tapped, TargetKind,
+        Rewrite, RuleChange, SpellCost, Subtype, Subtypes, Supertypes, Taken, Tapped, TargetKind,
         TargetSpec, Term, TextWord, TextWords, Trigger, TriggerEvent, TurnPhase, TurnStep, Types,
         When, Zone, ZoneSet, card, card_with_shape, mana,
     };

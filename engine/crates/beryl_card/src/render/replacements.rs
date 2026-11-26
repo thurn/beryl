@@ -96,6 +96,12 @@ impl Ctx {
                 "if you would begin your turn while {this} is tapped, you may skip that turn instead. If you do, untap {this}"
             )],
             (Replaced::Damage, Rewrite::Multiply(n)) => vec![super::prevention::multiplied(n)],
+            (Replaced::Tokens { players }, Rewrite::Multiply(n)) => {
+                vec![self.replaced_tokens(players, TokenCount::Multiply(n))]
+            }
+            (Replaced::Tokens { players }, Rewrite::Plus(n)) => {
+                vec![self.replaced_tokens(players, TokenCount::Plus(n))]
+            }
             (
                 Replaced::None
                 | Replaced::ThisEnters
@@ -103,13 +109,15 @@ impl Ctx {
                 | Replaced::PutInto(..)
                 | Replaced::Enters { .. }
                 | Replaced::BeginTurn
-                | Replaced::Damage,
+                | Replaced::Damage
+                | Replaced::Tokens { .. },
                 Rewrite::None
                 | Rewrite::ToZone(_)
                 | Rewrite::MaySkipTurnToUntap
                 | Rewrite::Instead
                 | Rewrite::Dredge(_)
-                | Rewrite::Multiply(_),
+                | Rewrite::Multiply(_)
+                | Rewrite::Plus(_),
             ) => self.body(ability.body()),
         };
         if let Some(&condition) = ability.condition() {
@@ -157,6 +165,40 @@ impl Ctx {
         }
         instead
     }
+
+    /// "If an effect would create one or more tokens under [players'] control, it creates
+    /// [count] instead."
+    fn replaced_tokens(&mut self, players: Players, count: TokenCount) -> String {
+        let under = match players {
+            Players::You => "your".to_owned(),
+            Players::EachOpponent => "an opponent's".to_owned(),
+            Players::EachPlayer => "a player's".to_owned(),
+            players @ (Players::Target(_)
+            | Players::ControllerOf(_)
+            | Players::OwnerOf(_)
+            | Players::Enchanted
+            | Players::ThatPlayer
+            | Players::SubgameNonwinners
+            | Players::EachOther(_)) => format!("{}'s", self.player(players)),
+        };
+        let many = match count {
+            TokenCount::Multiply(2) => "twice that many of those tokens".to_owned(),
+            TokenCount::Multiply(n) => format!("{} times that many of those tokens", number(n)),
+            TokenCount::Plus(1) => "those tokens plus an additional token".to_owned(),
+            TokenCount::Plus(n) => format!("that many tokens plus {}", number(n)),
+        };
+        format!(
+            "if an effect would create one or more tokens under {under} control, it creates {many} \
+             instead"
+        )
+    }
+}
+
+/// How a token-creation replacement rewrites the count.
+#[derive(Clone, Copy)]
+enum TokenCount {
+    Multiply(u8),
+    Plus(u8),
 }
 
 /// What a replacement does when it changes where an object goes.
