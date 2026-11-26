@@ -45,8 +45,10 @@ pub(crate) struct Slots {
     sets: Vec<Slot>,
     /// Whether the buffers are written mapped, rather than with `Queue::write_buffer`.
     mapped: bool,
-    /// The slot the last `write` returned.
+    /// The slot the last `write` filled.
     current: usize,
+    /// Whether that slot was written and neither taken by `take` nor given back by `skip`.
+    written: bool,
 }
 
 impl Slots {
@@ -89,6 +91,7 @@ impl Slots {
             sets,
             mapped,
             current: 0,
+            written: false,
         }
     }
 
@@ -104,16 +107,22 @@ impl Slots {
         }
     }
 
-    /// Writes a frame's `uniforms` and `records` into the next slot and returns it, or `None`
-    /// when the device was lost while the slot was being mapped. On the mapped path this waits
-    /// for the GPU only when it is still drawing the frame `SLOTS` frames back.
+    /// Writes a frame's `uniforms` and records into the next slot, or returns `None` when the
+    /// device was lost while the slot was being mapped. On the mapped path this waits for the GPU
+    /// only when it is still drawing the frame `SLOTS` frames back, and the buffers stay mapped
+    /// until `take`, so that a frame can write its slot before it has a drawable to draw into
+    /// and give the slot back with `skip` if it gets none.
     pub(crate) fn write(
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         uniforms: &[u8],
         records: &[u8],
-    ) -> Option<&Slot> {
+    ) -> Option<()> {
+        debug_assert!(
+            !self.written,
+            "a written slot was neither taken nor skipped"
+        );
         self.current = (self.current + 1) % self.sets.len();
         let slot = &mut self.sets[self.current];
         if !self.mapped {
@@ -121,7 +130,8 @@ impl Slots {
             if !records.is_empty() {
                 queue.write_buffer(&slot.instances, 0, records);
             }
-            return Some(slot);
+            self.written = true;
+            return Some(());
         }
         // `submitted` asked for the buffers to be mapped once that submission ends, and a wait
         // for it returns after the mapping callbacks have run.
@@ -135,12 +145,33 @@ impl Slots {
         }
         write_mapped(&slot.uniforms, uniforms)?;
         write_mapped(&slot.instances, records)?;
-        slot.uniforms.unmap();
-        slot.instances.unmap();
-        Some(slot)
+        self.written = true;
+        Some(())
     }
 
-    /// Records that `submission` reads the slot `write` last returned, and on the mapped path
+    /// The slot the last `write` filled, ready for a render pass to read: on the mapped path its
+    /// buffers are unmapped, as a submission that reads them requires.
+    pub(crate) fn take(&mut self) -> &Slot {
+        let slot = &self.sets[self.current];
+        if self.mapped && self.written {
+            slot.uniforms.unmap();
+            slot.instances.unmap();
+        }
+        self.written = false;
+        slot
+    }
+
+    /// Gives back the slot the last `write` filled, for a frame that will not be drawn: the next
+    /// `write` fills the same slot again. Its buffers are still mapped and no submission reads
+    /// them, so that `write` does not wait.
+    pub(crate) fn skip(&mut self) {
+        if self.written {
+            self.current = (self.current + self.sets.len() - 1) % self.sets.len();
+            self.written = false;
+        }
+    }
+
+    /// Records that `submission` reads the slot `take` last returned, and on the mapped path
     /// asks for its buffers to be mapped again once the GPU has finished with them.
     pub(crate) fn submitted(&mut self, submission: wgpu::SubmissionIndex) {
         if !self.mapped {
@@ -166,4 +197,59 @@ fn write_mapped(buffer: &wgpu::Buffer, bytes: &[u8]) -> Option<()> {
         view.copy_from_slice(bytes);
     }
     Some(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{SLOTS, Slots, mapped_features};
+
+    /// A device with the mapped buffers where the adapter has them (Metal), as a window's has.
+    fn device() -> (wgpu::Device, wgpu::Queue) {
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
+        let adapter =
+            pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
+                .expect("a GPU adapter");
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+            required_features: mapped_features(&adapter),
+            ..wgpu::DeviceDescriptor::default()
+        }))
+        .expect("a GPU device")
+    }
+
+    /// A frame that gets no drawable writes its slot and gives it back with `skip`. The next
+    /// frame must then write the same slot without failing to map it, and every slot must go on
+    /// mapping after the submissions that read it.
+    #[test]
+    fn a_skipped_frame_leaves_the_next_write_able_to_map_its_slot() {
+        let (device, queue) = device();
+        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[],
+        });
+        let bind = |_: &wgpu::Buffer| {
+            std::array::from_fn(|_| {
+                device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: None,
+                    layout: &layout,
+                    entries: &[],
+                })
+            })
+        };
+        let mut slots = Slots::new(&device, 256, 256, bind);
+        let (uniforms, records) = ([1_u8; 64], [2_u8; 128]);
+        for frame in 0..4 * SLOTS {
+            assert!(
+                slots.write(&device, &queue, &uniforms, &records).is_some(),
+                "frame {frame} could not write its slot"
+            );
+            if frame % 3 == 1 {
+                let skipped = slots.current;
+                slots.skip();
+                assert!(slots.write(&device, &queue, &uniforms, &records).is_some());
+                assert_eq!(slots.current, skipped, "the skipped slot is written again");
+            }
+            slots.take();
+            slots.submitted(queue.submit([]));
+        }
+    }
 }

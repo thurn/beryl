@@ -662,10 +662,23 @@ the zero-allocation and native rank assertions.
   stalled frame spent longest in render encoding and submission, and 46 of those
   had 2 or more buffer sets in flight, where `Slots::write`
   (`client/crates/beryl_render/src/slots.rs`) can wait for the GPU while the
-  frame holds a drawable. A ticket under the "Hold 120 Hz" epic moves that write
-  before the drawable is taken. These figures predate the change to the
+  frame holds a drawable. These figures predate the change to the
   `scene GPU timing` thread in the entry on late ticks, whose lock waits also
   show up as `handler` frames.
+
+  `Renderer::present_timed` (`client/crates/beryl_render/src/surface.rs`) now
+  writes the frame's slot before it calls `get_current_texture`, so a wait for
+  the GPU holds no drawable. A frame that gets no drawable gives its slot back
+  with `Slots::skip`, and the next frame writes the same slot. The write still
+  counts toward render encoding in the frame log. Before the change, 149
+  `handler` late frames after startup had render encoding as their largest
+  stage, in 12 runs, about 12 per run. After it, three fullscreen runs of
+  `just client app --agent expert --tier baseline --for 120s --window fullscreen`
+  on jarvis (games of 18.7, 24.4 and 21.1 s, load average 12 to 15) had none.
+  Each run had 2 late frames after startup, of any cause. The load was lower
+  than in the runs before the change, and those runs also predate the
+  `scene GPU timing` change, so not all of the drop need come from where the
+  write now happens.
 
 ## Checks and isolation
 

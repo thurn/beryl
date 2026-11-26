@@ -13,8 +13,8 @@ use wgpu::util::DeviceExt;
 
 use crate::atlas::Atlas;
 use crate::backdrop::Filter;
-use crate::count::{self, FragmentCounter};
-use crate::draw::Draws;
+use crate::count::FragmentCounter;
+use crate::draw::{Draws, baseline_pass, over_pass};
 use crate::enhanced::{Enhanced, LIT_OFFSET, Lit};
 use crate::faces::{
     COMPRESSION, FaceArray, Waiting, empty_arrays, face_arrays, face_upload, full_array, supported,
@@ -427,7 +427,8 @@ impl Renderer {
     /// Draws `frame` into `target`, cleared to black first.
     pub fn render(&mut self, frame: &Frame, target: &mut Target) -> Drawn {
         self.fit_card_mesh(frame.card);
-        self.render_view(frame, &target.view, target.width, target.height, None)
+        let kept = self.write_scene(frame, target.width, target.height);
+        self.render_view(frame, kept, &target.view, target.width, target.height, None)
     }
 
     /// The Enhanced tier's lighting `frame` is drawn with, or `None` when it is drawn in
@@ -439,18 +440,24 @@ impl Renderer {
     }
 
     /// Draws `frame` into `view`, `width` by `height` physical pixels, cleared to black first, with
-    /// the card meshes already built at the frame's card size (`fit_card_mesh`):
+    /// the card meshes already built at the frame's card size (`fit_card_mesh`) and its uniforms
+    /// and records already written (`write_scene`, which returned `kept`):
     /// in the Enhanced tier when the frame is in it and this renderer can draw it, and in
-    /// Baseline otherwise.
+    /// Baseline otherwise. A `kept` of `None`, a device lost while writing, draws nothing.
     pub(crate) fn render_view(
         &mut self,
         frame: &Frame,
+        kept: Option<u32>,
         view: &wgpu::TextureView,
         width: u32,
         height: u32,
         timing: Option<(&crate::GpuTimer, u64, &mut Option<u32>)>,
     ) -> Drawn {
-        let mut drawn = self.render_scene(frame, view, width, height, timing);
+        let Some(kept) = kept else {
+            // The device was lost; the host makes a new renderer when it notices.
+            return Drawn::default();
+        };
+        let mut drawn = self.encode_scene(frame, kept, view, width, height, timing);
         if let Some(inset) = &frame.inset {
             let mut viewport = inset.viewport;
             viewport.x = viewport.x.clamp(0.0, width as f32);
@@ -467,7 +474,7 @@ impl Renderer {
                         .target(&self.device, &self.sampler, self.format, width, height);
                 self.fit_card_mesh(inset.frame.card);
                 std::mem::swap(&mut self.depth, &mut self.inset.depth);
-                let inside = self.render_scene(&inset.frame, &target, width, height, None);
+                let inside = self.render_scene(&inset.frame, &target, width, height);
                 std::mem::swap(&mut self.depth, &mut self.inset.depth);
                 self.inset.paint(&self.device, &self.queue, view, viewport);
                 drawn.draw_calls += inside.draw_calls + 1;
@@ -476,20 +483,29 @@ impl Renderer {
         drawn
     }
 
-    #[expect(
-        clippy::too_many_lines,
-        reason = "the passes and timestamp sample belong to one submission"
-    )]
+    /// Writes and draws `frame` into `view`, as `write_scene` and then `render_view` without
+    /// its inset would.
     fn render_scene(
         &mut self,
         frame: &Frame,
         view: &wgpu::TextureView,
         width: u32,
         height: u32,
-        timing: Option<(&crate::GpuTimer, u64, &mut Option<u32>)>,
     ) -> Drawn {
+        match self.write_scene(frame, width, height) {
+            Some(kept) => self.encode_scene(frame, kept, view, width, height, None),
+            None => Drawn::default(),
+        }
+    }
+
+    /// Writes `frame`'s uniforms, for a target `width` by `height` physical pixels, and its
+    /// records into the next slot, and returns how many records it kept, or `None` when the
+    /// device was lost. On Metal this may wait for the GPU to finish an earlier frame, so a
+    /// window's frame calls it before it takes a drawable (`present_timed`): the wait then holds
+    /// no drawable the next frame could need. The slot is drawn by `encode_scene`, or given
+    /// back with `Slots::skip` when the frame is not drawn.
+    pub(crate) fn write_scene(&mut self, frame: &Frame, width: u32, height: u32) -> Option<u32> {
         let lit = self.lit_by(frame);
-        let enhanced = lit.is_some();
         let mut uniforms = [0_u8; UNIFORM_BUFFER as usize];
         let written = write_uniforms(frame, width, height, lit.as_ref(), &mut uniforms);
         // A client made with `Config::LARGEST` never writes more records than the buffer holds.
@@ -501,22 +517,35 @@ impl Renderer {
             "a frame holds more than {RECORDS} records"
         );
         let records: &[u8] = bytemuck::cast_slice(&frame.draws[..kept]);
-        let depth = self.depth_view(width, height);
-        let Some(slot) = self.slots.write(
+        self.slots.write(
             &self.device,
             &self.queue,
             &uniforms[..written as usize],
             records,
-        ) else {
-            // The device was lost; the host makes a new renderer when it notices.
-            return Drawn::default();
-        };
+        )?;
+        Some(kept as u32)
+    }
+
+    /// Encodes and submits the passes that draw `frame` into `view`, `width` by `height` physical
+    /// pixels, from the slot `write_scene` just filled with its first `kept` records.
+    fn encode_scene(
+        &mut self,
+        frame: &Frame,
+        kept: u32,
+        view: &wgpu::TextureView,
+        width: u32,
+        height: u32,
+        timing: Option<(&crate::GpuTimer, u64, &mut Option<u32>)>,
+    ) -> Drawn {
+        let enhanced = self.lit_by(frame).is_some();
+        let depth = self.depth_view(width, height);
+        let slot = self.slots.take();
         let work = timing
             .as_ref()
             .and_then(|(timer, tick, _)| timer.begin(*tick));
         let draws = Draws {
             frame,
-            kept: kept as u32,
+            kept,
             slot,
             vertices: &self.vertices,
             indices: &self.indices,
@@ -656,91 +685,6 @@ fn write_uniforms(
         written = (start + paints.len()) as u64;
     }
     written
-}
-
-/// Records the Baseline tier's one pass over every record of `draws` into `encoder`, drawing
-/// into `view` with the one-sample `depth` buffer, and returns how many draw calls it took.
-/// `counter`, when present, counts the fragments the pass shades.
-fn baseline_pass(
-    encoder: &mut wgpu::CommandEncoder,
-    draws: &Draws,
-    view: &wgpu::TextureView,
-    depth: &wgpu::TextureView,
-    pipelines: &Pipelines,
-    counter: Option<&FragmentCounter>,
-) -> u32 {
-    let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-        label: Some("frame"),
-        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-            view,
-            depth_slice: None,
-            resolve_target: None,
-            ops: wgpu::Operations {
-                load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                store: wgpu::StoreOp::Store,
-            },
-        })],
-        depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-            view: depth,
-            depth_ops: Some(wgpu::Operations {
-                load: wgpu::LoadOp::Clear(1.0),
-                store: wgpu::StoreOp::Discard,
-            }),
-            stencil_ops: None,
-        }),
-        timestamp_writes: draws.timing.and_then(crate::gpu_timing::Work::timestamps),
-        occlusion_query_set: None,
-        multiview_mask: None,
-    });
-    count::begin(counter, &mut pass);
-    let draw_calls = draws.record(&mut pass, pipelines, |_| true);
-    count::end(counter, &mut pass);
-    draw_calls
-}
-
-/// Records the flat layer's records from `at` on, those drawn over a backdrop filter, into
-/// `view`, over what it holds, and returns how many draw calls it took.
-fn over_pass(
-    encoder: &mut wgpu::CommandEncoder,
-    draws: &Draws,
-    at: u32,
-    view: &wgpu::TextureView,
-    depth: &wgpu::TextureView,
-    pipelines: &Pipelines,
-    counter: Option<&FragmentCounter>,
-) -> u32 {
-    let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-        label: Some("over the backdrop"),
-        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-            view,
-            depth_slice: None,
-            resolve_target: None,
-            ops: wgpu::Operations {
-                load: wgpu::LoadOp::Load,
-                store: wgpu::StoreOp::Store,
-            },
-        })],
-        depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-            view: depth,
-            depth_ops: Some(wgpu::Operations {
-                load: wgpu::LoadOp::Clear(1.0),
-                store: wgpu::StoreOp::Discard,
-            }),
-            stencil_ops: None,
-        }),
-        timestamp_writes: None,
-        occlusion_query_set: None,
-        multiview_mask: None,
-    });
-    count::begin(counter, &mut pass);
-    let calls = draws.record_part(
-        &mut pass,
-        at..draws.kept,
-        |run| Some(&pipelines[run.pass as usize]),
-        (draws.width, draws.height),
-    );
-    count::end(counter, &mut pass);
-    calls
 }
 
 /// The index in `Renderer::faces` of the array for `size`.

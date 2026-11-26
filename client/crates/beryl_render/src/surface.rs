@@ -223,6 +223,15 @@ impl Renderer {
         timing: Option<(&crate::GpuTimer, u64)>,
     ) -> Presented {
         use wgpu::CurrentSurfaceTexture as Texture;
+        // The frame's buffers are written before the drawable is taken: on Metal the write can
+        // wait for the GPU to finish the frame three back, and a frame holding a drawable through
+        // that wait left the next frame none (docs/beryl-3d.md, "Measurements"). The write counts
+        // as rendering in `render_cpu`.
+        let (width, height) = (surface.config.width, surface.config.height);
+        let write = Instant::now();
+        self.fit_card_mesh(frame.card);
+        let kept = self.write_scene(frame, width, height);
+        let written = write.elapsed();
         let asked = Instant::now();
         let acquire = surface.surface.get_current_texture();
         let waited = asked.elapsed();
@@ -237,6 +246,8 @@ impl Renderer {
         let drawable = match drawable {
             Ok(drawable) => drawable,
             Err(reason) => {
+                // Nothing reads the slot, so the next frame writes the same one.
+                self.slots.skip();
                 if matches!(reason, DrawFailure::Outdated | DrawFailure::Lost) {
                     surface.surface.configure(&self.device, &surface.config);
                 }
@@ -247,16 +258,16 @@ impl Renderer {
         let view = drawable
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
-        self.fit_card_mesh(frame.card);
         let mut gpu_in_flight = None;
         let drawn = self.render_view(
             frame,
+            kept,
             &view,
-            surface.config.width,
-            surface.config.height,
+            width,
+            height,
             timing.map(|(timer, tick)| (timer, tick, &mut gpu_in_flight)),
         );
-        let render_cpu = render.elapsed();
+        let render_cpu = written + render.elapsed();
         let present = Instant::now();
         before();
         self.queue.present(drawable);

@@ -6,6 +6,7 @@ use std::ops::Range;
 use glam::Vec2;
 use kit_frame::frame::{Frame, Mesh};
 
+use crate::count::{self, FragmentCounter};
 use crate::pipeline::{Pipelines, RECORD};
 use crate::runs::{Pass, Run, runs};
 use crate::slots::Slot;
@@ -137,4 +138,89 @@ fn scissor(frame: &Frame, clip: u8, (width, height): (u32, u32), scale: Vec2) ->
     let right = (far_right.max(0.0).ceil() as u32).clamp(x, width);
     let bottom = (far_bottom.max(0.0).ceil() as u32).clamp(y, height);
     [x, y, right - x, bottom - y]
+}
+
+/// Records the Baseline tier's one pass over every record of `draws` into `encoder`, drawing
+/// into `view` with the one-sample `depth` buffer, and returns how many draw calls it took.
+/// `counter`, when present, counts the fragments the pass shades.
+pub(crate) fn baseline_pass(
+    encoder: &mut wgpu::CommandEncoder,
+    draws: &Draws,
+    view: &wgpu::TextureView,
+    depth: &wgpu::TextureView,
+    pipelines: &Pipelines,
+    counter: Option<&FragmentCounter>,
+) -> u32 {
+    let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: Some("frame"),
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            view,
+            depth_slice: None,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                store: wgpu::StoreOp::Store,
+            },
+        })],
+        depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+            view: depth,
+            depth_ops: Some(wgpu::Operations {
+                load: wgpu::LoadOp::Clear(1.0),
+                store: wgpu::StoreOp::Discard,
+            }),
+            stencil_ops: None,
+        }),
+        timestamp_writes: draws.timing.and_then(crate::gpu_timing::Work::timestamps),
+        occlusion_query_set: None,
+        multiview_mask: None,
+    });
+    count::begin(counter, &mut pass);
+    let draw_calls = draws.record(&mut pass, pipelines, |_| true);
+    count::end(counter, &mut pass);
+    draw_calls
+}
+
+/// Records the flat layer's records from `at` on, those drawn over a backdrop filter, into
+/// `view`, over what it holds, and returns how many draw calls it took.
+pub(crate) fn over_pass(
+    encoder: &mut wgpu::CommandEncoder,
+    draws: &Draws,
+    at: u32,
+    view: &wgpu::TextureView,
+    depth: &wgpu::TextureView,
+    pipelines: &Pipelines,
+    counter: Option<&FragmentCounter>,
+) -> u32 {
+    let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: Some("over the backdrop"),
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            view,
+            depth_slice: None,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Load,
+                store: wgpu::StoreOp::Store,
+            },
+        })],
+        depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+            view: depth,
+            depth_ops: Some(wgpu::Operations {
+                load: wgpu::LoadOp::Clear(1.0),
+                store: wgpu::StoreOp::Discard,
+            }),
+            stencil_ops: None,
+        }),
+        timestamp_writes: None,
+        occlusion_query_set: None,
+        multiview_mask: None,
+    });
+    count::begin(counter, &mut pass);
+    let calls = draws.record_part(
+        &mut pass,
+        at..draws.kept,
+        |run| Some(&pipelines[run.pass as usize]),
+        (draws.width, draws.height),
+    );
+    count::end(counter, &mut pass);
+    calls
 }
