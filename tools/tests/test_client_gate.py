@@ -5,7 +5,8 @@ import json
 
 import pytest
 
-from beryl_tools.client import gate
+from beryl_tools import calibration
+from beryl_tools.client import frame_profiles, gate
 
 
 def output(
@@ -149,6 +150,10 @@ def test_json_reports_the_measurements_even_when_a_budget_fails(
     monkeypatch.setattr(
         gate, "play", lambda _names, *, json_output: ([board], enhanced)
     )
+    profile = calibration.Profile(
+        "fixture", "a" * 40, "client-frame-native/v1", {}, {"base": "budgets.json"}
+    )
+    monkeypatch.setattr(frame_profiles, "native", lambda: profile)
     parser = argparse.ArgumentParser()
     gate.gate_arguments(parser)
     assert gate.run_gate(parser.parse_args(["--json"])) == 1
