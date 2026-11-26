@@ -1105,5 +1105,10 @@
     "label": "Check keying memoizes each package's base paths separately from per-check `listed.inputs` and skips re-sorting already-sorted inputs in `input_hash`, while `Checks::run` and `Checks::run_batches` only key the checks they will run and index prepared checks by name instead of cloning the full family per batch (cutting 10.9-21.1 min of `other` overhead in `client-interface` rounds and culprit bisections)",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
+  },
+  {
+    "label": "`ignite-platform` builds and lists only the three test targets its filter selects (`ignite_os`, `ignite_daemon`, and `ignite_cli`'s `ignite` binary) via `ignite-platform-tests` instead of building all 28+ test binaries of `ignite-tests` in Windows tip rounds",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]
