@@ -461,18 +461,7 @@ impl Card {
         } else {
             (false, tail)
         };
-        let (first, rest) = word(tail);
-        let (printing, tail) = if let Some(value) = first
-            .strip_prefix("printing(")
-            .and_then(|s| s.strip_suffix(')'))
-        {
-            let ix = value
-                .parse()
-                .map_err(|_| "write a card's printing as printing(3)".to_owned())?;
-            (Some(PrintingIx(ix)), rest)
-        } else {
-            (None, tail)
-        };
+        let (printing, tail) = read_printing(tail)?;
         #[cfg(not(feature = "stories"))]
         let _ = (side, power_toughness, token, printing);
         let (states, count) = repeat(tail)?;
@@ -546,6 +535,16 @@ impl Card {
         }
         Ok(())
     }
+}
+
+/// A leading `printing(N)` word, the index of the printing the card shows, and what follows.
+fn read_printing(tail: &str) -> Result<(Option<PrintingIx>, &str), String> {
+    let (first, rest) = word(tail);
+    let Some(value) = (first.strip_prefix("printing(")).and_then(|s| s.strip_suffix(')')) else {
+        return Ok((None, tail));
+    };
+    let ix = (value.parse()).map_err(|_| "write a card's printing as printing(3)".to_owned())?;
+    Ok((Some(PrintingIx(ix)), rest))
 }
 
 fn read_stats(text: &str) -> Result<PowerToughness, String> {
