@@ -247,6 +247,7 @@ pub fn case_of(act: &Act, found: &Table, beside: &[&Act]) -> Option<&'static str
         ),
         Act::Vanish {
             subject,
+            from,
             why,
             object,
             ..
@@ -254,8 +255,14 @@ pub fn case_of(act: &Act, found: &Table, beside: &[&Act]) -> Option<&'static str
             if matches!(subject, Subject::Ability { .. }) {
                 return Some("ability finished");
             }
-            // Where it goes says more than why: a spell an effect returns is bounced.
+            // Where it goes says more than why. A permanent an effect returns to a hand is
+            // bounced. A spell that leaves the stack for a hand by vanishing is the opponent's
+            // (the viewer's own flies to their hand), and it breaks up in place on the stack as
+            // a countered spell does, whether it was countered (Remand) or only returned
+            // (Unsubstantiate) (UI Conventions, "An opponent's spell returned to hand": "It
+            // breaks up in place on the stack over 0.5 to 1 s").
             match object.as_ref().map(|o| o.zone) {
+                Some(ZoneName::Hand) if *from == ZoneName::Stack => return Some("countered"),
                 Some(ZoneName::Hand) => return Some("bounced"),
                 Some(ZoneName::Exile) => return Some("exiled"),
                 _ => {}

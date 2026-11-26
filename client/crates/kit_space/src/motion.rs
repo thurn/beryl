@@ -3,7 +3,7 @@
 //! segments and the same time give the same pose, however the frames before it went.
 
 use arrayvec::ArrayVec;
-use kit_base::pose::{Curve, Follows, Interval, Pose, Segment};
+use kit_base::pose::{Curve, Follows, Interval, Pose, Segment, Shape};
 
 /// The visible fraction of a fade that comes in over `begins` and goes out over `ends`.
 /// A zero-length interval changes immediately at its end.
@@ -133,7 +133,9 @@ impl Track {
 
     /// Whether an authored segment carries the object across the scene at `t`. Settling into
     /// an open slot and changing a card's face, size or opacity in place keep their depth
-    /// among the surrounding cards.
+    /// among the surrounding cards. A fading segment (`vanish`) ends at another place but
+    /// holds the object where it was until then, so a countered spell crumbles under the
+    /// spell that countered it rather than in front of it.
     #[must_use]
     pub fn crossing(&self, t: u64) -> bool {
         self.segments().iter().any(|segment| {
@@ -142,6 +144,7 @@ impl Track {
                 && segment
                     .step
                     .is_some_and(|step| step.follows == Follows::Start)
+                && segment.shape != Shape::Fading
                 && (segment.from.position != segment.to.position || segment.arc != 0.0)
         })
     }

@@ -1232,18 +1232,18 @@
           "why": "Not run through the tracker: nothing travels across the table, the countered spell changes in place under Memory Lapse.",
           "command": "just video film 0VsYGs88NXA 32:04.45 --span 0.6 --fps 20 --cols 4 --width 480",
           "since": "",
-          "duration_ms": 250,
+          "duration_ms": 910,
           "delay_ms": null,
           "stagger_ms": null,
           "peak": null,
-          "path": "Memory Lapse resolves: the spell it counters, under it on the stack, slides out from beneath it and is gone at the stack; it does not fly to its owner's library",
+          "path": "Memory Lapse resolves: the spell it counters stays under it on the stack, goes dark, holds dark, then crumbles into rubble there; it does not fly to its owner's library",
           "curve": "none",
-          "note": "Golos under Memory Lapse at 32:04.45, gone by 32:04.75; Memory Lapse then darkens from 32:04.90 and leaves. The countered spell goes to the top of its owner's library, which no frame shows it reaching."
+          "note": "Golos under Memory Lapse, bright at 32:03.78, dark from 32:03.87 and held dark to 32:04.45, crumbles 32:04.53 to 32:04.70, gone at 32:04.78 (read at 12 fps on a crop of the stack, 1300,0,620,700, as well as this filmstrip). Memory Lapse then darkens from 32:04.90 and leaves. The countered spell goes to the top of its owner's library, which no frame shows it reaching. Earlier notes said it slid out from beneath Memory Lapse; the crop shows it crumbling in place, as Counterspell's target does."
         }
       ],
       "summary": {
         "duration_ms": {
-          "median": 530,
+          "median": 600,
           "min": 33,
           "max": 1000
         },
@@ -1279,8 +1279,8 @@
           },
           "countered": {
             "duration_ms": {
-              "median": 870,
-              "min": 250,
+              "median": 910,
+              "min": 870,
               "max": 950
             },
             "delay_ms": {

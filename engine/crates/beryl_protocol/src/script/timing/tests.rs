@@ -305,6 +305,20 @@ fn each_case_of_the_data_is_found_on_one_act() {
             &table,
             vec![],
         ),
+        // An opponent's spell returned from the stack to their hand breaks up as a countered
+        // spell does.
+        (
+            "countered",
+            Act::Vanish {
+                subject: object(1),
+                from: ZoneName::Stack,
+                why: Why::Return,
+                object: gone(ZoneName::Hand),
+                at: None,
+            },
+            &table,
+            vec![],
+        ),
         (
             "sacrificed",
             vanish(object(1), Why::Sacrifice, gone(ZoneName::Graveyard)),

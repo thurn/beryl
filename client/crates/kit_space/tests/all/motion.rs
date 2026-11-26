@@ -1,7 +1,7 @@
 //! Poses from segments and tracks of segments.
 
 use glam::{Quat, Vec3};
-use kit_base::pose::{Curve, Follows, Interval, Pose, Segment, StepTime};
+use kit_base::pose::{Curve, Follows, Interval, Pose, Segment, Shape, StepTime};
 use kit_space::motion::{Full, SEGMENTS, Track, pose_at};
 
 const MS: u64 = 1_000_000;
@@ -130,6 +130,41 @@ fn a_card_held_within_its_steps_act_is_paused() {
     assert!(!track.moving(150 * MS), "nothing moves it at 150 ms");
     assert!(!track.paused(400 * MS), "between step 1 and step 2");
     assert!(!track.paused(700 * MS), "after the last move");
+}
+
+/// A card that vanishes (a countered spell crumbling under the spell that countered it) stays
+/// where it was until its step ends, so it keeps its depth among the cards round it and is
+/// not drawn over them as a card carried across the table is. Its segment still ends at the
+/// pile it goes to.
+#[test]
+fn a_card_fading_where_it_lies_is_not_crossing_the_table() {
+    let step = Some(StepTime {
+        number: 1,
+        follows: Follows::Start,
+    });
+    let mut fading = Track::default();
+    let vanish = Segment {
+        shape: Shape::Fading,
+        step,
+        ..segment(0, 300 * MS, at(0.0), at(500.0))
+    };
+    fading.push(vanish, 0).unwrap();
+    assert!(!fading.crossing(150 * MS), "it fades on the stack");
+    assert_eq!(fading.pose_at(150 * MS).position, at(0.0).position);
+    let mut flying = Track::default();
+    flying
+        .push(
+            Segment {
+                step,
+                ..segment(0, 300 * MS, at(0.0), at(500.0))
+            },
+            0,
+        )
+        .unwrap();
+    assert!(
+        flying.crossing(150 * MS),
+        "a flight to the pile crosses the table"
+    );
 }
 
 /// A full track drops only segments that have ended, keeping the latest of them, which still
