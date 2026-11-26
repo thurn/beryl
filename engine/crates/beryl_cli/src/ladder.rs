@@ -18,9 +18,18 @@
 //!   with its 95% interval, the verdict and a ready `docs/ladder.md` row, and writes
 //!   `match.json` beside the games. The games go to `--out`, by default
 //!   `$BERYL_CACHE/ladder/<date>-<challenger>/`, laid out as a long-think run's
-//!   ([`crate::match_log`]): `games.jsonl`, `logs/<game>.jsonl` (each decision's answer, which
-//!   replays the game from its seed, as `anchor_replay::walk` does), `transcripts/<game>.txt`
-//!   and `decisions.jsonl` (each searched decision's root visits and means).
+//!   ([`crate::match_log`]): `header.json` (the match's challenger, champion, budget, bar,
+//!   seed and positions, [`Header`]), `games.jsonl`, `logs/<game>.jsonl` (each decision's
+//!   answer, appended as it is made, which replays the game from its seed, as
+//!   `anchor_replay::walk` does), `transcripts/<game>.txt` and `decisions.jsonl` (each
+//!   searched decision's root visits and means, written when its game ends).
+//! - **Continuing.** Run again with the same `--out`, a match continues where it stopped, if
+//!   its header agrees; `--cap` may be raised. The games in `games.jsonl` are counted again
+//!   in seed order and never replayed, so the verdict is the one an unbroken match reaches,
+//!   and a match already decided plays nothing. A game in flight when the run stopped
+//!   replays through its log and is asked again only where the log ends
+//!   ([`crate::match_log::game`]). If it does not replay through its log, the binary has
+//!   changed since, and the game is played again from the start.
 //!
 //! With `--positions DIR`, a set of curated start positions ([`crate::positions`]), four pairs
 //! in five start from a position, both games from the same one with the libraries reshuffled
@@ -28,7 +37,7 @@
 //! (§4.1). The positions used are copied to the match's `positions/`, which each game's record
 //! names, and the report sets the spread of pair scores from positions beside the shuffle's.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -49,7 +58,7 @@ use crate::tournament::game_seed;
 mod report;
 mod sprt;
 
-pub use report::{Match, Report, dropped_row};
+pub use report::{Header, Match, Report, dropped_row};
 pub use sprt::{Bar, Pairs, Sprt, Verdict};
 
 /// Games played at once, one thread each and one a hardware thread:
@@ -64,7 +73,8 @@ pub const PROXY: u64 = 3_000_000;
 
 const USAGE: &str = "usage: beryl_cli ladder <challenger> [--vs NAME] [--work 3M] \
                      [--bar stronger|plausible|audit] [--cap N] [--seed N] [--positions DIR] \
-                     [--out DIR]";
+                     [--out DIR]\n\
+                     The same --out continues its match, whose --cap may be raised.";
 
 pub fn main(catalog: &'static Catalog, args: &[String]) -> Result<(), String> {
     let mut challenger = None;
@@ -258,9 +268,26 @@ struct Shared {
 }
 
 impl Shared {
+    /// What the match in `out` has finished: each game in `games.jsonl`, not yet counted.
     fn open(out: &Path) -> Result<Self, String> {
+        let games = out.join("games.jsonl");
+        let records = files::read::<GameRecord>(&games)?;
+        let halves = records
+            .iter()
+            .map(|r| (2 * r.pair + u32::from(r.seat), halves(r.outcome)))
+            .collect();
+        // A run stopped between a game's decisions and its record leaves decisions of a game
+        // with no record at the end of the file. The game replays to its end and writes them
+        // again, so they are cut off here.
+        #[derive(serde::Deserialize)]
+        struct Of {
+            game: String,
+        }
+        let recorded: BTreeSet<&str> = records.iter().map(|r| r.game.as_str()).collect();
+        let decisions = out.join("decisions.jsonl");
+        files::cut_last(&decisions, |d: &Of| !recorded.contains(d.game.as_str()))?;
         Ok(Self {
-            halves: BTreeMap::new(),
+            halves,
             pairs: Pairs::default(),
             from_positions: Pairs::default(),
             from_shuffle: Pairs::default(),
@@ -269,8 +296,8 @@ impl Shared {
             losses: 0,
             draws: 0,
             verdict: None,
-            games: Log::open(&out.join("games.jsonl"))?,
-            decisions: Log::open(&out.join("decisions.jsonl"))?,
+            games: Log::open(&games)?,
+            decisions: Log::open(&decisions)?,
             failure: None,
         })
     }
@@ -286,25 +313,27 @@ pub fn run(
     if m.bar == Bar::Audit && !m.cap.is_multiple_of(2) {
         return Err("--cap: an audit needs an even number of games".to_owned());
     }
-    if m.out.join("games.jsonl").exists() {
-        return Err(format!(
-            "{} already holds a match: pass another --out",
-            m.out.display()
-        ));
-    }
-    for sub in ["logs", "transcripts"] {
-        fs::create_dir_all(m.out.join(sub)).map_err(|e| format!("{}: {e}", m.out.display()))?;
-    }
-    if !m.positions.is_empty() {
-        crate::positions::write(&m.out.join("positions"), &m.positions)?;
-    }
     let entrants = [entrant(&m.challenger)?, entrant(&m.champion)?];
+    start_or_continue(m)?;
     let sprt = m.bar.sprt();
     let t = mirror(catalog);
     let games = m.cap - m.cap % 2;
+    let mut sh = Shared::open(&m.out)?;
+    let done: BTreeSet<u32> = sh.halves.keys().copied().collect();
+    if count_pairs(&mut sh, m, sprt) {
+        progress(sh.pairs, sprt);
+    }
+    if sh.counted > games {
+        return Err(format!(
+            "--cap {}: {} already holds {} counted games",
+            m.cap,
+            m.out.display(),
+            sh.counted
+        ));
+    }
     let next = AtomicU32::new(0);
-    let stop = AtomicBool::new(false);
-    let shared = Mutex::new(Shared::open(&m.out)?);
+    let stop = AtomicBool::new(sh.verdict.is_some());
+    let shared = Mutex::new(sh);
     let progress = Mutex::new(&mut progress);
     let workers = games_at_once().min(games as usize);
     thread::scope(|scope| {
@@ -315,16 +344,14 @@ pub fn run(
                     if g >= games {
                         break;
                     }
+                    if done.contains(&g) {
+                        continue;
+                    }
                     let played = play_one(&t, m, &entrants, g);
                     let mut sh = shared.lock().unwrap();
                     let counted = played.and_then(|(record, played)| {
                         record_game(&mut sh, m, &record, &played)?;
-                        let halves = match record.outcome {
-                            GameVerdict::Win => 2,
-                            GameVerdict::Loss => 0,
-                            _ => 1,
-                        };
-                        sh.halves.insert(g, halves);
+                        sh.halves.insert(g, halves(record.outcome));
                         Ok(count_pairs(&mut sh, m, sprt))
                     });
                     match counted {
@@ -353,6 +380,48 @@ pub fn run(
     let json = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())? + "\n";
     files::write_whole(&m.out.join("match.json"), json.as_bytes())?;
     Ok(report)
+}
+
+/// Starts match `m` in `m.out`, writing its `header.json`, or checks that the match the
+/// directory already holds is `m`.
+fn start_or_continue(m: &Match) -> Result<(), String> {
+    let at = |e: &dyn std::fmt::Display| format!("{}: {e}", m.out.display());
+    let path = m.out.join("header.json");
+    let header = m.header();
+    match fs::read_to_string(&path) {
+        Ok(text) => {
+            let held: Header = serde_json::from_str(&text).map_err(|e| at(&e))?;
+            if let Some(field) = held.differs(&header) {
+                return Err(at(&format!(
+                    "holds a match whose {field}: pass another --out"
+                )));
+            }
+            Ok(())
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            if m.out.join("games.jsonl").exists() {
+                return Err(at(&"holds games but no header.json: pass another --out"));
+            }
+            for sub in ["logs", "transcripts"] {
+                fs::create_dir_all(m.out.join(sub)).map_err(|e| at(&e))?;
+            }
+            if !m.positions.is_empty() {
+                crate::positions::write(&m.out.join("positions"), &m.positions)?;
+            }
+            let json = serde_json::to_string_pretty(&header).map_err(|e| e.to_string())? + "\n";
+            files::write_whole(&path, json.as_bytes())
+        }
+        Err(e) => Err(at(&e)),
+    }
+}
+
+/// The challenger's half points from a game it `won`, lost or drew.
+fn halves(outcome: GameVerdict) -> u32 {
+    match outcome {
+        GameVerdict::Win => 2,
+        GameVerdict::Loss => 0,
+        _ => 1,
+    }
 }
 
 /// The report of match `m` from what its workers counted.
@@ -420,7 +489,8 @@ fn count_pairs(sh: &mut Shared, m: &Match, sprt: Option<Sprt>) -> bool {
     any
 }
 
-/// Plays game `g` of match `m` and writes its log and transcript.
+/// Plays game `g` of match `m`, or continues it from its log, appending each decision's line
+/// to the log as it is made, and writes its transcript.
 fn play_one(
     t: &GameTable,
     m: &Match,
@@ -435,25 +505,40 @@ fn play_one(
     };
     let seed = game_seed(m.seed, 0, g / 2);
     let position = m.position(g / 2);
-    let game = Game {
-        seed,
-        entrants: seated,
-        from: [Resume::At(AgentDecision(0)); 2],
-        until: None,
-        start: position.map(|(_, p)| start(t, p, seed)).transpose()?,
-    };
+    let start = position.map(|(_, p)| start(t, p, seed)).transpose()?;
     let key = key(g);
-    let played = arena::play(t, &game, &build, &[], |_, _, _| Ok(()), |_, _, _| Ok(()))
-        .map_err(|stop| format!("{key} (seed {seed}): {stop}"))?;
-    let mut log = String::new();
-    for line in &played.lines {
-        log += &serde_json::to_string(line).map_err(|e| e.to_string())?;
-        log.push('\n');
+    let path = m.out.join("logs").join(format!("{key}.jsonl"));
+    let logged: Vec<Line> = files::read(&path)?;
+    let mut log = Log::open(&path)?;
+    let play = |logged: &[Line], log: &mut Log| {
+        let game = Game {
+            seed,
+            entrants: seated,
+            from: resume_points(logged),
+            until: None,
+            start,
+        };
+        // A searched line is synced: it took seconds to make. Any other is cheaper to make
+        // again than to sync, and the next sync covers it.
+        arena::play(
+            t,
+            &game,
+            &build,
+            logged,
+            |_, _, _| Ok(()),
+            |_, line, _| log.write(line, line.search.is_some()),
+        )
+    };
+    let played = match play(&logged, &mut log) {
+        // A log this binary does not replay to its end was written by another build.
+        Err(stop) if !logged.is_empty() => {
+            eprintln!("ladder: {key}: {stop}: the binary has changed, so it starts again");
+            log.clear()?;
+            play(&[], &mut log)
+        }
+        played => played,
     }
-    files::write_whole(
-        &m.out.join("logs").join(format!("{key}.jsonl")),
-        log.as_bytes(),
-    )?;
+    .map_err(|stop| format!("{key} (seed {seed}): {stop}"))?;
     files::write_whole(
         &m.out.join("transcripts").join(format!("{key}.txt")),
         played.transcript.as_bytes(),
@@ -490,6 +575,15 @@ fn play_one(
         position: position.map(|(name, _)| name.clone()),
     };
     Ok((record, played))
+}
+
+/// Where each seat's search starts again on a game continued through `logged`: the point its
+/// last line there says a rebuilt agent must start from, or its first decision.
+fn resume_points(logged: &[Line]) -> [Resume; 2] {
+    [0, 1].map(|seat| {
+        let last = logged.iter().rev().find(|l| l.seat == seat);
+        Resume::At(last.and_then(|l| l.resume).unwrap_or(AgentDecision(0)))
+    })
 }
 
 /// Appends a finished game's searched decisions and its record.

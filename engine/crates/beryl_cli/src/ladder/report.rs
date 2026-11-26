@@ -3,7 +3,7 @@
 use std::fmt::Write as _;
 use std::path::PathBuf;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::sprt::{Bar, Pairs, Sprt, Verdict, elo_of_swept_share, spread};
 use crate::positions::Position;
@@ -34,6 +34,57 @@ impl Match {
         }
         let k = (pair - pair / 5) as usize;
         self.positions.get(k % self.positions.len())
+    }
+}
+
+impl Match {
+    /// What a match directory's `header.json` keeps of this match.
+    pub fn header(&self) -> Header {
+        Header {
+            challenger: self.challenger.clone(),
+            champion: self.champion.clone(),
+            work: self.work,
+            bar: self.bar.name().to_owned(),
+            seed: self.seed,
+            positions: self
+                .positions
+                .iter()
+                .map(|(name, _)| name.clone())
+                .collect(),
+        }
+    }
+}
+
+/// A match directory's `header.json`, written when the match starts: what a later run with
+/// the same `--out` must agree on to continue it. The cap is not here, since it may be
+/// raised.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Header {
+    pub challenger: String,
+    pub champion: String,
+    pub work: u64,
+    pub bar: String,
+    pub seed: u64,
+    /// The start positions' file names, in order.
+    pub positions: Vec<String>,
+}
+
+impl Header {
+    /// The first field in which `other` differs from this header, with both values.
+    pub fn differs(&self, other: &Header) -> Option<String> {
+        let d = |v: &dyn std::fmt::Debug| format!("{v:?}");
+        let fields = [
+            ("challenger", d(&self.challenger), d(&other.challenger)),
+            ("champion", d(&self.champion), d(&other.champion)),
+            ("work", d(&self.work), d(&other.work)),
+            ("bar", d(&self.bar), d(&other.bar)),
+            ("seed", d(&self.seed), d(&other.seed)),
+            ("positions", d(&self.positions), d(&other.positions)),
+        ];
+        fields
+            .into_iter()
+            .find(|(_, a, b)| a != b)
+            .map(|(name, a, b)| format!("{name} is {a}, not {b}"))
     }
 }
 

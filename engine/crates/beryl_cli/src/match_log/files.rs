@@ -10,20 +10,33 @@ use std::path::Path;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
-/// A JSONL file open for appending.
+/// A JSONL file open for appending. It is not opened in append mode, since Windows then
+/// refuses to truncate it: each write goes to the end because this is the file's one writer
+/// ([`lock`]) and its position stays there.
 pub struct Log {
     file: File,
 }
 
 impl Log {
-    /// Opens `path` for appending, creating it if missing.
+    /// Opens `path` for appending, creating it if missing. A torn last line is cut off, as
+    /// [`read`] drops it, so the next line starts on a line of its own.
     pub fn open(path: &Path) -> Result<Log, String> {
-        let file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)
-            .map_err(|e| format!("{}: {e}", path.display()))?;
+        let at = |e: std::io::Error| format!("{}: {e}", path.display());
+        let mut file = open_rw(path).map_err(at)?;
+        cut_torn_line(&mut file)
+            .and_then(|()| file.seek(SeekFrom::End(0)))
+            .map_err(at)?;
         Ok(Log { file })
+    }
+
+    /// Empties the log.
+    pub fn clear(&mut self) -> Result<(), String> {
+        self.file
+            .set_len(0)
+            .and_then(|()| self.file.sync_data())
+            .and_then(|()| self.file.seek(SeekFrom::Start(0)))
+            .map(drop)
+            .map_err(|e| format!("emptying a log: {e}"))
     }
 
     /// Appends `value` as one line, durably: on disk before this returns.
@@ -49,6 +62,56 @@ impl Log {
             .sync_data()
             .map_err(|e| format!("syncing a log: {e}"))
     }
+}
+
+/// Truncates `file` after its last newline, reading back from its end a block at a time.
+fn cut_torn_line(file: &mut File) -> std::io::Result<()> {
+    let len = file.metadata()?.len();
+    let mut block = [0u8; 8192];
+    let mut end = len;
+    let keep = loop {
+        if end == 0 {
+            break 0;
+        }
+        let start = end.saturating_sub(block.len() as u64);
+        let n = (end - start) as usize;
+        file.seek(SeekFrom::Start(start))?;
+        file.read_exact(&mut block[..n])?;
+        if let Some(i) = block[..n].iter().rposition(|&b| b == b'\n') {
+            break start + i as u64 + 1;
+        }
+        end = start;
+    };
+    truncate(file, keep)
+}
+
+/// Cuts `file` to its first `len` bytes, durably, if it is longer.
+fn truncate(file: &File, len: u64) -> std::io::Result<()> {
+    if len < file.metadata()?.len() {
+        file.set_len(len)?;
+        file.sync_data()?;
+    }
+    Ok(())
+}
+
+/// Cuts JSONL file `path` before its last lines that `drop` says to, and before a torn last
+/// line: for lines that will be written again.
+pub fn cut_last<T: DeserializeOwned>(path: &Path, drop: impl Fn(&T) -> bool) -> Result<(), String> {
+    let at = |e: std::io::Error| format!("{}: {e}", path.display());
+    let text = match fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(at(e)),
+    };
+    let mut keep = text.rfind('\n').map_or(0, |i| i + 1);
+    while keep > 0 {
+        let start = text[..keep - 1].rfind('\n').map_or(0, |i| i + 1);
+        match serde_json::from_str::<T>(&text[start..keep - 1]) {
+            Ok(line) if !drop(&line) => break,
+            _ => keep = start,
+        }
+    }
+    truncate(&open_rw(path).map_err(at)?, keep as u64).map_err(at)
 }
 
 /// The whole lines of JSONL file `path`, none if it is missing. A last line without its
@@ -170,6 +233,9 @@ mod tests {
             .unwrap();
         assert_eq!(read::<u32>(&path).unwrap(), [1, 2]);
         assert!(read::<u32>(&dir.join("missing")).unwrap().is_empty());
+        // Opened again, the log continues after the last whole line.
+        Log::open(&path).unwrap().append(&5).unwrap();
+        assert_eq!(read::<u32>(&path).unwrap(), [1, 2, 5]);
     }
 
     /// Retries for a forked child that has not yet exec'd to let go of the lock's file.
