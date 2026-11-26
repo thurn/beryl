@@ -1,13 +1,14 @@
-//! Splitting a family's run into several commands when one would pass Windows its limit on the
+//! Splitting a family's run into several commands when one would pass the system's limit on the
 //! length of a command line.
 //!
 //! A `jsonl` family's run command names each check as an argument, and a `nextest` family's
 //! names each test in its filter. Windows refuses to start a process whose command line is over
 //! 32,767 characters (`ERROR_FILENAME_EXCED_RANGE`, "The filename or extension is too long").
-//! One Python test family measured on 2026-11-19 lists 1,021 checks in 1.7 MB of names, and a
-//! tip claim of Rust tests holds hundreds. So on Windows the checks are run in as many commands as keep each line under
-//! [`MAX_COMMAND_LINE`], one after another, and their reports are joined. macOS allows about a
-//! megabyte, so there every run is one command, as before.
+//! macOS enforces a 1 MiB `ARG_MAX` (`1,048,576` bytes) across `argv` strings, `argv` pointers,
+//! and the process environment, so large families such as `client-interface` (11,000+ checks
+//! totaling nearly 1 MB of names) fail `execve` with `E2BIG` if run in a single invocation. So on
+//! every platform the checks are run in as many commands as keep each line under
+//! [`MAX_COMMAND_LINE`], one after another, and their reports are joined.
 
 use std::ops::Range;
 
@@ -19,9 +20,10 @@ use super::execute::interrupted;
 use super::{Checks, Keyed, OpenTree, Reported, RunOptions, adapters};
 use crate::server::Context;
 
-/// The longest command line a family's run may have, in characters: Windows's limit with room
-/// for quoting. `None` where the system allows far more than a run ever needs.
-const MAX_COMMAND_LINE: Option<usize> = if cfg!(windows) { Some(30_000) } else { None };
+/// The longest command line a family's run may have, in bytes: Windows's 32,767-character limit
+/// with room for quoting, and on Unix a bounded size well below macOS's 1 MiB `ARG_MAX` to leave
+/// headroom for `argv` pointers and environment variables.
+const MAX_COMMAND_LINE: usize = if cfg!(windows) { 30_000 } else { 200_000 };
 
 impl Checks {
     /// Runs the family's `run` command for `checks` and reads what it reported, with the ID the
@@ -36,17 +38,12 @@ impl Checks {
         checks: &[Keyed],
         options: &RunOptions,
     ) -> (Vec<Reported>, RunResult, Option<RecordId>) {
-        let parts = MAX_COMMAND_LINE.map_or_else(
-            || std::iter::once(0..checks.len()).collect(),
-            |max| {
-                let fixed = adapters::words(family.run.as_deref().unwrap_or_default())
-                    .iter()
-                    .map(|word| word.len() + 1)
-                    .sum();
-                let lengths: Vec<usize> = checks.iter().map(|k| check_length(family, k)).collect();
-                chunks(fixed, &lengths, max)
-            },
-        );
+        let fixed = adapters::words(family.run.as_deref().unwrap_or_default())
+            .iter()
+            .map(|word| word.len() + 1)
+            .sum();
+        let lengths: Vec<usize> = checks.iter().map(|k| check_length(family, k)).collect();
+        let parts = chunks(fixed, &lengths, MAX_COMMAND_LINE);
         let split = parts.len() > 1;
         let mut joined: Option<(Vec<Reported>, RunResult, Option<RecordId>)> = None;
         for part in parts {
@@ -68,13 +65,14 @@ impl Checks {
     }
 }
 
-/// The characters one check adds to its family's run command.
+/// The bytes one check adds to its family's run command, including per-argument pointer overhead
+/// so Unix `ARG_MAX` accounting includes `argv` pointers.
 fn check_length(family: &Family, check: &Keyed) -> usize {
     match (&family.adapter, &check.listed.target) {
         // ` | (binary_id(=<id>) & test(=<test>))` in the filter.
         (Adapter::Nextest, Some(target)) => target.binary_id.len() + target.test.len() + 32,
-        // The check's name as an argument, with a space and room for quotes.
-        _ => check.listed.check.as_str().len() + 3,
+        // The check's name as an argument, with a space, room for quotes, and an `argv` pointer.
+        _ => check.listed.check.as_str().len() + 3 + std::mem::size_of::<usize>(),
     }
 }
 
@@ -150,5 +148,21 @@ mod tests {
     #[test]
     fn a_check_too_long_by_itself_still_runs_alone() {
         assert_eq!(chunks(10, &[5, 200, 5], 100), [0..1, 1..2, 2..3]);
+    }
+
+    #[test]
+    fn oversized_unix_family_is_split_well_below_arg_max() {
+        let fixed = 64;
+        // 11,058 checks of ~90 bytes each (plus pointer/separator overhead) would exceed 1 MiB.
+        let per_check = 90 + 3 + std::mem::size_of::<usize>();
+        let lengths = vec![per_check; 11_058];
+        let parts = chunks(fixed, &lengths, MAX_COMMAND_LINE);
+        assert!(parts.len() > 1);
+        assert_eq!(parts.iter().map(Range::len).sum::<usize>(), 11_058);
+        for part in &parts {
+            let total = fixed + part.len() * per_check;
+            assert!(total <= MAX_COMMAND_LINE);
+            assert!(total < 1_048_576);
+        }
     }
 }
