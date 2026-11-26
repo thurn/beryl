@@ -167,4 +167,13 @@ pub struct StartRequest {
     /// Deal the game the AI judges fairest of many, searched from the seed ([`crate::fair`]).
     #[serde(default)]
     pub fair: bool,
+    /// The deck both players play, by key: `wu-control` or `forgetful-fish`. A request from
+    /// before this field existed names no deck and gets `wu-control`.
+    #[serde(default = "default_deck")]
+    pub deck: String,
+}
+
+/// The deck key a [`StartRequest`] names when it names none.
+pub fn default_deck() -> String {
+    "wu-control".to_owned()
 }

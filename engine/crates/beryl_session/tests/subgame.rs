@@ -50,6 +50,7 @@ static CARDS: CardTable = CardTable::new(&[&SPELL, &LAND]);
 
 fn start() -> StartGame {
     StartGame {
+        format: beryl_session::Format::CONSTRUCTED,
         seed: 19,
         decks: [
             vec![(40, SPELL.name.to_owned())],
@@ -242,6 +243,7 @@ static RESTART_CARDS: CardTable = CardTable::new(&[&RESTART, &LAND]);
 /// decision after the restart keeps an opening hand without a play-or-draw choice.
 fn recorded_restart() -> Game {
     let start = StartGame {
+        format: beryl_session::Format::CONSTRUCTED,
         decks: [
             vec![(39, RESTART.name.to_owned()), (1, LAND.name.to_owned())],
             vec![(40, LAND.name.to_owned())],

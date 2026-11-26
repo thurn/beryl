@@ -11,8 +11,30 @@ use std::collections::BTreeSet;
 
 use beryl_card_store::{Record, STORE, Store};
 use beryl_protocol::card_records::{CardEntry, CardFace, CardImages, image};
-pub use beryl_protocol::card_records::{CardRecords, CardRecordsRequest};
+pub use beryl_protocol::card_records::{CardRecords, CardRecordsRequest, PrintingIx};
 use beryl_protocol::ipc::{CARD_RECORDS, FixtureMessage};
+
+/// One art of a card that has several: a Secret Lair printing of a deck's card. An
+/// [`ObjectView`](beryl_protocol::protocol::ObjectView)'s `printing` indexes [`PRINTINGS`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PrintingRecord {
+    /// The card's name, which keys its ordinary record in the card store.
+    pub name: &'static str,
+    /// The printing's set code.
+    pub set: &'static str,
+    /// The printing's collector number within its set.
+    pub collector_number: &'static str,
+    /// The printing's Scryfall id, from which its image addresses are expanded.
+    pub scryfall_id: &'static str,
+}
+
+/// The printing records, indexed by [`PrintingIx`]. Empty until the card store writes them.
+pub static PRINTINGS: [PrintingRecord; 0] = [];
+
+/// The record of `ix`, if the table has one.
+pub fn printing(ix: PrintingIx) -> Option<&'static PrintingRecord> {
+    PRINTINGS.get(usize::try_from(ix.0).ok()?)
+}
 
 /// The cards that make each token name, as `(token name, card name)` pairs in the order the
 /// cards are preferred. When several printings share a token's name, the one shown is the

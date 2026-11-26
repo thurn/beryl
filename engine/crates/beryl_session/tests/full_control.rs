@@ -24,6 +24,7 @@ fn deck(cards: &[(u8, &str)]) -> Vec<(u8, String)> {
 /// whenever the opponent casts something.
 fn new_game(seed: u64, stops: StopsSetting) -> Game {
     let start = StartGame {
+        format: beryl_session::Format::CONSTRUCTED,
         seed,
         decks: [
             deck(&[(24, ISLAND), (16, THUNDERTRAP_TRAINER)]),

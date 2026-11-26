@@ -513,6 +513,7 @@ fn start(
         match (&def.board, def.seed, &def.decks, &def.agents) {
             (None, Some(seed), Some(decks), Some(agents)) => {
                 let start = StartGame {
+                    format: beryl_session::Format::CONSTRUCTED,
                     seed,
                     decks: [deck(catalog, &decks[0])?, deck(catalog, &decks[1])?],
                     human,

@@ -25,6 +25,7 @@ fn owned(deck: &[(u8, &str)]) -> Vec<(u8, String)> {
 /// games these seeds deal, so they play decks that do not change as cards are written.
 fn start(seed: u64) -> StartGame {
     StartGame {
+        format: beryl_session::Format::CONSTRUCTED,
         seed,
         decks: [owned(WU_CONTROL), owned(VINTAGE_WU_CONTROL)],
         human: Seat::P0,

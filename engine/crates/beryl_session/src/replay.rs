@@ -36,6 +36,11 @@ pub struct ReplayFile {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub legacy_waterbend_mana: bool,
     pub seed: u64,
+    /// Whether the game was a shared-deck game ([`Format::SHARED_DECK`]). A file without the
+    /// field, as every file before that format was, is a constructed game, so the field needs
+    /// no format version.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub shared_deck: bool,
     /// Each seat's decklist: (count, card name).
     pub decks: [Vec<(u8, String)>; 2],
     /// Each seat's sideboard: (count, card name). A file without one, as every file before
@@ -182,6 +187,11 @@ impl ReplayFile {
         })?;
         Ok(StartGame {
             seed: self.seed,
+            format: if self.shared_deck {
+                Format::SHARED_DECK
+            } else {
+                Format::CONSTRUCTED
+            },
             decks: self.decks.clone(),
             human,
             opponent: self.opponent.clone(),
@@ -197,6 +207,7 @@ impl ReplayFile {
             legacy_waterbend: false,
             legacy_waterbend_mana: false,
             seed: start.seed,
+            shared_deck: start.format == Format::SHARED_DECK,
             decks: start.decks.clone(),
             sideboards: start.sideboards.clone(),
             human: start.human.get(),

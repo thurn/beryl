@@ -36,6 +36,7 @@ fn find(d: &DecisionView, f: fn(&Candidate) -> bool) -> Option<usize> {
 /// answer as before, which plays the same game again.
 fn play(answers: usize, undo: bool) -> (ReplayFile, bool) {
     let start = StartGame {
+        format: beryl_session::Format::CONSTRUCTED,
         seed: 3,
         decks: [WU_CONTROL, WU_CONTROL]
             .map(|deck| deck.iter().map(|&(n, name)| (n, name.to_owned())).collect()),

@@ -39,6 +39,7 @@ fn request(agent: &str) -> StartRequest {
         agent: agent.to_owned(),
         seed: None,
         fair: false,
+        deck: beryl_protocol::default_deck(),
     }
 }
 

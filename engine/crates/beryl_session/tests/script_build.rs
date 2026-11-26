@@ -619,6 +619,7 @@ fn an_opening_hand_appears_and_a_mulligans_goes_back_first() {
         cards.map(|&(n, name)| (n, name.to_owned())).collect()
     };
     let start = StartGame {
+        format: beryl_session::Format::CONSTRUCTED,
         seed: 34,
         decks: [deck(), deck()],
         human: Seat::P0,
@@ -693,6 +694,7 @@ fn game_views() -> Vec<PlayerView> {
         cards.map(|&(n, name)| (n, name.to_owned())).collect()
     };
     let start = StartGame {
+        format: beryl_session::Format::CONSTRUCTED,
         seed: 3,
         decks: [deck(), deck()],
         human: Seat::P0,

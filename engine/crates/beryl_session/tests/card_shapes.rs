@@ -529,6 +529,7 @@ fn plays(keystone: &Keystone) {
     let card = keystone.card;
     let lands = keystone.deck[0].1;
     let start = StartGame {
+        format: beryl_session::Format::CONSTRUCTED,
         seed: 7,
         decks: [owned(keystone.deck), vec![(40, lands.to_owned())]],
         human: Seat::P0,

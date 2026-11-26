@@ -8,6 +8,7 @@ use beryl_session::{Seat, StartGame, StopsSetting};
 fn start(seed: u64) -> StartGame {
     let deck = beryl_card_names::decks::default_deck();
     StartGame {
+        format: beryl_session::Format::CONSTRUCTED,
         seed,
         decks: [deck.clone(), deck],
         human: Seat::P0,

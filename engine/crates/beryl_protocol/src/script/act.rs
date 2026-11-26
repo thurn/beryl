@@ -272,12 +272,14 @@ pub enum Fact {
     /// damage wearing off, a characteristic an effect changed.
     Object { object: ObjectView },
     /// A library's order, bottom first, after a shuffle. Its cards' records change by steps
-    /// of their own.
+    /// of their own. In a shared-deck game `player` is whoever shuffled, and the order is the
+    /// shared library's.
     Library { player: Side, order: Vec<ObjectId> },
     /// Retire old slots when a hand entry or shuffle removes knowledge.
     /// The list gives no correspondence to the slots that replace them.
     Forget { slots: Vec<ObjectId> },
-    /// A shuffle installs the library's redacted card records in bottom-first order.
+    /// A shuffle installs the library's redacted card records in bottom-first order. In a
+    /// shared-deck game `player` is whoever shuffled, and the library is the shared one.
     ShuffledLibrary {
         player: Side,
         cards: Vec<ObjectView>,
@@ -292,7 +294,8 @@ pub enum Fact {
 pub enum Notice {
     /// "Your Turn" or "Opponent's Turn".
     Turn { active: Side },
-    /// "Scry: 1 top, 1 bottom."
+    /// "Scry: 1 top, 1 bottom." In a shared-deck game `player` is whoever scries, and the
+    /// library is the shared one.
     Scry { player: Side, top: u8, bottom: u8 },
     /// "Top" or "Bottom": the end of their library the opponent chose for a card, beside that
     /// library. Never the viewer's own choice, which they just made.

@@ -55,6 +55,7 @@ fn hidden_pick(view: &PlayerView) -> bool {
 /// turns and hidden picks the human's decisions saw.
 fn played(seed: u64, until: Until) -> (Game, PlayerView, (usize, usize)) {
     let start = StartGame {
+        format: beryl_session::Format::CONSTRUCTED,
         seed,
         decks: [deck(), deck()],
         human: Seat::P0,

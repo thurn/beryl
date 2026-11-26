@@ -22,6 +22,7 @@ fn owned(deck: &Decklist) -> Vec<(u8, String)> {
 /// human's decisions: the random agent in both seats, answering for the human as a stand-in.
 fn played(seed: u64) -> (Game, PlayerView) {
     let start = StartGame {
+        format: beryl_session::Format::CONSTRUCTED,
         seed,
         decks: [owned(VINTAGE_WU_CONTROL), owned(WU_CONTROL)],
         human: Seat::P0,

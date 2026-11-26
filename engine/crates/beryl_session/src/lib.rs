@@ -26,7 +26,7 @@ pub mod script;
 mod session;
 mod sessions;
 
-pub use beryl_engine::Seat;
+pub use beryl_engine::{Format, Seat};
 use beryl_engine::{GameTable, State};
 pub use beryl_protocol::{
     AgentView, GameUpdate, SessionError, SessionIds, StartRequest, WIRE_HASH, wire_hash,
@@ -44,6 +44,9 @@ pub use sessions::Sessions;
 pub struct StartGame {
     /// The game's seed; the agent's is derived from it.
     pub seed: u64,
+    /// The rules the game starts with. In a shared-deck game ([`Format::SHARED_DECK`]) `decks[0]`
+    /// is the shared list, and `decks[1]` and both sideboards are empty.
+    pub format: Format,
     /// Each seat's decklist: (count, card name).
     pub decks: [Vec<(u8, String)>; 2],
     /// The human's seat.

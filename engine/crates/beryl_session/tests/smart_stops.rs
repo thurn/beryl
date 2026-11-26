@@ -50,6 +50,7 @@ fn no_plays() -> Vec<(u8, String)> {
 
 fn new_game(seed: u64, opponent: Vec<(u8, String)>, stops: StopsSetting) -> Game {
     let start = StartGame {
+        format: beryl_session::Format::CONSTRUCTED,
         seed,
         decks: [trainers(), opponent],
         human: HUMAN,

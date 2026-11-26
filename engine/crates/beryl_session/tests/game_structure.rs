@@ -254,6 +254,7 @@ fn play_until(
 ) -> Option<Game> {
     let card = keystone.card;
     let start = StartGame {
+        format: beryl_session::Format::CONSTRUCTED,
         seed: 7,
         decks: [
             vec![

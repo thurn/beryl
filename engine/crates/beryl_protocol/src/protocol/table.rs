@@ -126,7 +126,9 @@ pub enum TablePhase {
     End,
 }
 
-/// A zone belonging to a player, relative to the viewer.
+/// A zone belonging to a player, relative to the viewer. In a shared-deck game a library or
+/// graveyard `side` names the player who acts (who shuffles, looks or scries), and the zone is
+/// the shared one ([`PlayerView::shared`](crate::protocol::PlayerView::shared)).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ZoneRef {

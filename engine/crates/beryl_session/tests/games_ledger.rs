@@ -50,6 +50,7 @@ fn completed_games_are_appended_and_counted_in_reports() {
     })
     .with_ledger(ledger.clone());
     let mut start = StartGame {
+        format: beryl_session::Format::CONSTRUCTED,
         seed: 11,
         decks: [7, 8].map(|n| vec![(n, "Island".to_owned())]),
         human: Seat::P0,

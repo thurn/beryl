@@ -342,6 +342,7 @@ impl Game {
             legacy_waterbend: false,
             legacy_waterbend_mana: false,
             seed: 0,
+            shared_deck: false,
             decks: [Vec::new(), Vec::new()],
             sideboards: [Vec::new(), Vec::new()],
             human: human.get(),

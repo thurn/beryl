@@ -165,6 +165,9 @@ pub enum Candidate {
     Draw,
     Keep,
     Mulligan,
+    /// The third choice of the keep-or-mulligan decision in a shared-deck game: reveal the hand
+    /// and take a mulligan that costs no card. It is offered only when the hand qualifies.
+    FreeMulligan,
     /// The waiting triggered ability at `index`, from the object in `source`: its face's
     /// `ability`th, by which a later decision's candidates (each index shifts as triggers go
     /// onto the stack) still name it.

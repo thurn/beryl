@@ -28,6 +28,7 @@ fn owned(deck: &Decklist) -> Vec<(u8, String)> {
 /// decisions: the random agent in both seats, answering for the human as a stand-in.
 fn played(seed: u64, decks: [&Decklist; 2]) -> (Game, PlayerView) {
     let start = StartGame {
+        format: beryl_session::Format::CONSTRUCTED,
         seed,
         decks: decks.map(owned),
         human: Seat::P0,

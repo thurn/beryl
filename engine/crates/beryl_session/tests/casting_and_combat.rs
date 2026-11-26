@@ -291,6 +291,7 @@ fn moments(decision: &beryl_session::protocol::DecisionView) -> Vec<Moment> {
 fn plays(keystone: &Keystone) {
     let card = keystone.card;
     let start = StartGame {
+        format: beryl_session::Format::CONSTRUCTED,
         seed: 7,
         decks: [owned(keystone.human_deck), owned(keystone.opponent_deck)],
         human: Seat::P0,

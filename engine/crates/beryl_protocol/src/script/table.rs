@@ -24,6 +24,12 @@ pub struct Table {
     pub stack: Vec<Entry>,
     pub you: Piles,
     pub opponent: Piles,
+    /// The library and graveyard both players share, in a shared-deck game
+    /// ([`PlayerView::shared`]); its `library` and `graveyard` are the piles, and its other
+    /// fields are unused. When it is there, [`Table::piles`], [`Table::piles_mut`] and
+    /// [`Table::order`] return it for either side, and each player's own `library` and
+    /// `graveyard` stay empty.
+    pub shared: Option<Piles>,
     pub turn: Turn,
 }
 
@@ -78,6 +84,7 @@ impl Table {
             stack: Vec::new(),
             you: piles(),
             opponent: piles(),
+            shared: None,
             turn: Turn {
                 number: 1,
                 own_number: 1,
@@ -149,6 +156,14 @@ impl Table {
             })
             .collect();
         let manual = view.table.as_ref().map(|table| &table.orders);
+        let shared = view.shared.as_ref().map(|shared| Piles {
+            life: 0,
+            mana: ManaPool::default(),
+            named_counters: Vec::new(),
+            library: shared.library.clone(),
+            graveyard: shared.graveyard.clone(),
+            manual: None,
+        });
         Table {
             objects,
             battlefield: view.battlefield.clone(),
@@ -158,6 +173,7 @@ impl Table {
                 &view.players.opponent,
                 manual.map(|orders| &orders.opponent),
             ),
+            shared,
             turn: Turn {
                 number: view.turn.number,
                 own_number: view.turn.own_number,
@@ -180,17 +196,35 @@ impl Table {
                 .all(|(a, b)| a.item == b.item)
             && self.you == other.you
             && self.opponent == other.opponent
+            && self.shared == other.shared
             && self.turn == other.turn
     }
 
+    /// The piles of `player`: the shared ones for either side in a shared-deck game, whose
+    /// life and mana are not the player's (read them through [`Table::player`]).
     pub fn piles(&self, player: Side) -> &Piles {
+        self.shared.as_ref().unwrap_or_else(|| self.player(player))
+    }
+
+    /// [`Table::piles`], to change.
+    pub fn piles_mut(&mut self, player: Side) -> &mut Piles {
+        if self.shared.is_some() {
+            return self.shared.as_mut().expect("checked above");
+        }
+        self.player_mut(player)
+    }
+
+    /// `player`'s own numbers (life, mana, counters), and their own piles in a game with no
+    /// shared ones.
+    pub fn player(&self, player: Side) -> &Piles {
         match player {
             Side::You => &self.you,
             Side::Opponent => &self.opponent,
         }
     }
 
-    pub fn piles_mut(&mut self, player: Side) -> &mut Piles {
+    /// [`Table::player`], to change.
+    pub fn player_mut(&mut self, player: Side) -> &mut Piles {
         match player {
             Side::You => &mut self.you,
             Side::Opponent => &mut self.opponent,
@@ -204,7 +238,7 @@ impl Table {
             ZoneName::Battlefield => Some(&self.battlefield),
             ZoneName::Library => Some(&self.piles(side).library),
             ZoneName::Graveyard => Some(&self.piles(side).graveyard),
-            _ => self.piles(side).manual.as_ref()?.order(zone),
+            _ => self.player(side).manual.as_ref()?.order(zone),
         }
     }
 
@@ -213,7 +247,7 @@ impl Table {
             ZoneName::Battlefield => Some(&mut self.battlefield),
             ZoneName::Library => Some(&mut self.piles_mut(side).library),
             ZoneName::Graveyard => Some(&mut self.piles_mut(side).graveyard),
-            _ => self.piles_mut(side).manual.as_mut()?.order_mut(zone),
+            _ => self.player_mut(side).manual.as_mut()?.order_mut(zone),
         }
     }
 
@@ -291,19 +325,19 @@ impl Table {
             Act::Count {
                 tally: Tally::Life { player, life },
             } => {
-                self.piles_mut(*player).life = *life;
+                self.player_mut(*player).life = *life;
                 Ok(())
             }
             Act::Count {
                 tally: Tally::Pool { player, mana },
             } => {
-                self.piles_mut(*player).mana = *mana;
+                self.player_mut(*player).mana = *mana;
                 Ok(())
             }
             Act::Count {
                 tally: Tally::PlayerCounters { player, counters },
             } => {
-                self.piles_mut(*player).named_counters.clone_from(counters);
+                self.player_mut(*player).named_counters.clone_from(counters);
                 Ok(())
             }
             Act::Set { fact } => self.set(fact, note),
@@ -468,5 +502,73 @@ impl Table {
             true,
         );
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::protocol::Why;
+
+    fn appear(object: ObjectView) -> Act {
+        Act::Appear {
+            from: ZoneName::Nowhere,
+            why: Why::Created,
+            object,
+            at: None,
+            item: None,
+        }
+    }
+
+    /// In a shared-deck game a card of either side goes into the one shared library or
+    /// graveyard, moves between them, and leaves, and no player's own pile ever holds it.
+    #[test]
+    fn a_shared_table_places_and_removes_a_card_for_either_side() {
+        for side in [Side::You, Side::Opponent] {
+            let mut table = Table::empty(20);
+            table.shared = Some(table.you.clone());
+            let slot = ObjectId(7);
+            let card = |zone| ObjectView::card(slot, "Island", zone, side, side);
+            let shared = |table: &Table| table.shared.clone().unwrap();
+
+            table.apply(&appear(card(ZoneName::Library))).unwrap();
+            assert_eq!(shared(&table).library, [slot], "{side:?}");
+            assert_eq!(table.order(ZoneName::Library, Side::You), Some(&vec![slot]));
+            assert_eq!(
+                table.order(ZoneName::Library, Side::Opponent),
+                Some(&vec![slot])
+            );
+
+            table.apply(&appear(card(ZoneName::Graveyard))).unwrap();
+            assert!(shared(&table).library.is_empty(), "{side:?}");
+            assert_eq!(shared(&table).graveyard, [slot], "{side:?}");
+
+            table
+                .apply(&Act::Set {
+                    fact: Fact::Forget { slots: vec![slot] },
+                })
+                .unwrap();
+            assert!(shared(&table).graveyard.is_empty(), "{side:?}");
+            assert!(table.objects.is_empty());
+            for own in [&table.you, &table.opponent] {
+                assert!(own.library.is_empty() && own.graveyard.is_empty());
+            }
+        }
+    }
+
+    /// A player's life stays theirs when the piles are shared.
+    #[test]
+    fn a_shared_table_keeps_each_players_life() {
+        let mut table = Table::empty(20);
+        table.shared = Some(table.you.clone());
+        table
+            .apply(&Act::Count {
+                tally: Tally::Life {
+                    player: Side::Opponent,
+                    life: 17,
+                },
+            })
+            .unwrap();
+        assert_eq!((table.you.life, table.opponent.life), (20, 17));
     }
 }

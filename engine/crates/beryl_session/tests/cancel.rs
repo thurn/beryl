@@ -19,6 +19,7 @@ const SESSION: SessionId = SessionId(1);
 
 fn new_game() -> Game {
     let start = StartGame {
+        format: beryl_session::Format::CONSTRUCTED,
         seed: 1,
         decks: [owned(WU_CONTROL), owned(WU_CONTROL)],
         human: Seat::P0,

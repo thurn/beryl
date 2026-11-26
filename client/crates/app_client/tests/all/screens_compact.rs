@@ -132,6 +132,7 @@ fn start_in(size: Size, safe: Insets, agent: &str, seed: Option<u32>) -> Page {
         agent: agent.to_owned(),
         seed,
         fair: false,
+        deck: beryl_protocol::default_deck(),
     };
     page_in(
         vec![

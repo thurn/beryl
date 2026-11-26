@@ -144,6 +144,8 @@ pub fn player_view<L: Layout>(
     PlayerView {
         status,
         handling,
+        // No game is dealt with shared piles yet.
+        shared: None,
         pending_attackers: pending_attackers(moment),
         turn: TurnView {
             number: turn.number(),
@@ -416,6 +418,8 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
         zone_side: None,
         controller: side(obs, obs.controller(slot)),
         name: name(t, obs, slot).map(str::to_owned),
+        // The session assigns printings once it deals a deck that has several.
+        printing: None,
         other_face: obs.other_face_name(t, slot).map(str::to_owned),
         facing: if o.face() == FaceIx::DOWN {
             Facing::Down

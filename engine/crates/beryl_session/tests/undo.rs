@@ -32,6 +32,7 @@ const SESSION: SessionId = SessionId(1);
 
 fn new_game(seed: u64) -> Game {
     let start = StartGame {
+        format: beryl_session::Format::CONSTRUCTED,
         seed,
         decks: [owned(WU_CONTROL), owned(WU_CONTROL)],
         human: Seat::P0,
@@ -79,6 +80,7 @@ fn answer(game: &mut Game, view: &PlayerView, index: usize) -> PlayerView {
 #[test]
 fn undo_groups_a_casts_automatic_payment_even_after_resume() {
     let start = StartGame {
+        format: beryl_session::Format::CONSTRUCTED,
         seed: 7,
         decks: [
             owned(&[(4, MANA_CRYPT), (4, STAFF_OF_THE_STORYTELLER), (16, PLAINS)]),

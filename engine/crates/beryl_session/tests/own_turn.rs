@@ -13,6 +13,7 @@ fn each_players_first_turn_is_turn_one() {
         (16, THUNDERTRAP_TRAINER.to_owned()),
     ];
     let start = StartGame {
+        format: beryl_session::Format::CONSTRUCTED,
         seed: 7,
         decks: [deck.clone(), deck],
         human: Seat::P0,

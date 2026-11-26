@@ -34,6 +34,7 @@ fn a_game_dropped_mid_game_resumes_from_a_second_sessions_on_the_same_dirs() {
         bugs: temp.path().join("bugs"),
     };
     let start = StartGame {
+        format: beryl_session::Format::CONSTRUCTED,
         seed: 3,
         decks: [owned(WU_CONTROL), owned(VINTAGE_WU_CONTROL)],
         human: Seat::P0,

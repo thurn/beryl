@@ -168,6 +168,7 @@ impl Feature for StartScreen {
                     agent: agent.name.clone(),
                     seed,
                     fair: state.fair,
+                    deck: beryl_protocol::default_deck(),
                 }));
                 state.confirming = false;
                 if state.fair {

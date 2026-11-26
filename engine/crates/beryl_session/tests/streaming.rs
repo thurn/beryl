@@ -24,6 +24,7 @@ fn owned(deck: &[(u8, &str)]) -> Vec<(u8, String)> {
 
 fn start(seed: u64, decks: [Vec<(u8, String)>; 2], human: Seat, stops: StopsSetting) -> StartGame {
     StartGame {
+        format: beryl_session::Format::CONSTRUCTED,
         seed,
         decks,
         human,

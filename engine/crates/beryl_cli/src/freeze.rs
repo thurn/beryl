@@ -198,6 +198,7 @@ fn play(catalog: &'static Catalog, seed: u64, i: u64) -> Played {
         owned(&catalog.fuzz_deck(seed))
     };
     let start = StartGame {
+        format: beryl_session::Format::CONSTRUCTED,
         seed,
         decks: [first, owned(&catalog.fuzz_deck(seed ^ 1 << 40))],
         human: Seat::P0,

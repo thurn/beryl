@@ -248,6 +248,7 @@ impl Live {
         let deck = beryl_cards::decks::default_deck();
         let start = StartGame {
             seed,
+            format: beryl_session::Format::CONSTRUCTED,
             decks: [deck.clone(), deck],
             human: Seat::P0,
             opponent: opponent.to_owned(),

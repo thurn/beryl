@@ -84,6 +84,7 @@ fn setup(scenario: &Scenario) -> (Game, PlayerView) {
         legacy_waterbend: false,
         legacy_waterbend_mana: false,
         seed: 1,
+        shared_deck: false,
         decks,
         sideboards: Default::default(),
         human: 0,

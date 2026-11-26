@@ -3,6 +3,8 @@
 use beryl_kernel::SlotId;
 use serde::{Deserialize, Serialize};
 
+use crate::card_records::PrintingIx;
+
 use super::{
     CardType, Counter, DecisionView, Declaration, FaceName, GameEvent, Keyword, ManualAbility,
     NamedCounter, OutcomeView, RowName, Step, StopsSetting, TableView, ZoneName,
@@ -58,6 +60,13 @@ pub struct PlayerView {
     pub pending_attackers: Option<Vec<ObjectId>>,
     pub turn: TurnView,
     pub players: Players,
+    /// The library and graveyard both players share, in a shared-deck game; none otherwise.
+    /// In a shared game both players' [`PlayerState::library`] and [`PlayerState::graveyard`]
+    /// are empty, every object whose `zone` is `Library` or `Graveyard` is in these piles, and
+    /// a client never reads such an object's `owner` or `zone_side`. Exile stays as it is: the
+    /// client draws one exile pile.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shared: Option<SharedPiles>,
     /// Permanents, in the order they entered.
     pub battlefield: Vec<ObjectId>,
     /// Every object in a zone, by slot: the battlefield, the stack, and each player's library,
@@ -125,12 +134,24 @@ pub enum Side {
     Opponent,
 }
 
+/// The library and graveyard that both players share in a shared-deck game
+/// ([`PlayerView::shared`]).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SharedPiles {
+    /// Bottom first.
+    pub library: Vec<ObjectId>,
+    /// Bottom first.
+    pub graveyard: Vec<ObjectId>,
+}
+
 /// Which part of the table the opponent is handling. The scope names a zone and how
 /// much of it is in use, without the candidates, their identities or any picks.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "zone", rename_all = "camelCase")]
 pub enum CardHandling {
-    /// The top `count` cards, or the whole library during a search.
+    /// The top `count` cards, or the whole library during a search. In a shared game `side` is
+    /// the player who looks, and the library is the shared one ([`PlayerView::shared`]).
     Library {
         side: Side,
         count: Option<u8>,
@@ -232,9 +253,9 @@ pub struct PlayerState {
     pub mulligans: u8,
     /// Where they are in the mulligan (CR 103.5): kept, once the game begins.
     pub mulligan: Declaration,
-    /// Bottom first.
+    /// Bottom first. Empty in a shared-deck game, whose library is [`PlayerView::shared`]'s.
     pub library: Vec<ObjectId>,
-    /// Bottom first.
+    /// Bottom first. Empty in a shared-deck game, whose graveyard is [`PlayerView::shared`]'s.
     pub graveyard: Vec<ObjectId>,
     /// The emblems' names.
     pub emblems: Vec<String>,
@@ -264,9 +285,12 @@ pub struct ManaPool {
 pub struct ObjectView {
     pub slot: ObjectId,
     pub zone: ZoneName,
+    /// Who owns the card. In a shared-deck game a client never reads it for an object in the
+    /// shared library or graveyard ([`PlayerView::shared`]).
     pub owner: Side,
     /// The player whose zone contains this card, when it differs from its owner.
-    /// Only the manual table can put a card in another player's pile or hand.
+    /// Only the manual table can put a card in another player's pile or hand. In a shared-deck
+    /// game a client never reads it for an object in the shared library or graveyard.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub zone_side: Option<Side>,
     pub controller: Side,
@@ -274,6 +298,10 @@ pub struct ObjectView {
     /// ([`crate::card_records`]); none for a card the viewer has not seen. A face-down
     /// permanent's controller may look at it (CR 708.5): its card's name, for them.
     pub name: Option<String>,
+    /// Which printing of the card's name this slot shows, an index into the printing records of
+    /// `beryl_card_records`; none is the card's ordinary printing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub printing: Option<PrintingIx>,
     /// The other face of a known multi-face card, when one of its faces is up.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub other_face: Option<String>,

@@ -802,6 +802,7 @@ fn owned(deck: &[(u8, &str)]) -> Vec<(u8, String)> {
 fn a_save_made_through_clicks_replays() {
     let deck = owned(&[(40, ISLAND), (20, TIME_SPIRAL)]);
     let start = StartGame {
+        format: beryl_session::Format::CONSTRUCTED,
         seed: 7,
         decks: [deck.clone(), deck],
         human: Seat::P0,

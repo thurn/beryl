@@ -37,6 +37,7 @@ fn to_human(game: &mut Game) -> PlayerView {
 /// happen rather than during a resolution.
 fn played(seed: u64, answers: usize) -> (Game, PlayerView, usize) {
     let start = StartGame {
+        format: beryl_session::Format::CONSTRUCTED,
         seed,
         decks: [deck(), deck()],
         human: Seat::P0,

@@ -33,6 +33,7 @@ fn owned(deck: &[(u8, &str)]) -> Vec<(u8, String)> {
 /// play these decks, which do not change as cards are written.
 fn start(seed: u64, stops: StopsSetting) -> StartGame {
     StartGame {
+        format: beryl_session::Format::CONSTRUCTED,
         decks: [owned(WU_CONTROL), owned(VINTAGE_WU_CONTROL)],
         ..fuzz_start(seed, stops)
     }
@@ -42,6 +43,7 @@ fn start(seed: u64, stops: StopsSetting) -> StartGame {
 /// hold whatever the cards.
 fn fuzz_start(seed: u64, stops: StopsSetting) -> StartGame {
     StartGame {
+        format: beryl_session::Format::CONSTRUCTED,
         seed,
         decks: [owned(&fuzz_deck(seed)), owned(&fuzz_deck(seed ^ 1 << 40))],
         human: Seat::P0,
@@ -138,6 +140,7 @@ fn a_scripted_human_plays_a_whole_game_and_its_replay_reproduces_it() {
     let session = sessions
         .start_game(
             &StartGame {
+                format: beryl_session::Format::CONSTRUCTED,
                 decks: [owned(WU_CONTROL), owned(WU_CONTROL)],
                 ..start(11, StopsSetting::SMART)
             },
@@ -493,6 +496,7 @@ const RESUME_VIEWS: usize = 20;
 fn resumes_play_on_as_if_never_stopped(opponent: &str, seeds: std::ops::Range<u64>) {
     for seed in seeds {
         let start = StartGame {
+            format: beryl_session::Format::CONSTRUCTED,
             opponent: opponent.to_owned(),
             ..start(seed, StopsSetting::EXACT)
         };

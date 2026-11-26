@@ -293,6 +293,7 @@ fn a_card_offered_to_cast_is_cast_or_declined() {
 fn dealt(seed: u64) -> Play {
     let deck = vec![(30, ISLAND.to_owned()), (30, COUNTERSPELL.to_owned())];
     Play::seeded(&StartGame {
+        format: beryl_session::Format::CONSTRUCTED,
         seed,
         decks: [deck.clone(), deck],
         human: Seat::P0,

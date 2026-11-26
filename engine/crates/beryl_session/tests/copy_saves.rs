@@ -56,6 +56,7 @@ struct Shown {
 /// each Image copy a creature, played to its `answers`th human decision.
 fn played(seed: u64, answers: usize) -> (Game, PlayerView, Shown) {
     let start = StartGame {
+        format: beryl_session::Format::CONSTRUCTED,
         seed,
         decks: [deck(), deck()],
         human: Seat::P0,

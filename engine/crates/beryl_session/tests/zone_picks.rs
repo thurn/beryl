@@ -759,6 +759,7 @@ fn a_manifest_dread_picks_one_of_the_two_cards_looked_at() {
 fn to_the_bottom() -> Play {
     let deck = vec![(30, ISLAND.to_owned()), (30, COUNTERSPELL.to_owned())];
     let start = StartGame {
+        format: beryl_session::Format::CONSTRUCTED,
         seed: 7,
         decks: [deck.clone(), deck],
         human: Seat::P0,

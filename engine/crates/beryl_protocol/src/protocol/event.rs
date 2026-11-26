@@ -41,6 +41,7 @@ pub enum GameEvent {
         player: Side,
         top: bool,
     },
+    /// In a shared-deck game `player` is whoever shuffles, and the library is the shared one.
     LibraryShuffled {
         player: Side,
     },

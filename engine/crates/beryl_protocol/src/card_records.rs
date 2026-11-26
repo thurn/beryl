@@ -19,6 +19,13 @@ pub const CARD_BACK_ID: &str = "0aeebaf5-8c7d-4636-9e82-8c27447861f7";
 /// with no text, no name, no subtypes, and no mana cost"): Double Masters' Copy token.
 pub const NAMELESS_TOKEN_ID: &str = "6870a2af-80e1-4813-a332-2b1bd789f1c1";
 
+/// An index into the printing records of `beryl_card_records` (`PRINTINGS`): one art of a card
+/// that has several. It is defined here, and re-exported by `beryl_card_records`, because that
+/// crate depends on this one and [`ObjectView`](crate::protocol::ObjectView) carries it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct PrintingIx(pub u32);
+
 /// The [`CARD_RECORDS`](crate::ipc::CARD_RECORDS) command's request.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

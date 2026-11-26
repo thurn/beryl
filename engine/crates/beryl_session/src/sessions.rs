@@ -21,7 +21,7 @@ use crate::protocol::{CandidateIndex, DecisionId, PlayerView, SessionId, Status,
 use crate::replay::ReplayFile;
 use crate::session::GameSession;
 use crate::{
-    GameUpdate, HandOver, Prepared, Seat, SessionError, SessionIds, StartGame, StartRequest, bugs,
+    Format, GameUpdate, HandOver, Prepared, Seat, SessionError, SessionIds, StartGame, StartRequest, bugs,
     journal,
 };
 
@@ -31,6 +31,7 @@ fn requested_game(request: &StartRequest) -> StartGame {
     let deck = beryl_card_names::decks::default_deck();
     StartGame {
         seed: request.seed.map_or_else(clock_seed, u64::from),
+        format: Format::CONSTRUCTED,
         decks: [deck.clone(), deck],
         human: Seat::P0,
         opponent: request.agent.clone(),
