@@ -80,6 +80,7 @@ use peaks::Peaks;
 use priority::AgentPriority;
 pub use requests::{request_of, requests_in, unfinished_of_in};
 pub use retain::{KEEP_JUDGED_S, KEEP_S, keep};
+pub(crate) use run_verb::duplicate_run_reply;
 pub use run_verb::{DEFAULT_HANG_LIMIT_S, RunVerb};
 
 /// The line a supervisor prints on its standard output once it holds its run's lock. The

@@ -228,31 +228,34 @@ impl Checks {
         }
         // A family listed even if that builds a product the tree has never built: one in the
         // always set for this change, or one holding a required regression or deleted-input check.
-        let listing = Stopwatch::start(ctx);
         let required = required_families(&catches, options);
         let unbuilt = unbuilt(ctx, tree, among.iter().map(|(_, family)| *family));
-        let mut prepared =
-            self.prepare_gate(ctx, tree, &among, options, &mut run, &|name, family| {
-                let needs = family.list_needs.as_ref().unwrap_or(&family.needs);
-                let required = family.always_for(changes.paths)
-                    || required.contains(name)
-                    || changes.deleted_input_families.contains(name);
-                !required && needs.iter().any(|need| unbuilt.contains(need))
-            });
-        for family in &mut prepared {
-            family.keep(|_| true, &mut run);
-        }
-        run.stage(ctx, "listing", listing);
-        // A fault found while listing, such as an invalid manifest entry, refuses the landing
-        // before anything is looked up, built or run.
-        if !run.passed() {
-            return GateRun {
-                run,
-                ..GateRun::default()
+        let cold = |name: &str, family: &Family| {
+            let needs = family.list_needs.as_ref().unwrap_or(&family.needs);
+            let required = family.always_for(changes.paths)
+                || required.contains(name)
+                || changes.deleted_input_families.contains(name);
+            !required && needs.iter().any(|need| unbuilt.contains(need))
+        };
+        let shared = super::prepass::PrepassContext {
+            changes: &changes,
+            catches: &catches,
+            unbuilt: &unbuilt,
+            excused,
+            scoped: &scoped,
+            carried: &carried,
+        };
+        let (prepared, hits, fast_done, pre_running_s) =
+            match self.prepare_with_prepass(ctx, tree, &among, options, &cold, &shared, &mut run) {
+                super::prepass::PreparedGate::Ready {
+                    prepared,
+                    hits,
+                    fast_done,
+                    pre_running_s,
+                } => (prepared, hits, fast_done, pre_running_s),
+                super::prepass::PreparedGate::Failed(gated) => return *gated,
             };
-        }
         let planning = Stopwatch::start(ctx);
-        let hits = self.lookup(&prepared, options);
         let mut view = gate_view_of(self, ctx, tree, &prepared, &hits, &changes, catches);
         landing_view(&mut view, options, excused);
         let gate_plan = self.remember_choice(ctx, changes.paths, view.plan(&ctx.config.gate));
@@ -260,6 +263,12 @@ impl Checks {
         // cold build even when listing a family made the product.
         let budget = gate_budget(&view.budget(&ctx.config.gate), &gate_plan, unbuilt.clone());
         let mut families = planned_families(prepared, hits, &gate_plan);
+        if !fast_done.is_empty() {
+            for (_, items) in &mut families {
+                items.retain(|(k, _)| !fast_done.contains(&k.listed.check));
+            }
+            families.retain(|(_, items)| !items.is_empty());
+        }
         let order = plan::run_order(&view, &gate_plan);
         let key = |family: &str| order.get(family).copied().unwrap_or(0.0);
         families.sort_by(|a, b| key(&a.0).total_cmp(&key(&b.0)));
@@ -267,7 +276,7 @@ impl Checks {
         let running = Stopwatch::start(ctx);
         self.run_families(ctx, tree, families, options, &mut run);
         run.stage(ctx, "running", running);
-        self.remember_rate(ctx, &gate_plan, &run, running.seconds(ctx));
+        self.remember_rate(ctx, &gate_plan, &run, pre_running_s + running.seconds(ctx));
         GateRun {
             run,
             left: gate_plan.past_budget.len() + gate_plan.cold.len() + gate_plan.tip.len(),
@@ -286,7 +295,7 @@ impl Checks {
     /// already passed stays in the cache. What each family found is added to `run` in that
     /// order. On 2026-11-19 the gate of a one-card comment change ran its families one after
     /// another for 123 s, though no single family took more than 41 s.
-    fn run_families(
+    pub(super) fn run_families(
         &self,
         ctx: &Context,
         tree: &OpenTree,
@@ -418,7 +427,7 @@ fn required_families<'a>(
 }
 
 /// Keeps the checks the gate selected and passes cache hits only where it chose to use them.
-fn planned_families(
+pub(super) fn planned_families(
     prepared: Vec<Prepared>,
     hits: Vec<Option<CachedResult>>,
     gate_plan: &GatePlan,
@@ -448,7 +457,7 @@ fn planned_families(
 
 /// Names the ticket being landed in `view`, and gives each check in `excused` its regression
 /// ticket, so the plan leaves it out as known to fail.
-fn landing_view(view: &mut plan::GateView, options: &RunOptions, excused: &Excused) {
+pub(super) fn landing_view(view: &mut plan::GateView, options: &RunOptions, excused: &Excused) {
     view.landing.clone_from(&options.ticket);
     for check in &mut view.checks {
         if check.regression.is_none() {
@@ -467,7 +476,7 @@ fn left_by_family(plan: &ignite_core::gate::GatePlan) -> BTreeMap<String, usize>
 }
 
 /// The counts and costs of each part of `plan`.
-fn gate_budget(
+pub(super) fn gate_budget(
     budget: &ignite_core::budget::Budget,
     plan: &ignite_core::gate::GatePlan,
     unbuilt: BTreeSet<String>,

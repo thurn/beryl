@@ -23,7 +23,6 @@
 //! that session at once with the reply it is given, such as a message from a person.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
@@ -37,7 +36,11 @@ use ignite_core::traits::{Clock, Error, Result};
 use ignite_store::local::{handles as store, rows};
 
 use crate::server::{Context, Verb, still_running_at};
-use crate::steps::{Activity, Steps};
+use crate::steps::Steps;
+
+#[path = "handles_feed.rs"]
+mod feed;
+pub(crate) use feed::StepFeed;
 
 pub(crate) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
@@ -107,6 +110,8 @@ struct Entry {
     tree: Option<TreeId>,
     /// The session that asked for it, if any.
     session: Option<SessionId>,
+    /// The request arguments it started with.
+    args: Vec<String>,
     reply: Option<Reply>,
     finished_at: Option<Timestamp>,
     /// A wait has returned the reply.
@@ -117,11 +122,17 @@ struct Entry {
 }
 
 impl Entry {
-    fn running(verb: &str, tree: Option<TreeId>, session: Option<SessionId>) -> Entry {
+    fn running(
+        verb: &str,
+        tree: Option<TreeId>,
+        session: Option<SessionId>,
+        args: Vec<String>,
+    ) -> Entry {
         Entry {
             verb: verb.to_owned(),
             tree,
             session,
+            args,
             reply: None,
             finished_at: None,
             read: false,
@@ -184,9 +195,14 @@ impl Handles {
         // One counter numbers every verb's handles, so start above every stored number.
         state.next = highest + 1;
         for (orphan, (tree, session)) in orphans.iter().zip(trees) {
+            let args = orphan
+                .request
+                .as_ref()
+                .map(|r| r.args.clone())
+                .unwrap_or_default();
             state.replies.insert(
                 orphan.handle.clone(),
-                Entry::running(&orphan.verb, tree, session),
+                Entry::running(&orphan.verb, tree, session, args),
             );
         }
         state.orphans = orphans;
@@ -229,7 +245,12 @@ impl Handles {
         self.prune(&mut state);
         state.replies.insert(
             handle.clone(),
-            Entry::running(verb, tree.cloned(), session.cloned()),
+            Entry::running(
+                verb,
+                tree.cloned(),
+                session.cloned(),
+                request.map(|r| r.args.clone()).unwrap_or_default(),
+            ),
         );
         self.save(&rows::Handle {
             id: handle.to_string(),
@@ -266,6 +287,32 @@ impl Handles {
             .collect();
         running.sort_by(|a, b| a.0.as_str().cmp(b.0.as_str()));
         running
+    }
+
+    /// Running handles of `verb` in `tree` (or in `session` when `tree` is none), with their
+    /// request arguments, sorted by handle.
+    pub fn running_args(
+        &self,
+        verb: &str,
+        tree: Option<&TreeId>,
+        session: Option<&SessionId>,
+    ) -> Vec<(Handle, Vec<String>)> {
+        let mut found: Vec<_> = lock(&self.state)
+            .replies
+            .iter()
+            .filter(|(_, e)| {
+                e.reply.is_none()
+                    && e.verb == verb
+                    && match (tree, session) {
+                        (Some(t), _) => e.tree.as_ref() == Some(t),
+                        (None, Some(s)) => e.tree.is_none() && e.session.as_ref() == Some(s),
+                        (None, None) => false,
+                    }
+            })
+            .map(|(h, e)| (h.clone(), e.args.clone()))
+            .collect();
+        found.sort_by(|a, b| a.0.as_str().cmp(b.0.as_str()));
+        found
     }
 
     /// Whether an operation of one of `verbs` that `session` asked for is still running, such as
@@ -436,6 +483,7 @@ impl Handles {
                         verb: row.verb,
                         tree: row.tree.as_deref().and_then(|t| TreeId::new(t).ok()),
                         session: row.session.as_deref().and_then(|s| SessionId::new(s).ok()),
+                        args: Vec::new(),
                         reply,
                         finished_at,
                         read: false,
@@ -712,61 +760,6 @@ impl WaitVerb {
                 reply
             }
             Waited::Unknown => Reply::text(Exit::Usage, format!("unknown handle: {name}")),
-        }
-    }
-}
-
-/// Each step of the operation running under a handle, as it starts, read from whichever activity
-/// the steps registry lists for the handle: the one of a verb on a thread of the daemon, or the
-/// one the daemon keeps for a verb process (see [`crate::host`]). The activity is looked up
-/// again once it ends, as when a verb whose process died is run again by the daemon.
-pub(crate) struct StepFeed {
-    steps: Arc<Steps>,
-    handle: Handle,
-    current: Option<(Arc<Activity>, Receiver<String>)>,
-}
-
-impl StepFeed {
-    pub(crate) fn new(steps: Arc<Steps>, handle: Handle) -> StepFeed {
-        StepFeed {
-            steps,
-            handle,
-            current: None,
-        }
-    }
-
-    /// The steps heard within `timeout`: it returns at the first one, with any that came with it.
-    /// The first call that finds the activity starts with its step now, if it has one, so a
-    /// client that comes in the middle, as after a restart, sees where the work is at once.
-    pub(crate) fn next(&mut self, timeout: Duration) -> Vec<String> {
-        if self
-            .current
-            .as_ref()
-            .is_none_or(|(activity, _)| activity.is_finished())
-        {
-            self.current = self.steps.by_handle(&self.handle).map(|activity| {
-                let heard = activity.subscribe();
-                (activity, heard)
-            });
-            if let Some(step) = self.current.as_ref().and_then(|(a, _)| a.view().step) {
-                return vec![step];
-            }
-        }
-        let Some((_, heard)) = &self.current else {
-            std::thread::sleep(timeout);
-            return Vec::new();
-        };
-        match heard.recv_timeout(timeout) {
-            Ok(line) => {
-                let mut lines = vec![line];
-                lines.extend(heard.try_iter());
-                lines
-            }
-            Err(RecvTimeoutError::Timeout) => Vec::new(),
-            Err(RecvTimeoutError::Disconnected) => {
-                self.current = None;
-                Vec::new()
-            }
         }
     }
 }

@@ -17,7 +17,41 @@ use ignite_core::protocol::Class;
 use ignite_core::protocol::client::{Exit, Reply, Request};
 use ignite_core::traits::{CommandSpec, RunResult};
 
+use crate::handles::Handles;
 use crate::server::{Context, Verb};
+
+/// Command tokens after `--` in an `ignite run` request, or `None` when none are given.
+fn run_command(args: &[String]) -> Option<&[String]> {
+    let pos = args.iter().position(|arg| arg == "--")?;
+    let cmd = &args[pos + 1..];
+    (!cmd.is_empty()).then_some(cmd)
+}
+
+/// Refuses a second `ignite run` of a command already running in the same tree (or session when
+/// outside a tree), naming the active handle so the caller waits on or stops it instead of
+/// holding duplicate cores.
+pub(crate) fn duplicate_run_reply(
+    handles: &Handles,
+    ctx: &Context,
+    req: &Request,
+) -> Option<Reply> {
+    if req.verb != "run" {
+        return None;
+    }
+    let command = run_command(&req.args)?;
+    let (handle, _) = handles
+        .running_args("run", ctx.tree.as_ref(), ctx.session.as_ref())
+        .into_iter()
+        .find(|(_, args)| run_command(args) == Some(command))?;
+    let shown = command.join(" ");
+    Some(Reply::text(
+        Exit::Conflict,
+        format!(
+            "running  `{shown}` is already running as {handle}\n\
+             next     run `ignite wait {handle}`, or `ignite stop {handle}` before starting another\n"
+        ),
+    ))
+}
 
 /// Seconds after which `ignite run` ends a command that is still running, unless `--hang-limit`
 /// says otherwise. Generous, because `run` is used for long builds and test runs: it is there

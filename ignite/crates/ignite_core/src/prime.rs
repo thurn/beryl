@@ -106,8 +106,9 @@ flaky-checks` for a flaky, hung or never-catching check. Every command prints a 
   and read the whole diff as a reviewer before landing. A check that could not run is not
   a pass.
 - Run every build, test suite and other heavy command through Ignite: `ignite test <names>`
-  for checks and `ignite run -- <cmd>` for anything else. A command run directly competes
-  for the cores that Ignite has already granted to other sessions.
+  for checks (and after a failed `check`, pass `ignite test` on those failures before
+  re-running `check`) and `ignite run -- <cmd>` (with `--class batch` for long runs) for the
+  rest. A command run directly competes for the cores Ignite granted to other sessions.
 - Tests go through public behavior and never depend on the machine's speed.
 - Ordinary difficulty is the job: failing tests, confusing code, conflicts. Never wait for
   a person, for another ticket, for another machine or for verification. When the ticket needs

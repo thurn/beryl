@@ -1070,5 +1070,10 @@
     "label": "A `checks-only` or `off` machine state set by a session ends after four hours by default and hub upkeep returns the machine to `active`, so a justiciar's mitigation cannot keep a machine out of the worker pool after its reason has passed (cygnus's 20 cores took no tickets for eight hours on 2026-11-26 while 15 tickets waited for build slots on the Macs)",
     "metric": "bead.lead-minutes",
     "expect": "down"
+  },
+  {
+    "label": "`ignite check` and `ignite land` now run zero-build always-set families (`commit`, `repository`, `markdown`, `source`, `client-source`, `rust-format`, `client-format`, `black`, `pyre`) in a fast pre-pass before launching compiled builds, refuse duplicate `ignite run` commands in the same tree or session with the active handle ID, and print all failing checks in `rerun` with guidance to pass `ignite test` before re-running `ignite check`",
+    "metric": "bead.minutes",
+    "expect": "down"
   }
 ]

@@ -57,8 +57,8 @@ fn an_invalid_entry_refuses_the_landing_before_anything_runs() {
     let gated = world.checks.gate(&world.ctx, &tree(), &landing());
 
     assert!(!gated.run.passed());
-    // The product `unit` needs to be listed was built while `zlint` was listed.
-    assert_eq!(world.builds.requests().len(), 1, "only deps");
+    // `zlint` ran in the fast pre-pass before `unit` was listed or `deps` was built.
+    assert!(world.builds.requests().is_empty(), "nothing built");
     assert!(world.launcher.commands("runner").is_empty(), "nothing ran");
     assert_eq!(world.launcher.commands("lister").len(), 1, "only zlint");
     assert_eq!(gated.run.unlisted, ["unit"]);
@@ -70,6 +70,113 @@ fn an_invalid_entry_refuses_the_landing_before_anything_runs() {
     assert!(
         text.contains("stopped  at the first fault: 1 family not listed"),
         "{text}"
+    );
+}
+
+/// A failing check in a fast no-build always family stops the gate before any compiled or unbuilt
+/// product is built or any heavier family is listed.
+#[test]
+fn a_failing_no_build_check_refuses_the_gate_before_any_build_starts() {
+    let manifest = [
+        DEPS.to_owned(),
+        family("unit", "\"deps\""),
+        family("zlint", ""),
+    ]
+    .join("\n");
+    let world = world(&manifest, &["src/a.py"], FakeHistory::default());
+    *world.launcher.listing.lock().unwrap() =
+        "{\"check\": \"unit:a\"}\n{\"check\": \"zlint:cap\"}\n".to_owned();
+    world
+        .launcher
+        .script("zlint:cap", &[Some("fail"), Some("fail")]);
+
+    let gated = world.checks.gate(&world.ctx, &tree(), &landing());
+
+    assert!(!gated.run.passed());
+    assert!(
+        world.builds.requests().is_empty(),
+        "deps must not build when zlint fails: {:?}",
+        world.builds.requests()
+    );
+    assert_eq!(world.launcher.commands("lister").len(), 1, "only zlint");
+    assert_eq!(gated.run.unlisted, ["unit"]);
+    assert_eq!(gated.run.outcomes, [(name("zlint:cap"), Outcome::Fail)]);
+}
+
+/// When every fast pre-pass check passes, heavier families build and run next without running
+/// the fast checks a second time or double-counting their outcomes.
+#[test]
+fn passing_no_build_checks_run_once_before_heavy_families() {
+    let manifest = [
+        DEPS.to_owned(),
+        family("unit", "\"deps\""),
+        family("zlint", ""),
+    ]
+    .join("\n");
+    let world = world(&manifest, &["src/a.py"], FakeHistory::default());
+    *world.launcher.listing.lock().unwrap() =
+        "{\"check\": \"unit:a\"}\n{\"check\": \"zlint:ok\"}\n".to_owned();
+
+    let gated = world.checks.gate(&world.ctx, &tree(), &landing());
+
+    assert!(gated.run.passed(), "{gated:?}");
+    assert!(!world.builds.requests().is_empty(), "deps built for unit");
+    let runs = world.launcher.commands("runner");
+    assert_eq!(
+        runs.iter().filter(|r| r[1] == "zlint:ok").count(),
+        1,
+        "{runs:?}"
+    );
+    assert_eq!(
+        runs.iter().filter(|r| r[1] == "unit:a").count(),
+        1,
+        "{runs:?}"
+    );
+    assert_eq!(gated.run.outcomes.len(), 2, "{:?}", gated.run.outcomes);
+    assert_eq!(gated.run.ran, 2);
+}
+
+/// `ignite check` prints a copy-pasteable `rerun` line covering every shown failing check and
+/// tells the caller to pass `ignite test` on them before running `ignite check` again.
+#[test]
+fn check_failure_names_all_failing_checks_in_rerun_and_next() {
+    let manifest = family("zlint", "");
+    let world = world(&manifest, &["src/a.py"], FakeHistory::default());
+    *world.launcher.listing.lock().unwrap() =
+        "{\"check\": \"zlint:a\"}\n{\"check\": \"zlint:b\"}\n".to_owned();
+    world
+        .launcher
+        .script("zlint:a", &[Some("fail"), Some("fail")]);
+    world
+        .launcher
+        .script("zlint:b", &[Some("fail"), Some("fail")]);
+
+    let verb = verbs::CheckVerb {
+        checks: Arc::clone(&world.checks),
+        express: None,
+    };
+    let req = ignite_core::protocol::client::Request {
+        verb: "check".to_owned(),
+        args: Vec::new(),
+        cwd: world.dir.join("trees/tree-01"),
+        session: None,
+        wait_s: 30,
+        pid: None,
+    };
+    let reply = crate::server::Verb::run(&verb, &world.ctx, &req);
+
+    assert_eq!(reply.exit, ignite_core::protocol::client::Exit::CheckFailed);
+    assert!(
+        reply.text.contains("rerun    ignite test zlint:a zlint:b"),
+        "{}",
+        reply.text
+    );
+    assert!(
+        reply
+            .text
+            .contains("pass `ignite test` on them (plus clippy for any edited crate)"),
+        "{}",
+        reply.text
     );
 }
 

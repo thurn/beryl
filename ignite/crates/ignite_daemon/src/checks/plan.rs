@@ -46,6 +46,7 @@ pub(crate) fn areas(changed: &[String], graph: &CrateGraph) -> Vec<String> {
 
 /// Product catches for one planning pass. Read before listing so a required check's family
 /// can be brought into scope and listed even if it needs a cold build.
+#[derive(Clone)]
 pub(super) struct GateCatches {
     pub areas: Vec<String>,
     pub records: Vec<ProductCatch>,

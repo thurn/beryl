@@ -54,6 +54,7 @@ mod observed;
 mod package_listings;
 pub(crate) mod plan;
 mod prepare;
+mod prepass;
 mod products;
 mod regression;
 pub(crate) mod run_reads;

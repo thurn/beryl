@@ -57,10 +57,8 @@ pub(super) fn failed_gate(
     )];
     lines.extend(built_lines(&gated.run));
     lines.extend(gate_lines(gated));
-    let rerun = gated.run.failures.first().map_or_else(
-        || "ignite check".to_owned(),
-        |failure| format!("ignite test {}", failure.check),
-    );
+    let rerun = crate::checks::verbs::rerun_command(&gated.run)
+        .unwrap_or_else(|| "ignite check".to_owned());
     lines.push(line("rerun", rerun));
     lines.push(line("next", refused_next(gated)));
     let prefix = format!("{}/", gate_path.display());

@@ -477,6 +477,9 @@ impl Server {
                 return refusal;
             }
         }
+        if let Some(refusal) = crate::supervise::duplicate_run_reply(&self.handles, &ctx, req) {
+            return refusal;
+        }
         if let Some(session) = &req.session {
             lock(&self.commands).insert(
                 session.clone(),

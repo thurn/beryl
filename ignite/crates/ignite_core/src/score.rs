@@ -31,7 +31,7 @@ use crate::traits::Git;
 pub const RECENT_PRODUCT_CATCH_SECONDS: f64 = 14.0 * 86_400.0;
 
 /// One check whose failure led to a product fix, with the areas of its first bad commit.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ProductCatch {
     pub check: CheckName,
     pub at: Timestamp,

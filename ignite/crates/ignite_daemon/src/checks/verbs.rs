@@ -168,6 +168,17 @@ impl Verb for CheckVerb {
             gated.opened(ctx, opening);
             let mut lines = built_lines(&gated.run);
             lines.extend(gate_lines(&gated));
+            if !gated.run.passed()
+                && let Some(rerun) = rerun_command(&gated.run)
+            {
+                lines.push(("rerun".to_owned(), rerun));
+                lines.push((
+                    "next".to_owned(),
+                    "fix the failures and pass `ignite test` on them (plus clippy for any \
+                     edited crate) before running `ignite check` again"
+                        .to_owned(),
+                ));
+            }
             lines.extend(super::verdict::store_lines(ctx, &checks, &tree, &gated));
             return reply(&gated.run, render(&lines));
         }
@@ -586,6 +597,22 @@ fn ran_line(run: &CheckRun) -> String {
         String::new()
     };
     format!("{} checks: {verdict}{cache}", run.outcomes.len())
+}
+
+/// A copy-pasteable `ignite test` command covering up to [`SHOWN_FAILURES`] distinct failed
+/// checks from `run`, in failure order.
+pub(crate) fn rerun_command(run: &CheckRun) -> Option<String> {
+    let mut names = Vec::new();
+    for failure in &run.failures {
+        let check = failure.check.as_str();
+        if !names.contains(&check) {
+            names.push(check);
+            if names.len() == SHOWN_FAILURES {
+                break;
+            }
+        }
+    }
+    (!names.is_empty()).then(|| format!("ignite test {}", names.join(" ")))
 }
 
 pub(super) fn failure_lines(run: &CheckRun) -> Vec<(String, String)> {

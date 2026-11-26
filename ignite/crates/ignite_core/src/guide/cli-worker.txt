@@ -11,6 +11,12 @@ Rules, and why:
 - Wait in the foreground. Run heavy work as ignite run -- <command> or ignite
   test <names>, then ignite wait <handle>. These run under the daemon, which
   outlives your turn, and ignite wait blocks until the operation finishes.
+- Pass --class batch on multi-minute ignite run commands (such as fuzzing) so
+  they do not starve builds, and never launch a second ignite run of a command
+  already running.
+- After an ignite check or ignite land failure, fix the failures and pass
+  ignite test on every failing check (plus clippy for any crate you edited)
+  before running ignite check or ignite land again.
 - A turn may also end while an ignite verb of yours still runs. The daemon
   resumes you when the verb ends, with its result.
 - Leave fleet settings to the operator, incident commander or justiciar.

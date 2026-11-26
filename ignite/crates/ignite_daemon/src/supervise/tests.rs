@@ -207,3 +207,36 @@ fn a_run_in_the_express_directory_of_a_tree_names_ignite_test_of_the_express_fam
     assert!(!run_in("/repo/trees/tree-01/rust").contains("hint"));
     assert!(!run_in("/repo/tool").contains("hint"), "the main checkout");
 }
+
+#[test]
+fn a_duplicate_ignite_run_in_the_same_tree_is_refused_with_the_active_handle() {
+    let handles = crate::handles::Handles::new(Arc::new(ignite_core::fakes::FakeClock::new(
+        ignite_core::time::Timestamp::EPOCH,
+    )));
+    let mut ctx = context(Arc::new(FakeLauncher::default()));
+    let tree = ignite_core::ids::TreeId::new("tree-02").unwrap();
+    ctx.tree = Some(tree.clone());
+    let first = request(&["--", "just", "fuzz"]);
+    let handle = handles.create_for("run", None, Some(&tree), Some(&first));
+
+    let dup = duplicate_run_reply(
+        &handles,
+        &ctx,
+        &request(&["--cores", "2", "--", "just", "fuzz"]),
+    )
+    .expect("duplicate run refused");
+    assert_eq!(dup.exit, Exit::Conflict);
+    assert!(dup.text.contains(handle.as_str()), "{}", dup.text);
+    assert!(dup.text.contains("ignite wait"), "{}", dup.text);
+
+    assert!(
+        duplicate_run_reply(&handles, &ctx, &request(&["--", "just", "fmt"])).is_none(),
+        "a different command is allowed"
+    );
+
+    handles.finish(&handle, Reply::text(Exit::Success, "done"));
+    assert!(
+        duplicate_run_reply(&handles, &ctx, &request(&["--", "just", "fuzz"])).is_none(),
+        "once finished, the same command may run again"
+    );
+}
