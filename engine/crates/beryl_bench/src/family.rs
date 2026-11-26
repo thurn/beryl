@@ -17,6 +17,13 @@
 //! ([`stand_in`]), the same card with no static or triggered ability and no keyword, and ends
 //! every effect a card of the family created. A card of the family in a hand, a library or a
 //! graveyard stays: no ability of these cards works there.
+//!
+//! The control runs on a table of its own ([`control_table`]): the same cards under the same
+//! indices, with the capabilities ([`beryl_engine::table::Capability`]) the game would have if
+//! no card of the family, no stand-in and no token only they make were in it. The engine
+//! switches a path on for every game whose cards can use it (banding's combat, a turn plan, a
+//! split card's characteristics), so a control on the present table would pay for every path
+//! the family switches on, and the ratio would see only what its permanents' abilities do.
 
 use std::hint::black_box;
 
@@ -462,10 +469,37 @@ impl InTable {
     }
 }
 
-/// The control state: `s` with the family taken out, its layer results current. Each
-/// permanent and spell of the family becomes its stand-in, and every effect a card of the
-/// family created ends. Nothing else changes. `None` if the recompute had no room.
-pub fn control(s: &State, t: &GameTable, family: &InTable) -> Option<State> {
+/// The control's table: `t` with the capabilities it would have if the cards of `family`,
+/// their stand-ins and every token or emblem that only they make were in no deck. A stand-in
+/// counts as out because it keeps its card's spell and activated abilities (Time Stop's
+/// stand-in still ends the turn), so leaving it in would keep the capability the family is
+/// measured for.
+pub fn control_table(t: &GameTable, family: &InTable) -> GameTable {
+    let mut without: Vec<CardIx> = family.pairs.iter().flat_map(|&(c, s)| [c, s]).collect();
+    let made_by = |cards: &mut dyn Iterator<Item = CardIx>| {
+        let mut made = Vec::new();
+        for card in cards {
+            t.def(card)
+                .creates(&mut |def| made.extend(t.index_of::<CardIx>(def)));
+        }
+        made
+    };
+    let only_theirs = made_by(&mut without.iter().copied());
+    let others = made_by(&mut t.indices::<CardIx>().filter(|c| !without.contains(c)));
+    without.extend(only_theirs.into_iter().filter(|c| !others.contains(c)));
+    t.without_capabilities_of(&without)
+}
+
+/// The control state: `s` with the family taken out, its layer results current under the
+/// control's table `tc` ([`control_table`]). Each permanent and spell of the family becomes its
+/// stand-in, every effect a card of the family created ends, and every tracker and count that
+/// no card of `tc` reads is forgotten. Nothing else changes. `None` if the recompute had no
+/// room.
+///
+/// The swaps are recomputed under the present table `t` first: a list the layers keep only in
+/// a game with the capability, such as the effects that reach other zones, is rebuilt there
+/// without the family's, and a recompute under `tc` would leave it as it was.
+pub fn control(s: &State, t: &GameTable, tc: &GameTable, family: &InTable) -> Option<State> {
     // A question about which of several legendary permanents to keep is asked of a state with
     // such a group, which the control has no longer if a copy by the family was in it.
     if matches!(s.pending(), beryl_engine::state::Pending::LegendRule { .. })
@@ -489,6 +523,8 @@ pub fn control(s: &State, t: &GameTable, family: &InTable) -> Option<State> {
         board.set_card(slot, stand_in);
     }
     rederive(&mut c, t).ok()?;
+    c.board().forget_unread_trackers(tc);
+    rederive(&mut c, tc).ok()?;
     Some(c)
 }
 
@@ -520,6 +556,8 @@ fn cut(t: &GameTable, family: &InTable, seed: u64, out: &mut Vec<State>) {
 pub struct FamilyWorkload {
     pub family: &'static Family,
     pub table: GameTable,
+    /// The table the control states run on ([`control_table`]).
+    pub control_table: GameTable,
     pub in_table: InTable,
     pub policy: RolloutPolicy,
     pub positions: Vec<State>,
@@ -557,9 +595,11 @@ impl FamilyWorkload {
             }
         }
         let policy = RolloutPolicy::new(&table);
+        let control_table = control_table(&table, &in_table);
         FamilyWorkload {
             family,
             table,
+            control_table,
             in_table,
             policy,
             positions,
@@ -621,7 +661,8 @@ pub fn control_step(
 }
 
 /// The control's step for the rollout's choice `c` of `d` in `s`, if the control `sc` offers a
-/// candidate that does the same; none, and nothing counted, otherwise.
+/// candidate that does the same; none, and nothing counted, otherwise. `a` answers on the
+/// control's table.
 fn pair(
     w: &FamilyWorkload,
     s: &State,
@@ -631,14 +672,14 @@ fn pair(
     xc: &mut Scratch,
     a: &mut Inline<'_>,
 ) -> bool {
-    let t = &w.table;
-    let Step::Decide(dc) = next(sc, t, xc, a) else {
+    let tc = &w.control_table;
+    let Step::Decide(dc) = next(sc, tc, xc, a) else {
         return false;
     };
-    let Some(cc) = Chosen::new(t, s, d, c).find(t, sc, &dc) else {
+    let Some(cc) = Chosen::new(&w.table, s, d, c).find(tc, sc, &dc) else {
         return false;
     };
-    black_box(control_step(sc, t, xc, a, &dc, cc));
+    black_box(control_step(sc, tc, xc, a, &dc, cc));
     true
 }
 
@@ -649,7 +690,22 @@ pub fn roll_paired(w: &FamilyWorkload) -> Pairing {
         policy: &w.policy,
         t,
     };
-    let (mut x, mut xc) = (Scratch::unchecked(), Scratch::unchecked());
+    let mut ac = Inline {
+        policy: &w.policy,
+        t: &w.control_table,
+    };
+    // The control side is checked in a debug build ([`Scratch::new`]): its states run on a
+    // table with fewer capabilities than the game they were cut from, and a step that reaches
+    // a path the table switched off would be counted wrong. A release build checks neither.
+    // The identity family's control is left unchecked: it keeps merged and phased-out
+    // permanents as they are, and one of its states holds a memo whose object has gone, on the
+    // present table as on the control's.
+    let mut xc = if w.in_table.identity {
+        Scratch::unchecked()
+    } else {
+        Scratch::new()
+    };
+    let mut x = Scratch::unchecked();
     let mut pairing = Pairing::default();
     for start in &w.starts {
         let mut s = *start;
@@ -658,8 +714,8 @@ pub fn roll_paired(w: &FamilyWorkload) -> Pairing {
         let mut copies = x.counts.state_copies;
         while let Step::Decide(d) = step {
             let c = w.policy.choose(t, Observation::new(&s, d.decider), &d);
-            let paired = control(&s, t, &w.in_table)
-                .is_some_and(|mut sc| pair(w, &s, &d, c, &mut sc, &mut xc, &mut a));
+            let paired = control(&s, t, &w.control_table, &w.in_table)
+                .is_some_and(|mut sc| pair(w, &s, &d, c, &mut sc, &mut xc, &mut ac));
             if paired {
                 pairing.paired += 1;
                 step = present_step(&mut s, t, &mut x, &mut a, &d, c);

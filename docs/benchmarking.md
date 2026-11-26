@@ -158,6 +158,19 @@ it is in play. The present-cost gate measures what it costs while one is:
   both and advances each to the next decision. The rollout goes on from S and S'
   is dropped. A step whose choice S' does not offer is left out of both sums and
   counted as skipped.
+- **The control has its own table** (`family::control_table`): the same cards
+  under the same indices, with the capabilities
+  (`beryl_engine::table::Capability`) the game would have if no card of the
+  family, no stand-in and no token that only they make were in it
+  (`GameTable::without_capabilities_of`). The engine switches a path on for
+  every game whose cards could use it, such as banding's attack options or the
+  turn plan, so a control on the present table would pay for every path the
+  family switches on. A stand-in counts as out because it keeps its card's spell
+  and activated abilities: Time Stop's stand-in still ends the turn. S' forgets
+  the trackers and counts the control's table does not keep, and a debug build
+  checks every control step against the engine's invariants on that table
+  (`families_pair_their_steps`). The `identity` family's control is not checked:
+  one of its states holds a memo whose object has gone, on either table.
 - **Why the control is rebuilt at every step.** Rolling the same positions out
   with and without the family plays different games from the first decision.
   Glorious Anthem makes games with more combat and more creatures dying, which
@@ -180,6 +193,18 @@ it is in play. The present-cost gate measures what it costs while one is:
   in `Stalled(Capacity)` (a list filled, so a `Large` game would have gone on)
   and the layer recomputes per step. Ignite lists each family with a bar as
   `counts:family/<name>`.
+
+Measured on the ARM64 Lima verifier on 2026-11-25, after the control got its own
+table, each of the last eight families still measured a ratio of 1.000:
+`two-faced` 300,593,256 against 300,611,447 instructions, `levels` 383,200,168
+against 383,208,828, `face-down` 361,992,460 against 362,002,502, `outside`
+201,553,275 against 201,593,397, `turn-structure` 189,760,044 against
+189,767,934, `restart` 257,314,902 against 257,330,478, `cast-in-resolution`
+330,385,225 against 330,392,334 and `combat-assignment` 267,645,025 against
+267,651,394. The control does take other paths: in `combat-assignment` 71 of
+3,118 control decisions lost their banding options, and in `turn-structure` 820
+of 1,871 control steps ended in another state than on the present table. What a
+capability switches on costs a step too little to show.
 
 A subgame cannot be paired: only `State<Large>` suspends a game, and a state
 inside a subgame has no control with a card taken out.

@@ -286,6 +286,27 @@ impl Capability {
     }
 }
 
+impl super::GameTable {
+    /// This table with its capabilities found again as if the cards at `without` were in no
+    /// deck: the same cards under the same indices, so a state of this table is a state of
+    /// the copy. Everything else the table found from those cards stays, such as their
+    /// listeners and rule changes. The present-cost benchmark measures a family of cards
+    /// against a copy without the paths their capabilities switch on (`beryl_bench`'s
+    /// `family`).
+    #[must_use]
+    pub fn without_capabilities_of(&self, without: &[crate::ids::CardIx]) -> super::GameTable {
+        let kept: Vec<&CardDef> = (self.defs.iter().enumerate())
+            .filter(|&(i, _)| !without.iter().any(|card| card.index() == i))
+            .map(|(_, &def)| def)
+            .collect();
+        let capabilities = Capability::of_game(&kept, &self.subtypes);
+        super::GameTable {
+            capabilities,
+            ..self.clone()
+        }
+    }
+}
+
 /// The capabilities a replacement effect gives a game. Each test reads a different field of the
 /// replacement, so they are separate tests: as arms of one match, the first to accept a
 /// replacement would hide the others.

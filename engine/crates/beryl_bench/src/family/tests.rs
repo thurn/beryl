@@ -11,7 +11,7 @@ fn control_takes_the_family_out() {
     let w = FamilyWorkload::new("attachments");
     for s in &w.positions {
         assert!(w.in_table.in_play(s));
-        let c = control(s, &w.table, &w.in_table).expect("room to recompute");
+        let c = control(s, &w.table, &w.control_table, &w.in_table).expect("room to recompute");
         assert!(!w.in_table.in_play(&c));
         let slots = |s: &State| {
             s.permanents_with_derived()
@@ -151,7 +151,8 @@ fn family_corpora_never_change() {
 /// steps would not be what a `Large` game costs, unless a card of the family records the mana
 /// spent on an ability's X (`Capability::SpentOnX`, Illusionary Mask): only `Large` holds that
 /// record, so every activation for X above 0 stalls a `Small` rollout, and the family is
-/// measured up to it; and the counts are the same on a second run,
+/// measured up to it; the control's steps keep the engine's invariants on the control's table,
+/// which `roll_paired` checks in a debug build; and the counts are the same on a second run,
 /// since the gate compares counts from separate runs. The exact counts are not pinned: they
 /// move with every change to the engine or the rollout policy, and the corpora themselves are
 /// pinned by `family_corpora_never_change`.
@@ -173,5 +174,23 @@ fn families_pair_their_steps() {
             assert_eq!(p.capacity_stalls, 0, "{}: {p:?}", f.name);
         }
         assert_eq!(roll_paired(&w), p, "{}: a second run differs", f.name);
+    }
+}
+
+/// The control runs on a table without the capabilities the family's cards switch on, so its
+/// steps skip the paths they pay for: banding's combat for the combat-assignment family, the
+/// turn plan for the turn-structure family. The present table keeps them.
+#[test]
+fn the_control_table_lacks_the_family_capabilities() {
+    for (name, capability) in [
+        ("combat-assignment", Capability::Banding),
+        ("turn-structure", Capability::TurnStructure),
+    ] {
+        let (t, in_table) = InTable::table(family(name).expect("a family"));
+        assert!(t.can(capability), "{name}: {capability:?}");
+        assert!(
+            !control_table(&t, &in_table).can(capability),
+            "{name}: {capability:?}"
+        );
     }
 }

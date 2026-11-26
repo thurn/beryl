@@ -179,6 +179,23 @@ impl<L: Layout> Trackers<L> {
             set.remove(slot);
         }
     }
+
+    /// Ends every tracker and count that no card of `t` reads: what a game played on `t` would
+    /// not have kept.
+    pub(crate) fn forget_unread(&mut self, t: &GameTable) {
+        for tracker in Tracker::ALL {
+            if !t.can(tracker.capability()) {
+                self.sets[tracker.index()] = Bitboard::EMPTY;
+            }
+        }
+        for count in Count::ALL {
+            if !t.can(count.capability()) {
+                for player in Seat::BOTH {
+                    self.counts[player.index()][count.index()] = 0;
+                }
+            }
+        }
+    }
 }
 
 impl<L: Layout> Store<L> for Trackers<L> {

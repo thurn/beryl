@@ -356,6 +356,13 @@ impl<L: Layout> Board<'_, L> {
         self.0.trackers.set_count(count, player, n);
     }
 
+    /// Ends every tracker and count that no card of `t` reads, for a state moved to a table
+    /// with fewer capabilities ([`GameTable::without_capabilities_of`]), which keeps none of
+    /// them.
+    pub fn forget_unread_trackers(&mut self, t: &GameTable) {
+        self.0.trackers.forget_unread(t);
+    }
+
     /// Trades the identities of two cards, as the deal could have dealt them: which card a
     /// slot holds says nothing until a player knows it (architecture §13).
     pub fn swap_cards(&mut self, a: L::Slot, b: L::Slot) {
