@@ -185,8 +185,10 @@ each command prints. `ignite guide <topic>` holds the rules for one situation.
   worker pool starts on it (`/ignite <plan>` and the `ignite` skill).
 - Each ticket names the files, helpers and tests it needs by path, so that its
   session can read them all in its first message, and has a tier: `tier:high`
-  for design work, `tier:light` for mechanical work. An epic gets no tier label,
-  because its children inherit it.
+  for design, new rules mechanics, kernel work and changes to shared layout or
+  animation code, and `tier:light` for the rest. Around half of all tickets
+  filed should be `tier:light`. An epic gets no tier label, because its children
+  inherit it.
 - The worker pool can pick up a standalone ticket within minutes, so land what
   it depends on first or give it the dependency. When you file a ticket for
   something you found while working with the user, offer to fix it in the

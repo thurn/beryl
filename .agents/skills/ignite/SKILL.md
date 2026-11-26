@@ -85,9 +85,23 @@ start, because the person may not be there later.
   ticket that needs it, never on its epic. A reported-only ticket (a benchmark,
   a measurement) gets no dependents. Two tickets that would rewrite the same
   code get an ordering edge.
-- **Every ticket gets a tier label**: `tier:high` for design and anything that
-  races or caches, `tier:light` for ports, declarations and mechanical work.
-  These run on every provider (`[pool.models]` in `ignite.toml`). A tier named
+- **Every ticket gets a tier label**, and around half of all tickets filed
+  should be `tier:light`. In a blind trial on real high-tier tickets, the light
+  model cost about half as much, matched the high model overall and wrote
+  better tests, but its mistakes got past the checks in some kinds of work. Use
+  `tier:high` for:
+  - engine work that adds or changes a rules mechanic or vocabulary entry, or
+    touches the kernel or the rollout hot path, where the light model shipped
+    rules bugs and costs to games that don't use the card, and the count gate
+    and scenarios did not catch them;
+  - interface changes to shared layout, animation or frame code, where the
+    light model tended to add state beside the code rather than fix it at its
+    source;
+  - design work, and anything that races or caches.
+
+  Use `tier:light` for card files written in existing vocabulary, tooling,
+  tests, check repairs, ports, declarations, and refactors whose ticket names
+  every file to change. These run on every provider (`[pool.models]` in `ignite.toml`). A tier named
   after a model, such as `tier:opus` or `tier:hydrogen`, runs only on that
   model; use one only when the work needs that model, as a model trial's arms
   do. Never `tier:fable` unless the person asked for it. No tier or lane label
