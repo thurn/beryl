@@ -256,15 +256,23 @@ impl TipVerifier {
             .map(|(key, run)| (key.clone(), run.clone()))
             .collect();
         self.note_incomplete(ctx, tip, checks, &after, false);
-        for check in &split.after {
-            let Some(run) = verdicts.get(&check.key) else {
-                continue;
-            };
-            if run.outcome != Outcome::Fail {
-                continue;
-            }
-            let output = run.output.clone();
-            let prior = scope.last_good_for(check);
+        let failed: Vec<&TipCheck> = split
+            .after
+            .iter()
+            .copied()
+            .filter(|check| {
+                verdicts
+                    .get(&check.key)
+                    .is_some_and(|run| run.outcome == Outcome::Fail)
+            })
+            .collect();
+        // `master` is at `tip` now, so the pass that clears a check is at `last`.
+        let at_master = self.passed_at_master(ctx, scope, last, tip, &failed);
+        for check in failed {
+            let output = verdicts.get(&check.key).and_then(|run| run.output.clone());
+            let prior = scope
+                .last_good_for(check)
+                .filter(|_| !at_master.contains(&check.check));
             if let Err(error) = self.blame(
                 ctx,
                 prior.unwrap_or(last),

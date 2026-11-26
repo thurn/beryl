@@ -1000,5 +1000,10 @@
     "label": "A newer `staging` candidate no longer ends a tip round that is still running its own checks before `master` moves, unless `master` has reached the round's tip. On 2026-11-25 a Windows-only lint failed at every tip for six hours, and each landing ended the other machines' rounds within minutes: 84 rounds ran about 5,000 checks between them, so breakages that landed meanwhile were found one at a time after the lint cleared, and `master` stayed stalled while 99 product commits waited on `staging`",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
+  },
+  {
+    "label": "A tip check that fails on a platform still catching up on deferred checks is blamed from `master`, and may be reverted after a stall, when it has a pass at `master` on that platform. On 2026-11-25 the macOS and Windows gaps opened at f686d75 the evening before had not closed, so every native failure was blamed from a commit 265 landings back and no stall could revert it: a Windows-only lint held `master` from 14:21 to about 20:50, and `counts:rollouts` held it again from 23:44 with a culprit search naming the day before's landings",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]

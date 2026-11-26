@@ -317,3 +317,67 @@ pub(super) fn budget_after<'a>(
     }
     Ok(after)
 }
+
+impl TipVerifier {
+    /// Which of `failed` passed at `last`, the commit `master` is at, on a platform still
+    /// catching up on checks deferred past an earlier promotion.
+    ///
+    /// The gap's `last_good` is where every check of the platform last passed together, and it
+    /// stays there until one round passes them all. A check that passed at `master` was not
+    /// left unverified by the gap, so its failure is blamed from `master` and a stall may
+    /// revert its culprit. On 2026-11-25 a gap opened the evening before had not closed, so
+    /// every macOS and Windows failure was blamed from a commit 265 landings back and no stall
+    /// could revert it: a Windows lint held `master` for six hours and a count check for hours
+    /// more, and the count check's search named landings from the day before.
+    pub(super) fn passed_at_master(
+        &self,
+        ctx: &Context,
+        scope: &Scope<'_>,
+        last: &Commit,
+        tip: &Commit,
+        failed: &[&TipCheck],
+    ) -> HashSet<CheckName> {
+        let behind: Vec<&TipCheck> = failed
+            .iter()
+            .copied()
+            .filter(|check| scope.last_good_for(check).is_some_and(|good| good != last))
+            .collect();
+        if last == tip || behind.is_empty() {
+            return HashSet::new();
+        }
+        let listing = match self.work.cached_checks(ctx, last) {
+            Ok(Some(set)) => set.listing,
+            Ok(None) => return HashSet::new(),
+            Err(error) => {
+                eprintln!("ignite: master {last}: could not read kept listings: {error}");
+                return HashSet::new();
+            }
+        };
+        let at_master: Vec<&TipCheck> = listing
+            .checks
+            .iter()
+            .filter(|listed| {
+                listed.reuse
+                    && behind.iter().any(|check| {
+                        check.check == listed.check && check.key.platform == listed.key.platform
+                    })
+            })
+            .collect();
+        if at_master.is_empty() {
+            return HashSet::new();
+        }
+        let keys: Vec<ResultKey> = at_master.iter().map(|check| check.key.clone()).collect();
+        let Ok(results) = ctx.hub.lookup(&keys) else {
+            return HashSet::new();
+        };
+        at_master
+            .into_iter()
+            .zip(results)
+            .filter(|(_, hit)| {
+                hit.as_ref()
+                    .is_some_and(|hit| matches!(hit.outcome, Outcome::Pass | Outcome::Flaky))
+            })
+            .map(|(check, _)| check.check.clone())
+            .collect()
+    }
+}

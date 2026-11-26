@@ -3086,7 +3086,9 @@ landing. A settled tip with a required failure gets one more round when the
 stall threshold is reached. Checks past the tip budget, and native checks
 catching up on coverage from before `master`, still get regression tickets. A
 platform catching up from `master` itself has no promoted landing to blame, so
-its failures qualify like any other. The stall setting is optional and
+its failures qualify like any other. So does a failed check that has a pass at
+`master` on its platform, however old the gap: the gap did not leave that check
+unverified. The stall setting is optional and
 independent of `broken_build`.
 
 An eligible failure reverts its culprit when all of these hold, and otherwise
@@ -4801,7 +4803,12 @@ deferred checks, even if more tips advance before the platform catches up.
 
 An available verifier catches up at the promoted tip, including when `master`
 already points to it. A failure files a regression whose culprit search starts
-at the last commit before the first deferral. Once the platform verifies the
+at the last commit before the first deferral, unless the check has a pass at
+`master` on that platform, read through `master`'s kept listing: then the search
+starts at `master`. A gap closes only when one round passes every check of the
+platform, so it can stay open for a day while the platform verifies every tip,
+and without this rule each failure then blamed hundreds of landings and could
+never be reverted. Once the platform verifies the
 tip, the warning clears. The hub skips filing wait tickets for off machines and
 closes existing tickets about waiting for them.
 

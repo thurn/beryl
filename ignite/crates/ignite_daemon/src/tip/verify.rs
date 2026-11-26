@@ -441,11 +441,19 @@ impl TipVerifier {
             // A platform catching up on checks deferred past an earlier promotion blames from
             // its own last good commit. When that commit is `master` itself, the gap holds no
             // promoted landing and the failure is like any other: refusing it the revert left
-            // a Windows lint holding `master` for hours while every tip failed it.
+            // a Windows lint holding `master` for hours while every tip failed it. A check
+            // that passed at `master` was not left unverified by the gap, so it blames from
+            // `master` too (see `passed_at_master`).
+            let at_master = self.passed_at_master(ctx, scope, last, tip, &failed);
+            let prior_for = |check: &TipCheck| {
+                scope
+                    .last_good_for(check)
+                    .filter(|_| !at_master.contains(&check.check))
+            };
             let can_revert = |check: &TipCheck| {
                 last != tip
                     && check.runnable
-                    && scope.last_good_for(check).is_none_or(|good| good == last)
+                    && prior_for(check).is_none_or(|good| good == last)
                     && (!split.is_after(check) || regressions.contains(&check.check))
             };
             let stall_at = failed
@@ -466,7 +474,7 @@ impl TipVerifier {
             for check in &failed {
                 let output = verdicts.get(&check.key).and_then(|v| v.output.clone());
                 // If this search is interrupted and the check still fails, the next round reports it.
-                let prior = scope.last_good_for(check);
+                let prior = prior_for(check);
                 match self.blame(
                     ctx,
                     prior.unwrap_or(last),

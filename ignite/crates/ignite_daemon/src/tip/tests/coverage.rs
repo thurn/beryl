@@ -315,6 +315,83 @@ fn a_platform_catching_up_from_master_reverts_during_a_stall() {
     assert_eq!(reverts[0].ticket, Some(ticket("tk.40")));
 }
 
+/// A platform whose gap opened long before `master` still blames a check from `master` when
+/// that check passed there, so a stall reverts its culprit. Without the pass at `master`, the
+/// failure may have been in the gap, and it blames from the gap's last good commit as before.
+#[test]
+fn a_check_that_passed_at_master_reverts_despite_an_older_gap() {
+    use ignite_core::protocol::hub::{NewResult, ResultCost};
+    use ignite_core::tipround::{DeferredPlatform, PlatformVerification, TipCoverage};
+    use ignite_core::traits::RevertOutcome;
+
+    for passed_at_master in [true, false] {
+        let world = World::new();
+        let master = world.master();
+        let old = commit("9999000");
+        let tip = commit("bbbb000");
+        world.land(&tip);
+        world.hub.set_tip_coverage(TipCoverage {
+            platforms: [(
+                Os::Windows,
+                PlatformVerification {
+                    through: master.clone(),
+                    deferred: Some(DeferredPlatform {
+                        since: commit("9999111"),
+                        last_good: old.clone(),
+                    }),
+                },
+            )]
+            .into(),
+            ..TipCoverage::default()
+        });
+        let at_master = windows_check('a', true);
+        let failing = windows_check('b', true);
+        world.work.set_checks(&master, vec![at_master.clone()]);
+        if passed_at_master {
+            world
+                .hub
+                .store(&[NewResult {
+                    key: at_master.key.clone(),
+                    outcome: Outcome::Pass,
+                    machine: world.ctx("m-2").machine.clone(),
+                    record: RecordId(1),
+                    output: None,
+                    cost: ResultCost::default(),
+                    areas: Vec::new(),
+                }])
+                .unwrap();
+        }
+        world
+            .work
+            .add_landing("tk.41", &[tip.as_str()], &["src/windows/lib.rs"]);
+        world.work.set_outcome(&tip, &failing.check, Outcome::Fail);
+        world.work.set_checks(&tip, vec![failing]);
+        world.git.script_revert(RevertOutcome::Clean {
+            commit: commit("cccc000"),
+        });
+        let mut ctx = world.ctx("m-2");
+        ctx.config.revert.stall_minutes = Some(120);
+        world.clock.advance(121.0 * 60.0);
+
+        world
+            .verifier()
+            .with_host("windows")
+            .pausing_with(Arc::new(|_| {}))
+            .verify(&ctx, &tip)
+            .unwrap();
+
+        let reverts = world.hub.reverted_landings();
+        let reports = world.hub.regressions();
+        if passed_at_master {
+            assert_eq!(reverts.len(), 1, "{reports:?}");
+            assert_eq!(reverts[0].ticket, Some(ticket("tk.41")));
+        } else {
+            assert!(reverts.is_empty(), "{reverts:?}");
+            assert_eq!(reports[0].last_good, old);
+        }
+    }
+}
+
 #[test]
 #[allow(clippy::too_many_lines)]
 fn family_and_checks_only_deferrals_promote_before_windows_catches_up() {
