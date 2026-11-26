@@ -303,12 +303,26 @@ fn local_draw_spline(step: &StepIn<'_>, (from, to): (Pose, Pose)) -> Shape {
     let from_ndc = camera.project(from.position).truncate();
     let ref_hold_ndc = spec.nodes[3].ndc;
     let ref_span = ref_hold_ndc - LOCAL_REF_FROM_NDC;
+    // A shared library stands at the side of the table, level with the hold spot rather than
+    // below it, so scaling each waypoint's share of Arena's way would turn the arc upside
+    // down. Arena's waypoints are moved instead: each by as much of the library's offset from
+    // Arena's library as it lies near the library, and of the hold spot's offset as it lies
+    // near the hold, so the card still rises off the library and comes down to the hold.
+    let shifted = step.table.shared.is_some().then(|| {
+        let hold_ndc = over_rest_ndc.unwrap_or(ref_hold_ndc);
+        move |node: Vec2| {
+            let near_hold = ((node.x - LOCAL_REF_FROM_NDC.x) / ref_span.x).clamp(0.0, 1.0);
+            node + (from_ndc - LOCAL_REF_FROM_NDC) * (1.0 - near_hold)
+                + (hold_ndc - ref_hold_ndc) * near_hold
+        }
+    });
 
     let mut interior = [SplineNode::default(); MAX_SPLINE_INTERIOR];
     for (index, node) in spec.nodes.iter().enumerate() {
         #[expect(clippy::cast_precision_loss, reason = "index is 0..4")]
         let u = (index + 1) as f32 / 5.0;
         let ndc = match over_rest_ndc {
+            _ if let Some(shift) = shifted => shift(node.ndc),
             Some(hold_ndc) if index == 3 => hold_ndc,
             Some(hold_ndc) => {
                 // Remap interior waypoints proportionally between `from_ndc` and `hold_ndc` on

@@ -235,7 +235,7 @@ pub(crate) fn place_reusing(
         // A group the cards being handled are lifted from is placed again when the cards
         // handled changed, though its objects did not.
         let lifted_from = |handled: Option<&lifted::Handled>| {
-            handled.and_then(|handled| lifted::group_of(handled.handling)) == Some(group)
+            handled.and_then(lifted::Handled::group) == Some(group)
         };
         let (handled, known_handled) = (zones.handling.as_ref(), known_zones.handling.as_ref());
         let same = same
@@ -653,7 +653,9 @@ fn lay(
     let (layout, camera, scroll, fits, ids, lift) = rules;
     match group {
         Group::Pile { side, zone } => {
-            if side.is_none() != layout.shape.is_shared() {
+            // The zones, not the layout, say whether the piles are shared: the table played
+            // over by a script is placed with no view to take the layout's shape from.
+            if side.is_none() != zones.shared {
                 return;
             }
             if layout.pile_visible(zone) {

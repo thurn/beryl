@@ -17,7 +17,7 @@ use super::shorthand::{
 
 /// A library for the many draws of verbs-piles: Jace, Wielder of Mysteries wins its controller
 /// the game on a draw from an empty one.
-const DRAWS: &[&str] = &[
+pub(super) const DRAWS: &[&str] = &[
     ISLAND, PLAINS, ISLAND, PLAINS, ISLAND, PLAINS, ISLAND, PLAINS, ISLAND, PLAINS, ISLAND, PLAINS,
     ISLAND, PLAINS, ISLAND, PLAINS,
 ];
@@ -28,16 +28,132 @@ const BURN_SEED: u64 = 2;
 /// What the first seat scries with: Aang's Iceberg and the lands to activate it.
 const ICEBERG: &[Permanent] = &[Permanent::new(AANGS_ICEBERG), PLAINS_, PLAINS_, ISLAND_];
 
-/// The first seat's table for a scry of two with Aang's Iceberg, named `name`.
-const fn scry(name: &'static str) -> Scenario {
+/// The first seat's library for a scry of two with Aang's Iceberg, top first.
+pub(super) const SCRIED: &[&str] = &[COUNTERSPELL, ISLAND, PLAINS, ISLAND];
+
+/// The first seat's table for a scry of two with Aang's Iceberg, named `name`, with neither
+/// player's library set.
+pub(super) const fn scry_table(name: &'static str) -> Scenario {
     Scenario::new(name)
         .at(3, P0, TurnStep::PrecombatMain)
         .permanents(P0, ICEBERG)
         .hand(P0, &[COUNTERSPELL])
-        .library(P0, &[COUNTERSPELL, ISLAND, PLAINS, ISLAND])
         .permanents(P1, &[ISLAND_, PLAINS_])
-        .library(P1, LANDS)
 }
+
+/// The first seat's table for a scry of two with Aang's Iceberg, named `name`.
+const fn scry(name: &'static str) -> Scenario {
+    scry_table(name).library(P0, SCRIED).library(P1, LANDS)
+}
+
+/// The actions of verbs-scry: the first seat scries two and puts one of them on the bottom.
+pub(super) const SCRY: &[Action] = &[
+    Action::activate(P0, AANGS_ICEBERG, 1),
+    choose(P0, DecisionKind::ChooseUpTo, ISLAND),
+    Action::answer(P0, DecisionKind::ChooseUpTo, Pick::Done),
+];
+
+/// The actions of verbs-look: the scry left open while the first seat looks.
+pub(super) const LOOK: &[Action] = &[Action::activate(P0, AANGS_ICEBERG, 1)];
+
+/// The first seat's permanents in verbs-piles.
+const PILES_MINE: &[Permanent] = &[
+    Permanent::new(JACE_WIELDER_OF_MYSTERIES),
+    Permanent::new(JACE_THE_MIND_SCULPTOR),
+    ISLAND_,
+    ISLAND_,
+    ISLAND_,
+    ISLAND_,
+    ISLAND_,
+    ISLAND_,
+    PLAINS_,
+    PLAINS_,
+    PLAINS_,
+    PLAINS_,
+];
+
+/// The opponent's permanents in verbs-piles.
+const PILES_THEIRS: &[Permanent] = &[
+    Permanent::new(ADELINE_RESPLENDENT_CATHAR),
+    Permanent::new(MANA_CRYPT),
+    ISLAND_,
+    ISLAND_,
+    ISLAND_,
+    PLAINS_,
+    PLAINS_,
+];
+
+/// The first seat's permanents in verbs-reveal: Snapcaster Mage face down, and the lands that
+/// cast Trinket Mage.
+const REVEAL_MINE: &[Permanent] = &[
+    Permanent::new(SNAPCASTER_MAGE).face_down(),
+    ISLAND_,
+    ISLAND_,
+    ISLAND_,
+];
+
+/// The table of verbs-piles, named `name`, with neither player's library or graveyard set.
+pub(super) const fn piles_table(name: &'static str) -> Scenario {
+    Scenario::new(name)
+        .at(3, P0, TurnStep::PrecombatMain)
+        .permanents(P0, PILES_MINE)
+        .hand(P0, &[SNAPCASTER_MAGE, PORTABLE_HOLE, ELITE_SPELLBINDER])
+        .permanents(P1, PILES_THEIRS)
+        .hand(P1, &[TEFERI_TIME_RAVELER, ISLAND])
+}
+
+/// What the first seat's graveyard holds in verbs-piles: the spell Snapcaster Mage targets.
+pub(super) const PILES_GRAVEYARD: &[&str] = &[THIRST_FOR_DISCOVERY];
+
+/// The actions of verbs-piles.
+pub(super) const PILES: &[Action] = &[
+    Action::cast(P0, SNAPCASTER_MAGE),
+    choose(P0, DecisionKind::Target, THIRST_FOR_DISCOVERY),
+    Action::cast(P0, THIRST_FOR_DISCOVERY),
+    Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+    choose(P0, DecisionKind::ChooseObject, ISLAND),
+    Action::cast(P0, PORTABLE_HOLE),
+    choose(P0, DecisionKind::Target, MANA_CRYPT),
+    Action::cast(P0, ELITE_SPELLBINDER),
+    Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+    // Last of its turn: a seat with its own ability on the stack and a spell still to
+    // cast would cast it in answer from the chair the session does not pass for.
+    Action::activate(P0, JACE_WIELDER_OF_MYSTERIES, 1),
+    Action::answer(P0, DecisionKind::Target, Pick::Player { player: P0 }),
+    Action::activate(P0, JACE_THE_MIND_SCULPTOR, 1),
+    choose(P0, DecisionKind::ChooseObject, PLAINS),
+    choose(P0, DecisionKind::ChooseObject, PLAINS),
+    Action::cast(P1, TEFERI_TIME_RAVELER),
+    Action::activate(P1, TEFERI_TIME_RAVELER, 2),
+    Action::answer(P1, DecisionKind::TargetCount, Pick::Number { n: 1 }),
+    choose(P1, DecisionKind::Target, PORTABLE_HOLE),
+    choose(P1, DecisionKind::Attacker, ADELINE_RESPLENDENT_CATHAR),
+    Action::answer(P1, DecisionKind::AttackTarget, Pick::DefendingPlayer),
+    // The token's: it attacks the player, not their planeswalker.
+    Action::answer(P1, DecisionKind::AttackTarget, Pick::DefendingPlayer),
+];
+
+/// The table of verbs-reveal, named `name`, with neither player's library set.
+pub(super) const fn reveal_table(name: &'static str) -> Scenario {
+    Scenario::new(name)
+        .at(3, P0, TurnStep::PrecombatMain)
+        .permanents(P0, REVEAL_MINE)
+        .hand(P0, &[TRINKET_MAGE])
+        .permanents(P1, &[PLAINS_, PLAINS_])
+        .hand(P1, &[OUST, PORTABLE_HOLE])
+}
+
+/// The first seat's library in verbs-reveal, top first: Trinket Mage finds Mana Crypt in it.
+pub(super) const REVEALED: &[&str] = &[ISLAND, PLAINS, ISLAND, MANA_CRYPT, PLAINS, ISLAND];
+
+/// The actions of verbs-reveal.
+pub(super) const REVEAL: &[Action] = &[
+    Action::cast(P0, TRINKET_MAGE),
+    Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+    choose(P0, DecisionKind::ChooseUpTo, MANA_CRYPT),
+    Action::cast(P1, OUST),
+    choose(P1, DecisionKind::Target, SNAPCASTER_MAGE),
+];
 
 /// Boards for the verb suite.
 pub(super) const VERBS: &[Scenario] = &[
@@ -104,77 +220,16 @@ pub(super) const VERBS: &[Scenario] = &[
     // draws it three and puts two back. In their turn the
     // opponent casts Teferi from exile and returns Portable Hole to its owner's hand with it,
     // so Mana Crypt comes back, and attacks with Adeline, whose Human token enters attacking.
-    Scenario::new("verbs-piles")
-        .at(3, P0, TurnStep::PrecombatMain)
-        .permanents(
-            P0,
-            &[
-                Permanent::new(JACE_WIELDER_OF_MYSTERIES),
-                Permanent::new(JACE_THE_MIND_SCULPTOR),
-                ISLAND_,
-                ISLAND_,
-                ISLAND_,
-                ISLAND_,
-                ISLAND_,
-                ISLAND_,
-                PLAINS_,
-                PLAINS_,
-                PLAINS_,
-                PLAINS_,
-            ],
-        )
-        .hand(P0, &[SNAPCASTER_MAGE, PORTABLE_HOLE, ELITE_SPELLBINDER])
-        .graveyard(P0, &[THIRST_FOR_DISCOVERY])
+    piles_table("verbs-piles")
+        .graveyard(P0, PILES_GRAVEYARD)
         .library(P0, DRAWS)
-        .permanents(
-            P1,
-            &[
-                Permanent::new(ADELINE_RESPLENDENT_CATHAR),
-                Permanent::new(MANA_CRYPT),
-                ISLAND_,
-                ISLAND_,
-                ISLAND_,
-                PLAINS_,
-                PLAINS_,
-            ],
-        )
-        .hand(P1, &[TEFERI_TIME_RAVELER, ISLAND])
         .library(P1, LANDS)
-        .actions(&[
-            Action::cast(P0, SNAPCASTER_MAGE),
-            choose(P0, DecisionKind::Target, THIRST_FOR_DISCOVERY),
-            Action::cast(P0, THIRST_FOR_DISCOVERY),
-            Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
-            choose(P0, DecisionKind::ChooseObject, ISLAND),
-            Action::cast(P0, PORTABLE_HOLE),
-            choose(P0, DecisionKind::Target, MANA_CRYPT),
-            Action::cast(P0, ELITE_SPELLBINDER),
-            Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
-            // Last of its turn: a seat with its own ability on the stack and a spell still to
-            // cast would cast it in answer from the chair the session does not pass for.
-            Action::activate(P0, JACE_WIELDER_OF_MYSTERIES, 1),
-            Action::answer(P0, DecisionKind::Target, Pick::Player { player: P0 }),
-            Action::activate(P0, JACE_THE_MIND_SCULPTOR, 1),
-            choose(P0, DecisionKind::ChooseObject, PLAINS),
-            choose(P0, DecisionKind::ChooseObject, PLAINS),
-            Action::cast(P1, TEFERI_TIME_RAVELER),
-            Action::activate(P1, TEFERI_TIME_RAVELER, 2),
-            Action::answer(P1, DecisionKind::TargetCount, Pick::Number { n: 1 }),
-            choose(P1, DecisionKind::Target, PORTABLE_HOLE),
-            choose(P1, DecisionKind::Attacker, ADELINE_RESPLENDENT_CATHAR),
-            Action::answer(P1, DecisionKind::AttackTarget, Pick::DefendingPlayer),
-            // The token's: it attacks the player, not their planeswalker.
-            Action::answer(P1, DecisionKind::AttackTarget, Pick::DefendingPlayer),
-        ]),
+        .actions(PILES),
     // The first seat scries two with Aang's Iceberg and puts one of them on the bottom.
-    scry("verbs-scry").actions(&[
-        Action::activate(P0, AANGS_ICEBERG, 1),
-        choose(P0, DecisionKind::ChooseUpTo, ISLAND),
-        Action::answer(P0, DecisionKind::ChooseUpTo, Pick::Done),
-    ]),
+    scry("verbs-scry").actions(SCRY),
     // The same scry left open: the first seat looks at its two cards and has yet to choose,
     // so a recording stops while the look lasts (the stepped capture's lift).
-    scry("verbs-look").actions(&[Action::activate(P0, AANGS_ICEBERG, 1)]),
+    scry("verbs-look").actions(LOOK),
     // A look that sends its cards away one choice at a time: the first seat's Stock Up takes
     // Currency Converter and Counterspell of the top five to the hand, then puts Oust and
     // the Plains on the bottom one by one, the Island under them last.
@@ -320,29 +375,10 @@ pub(super) const VERBS: &[Scenario] = &[
     // to the hand; and in their turn the opponent Ousts the first seat's face-down Snapcaster
     // Mage into its library, revealed as it goes. Each seat is left holding a card it could
     // cast in its own main phase, which asks it once more before its recording ends.
-    Scenario::new("verbs-reveal")
-        .at(3, P0, TurnStep::PrecombatMain)
-        .permanents(
-            P0,
-            &[
-                Permanent::new(SNAPCASTER_MAGE).face_down(),
-                ISLAND_,
-                ISLAND_,
-                ISLAND_,
-            ],
-        )
-        .hand(P0, &[TRINKET_MAGE])
-        .library(P0, &[ISLAND, PLAINS, ISLAND, MANA_CRYPT, PLAINS, ISLAND])
-        .permanents(P1, &[PLAINS_, PLAINS_])
-        .hand(P1, &[OUST, PORTABLE_HOLE])
+    reveal_table("verbs-reveal")
+        .library(P0, REVEALED)
         .library(P1, LANDS)
-        .actions(&[
-            Action::cast(P0, TRINKET_MAGE),
-            Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
-            choose(P0, DecisionKind::ChooseUpTo, MANA_CRYPT),
-            Action::cast(P1, OUST),
-            choose(P1, DecisionKind::Target, SNAPCASTER_MAGE),
-        ]),
+        .actions(REVEAL),
     // A spell put on the bottom of its owner's library by their choice: in the opponent's
     // turn the first seat answers their Elite Spellbinder with Subtlety, and the opponent puts
     // the Spellbinder on the bottom, which the first seat is told beside their library.

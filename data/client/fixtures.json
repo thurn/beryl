@@ -615,6 +615,59 @@
       "after": 1
     },
     {
+      "name": "shared-verbs-piles",
+      "board": "shared-verbs-piles",
+      "until": "first blocker decision for seat 0 from turn 4"
+    },
+    {
+      "name": "shared-verbs-piles-theirs",
+      "board": "shared-verbs-piles",
+      "until": "first priority decision for seat 1 from turn 4",
+      "where": ["step postcombatMain"]
+    },
+    {
+      "name": "shared-verbs-reveal",
+      "board": "shared-verbs-reveal",
+      "until": "first priority decision for seat 0 from turn 5"
+    },
+    {
+      "name": "shared-verbs-reveal-theirs",
+      "board": "shared-verbs-reveal",
+      "until": "first priority decision for seat 1 from turn 4",
+      "where": ["step postcombatMain"]
+    },
+    {
+      "name": "shared-verbs-scry",
+      "board": "shared-verbs-scry",
+      "until": "first priority decision for seat 0 from turn 5"
+    },
+    {
+      "name": "shared-verbs-scry-theirs",
+      "board": "shared-verbs-scry",
+      "until": "first priority decision for seat 1",
+      "after": 1
+    },
+    {
+      "name": "shared-verbs-look",
+      "board": "shared-verbs-look",
+      "until": "first chooseUpTo decision for seat 0"
+    },
+    {
+      "name": "shared-verbs-look-theirs",
+      "board": "shared-verbs-look",
+      "until": "first handling for seat 1"
+    },
+    {
+      "name": "shared-verbs-lapse",
+      "board": "shared-verbs-lapse",
+      "until": "first priority decision for seat 0 from turn 3"
+    },
+    {
+      "name": "shared-verbs-lapse-theirs",
+      "board": "shared-verbs-lapse",
+      "until": "first priority decision for seat 1 from turn 3"
+    },
+    {
       "name": "verbs-tuck",
       "board": "verbs-tuck",
       "until": "first priority decision for seat 0 from turn 3"

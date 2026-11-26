@@ -894,6 +894,16 @@ shape-yes
 shape-yes-theirs
 shape-zone
 shape-zone-theirs
+shared-verbs-lapse
+shared-verbs-lapse-theirs
+shared-verbs-look
+shared-verbs-look-theirs
+shared-verbs-piles
+shared-verbs-piles-theirs
+shared-verbs-reveal
+shared-verbs-reveal-theirs
+shared-verbs-scry
+shared-verbs-scry-theirs
 show-and-tell/a-clone-cant-copy-a-creature-entering-with-it
 show-and-tell/an-aura-cant-enchant-a-creature-entering-with-it
 show-and-tell/an-aura-may-enchant-the-opponents-creature

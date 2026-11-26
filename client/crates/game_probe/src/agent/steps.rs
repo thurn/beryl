@@ -297,7 +297,10 @@ pub fn card_of(frame: &Frame, slot: usize) -> Option<u32> {
         .position(|element| {
             element.role == Role::Card
                 && element.id.0 == id
-                && matches!(Place::in_frame(element.place), Some(Place::Card { .. }))
+                && matches!(
+                    Place::in_frame(element.place),
+                    Some(Place::Card { .. } | Place::SharedPile(_))
+                )
         })
         .and_then(|index| u32::try_from(index).ok())
 }

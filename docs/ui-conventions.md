@@ -704,6 +704,15 @@ recordings do not show them.
   and the graveyard at the right edge of the seam between the two players'
   creature rows, with exile beneath the graveyard. The per-player pile places
   stay empty.
+- **Cards moving to and from the shared piles.** A card drawn, milled, put back
+  or looked at in a shared-deck game uses the `fly` and `lift` motions a
+  per-player game uses, starting or ending at the shared pile. A draw rises off
+  the shared library and comes down to where the drawing player's draw ends: the
+  viewer's beside the stack, the opponent's into their hand. A milled card
+  crosses the table from the shared library to the shared graveyard on the same
+  rising path as a per-player mill. The cards a player looks at lie beside the
+  shared library, toward the middle of the table and half a card toward that
+  player.
 
 ## Verbs
 

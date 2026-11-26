@@ -470,6 +470,52 @@
           "path": "each card leaves the library at the lower left as a card back, turns face up as it rises up and right across the table, passes beside the spell on the stack and comes down into the hand at the bottom; no pause",
           "curve": "ease-out",
           "note": "Three cards from Ancestral Recall (the draws begin about 2.3 s after the spell reaches the stack). Starts at 14.27 (Animate Dead), 14.53 (Island), 14.73-14.80 (Booster Tutor): stagger about 233 ms start to start, read at 15 fps so +-67 ms. At 30 fps ('just video film WQiYBv23buw 29:14.2 --span 0.8 --fps 30 --cols 8 --width 320 --crop 300,300,1300,700') each leaves the library as a card back (14.23, 14.45, 14.68), is edge-on 100 to 130 ms later (14.30-14.33, 14.57-14.60, 14.80) and face up by about 170 ms, as the turn-start draw is; an earlier reading had them come out from behind the spell. Arrivals in the hand about 14.97, 15.20, 15.50 (700, 670, 770 ms each). Unlike the turn-start draw there is no large hold by the library here; the cards pass beside the stack at their natural size. Peak null."
+        },
+        {
+          "case": "mill",
+          "recording": "tovCPHl-gOM",
+          "time": "14:55.1",
+          "span": 0.7,
+          "crop": [
+            0,
+            650,
+            700,
+            430
+          ],
+          "method": "filmstrip",
+          "why": "tracker cannot isolate: 'cannot measure: 4 things moved where 1 card was asked for' (the library's blue glow and a second card)",
+          "command": "just video film tovCPHl-gOM 14:55.1 --span 0.7 --fps 20 --cols 7 --width 360 --crop 0,650,700,430  and  just video film tovCPHl-gOM 14:54.8 --span 1.4 --fps 10 --cols 7 --width 400 --crop 0,650,700,430",
+          "since": "",
+          "duration_ms": 500,
+          "delay_ms": null,
+          "stagger_ms": 400,
+          "peak": 1.2,
+          "path": "the streamer's own Thought Scour targeting themself: the top card turns face up on the library, rises up and a little right to about a card's height above it, then slides left and drops onto the graveyard beside the library",
+          "curve": "ease-out",
+          "note": "Face down on the library at 14:55.10 and face up at 14:55.15 before it has moved; highest at 14:55.40; at rest on the graveyard at 14:55.65. The second milled card is face up on the library at 14:55.60 and at rest about 14:56.10, so the stagger is about 400 ms start to start (20 fps, +-50 ms). Peak is a width read by eye at the highest frame. The library and graveyard lie side by side at the bottom left, so the card never crosses the table."
+        },
+        {
+          "case": "opponent draw",
+          "recording": "SswBO8aOOgc",
+          "time": "21:03.8",
+          "span": 1.6,
+          "crop": [
+            900,
+            0,
+            1020,
+            600
+          ],
+          "method": "filmstrip",
+          "why": "tracker cannot isolate: the turn banner sweeps across the crop as the card leaves",
+          "command": "just video film SswBO8aOOgc 21:03.8 --span 1.6 --fps 10 --cols 4 --width 480 --crop 900,0,1020,600",
+          "since": "",
+          "duration_ms": 400,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "the opponent's turn draw: a card back leaves their library at the top right, drops down and left along the library's flank, then sweeps up and left into their hand at the top of the table, face down all the way",
+          "curve": "ease-out",
+          "note": "On the library at 21:03.80; lowest, about a card's height below the library, at 21:03.90-21:04.00; leaving the crop toward the hand at 21:04.20 (10 fps, +-100 ms). The OPPONENT'S TURN banner comes after the card has left. Size not taken."
         }
       ],
       "summary": {
@@ -480,7 +526,7 @@
         },
         "delay_ms": null,
         "stagger_ms": {
-          "median": 326,
+          "median": 400,
           "min": 233,
           "max": 420
         },
@@ -608,6 +654,38 @@
               "min": 233,
               "max": 233
             },
+            "peak": null,
+            "start": null,
+            "curve": "ease-out"
+          },
+          "mill": {
+            "duration_ms": {
+              "median": 500,
+              "min": 500,
+              "max": 500
+            },
+            "delay_ms": null,
+            "stagger_ms": {
+              "median": 400,
+              "min": 400,
+              "max": 400
+            },
+            "peak": {
+              "median": 1.2,
+              "min": 1.2,
+              "max": 1.2
+            },
+            "start": null,
+            "curve": "ease-out"
+          },
+          "opponent draw": {
+            "duration_ms": {
+              "median": 400,
+              "min": 400,
+              "max": 400
+            },
+            "delay_ms": null,
+            "stagger_ms": null,
             "peak": null,
             "start": null,
             "curve": "ease-out"
@@ -1143,11 +1221,29 @@
           "path": "gone between two frames; a faint smoke wisp stays for 100 ms or more",
           "curve": "none",
           "note": "Gideon, Ally of Zendikar's ability card present at 17:38.46, absent at 17:38.49. The Knight token appears 140 ms later."
+        },
+        {
+          "case": "countered",
+          "recording": "0VsYGs88NXA",
+          "time": "32:04.45",
+          "span": 0.6,
+          "crop": null,
+          "method": "filmstrip",
+          "why": "Not run through the tracker: nothing travels across the table, the countered spell changes in place under Memory Lapse.",
+          "command": "just video film 0VsYGs88NXA 32:04.45 --span 0.6 --fps 20 --cols 4 --width 480",
+          "since": "",
+          "duration_ms": 250,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "Memory Lapse resolves: the spell it counters, under it on the stack, slides out from beneath it and is gone at the stack; it does not fly to its owner's library",
+          "curve": "none",
+          "note": "Golos under Memory Lapse at 32:04.45, gone by 32:04.75; Memory Lapse then darkens from 32:04.90 and leaves. The countered spell goes to the top of its owner's library, which no frame shows it reaching."
         }
       ],
       "summary": {
         "duration_ms": {
-          "median": 565,
+          "median": 530,
           "min": 33,
           "max": 1000
         },
@@ -1183,8 +1279,8 @@
           },
           "countered": {
             "duration_ms": {
-              "median": 910,
-              "min": 870,
+              "median": 870,
+              "min": 250,
               "max": 950
             },
             "delay_ms": {

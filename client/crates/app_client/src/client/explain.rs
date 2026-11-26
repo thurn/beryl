@@ -198,7 +198,9 @@ impl Client {
                 zone: ZoneName::Stack,
                 ..
             }) => ("stack", "game_table/src/table"),
-            Some(Place::Card { .. } | Place::Revealed) => ("piles", "game_table/src/table"),
+            Some(Place::Card { .. } | Place::Revealed | Place::SharedPile(_)) => {
+                ("piles", "game_table/src/table")
+            }
             _ if matches!(element.role, Role::Arrow | Role::Mark) => {
                 ("table marks", "game_play/src/light")
             }

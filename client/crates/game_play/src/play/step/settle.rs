@@ -68,10 +68,11 @@ impl Motion<'_> {
 fn settles_in_pile(before: &Rest, after: &Rest) -> bool {
     let in_pile = matches!(
         before.place,
-        Place::Card {
-            zone: ZoneName::Library | ZoneName::Graveyard | ZoneName::Exile,
-            ..
-        }
+        Place::SharedPile(_)
+            | Place::Card {
+                zone: ZoneName::Library | ZoneName::Graveyard | ZoneName::Exile,
+                ..
+            }
     );
     in_pile
         && before.place == after.place

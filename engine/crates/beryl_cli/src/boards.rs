@@ -7,6 +7,7 @@ mod choices;
 mod combat;
 mod script;
 mod shapes;
+mod shared;
 mod shorthand;
 mod stack;
 mod table;
@@ -27,6 +28,7 @@ pub const BOARDS: &[&[Scenario]] = &[
     table::TABLE,
     verbs::VERBS,
     shapes::SHAPES,
+    shared::SHARED,
 ];
 
 /// The board named `name`.

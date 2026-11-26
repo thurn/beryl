@@ -21,9 +21,11 @@ use kit_base::data::verbs::{Lift, LiftHand};
 use kit_base::pose::Pose;
 use kit_space::arrange::{LiftedFan, LiftedPlane};
 
-/// The group that holds the cards `handling` takes, if the table places any of them.
+/// The group that holds the cards `handling` takes, if the table places any of them. On a
+/// table that shares its piles, a library's side names the player who looks, and the cards
+/// come from the one shared library.
 #[must_use]
-pub(crate) fn group_of(handling: CardHandling) -> Option<Group> {
+pub(crate) fn group_of(handling: CardHandling, shared: bool) -> Option<Group> {
     match handling {
         CardHandling::Library { side, .. }
         | CardHandling::Pile {
@@ -31,7 +33,7 @@ pub(crate) fn group_of(handling: CardHandling) -> Option<Group> {
             pile: ZoneName::Library,
             ..
         } => Some(Group::Pile {
-            side: Some(side),
+            side: (!shared).then_some(side),
             zone: ZoneName::Library,
         }),
         CardHandling::Hand { side: Side::You } => Some(Group::Hand(Side::You)),
@@ -95,6 +97,8 @@ pub struct Handled {
     /// Whether the look is before the game's first turn, at an opening hand, which the web's
     /// `handlingPlacements` holds up smaller and out of the way (`view.turn.number === 0`).
     pub(crate) opening: bool,
+    /// Whether the table shares its library, so that a look at a library takes the shared one.
+    pub(crate) shared: bool,
 }
 
 impl Handled {
@@ -122,7 +126,8 @@ impl Handled {
 
     /// The look `handling` as it begins over `zones`, `opening` if before the first turn.
     pub(crate) fn of(zones: &Zones, handling: CardHandling, opening: bool) -> Self {
-        let slots = group_of(handling).map_or_else(Vec::new, |group| {
+        let shared = zones.shared;
+        let slots = group_of(handling, shared).map_or_else(Vec::new, |group| {
             handled(handling, &members(zones, group))
                 .iter()
                 .map(|object| object.slot)
@@ -132,7 +137,13 @@ impl Handled {
             handling,
             slots,
             opening,
+            shared,
         }
+    }
+
+    /// The group the cards held up come from, if the table places any of them.
+    pub(crate) fn group(&self) -> Option<Group> {
+        group_of(self.handling, self.shared)
     }
 }
 
@@ -148,7 +159,7 @@ pub(crate) fn lay(
     (layout, camera, lift): (&Layout, &Camera, &Lift),
     placement: &mut Placement,
 ) {
-    let Some(handled) = handled.filter(|handled| group_of(handled.handling) == Some(group)) else {
+    let Some(handled) = handled.filter(|handled| handled.group() == Some(group)) else {
         return;
     };
     let cards: Vec<&ObjectView> = handled
@@ -160,9 +171,26 @@ pub(crate) fn lay(
         Group::Pile { side, .. } => {
             let library = lift.pile;
             let scale = super::pile::nominal_scale(layout, side);
-            let (direction, band) = match side {
-                Some(Side::You) | None => (1.0, -1.0..0.0),
-                Some(Side::Opponent) => (-1.0, 0.0..1.0),
+            let (direction, band, toward_looker) = match side {
+                Some(Side::You) => (1.0, -1.0..0.0, 0.0),
+                Some(Side::Opponent) => (-1.0, 0.0..1.0, 0.0),
+                // The shared library stands at one edge of the table, between the two players.
+                // Its cards lie beside it toward the middle of the table, and on the side of it
+                // of the player who looks: above it for the opponent, below it for the viewer.
+                None => {
+                    let toward_middle = if layout.shared_piles[0].x <= 0.0 {
+                        1.0
+                    } else {
+                        -1.0
+                    };
+                    let (CardHandling::Library { side: looker, .. }
+                    | CardHandling::Hand { side: looker }
+                    | CardHandling::Pile { side: looker, .. }) = handled.handling;
+                    match looker {
+                        Side::You => (toward_middle, -1.0..0.0, -1.0),
+                        Side::Opponent => (toward_middle, 0.0..1.0, 1.0),
+                    }
+                }
             };
             // A short look follows Arena: cards lie at library size beside the pile,
             // toward the middle of the table (UI Conventions, "Cards the opponent looks at").
@@ -171,7 +199,12 @@ pub(crate) fn lay(
                 .top
                 .and_then(|slot| placement.get(slot))
                 .map(|rest| rest.pose);
-            let at = pile.base + library.beside * scale * direction;
+            // Beside a shared library, the cards also lie half a card toward the player who
+            // looks, so that the look reads as that player's.
+            let card_height = layout.camera.card.height * scale;
+            let at = pile.base
+                + library.beside * scale * direction
+                + Vec2::Y * (card_height / 2.0) * toward_looker;
             (
                 LiftedFan {
                     columns: library.columns,
@@ -400,7 +433,7 @@ impl Look {
     ) {
         self.lifting.clear();
         let mut mark = |handled: &Handled| {
-            if let Some(group) = group_of(handled.handling) {
+            if let Some(group) = handled.group() {
                 dirty[group.index()] = true;
             }
         };

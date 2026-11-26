@@ -1473,6 +1473,11 @@
       "kind": "not-seen",
       "name": "Shared piles",
       "rule": "A shared-deck table draws one shared library, one shared graveyard and one shared exile pile with the same card look, tilt and scale as per-player piles, placed at new positions from each profile's `shared_piles` data: on desktop, the library at the middle left and the graveyard and exile at the middle right; on phone and wide-compact, the library at the left edge and the graveyard at the right edge of the seam between the two players' creature rows, with exile beneath the graveyard. The per-player pile places stay empty."
+    },
+    {
+      "kind": "not-seen",
+      "name": "Cards moving to and from the shared piles",
+      "rule": "A card drawn, milled, put back or looked at in a shared-deck game uses the `fly` and `lift` motions a per-player game uses, starting or ending at the shared pile. A draw rises off the shared library and comes down to where the drawing player's draw ends: the viewer's beside the stack, the opponent's into their hand. A milled card crosses the table from the shared library to the shared graveyard on the same rising path as a per-player mill. The cards a player looks at lie beside the shared library, toward the middle of the table and half a card toward that player."
     }
   ],
   "verbs": [
