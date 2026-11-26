@@ -1239,8 +1239,10 @@ plays, the hand limit, which zones each player has, the roles of a player's
 decklists (library, sideboard) and the losses. `Format::CONSTRUCTED`, two-player
 constructed, is its one value. `Format` is zero-sized, so every getter is a
 constant and a rollout reads nothing for it; the WU mirror's count did not move
-when it was built. A second value therefore needs `Format` to carry data first,
-and each getter then becomes a load from the table. The rules read the starting
+when it was built. A second value therefore needs `Format` to carry data first.
+A getter whose answer is the same for every value stays a constant, and a getter
+whose answer differs becomes a load from the table, so what a rollout needs of
+the format is copied into the state at the deal. The rules read the starting
 life, opening hand, mulligan, first draw, hand limit, land plays, losses and
 seats. Nothing reads the turn's steps (the plan fills from `TurnStep::ALL`) or
 the zones, and the poison threshold in the losses is recorded but not checked.
@@ -1252,13 +1254,13 @@ opponents, the defending players or the next player in turn order. What each
 other mode would still need, checked against the code on 2026-11-25 ("value"
 means a value an existing getter of `Format` would return):
 
-| Mode             | Values of `Format`                     | Still to build                                                                                                                                                                                                    |
-| ---------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Commander        | 40 life                                | 100-card decks (`DECK_SLOTS` is 60 in both layouts); a `Zone::Command` variant; a third and fourth seat; a player leaving the game; attacking several players; the commander tax, damage and color identity rules |
-| Two-Headed Giant | Teams of two (`Teams` needs a variant) | Life shared by a team (life is per player); four seats; a shared turn; team blocks                                                                                                                                |
-| Planechase       | None                                   | A planar `DeckRole` variant; the planar die as a special action; plane and phenomenon cards as objects in the command zone                                                                                        |
-| Archenemy        | None                                   | `Teams` and `DeckRole` variants for one against many and a scheme deck; more seats; scheme cards                                                                                                                  |
-| DanDân           | 20 life                                | The shared library and graveyard: a shared `ZoneKey` variant, storage for it in `Zones`, a reader of `Format::zones`, and "your library" as a question separate from ownership                                    |
+| Mode             | Values of `Format`                     | Still to build                                                                                                                                                                                                                                                                   |
+| ---------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Commander        | 40 life                                | 100-card decks (`DECK_SLOTS` is 60 in `Small`); a `Zone::Command` variant; a third and fourth seat; a player leaving the game; attacking several players; the commander tax, damage and color identity rules                                                                     |
+| Two-Headed Giant | Teams of two (`Teams` needs a variant) | Life shared by a team (life is per player); four seats; a shared turn; team blocks                                                                                                                                                                                               |
+| Planechase       | None                                   | A planar `DeckRole` variant; the planar die as a special action; plane and phenomenon cards as objects in the command zone                                                                                                                                                       |
+| Archenemy        | None                                   | `Teams` and `DeckRole` variants for one against many and a scheme deck; more seats; scheme cards                                                                                                                                                                                 |
+| DanDân           | A second value, `Format::SHARED_DECK`  | The shared library and graveyard, designed in §20 ("Shared zones"): the two per-player lists become one list type that a shared game uses whole, the zone moves write both players' membership, and a card that leaves a shared zone gets its owner from the player who takes it |
 
 Every mode with more than two players also needs `Seat`, `PerSeat` and
 `SlotId::PLAYERS` to grow past two. A subgame and a restart each take one
@@ -1967,9 +1969,33 @@ and an `Undo` entry, so a replay goes back too. The engine is untouched.
 - **The repeat shortcut** (CR 733.2). The session replays a recorded run of
   choices N times, matching each by what it does, as a save does, and search
   proposes the count (§12.3). The engine needs nothing.
-- **Shared zones.** `ZoneKey`'s rustdoc says how a shared library joins it, and
-  `Format::zones` is where a format asks for one; "your library" then becomes a
-  question separate from ownership (§12.4, DanDân).
+- **Shared zones** (§12.4, DanDân: both players draw from one library and share
+  one graveyard). `Format::zones` is where a format asks for them, and the deal
+  copies the answer into the state, so no hot path reads the format.
+  - Storage. The library and graveyard lists of the two players become one list
+    type of the layout. In `Small` it is one array of `2 * DECK_SLOTS` slots
+    with two lengths, the bytes the two lists take today. A per-player game uses
+    a half for each player. A shared game uses the whole array for its one list,
+    so an 80-card library fits and the state does not grow.
+    `State::library(player)` returns the shared list for either player by
+    masking the player's index, with no branch.
+  - Membership. `ZoneKey` gets no shared variant. In a shared game the library
+    and graveyard bitboards of both players hold the same set, which the zone
+    chokepoints write under one test of the state's flag. A read of
+    `ZoneKey::Of(player, Zone::Library)` is then right for either player and
+    costs a per-player game nothing.
+  - Ownership. A card in a shared zone has no owner. A card that leaves one is
+    owned by the player who takes it: who draws it, whose effect puts it into a
+    hand or exiles it, who casts it, or under whose control it enters the
+    battlefield. The zone-change pipeline claims the card for that player before
+    it moves, and a move with no taker is a bug.
+  - Acting once. Rules that act on or count each player's library or graveyard
+    walk the seats that hold distinct zones, so a shared library is shuffled
+    once and a shared graveyard is counted once.
+  - Hidden information. Slots stay public handles and knowledge stays a bitboard
+    for each player. A determinization deals the one deck list, minus the cards
+    the viewer knows, into every slot the viewer does not know, in the shared
+    library and the opponent's hand alike (§13).
 - **Ante.** A zone per player that `Format::zones` would list; `Zone` has no
   variant for it, and cards that mention ante are not written.
 - **A third seat.** `two_player.rs` says what breaks (§12.4).
