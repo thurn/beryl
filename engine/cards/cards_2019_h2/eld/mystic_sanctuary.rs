@@ -76,5 +76,33 @@ pub mod scenarios {
             ME.yes(),
             ME.library_top(&[Card::MentalNote]),
         ]),
+        Scenario::new("Mystic Sanctuary in a shared game with two other Islands enters tapped")
+            .shared_library(&[Card::Island; 3])
+            .shared_graveyard(&[Prop::Instant])
+            .battlefield(P0, &[Card::Island, Card::Island])
+            .hand(P0, &[Card::MysticSanctuary])
+            .actions(&[
+                ME.plays(Card::MysticSanctuary),
+                ME.tapped(Card::MysticSanctuary, 1),
+                stack(0),
+                ME.has(Zone::Graveyard, Prop::Instant, 1),
+            ]),
+        Scenario::new(
+            "Mystic Sanctuary in a shared game chooses among instants and sorceries in the shared graveyard",
+        )
+        .shared_library(&[Card::Island; 3])
+        .shared_graveyard(&[Prop::Instant, Prop::Sorcery, Prop::Vanilla])
+        .battlefield(P0, &[Card::Island; 3])
+        .hand(P0, &[Card::MysticSanctuary, Prop::Vanilla])
+        .actions(&[
+            ME.plays(Card::MysticSanctuary),
+            ME.tapped(Card::MysticSanctuary, 0),
+            ME.targets(Prop::Sorcery),
+            Resolve,
+            ME.yes(),
+            ME.library_top(&[Prop::Sorcery]),
+            ME.has(Zone::Graveyard, Prop::Instant, 1),
+            ME.has(Zone::Graveyard, Prop::Vanilla, 1),
+        ]),
     ];
 }

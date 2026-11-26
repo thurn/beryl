@@ -542,8 +542,10 @@ recordings do not show them.
   cards at a time, dismissed before the next. One spell's four revealed cards
   lie in the pile together; the next reveal seen comes after the pile was
   dismissed (I3Te0m1bBFw 22:08.8, I3Te0m1bBFw 29:45.5).
-- **Cards leaving a graveyard.** A card returned to the battlefield or to a hand
-  flies there from its pile. None is seen.
+- **Cards leaving a graveyard.** A card returned to the battlefield or to your
+  hand flies there from its pile; one returned to the opponent's hand swings up
+  to a readable apex beside the stack before gliding to their hand (jD7VqaT8VC8
+  46:23.2). Returning to the battlefield or to your own hand is not seen.
 - **An ability with no source on the battlefield.** It emerges from the pile its
   source lies in, and appears on the stack when it has no source. No trigger
   from a graveyard is seen.

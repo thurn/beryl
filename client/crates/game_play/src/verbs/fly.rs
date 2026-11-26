@@ -63,8 +63,9 @@ enum Path {
     EnterFromStack { flying: bool },
     /// A card entering the battlefield from the viewer's library: two-node spline.
     LibraryToBattlefieldLocal,
-    /// A card entering the battlefield from the opponent's library: three-node showcase spline.
-    LibraryToBattlefieldOpponent,
+    /// A card entering the battlefield from the opponent's library, or a known card returning from
+    /// a graveyard to the opponent's hand: three-node showcase spline.
+    FetchFar,
     /// A card moving from exile to the stack or battlefield: two-node S-curve spline.
     ExileTransfer,
 }
@@ -87,32 +88,20 @@ fn path_of(act: &Act, case: Option<&str>, fly: &Fly) -> Path {
     };
     let mine = object.controller == Side::You;
     let toward = if mine { 1.0 } else { -1.0 };
+    let draw_path = if mine {
+        Path::DrawLocal
+    } else {
+        Path::DrawOpponent
+    };
     match case {
         Some("draw" | "fast draw" | "draw of several") => return Path::DrawLocal,
-        Some("opponent draw") => {
-            return if mine {
-                Path::DrawLocal
-            } else {
-                Path::DrawOpponent
-            };
-        }
+        Some("opponent draw") => return draw_path,
+        _ if draws(act) => return draw_path,
         _ => {}
     }
-    if draws(act) {
-        return if mine {
-            Path::DrawLocal
-        } else {
-            Path::DrawOpponent
-        };
-    }
     match (*from, object.zone) {
-        (ZoneName::Hand, ZoneName::Stack) => {
-            if mine {
-                Path::CastLocal
-            } else {
-                Path::CastOpponent
-            }
-        }
+        (ZoneName::Hand, ZoneName::Stack) if mine => Path::CastLocal,
+        (ZoneName::Hand, ZoneName::Stack) => Path::CastOpponent,
         (ZoneName::Exile, ZoneName::Stack | ZoneName::Battlefield) => Path::ExileTransfer,
         (_, ZoneName::Stack) => Path::Bowed {
             bowing: if mine { fly.bows.cast } else { fly.bows.theirs },
@@ -122,20 +111,13 @@ fn path_of(act: &Act, case: Option<&str>, fly: &Fly) -> Path {
         (ZoneName::Stack, ZoneName::Battlefield) => Path::EnterFromStack {
             flying: object.keywords.contains(&Keyword::Flying),
         },
-        (ZoneName::Hand, ZoneName::Battlefield) => {
-            if mine {
-                Path::PlayLandLocal
-            } else {
-                Path::PlayLandOpponent
-            }
+        (ZoneName::Hand, ZoneName::Battlefield) if mine => Path::PlayLandLocal,
+        (ZoneName::Hand, ZoneName::Battlefield) => Path::PlayLandOpponent,
+        (ZoneName::Library, ZoneName::Battlefield) if object.owner == Side::You => {
+            Path::LibraryToBattlefieldLocal
         }
-        (ZoneName::Library, ZoneName::Battlefield) => {
-            if object.owner == Side::You {
-                Path::LibraryToBattlefieldLocal
-            } else {
-                Path::LibraryToBattlefieldOpponent
-            }
-        }
+        (ZoneName::Library, ZoneName::Battlefield) => Path::FetchFar,
+        (ZoneName::Graveyard, ZoneName::Hand) if !mine && object.name.is_some() => Path::FetchFar,
         // The opponent's hand lies at the top of the frame. A discard drops from the
         // hand to the graveyard, so it should not rise farther above the table first.
         (ZoneName::Hand, ZoneName::Graveyard) if !mine && *why == Why::Discard => {
@@ -671,7 +653,7 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
             ))
         }
         Path::LibraryToBattlefieldLocal => Some(straight_spline(step, to, &paths.fetch_near)),
-        Path::LibraryToBattlefieldOpponent => Some(apex_spline(
+        Path::FetchFar => Some(apex_spline(
             step,
             (from, to),
             paths.fetch_far.from_rel_scale,

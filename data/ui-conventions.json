@@ -1257,7 +1257,7 @@
     {
       "kind": "not-seen",
       "name": "Cards leaving a graveyard",
-      "rule": "A card returned to the battlefield or to a hand flies there from its pile. None is seen."
+      "rule": "A card returned to the battlefield or to your hand flies there from its pile; one returned to the opponent's hand swings up to a readable apex beside the stack before gliding to their hand (jD7VqaT8VC8 46:23.2). Returning to the battlefield or to your own hand is not seen."
     },
     {
       "kind": "not-seen",
@@ -1597,6 +1597,12 @@
         },
         "opponent library to battlefield": {
           "duration": 667,
+          "delay": null,
+          "stagger": null,
+          "curve": "ease-out"
+        },
+        "opponent graveyard to hand": {
+          "duration": 750,
           "delay": null,
           "stagger": null,
           "curve": "ease-out"

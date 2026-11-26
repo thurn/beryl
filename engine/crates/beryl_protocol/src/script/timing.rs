@@ -192,11 +192,15 @@ pub fn case_of(act: &Act, found: &Table, beside: &[&Act]) -> Option<&'static str
             } else {
                 "opponent land played"
             }),
-            (ZoneName::Library, ZoneName::Battlefield) => Some(if object.owner == Side::You {
-                "library to battlefield"
-            } else {
-                "opponent library to battlefield"
-            }),
+            (ZoneName::Library, ZoneName::Battlefield) if object.owner == Side::You => {
+                Some("library to battlefield")
+            }
+            (ZoneName::Library, ZoneName::Battlefield) => Some("opponent library to battlefield"),
+            (ZoneName::Graveyard, ZoneName::Hand)
+                if object.owner == Side::Opponent && object.name.is_some() =>
+            {
+                Some("opponent graveyard to hand")
+            }
             (ZoneName::Exile, ZoneName::Battlefield) => Some("exile to battlefield"),
             (ZoneName::Hand, ZoneName::Graveyard) => Some("discard"),
             // Yours, drawn alone during the beginning phase, plays at Arena's slower turn-draw
@@ -749,16 +753,14 @@ fn draws(act: &Act) -> bool {
         if object.zone == ZoneName::Hand && (*why == Why::Draw || object.name.is_none()))
 }
 
-/// Whether `act` is your draw of a card you see: the one flight in which a card is held up to
-/// be read (UI Conventions, Verbs, fly). A port of `drawsToRead` in `tracks.ts`.
+/// Whether `act` is your draw of a card you see (held up to be read; UI Conventions, `fly`).
 fn draws_to_read(act: &Act) -> bool {
     draws(act)
         && matches!(act, Act::Fly { object, .. }
             if object.zone_side.unwrap_or(object.owner) == Side::You && object.name.is_some())
 }
 
-/// Whether the strikes `a` and `b` are the two blows of one fight: each creature strikes the
-/// other. A port of `meets` in `tracks.ts`.
+/// Whether `a` and `b` are the two blows of one fight: each creature strikes the other.
 fn meets(a: &Act, b: Option<&Act>) -> bool {
     matches!(
         (a, b),
@@ -769,8 +771,7 @@ fn meets(a: &Act, b: Option<&Act>) -> bool {
     )
 }
 
-/// The record the act carries as its own `object` field, where it has one. Unlike
-/// [`Act::object`], a count's or a set's record is no act's own here, as on the web.
+/// The record the act carries as its own `object` field, where it has one.
 fn carried(act: &Act) -> Option<&ObjectView> {
     match act {
         Act::Fly { object, .. }

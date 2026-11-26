@@ -213,6 +213,16 @@ fn each_case_of_the_data_is_found_on_one_act() {
             vec![],
         ),
         (
+            "opponent graveyard to hand",
+            fly(
+                ZoneName::Graveyard,
+                Why::Return,
+                card(1, ZoneName::Hand, them),
+            ),
+            &table,
+            vec![],
+        ),
+        (
             "exile to battlefield",
             fly(
                 ZoneName::Exile,

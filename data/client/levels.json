@@ -67,10 +67,6 @@
       "lines": 12003,
       "reason": "At 12,003 lines after adding `prompts::holds_up`, the one definition of whether a prompt holds cards up over a shaded table, which the prompt bar and the client's row counts share. Considered moving it out of game_hud, but it reads `Piles`, which the prompt tray owns, so it stays beside `covers_table`."
     },
-    "game_play": {
-      "lines": 12008,
-      "reason": "At 12,012 lines after the shared-pile moves: a draw from a shared library moves Arena's draw waypoints with the library. Considered moving the fly splines (verbs/fly.rs) into kit_space, but they read StepIn, Places and the game Layout, so moving them means first splitting those types out of game_play, a separate refactor."
-    },
     "game_table": {
       "lines": 12384,
       "reason": "At 12,283 lines after adding the shared-piles table shape, nine pile slots and Place::SharedPile. Considered splitting profiles/ or faces/ into a sibling game crate, but both share Layout, TableShape and Placement internals tightly and splitting them is a separate crate refactor. At 12,337 lines after adding printing faces to FaceList (faces/ is the same crate's face lookup that table scene placement reads on every frame, so it is the seam already rejected above). At 12,377 lines after the shared-pile moves: the cards a player looks at lie beside the shared library on that player's side (`beside_library`), and a look takes its cards from the shared library's group; the same seams were considered. At 12,384 lines after the tray stopped allocating inside a frame: `Table::take_handed` lends the tray's list of handed-over cards, which has room for every slot, to `Show::hand_over_tray` to fill; the same seams were considered. At 12,384 lines after `Table::pool_align`: the phone's pool stands beside the life orb through a banded-profile alignment that `game_hud` reads from the table. The method is here, not in `game_hud`, which is itself at its cap; the same seams were considered."
