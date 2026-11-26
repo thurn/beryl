@@ -64,7 +64,10 @@ pub(crate) fn instruction<L: Layout>(
     for player in run.in_turn_order(players) {
         // Two players who share a library are one library to look at, so it is sealed once.
         let shared = run.state().shares_zones();
-        for whose in run.in_turn_order(library).take(if shared { 1 } else { usize::MAX }) {
+        for whose in run
+            .in_turn_order(library)
+            .take(if shared { 1 } else { usize::MAX })
+        {
             let (game, resolution) = run.resolving();
             looked |= fateseal(game, resolution, player, whose)?;
         }

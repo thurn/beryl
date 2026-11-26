@@ -2,8 +2,8 @@
 //!
 //! Implements: CR 730.3, CR 730.5
 
-use beryl_card::{Prompt, Zone};
 use beryl_card::prompt::Purpose;
+use beryl_card::{Prompt, Zone};
 use beryl_kernel::chance;
 
 use crate::actions::shuffle;
