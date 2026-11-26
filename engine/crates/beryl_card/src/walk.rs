@@ -367,7 +367,9 @@ impl Condition {
         visit(Node::Condition(self));
         match self {
             Condition::Did | Condition::WonFlip | Condition::Paid(_) => {}
-            Condition::DrewInDrawStep(players) => players.walk(visit),
+            Condition::DrewInDrawStep(players)
+            | Condition::TurnOf(players)
+            | Condition::AttackedThisTurn(players) => players.walk(visit),
             Condition::Compare(left, _, right) => {
                 left.walk(visit);
                 right.walk(visit);

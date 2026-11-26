@@ -101,6 +101,7 @@ static TALLY: CardDef = CardDef {
                 amount: Amount::CardsDrawn(you()),
             },
             if_then(Condition::DrewInDrawStep(you()), &gain_life(you(), 10)),
+            if_then(Condition::AttackedThisTurn(you()), &gain_life(you(), 1)),
         ]))],
         ..Face::EMPTY
     }],
@@ -109,7 +110,7 @@ static TALLY: CardDef = CardDef {
 static TALLY_CARDS: CardTable = CardTable::new(&[&LAND, &TALLY]);
 
 /// Each count of `player`'s this turn, in the order of the list.
-fn counts(g: &Game, player: Seat) -> [u8; 3] {
+fn counts(g: &Game, player: Seat) -> [u8; 4] {
     Count::ALL.map(|count| g.s.counted(count, player))
 }
 
@@ -144,23 +145,23 @@ fn spells_cast_and_cards_drawn_are_counted_only_in_a_game_with_a_card_that_reads
             // The first turn: the starting player skips their draw (CR 103.8a), so the spell
             // counts itself and no card drawn.
             tally(&mut g, me);
-            assert_eq!(counts(&g, me), [1, 0, 0]);
+            assert_eq!(counts(&g, me), [1, 0, 0, 0]);
             assert_eq!((g.s.player(me).life(), g.s.player(them).life()), (21, 20));
         }
 
         // The next turn begins with nothing counted, and its player draws in their draw step.
         next_main(&mut g, them);
-        assert_eq!(counts(&g, me), [0; 3]);
-        assert_eq!(counts(&g, them), if reads { [0, 1, 1] } else { [0; 3] });
+        assert_eq!(counts(&g, me), [0; 4]);
+        assert_eq!(counts(&g, them), if reads { [0, 1, 1, 0] } else { [0; 4] });
         assert_eq!(g.s.check_invariants(&g.t), Ok(()));
         if reads {
             // One spell, one card drawn, and that card in the draw step.
             tally(&mut g, them);
-            assert_eq!(counts(&g, them), [1, 1, 1]);
+            assert_eq!(counts(&g, them), [1, 1, 1, 0]);
             assert_eq!((g.s.player(me).life(), g.s.player(them).life()), (20, 31));
             // A second: two spells, and the same card drawn.
             tally(&mut g, them);
-            assert_eq!(counts(&g, them), [2, 1, 1]);
+            assert_eq!(counts(&g, them), [2, 1, 1, 0]);
             assert_eq!((g.s.player(me).life(), g.s.player(them).life()), (19, 43));
         }
     }

@@ -18,48 +18,7 @@ impl Ctx {
             Condition::Did => "you do".to_owned(),
             Condition::Paid(kind) => self.paid_condition(kind, true),
             Condition::Compare(left, comparison, right) => self.compare(left, comparison, right),
-            // A permanent target said before is "that artifact" in a condition about it:
-            // "If that artifact is an Equipment". A card is "it": "If it's a land card".
-            Condition::Is(objects, filter) => {
-                let permanent = match objects {
-                    Objects::Target(n) => self
-                        .targets
-                        .get(n.index())
-                        .copied()
-                        .filter(|spec| spec.kind == TargetKind::Permanent),
-                    Objects::This
-                    | Objects::AttachedTo
-                    | Objects::Those
-                    | Objects::TriggeredOn
-                    | Objects::TriggeredOnIn(_)
-                    | Objects::ExiledWithThis
-                    | Objects::LibraryTop { .. }
-                    | Objects::ExceptThose(_)
-                    | Objects::PutOntoBattlefieldWithThis
-                    | Objects::Carried
-                    | Objects::All { .. }
-                    | Objects::InZoneOf { .. }
-                    | Objects::CardsIn { .. }
-                    | Objects::Everywhere(_)
-                    | Objects::Paid(_)
-                    | Objects::Other(_) => None,
-                };
-                let (what, kind) = match permanent {
-                    Some(spec) => {
-                        let head = self.noun(kind_of(spec.filter), Kind::Permanent);
-                        (
-                            format!("that {}", head.singular(Kind::Permanent)),
-                            Kind::Permanent,
-                        )
-                    }
-                    None => (self.objects(objects), Kind::Card(None)),
-                };
-                let noun = self.noun(filter, kind);
-                let noun = noun
-                    .adjectives_only()
-                    .unwrap_or_else(|| noun.indefinite(kind));
-                format!("{} {noun}", be(&what, self.is_plural(objects), true))
-            }
+            Condition::Is(objects, filter) => self.is_condition(objects, filter),
             Condition::EnteredThisTurn(objects) => {
                 format!("{} entered this turn", self.objects(objects))
             }
@@ -95,6 +54,10 @@ impl Ctx {
                 "{} drew a card in their draw step this turn",
                 self.player(players)
             ),
+            Condition::TurnOf(players) => format!("it's {} turn", self.possessive(players)),
+            Condition::AttackedThisTurn(players) => {
+                format!("{} attacked this turn", self.player(players))
+            }
             Condition::MeldPair(partner) => {
                 let noun = self.noun(partner, Kind::Permanent);
                 format!(
@@ -114,6 +77,49 @@ impl Ctx {
                 list(&each, "or")
             }
         }
+    }
+
+    /// "If that artifact is an Equipment", "if it's a land card": a permanent target said
+    /// before is "that [kind]", and a card is "it".
+    fn is_condition(&mut self, objects: Objects, filter: Filter) -> String {
+        let permanent = match objects {
+            Objects::Target(n) => self
+                .targets
+                .get(n.index())
+                .copied()
+                .filter(|spec| spec.kind == TargetKind::Permanent),
+            Objects::This
+            | Objects::AttachedTo
+            | Objects::Those
+            | Objects::TriggeredOn
+            | Objects::TriggeredOnIn(_)
+            | Objects::ExiledWithThis
+            | Objects::LibraryTop { .. }
+            | Objects::ExceptThose(_)
+            | Objects::PutOntoBattlefieldWithThis
+            | Objects::Carried
+            | Objects::All { .. }
+            | Objects::InZoneOf { .. }
+            | Objects::CardsIn { .. }
+            | Objects::Everywhere(_)
+            | Objects::Paid(_)
+            | Objects::Other(_) => None,
+        };
+        let (what, kind) = match permanent {
+            Some(spec) => {
+                let head = self.noun(kind_of(spec.filter), Kind::Permanent);
+                (
+                    format!("that {}", head.singular(Kind::Permanent)),
+                    Kind::Permanent,
+                )
+            }
+            None => (self.objects(objects), Kind::Card(None)),
+        };
+        let noun = self.noun(filter, kind);
+        let noun = noun
+            .adjectives_only()
+            .unwrap_or_else(|| noun.indefinite(kind));
+        format!("{} {noun}", be(&what, self.is_plural(objects), true))
     }
 
     /// What a condition about whether objects are somewhere is about: "it" for the object the
@@ -175,6 +181,10 @@ impl Ctx {
                 "{} didn't draw a card in their draw step this turn",
                 self.player(players)
             ),
+            Condition::TurnOf(players) => format!("it isn't {} turn", self.possessive(players)),
+            Condition::AttackedThisTurn(players) => {
+                format!("{} didn't attack this turn", self.player(players))
+            }
             Condition::Not(inner) => self.condition(*inner),
             Condition::HasChosenName(Objects::Those) if self.done_this_way.is_some() => {
                 format!(

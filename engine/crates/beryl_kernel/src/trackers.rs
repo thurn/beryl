@@ -121,6 +121,12 @@ kinds! {
         ///
         /// [CR 504.1]: https://yawgatog.com/resources/magic-rules/#R5041
         DrewInDrawStep = "cards drawn in their most recent draw step",
+        /// The creatures the player declared as attackers this turn. A creature put onto the
+        /// battlefield attacking never "attacked" for effects (see [CR 508.4]).
+        /// `beryl_card`'s `Condition::AttackedThisTurn` reads it.
+        ///
+        /// [CR 508.4]: https://yawgatog.com/resources/magic-rules/#R5084
+        AttackersDeclared = "creatures declared as attackers this turn",
     }
 }
 

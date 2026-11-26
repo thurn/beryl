@@ -17,7 +17,7 @@ use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
 use crate::replacement::event::{self, Event, Sink};
 use crate::replacement::protection;
-use crate::state::{AttackTarget, CombatRole, Pending, State, Tracker, TurnStep};
+use crate::state::{AttackTarget, CombatRole, Count, Pending, State, Tracker, TurnStep};
 use crate::table::{Capability, GameTable};
 use beryl_kernel::reference::Permanent;
 
@@ -238,6 +238,7 @@ fn declare_attacker<L: Layout>(s: &mut State<L>, t: &GameTable, attacker: Perman
     // See CR 508.4: creatures put onto the battlefield attacking never "attacked"
     // for effects. Only a declaration pick records the turn's attack history.
     s.track(t, Tracker::AttackedThisTurn, attacker);
+    s.count(t, Count::AttackersDeclared, s.turn().active());
 }
 
 /// Finishes the attack declaration: the attackers tap, then attack triggers trigger.

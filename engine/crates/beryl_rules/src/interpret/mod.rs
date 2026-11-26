@@ -291,6 +291,8 @@ pub(crate) fn without_a_scene<L: Layout>(
         | Condition::HasChosenName(_)
         | Condition::WonFlip
         | Condition::DrewInDrawStep(_)
+        | Condition::TurnOf(_)
+        | Condition::AttackedThisTurn(_)
         | Condition::MeldPair(_)
         | Condition::Not(_)
         | Condition::All(_)

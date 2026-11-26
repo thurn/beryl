@@ -863,6 +863,40 @@
       ]
     }
   ],
+  "Day's Undoing": [
+    {
+      "published_at": "2015-06-22",
+      "hash": "801715fd738e",
+      "covered": "Effect::EndTurn"
+    },
+    {
+      "published_at": "2015-06-22",
+      "hash": "b49bf0511eee",
+      "covered": "Effect::EndTurn"
+    },
+    {
+      "published_at": "2015-06-22",
+      "hash": "3f490c9dfa6e",
+      "covered": "Effect::EndTurn"
+    },
+    {
+      "published_at": "2015-06-22",
+      "hash": "e5daed924872",
+      "covered": "Effect::ShuffleInto"
+    },
+    {
+      "published_at": "2015-06-22",
+      "hash": "8028f395cf5e",
+      "covered": "Effect::EndTurn"
+    },
+    {
+      "published_at": "2017-04-18",
+      "hash": "1199b924a8d3",
+      "scenario": [
+        "Draw triggers from Day's Undoing cease to exist when the turn ends"
+      ]
+    }
+  ],
   "Delver of Secrets // Insectile Aberration": [
     {
       "published_at": "2011-09-22",

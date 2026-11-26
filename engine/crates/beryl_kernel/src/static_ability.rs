@@ -158,6 +158,8 @@ fn condition_reads_tapped(condition: &Condition) -> bool {
         | Condition::Cast(_)
         | Condition::HasChosenName(_)
         | Condition::DrewInDrawStep(_)
+        | Condition::TurnOf(_)
+        | Condition::AttackedThisTurn(_)
         | Condition::MeldPair(_)
         | Condition::Token(_) => false,
     }
@@ -183,7 +185,9 @@ fn compares(condition: &Condition, read: &dyn Fn(&Counted) -> bool) -> bool {
         | Condition::MeldPair(_)
         | Condition::Token(_)
         | Condition::WonFlip
-        | Condition::DrewInDrawStep(_) => false,
+        | Condition::DrewInDrawStep(_)
+        | Condition::TurnOf(_)
+        | Condition::AttackedThisTurn(_) => false,
     }
 }
 
@@ -536,6 +540,8 @@ fn reads(condition: &Condition) -> bool {
         | Condition::Cast(_)
         | Condition::HasChosenName(_)
         | Condition::DrewInDrawStep(_)
+        | Condition::TurnOf(_)
+        | Condition::AttackedThisTurn(_)
         | Condition::MeldPair(_)
         | Condition::Token(_) => false,
     }
@@ -566,6 +572,8 @@ pub fn reads_results(condition: &Condition) -> bool {
         | Condition::Cast(_)
         | Condition::HasChosenName(_)
         | Condition::DrewInDrawStep(_)
+        | Condition::TurnOf(_)
+        | Condition::AttackedThisTurn(_)
         | Condition::MeldPair(_)
         | Condition::Token(_) => false,
     }
@@ -717,6 +725,8 @@ pub fn holds<L: Layout>(
         | Condition::Cast(_)
         | Condition::HasChosenName(_)
         | Condition::DrewInDrawStep(_)
+        | Condition::TurnOf(_)
+        | Condition::AttackedThisTurn(_)
         | Condition::MeldPair(_)
         | Condition::Token(_) => {
             unreachable!("the card table refuses a static ability with this condition")

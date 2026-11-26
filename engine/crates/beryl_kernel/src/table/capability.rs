@@ -175,10 +175,13 @@ pub enum Capability {
     /// looks at each source it may tap for a second way to make mana
     /// (`beryl_rules`' `mana::sources`).
     SacrificeAlternative,
+    /// A card asks whether a player declared an attacker this turn
+    /// ([`Condition::AttackedThisTurn`]), so each attacker declared is counted for its player.
+    AttackersDeclared,
 }
 
 // The game keeps its capabilities in a `u64`.
-const _: () = assert!((Capability::SacrificeAlternative as u32) < u64::BITS);
+const _: () = assert!((Capability::AttackersDeclared as u32) < u64::BITS);
 
 impl Capability {
     /// The capabilities of every face and subtype the game can contain.
@@ -477,6 +480,7 @@ fn facts_read_by(ability: &Ability) -> u64 {
             }
             Node::Amount(Amount::CardsDrawn(_)) => Capability::CardsDrawn.bit(),
             Node::Condition(Condition::DrewInDrawStep(_)) => Capability::DrewInDrawStep.bit(),
+            Node::Condition(Condition::AttackedThisTurn(_)) => Capability::AttackersDeclared.bit(),
             Node::Filter(Filter::AttackedThisTurn) => Capability::AttackedThisTurn.bit(),
             Node::Condition(Condition::Cast(_)) => Capability::RemembersCast.bit(),
             Node::Filter(Filter::ManaValueAtMostPower) => Capability::ReadsSourcePower.bit(),

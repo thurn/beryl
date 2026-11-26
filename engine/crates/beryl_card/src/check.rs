@@ -616,7 +616,9 @@ impl Scope<'_> {
     const fn condition(self, condition: &Condition) -> Checked {
         match condition {
             Condition::Did | Condition::WonFlip => Ok(()),
-            Condition::DrewInDrawStep(players) => self.players(players),
+            Condition::DrewInDrawStep(players)
+            | Condition::TurnOf(players)
+            | Condition::AttackedThisTurn(players) => self.players(players),
             Condition::Paid(kind) => {
                 let casting = self.face.casting;
                 let mut i = 0;

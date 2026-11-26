@@ -715,6 +715,17 @@ impl<L: Layout> Scene<'_, L> {
                 each.peek().is_some()
                     && each.all(|player| self.s.counted(Count::DrewInDrawStep, player) > 0)
             }
+            // See CR 102.1: whether the active player is one of `players`.
+            Condition::TurnOf(players) => self.players(players).contains(self.s.turn().active()),
+            // See CR 508.4: whether each of the players declared at least one creature as an
+            // attacker this turn, counted in a game with a card that asks
+            // (`beryl_kernel`'s `Capability::AttackersDeclared`).
+            Condition::AttackedThisTurn(players) => {
+                let who = self.players(players);
+                let mut each = who.in_seat_order().peekable();
+                each.peek().is_some()
+                    && each.all(|player| self.s.counted(Count::AttackersDeclared, player) > 0)
+            }
             // See CR 701.42a (`actions::meld`).
             Condition::MeldPair(partner) => self.meld_pair(partner).is_some(),
             Condition::HasChosenName(names) => self.has_chosen_name(names),

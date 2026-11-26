@@ -62,6 +62,7 @@ static TALLY: CardDef = CardDef {
                 amount: Amount::CardsDrawn(you()),
             },
             if_then(Condition::DrewInDrawStep(you()), &gain_life(you(), 1)),
+            if_then(Condition::AttackedThisTurn(you()), &gain_life(you(), 1)),
         ]))],
         ..Face::EMPTY
     }],

@@ -91,6 +91,20 @@ impl Ctx {
         then: &Effect,
         otherwise: Option<&Effect>,
     ) -> Vec<String> {
+        if otherwise.is_none()
+            && let Condition::Not(inner @ Condition::AttackedThisTurn(_)) = condition
+        {
+            let unless = self.condition(*inner);
+            let mut clauses = self.effect(then);
+            match clauses.first_mut() {
+                Some(first) => {
+                    first.push_str(" unless ");
+                    first.push_str(&unless);
+                }
+                None => clauses.push(format!("unless {unless}")),
+            }
+            return clauses;
+        }
         let cast_trigger = self.trigger.is_some_and(|trigger| trigger.event.is_cast());
         let did = matches!(condition, Condition::Did);
         // After a clause about another player, the outcome of a condition about a card says
@@ -243,7 +257,16 @@ impl Ctx {
             // card": an instruction Oracle would join with ", then" starts a sentence of its
             // own with "Then" when an "unless" follows it.
             let then_unless = previous.is_some_and(|before| {
-                matches!(effect, Effect::Unless { effect: inner, .. } if joined_by_then(before, inner))
+                matches!(
+                    effect,
+                    Effect::Unless { effect: inner, .. }
+                        | Effect::If {
+                            condition: Condition::Not(Condition::AttackedThisTurn(_)),
+                            then: inner,
+                            otherwise: None,
+                        }
+                        if joined_by_then(before, inner)
+                )
             });
             self.continued = then && previous.and_then(subject_of) == subject_of(effect);
             let mut more = self.effect(effect);

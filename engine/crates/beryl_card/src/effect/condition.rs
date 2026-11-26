@@ -58,6 +58,19 @@ pub enum Condition {
     ///
     /// [CR 504.1]: https://yawgatog.com/resources/magic-rules/#R5041
     DrewInDrawStep(Players),
+    /// "If it's your turn", "if it's [player]'s turn": the active player ([CR 102.1]: "The
+    /// active player is the player whose turn it is.") is one of `players`.
+    ///
+    /// [CR 102.1]: https://yawgatog.com/resources/magic-rules/#R1021
+    TurnOf(Players),
+    /// "If you attacked this turn", "unless you attacked this turn": there is such a player,
+    /// and every one declared at least one creature as an attacker this turn. A creature put
+    /// onto the battlefield attacking never "attacked" for effects ([CR 508.4]): "for the
+    /// purposes of trigger events and effects, ... never 'attacked.'" Kept only in a game with
+    /// a card that reads it (`beryl_kernel`'s `Count`).
+    ///
+    /// [CR 508.4]: https://yawgatog.com/resources/magic-rules/#R5084
+    AttackedThisTurn(Players),
     /// "If you cast it": there is such an object, and every one is a permanent that was a
     /// spell its controller cast, which became that permanent as it resolved. A copy of a
     /// spell was not cast ([CR 707.10]): "a copy of a spell isn't cast". A permanent that was
@@ -105,7 +118,9 @@ impl Condition {
             Condition::Did | Condition::WonFlip | Condition::HasChosenName(_) => true,
             Condition::Paid(_) => false,
             Condition::MeldPair(partner) => partner.needs_a_resolution(),
-            Condition::DrewInDrawStep(players) => players.needs_a_resolution(),
+            Condition::DrewInDrawStep(players)
+            | Condition::TurnOf(players)
+            | Condition::AttackedThisTurn(players) => players.needs_a_resolution(),
             Condition::Compare(left, _, right) => {
                 left.needs_a_resolution() || right.needs_a_resolution()
             }
@@ -138,7 +153,9 @@ impl Condition {
             Condition::Did | Condition::WonFlip | Condition::Paid(_) | Condition::MeldPair(_) => {
                 false
             }
-            Condition::DrewInDrawStep(players) => players.names_paid(),
+            Condition::DrewInDrawStep(players)
+            | Condition::TurnOf(players)
+            | Condition::AttackedThisTurn(players) => players.names_paid(),
             Condition::Compare(left, _, right) => left.names_paid() || right.names_paid(),
             Condition::Is(objects, _)
             | Condition::EnteredThisTurn(objects)
@@ -181,7 +198,9 @@ impl Condition {
                 | Condition::HasChosenName(_)
                 | Condition::WonFlip
                 | Condition::MeldPair(_)
-                | Condition::DrewInDrawStep(_) => false,
+                | Condition::DrewInDrawStep(_)
+                | Condition::TurnOf(_)
+                | Condition::AttackedThisTurn(_) => false,
             }
     }
 }
