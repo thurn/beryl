@@ -130,10 +130,10 @@ it is in play. The present-cost gate measures what it costs while one is:
   a phased-out permanent as it is, and a step while a card of the family is
   merged with a permanent is left out: ending Gemrazer's merge would leave the
   cards under the permanent behind in the merged zone once it left the
-  battlefield. `two-faced` swaps in Fire // Ice, Wear // Tear,
-  Bonecrusher Giant, Valakut Awakening and Delver of Secrets (and Mountains, so
-  the red halves can be cast), `levels` The Eldest Reborn, Wizard Class, Case of
-  the Crimson Pulse and Student of Warfare, `face-down` Exalted Angel and Gathan
+  battlefield. `two-faced` swaps in Fire // Ice, Wear // Tear, Bonecrusher
+  Giant, Valakut Awakening and Delver of Secrets (and Mountains, so the red
+  halves can be cast), `levels` The Eldest Reborn, Wizard Class, Case of the
+  Crimson Pulse and Student of Warfare, `face-down` Exalted Angel and Gathan
   Raiders (not Illusionary Mask, whose rollouts outgrow `Small` as soon as it
   spends mana on X), and `outside` Burning Wish and Lurrus of the Dream-Den,
   `turn-structure` Time Stop, Paradox Haze, Relentless Assault and Time Vault
