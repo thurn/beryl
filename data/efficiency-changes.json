@@ -1015,5 +1015,10 @@
     "label": "Landings inspect changed Rust files outside `repository.test_paths` and mark those whose diff touched only `#[cfg(test)]` items, comments or whitespace as test-only when classifying check fix outcomes, and `test_paths` now includes `docs/**`, `data/oracle-divergences.json` and `data/efficiency-changes.json`",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Added always-on Antigravity rules in `.agents/rules/agy-efficiency.md` instructing `agy` sessions to search with `rg -n` and read narrow line ranges instead of whole files, limit screenshot reads, offload broad multi-file surveys to the `research` subagent on `flash`, and refresh the 5-minute prompt cache every 240 s during long waits (2026-11-25)",
+    "metric": "bead.dollars",
+    "expect": "down"
   }
 ]
