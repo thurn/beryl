@@ -177,14 +177,28 @@ fn record_hold(
 }
 
 /// Whether a fix of `check` ever changed product behavior, counting only a fix outside the
-/// budget families.
+/// budget families. A close that stamped checks from more than one family at once is ignored,
+/// because a fix for one check on a multi-family or reopened ticket otherwise stamps every
+/// unrelated co-filed check as having caught a product defect.
 fn caught_a_defect(conn: &Connection, rules: &Rules, check: &str) -> Result<bool> {
     if rules.is_budget(check) {
         return Ok(false);
     }
     Ok(conn.query_row(
-        "SELECT EXISTS (SELECT 1 FROM check_fix_outcomes
-                        WHERE check_name = ?1 AND outcome = 'product')",
+        "SELECT EXISTS (
+             SELECT 1 FROM check_fix_outcomes o
+             WHERE o.check_name = ?1 AND o.outcome = 'product'
+               AND NOT EXISTS (
+                   SELECT 1 FROM check_fix_outcomes peer
+                   WHERE peer.ticket = o.ticket AND peer.close_seq = o.close_seq
+                     AND CASE WHEN instr(peer.check_name, ':') > 0
+                              THEN substr(peer.check_name, 1, instr(peer.check_name, ':') - 1)
+                              ELSE peer.check_name END
+                      != CASE WHEN instr(o.check_name, ':') > 0
+                              THEN substr(o.check_name, 1, instr(o.check_name, ':') - 1)
+                              ELSE o.check_name END
+               )
+         )",
         [check],
         |row| row.get(0),
     )?)

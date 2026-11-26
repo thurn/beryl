@@ -434,3 +434,58 @@ fn inline_test_only_edits_in_product_files_classify_as_test_only() {
     assert_eq!(fixes.len(), 1);
     assert_eq!(fixes[0].outcome, FixOutcome::Product);
 }
+
+#[test]
+fn reopening_a_regression_ticket_does_not_restamp_already_fixed_checks() {
+    let mut conn = open();
+    register(&mut conn);
+    let config = ["**/tests/**".to_owned()];
+
+    let first = report("first");
+    let second = report("second");
+    let (ticket, _) = regressions::file(&mut conn, UPKEEP, &first, at(1.0)).unwrap();
+    let (grouped, _) = regressions::file(&mut conn, UPKEEP, &second, at(1.0)).unwrap();
+    assert_eq!(ticket, grouped);
+    assert_eq!(
+        post(&mut conn, "/claims", &claim(&ticket, "a"), at(2.0)).0,
+        200
+    );
+    let mut body = landed(&ticket, "a", "test-only fix");
+    body["work"]["files"] = json!(["tests/first.rs"]);
+    assert_eq!(
+        post_with_test_paths(&mut conn, "/landed", &body, at(3.0), &config).0,
+        200
+    );
+
+    // Both checks pass at a verified tip and are marked fixed.
+    ignite_store::hub::tips::regression_fixed(&conn, first.check.as_str()).unwrap();
+    ignite_store::hub::tips::regression_fixed(&conn, second.check.as_str()).unwrap();
+
+    // Only `first` fails again and reopens the ticket; its fix touches a product file.
+    let (reopened, change) = regressions::file(&mut conn, UPKEEP, &first, at(5.0)).unwrap();
+    assert_eq!(reopened, ticket);
+    assert_eq!(change, regressions::Outcome::Reopened);
+    assert_eq!(
+        post(&mut conn, "/claims", &claim(&ticket, "b"), at(6.0)).0,
+        200
+    );
+    let mut body = landed(&ticket, "b", "product fix");
+    body["work"]["files"] = json!(["src/lib.rs"]);
+    assert_eq!(
+        post_with_test_paths(&mut conn, "/landed", &body, at(7.0), &config).0,
+        200
+    );
+
+    let first_fixes = history(&mut conn, ("check", first.check.as_str()), at(8.0));
+    assert_eq!(first_fixes.len(), 2);
+    assert_eq!(first_fixes[0].outcome, FixOutcome::Product);
+    assert_eq!(first_fixes[1].outcome, FixOutcome::TestOnly);
+
+    let second_fixes = history(&mut conn, ("check", second.check.as_str()), at(8.0));
+    assert_eq!(
+        second_fixes.len(),
+        1,
+        "already-fixed check must not be stamped again on reopen close"
+    );
+    assert_eq!(second_fixes[0].outcome, FixOutcome::TestOnly);
+}

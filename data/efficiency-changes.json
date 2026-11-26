@@ -1025,5 +1025,10 @@
     "label": "Upkeep measures an unproven check's hold on `master` from when the first failing tip was seen rather than when its round finished, and counts repeated `observed_failures` on superseded or still-verifying tips while keeping `native-ios` and `native-android` protected. On 2026-11-25 `counts:rollouts` failed on ten consecutive superseded tips for 2.5 hours without triggering a switch-off, and on 2026-11-26 six Windows `counts:family` checks held `master` for 90 minutes because a 38-minute Windows tip round delayed the hold clock",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Recording check fix outcomes on ticket close skips regressions already marked `fixed` from an earlier close, and `unproven_holds` ignores `product` outcomes whose close stamped checks from more than one family at once. Previously, reopened and cross-family regression tickets tainted 156 checks with `product` outcomes—including re-stamping 20 already-fixed `client-interface` checks twice when a ticket reopened for `source:file-length`—blinding `unproven_holds` from switching off unproven checks holding `master` back",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]

@@ -8,7 +8,7 @@ use ignite_core::ids::{CheckName, Commit};
 use ignite_core::protocol::hub::{CheckFix, FixOutcome, FixSource};
 use ignite_core::time::Timestamp;
 
-use crate::hub::{findings, rows};
+use crate::hub::{findings, rows, tips};
 use crate::{Result, StoreError};
 
 /// The classification and tip of a landing closing a ticket in the current transaction.
@@ -21,8 +21,9 @@ pub struct LandingFix {
     pub prior_commits: Vec<Commit>,
 }
 
-/// Records one outcome per check on the ticket, and credits exploration families for a
-/// product fix using that same classification.
+/// Records one outcome per active check on the ticket, and credits exploration families for a
+/// product fix using that same classification. Regressions already marked `fixed` from an
+/// earlier close of a reopened ticket are skipped so a later fix does not stamp them again.
 pub(super) fn record_close(
     conn: &Connection,
     ticket: &str,
@@ -46,7 +47,7 @@ pub(super) fn record_close(
              CASE WHEN ?4 = 'test-only' AND ?5 IS NOT NULL AND NOT EXISTS (
                  SELECT 1 FROM json_each(?6) WHERE value = r.first_bad
              ) AND coalesce(r.culprit_ticket, '') != ?2 THEN '' END
-         FROM regressions r WHERE r.ticket = ?2
+         FROM regressions r WHERE r.ticket = ?2 AND r.state != ?8
          UNION ALL
          SELECT ?1, check_name, ?2, ?3, ?4, 'flaky', NULL, ?5, NULL, NULL
          FROM (
@@ -67,6 +68,7 @@ pub(super) fn record_close(
             commit,
             prior_commits,
             flaky_triage::CATEGORY,
+            tips::FIXED,
         ],
     )?;
     if outcome == FixOutcome::Product {

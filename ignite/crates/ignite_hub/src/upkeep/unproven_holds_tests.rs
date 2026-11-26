@@ -57,8 +57,8 @@ fn failed(conn: &Connection, commit: &str, checks: &[&str], clock: &FakeClock) {
 fn fixed_before(conn: &Connection, check: &str, outcome: &str) {
     conn.execute(
         "INSERT INTO check_fix_outcomes (close_seq, check_name, ticket, at, outcome, source)
-         VALUES (1, ?1, 'old', '2026-11-01T00:00:00Z', ?2, 'regression')",
-        params![check, outcome],
+         VALUES (1, ?1, ?2, '2026-11-01T00:00:00Z', ?3, 'regression')",
+        params![check, format!("old-{check}"), outcome],
     )
     .unwrap();
 }
@@ -137,6 +137,41 @@ fn an_unproven_check_holding_master_for_an_hour_is_switched_off_and_its_ticket_t
         pass(&mut conn, &clock).is_empty(),
         "a check is switched off once"
     );
+}
+
+#[test]
+fn a_cross_family_product_close_does_not_protect_an_unproven_check() {
+    let mut conn = hub::open_in_memory().unwrap();
+    let clock = start();
+    for check in ["rust:tainted", "pytest:other", "rust:same-a", "rust:same-b"] {
+        list_check(&mut conn, check);
+    }
+    // Cross-family bulk/reopened close: rust:tainted rode along with pytest:other.
+    for check in ["rust:tainted", "pytest:other"] {
+        conn.execute(
+            "INSERT INTO check_fix_outcomes (close_seq, check_name, ticket, at, outcome, source)
+             VALUES (10, ?1, 'multi', '2026-11-01T00:00:00Z', 'product', 'regression')",
+            params![check],
+        )
+        .unwrap();
+    }
+    // Single-family close: two checks in the same family fixed together still count.
+    for check in ["rust:same-a", "rust:same-b"] {
+        conn.execute(
+            "INSERT INTO check_fix_outcomes (close_seq, check_name, ticket, at, outcome, source)
+             VALUES (11, ?1, 'single-fam', '2026-11-01T00:00:00Z', 'product', 'regression')",
+            params![check],
+        )
+        .unwrap();
+    }
+    verified(&conn, "aaaa", &clock);
+    clock.advance(60.0);
+    failed(&conn, "bbbb", &["rust:tainted", "rust:same-a"], &clock);
+    clock.advance(HOLD_SECONDS + 60.0);
+
+    assert_eq!(pass(&mut conn, &clock), ["rust:tainted"]);
+    assert_eq!(check_state(&conn, "rust:tainted"), "off");
+    assert_eq!(check_state(&conn, "rust:same-a"), "on");
 }
 
 #[test]
