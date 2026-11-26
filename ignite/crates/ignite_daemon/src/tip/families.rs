@@ -531,10 +531,7 @@ mod tests {
         let to_run: Vec<&TipCheck> = checks.iter().collect();
         let high_costs = |_: &str| TipCosts {
             claim_seconds: 60.0,
-            costs: checks
-                .iter()
-                .map(|c| (c.check.to_string(), 60.0))
-                .collect(),
+            costs: checks.iter().map(|c| (c.check.to_string(), 60.0)).collect(),
         };
 
         let split = batches(&listed, &to_run, &high_costs, &BTreeSet::new());
