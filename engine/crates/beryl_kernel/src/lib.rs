@@ -19,12 +19,11 @@
 //!
 //! ## Mutators
 //!
-//! A mutator is a method of [`State`], `#[inline]` and generic over the layout: one for each
-//! thing the rules do to the state. It takes what the rules decided and makes the whole
-//! change, so no caller repeats a part of it. No `&mut` to an object, a player or a queue
-//! leaves the crate. One that runs out of a capacity returns [`fixed::Full`], which the rules
-//! turn into a stall: the state is then abandoned for its wider copy, so a mutator never
-//! undoes.
+//! A mutator is a method of [`State`], `#[inline]` and generic over the layout: one for each thing
+//! the rules do to the state. It takes what the rules decided and makes the whole change, so no
+//! caller repeats a part of it. No `&mut` to an object, a player or a queue leaves the crate. One
+//! that runs out of a capacity returns [`fixed::Full`], which the rules turn into a stall: the
+//! state is then abandoned for its wider copy, so a mutator never undoes.
 //!
 //! The object mutators are built ([`mutate`]): [`State`]'s way to an object to write is
 //! private to the crate. An attachment or a base controller changes only as a permanent
@@ -126,11 +125,16 @@
 //! Use `.slots()` for batch events and unconverted calls. For sequential actions on permanents
 //! use [`State::next_permanent`] to read them in battlefield order.
 //!
-//! [`memos::Memo::ExiledWith`] survives its source leaving (see “Duration and expiry”).
-//! A [`memos::Memo::PartOf`] component leaves with its merged permanent. Zone departure
-//! clears attachments and combat references to that slot, including
-//! [`state::AttackTarget::Planeswalker`]. [`effects::Affects::Object`] stores both the slot
-//! and incarnation, exposed together as an [`state::ObjectRef`].
+//! A memo naming an object that can leave while the memo lasts holds a [`memos::Link`] (slot and
+//! incarnation byte). A bare slot is kept only where its object cannot change while the memo lasts:
+//! a [`memos::Memo::PartOf`] component leaves with its merged permanent; each way a
+//! [`memos::Memo::Prepared`] copy leaves exile uncast sets it to `None`
+//! (`State::detach_prepare_copy`), and casting it ends the memo (see CR 723.3c); a
+//! [`memos::Memo::CombatBand`] number is only compared between memos, and bands are declared while
+//! nothing moves and end with combat (see CR 702.22e). Zone departure clears attachments and combat
+//! references to that slot, including [`state::AttackTarget::Planeswalker`].
+//! [`effects::Affects::Object`] stores both the slot and incarnation, exposed together as an
+//! [`state::ObjectRef`].
 //!
 //! ## The board door
 //!
@@ -164,7 +168,7 @@
 //! | `CastPermission::exile` and `flashback`, `StackEntry::exile` and `flashback` | the permission's terms carry them to the cast, which starts an [`effects::Payload::Move`] on the spell: exile instead of a graveyard, or [`effects::MoveReplacement::Flashback`], exile instead of anywhere else (see CR 702.34a). Every move of the spell applies it where it applies any replacement (the rules' `replacement::moving`), and "was a flashback cost paid" is whether that replacement is on the spell | by-w8gv.7.4, built |
 //! | `State::entered_x` | Memos: the permanent's `X` ([`memos::Memo::X`]) | by-w8gv.7.6, built |
 //! | `ObjectFlags` `KICKED`, `OFFSPRING`, `IMPENDING`, `EVOKED` | Memos: the costs paid as the object was cast ([`memos::Memo::Paid`]), one entry holding the set of them, with a kind in the store's index for each kind of casting option of the vocabulary's list | by-w8gv.7.6, built |
-//! | `EXILED_UNTIL`, `EXILED_WITH`, `Object::linked`, `State::link`, `State::forget_links_to` | Memos: a memo of the exiled card naming the slot of what exiled it ([`memos::Memo::ExiledWith`], [`memos::Memo::ExiledUntil`]; "Duration and expiry" says how the first outlives that object), read by [`State::linked`] and [`State::exiled_until`] | by-w8gv.7.7, built |
+//! | `EXILED_UNTIL`, `EXILED_WITH`, `Object::linked`, `State::link`, `State::forget_links_to` | Memos: a memo of the exiled card naming what exiled it by slot and incarnation ([`memos::Memo::ExiledWith`], [`memos::Memo::ExiledUntil`]; "Duration and expiry" says how the first outlives that object), read by [`State::linked`] and [`State::exiled_until`] | by-w8gv.7.7, built |
 //! | a field naming the creature an Aura put onto the battlefield | Memos: a memo of the creature naming the Aura by slot and incarnation ([`memos::Memo::PutOntoBattlefieldWith`]), which outlives the Aura as [`memos::Memo::ExiledWith`] does, read by [`State::linked`] | by-bajq.8.2, built |
 //! | `LOYALTY_ACTIVATED`, `ENTERED_THIS_TURN` | Trackers, keyed by permanent: a kind of [`trackers::Tracker`] each, noted with [`State::track`] and read with [`State::tracked`] | by-w8gv.7.8, built |
 //! | [`state::Counters`]' long-tail pair (`other_kind`, `other`) | the counters table ([`counters::CounterTable`]), a row for each kind on each object, beside the three kinds the rules themselves read, which stay fields of the object. The kinds are the vocabulary's list (`beryl_card::counter_kinds`), and [`State::add_counters`], [`State::remove_counters`] and [`State::counters_of`] take any of them | by-w8gv.7.9, built |
@@ -196,14 +200,13 @@
 //! | Trackers' counts | a byte for each player and kind of count, padded to the sets' alignment | 1 | 3 kinds, 2 players | 8 | the same |
 //! | Counters | a queue of (slot, kind, count), in the order each kind was first put on its object | 3 | 32 ([`counters::COUNTERS`]) | 97, of the 104 allowed | a `Vec` |
 //!
-//! A full fixed-layout store returns [`fixed::Full`] so the game can retry in `Large`.
-//! A list that cannot fill says why in a comment and takes
-//! [`layout::Queue::push_bounded`], which checks the argument in debug builds; a list a
-//! heuristic samples takes [`layout::Queue::push_if_room`]; the `discarded-push` check in
-//! the `names` lane refuses a push whose result is bound to `_` in the kernel,
-//! `beryl_engine` and `beryl_cards` outside their tests. A locked-in set is 32 bytes, so the sets are a
-//! table of their own and never part of an entry. Counter kinds cannot be fields of each of
-//! 255 objects, so all but the three hot kinds are a keyed table.
+//! A full fixed-layout store returns [`fixed::Full`] so the game can retry in `Large`. A list that
+//! cannot fill says why in a comment and takes [`layout::Queue::push_bounded`], which checks the
+//! argument in debug builds; a list a heuristic samples takes [`layout::Queue::push_if_room`]; the
+//! `discarded-push` check in the `names` lane refuses a push whose result is bound to `_` in the
+//! kernel, `beryl_engine` and `beryl_cards` outside their tests. A locked-in set is 32 bytes, so
+//! the sets are a table of their own and never part of an entry. Counter kinds cannot be fields of
+//! each of 255 objects, so all but the three hot kinds are a keyed table.
 //!
 //! `size_of::<State<Small>>()` was 19,992 before the milestone and is 20,040 after by-w8gv.7.2: 40
 //! for the store's mask and the keyed slots, 8 of padding for the field order ([`State`]'s
@@ -343,13 +346,10 @@
 //!   the card: it ends as the card leaves.
 //!
 //! Memos clear the same way, as their object ends. A card "exiled with" a permanent names that
-//! object by its slot and incarnation byte ([`memos::Link`]): an ability of it still on the stack
-//! finds the card after it has left (see CR 607.2a), and a new object in the slot does not (see
-//! CR 400.7). A memo of a permanent put onto the battlefield with an Aura names the slot alone. As
-//! an object arrives in a slot, the move ends those memos naming it and the links with its byte
-//! (`State::forget_links_to`), behind one AND. A card exiled "until" a permanent leaves needs no
-//! such end: the rules return it as it leaves (see CR 610.3), and the store's invariant holds
-//! that permanent to the battlefield.
+//! object by a [`memos::Link`], as each memo holding one does ("Object references"): an ability of
+//! it still on the stack finds the card after it has left (see CR 607.2a), and a new object in the
+//! slot does not (see CR 400.7). As an object arrives in a slot, the move ends the links with its
+//! byte (`State::forget_links_to`), behind one AND.
 //!
 //! Counters end the same way (see [CR 122.2]: "Counters on an object are not retained if that object
 //! moves from one zone to another."): the move resets the object's fields and ends its rows of the

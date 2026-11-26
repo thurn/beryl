@@ -320,7 +320,8 @@ fn a_link_ends_before_a_later_object_in_its_slot_could_read_as_its_object() {
 fn what_exiled_a_card_survives_small_to_large_and_back() {
     let (t, mut small, slots) = bears(1);
     let card = exiled(&mut small, 0);
-    small.remember(card, Memo::ExiledUntil(slots[0])).unwrap();
+    let until = Memo::ExiledUntil(Link::to(small.object_ref(slots[0])));
+    small.remember(card, until).unwrap();
     derive(&t, &mut small);
     // The permanent is on the battlefield, as the store's check holds it to be.
     assert_eq!(small.check_stores(&t), Ok(()));
@@ -340,4 +341,53 @@ fn what_exiled_a_card_survives_small_to_large_and_back() {
     assert_eq!(large.check_stores(&t), Ok(()));
     let back: State<Small> = large.relayout();
     assert_eq!(back, small);
+}
+
+/// A card exiled until a permanent leaves names that permanent by a [`Link`]. If the
+/// permanent leaves without returning the card and a new object takes its slot, the card is
+/// not exiled until the new one.
+#[test]
+fn a_card_exiled_until_a_permanent_leaves_is_not_exiled_until_a_new_object_in_its_slot() {
+    let (t, mut s, slots) = bears(1);
+    let source = slots[0];
+    let card = exiled(&mut s, 0);
+    let until = Memo::ExiledUntil(Link::to(s.object_ref(source)));
+    s.remember(card, until).unwrap();
+    assert_eq!(s.exiled_until(source), Bitboard::single(card));
+    assert_eq!(s.memos(card).exiled_until(), Some(source));
+
+    // The kernel's move returns nothing: that is the rules' (see CR 610.3).
+    s.move_object(&mut Sink::off(), source, Zone::Graveyard, Place::Top)
+        .unwrap();
+    s.move_object(&mut Sink::off(), source, Zone::Battlefield, Place::Top)
+        .unwrap();
+    assert!(s.exiled_until(source).is_empty());
+    assert_eq!(s.memos(card).exiled_until(), None);
+    derive(&t, &mut s);
+    assert_eq!(s.check_stores(&t), Ok(()));
+}
+
+/// The cards that went to exile together from a merged permanent name the permanent's own
+/// card by a [`Link`]. Once that card leaves exile it is a new object (see CR 400.7), and it
+/// is not one of them even when it is exiled again.
+#[test]
+fn cards_exiled_together_do_not_include_a_new_object_in_the_leaders_slot() {
+    let (t, mut s, _) = bears(0);
+    let (leader, under, other) = (exiled(&mut s, 0), exiled(&mut s, 1), exiled(&mut s, 2));
+    let pile = Memo::ExiledFromPileOf(Link::to(s.object_ref(leader)));
+    s.remember(under, pile).unwrap();
+    s.remember(other, pile).unwrap();
+    let all: Bitboard<Slot> = [leader, under, other].into_iter().collect();
+    assert_eq!(s.exiled_together(under), all);
+    assert_eq!(s.exiled_together(leader), all);
+
+    s.move_object(&mut Sink::off(), leader, Zone::Graveyard, Place::Top)
+        .unwrap();
+    s.move_object(&mut Sink::off(), leader, Zone::Exile, Place::Top)
+        .unwrap();
+    let rest: Bitboard<Slot> = [under, other].into_iter().collect();
+    assert_eq!(s.exiled_together(under), rest);
+    assert_eq!(s.exiled_together(leader), Bitboard::single(leader));
+    derive(&t, &mut s);
+    assert_eq!(s.check_stores(&t), Ok(()));
 }

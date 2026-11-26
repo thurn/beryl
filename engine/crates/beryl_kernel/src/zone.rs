@@ -214,10 +214,12 @@ impl<L: Layout> State<L> {
             to
         };
         let together = to == Zone::Exile && !self.object(leader).is_token();
+        // The leader has already moved: the link names the card it is in exile.
+        let link = crate::memos::Link::to(self.object_ref(leader));
         for &card in pile.as_slice() {
             self.move_object(sink, card, to, place)?;
             if together {
-                self.remember(card, crate::memos::Memo::ExiledFromPileOf(leader))?;
+                self.remember(card, crate::memos::Memo::ExiledFromPileOf(link))?;
             }
         }
         Ok(())

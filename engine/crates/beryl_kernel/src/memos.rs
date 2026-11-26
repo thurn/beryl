@@ -10,9 +10,14 @@
 //!
 //! Built so far: what a permanent remembers of the spell it was, the costs paid for it and
 //! the value of X; what exiled a card, a memo of the exiled card naming what exiled it,
-//! which ends with the card as every memo does ([`Memo::ExiledWith`] names one object and
-//! outlives it, [`Memo::ExiledUntil`] names a slot); and the value a permanent chose as it
-//! entered ([`Memo::Chosen`]).
+//! which ends with the card as every memo does ([`Memo::ExiledWith`] and
+//! [`Memo::ExiledUntil`] name one object by its slot and incarnation, a [`Link`]); and the
+//! value a permanent chose as it entered ([`Memo::Chosen`]).
+//!
+//! A memo that names another object names it by a [`Link`] wherever that object can leave
+//! its zone while the memo lasts, so that a new object in the same slot is never taken for
+//! it. The kernel contract ("Object references") says why each memo that names a bare slot
+//! cannot outlive the object in it.
 //!
 //! Implements: none. Stores facts about objects for their abilities to read later.
 
@@ -75,11 +80,15 @@ pub enum Memo<L: Layout = Small> {
     /// that object after the object has left its zone or ceased to exist, for an ability of
     /// it still on the stack, and is never exiled with a new object in the same slot.
     ExiledWith(Link<L>),
-    /// The card in exile was exiled until the permanent in this slot leaves the
-    /// battlefield, which returns it
+    /// The card in exile was exiled until this permanent leaves the battlefield, which
+    /// returns it
     /// (see [CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103)): "Some one-shot
     /// effects cause an object to change zones 'until' a specified event occurs."
-    ExiledUntil(L::Slot),
+    ///
+    /// It names one object, by its slot and incarnation ([`Link`]): a new permanent in the
+    /// same slot (see [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)) is never
+    /// the one the card waits for, even if the card was not returned as the old one left.
+    ExiledUntil(Link<L>),
     /// The value the permanent chose as it entered: a color, a creature type or a card name
     /// (see [CR 614.12a](https://yawgatog.com/resources/magic-rules/#R61412a)): "If a replacement
     /// effect that modifies how a permanent enters the battlefield requires a choice, that
@@ -137,8 +146,10 @@ pub enum Memo<L: Layout = Small> {
     /// [CR 731.2e]: https://yawgatog.com/resources/magic-rules/#R7312e
     /// [CR 708.9]: https://yawgatog.com/resources/magic-rules/#R7089
     FaceDownUnder(PlayerSet),
-    /// The card was under the merged or melded permanent whose own card is in this slot when
-    /// that permanent was exiled, and the two went to exile together. An effect that can
+    /// The card was under the merged or melded permanent whose own card this is when that
+    /// permanent was exiled, and the two went to exile together. It names that card in exile
+    /// by its slot and incarnation ([`Link`]): once the card leaves exile, it and any later
+    /// object in its slot are no longer part of the group, even if the card is exiled again. An effect that can
     /// find one of the cards the permanent became finds every one of them (see [CR 713.8c]):
     /// "If an effect can find the new object that a melded permanent becomes as it leaves the
     /// battlefield, it finds both cards." The same holds of a merged permanent (see
@@ -146,7 +157,7 @@ pub enum Memo<L: Layout = Small> {
     ///
     /// [CR 713.8c]: https://yawgatog.com/resources/magic-rules/#R7138c
     /// [CR 731.3c]: https://yawgatog.com/resources/magic-rules/#R7313c
-    ExiledFromPileOf(L::Slot),
+    ExiledFromPileOf(Link<L>),
     /// This permanent entered by resolving a face-down spell cast for morph (see CR 702.37c),
     /// or by resolving one an effect cast face down.
     Morphed,
@@ -177,10 +188,14 @@ pub enum Memo<L: Layout = Small> {
     /// [CR 720.3b]: https://yawgatog.com/resources/magic-rules/#R7203b
     Solved,
     /// This attacker is in the band identified by the first member's slot number at
-    /// declaration. The number still identifies the band if that creature leaves combat.
+    /// declaration. The number still identifies the band if that creature leaves combat. A
+    /// bare slot: the number is only compared between members' memos, never read as an
+    /// object (the kernel contract, "Object references", says why).
     CombatBand(L::Slot),
     /// The prepared designation and the copy it created, while that copy remains in exile
     /// or is being cast (see CR 723.3a–c). Phasing out removes the copy but preserves the memo.
+    /// A bare slot: every way the copy can leave exile, other than being cast, sets it to
+    /// `None` first (the kernel contract, "Object references", says why).
     Prepared(Option<L::Slot>),
     /// This permanent used its permission to cast from a graveyard once each turn
     /// ([`beryl_card::Ability::cast_from_graveyard_each_turn`]) this turn. Each turn begins
@@ -223,7 +238,8 @@ impl Kinds {
         | Kinds::EXILED_FROM_PILE;
     /// The kinds whose memo may end as a new object arrives in the slot it names
     /// ([`State::forget_links_to`]).
-    const LINKS: u32 = Kinds::EXILED_WITH | Kinds::PUT_WITH;
+    const LINKS: u32 =
+        Kinds::EXILED_WITH | Kinds::PUT_WITH | Kinds::EXILED_UNTIL | Kinds::EXILED_FROM_PILE;
 
     /// The bits of the kinds of cost in `paid`.
     #[inline]
@@ -470,14 +486,16 @@ impl<L: Layout> MemosOf<'_, L> {
         })
     }
 
-    /// The permanent this card is exiled until the leaving of (see CR 610.3).
+    /// The slot of the permanent this card is exiled until the leaving of (see CR 610.3), if
+    /// that permanent is the object in the slot now ([`Link`]).
     #[inline]
     pub fn exiled_until(&self) -> Option<L::Slot> {
         self.iter().find_map(|memo| {
-            let Memo::ExiledUntil(by) = memo else {
+            let Memo::ExiledUntil(link) = memo else {
                 return None;
             };
-            Some(by)
+            link.is(self.state.object_ref(link.slot))
+                .then_some(link.slot)
         })
     }
 }
@@ -597,12 +615,16 @@ impl<L: Layout> State<L> {
     }
 
     /// The cards exiled until the permanent in `source` leaves the battlefield
-    /// (see [CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103)). With no card in
-    /// the game exiled this way, one AND.
+    /// (see [CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103)): those exiled until
+    /// the object in the slot now, never an earlier one ([`Link`]). With no card in the game
+    /// exiled this way, one AND.
     #[inline]
     pub fn exiled_until(&self, source: L::Slot) -> Bitboard<L::Slot> {
-        self.memos
-            .remembering(Kinds::EXILED_UNTIL, Memo::ExiledUntil(source))
+        if self.memos.kinds.0 & Kinds::EXILED_UNTIL == 0 {
+            return Bitboard::EMPTY;
+        }
+        let until = Memo::ExiledUntil(Link::to(self.object_ref(source)));
+        self.memos.remembering(Kinds::EXILED_UNTIL, until)
     }
 
     /// Ends `card`'s memo of what it was exiled until, if it has one: the card

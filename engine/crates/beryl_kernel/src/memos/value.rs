@@ -90,8 +90,11 @@ impl<L: Layout> Memo<L> {
             | Memo::CombatBand(_)
             | Memo::Solved => None,
             Memo::Prepared(copy) => copy,
-            Memo::ExiledWith(link) | Memo::PutOntoBattlefieldWith(link) => Some(link.slot),
-            Memo::ExiledUntil(by) | Memo::PartOf(by) | Memo::ExiledFromPileOf(by) => Some(by),
+            Memo::ExiledWith(link)
+            | Memo::PutOntoBattlefieldWith(link)
+            | Memo::ExiledUntil(link)
+            | Memo::ExiledFromPileOf(link) => Some(link.slot),
+            Memo::PartOf(of) => Some(of),
         }
     }
 
@@ -121,9 +124,9 @@ impl<L: Layout> Memo<L> {
             // Somebody knew the face-down card: at least its controller (see CR 708.5).
             Memo::FaceDownUnder(knew) => !knew.is_empty(),
             // The card of the permanent it was under left a card or a token in its slot.
-            Memo::ExiledFromPileOf(by) => zone(by) != Zone::Nowhere,
+            Memo::ExiledFromPileOf(by) => zone(by.slot) != Zone::Nowhere,
             // An object exiled "until" its exiler leaves returns as it leaves (see CR 610.3).
-            Memo::ExiledUntil(by) => zone(by) == Zone::Battlefield,
+            Memo::ExiledUntil(by) => zone(by.slot) == Zone::Battlefield,
             // A card is part of a permanent only while it is on the battlefield.
             Memo::PartOf(of) => zone(of) == Zone::Battlefield,
             Memo::Prepared(copy) => {
@@ -138,13 +141,13 @@ impl<L: Layout> Memo<L> {
             Memo::Paid(paid) => Memo::Paid(paid),
             Memo::X(x) => Memo::X(x),
             Memo::ExiledWith(link) => Memo::ExiledWith(link.relayout()),
-            Memo::ExiledUntil(by) => Memo::ExiledUntil(slot(by)),
+            Memo::ExiledUntil(by) => Memo::ExiledUntil(by.relayout()),
             Memo::Chosen(value) => Memo::Chosen(value.relayout()),
             Memo::Really(card) => Memo::Really(crate::relayout::card(card)),
             Memo::PutOntoBattlefieldWith(link) => Memo::PutOntoBattlefieldWith(link.relayout()),
             Memo::PhasedOutUnder(player) => Memo::PhasedOutUnder(player),
             Memo::PartOf(of) => Memo::PartOf(slot(of)),
-            Memo::ExiledFromPileOf(by) => Memo::ExiledFromPileOf(slot(by)),
+            Memo::ExiledFromPileOf(by) => Memo::ExiledFromPileOf(by.relayout()),
             Memo::FaceDownUnder(knew) => Memo::FaceDownUnder(knew),
             Memo::Morphed => Memo::Morphed,
             Memo::TurnsUpWhenUsed => Memo::TurnsUpWhenUsed,

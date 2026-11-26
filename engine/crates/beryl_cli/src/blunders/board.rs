@@ -2,7 +2,7 @@
 //! reproduces its game.
 
 use beryl_engine::card::FaceIx;
-use beryl_engine::state::{CounterKind, LinkKind, Memo};
+use beryl_engine::state::{CounterKind, Link, LinkKind, Memo};
 use beryl_engine::{
     CardIx, GameTable, Profile, Seat, Slot, State, TurnStep, Zone, two_player::TwoPlayerSeat as _,
 };
@@ -124,7 +124,7 @@ pub fn arrange(t: &GameTable, b: &Board) -> Result<State, String> {
                 s.board().remember(slot, with).map_err(full)?;
             }
             if let Some(i) = x.until {
-                let until = Memo::ExiledUntil(permanent(i)?);
+                let until = Memo::ExiledUntil(Link::to(s.object_ref(permanent(i)?)));
                 s.board().remember(slot, until).map_err(full)?;
             }
         }

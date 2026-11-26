@@ -11,7 +11,7 @@ use crate::game::Game;
 use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
 use crate::replacement::event::Reason;
-use crate::state::{Memo, ObjectRef, Zone};
+use crate::state::{Link, Memo, ObjectRef, Zone};
 use crate::zones;
 
 /// Exiles a permanent until `until`, another permanent, leaves the battlefield
@@ -39,7 +39,7 @@ pub fn exile_until_leaves<L: Layout>(
     }
     zones::move_to(game, object.into(), Zone::Exile, Reason::Exile)?;
     if game.state.object(object.slot()).zone() == Zone::Exile {
-        (game.state).remember(object.slot(), Memo::ExiledUntil(until.slot))?;
+        (game.state).remember(object.slot(), Memo::ExiledUntil(Link::to(until)))?;
     }
     Ok(())
 }

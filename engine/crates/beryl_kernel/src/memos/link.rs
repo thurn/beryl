@@ -1,6 +1,7 @@
-//! The object a card in exile was exiled with ([`Memo::ExiledWith`]), or a permanent was put
-//! onto the battlefield with ([`Memo::PutOntoBattlefieldWith`]): its slot and which of the
-//! slot's objects it was.
+//! The object a card in exile was exiled with ([`Memo::ExiledWith`]) or until
+//! ([`Memo::ExiledUntil`]), a permanent was put onto the battlefield with
+//! ([`Memo::PutOntoBattlefieldWith`]), or a card went to exile together with
+//! ([`Memo::ExiledFromPileOf`]): its slot and which of the slot's objects it was.
 //!
 //! The interpreter reads it to find the objects an ability of that object refers to.
 //!
@@ -33,7 +34,7 @@ use super::{Kinds, Memo};
 /// in the same slot would lose its cards, which no game reaches.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Link<L: Layout = crate::layout::Small> {
-    /// The slot of the object that exiled the card or put the permanent onto the battlefield.
+    /// The slot of the object the memo names.
     pub slot: L::Slot,
     generation: u8,
 }
@@ -159,12 +160,14 @@ impl<L: Layout> crate::state::State<L> {
     fn forget_links_to_slot(&mut self, slot: L::Slot) {
         let incarnation = self.object(slot).incarnation;
         let done = self.memos.end(|e| match e.memo {
-            Memo::ExiledWith(link) | Memo::PutOntoBattlefieldWith(link) => {
+            Memo::ExiledWith(link)
+            | Memo::PutOntoBattlefieldWith(link)
+            | Memo::ExiledUntil(link)
+            | Memo::ExiledFromPileOf(link) => {
                 !(link.slot == slot && link.shares_generation(incarnation))
             }
             Memo::Paid(_)
             | Memo::X(_)
-            | Memo::ExiledUntil(_)
             | Memo::Chosen(_)
             | Memo::Really(_)
             | Memo::PhasedOutUnder(_)
@@ -177,7 +180,6 @@ impl<L: Layout> crate::state::State<L> {
             | Memo::Solved
             | Memo::CombatBand(_)
             | Memo::Prepared(_)
-            | Memo::ExiledFromPileOf(_)
             | Memo::Cast => true,
         });
         self.settle_ended(done);

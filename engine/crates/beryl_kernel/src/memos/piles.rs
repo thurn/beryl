@@ -14,7 +14,8 @@ impl<L: Layout> State<L> {
 
     /// The cards in exile that went there together from one merged or melded permanent,
     /// with the card in `slot` among them ([`Memo::ExiledFromPileOf`]): `slot` alone for any
-    /// other card. One AND while no such card is in exile.
+    /// other card. The permanent's own card is among them only while it is the object that
+    /// went to exile ([`super::Link`]). One AND while no such card is in exile.
     #[inline]
     pub fn exiled_together(&self, slot: L::Slot) -> Bitboard<L::Slot> {
         if self.memos.kinds.0 & Kinds::EXILED_FROM_PILE == 0 {
@@ -51,10 +52,10 @@ impl<L: Layout> State<L> {
                 | Memo::Prepared(_)
                 | Memo::Cast => None,
             })
-            .unwrap_or(slot);
+            .unwrap_or_else(|| super::Link::to(self.object_ref(slot)));
         let mut together = Bitboard::single(slot);
-        if self.object(leader).zone == Zone::Exile {
-            together.insert(leader);
+        if leader.is(self.object_ref(leader.slot)) && self.object(leader.slot).zone == Zone::Exile {
+            together.insert(leader.slot);
         }
         for e in pile {
             if e.memo == Memo::ExiledFromPileOf(leader) {

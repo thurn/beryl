@@ -6,6 +6,27 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Memos named another object by its bare slot.** Two earlier bugs had one
+  cause: `Memo::ExiledWith` and `Memo::PutOntoBattlefieldWith` held only a slot,
+  so once the object in it left and a new object took the slot, the memo named
+  the new object. Two more memos still held a bare slot.
+  `Memo::ExiledFromPileOf` named the card of a merged or melded permanent that
+  went to exile with the cards under it, and `State::exiled_together` counted
+  that card in the group whenever the slot held a card in exile, so a card that
+  left exile and was exiled again rejoined a group it had left (CR 400.7).
+  `Memo::ExiledUntil` named the permanent a card waits for, and would have named
+  a new permanent in that slot if the card was ever not returned as the first
+  one left (CR 610.3). Fixed: both hold a `Link` (the slot and the incarnation's
+  low byte), their readers return the object only while the link is current, and
+  `State::forget_links_to` ends them as `ExiledWith` links end. `Memo::PartOf`,
+  `Memo::Prepared` and `Memo::CombatBand` keep a bare slot, and the kernel
+  contract ("Object references") says why the object in each cannot change while
+  the memo lasts. Guard: `Link`, the type a memo uses to name an object that can
+  leave, and the slot-reuse tests
+  `a_card_exiled_until_a_permanent_leaves_is_not_exiled_until_a_new_object_in_its_slot`
+  and `cards_exiled_together_do_not_include_a_new_object_in_the_leaders_slot` in
+  `beryl_kernel/src/memos/tests.rs`.
+
 - **Haste and summoning sickness were read differently by the mana paths.** A
   creature with haste that came under its controller's control this turn could
   tap for an unrestricted mana ability, but not for a restricted one such as
