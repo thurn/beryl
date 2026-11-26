@@ -222,9 +222,12 @@ pub(super) fn order(events: &[GameEvent], told: &[Told]) -> Vec<usize> {
 /// `beats.ts`; Arena, `iRr-GeSF0lI 21:23.9`).
 pub(super) fn looked(view: &PlayerView) -> Vec<ObjectId> {
     let top = |player: Side, count: u8| {
-        let library = match player {
-            Side::You => &view.players.you.library,
-            Side::Opponent => &view.players.opponent.library,
+        // In a shared-deck game both players' own libraries are empty: the one library is
+        // `view.shared`'s.
+        let library = match (&view.shared, player) {
+            (Some(shared), _) => &shared.library,
+            (None, Side::You) => &view.players.you.library,
+            (None, Side::Opponent) => &view.players.opponent.library,
         };
         library
             .iter()
