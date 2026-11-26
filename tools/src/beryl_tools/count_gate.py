@@ -260,19 +260,100 @@ printf 'gungraun=%s\\n' "$(gungraun-runner --version)"
     }
 
 
-def family_gate(names: list[str], bars: dict[str, FamilyBar]) -> int:
-    """Counts each family named and judges it against its bar: 0 if all pass."""
-    unknown = [name for name in names if name not in bars]
-    if unknown:
-        known = ", ".join(bars) or "none"
-        bench.log(
-            f"no bar in {GATE_FILE.name} for {', '.join(unknown)}; families: {known}"
+def parallel_gate_build(rollout: Gate | None, families: list[str]) -> list[str]:
+    """The single `cargo bench --no-run` command that builds every binary this gate run needs."""
+    benches: list[str] = []
+    if rollout is not None:
+        benches += ["--bench", rollout.benchmark.split("::")[0]]
+    if families:
+        benches += ["--bench", FAMILY_BENCH, "--bench", FAMILY_STEPS]
+    return bench.cargo_bench([*benches, "--no-run", "--message-format=json"])
+
+
+def parallel_gate_body(rollout: Gate | None, families: list[str], jobs: int) -> str:
+    """Builds the needed benchmark binaries once and runs all requested Callgrind benchmarks
+    (and `family_steps`) directly in parallel up to `jobs`, each with its own `GUNGRAUN_HOME`
+    and output files so JSON lines never interleave and Cargo's lock never serializes them.
+    """
+    build = shlex.join(parallel_gate_build(rollout, families))
+    lines = [
+        "bins=$(",
+        f"  {build} | python3 -c 'import json, sys",
+        "for line in sys.stdin:",
+        '  if not line.startswith("{"): continue',
+        "  msg = json.loads(line)",
+        '  if msg.get("reason") == "compiler-artifact" and msg.get("executable"):',
+        '    print(msg["target"]["name"], msg["executable"])',
+        "'",
+        ")",
+    ]
+    rollout_target = rollout.benchmark.split("::")[0] if rollout is not None else None
+    if rollout_target is not None:
+        lines.append(
+            f"rollout_bin=$(printf '%s\\n' \"$bins\" | awk '$1==\"{rollout_target}\"{{print $2}}')"
         )
-        return 2
-    first, *rest = family_cargo(names)
-    code, out = bench.run_count(first, bench.GATE_NAME, then=rest)
-    if code != 0:
-        return vm_host.vm_failed(code, bench.VM)
+        lines.append('test -n "$rollout_bin"')
+    if families:
+        lines.append(
+            f"family_bin=$(printf '%s\\n' \"$bins\" | awk '$1==\"{FAMILY_BENCH}\"{{print $2}}')"
+        )
+        lines.append(
+            f"steps_bin=$(printf '%s\\n' \"$bins\" | awk '$1==\"{FAMILY_STEPS}\"{{print $2}}')"
+        )
+        lines.append('test -n "$family_bin" && test -n "$steps_bin"')
+    lines += [
+        'mkdir -p "$GUNGRAUN_HOME"',
+        'out=$(mktemp -d "$GUNGRAUN_HOME/run.XXXXXX")',
+        "trap 'rm -rf -- \"$out\"' EXIT",
+        f"count_jobs={max(1, jobs)}",
+        "cpus=$(nproc)",
+        "if ((count_jobs > cpus)); then count_jobs=$cpus; fi",
+        "running=0",
+        "failed=0",
+        "launch() {",
+        '  local tag="$1"; shift',
+        "  while ((running >= count_jobs)); do",
+        "    wait -n || failed=1",
+        "    running=$((running - 1))",
+        "  done",
+        '  (GUNGRAUN_HOME="$out/$tag" "$@" >"$out/$tag.stdout" 2>"$out/$tag.stderr") &',
+        "  running=$((running + 1))",
+        "}",
+    ]
+    if rollout is not None:
+        lines.append(
+            'launch rollouts "$rollout_bin" --bench --output-format=json '
+            + shlex.quote(rollout.benchmark)
+        )
+    if families:
+        lines.append(
+            'launch steps "$steps_bin" --bench '
+            + " ".join(shlex.quote(name) for name in families)
+        )
+        for name in families:
+            for side in ("present", "control"):
+                tag = shlex.quote(f"{name}-{side}")
+                target = shlex.quote(family_benchmark(side, name))
+                lines.append(
+                    f'launch {tag} "$family_bin" --bench --output-format=json {target}'
+                )
+    lines += [
+        "while ((running > 0)); do",
+        "  wait -n || failed=1",
+        "  running=$((running - 1))",
+        "done",
+        'for f in "$out"/*.stderr; do [ -s "$f" ] && cat "$f" >&2; done',
+        'for f in "$out"/*.stdout; do [ -s "$f" ] && cat "$f"; done',
+        # The script's status is its last command's (avoid `exit` in Ubuntu's login shell).
+        'test "$failed" = 0',
+    ]
+    return "\n".join(lines)
+
+
+def judge_families_output(
+    names: list[str], bars: dict[str, FamilyBar], out: str
+) -> int:
+    """Judges each family in `names` from `out`, printing its line and verdict."""
     failed = False
     for name in names:
         present = counted(out, family_benchmark("present", name))
@@ -289,6 +370,23 @@ def family_gate(names: list[str], bars: dict[str, FamilyBar]) -> int:
         bench.log(f"verdict {name}: {'pass' if ok else 'fail'}")
         failed |= not ok
     return 1 if failed else 0
+
+
+def family_gate(names: list[str], bars: dict[str, FamilyBar]) -> int:
+    """Counts each family named and judges it against its bar: 0 if all pass."""
+    unknown = [name for name in names if name not in bars]
+    if unknown:
+        known = ", ".join(bars) or "none"
+        bench.log(
+            f"no bar in {GATE_FILE.name} for {', '.join(unknown)}; families: {known}"
+        )
+        return 2
+    build = parallel_gate_build(None, names)
+    body = parallel_gate_body(None, names, bench.count_jobs())
+    code, out = bench.run_count(build, bench.GATE_NAME, body=body)
+    if code != 0:
+        return vm_host.vm_failed(code, bench.VM)
+    return judge_families_output(names, bars, out)
 
 
 # The subgame measurement (`beryl_bench::subgame`): instructions per rollout step inside a
@@ -348,11 +446,25 @@ def count_gate(args: argparse.Namespace) -> int:
     )
     if args.subgame:
         return subgame_report()
-    families: list[str] | None = args.family
-    if families:
+    families: list[str] = args.family or []
+    include_rollouts = args.measure is not None or not families
+    if families and not include_rollouts:
         return family_gate(families, setup.families)
+    if families:
+        unknown = [name for name in families if name not in setup.families]
+        if unknown:
+            known = ", ".join(setup.families) or "none"
+            bench.log(
+                f"no bar in {GATE_FILE.name} for {', '.join(unknown)}; families: {known}"
+            )
+            return 2
     gate = setup.rollout
-    code, out = bench.run_count(gate_cargo(gate), bench.GATE_NAME)
+    if families:
+        build = parallel_gate_build(gate, families)
+        body = parallel_gate_body(gate, families, bench.count_jobs())
+        code, out = bench.run_count(build, bench.GATE_NAME, body=body)
+    else:
+        code, out = bench.run_count(gate_cargo(gate), bench.GATE_NAME)
     if code != 0:
         return vm_host.vm_failed(code, bench.VM)
     measured = counted(out, gate.benchmark)
@@ -376,7 +488,12 @@ def count_gate(args: argparse.Namespace) -> int:
             )
             + "\n"
         )
-    return 0 if ok else 1
+    family_code = (
+        judge_families_output(families, setup.families, out) if families else 0
+    )
+    if family_code == 2:
+        return 2
+    return 0 if (ok and family_code == 0) else 1
 
 
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:

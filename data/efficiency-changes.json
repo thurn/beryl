@@ -1030,5 +1030,10 @@
     "label": "Recording check fix outcomes on ticket close skips regressions already marked `fixed` from an earlier close, and `unproven_holds` ignores `product` outcomes whose close stamped checks from more than one family at once. Previously, reopened and cross-family regression tickets tainted 156 checks with `product` outcomes—including re-stamping 20 already-fixed `client-interface` checks twice when a ticket reopened for `source:file-length`—blinding `unproven_holds` from switching off unproven checks holding `master` back",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
+  },
+  {
+    "label": "The `counts` family keeps a constant target-directory owner across streamed worktrees instead of running `cargo clean` on every landing-tree switch, drops its `cores = 1` cap so Windows builds and runs Callgrind benchmarks in parallel up to `IGNITE_CORES`, and combines `counts:rollouts` with `counts:family/*` into one guest build and parallel Callgrind pool. On cygnus all 17 checks dropped from 290-926 s to 75 s wall time",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]

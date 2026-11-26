@@ -455,6 +455,15 @@ done
 {script}"""
 
 
+def count_jobs() -> int:
+    """Parallel Callgrind workers inside the guest. Windows WSL has abundant CPUs and RAM so
+    it uses Ignite's core grant (or 4 when run by hand); Lima's 4 GiB guest caps parallelism
+    at 2 so concurrent Valgrind processes stay within memory."""
+    raw = os.environ.get("IGNITE_CORES")
+    grant = max(1, int(raw)) if raw and raw.isdigit() else 4
+    return grant if system.WINDOWS else min(grant, 2)
+
+
 def count_script(
     provision: str,
     cargo: list[str],
@@ -463,10 +472,12 @@ def count_script(
     live: list[str],
     then: list[list[str]] | None = None,
     source: str = "",
+    body: str | None = None,
 ) -> str:
     """Counts in `name`'s target dir and Gungraun home, as `checkout`'s build, running each
-    command of `then` after `cargo` if it succeeded. A new target dir copies the gate's warm
-    one; those of worktrees not in `live` go. The gate's home is emptied."""
+    command of `then` after `cargo` if it succeeded (or `body` when given). A new target dir
+    copies the gate's warm one; those of worktrees not in `live` go. The gate's home is emptied.
+    """
     target = f"{VM_TARGETS}/{shlex.quote(name)}"
     home = f"{VM_GUNGRAUN}/{shlex.quote(name)}"
     keep = " ".join(shlex.quote(n) for n in sorted({*live, name, GATE_NAME}))
@@ -487,12 +498,15 @@ if [ "$(cat {stamp} 2>/dev/null)" != {owner} ]; then
   mkdir -p {target} && printf '%s\\n' {owner} >{stamp}
 fi
 {fresh}"""
-    env = f"CARGO_TARGET_DIR={target} GUNGRAUN_HOME={home}"
-    commands = " && ".join(f"{env} {shlex.join(c)}" for c in [cargo, *(then or [])])
+    if body is None:
+        env = f"CARGO_TARGET_DIR={target} GUNGRAUN_HOME={home}"
+        work = " && ".join(f"{env} {shlex.join(c)}" for c in [cargo, *(then or [])])
+    else:
+        work = f"export CARGO_TARGET_DIR={target}\nexport GUNGRAUN_HOME={home}\n{body}"
     # Parallel Rust compilers can exhaust the Lima guest's default 4 GiB on a cold build.
     grant = os.environ.get("IGNITE_CORES") if system.WINDOWS else "1"
     jobs = f"export CARGO_BUILD_JOBS={shlex.quote(grant)}\n" if grant else ""
-    return locked(f"{source}{provision}{jobs}{prepare}{commands}\n")
+    return locked(f"{source}{provision}{jobs}{prepare}{work}\n")
 
 
 def wsl_ensure(vm: str = VM) -> int:
@@ -557,6 +571,7 @@ def run_count(
     name: str,
     *,
     then: list[list[str]] | None = None,
+    body: str | None = None,
     capture: bool = True,
 ) -> tuple[int, str]:
     runner = locked_version((paths.ENGINE / "Cargo.lock").read_text(), "gungraun")
@@ -564,14 +579,20 @@ def run_count(
         log("no gungraun in engine/Cargo.lock")
         return 2, ""
     mounted = not system.WINDOWS and vm_host.vm_sees(paths.ENGINE, VM)
+    # Streamed runs sync into a single `$HOME/bench-source` with `rsync --checksum`, which
+    # preserves unchanged mtimes and updates changed ones even across different host worktrees.
+    # A constant owner keeps the Cargo target dir warm instead of running `cargo clean` on
+    # every landing-tree switch.
+    owner = str(paths.REPO) if mounted else "streamed"
     script = count_script(
         provision_script(toolchain(), runner),
         cargo,
         name,
-        str(paths.REPO) if mounted else f"streamed:{paths.REPO}",
+        owner,
         paths.worktree_names(),
         then=then,
         source="" if mounted else vm_host.bench_source_script(),
+        body=body,
     )
     if mounted:
         run = subprocess.run(

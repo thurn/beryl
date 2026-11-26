@@ -49,9 +49,8 @@ list_needs = []
 # Listing reads the gate file without starting the benchmark VM.
 list_without_resources = true
 resources = ["bench-vm"]
-# The adapter waits while Callgrind runs in the Linux guest. The guest's CPU shows as load
-# outside Ignite.
-cores = 1
+# The guest builds and runs Callgrind benchmarks in parallel up to IGNITE_CORES on Windows
+# (and caps build and Callgrind parallelism inside the smaller Lima guest on macOS).
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.rest list counts"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.rest run counts {checks}"
 inputs = [

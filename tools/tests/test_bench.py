@@ -300,6 +300,71 @@ def test_the_gate_file_gives_each_family_a_bar() -> None:
     assert all(1.0 <= b.ratio <= 2.0 for b in bars)
 
 
+def test_count_jobs_uses_grant_on_windows_and_caps_lima(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(bench.system, "WINDOWS", True)
+    monkeypatch.setenv("IGNITE_CORES", "6")
+    assert bench.count_jobs() == 6
+    monkeypatch.delenv("IGNITE_CORES", raising=False)
+    assert bench.count_jobs() == 4
+    monkeypatch.setattr(bench.system, "WINDOWS", False)
+    monkeypatch.setenv("IGNITE_CORES", "6")
+    assert bench.count_jobs() == 2
+    monkeypatch.setenv("IGNITE_CORES", "1")
+    assert bench.count_jobs() == 1
+
+
+def test_parallel_gate_body_builds_once_and_runs_both_sides_in_parallel() -> None:
+    body = count_gate.parallel_gate_body(GATE, ["blank", "two-faced"], jobs=6)
+    assert (
+        "--bench rollout_counts --bench family_counts --bench family_steps --no-run"
+        in body
+    )
+    assert "count_jobs=6" in body
+    assert "wait -n || failed=1" in body
+    assert "rollout_counts::cube_rollout::rollouts::corpus" in body
+    assert "family_counts::present_cost::present::blank" in body
+    assert "family_counts::present_cost::control::blank" in body
+    assert "family_counts::present_cost::present::two_faced" in body
+    assert "family_counts::present_cost::control::two_faced" in body
+    assert '"$steps_bin" --bench blank two-faced' in body
+
+
+def test_streamed_runs_share_owner_across_worktrees(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    owners: list[str] = []
+    for name in ("landing-1", "landing-2"):
+        tree = tmp_path / name
+        (tree / "engine").mkdir(parents=True)
+        (tree / "rust-toolchain.toml").write_text('[toolchain]\nchannel = "stable"\n')
+        (tree / "engine" / "Cargo.lock").write_text(
+            '[[package]]\nname = "gungraun"\nversion = "0.20.0"\n'
+        )
+        monkeypatch.setattr(bench.paths, "REPO", tree)
+        monkeypatch.setattr(bench.paths, "ENGINE", tree / "engine")
+        monkeypatch.setattr(
+            bench.paths, "worktree_names", lambda: ["landing-1", "landing-2"]
+        )
+        monkeypatch.setattr(bench.system, "WINDOWS", True)
+
+        def capture(
+            cmd: list[str], *_a: object, **_kw: object
+        ) -> subprocess.CompletedProcess[str]:
+            script = base64.b64decode(cmd[-1].split("echo ")[1].split()[0]).decode()
+            line = next(
+                t for t in script.splitlines() if bench.VM_OWNER in t and "printf" in t
+            )
+            owners.append(line)
+            return subprocess.CompletedProcess[str](cmd, 0, "", "")
+
+        monkeypatch.setattr(bench.vm_host, "run_with_sources", capture)
+        assert bench.run_count(["cargo", "bench"], bench.GATE_NAME)[0] == 0
+    assert len(owners) == 2 and owners[0] == owners[1]
+    assert "streamed" in owners[0] and "landing-1" not in owners[0]
+
+
 def test_a_family_counts_both_sides_then_prints_its_pairing() -> None:
     counts, steps = count_gate.family_cargo(["attachments"])
     assert counts[counts.index("--bench") + 1] == "family_counts"

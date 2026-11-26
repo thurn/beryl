@@ -505,16 +505,7 @@ VERDICT: re.Pattern[str] = re.compile(
 )
 
 
-def run_gate_families(names: Sequence[str], root: Path) -> list[dict[str, Any]]:
-    """The results of the families `names`, counted in one run of the gate: one build and one
-    turn at the VM instead of one per family, which put a whole check run past its hang limit.
-    A family the gate did not judge gets no line, so Ignite records it as `incomplete`.
-    """
-    arguments = [argument for name in names for argument in ("--family", name)]
-    code, output = run_gate(arguments, root)
-    print(output, file=sys.stderr)
-    if code == CANNOT_RUN:
-        return [cannot_run(f"{FAMILY_PREFIX}{name}", tail(output)) for name in names]
+def parse_family_verdicts(names: Sequence[str], output: str) -> list[dict[str, Any]]:
     verdicts = dict(VERDICT.findall(output))
     results: list[dict[str, Any]] = []
     for name in names:
@@ -537,16 +528,72 @@ def run_gate_families(names: Sequence[str], root: Path) -> list[dict[str, Any]]:
     return results
 
 
+def run_gate_families(names: Sequence[str], root: Path) -> list[dict[str, Any]]:
+    """The results of the families `names`, counted in one run of the gate: one build and one
+    turn at the VM instead of one per family, which put a whole check run past its hang limit.
+    A family the gate did not judge gets no line, so Ignite records it as `incomplete`.
+    """
+    arguments = [argument for name in names for argument in ("--family", name)]
+    code, output = run_gate(arguments, root)
+    print(output, file=sys.stderr)
+    if code == CANNOT_RUN:
+        return [cannot_run(f"{FAMILY_PREFIX}{name}", tail(output)) for name in names]
+    return parse_family_verdicts(names, output)
+
+
 def run_counts(names: Sequence[str], root: Path, results: Path) -> None:
-    if ROLLOUTS in names:
-        result = run_rollouts(root)
-        if result:
-            append(results, [{"check": ROLLOUTS, **result}])
+    include_rollouts = ROLLOUTS in names
     families = [
         name.removeprefix(FAMILY_PREFIX)
         for name in names
         if name.startswith(FAMILY_PREFIX)
     ]
+    if include_rollouts and families:
+        with tempfile.TemporaryDirectory() as scratch:
+            measure = Path(scratch) / "measure.json"
+            arguments = [
+                "--measure",
+                str(measure),
+                *(argument for name in families for argument in ("--family", name)),
+            ]
+            code, output = run_gate(arguments, root)
+            print(output, file=sys.stderr)
+            if code == CANNOT_RUN:
+                reason = tail(output)
+                append(
+                    results,
+                    [
+                        cannot_run(ROLLOUTS, reason),
+                        *(
+                            cannot_run(f"{FAMILY_PREFIX}{name}", reason)
+                            for name in families
+                        ),
+                    ],
+                )
+                return
+            batch: list[dict[str, Any]] = []
+            if measure.is_file():
+                found = json.loads(measure.read_text())
+                trend(
+                    root,
+                    int(found["measured"]),
+                    int(found["bar"]),
+                    bool(found["ok"]),
+                    str(found["verifier"]),
+                    str(found["calibration"]),
+                )
+                result: dict[str, Any] = {"outcome": "pass" if found["ok"] else "fail"}
+                if not found["ok"]:
+                    result["message"] = clip(str(found["message"]))
+                batch.append({"check": ROLLOUTS, **result})
+            batch.extend(parse_family_verdicts(families, output))
+            if batch:
+                append(results, batch)
+        return
+    if include_rollouts:
+        result = run_rollouts(root)
+        if result:
+            append(results, [{"check": ROLLOUTS, **result}])
     if families:
         append(results, run_gate_families(families, root))
 

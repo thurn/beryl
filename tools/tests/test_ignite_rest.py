@@ -7,6 +7,7 @@ import re
 import subprocess
 import sys
 import tomllib
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import pytest
@@ -261,6 +262,7 @@ GATE = """\
 import json
 import os
 import sys
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 mode = os.environ.get("FAKE_GATE")
@@ -268,13 +270,16 @@ if mode == "cannot":
     print("no beryl-bench VM: run just bench-count once", file=sys.stderr)
     sys.exit(125)
 ok = mode != "fail"
-if sys.argv[1] == "--measure":
+args = sys.argv[1:]
+if "--measure" in args:
+    idx = args.index("--measure")
     result = {"measured": 995 if ok else 1010, "bar": 1000, "ok": ok,
               "message": "ok" if ok else "over",
               "verifier": "cygnus", "calibration": "windows-digest"}
-    Path(sys.argv[2]).write_text(json.dumps(result))
-if sys.argv[1] == "--family":
-    for name in sys.argv[2::2]:
+    Path(args[idx + 1]).write_text(json.dumps(result))
+for i, arg in enumerate(args):
+    if arg == "--family":
+        name = args[i + 1]
         print(f"bench: family {name}: ratio", file=sys.stderr)
         print(f"bench: verdict {name}: {'pass' if ok else 'fail'}", file=sys.stderr)
 sys.exit(0 if ok else 1)
@@ -363,6 +368,34 @@ def test_families_are_counted_in_one_gate_run_with_a_result_each(
     assert [(r["check"], r["outcome"], r["message"]) for r in lines(results)] == [
         ("counts:family/layers", "fail", "family layers: ratio"),
         ("counts:family/costs", "fail", "family costs: ratio"),
+    ]
+
+
+def test_rollouts_and_families_share_one_gate_run(
+    tmp_path: Path, gate: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("FAKE_GATE", raising=False)
+    monkeypatch.setattr(count_trend, "report_at", lambda *a, **k: [])
+    calls = 0
+    real: Callable[[Sequence[str], Path], tuple[int, str]] = adapter.run_gate
+
+    def counted_run_gate(args: Sequence[str], root: Path) -> tuple[int, str]:
+        nonlocal calls
+        calls += 1
+        return real(args, root)
+
+    monkeypatch.setattr(adapter, "run_gate", counted_run_gate)
+    results = tmp_path / "results.jsonl"
+    adapter.run_counts(
+        [adapter.ROLLOUTS, "counts:family/blank", "counts:family/layers"],
+        tmp_path,
+        results,
+    )
+    assert calls == 1
+    assert [(r["check"], r["outcome"]) for r in lines(results)] == [
+        ("counts:rollouts", "pass"),
+        ("counts:family/blank", "pass"),
+        ("counts:family/layers", "pass"),
     ]
 
 
