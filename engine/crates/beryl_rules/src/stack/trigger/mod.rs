@@ -3,6 +3,7 @@
 //!
 //! Implements: CR 107.3m, CR 603.2, CR 603.3, CR 603.4, CR 603.6a, CR 603.8, CR 603.10
 
+use crate::PlayerSet;
 use crate::bitboard::Bitboard;
 use crate::card::{Ability, AbilityIx, CastingKind, FaceIx, Subject, Trigger, TriggerEvent, Words};
 use crate::continuous::layers;
@@ -54,6 +55,27 @@ pub(crate) fn of_object<L: Layout>(
         face,
         ability,
         controller: s.controller(slot).into(),
+    }
+}
+
+/// The players who control the triggered abilities of the object in `slot`, outside the
+/// battlefield, that work where it is ([`away`]): its controller, or for a card in a shared
+/// graveyard or library, every player. Such a card has no owner ([`State::has_owner`]) and is
+/// in each player's graveyard or library (the shared-deck format: "Anything referring to
+/// 'your' graveyard or library is referencing the shared zone"), so its ability is matched
+/// once for each player, with that player as its controller and its "you". The rule for a
+/// card with no owner is the format's (see [CR 113.8]): "The controller of a triggered ability
+/// on the stack ... is the player who controlled the ability's source when it triggered, or,
+/// if it had no controller, the player who owned the ability's source when it triggered."
+/// [`of_object`] reads [`State::controller`], which is [`Seat::P0`] for such a card.
+///
+/// [CR 113.8]: https://yawgatog.com/resources/magic-rules/#R1138
+#[inline]
+pub(crate) fn away_controllers<L: Layout>(s: &State<L>, slot: L::Slot) -> PlayerSet {
+    if s.has_owner(slot) {
+        PlayerSet::only(s.controller(slot))
+    } else {
+        s.players()
     }
 }
 
@@ -590,9 +612,16 @@ fn match_states_out_of_line<L: Layout>(s: &mut State<L>, t: &GameTable) -> Resul
         for &slot in s.in_game_order(t, away(s, t))?.iter() {
             let zone = s.object(slot).zone();
             let (card, face) = s.definition(slot).record(t);
-            for l in t.away_listeners(card, face, kind) {
-                if l.zones.contains(zone) && s.has_ability(slot, l.ability) {
-                    state_trigger(s, t, slot, card, face, l.ability, l.trigger)?;
+            for controller in away_controllers(s, slot).in_seat_order() {
+                for l in t.away_listeners(card, face, kind) {
+                    if l.zones.contains(zone) && s.has_ability(slot, l.ability) {
+                        let ability = TriggeredAbility::own(l.ability);
+                        let of = AbilityRef {
+                            controller: controller.into(),
+                            ..of_object(s, slot, card, face, ability)
+                        };
+                        state_trigger_of(s, t, of, l.trigger)?;
+                    }
                 }
             }
         }
@@ -611,13 +640,30 @@ fn state_trigger<L: Layout>(
     ability: AbilityIx,
     trigger: &Trigger,
 ) -> Result<(), Full> {
+    let of = of_object(s, slot, card, face, TriggeredAbility::own(ability));
+    state_trigger_of(s, t, of, trigger)
+}
+
+/// [`state_trigger`] for the ability `of`, whose controller the caller chose: one of the
+/// players of [`away_controllers`]. Each player's instance of a card's ability in a shared
+/// zone waits or is on the stack apart from the other's.
+fn state_trigger_of<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    of: AbilityRef<L, TriggeredAbility>,
+    trigger: &Trigger,
+) -> Result<(), Full> {
     let TriggerEvent::State(condition) = trigger.event else {
         unreachable!("a listener of state triggers is a state trigger");
     };
-    let of = of_object(s, slot, card, face, TriggeredAbility::own(ability));
     let same = |other: &AbilityRef<L, TriggeredAbility>| {
-        (other.source, other.card, other.face, other.ability)
-            == (of.source, of.card, of.face, of.ability)
+        (
+            other.source,
+            other.card,
+            other.face,
+            other.ability,
+            other.controller,
+        ) == (of.source, of.card, of.face, of.ability, of.controller)
     };
     if waiting_or_on_stack(s, same) {
         return Ok(());

@@ -130,15 +130,28 @@ fn next_to_arrange<L: Layout>(s: &State<L>, group: Bitboard<L::Slot>) -> (Seat, 
         .expect("a question of arranging cards with none left")
 }
 
-/// The cards of `cards` that `player` owns and that are in their `zone`.
+/// The cards of `cards` in `zone` that `player` arranges ([`arranger`]).
 fn owned_in<L: Layout>(
     s: &State<L>,
     cards: Bitboard<L::Slot>,
     player: Seat,
     zone: Zone,
 ) -> Bitboard<L::Slot> {
-    cards.filter(|slot| {
-        let o = s.object(slot);
-        o.owner() == player && o.zone() == zone
-    })
+    cards.filter(|slot| s.object(slot).zone() == zone && arranger(s, slot) == player)
+}
+
+/// The player who arranges the card in `slot` among the others of its pile: its owner, or for
+/// a card in a shared graveyard or library, which has no owner ([`State::has_owner`]), the
+/// active player. CR 731.3a gives the choice to the owner, and the shared-deck format has
+/// none, so the active player makes it as they make the first of simultaneous choices (see
+/// [CR 101.4]): "the active player ... makes any choices required, then the next player in
+/// turn order".
+///
+/// [CR 101.4]: https://yawgatog.com/resources/magic-rules/#R1014
+fn arranger<L: Layout>(s: &State<L>, slot: L::Slot) -> Seat {
+    if s.has_owner(slot) {
+        s.object(slot).owner()
+    } else {
+        s.turn().active()
+    }
 }

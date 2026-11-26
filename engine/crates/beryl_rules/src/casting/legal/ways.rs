@@ -66,10 +66,10 @@ impl Ways {
             From::Priority => {
                 let permission = start::permission(s, player, slot, FaceIx::FRONT);
                 // See CR 702.138a: escape "functions while the card with escape is in a player's
-                // graveyard", and lets its owner cast it from there.
-                let escape = s.reaches_elsewhere()
-                    && s.object(slot).owner() == player
-                    && has_escape(s, t, slot);
+                // graveyard", and lets its owner cast it from there. A card in a shared
+                // graveyard is in each player's, so either may ([`State::holds`]).
+                let escape =
+                    s.reaches_elsewhere() && s.holds(player, slot) && has_escape(s, t, slot);
                 let graveyard =
                     permission.is_none() && graveyard::relies_on_permission(s, t, player, slot);
                 Ways {

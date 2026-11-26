@@ -123,8 +123,16 @@ impl Evaluate for Filter {
             }
             .intersects(colors.read(words)),
             // See CR 108.4a: a card that is no permanent or spell has no controller, and "its
-            // owner" is used instead, which is what the query answers.
-            Filter::Whose(players) => is_for(players, s.controller(slot), you),
+            // owner" is used instead, which is what the query answers ([`State::controller`]).
+            // A card in a shared library or graveyard has no owner and is each player's, as
+            // for `Owned`. A permanent is in neither, so it is not asked.
+            Filter::Whose(players) => match derived() {
+                Some(d) => is_for(players, d.controller, you),
+                None => {
+                    is_for(players, o.base_controller, you)
+                        || (s.zones.mask == 0 && owned_by_all(s, slot, players, you))
+                }
+            },
             // A card in a shared library or graveyard is each player's (the shared-deck
             // format: "Anything referring to 'your' graveyard or library is referencing the
             // shared zone").
@@ -318,8 +326,8 @@ pub const fn reads(players: &Players) -> bool {
 }
 
 /// Whether `players` owns the object in `slot` in a game whose players share a library and a
-/// graveyard: a card there is each player's. Out of line, so the per-player test of
-/// [`Filter::Owned`] stays as small as it was.
+/// graveyard: a card there is each player's. Out of line, so the per-player tests of
+/// [`Filter::Owned`] and [`Filter::Whose`] stay as small as they were.
 #[cold]
 #[inline(never)]
 fn owned_by_all<L: Layout>(s: &State<L>, slot: L::Slot, players: &Players, you: Seat) -> bool {

@@ -33,6 +33,9 @@ pub fn shuffle<L: Layout>(game: &mut Game<'_, L>, player: Seat) -> Result<(), Fu
 /// ([CR 701.24d](https://yawgatog.com/resources/magic-rules/#R70124d)): "If an effect would
 /// cause a player to shuffle a set of objects into a library, that library is shuffled even
 /// if there are no objects in that set." The outcome is the cards that are in a library.
+///
+/// Players who share a library ([`crate::state::State::zone_owners`]) shuffle it once, by the
+/// first of them in turn order: shuffling it again would randomize what is already random.
 pub(crate) fn into_instruction<L: Layout>(
     run: &mut Run<'_, '_, L>,
     players: Players,
@@ -40,7 +43,9 @@ pub(crate) fn into_instruction<L: Layout>(
 ) -> Result<Outcome<L>, Full> {
     let cards = run.elsewhere_than(cards, Zone::Library);
     zones::move_all(run.game(), cards, Zone::Library, Reason::Effect)?;
-    for player in run.in_turn_order(players) {
+    let libraries = run.state().zone_owners(Zone::Library).count();
+    let libraries = usize::try_from(libraries).unwrap_or(usize::MAX);
+    for player in run.in_turn_order(players).take(libraries) {
         shuffle(run.game(), player)?;
     }
     Ok(run.now_in(cards, Zone::Library))

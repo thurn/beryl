@@ -537,7 +537,10 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     }
 
     /// The players `players` names, in the order they act (CR 101.4).
-    pub(crate) fn in_turn_order(&self, players: Players) -> impl Iterator<Item = Seat> + use<L> {
+    pub(crate) fn in_turn_order(
+        &self,
+        players: Players,
+    ) -> impl Iterator<Item = Seat> + Clone + use<L> {
         let who = self.scene().players(players);
         self.game.state.players_in_turn_order(who)
     }

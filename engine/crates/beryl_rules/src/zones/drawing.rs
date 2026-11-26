@@ -27,6 +27,7 @@ use crate::resolution::Resolution;
 use crate::state::TriggeredAbility;
 use crate::state::{AbilityRef, Count, PendingTrigger, TriggerInfo, TurnStep, Zone, ZoneKey};
 use crate::table::Capability;
+use beryl_kernel::format::SimultaneousDraws;
 use beryl_kernel::replacement::{self as card_replacement, Instead};
 
 /// A player draws cards, one at a time ([CR 121.2]): "If a player is instructed to draw multiple
@@ -231,6 +232,10 @@ pub fn wins_instead_of_drawing(ability: &Ability) -> bool {
 /// player draws a card by putting the top card of their library into their hand." The outcome is
 /// the cards drawn.
 ///
+/// Several players draw in turn order. In a format whose players are dealt one card at a time
+/// ([`SimultaneousDraws::OneAtATimeFromActivePlayer`]) they draw alternately instead, one card
+/// each, starting with the first of them in turn order ([`alternately`]).
+///
 /// [CR 121.1]: https://yawgatog.com/resources/magic-rules/#R1211
 pub(crate) fn instruction<L: Layout>(
     run: &mut Run<'_, '_, L>,
@@ -239,11 +244,44 @@ pub(crate) fn instruction<L: Layout>(
 ) -> Result<Outcome<L>, Full> {
     let count = run.scene().amount(count);
     let mut drawn = Bitboard::EMPTY;
-    for player in run.in_turn_order(players) {
+    let drawers = run.in_turn_order(players);
+    if run.game().table.format().simultaneous_draws() != SimultaneousDraws::Together
+        && drawers.clone().nth(1).is_some()
+    {
+        return alternately(run, &drawers, count);
+    }
+    for player in drawers {
         let game = run.game();
         let hand = game.state.zone(ZoneKey::Of(player, Zone::Hand));
         draw(game, player, count)?;
         drawn |= game.state.zone(ZoneKey::Of(player, Zone::Hand)) & !hand;
+    }
+    Ok(Outcome::acted_on(drawn))
+}
+
+/// `drawers`, two or more players in turn order, each draw `count` cards one at a time in turn,
+/// by the shared-deck format's rule: "Whenever multiple players are drawing cards
+/// simultaneously, they are dealt one at a time, starting with the active player". Each card
+/// is a draw of its own, so a replacement or trigger sees one card at a time. The outcome is
+/// the cards drawn. Out of line: only that format reaches it.
+#[cold]
+#[inline(never)]
+fn alternately<L: Layout>(
+    run: &mut Run<'_, '_, L>,
+    drawers: &(impl Iterator<Item = Seat> + Clone),
+    count: u8,
+) -> Result<Outcome<L>, Full> {
+    let mut drawn = Bitboard::EMPTY;
+    for _ in 0..count {
+        for player in drawers.clone() {
+            let game = run.game();
+            let hand = game.state.zone(ZoneKey::Of(player, Zone::Hand));
+            draw(game, player, 1)?;
+            drawn |= game.state.zone(ZoneKey::Of(player, Zone::Hand)) & !hand;
+            if game.state.outcome().is_some() {
+                return Ok(Outcome::acted_on(drawn));
+            }
+        }
     }
     Ok(Outcome::acted_on(drawn))
 }

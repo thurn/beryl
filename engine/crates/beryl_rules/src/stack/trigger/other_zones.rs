@@ -5,7 +5,9 @@
 //!
 //! Implements: none. Matches triggers under the rules declared by its parent module.
 
-use super::{ability, away, fire, keep_last_known, look_back, look_back_kinds, of_object};
+use super::{
+    ability, away, away_controllers, fire, keep_last_known, look_back, look_back_kinds, of_object,
+};
 use crate::card::FaceAbility;
 use crate::fixed::Full;
 use crate::layout::{Layout, Queue};
@@ -122,7 +124,8 @@ pub(super) fn look_back_merged<L: Layout>(
 }
 
 /// Matches `e`, an event of kind `k`, against the abilities of the objects outside the battlefield
-/// that work where they are ([`away`]). Out of line: most games have none.
+/// that work where they are ([`away`]), once for each of the players who control them
+/// ([`away_controllers`]). Out of line: most games have none.
 #[cold]
 #[inline(never)]
 pub(super) fn match_away<L: Layout>(
@@ -135,10 +138,18 @@ pub(super) fn match_away<L: Layout>(
         let zone = s.object(slot).zone();
         let (card, face) = s.definition(slot).record(t);
         let of = of_object(s, slot, card, face, TriggeredAbility::default());
-        for l in t.away_listeners(card, face, k) {
-            if l.zones.contains(zone) && s.has_ability(slot, l.ability) {
-                let ability = TriggeredAbility::own(l.ability);
-                fire(s, t, l.trigger, AbilityRef { ability, ..of }, e)?;
+        for controller in away_controllers(s, slot).in_seat_order() {
+            let controller = controller.into();
+            for l in t.away_listeners(card, face, k) {
+                if l.zones.contains(zone) && s.has_ability(slot, l.ability) {
+                    let ability = TriggeredAbility::own(l.ability);
+                    let of = AbilityRef {
+                        ability,
+                        controller,
+                        ..of
+                    };
+                    fire(s, t, l.trigger, of, e)?;
+                }
             }
         }
     }
@@ -164,18 +175,19 @@ pub(super) fn look_back_away<L: Layout>(
             let words = s.words_of(slot);
             let (card, face) = s.definition(slot).record(t);
             let of = of_object(s, slot, card, face, TriggeredAbility::default());
-            for kind in look_back_kinds(to) {
-                for l in t.away_listeners(card, face, kind) {
-                    if l.zones.contains(zone) && s.has_ability(slot, l.ability) {
-                        let ability = TriggeredAbility::own(l.ability);
-                        look_back(
-                            s,
-                            t,
-                            l.trigger.subject,
-                            AbilityRef { ability, ..of },
-                            &words,
-                            object,
-                        )?;
+            for controller in away_controllers(s, slot).in_seat_order() {
+                let controller = controller.into();
+                for kind in look_back_kinds(to) {
+                    for l in t.away_listeners(card, face, kind) {
+                        if l.zones.contains(zone) && s.has_ability(slot, l.ability) {
+                            let ability = TriggeredAbility::own(l.ability);
+                            let of = AbilityRef {
+                                ability,
+                                controller,
+                                ..of
+                            };
+                            look_back(s, t, l.trigger.subject, of, &words, object)?;
+                        }
                     }
                 }
             }

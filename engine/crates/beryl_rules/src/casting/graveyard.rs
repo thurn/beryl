@@ -44,7 +44,7 @@ pub(super) fn permitter<L: Layout>(
 
 /// Whether the card in `slot` is in `player`'s own graveyard while a card of the game gives
 /// such permissions, so that casting it at priority without another permission relies on
-/// one.
+/// one. A card in a shared graveyard is in each player's ([`State::holds`]).
 #[inline]
 pub(super) fn relies_on_permission<L: Layout>(
     s: &State<L>,
@@ -53,8 +53,7 @@ pub(super) fn relies_on_permission<L: Layout>(
     slot: L::Slot,
 ) -> bool {
     t.can(Capability::CastsFromGraveyard) && {
-        let object = s.object(slot);
-        object.zone() == Zone::Graveyard && object.owner() == player
+        s.object(slot).zone() == Zone::Graveyard && s.holds(player, slot)
     }
 }
 

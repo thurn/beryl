@@ -20,7 +20,8 @@ use crate::state::{Duration, MoveReplacement, ObjectRef, Permission, State};
 /// instant or sorcery spell by paying [cost] rather than paying its mana cost' and 'If the
 /// flashback cost was paid, exile this card instead of putting it anywhere else any time
 /// it would leave the stack.'" Only its owner can cast it from their graveyard, so
-/// `player` is its owner.
+/// `player` is its owner, or for a card in a shared graveyard, which is each player's, the
+/// player the effect is for.
 pub fn grant<L: Layout>(
     game: &mut Game<'_, L>,
     resolution: &Resolution<'_, L>,
@@ -47,19 +48,25 @@ pub fn paid<L: Layout>(s: &State<L>, spell: ObjectRef<L>) -> bool {
 
 /// [`Effect::GainFlashback`](beryl_card::Effect::GainFlashback): "[Cards] gain flashback until
 /// end of turn. The flashback cost is equal to its mana cost" (CR 702.34a): [`grant`], each
-/// card for its owner, who alone can cast it from their graveyard. The outcome is the cards.
+/// card for its owner, who alone can cast it from their graveyard. A card in a shared
+/// graveyard has no owner and is in each player's graveyard, so it is granted to the
+/// effect's controller, who cast the spell or controls the ability that grants it. The
+/// outcome is the cards.
 pub(crate) fn instruction<L: Layout>(
     run: &mut Run<'_, '_, L>,
     cards: Objects,
 ) -> Result<Outcome<L>, Full> {
     let cards = run.scene().objects(cards);
     for &slot in run.in_game_order(cards)?.iter() {
-        let (card, owner) = (
-            run.state().object_ref(slot),
-            run.state().object(slot).owner(),
-        );
+        let s = run.state();
+        let player = if s.has_owner(slot) {
+            s.object(slot).owner()
+        } else {
+            run.scene().you()
+        };
+        let card = s.object_ref(slot);
         let (game, resolution) = run.resolving();
-        grant(game, resolution, card, owner)?;
+        grant(game, resolution, card, player)?;
     }
     Ok(Outcome::acted_on(cards))
 }
