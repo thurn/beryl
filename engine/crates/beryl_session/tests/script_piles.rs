@@ -166,7 +166,7 @@ fn a_face_down_permanent_put_into_a_library_is_held_up_as_it_goes() {
     let lines = |gains: &str| {
         text(&[
             "-point hostile-target #256 > #0".to_owned(),
-            "vanish #0 (Wetland Sambar) battlefield>library bottom effect <- #256".to_owned(),
+            "appear #0 (Wetland Sambar) battlefield>library bottom effect <- #256".to_owned(),
             "& showcase #0 (Wetland Sambar) <- #256".to_owned(),
             format!("count {gains} life 23 <- #256"),
             "vanish #256 (Oust) stack>graveyard resolve <- #256".to_owned(),

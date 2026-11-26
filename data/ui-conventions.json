@@ -1483,6 +1483,11 @@
       "kind": "not-seen",
       "name": "A spell that ends the turn",
       "rule": "When a resolving spell ends the turn, play goes on to the cleanup step with no banner of its own: the turn is cut short as any turn ends, and the spell goes to its owner's pile (a shared-deck game's shared exile pile) in the move it would make at any other time. Arena's recordings show no spell that ends the turn."
+    },
+    {
+      "kind": "not-seen",
+      "name": "An Aura that takes control",
+      "rule": "No Aura that gains control of what it enchants is in the recordings. Control Magic resolves as any Aura does: it flies from the stack to the creature and settles behind it in the creature's row. Then the creature slides, with the Aura, straight to its new controller's creature row, as a permanent changing sides does (Coveted Jewel, 0VsYGs88NXA 27:39.5). When the Aura leaves, the creature slides back the same way, after the spell that removed the Aura has gone."
     }
   ],
   "verbs": [
@@ -1665,9 +1670,9 @@
     },
     {
       "name": "appear",
-      "shows": "A card comes to be at its place with no flight: a token, the opening hand, a card a look put in the graveyard. Its row makes room in its delay, so it shows at a place already open.",
+      "shows": "A card comes to be at its place with no flight: a token, the opening hand, a card a look put in the graveyard, a permanent put into a library. Its row makes room in its delay, so it shows at a place already open.",
       "arena": {
-        "does": "A token appears whole with a short glow, a batch as one group. The opening hand and a mulligan's new hand are there at once.",
+        "does": "A token appears whole with a short glow, a batch as one group. The opening hand and a mulligan's new hand are there at once. A permanent put into a library is on the library face up within a frame, with nothing left where it was, and slips in 70 to 130 ms later.",
         "evidence": [
           {
             "recording": "UrGalw_f35w",
@@ -1688,6 +1693,14 @@
           {
             "recording": "iRr-GeSF0lI",
             "time": "21:23.9"
+          },
+          {
+            "recording": "TbrYIs2juCw",
+            "time": "1:09:04.55"
+          },
+          {
+            "recording": "jD7VqaT8VC8",
+            "time": "23:05.50"
           }
         ]
       },

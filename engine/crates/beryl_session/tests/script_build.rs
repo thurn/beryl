@@ -462,7 +462,8 @@ fn an_exiled_permanent_vanishes() {
     assert_eq!(second, text(&lines));
 }
 
-/// `vanish` into a library: the place the card takes in it, and no name there.
+/// `appear` in a library: a permanent put there is at its place in the library within a
+/// frame, as Arena shows it (`TbrYIs2juCw 1:09:04.55`), with no ash or vortex where it lay.
 #[test]
 fn a_permanent_put_into_a_library_takes_its_place() {
     let [first, second] = script(OUST, 1);
@@ -474,7 +475,7 @@ fn a_permanent_put_into_a_library_takes_its_place() {
             "tap #3 (Plains) <- you",
             "& streak #3 > #1 white 1 <- #3",
             "-point hostile-target #1 > #256",
-            "vanish #256 (Geist of the Moors) battlefield>library @1 effect <- #1",
+            "appear #256 (Geist of the Moors) battlefield>library @1 effect <- #1",
             "count opponent life 23 <- #1",
             "vanish #1 (Oust) stack>graveyard resolve <- #1",
         ])
@@ -488,7 +489,7 @@ fn a_permanent_put_into_a_library_takes_its_place() {
             "& streak #3 > #1 white 1 <- #3",
             "dwell #1",
             "-point hostile-target #1 > #256",
-            "vanish #256 (Geist of the Moors) battlefield>library @1 effect <- #1",
+            "appear #256 (Geist of the Moors) battlefield>library @1 effect <- #1",
             "count you life 23 <- #1",
             "vanish #1 (Oust) stack>graveyard resolve <- #1",
         ])

@@ -231,10 +231,14 @@ impl Builder<'_> {
         let to = object.zone;
         let subject = Subject::Object { slot: object.slot };
         let own_spell_back = to == ZoneName::Hand && object.owner == Side::You;
+        // A permanent put into a library is at the library face up within a frame and
+        // slips in, with no ash or vortex where it was (TbrYIs2juCw 1:09:04.55, jD7VqaT8VC8
+        // 23:05.50): it appears there.
+        let to_library = from == ZoneName::Battlefield && to == ZoneName::Library;
         let goes = match from {
             ZoneName::Nowhere => false,
             _ if to == ZoneName::Stack || to == ZoneName::Battlefield => false,
-            ZoneName::Battlefield => true,
+            ZoneName::Battlefield => !to_library,
             ZoneName::Stack => !own_spell_back,
             _ => still && to == ZoneName::Library,
         };
@@ -246,7 +250,7 @@ impl Builder<'_> {
                 object: Some(object),
                 at,
             }
-        } else if from == ZoneName::Nowhere || (still && to != ZoneName::Stack) {
+        } else if from == ZoneName::Nowhere || to_library || (still && to != ZoneName::Stack) {
             Act::Appear {
                 from,
                 why,

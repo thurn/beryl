@@ -718,6 +718,13 @@ recordings do not show them.
   as any turn ends, and the spell goes to its owner's pile (a shared-deck game's
   shared exile pile) in the move it would make at any other time. Arena's
   recordings show no spell that ends the turn.
+- **An Aura that takes control.** No Aura that gains control of what it enchants
+  is in the recordings. Control Magic resolves as any Aura does: it flies from
+  the stack to the creature and settles behind it in the creature's row. Then
+  the creature slides, with the Aura, straight to its new controller's creature
+  row, as a permanent changing sides does (Coveted Jewel, 0VsYGs88NXA 27:39.5).
+  When the Aura leaves, the creature slides back the same way, after the spell
+  that removed the Aura has gone.
 
 ## Verbs
 
@@ -784,11 +791,14 @@ plays that timing. `just client check` checks the motion in a recording, and
   UrGalw_f35w 17:01.03). Beryl: 475 ms, 326 ms apart, ease-out. Effects: settle
   as it ends (into the battlefield) (but not land played, opponent land played).
 - **appear.** A card comes to be at its place with no flight: a token, the
-  opening hand, a card a look put in the graveyard. Its row makes room in its
-  delay, so it shows at a place already open. A token appears whole with a short
-  glow, a batch as one group. The opening hand and a mulligan's new hand are
-  there at once (UrGalw_f35w 17:38.4, WQiYBv23buw 23:57.0, UrGalw_f35w 15:48,
-  0VsYGs88NXA 54:16.6, iRr-GeSF0lI 21:23.9). Beryl: 66 ms, 135 ms after its
+  opening hand, a card a look put in the graveyard, a permanent put into a
+  library. Its row makes room in its delay, so it shows at a place already open.
+  A token appears whole with a short glow, a batch as one group. The opening
+  hand and a mulligan's new hand are there at once. A permanent put into a
+  library is on the library face up within a frame, with nothing left where it
+  was, and slips in 70 to 130 ms later (UrGalw_f35w 17:38.4, WQiYBv23buw
+  23:57.0, UrGalw_f35w 15:48, 0VsYGs88NXA 54:16.6, iRr-GeSF0lI 21:23.9,
+  TbrYIs2juCw 1:09:04.55, jD7VqaT8VC8 23:05.50). Beryl: 66 ms, 135 ms after its
   cause, 33 ms apart, in place. Effects: glow as it begins (token).
 - **vanish.** A card or an ability goes from where it is with no flight, and a
   card is at its new place as it is gone: destroyed, exiled, sacrificed,
