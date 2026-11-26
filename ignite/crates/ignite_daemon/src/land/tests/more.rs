@@ -31,6 +31,7 @@ fn write_pushing(world: &World, commit: &Commit, at: Option<Timestamp>) -> Landi
             fresh: false,
             pressure: None,
             defer_successor: false,
+            test_only_files: Vec::new(),
         },
         commit: commit.clone(),
         state: RecordState::Pushing,

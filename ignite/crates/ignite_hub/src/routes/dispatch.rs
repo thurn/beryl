@@ -452,7 +452,7 @@ fn landed(conn: &mut Connection, landed: &Landed, now: Timestamp, test_paths: &[
     )
     .map_err(|e| store_failure(&e))?;
     let fix = LandingFix {
-        outcome: FixOutcome::classify(&landed.work.files, test_paths),
+        outcome: FixOutcome::classify(&landed.work.files, test_paths, &landed.test_only_files),
         commit: landed.work.commits.last().cloned(),
         prior_commits,
     };

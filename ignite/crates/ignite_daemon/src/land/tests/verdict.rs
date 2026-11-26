@@ -439,6 +439,7 @@ fn land_on_tip(world: &World, changes: &[(&str, &str)]) -> (Commit, TicketId) {
             fresh: false,
             pressure: None,
             defer_successor: false,
+            test_only_files: Vec::new(),
         })
         .unwrap();
     (commit, ticket)

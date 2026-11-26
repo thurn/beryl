@@ -667,6 +667,7 @@ fn cli_e2e_four_workers_on_two_providers_start_with_room_and_leave_at_landing() 
                 fresh: false,
                 pressure: None,
                 defer_successor: false,
+                test_only_files: Vec::new(),
             })
             .unwrap();
         lock(&rig.host.holders).remove(&worker.session);

@@ -393,3 +393,44 @@ fn the_culprit_tickets_own_test_update_and_scenario_changes_do_not_switch_checks
         );
     }
 }
+
+#[test]
+fn inline_test_only_edits_in_product_files_classify_as_test_only() {
+    let mut conn = open();
+    register(&mut conn);
+    let config = ["**/tests.rs".to_owned()];
+
+    let test_only = report("cfg-test");
+    let (ticket, _) = regressions::file(&mut conn, UPKEEP, &test_only, at(1.0)).unwrap();
+    assert_eq!(
+        post(&mut conn, "/claims", &claim(&ticket, "a"), at(2.0)).0,
+        200
+    );
+    let mut body = landed(&ticket, "a", "updated inline unit test");
+    body["work"]["files"] = json!(["src/rule_changes.rs", "src/trackers/tests.rs"]);
+    body["test_only_files"] = json!(["src/rule_changes.rs"]);
+    assert_eq!(
+        post_with_test_paths(&mut conn, "/landed", &body, at(3.0), &config).0,
+        200
+    );
+    let fixes = history(&mut conn, ("check", test_only.check.as_str()), at(4.0));
+    assert_eq!(fixes.len(), 1);
+    assert_eq!(fixes[0].outcome, FixOutcome::TestOnly);
+
+    let mixed = report("mixed");
+    let (ticket, _) = regressions::file(&mut conn, UPKEEP, &mixed, at(5.0)).unwrap();
+    assert_eq!(
+        post(&mut conn, "/claims", &claim(&ticket, "b"), at(6.0)).0,
+        200
+    );
+    let mut body = landed(&ticket, "b", "fixed production code and inline test");
+    body["work"]["files"] = json!(["src/rule_changes.rs", "src/other.rs"]);
+    body["test_only_files"] = json!(["src/rule_changes.rs"]);
+    assert_eq!(
+        post_with_test_paths(&mut conn, "/landed", &body, at(7.0), &config).0,
+        200
+    );
+    let fixes = history(&mut conn, ("check", mixed.check.as_str()), at(8.0));
+    assert_eq!(fixes.len(), 1);
+    assert_eq!(fixes[0].outcome, FixOutcome::Product);
+}

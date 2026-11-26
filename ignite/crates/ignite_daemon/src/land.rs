@@ -594,15 +594,15 @@ impl Landing {
                 note: note.clone(),
             };
             let mut record = LandingRecord {
-                landed: Landed {
-                    ticket: ticket.clone(),
-                    machine: ctx.machine.clone(),
-                    session: session.clone(),
+                landed: by_verdict::landed_message(
+                    ctx,
+                    ticket.clone(),
+                    session.clone(),
+                    &rebased.onto,
+                    &rebased.head,
                     work,
-                    fresh: args.fresh,
-                    pressure: None,
-                    defer_successor: false,
-                },
+                    args.fresh,
+                ),
                 commit: rebased.head.clone(),
                 state: RecordState::Pushing,
                 written_at: Some(ctx.clock.now()),

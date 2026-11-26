@@ -286,6 +286,17 @@ pub trait Git: Send + Sync {
     fn object_ids(&self, tree: &Path, paths: &[String]) -> Result<Vec<(String, Oid)>>;
     /// The paths that differ between two commits.
     fn changed(&self, from: &Commit, to: &Commit) -> Result<Vec<String>>;
+    /// Paths among `files` whose changes between `from` and `to` touch only test-only code
+    /// (such as Rust `#[cfg(test)]` items). Implementations that do not inspect file contents
+    /// return an empty list.
+    fn test_only_files(
+        &self,
+        _from: &Commit,
+        _to: &Commit,
+        _files: &[String],
+    ) -> Result<Vec<String>> {
+        Ok(Vec::new())
+    }
     /// The paths a commit changed against its first parent.
     fn commit_paths(&self, _commit: &Commit) -> Result<Vec<String>> {
         Err(git_not_supported("read the paths a commit changed"))

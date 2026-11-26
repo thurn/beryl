@@ -146,6 +146,7 @@ impl World {
                 fresh: false,
                 pressure: None,
                 defer_successor: false,
+                test_only_files: Vec::new(),
             })
             .unwrap();
     }

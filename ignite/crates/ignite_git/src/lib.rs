@@ -43,6 +43,10 @@ impl Git for GitCli {
         changed::between(&self.repo, from, to)
     }
 
+    fn test_only_files(&self, from: &Commit, to: &Commit, files: &[String]) -> Result<Vec<String>> {
+        changed::test_only_files(&self.repo, from, to, files)
+    }
+
     fn commit_paths(&self, commit: &Commit) -> Result<Vec<String>> {
         changed::in_commit(&self.repo, commit)
     }

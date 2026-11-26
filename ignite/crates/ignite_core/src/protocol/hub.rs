@@ -18,7 +18,7 @@ use super::{Class, Outcome};
 use crate::config::Os;
 use crate::dispatch_pressure::DispatchPressure;
 use crate::fleet::FleetNotice;
-use crate::ids::{CheckName, Commit, InputHash, MachineId, RecordId, SessionId, TicketId, TreeId};
+use crate::ids::{CheckName, Commit, MachineId, RecordId, SessionId, TicketId, TreeId};
 use crate::time::Timestamp;
 
 /// The largest request body the hub reads from a machine with a token, as the ticket service
@@ -314,6 +314,10 @@ pub struct Landed {
     /// let ordinary dispatch take its successor when capacity can be read again.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub defer_successor: bool,
+    /// Paths in `work.files` whose changes touched only test-only code (such as Rust
+    /// `#[cfg(test)]` items), even though the path itself does not match `test_paths`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub test_only_files: Vec<String>,
 }
 
 /// `POST /release`: a session gives a ticket back without landing it.
@@ -761,38 +765,6 @@ pub enum JusticiarRecovery {
     LoopRound { finished_at: Timestamp },
     /// Recovery from a specific idle-job failure streak or rejected release.
     Sighting { evidence: String },
-}
-
-/// A family's stored listing is found by the family's name and its listing hash, the hash of
-/// everything the family's `list` command can read.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct ListingKey {
-    pub family: String,
-    pub hash: InputHash,
-}
-
-/// `POST /listings/lookup`; the reply holds one entry per key, in order.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ListingLookup {
-    pub keys: Vec<ListingKey>,
-    /// Return an empty string for each stored listing when the caller only needs to know it exists.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub presence_only: bool,
-}
-
-/// The stored listing of each key asked for, or `None` where the hub has none. A listing is
-/// text the daemon wrote; the hub keeps it without reading it.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ListingReply {
-    pub listings: Vec<Option<String>>,
-}
-
-/// `POST /listings/store`: a listing one machine made, for every machine to reuse while the
-/// family's listing hash holds.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct StoredListing {
-    pub key: ListingKey,
-    pub listing: String,
 }
 
 #[cfg(test)]

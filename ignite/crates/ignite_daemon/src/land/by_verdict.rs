@@ -396,24 +396,25 @@ impl Landing {
                     .map_err(io)?
                     .join("\n"),
             };
+            let files = ctx.git.changed(&onto, &replayed).map_err(io)?;
             let work = LandedWork {
                 commits: self
                     .trees
                     .commits(&held.path, &onto, &replayed)
                     .map_err(io)?,
-                files: ctx.git.changed(&onto, &replayed).map_err(io)?,
+                files,
                 note: note.clone(),
             };
             let mut record = LandingRecord {
-                landed: Landed {
-                    ticket: ticket.clone(),
-                    machine: ctx.machine.clone(),
-                    session: session.clone(),
+                landed: landed_message(
+                    ctx,
+                    ticket.clone(),
+                    session.clone(),
+                    &onto,
+                    &replayed,
                     work,
-                    fresh: args.fresh,
-                    pressure: None,
-                    defer_successor: false,
-                },
+                    args.fresh,
+                ),
                 commit: replayed.clone(),
                 state: RecordState::Pushing,
                 written_at: Some(ctx.clock.now()),
@@ -560,4 +561,50 @@ fn conflict(ctx: &Context, tip: &Commit, files: &[String]) -> Stop {
         ),
     ));
     stop(Exit::Conflict, &lines)
+}
+
+/// Builds the `POST /landed` payload, marking any changed files outside `repository.test_paths`
+/// whose diff between `onto` and `head` touched only test-only code (such as Rust `#[cfg(test)]`
+/// items).
+pub(super) fn landed_message(
+    ctx: &Context,
+    ticket: ignite_core::ids::TicketId,
+    session: ignite_core::ids::SessionId,
+    onto: &Commit,
+    head: &Commit,
+    work: LandedWork,
+    fresh: bool,
+) -> Landed {
+    let test_paths = &ctx.config.repository.test_paths;
+    let candidates: Vec<String> = work
+        .files
+        .iter()
+        .filter(|file| {
+            !test_paths
+                .iter()
+                .any(|pattern| ignite_core::inputs::path_matches(pattern, file))
+        })
+        .cloned()
+        .collect();
+    let test_only_files = if candidates.is_empty() {
+        Vec::new()
+    } else {
+        match ctx.git.test_only_files(onto, head, &candidates) {
+            Ok(found) => found,
+            Err(error) => {
+                eprintln!("ignite: could not inspect diff for test-only changes: {error}");
+                Vec::new()
+            }
+        }
+    };
+    Landed {
+        ticket,
+        machine: ctx.machine.clone(),
+        session,
+        work,
+        fresh,
+        pressure: None,
+        defer_successor: false,
+        test_only_files,
+    }
 }

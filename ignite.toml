@@ -40,6 +40,9 @@ test_paths = [
   "data/client/gates.json",     # Limits for shader and interface audit checks.
   "data/client/conventions/**", # Recordings and moments that demonstrate UI conventions.
   "data/client/screens.json",   # Expected screens and prompts in recorded examples.
+  "data/oracle-divergences.json", # Expected oracle divergences, not rules or card behavior.
+  "data/efficiency-changes.json", # Efficiency change log, not product code.
+  "docs/**",                    # Documentation changes are not product fixes.
   "ignite/checks/**",           # Check family declarations and commands.
 ]
 

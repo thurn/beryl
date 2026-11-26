@@ -308,6 +308,7 @@ fn statuses_become_the_shared_errors() {
         fresh: false,
         pressure: None,
         defer_successor: false,
+        test_only_files: Vec::new(),
     };
     assert!(matches!(client.landed(&landed), Err(Error::NotFound(_))));
     assert!(matches!(client.records(&[]), Err(Error::Unreachable(m)) if m.contains("token")));

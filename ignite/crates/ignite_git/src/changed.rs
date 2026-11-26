@@ -35,6 +35,51 @@ pub fn between(repo: &Path, from: &Commit, to: &Commit) -> Result<Vec<String>> {
     Ok(paths)
 }
 
+/// Paths among `files` whose changes between `from` and `to` touch only test-only code in a
+/// Rust source file (`#[cfg(test)]` items, comments, or whitespace). Added or deleted files
+/// are not reported as test-only.
+pub fn test_only_files(
+    repo: &Path,
+    from: &Commit,
+    to: &Commit,
+    files: &[String],
+) -> Result<Vec<String>> {
+    let mut result = Vec::new();
+    for file in files {
+        if !Path::new(file)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("rs"))
+        {
+            continue;
+        }
+        let Some(before) = blob(repo, from, file)? else {
+            continue;
+        };
+        let Some(after) = blob(repo, to, file)? else {
+            continue;
+        };
+        if ignite_core::rust_source::is_test_only_change(&before, &after) {
+            result.push(file.clone());
+        }
+    }
+    Ok(result)
+}
+
+/// The text of `path` at `commit`, or `None` when the file does not exist at that commit.
+fn blob(repo: &Path, commit: &Commit, path: &str) -> Result<Option<String>> {
+    let spec = format!("{commit}:{path}");
+    let mut command = cmd::git(repo, ["show", &spec]);
+    let out = cmd::output(&mut command)?;
+    if out.status.success() {
+        return Ok(Some(String::from_utf8_lossy(&out.stdout).into_owned()));
+    }
+    // `git show <commit>:<path>` exits 128 when the path does not exist in the commit's tree.
+    if out.status.code() == Some(128) {
+        return Ok(None);
+    }
+    Err(ignite_core::traits::Error::Io(cmd::failure(&command, &out)))
+}
+
 /// The paths one commit changed against its first parent, or added in a root commit.
 pub fn in_commit(repo: &Path, commit: &Commit) -> Result<Vec<String>> {
     let out = cmd::run(

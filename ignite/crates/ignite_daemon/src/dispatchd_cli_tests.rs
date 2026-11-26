@@ -614,6 +614,7 @@ fn a_lost_landing_reply_delivers_the_lane_successor_once_the_cli_turn_ends() {
             fresh: false,
             pressure: None,
             defer_successor: false,
+            test_only_files: Vec::new(),
         },
         commit,
         state: RecordState::Pushed,

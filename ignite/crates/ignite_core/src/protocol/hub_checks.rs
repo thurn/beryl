@@ -126,14 +126,16 @@ pub enum FixOutcome {
 }
 
 impl FixOutcome {
-    /// An empty file list means no change. A single product path makes the fix a product fix.
-    pub fn classify(files: &[String], test_paths: &[String]) -> Self {
+    /// An empty file list means no change. A single product path whose diff was not test-only
+    /// makes the fix a product fix.
+    pub fn classify(files: &[String], test_paths: &[String], test_only_files: &[String]) -> Self {
         if files.is_empty() {
             Self::None
         } else if files.iter().all(|file| {
             test_paths
                 .iter()
                 .any(|pattern| crate::inputs::path_matches(pattern, file))
+                || test_only_files.iter().any(|path| path == file)
         }) {
             Self::TestOnly
         } else {
@@ -328,4 +330,36 @@ pub struct TipUnclaimedBatch {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TipUnclaimedReply {
     pub checks: Vec<CheckName>,
+}
+
+/// A family's stored listing is found by the family's name and its listing hash, the hash of
+/// everything the family's `list` command can read.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ListingKey {
+    pub family: String,
+    pub hash: InputHash,
+}
+
+/// `POST /listings/lookup`; the reply holds one entry per key, in order.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListingLookup {
+    pub keys: Vec<ListingKey>,
+    /// Return an empty string for each stored listing when the caller only needs to know it exists.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub presence_only: bool,
+}
+
+/// The stored listing of each key asked for, or `None` where the hub has none. A listing is
+/// text the daemon wrote; the hub keeps it without reading it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListingReply {
+    pub listings: Vec<Option<String>>,
+}
+
+/// `POST /listings/store`: a listing one machine made, for every machine to reuse while the
+/// family's listing hash holds.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StoredListing {
+    pub key: ListingKey,
+    pub listing: String,
 }
