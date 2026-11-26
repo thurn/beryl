@@ -377,6 +377,27 @@ impl Table {
             };
             let track = motion.and_then(|motion| Some((motion.tracks.get(slot)?, motion.t)));
             let paused = track.is_some_and(|(track, time)| track.paused(time));
+            // A card that changes place during the script, and waits where an earlier step left
+            // it for the step that moves it on, is between zones: it is drawn where that step
+            // left it, with the record of the zone it ends in, so a press on it would act on a
+            // card that is not there yet. A waiting card of a pile (a Dragon's exiled cards, held
+            // at the exile pile until its trigger returns them) stood on one spot, each
+            // reachable and each covering the one under it.
+            let between_zones = track.is_some_and(|(track, time)| {
+                track.begun(time)
+                    && !track.settled(time)
+                    && !track.moving(time)
+                    && self
+                        .objects
+                        .cards
+                        .get(slot)
+                        .copied()
+                        .flatten()
+                        .map(|rest| rest.place)
+                        != motion
+                            .and_then(|motion| motion.finals.cards.get(slot).copied().flatten())
+                            .map(|last| last.place)
+            });
             let layout_motion =
                 under_way && !paused && !track.is_some_and(|(track, time)| track.crossing(time));
             // A card at rest in a row that scrolled slides to its new place, as one does into
@@ -403,7 +424,7 @@ impl Table {
                 slot,
                 (&object, drawn, (under_way, state), held_at),
                 (view, faces),
-                (back, dress, self.handed_waiting(motion)),
+                (back, dress, self.handed_waiting(motion) || between_zones),
                 builder,
             );
         }
