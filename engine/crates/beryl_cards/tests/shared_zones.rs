@@ -553,3 +553,182 @@ fn a_seeded_forgetful_fish_game_between_random_agents_reaches_an_outcome() {
         "seeded Forgetful Fish game did not reach an outcome"
     );
 }
+
+fn shared_controller_game(
+    active: Seat,
+) -> (Game, &'static str, &'static str, &'static str, &'static str) {
+    use beryl_card::prelude::{
+        Ability, CardDef, Face, Filter, Objects, Prompt, Purpose, TargetKind, TargetSpec, Types,
+        Zone as CardZone, choose, controller_of, each_player, exile, for_each_player, gain_life,
+        its_controller, lose_life, sequence, target, that_player, those,
+    };
+
+    const A_GRAVEYARD_CARD: TargetSpec = TargetSpec::one(TargetKind::GraveyardCard, Filter::Any);
+    static FILLER: CardDef = CardDef {
+        name: "Test Filler",
+        shape: beryl_card::definition::Shape::Single,
+        faces: &[Face {
+            types: Types::LAND,
+            ..Face::EMPTY
+        }],
+        tokens: &[],
+    };
+    static READ_CONTROLLER: CardDef = CardDef {
+        name: "Test Read Controller",
+        shape: beryl_card::definition::Shape::Single,
+        faces: &[Face {
+            types: Types::SORCERY,
+            abilities: &[Ability::spell()
+                .targeting(&[A_GRAVEYARD_CARD])
+                .effect(&gain_life(its_controller(), 3))],
+            ..Face::EMPTY
+        }],
+        tokens: &[],
+    };
+    static MOVE_AND_READ: CardDef = CardDef {
+        name: "Test Move And Read",
+        shape: beryl_card::definition::Shape::Single,
+        faces: &[Face {
+            types: Types::SORCERY,
+            abilities: &[Ability::spell()
+                .targeting(&[A_GRAVEYARD_CARD])
+                .effect(&sequence(&[
+                    exile(target()),
+                    lose_life(controller_of(those()), 1),
+                    gain_life(its_controller(), 4),
+                ]))],
+            ..Face::EMPTY
+        }],
+        tokens: &[],
+    };
+    static EACH_EXILES: CardDef = CardDef {
+        name: "Test Each Exiles",
+        shape: beryl_card::definition::Shape::Single,
+        faces: &[Face {
+            types: Types::SORCERY,
+            abilities: &[Ability::spell().effect(&for_each_player(
+                each_player(),
+                &sequence(&[
+                    choose(
+                        that_player(),
+                        Objects::All {
+                            zone: CardZone::Graveyard,
+                            filter: Filter::Any,
+                        },
+                        Prompt::new(Purpose::Choose),
+                    ),
+                    exile(those()),
+                ]),
+            ))],
+            ..Face::EMPTY
+        }],
+        tokens: &[],
+    };
+    static CATALOG: beryl_engine::CardTable =
+        beryl_engine::CardTable::new(&[&FILLER, &READ_CONTROLLER, &MOVE_AND_READ, &EACH_EXILES]);
+    let deck = [
+        (1, READ_CONTROLLER.name),
+        (1, MOVE_AND_READ.name),
+        (1, EACH_EXILES.name),
+        (12, FILLER.name),
+    ];
+    let t = GameTable::new(Format::SHARED_DECK, &CATALOG, [&deck, &[]]).unwrap();
+    let mut s = State::new(&t, 0, Profile::EXACT).unwrap();
+    s.board().begin_at(3, active, TurnStep::PrecombatMain);
+    let g = Game {
+        t,
+        s,
+        x: Scratch::new(),
+    };
+    (
+        g,
+        FILLER.name,
+        READ_CONTROLLER.name,
+        MOVE_AND_READ.name,
+        EACH_EXILES.name,
+    )
+}
+
+#[test]
+fn controller_of_a_card_in_or_moved_from_a_shared_zone_is_the_performing_player() {
+    // 1. Players::ControllerOf(Target(0)) on a card still in the shared graveyard resolves to
+    //    Seat::P1 (the casting player), not the Seat::P0 placeholder.
+    {
+        let (mut g, filler, read_controller, _, _) = shared_controller_game(Seat::P1);
+        let spell = g.put(read_controller, Seat::P1, Zone::Hand);
+        let card = g.put(filler, Seat::P0, Zone::Graveyard);
+        assert!(!g.s.has_owner(card));
+        g.play(
+            |_, d| Game::cast(d, spell),
+            |s| s.object(spell).zone() == Zone::Graveyard && s.stack().is_empty(),
+        );
+        assert_eq!(g.s.player(Seat::P1).life(), 23);
+        assert_eq!(g.s.player(Seat::P0).life(), 20);
+    }
+
+    // 2. After Seat::P1 exiles a card from the shared graveyard, both Players::ControllerOf
+    //    on the moved target (Scene::known) and on Objects::Those (Run::remember) resolve to
+    //    Seat::P1, not Seat::P0.
+    {
+        let (mut g, filler, _, move_and_read, _) = shared_controller_game(Seat::P1);
+        let spell = g.put(move_and_read, Seat::P1, Zone::Hand);
+        let card = g.put(filler, Seat::P0, Zone::Graveyard);
+        assert!(!g.s.has_owner(card));
+        g.play(
+            |_, d| Game::cast(d, spell),
+            |s| s.object(spell).zone() == Zone::Graveyard && s.stack().is_empty(),
+        );
+        assert_eq!(g.s.object(card).zone(), Zone::Exile);
+        assert_eq!(owner(&g.s, card), Seat::P1);
+        assert_eq!(g.s.player(Seat::P1).life(), 23);
+        assert_eq!(g.s.player(Seat::P0).life(), 20);
+    }
+
+    // 3. Inside Effect::ForEachPlayer, each player who exiles a card from the shared graveyard
+    //    becomes that card's owner, not the spell's controller.
+    {
+        let (mut g, filler, _, _, each_exiles) = shared_controller_game(Seat::P0);
+        let spell = g.put(each_exiles, Seat::P0, Zone::Hand);
+        let first = g.put(filler, Seat::P0, Zone::Graveyard);
+        let second = g.put(filler, Seat::P0, Zone::Graveyard);
+        g.play(
+            |_, d| Game::cast(d, spell),
+            |s| s.object(spell).zone() == Zone::Graveyard && s.stack().is_empty(),
+        );
+        let mut owners = [owner(&g.s, first), owner(&g.s, second)];
+        owners.sort_by_key(|p| p.index());
+        assert_eq!(owners, [Seat::P0, Seat::P1]);
+    }
+}
+
+#[test]
+fn defined_pt_in_a_shared_zone_does_not_read_seat_zero() {
+    use names::{ADELINE_RESPLENDENT_CATHAR, DANDAN, ISLAND, TARMOGOYF};
+    let deck = [
+        (2, ADELINE_RESPLENDENT_CATHAR),
+        (1, TARMOGOYF),
+        (2, DANDAN),
+        (8, ISLAND),
+    ];
+    let mut g = Game::new(&deck, Seat::P0);
+    g.put(DANDAN, Seat::P0, Zone::Battlefield);
+    g.put(DANDAN, Seat::P0, Zone::Battlefield);
+    let adeline_gy = g.put(ADELINE_RESPLENDENT_CATHAR, Seat::P0, Zone::Graveyard);
+    let adeline_lib =
+        g.s.library(Seat::P0)
+            .iter()
+            .copied()
+            .find(|&slot| g.s.definition_name(&g.t, slot) == ADELINE_RESPLENDENT_CATHAR)
+            .unwrap();
+    assert!(!g.s.has_owner(adeline_gy));
+    assert!(!g.s.has_owner(adeline_lib));
+    // Adeline's power is the number of creatures "you" control; with no owner in a shared zone,
+    // she does not count Seat::P0's creatures.
+    assert_eq!(g.s.power(&g.t, adeline_gy), 0);
+    assert_eq!(g.s.power(&g.t, adeline_lib), 0);
+    // Tarmogoyf's ability counts card types across graveyards, which does not depend on "you".
+    let goyf = g.put(TARMOGOYF, Seat::P0, Zone::Graveyard);
+    g.put(ISLAND, Seat::P0, Zone::Graveyard);
+    assert_eq!(g.s.power(&g.t, goyf), 2);
+    assert_eq!(g.s.toughness(&g.t, goyf), 3);
+}

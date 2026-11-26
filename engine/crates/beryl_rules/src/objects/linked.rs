@@ -85,7 +85,7 @@ pub(crate) fn exile_instruction<L: Layout>(
     let cards = run.elsewhere_than(cards, Zone::Exile);
     run.remember(cards)?;
     let source = run.resolution().source();
-    let you = run.you();
-    exile_and_link(run.game(), you, cards, source)?;
+    let taker = run.taker();
+    exile_and_link(run.game(), taker, cards, source)?;
     Ok(run.now_in(cards, Zone::Exile))
 }

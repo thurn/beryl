@@ -78,10 +78,17 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
         self
     }
 
-    /// "You": the controller of the spell or ability. An instruction that takes a card out of
-    /// a shared library or graveyard names this player as its taker unless it names another.
+    /// "You": the controller of the spell or ability.
     pub(crate) fn you(&self) -> Seat {
         self.subject.of.controller.seat()
+    }
+
+    /// The player performing the current instruction: "that player" inside
+    /// [`Effect::ForEachPlayer`] or a draw replacement, and otherwise [`Run::you`]. An
+    /// instruction that takes a card out of a shared library or graveyard names this player
+    /// as its taker unless it names another.
+    pub(crate) fn taker(&self) -> Seat {
+        self.registers.that_player.unwrap_or_else(|| self.you())
     }
 
     /// The game the ability resolves in, to change.
@@ -646,8 +653,17 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
         let game = &mut *self.game;
         layers::refresh(game.state, game.table, game.sink)?;
         let s = &*self.game.state;
-        self.registers.controlled =
-            Table::from_fn(|player| leaving.filter(|slot| s.controller(slot).index() == player));
+        let taker = self.taker();
+        self.registers.controlled = Table::from_fn(|player| {
+            leaving.filter(|slot| {
+                let controller = if s.has_owner(slot) {
+                    s.controller(slot)
+                } else {
+                    taker
+                };
+                controller.index() == player
+            })
+        });
         for (place, target) in placed(self.resolving.entry.targets.as_slice()) {
             let Some(object) = target.as_object().and_then(|object| s.current(object)) else {
                 continue;

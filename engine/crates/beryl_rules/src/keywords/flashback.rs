@@ -62,7 +62,7 @@ pub(crate) fn instruction<L: Layout>(
         let player = if s.has_owner(slot) {
             s.object(slot).owner()
         } else {
-            run.scene().you()
+            run.taker()
         };
         let card = s.object_ref(slot);
         let (game, resolution) = run.resolving();

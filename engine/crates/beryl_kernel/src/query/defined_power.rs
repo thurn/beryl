@@ -16,7 +16,7 @@
 //!
 //! [CR 604.3]: https://yawgatog.com/resources/magic-rules/#R6043
 
-use beryl_card::{Amount, Modification, Objects, Types, Words, Zone};
+use beryl_card::{Amount, Filter, Modification, Objects, Players, Types, Words, Zone};
 
 use crate::filter::Evaluate;
 use crate::ids::Seat;
@@ -53,9 +53,9 @@ impl<L: Layout> State<L> {
             return (power, toughness);
         }
         // see CR 108.4a: "If anything asks for the controller of a card that doesn't have one
-        // (because it's not a permanent or spell), use its owner instead." The query answers
-        // that, and a count of "creatures you control" counts its owner's.
-        let you = self.controller(slot);
+        // (because it's not a permanent or spell), use its owner instead." A card in a shared
+        // library or graveyard has no owner, so any count that depends on "you" is zero.
+        let you = self.has_owner(slot).then(|| self.controller(slot));
         let words = self.words_of(slot);
         let number = |amount| i8::try_from(self.defined(t, amount, you, &words)).unwrap_or(i8::MAX);
         for ability in values.face(t).abilities {
@@ -95,10 +95,10 @@ impl<L: Layout> State<L> {
     }
 
     /// The value of `amount`, which a characteristic-defining ability of an object off the
-    /// battlefield reads for `you`, its owner, through `words`, its text changes: the amounts
-    /// `static_ability::read_amounts` admits. A count of permanents reads their layer results,
-    /// as they stand.
-    fn defined(&self, t: &GameTable, amount: &Amount, you: Seat, words: &Words) -> usize {
+    /// battlefield reads for `you`, its owner (or `None` in a shared library or graveyard),
+    /// through `words`, its text changes: the amounts `static_ability::read_amounts` admits.
+    /// A count of permanents reads their layer results, as they stand.
+    fn defined(&self, t: &GameTable, amount: &Amount, you: Option<Seat>, words: &Words) -> usize {
         match *amount {
             Amount::Fixed(n) => usize::from(n),
             Amount::Times(n, amount) => {
@@ -118,9 +118,15 @@ impl<L: Layout> State<L> {
             Amount::Count(&Objects::All {
                 zone: Zone::Battlefield,
                 filter,
-            }) => (self.battlefield().iter())
-                .filter(|&&slot| filter.matches(self, t, slot, you, words))
-                .count(),
+            }) => {
+                let Some(you) = you.or_else(|| (!depends_on_you(filter)).then_some(Seat::P0))
+                else {
+                    return 0;
+                };
+                (self.battlefield().iter())
+                    .filter(|&&slot| filter.matches(self, t, slot, you, words))
+                    .count()
+            }
             Amount::CardTypesAmong(_) => self.card_types_in_graveyards(t),
             Amount::X
             | Amount::ThatMany
@@ -175,5 +181,28 @@ impl<L: Layout> State<L> {
             }
         }
         usize::try_from(types.0.count_ones()).expect("a bit count fits in usize")
+    }
+}
+
+/// Whether `filter` reads `you` (through a player reference other than `EachPlayer`).
+fn depends_on_you(filter: Filter) -> bool {
+    match filter {
+        Filter::Whose(p) | Filter::Owned(p) => !matches!(p, Players::EachPlayer),
+        Filter::Not(f) => depends_on_you(*f),
+        Filter::All(fs) | Filter::AnyOf(fs) => fs.iter().any(|&f| depends_on_you(f)),
+        Filter::Any
+        | Filter::Types(_)
+        | Filter::Supertypes(_)
+        | Filter::SubtypeWord(_)
+        | Filter::ColorWords(_)
+        | Filter::Tapped
+        | Filter::AttackedThisTurn
+        | Filter::Token
+        | Filter::Named(_)
+        | Filter::ManaValueAtMost(_)
+        | Filter::PowerAtMost(_)
+        | Filter::ManaValueAtMostX
+        | Filter::ManaValueAtMostPower
+        | Filter::InZone(_) => false,
     }
 }

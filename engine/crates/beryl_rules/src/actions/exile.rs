@@ -73,7 +73,7 @@ pub(crate) fn instruction<L: Layout>(
     }
     run.remember(objects)?;
     let found = run.with_piles(objects);
-    let you = run.you();
-    exile(run.game(), you, objects)?;
+    let taker = run.taker();
+    exile(run.game(), taker, objects)?;
     Ok(run.now_in(found, Zone::Exile))
 }

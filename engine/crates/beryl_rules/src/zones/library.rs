@@ -393,10 +393,10 @@ pub(crate) fn put_instruction<L: Layout>(
             let cards = run.elsewhere_than(objects, Zone::Library);
             if !cards.is_empty() {
                 run.remember(cards)?;
-                let you = run.you();
+                let taker = run.taker();
                 let game = run.game();
                 let rest = crate::stack::unstack(game, cards, Zone::Library)?;
-                put_on_bottom_in_random_order(game, you, rest)?;
+                put_on_bottom_in_random_order(game, taker, rest)?;
             }
             return Ok(run.now_in(cards, Zone::Library));
         }
@@ -422,14 +422,14 @@ fn put_at_owners_choice<L: Layout>(
     run.remember(objects)?;
     let top_or_bottom =
         Prompt::new(Purpose::TopOrBottom).places(prompt::Place::Top, prompt::Place::Bottom);
-    let you = run.you();
+    let taker = run.taker();
     for &slot in run.in_game_order(objects)?.iter() {
         let (game, resolution) = run.resolving();
         let object = game.state.object_ref(slot);
         let owner = if game.state.has_owner(slot) {
             game.state.object(slot).owner()
         } else {
-            you
+            taker
         };
         let about = Bitboard::single(slot);
         let top = choices::yes_no(game, resolution, owner, top_or_bottom, about)?;

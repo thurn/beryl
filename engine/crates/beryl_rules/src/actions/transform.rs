@@ -169,10 +169,10 @@ pub(crate) fn return_instruction<L: Layout>(
     cards: Objects,
 ) -> Result<Outcome<L>, Full> {
     let cards = run.elsewhere_than(cards, Zone::Battlefield);
-    let you = run.you();
+    let taker = run.taker();
     for &slot in run.in_game_order(cards)?.iter() {
         let card = run.state().object_ref(slot);
-        return_transformed(run.game(), you, card)?;
+        return_transformed(run.game(), taker, card)?;
     }
     Ok(run.now_in(cards, Zone::Battlefield))
 }

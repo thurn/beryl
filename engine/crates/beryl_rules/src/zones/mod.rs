@@ -219,7 +219,7 @@ fn onto_battlefield<L: Layout>(
     let objects = run.elsewhere_than(objects, Zone::Battlefield);
     // "Under its owner's control" of a card in a shared zone, which has no owner, is under the
     // control of the player who performs the instruction.
-    let you = run.you();
+    let taker = run.taker();
     let game = run.game();
     let objects = objects.filter(|slot| {
         // A split card off the stack has both halves' card types (see CR 709.4c).
@@ -228,7 +228,7 @@ fn onto_battlefield<L: Layout>(
     });
     let (to, reason) = (Zone::Battlefield, Reason::Effect);
     let (s, t, sink) = (&mut *game.state, game.table, &mut *game.sink);
-    event::move_batch_by(s, t, sink, you, objects, to, reason, entry)?;
+    event::move_batch_by(s, t, sink, taker, objects, to, reason, entry)?;
     Ok(run.now_in(objects, Zone::Battlefield))
 }
 
@@ -298,11 +298,11 @@ pub(crate) fn put_into_graveyard_instruction<L: Layout>(
     // instead has moved already.
     let rest = stack::unstack(run.game(), objects, Zone::Graveyard)?;
     let mut moved = objects & !rest;
-    let you = run.you();
+    let taker = run.taker();
     for &slot in run.in_game_order(rest)?.iter() {
         let object = run.state().object_ref(slot);
         let pile = run.with_piles(Bitboard::single(slot));
-        move_to_by(run.game(), you, object, Zone::Graveyard, Reason::Effect)?;
+        move_to_by(run.game(), taker, object, Zone::Graveyard, Reason::Effect)?;
         if !run.state().is_current(object) {
             moved |= pile;
         }
@@ -328,11 +328,11 @@ pub(crate) fn put_instruction<L: Layout>(
     let found = run.with_piles(objects);
     // "Its owner's hand" of a card in a shared zone is the hand of the player who performs the
     // instruction, who takes it.
-    let you = run.you();
+    let taker = run.taker();
     let game = run.game();
     let rest = stack::unstack(game, objects, to)?;
     let (reason, entry) = (Reason::Effect, Entry::default());
     let (s, t, sink) = (&mut *game.state, game.table, &mut *game.sink);
-    event::move_batch_to_by(s, t, sink, you, rest, to, place, reason, entry)?;
+    event::move_batch_to_by(s, t, sink, taker, rest, to, place, reason, entry)?;
     Ok(run.now_in(found, to))
 }

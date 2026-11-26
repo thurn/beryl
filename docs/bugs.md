@@ -1595,3 +1595,25 @@ fixed in the same session. Newest first.
   split card with an instant half and a sorcery half to two. No type stops a
   reader from taking one face's characteristics directly; the review of the card
   shapes found this one by searching for readers of `definition(..).face(..)`.
+
+- **Controller queries and `defined_pt` read `Seat::P0` for cards in a shared
+  library or graveyard.** A card in a shared library or graveyard has no owner
+  (`!State::has_owner(slot)`) and stores `Seat::P0` as a placeholder in `owner`
+  and `base_controller`. `Players::ControllerOf`, `Run::remember`,
+  `Scene::controller`, `Scene::known`, and `State::defined_pt` read
+  `State::controller(slot)` without checking `State::has_owner(slot)`, so
+  `Seat::P1` resolving an effect on a card in or moved from a shared zone saw
+  `Seat::P0` as its controller, and a characteristic-defining ability counting
+  "creatures you control" off the battlefield counted `Seat::P0`'s creatures.
+  Also, `Run::you()` ignored `Registers::that_player` inside
+  `Effect::ForEachPlayer`, so instructions taking cards from a shared zone
+  credited the spell's controller instead of `that_player`. Fixed: `Scene` and
+  `Run` check `State::has_owner(slot)` and fall back to `taker()`
+  (`that_player`, else `you()`), instructions that take cards from a shared zone
+  use `Run::taker()`, and `State::defined_pt` treats an ownerless card's "you"
+  counts as zero. Prevention: `beryl_cards/tests/shared_zones.rs` covers
+  `Players::ControllerOf` before and after a move from a shared zone,
+  `Effect::ForEachPlayer` taking from a shared zone, and `State::defined_pt` in
+  a shared graveyard and library. No type prevents reading `State::controller`
+  on an ownerless slot; callers on off-battlefield cards must check
+  `State::has_owner`.

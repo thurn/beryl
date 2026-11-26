@@ -158,6 +158,18 @@ impl<L: Layout> Scene<'_, L> {
         self.subject.of.controller.seat()
     }
 
+    fn taker(&self) -> Seat {
+        self.registers.that_player.unwrap_or_else(|| self.you())
+    }
+
+    fn controller_now(&self, slot: L::Slot) -> Seat {
+        if self.s.has_owner(slot) {
+            self.s.controller(slot)
+        } else {
+            self.taker()
+        }
+    }
+
     /// The ability's source if it is still the object it was (see CR 400.7): a source that
     /// has changed zones since is a new object, which "this" no longer names.
     fn source(&self) -> Option<ObjectRef<L>> {
@@ -430,16 +442,10 @@ impl<L: Layout> Scene<'_, L> {
             // moved ([`Scene::controller`]). What any other name names is read where it is.
             Players::ControllerOf(objects) => {
                 let moved = objects == Objects::Those;
-                let mut who = self
-                    .objects(objects)
-                    .fold(PlayerSet::NOBODY, |mut who, slot| {
-                        who.insert(if moved {
-                            self.controller(slot)
-                        } else {
-                            self.s.controller(slot)
-                        });
-                        who
-                    });
+                let mut who = self.objects(objects).fold(PlayerSet::NOBODY, |mut who, s| {
+                    who.insert(self.controller(s, moved));
+                    who
+                });
                 // CR 608.2h: "if it’s no longer in that zone ... the effect uses the
                 // object’s last known information." A becomes-target-of-a-spell trigger
                 // remembers that spell's controller even if the spell has been countered.
@@ -467,19 +473,17 @@ impl<L: Layout> Scene<'_, L> {
             // shared library or graveyard has none, and "its owner" there is the player who
             // performs the instruction.
             Players::OwnerOf(objects) => {
-                let owner = |slot| {
-                    if self.s.has_owner(slot) {
-                        self.s.object(slot).owner()
+                let owner = |s| {
+                    if self.s.has_owner(s) {
+                        self.s.object(s).owner()
                     } else {
-                        self.you()
+                        self.taker()
                     }
                 };
-                let mut who = self
-                    .objects(objects)
-                    .fold(PlayerSet::NOBODY, |mut who, slot| {
-                        who.insert(owner(slot));
-                        who
-                    });
+                let mut who = self.objects(objects).fold(PlayerSet::NOBODY, |mut who, s| {
+                    who.insert(owner(s));
+                    who
+                });
                 if let Objects::Target(spec) = objects {
                     for object in self.targets(spec).filter_map(|(_, t)| t.as_object()) {
                         who.insert(owner(object.slot));
@@ -513,13 +517,13 @@ impl<L: Layout> Scene<'_, L> {
     /// else that the last instruction to move any set out to move, the player who controlled
     /// it as that instruction did ([`Registers::controlled`], CR 608.2h), and of any other
     /// its owner (see CR 108.4a).
-    fn controller(&self, slot: L::Slot) -> Seat {
-        let s = self.s;
-        let now = s.controller(slot);
-        if matches!(s.object(slot).zone(), Zone::Battlefield | Zone::Stack) {
+    fn controller(&self, slot: L::Slot, moved: bool) -> Seat {
+        let now = self.controller_now(slot);
+        if !moved || matches!(self.s.object(slot).zone(), Zone::Battlefield | Zone::Stack) {
             return now;
         }
-        s.players()
+        self.s
+            .players()
             .in_seat_order()
             .find(|player| self.registers.controlled[player.index()].contains(slot))
             .unwrap_or(now)
@@ -528,7 +532,7 @@ impl<L: Layout> Scene<'_, L> {
     /// What is known of the object in `slot` as it is now, for an effect about to move it.
     pub(crate) fn known(&self, slot: L::Slot) -> Known<L> {
         Known {
-            controller: self.s.controller(slot),
+            controller: self.controller_now(slot),
             copiable: Some(self.s.copiable(slot)),
             power: self.s.power(self.t, slot),
             toughness: self.s.toughness(self.t, slot),
