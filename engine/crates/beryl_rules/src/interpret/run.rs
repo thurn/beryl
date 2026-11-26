@@ -418,9 +418,11 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 modifications,
                 duration,
             } => continuous::instruction(self, objects, modifications, duration)?,
-            Effect::ChangeText { objects, duration } => {
-                crate::continuous::text::instruction(self, objects, duration)?
-            }
+            Effect::ChangeText {
+                objects,
+                words,
+                duration,
+            } => crate::continuous::text::instruction(self, objects, words, duration)?,
             Effect::ExchangeControl(first, second) => {
                 continuous::exchange_instruction(self, first, second)?
             }

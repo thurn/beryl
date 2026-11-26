@@ -408,10 +408,12 @@ impl Effect {
                         *found = found.union(given);
                     }
                 }
-                Effect::ChangeText { .. } => {
+                Effect::ChangeText { words, .. } if words.land_types() => {
                     *found = (BasicLandTypes::ALL.subtypes()).fold(*found, Subtypes::with);
                 }
-                Effect::Sequence(_)
+                // A change of color words alone makes no subtype word read otherwise.
+                Effect::ChangeText { .. }
+                | Effect::Sequence(_)
                 | Effect::If { .. }
                 | Effect::May { .. }
                 | Effect::Unless { .. }

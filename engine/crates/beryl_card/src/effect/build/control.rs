@@ -18,10 +18,15 @@ pub const fn modify(
     }
 }
 
-/// [`Effect::ChangeText`]: "change the text of [objects] by replacing all instances of one
-/// color word with another or one basic land type with another [duration]".
-pub const fn change_text(objects: Objects, duration: Duration) -> Effect {
-    Effect::ChangeText { objects, duration }
+/// [`Effect::ChangeText`]: "change the text of [objects] by replacing all instances of
+/// [words] [duration]", such as "one basic land type with another"
+/// ([`crate::TextWords::LandTypes`]).
+pub const fn change_text(objects: Objects, words: crate::TextWords, duration: Duration) -> Effect {
+    Effect::ChangeText {
+        objects,
+        words,
+        duration,
+    }
 }
 
 /// [`Effect::ExchangeControl`]: "exchange control of [first] and [second]".

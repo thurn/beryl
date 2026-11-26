@@ -18,7 +18,11 @@ use crate::prelude::*;
 pub static CARD: CardDef = Printed::MindBend
     .abilities(&[Ability::spell()
         .target(&TargetSpec::permanent(Filter::Any))
-        .effect(&change_text(target(), Duration::Indefinite))])
+        .effect(&change_text(
+            target(),
+            TextWords::ColorsAndLandTypes,
+            Duration::Indefinite,
+        ))])
     .card();
 
 #[cfg(feature = "scenarios")]

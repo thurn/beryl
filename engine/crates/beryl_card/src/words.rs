@@ -307,6 +307,54 @@ impl TextWord {
     }
 }
 
+/// Which words a text-changing effect may replace ([CR 612.2]): "A text-changing effect
+/// changes only those words that are used in the correct way". Mind Bend names color words
+/// and basic land types, Magical Hack only basic land types, and Sleight of Mind only color
+/// words. Its controller chooses the word to replace among these, and the new word is
+/// another of the same kind ([`TextWord::to`]).
+///
+/// [CR 612.2]: https://yawgatog.com/resources/magic-rules/#R6122
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum TextWords {
+    /// "one color word with another or one basic land type with another".
+    ColorsAndLandTypes,
+    /// "one color word with another".
+    Colors,
+    /// "one basic land type with another".
+    LandTypes,
+}
+
+impl TextWords {
+    /// Whether `word` is one of these.
+    pub const fn contains(self, word: TextWord) -> bool {
+        match (self, word) {
+            (TextWords::ColorsAndLandTypes, _)
+            | (TextWords::Colors, TextWord::Color(_))
+            | (TextWords::LandTypes, TextWord::LandType(_)) => true,
+            (TextWords::Colors, TextWord::LandType(_))
+            | (TextWords::LandTypes, TextWord::Color(_)) => false,
+        }
+    }
+
+    /// Whether these include the basic land types, so that a text change can make a word
+    /// read as any of the five.
+    pub const fn land_types(self) -> bool {
+        !matches!(self, TextWords::Colors)
+    }
+
+    /// How a card says them: "one color word with another or one basic land type with
+    /// another".
+    pub const fn phrase(self) -> &'static str {
+        match self {
+            TextWords::ColorsAndLandTypes => {
+                "one color word with another or one basic land type with another"
+            }
+            TextWords::Colors => "one color word with another",
+            TextWords::LandTypes => "one basic land type with another",
+        }
+    }
+}
+
 /// Color words: "red", "white and blue". Holds a set, since a card names several at once.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ColorWords(Colors);

@@ -19,7 +19,7 @@ pub static CARD: CardDef = Printed::CrystalSpray
     .abilities(&[Ability::spell()
         .target(&TargetSpec::one(TargetKind::SpellOrPermanent, Filter::Any))
         .effect(&sequence(&[
-            change_text(target(), Duration::EndOfTurn),
+            change_text(target(), TextWords::ColorsAndLandTypes, Duration::EndOfTurn),
             draw(you(), 1),
         ]))])
     .card();

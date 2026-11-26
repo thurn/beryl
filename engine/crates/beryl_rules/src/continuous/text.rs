@@ -6,7 +6,7 @@
 //!
 //! [CR 612.1]: https://yawgatog.com/resources/magic-rules/#R6121
 
-use beryl_card::{ChosenKind, Objects, Prompt, Purpose, TextWord, Zone};
+use beryl_card::{ChosenKind, Objects, Prompt, Purpose, TextWord, TextWords, Zone};
 
 use crate::card::Stop;
 use crate::continuous::lasting;
@@ -17,15 +17,18 @@ use crate::layout::{Layout, Queue};
 use crate::state::Continuous;
 
 /// [`Effect::ChangeText`](beryl_card::Effect::ChangeText): "change the text of [objects] by
-/// replacing all instances of one color word with another or one basic land type with
-/// another [duration]". The outcome is the objects changed.
+/// replacing all instances of [words] [duration]", where the words are "one color word with
+/// another or one basic land type with another" or one half of that. The outcome is the
+/// objects changed.
 ///
 /// The controller chooses the words as it resolves (see [CR 608.2d]): "If an effect of a spell or
 /// ability offers any choices other than choices already made as part of casting the spell,
 /// activating the ability, or otherwise putting the spell or ability on the stack, the player
-/// announces these while applying the effect." Any of the ten words may be replaced, one the
-/// object's text does not have included, which changes nothing; the new word is another of
-/// the same kind, since a color word is replaced with a color word and a land type with a land
+/// announces these while applying the effect." The controller answers two questions: which
+/// word to replace, among the words the effect names ([`TextWords`]: all ten, the five color
+/// words or the five basic land types), and what it becomes, among the four other words of
+/// its kind. A word the object's text does not have may be replaced, which changes nothing.
+/// The new word is another of the same kind, since a color word is replaced with a color word and a land type with a land
 /// type ([CR 612.2]): "A text-changing effect changes only those words that are used in the
 /// correct way".
 ///
@@ -39,6 +42,7 @@ use crate::state::Continuous;
 pub(crate) fn instruction<L: Layout>(
     run: &mut Run<'_, '_, L>,
     objects: Objects,
+    words: TextWords,
     duration: beryl_card::Duration,
 ) -> Result<Outcome<L>, Stop> {
     let you = run.resolution().entry.controller();
@@ -50,8 +54,18 @@ pub(crate) fn instruction<L: Layout>(
         return Ok(Outcome::NOTHING);
     }
     let (game, resolution) = run.resolving();
-    let from = (choices::catalog(game, resolution, you, ChosenKind::Word, named)?.word())
-        .expect("a word is chosen as a word");
+    let named_word = |n| TextWord::of_number(n).is_some_and(|word| words.contains(word));
+    let prompt = Prompt::new(Purpose::ReplaceWord);
+    let from = choices::catalog_among(
+        game,
+        resolution,
+        you,
+        ChosenKind::Word,
+        prompt,
+        named,
+        named_word,
+    )?;
+    let from = from.word().expect("a word is chosen as a word");
     let prompt = Prompt::new(Purpose::NewWord);
     let keep = |n| TextWord::of_number(n).and_then(|to| from.to(to)).is_some();
     let to = choices::catalog_among(game, resolution, you, ChosenKind::Word, prompt, named, keep)?;

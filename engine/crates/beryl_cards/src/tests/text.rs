@@ -1,7 +1,8 @@
 //! Text changes no oracle can check, played as scenarios here instead of in a card's file.
 //! `card diverge` records an oracle that is wrong only when the other oracle passes, and
 //! `XMage` has no Mind Bend and no Crystal Spray, so where Forge is wrong too nothing can be
-//! recorded.
+//! recorded. Magical Hack's attack and duration scenarios with Dandân are here with them, since
+//! Forge's Dandân, below, attacks as printed.
 //!
 //! A text change on a permanent spell goes on with the permanent the spell becomes
 //! ([CR 400.7a]): "Effects from spells, activated abilities, and triggered abilities that change
@@ -31,9 +32,11 @@
 //! [CR 707.9b]: https://yawgatog.com/resources/magic-rules/#R7079b
 
 use beryl_card::{Colors, Subtype, TextWord, TurnStep, Zone};
+use beryl_engine::DecisionKind;
 use beryl_scenario::Scenario;
 use beryl_scenario_types::prelude::{ME, P0, P1, Resolve, THEM, advance_to};
 
+use crate::props::Prop;
 use crate::{CARDS, names};
 
 const ISLAND: TextWord = TextWord::LandType(Subtype::Island);
@@ -70,7 +73,37 @@ const MIND_BEND_ON_DANDAN: Scenario =
             THEM.life(16),
         ]);
 
-/// Crystal Spray makes the same change until end of turn.
+/// Magical Hack makes the same change, and it lasts: Dandân attacks P1 again on P0's next
+/// turn.
+const MAGICAL_HACK_ON_DANDAN: Scenario =
+    Scenario::new("Magical Hack lets Dandân attack a player with a Swamp on later turns")
+        .interaction(&[names::DANDAN, names::MAGICAL_HACK])
+        .battlefield(P0, &[names::DANDAN, names::ISLAND, names::SWAMP])
+        .battlefield(P1, &[names::SWAMP])
+        .hand(P0, &[names::MAGICAL_HACK])
+        .library(P0, &[names::PLAINS])
+        .library(P1, &[names::PLAINS])
+        .actions(&[
+            ME.casts(names::MAGICAL_HACK),
+            ME.targets(names::DANDAN),
+            Resolve,
+            ME.chooses_word(ISLAND),
+            ME.chooses_word(SWAMP),
+            advance_to(1, TurnStep::BeginningOfCombat),
+            ME.passes(),
+            ME.attacks_with(names::DANDAN),
+            advance_to(1, TurnStep::EndOfCombat),
+            THEM.life(16),
+            advance_to(3, TurnStep::BeginningOfCombat),
+            ME.passes(),
+            ME.attacks_with(names::DANDAN),
+            advance_to(3, TurnStep::EndOfCombat),
+            THEM.life(12),
+        ]);
+
+/// Crystal Spray makes the same change until end of turn. By P0's next turn the change has
+/// ended and Dandân again needs the defending player to control an Island, so it can't attack
+/// P1, who controls only a Swamp: the attack question offers the flier and not Dandân.
 const CRYSTAL_SPRAY_ON_DANDAN: Scenario =
     Scenario::new("Crystal Spray lets Dandân attack a player who controls a Swamp")
         .interaction(&[names::DANDAN, names::CRYSTAL_SPRAY])
@@ -82,11 +115,13 @@ const CRYSTAL_SPRAY_ON_DANDAN: Scenario =
                 names::ISLAND,
                 names::ISLAND,
                 names::SWAMP,
+                Prop::Flier,
             ],
         )
         .battlefield(P1, &[names::SWAMP])
         .hand(P0, &[names::CRYSTAL_SPRAY])
-        .library(P0, &[names::ISLAND, names::ISLAND])
+        .library(P0, &[names::PLAINS, names::PLAINS])
+        .library(P1, &[names::PLAINS])
         .actions(&[
             ME.casts(names::CRYSTAL_SPRAY),
             ME.targets(names::DANDAN),
@@ -96,13 +131,21 @@ const CRYSTAL_SPRAY_ON_DANDAN: Scenario =
             advance_to(1, TurnStep::BeginningOfCombat),
             ME.passes(),
             ME.attacks_with(names::DANDAN),
+            ME.done_attacking(),
             advance_to(1, TurnStep::EndOfCombat),
             THEM.life(16),
+            advance_to(3, TurnStep::BeginningOfCombat),
+            ME.passes(),
+            ME.deciding(DecisionKind::Attacker, 2),
         ]);
 
 #[test]
 fn a_text_change_moves_dandans_attack_restriction_to_the_new_land_type() {
-    for scenario in [&MIND_BEND_ON_DANDAN, &CRYSTAL_SPRAY_ON_DANDAN] {
+    for scenario in [
+        &MIND_BEND_ON_DANDAN,
+        &MAGICAL_HACK_ON_DANDAN,
+        &CRYSTAL_SPRAY_ON_DANDAN,
+    ] {
         beryl_scenario::run(&CARDS, scenario).unwrap_or_else(|e| panic!("{e}"));
     }
 }

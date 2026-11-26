@@ -592,27 +592,33 @@ pub(super) fn local(effect: &'static Effect) -> Vec<(Kind, String, Effect)> {
         }
         Effect::ChangeText {
             objects: which,
+            words,
             duration,
         } => {
             for (name, which) in objects(which) {
+                let objects = which;
                 add(
                     Kind::EffectObjects,
                     name,
                     Effect::ChangeText {
-                        objects: which,
+                        objects,
+                        words,
                         duration,
                     },
                 );
             }
             for other in [Duration::EndOfTurn, Duration::Indefinite] {
                 if other != duration {
+                    let (objects, duration) = (which, other);
+                    let mutant = Effect::ChangeText {
+                        objects,
+                        words,
+                        duration,
+                    };
                     add(
                         Kind::TextChangeDuration,
                         format!("lasting {other:?}"),
-                        Effect::ChangeText {
-                            objects: which,
-                            duration: other,
-                        },
+                        mutant,
                     );
                 }
             }

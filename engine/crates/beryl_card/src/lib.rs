@@ -82,7 +82,8 @@ pub use target::{Abilities, Takes, TargetKind, TargetSpec};
 pub use trigger::{CastNumber, Subject, Trigger, TriggerEvent};
 pub use walk::Node;
 pub use words::{
-    ColorChanges, ColorWords, LandTypeWords, SubtypeWord, SubtypeWords, TextChange, TextWord, Words,
+    ColorChanges, ColorWords, LandTypeWords, SubtypeWord, SubtypeWords, TextChange, TextWord,
+    TextWords, Words,
 };
 
 /// Everything a card file uses: the vocabulary's types and its builders,
@@ -101,7 +102,7 @@ pub mod prelude {
         LibraryOrder, LibraryPosition, ManaColor, ManaCost, ManaRestriction, ManaSet, Modification,
         Named, Objects, Place, PlayerRules, Players, Prevention, Prompt, Protection, Purpose,
         PutOnto, Recipients, Replacement, RuleChange, SpellCost, Subtype, Subtypes, Supertypes,
-        Taken, TargetKind, TargetSpec, TextWord, Trigger, TriggerEvent, TurnPhase, TurnStep, Types,
-        When, Zone, ZoneSet, card, card_with_shape, mana,
+        Taken, TargetKind, TargetSpec, TextWord, TextWords, Trigger, TriggerEvent, TurnPhase,
+        TurnStep, Types, When, Zone, ZoneSet, card, card_with_shape, mana,
     };
 }

@@ -1754,6 +1754,70 @@
       ]
     }
   ],
+  "Magical Hack": [
+    {
+      "published_at": "2004-10-04",
+      "hash": "46748c8c95b1",
+      "covered": "Effect::ChangeText"
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "26403c02eaea",
+      "scenario": [
+        "Magical Hack asks for a land type and then another"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "2a1b51c74b99",
+      "scenario": [
+        "Magical Hack asks for a land type and then another"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "361fc63c8397",
+      "scenario": [
+        "Magical Hack makes a Forest an Island"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "d41fe6a92e4c",
+      "scenario": [
+        "Magical Hack on a Dandân spell carries to the permanent"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "345b2c3ca4e8",
+      "scenario": [
+        "Magical Hack asks for a land type and then another"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "bd3621651aa3",
+      "scenario": [
+        "Magical Hack makes a Forest an Island"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "4bc242f708ba",
+      "scenario": [
+        "Magical Hack makes a Forest an Island",
+        "Magical Hack has Dandân sacrificed for want of a Swamp"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "05016333d9f7",
+      "scenario": [
+        "Crystal Spray makes a spell's chosen target illegal"
+      ]
+    }
+  ],
   "Master of the Hunt": [
     {
       "published_at": "2004-10-04",

@@ -241,10 +241,14 @@ impl Ctx {
                 let text = self.modify(objects, modifications);
                 vec![format!("{text}{}", duration_suffix(duration))]
             }
-            Effect::ChangeText { objects, duration } => vec![format!(
-                "change the text of {} by replacing all instances of one color word with \
-                 another or one basic land type with another{}",
+            Effect::ChangeText {
+                objects,
+                words,
+                duration,
+            } => vec![format!(
+                "change the text of {} by replacing all instances of {}{}",
                 self.objects(objects),
+                words.phrase(),
                 duration_suffix(duration)
             )],
             Effect::ChangeRule { rule, duration } => self.change_rule(rule, duration),
