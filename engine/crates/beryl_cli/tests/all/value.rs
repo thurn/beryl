@@ -92,6 +92,17 @@ fn value_test_runs_over_a_match_and_repeats() {
     };
     let first = written("one");
     assert_eq!(first, written("two"));
+    // Reversing `games.jsonl` simulates games finishing in a different parallel order or after
+    // a kill and rerun; the value report must stay identical.
+    let games_path = dir.join("games.jsonl");
+    let lines: Vec<String> = std::fs::read_to_string(&games_path)
+        .unwrap()
+        .lines()
+        .map(str::to_owned)
+        .collect();
+    let reversed = lines.into_iter().rev().collect::<Vec<_>>().join("\n") + "\n";
+    std::fs::write(&games_path, reversed).unwrap();
+    assert_eq!(first, written("reversed"));
     let names: Vec<&str> = first["predictors"]
         .as_array()
         .unwrap()

@@ -1,0 +1,154 @@
+{
+  "name": "strength-1",
+  "stages": [
+    {
+      "id": "positions",
+      "kind": "positions",
+      "games": 250,
+      "seed": 1,
+      "work": "3M"
+    },
+    {
+      "id": "bonus-gate",
+      "kind": "gate",
+      "challenger": "turnbudget72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker+bonus",
+      "champion": "turnbudget72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker"
+    },
+    {
+      "id": "bonus",
+      "kind": "match",
+      "challenger": "turnbudget72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker+bonus",
+      "champion": "turnbudget72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker",
+      "work": "3M",
+      "bar": "stronger",
+      "cap": 1200,
+      "seed": 1
+    },
+    {
+      "id": "audit",
+      "kind": "match",
+      "challenger": "turnbudget72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker@10M",
+      "champion": "pimc72/hidden/rollout/tuned/anchor+guard@10M",
+      "work": "10M",
+      "bar": "audit",
+      "cap": 400,
+      "seed": 2
+    },
+    {
+      "id": "fitroll-gate",
+      "kind": "gate",
+      "challenger": "turnbudget72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker+fitroll",
+      "champion": "turnbudget72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker"
+    },
+    {
+      "id": "fitroll",
+      "kind": "match",
+      "challenger": "turnbudget72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker+fitroll",
+      "champion": "turnbudget72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker",
+      "work": "3M",
+      "bar": "stronger",
+      "cap": 600,
+      "seed": 3
+    },
+    {
+      "id": "fitroot-gate",
+      "kind": "gate",
+      "challenger": "turnbudget72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker+fitroot",
+      "champion": "turnbudget72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker"
+    },
+    {
+      "id": "fitroot",
+      "kind": "match",
+      "challenger": "turnbudget72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker+fitroot",
+      "champion": "turnbudget72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker",
+      "work": "3M",
+      "bar": "stronger",
+      "cap": 600,
+      "seed": 4
+    },
+    {
+      "id": "budget-10",
+      "kind": "match",
+      "challenger": "turnbudget72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker@10M",
+      "champion": "turnbudget72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker@3M",
+      "work": "3M",
+      "bar": "audit",
+      "cap": 400,
+      "seed": 5
+    },
+    {
+      "id": "budget-30",
+      "kind": "match",
+      "challenger": "turnbudget72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker@30M",
+      "champion": "turnbudget72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker@10M",
+      "work": "10M",
+      "bar": "audit",
+      "cap": 400,
+      "seed": 6
+    },
+    {
+      "id": "race-gate",
+      "kind": "gate",
+      "challenger": "turnbudget72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker+race",
+      "champion": "turnbudget72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker"
+    },
+    {
+      "id": "race",
+      "kind": "match",
+      "challenger": "turnbudget72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker+race",
+      "champion": "turnbudget72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker",
+      "work": "3M",
+      "bar": "stronger",
+      "cap": 1200,
+      "seed": 7
+    },
+    {
+      "id": "prior",
+      "kind": "match",
+      "challenger": "turnbudget72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker+prior",
+      "champion": "turnbudget72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker",
+      "work": "3M",
+      "bar": "audit",
+      "cap": 100,
+      "seed": 8
+    },
+    {
+      "id": "bonus-ext",
+      "kind": "match",
+      "extends": "bonus",
+      "cap": 2000
+    },
+    {
+      "id": "race-ext",
+      "kind": "match",
+      "extends": "race",
+      "cap": 2000
+    },
+    {
+      "id": "budget-30-ext",
+      "kind": "match",
+      "extends": "budget-30",
+      "cap": 800
+    },
+    {
+      "id": "audit-ext",
+      "kind": "match",
+      "extends": "audit",
+      "cap": 800
+    },
+    {
+      "id": "value",
+      "kind": "value-test",
+      "matches": [
+        "bonus",
+        "audit",
+        "fitroll",
+        "fitroot",
+        "budget-10",
+        "budget-30",
+        "race",
+        "prior"
+      ]
+    }
+  ]
+}

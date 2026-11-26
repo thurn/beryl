@@ -73,7 +73,8 @@ impl GameLine {
     }
 }
 
-/// The finished games of the run or match in `dir`, crashed ones left out.
+/// The finished games of the run or match in `dir`, crashed ones left out, sorted by game id so
+/// replay order does not depend on parallel completion order or crash resumption.
 pub fn games(dir: &Path) -> Result<Vec<GameLine>, String> {
     let path = dir.join("games.jsonl");
     let text = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
@@ -84,6 +85,7 @@ pub fn games(dir: &Path) -> Result<Vec<GameLine>, String> {
             games.push(g);
         }
     }
+    games.sort_by(|a, b| a.game.cmp(&b.game));
     Ok(games)
 }
 

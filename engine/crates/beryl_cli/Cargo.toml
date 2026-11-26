@@ -37,6 +37,8 @@ windows-sys = { version = "0.61.2", features = ["Win32_System_Threading"] }
 [dev-dependencies]
 # The integration tests' catalog (`tests/all/common.rs`): the commands played with every card.
 beryl_cards = { path = "../beryl_cards", features = ["scenarios"] }
+# Records checkout files opened by tests so Ignite's check-input hash covers them.
+beryl_test_files = { path = "../beryl_test_files" }
 # Every shared dependency with the whole workspace's features, so that a build of this
 # package's tests alone builds what the whole workspace's does (beryl_workspace_hack).
 beryl_workspace_hack = { path = "../beryl_workspace_hack" }

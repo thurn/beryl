@@ -287,6 +287,56 @@ first, at 10M over 200 games, and unsets the first one that scores under 45%.
   `rust/crates/beryl_bench/count-gate.toml`: update the pinned rollouts and the
   bar in the same change, with the old and new counts in the commit body.
 
+### 4.7 A campaign: a run with no session
+
+A campaign runs several measurements back to back under one command, with no
+agent session watching:
+
+`just campaign data/campaigns/<name>.json [--hours N] [--smoke] [--accept-commit]`
+
+- **What it runs.** A plan file lists stages in priority order: building a
+  position set (`positions`), running the blunder suite (`gate`), playing a
+  paired match (`match`, optionally extending an earlier match to a higher cap
+  if it ended undecided), and running the value test over the matches' games
+  (`value-test`, which runs last and is exempt from the time limit). Before
+  starting the real stages, `just campaign` runs the whole plan in miniature
+  (`--smoke`: 10k work, cap 4, 4 positions, 1 gate seed) and stops if any stage
+  fails.
+- **No promotions during a campaign.** Every match plays the exact families
+  named in the plan on one checked-out commit. Nothing changes `DEEP_SEARCHER`,
+  `docs/ladder.md`, or `docs/ai-plan.md` while the campaign runs.
+- **Directory and report.** State and game logs live under
+  `$BERYL_CACHE/campaign/<name>/` (with the smoke preflight in
+  `$BERYL_CACHE/campaign/<name>-smoke/`). Each stage runs as its own child
+  process and writes to its subdirectory; `state.jsonl` records stage outcomes
+  and `report.txt` is rewritten after every stage. Re-running the same command
+  after a crash, kill, or reboot resumes from the last unfinished stage and the
+  last finished game in it.
+- **Judging afterwards.** When the run finishes, a session reads `report.txt`,
+  applies §4.4's guidance to each gate and match result, adds a row to
+  `docs/ladder.md` for every match stage, updates §1 with any reference audit,
+  and promotes any winning challenger under §4.6.
+
+The first plan, `data/campaigns/strength-1.json`, tests four search options, the
+10M reference audit, budget scaling, and the value model against the champion
+(`CH` =
+`turnbudget72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker`,
+`REF` = `pimc72/hidden/rollout/tuned/anchor+guard`):
+
+| Order | Stage                                                 | Kind                | What it plays                                                                   |
+| ----- | ----------------------------------------------------- | ------------------- | ------------------------------------------------------------------------------- |
+| 1     | `positions`                                           | `positions`         | 250 champion games at 3M, cut into start positions                              |
+| 2     | `bonus-gate`, `bonus`                                 | `gate`, `match`     | Suite, then `CH+bonus` v `CH`, 3M, `stronger`, cap 1200, seed 1                 |
+| 3     | `audit`                                               | `match`             | `CH@10M` v `REF@10M`, `audit`, cap 400, seed 2                                  |
+| 4     | `fitroll-gate`, `fitroll`                             | `gate`, `match`     | Suite, then `CH+fitroll` v `CH`, 3M, `stronger`, cap 600, seed 3                |
+| 5     | `fitroot-gate`, `fitroot`                             | `gate`, `match`     | Suite, then `CH+fitroot` v `CH`, 3M, `stronger`, cap 600, seed 4                |
+| 6     | `budget-10`                                           | `match`             | `CH@10M` v `CH@3M`, `audit`, cap 400, seed 5                                    |
+| 7     | `budget-30`                                           | `match`             | `CH@30M` v `CH@10M`, `audit`, cap 400, seed 6                                   |
+| 8     | `race-gate`, `race`                                   | `gate`, `match`     | Suite, then `CH+race` v `CH`, 3M, `stronger`, cap 1200, seed 7                  |
+| 9     | `prior`                                               | `match`             | `CH+prior` v `CH`, 3M, `audit`, cap 100, seed 8                                 |
+| 10    | `bonus-ext`, `race-ext`, `budget-30-ext`, `audit-ext` | `match` (`extends`) | `bonus` and `race` to cap 2000 if undecided; `budget-30` and `audit` to cap 800 |
+| 11    | `value`                                               | `value-test`        | Value test over all eight matches above                                         |
+
 ## 5. The blunder suite
 
 A ledger of every blunder a human has caught: `data/blunders.json`.

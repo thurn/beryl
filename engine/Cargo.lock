@@ -318,6 +318,7 @@ dependencies = [
  "beryl_session",
  "beryl_table",
  "beryl_table_session",
+ "beryl_test_files",
  "beryl_workspace_hack",
  "ctrlc",
  "serde",

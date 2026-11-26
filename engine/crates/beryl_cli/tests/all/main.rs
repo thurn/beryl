@@ -1,6 +1,7 @@
 //! The commands played with every implemented card, through the library's public API.
 
 mod blunders;
+mod campaign;
 mod common;
 mod fit;
 mod fixture;
