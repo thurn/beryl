@@ -70,8 +70,8 @@ pub use definition::{
 };
 pub use effect::{
     Amount, CastFace, CastTerms, Comparison, Condition, CopyChange, CopyException, Effect,
-    ExileMatch, Found, LibraryOrder, LibraryPosition, Objects, Players, Prevention, PutOnto,
-    Recipients, Regeneration, Taken,
+    ExileMatch, Found, LibraryOrder, LibraryPosition, LibraryRest, Objects, Players, Prevention,
+    PutOnto, Recipients, Regeneration, Taken,
 };
 pub use filter::Filter;
 pub use ids::{Seat, TurnPhase, TurnStep, Zone, ZoneSet};
@@ -99,10 +99,10 @@ pub mod prelude {
         CastingOption, Castings, ChosenKind, Colors, Comparison, Condition, CopyChange,
         CopyException, Cost, CostAction, CostPart, CounterKind, DeckCondition, Duration, Effect,
         ExceptIx, ExileMatch, Face, FaceIx, Filter, Found, Governed, GrantIx, Keywords, LayerSpec,
-        LibraryOrder, LibraryPosition, ManaColor, ManaCost, ManaRestriction, ManaSet, Modification,
-        Named, Objects, Place, PlayerRules, Players, Prevention, Prompt, Protection, Purpose,
-        PutOnto, Recipients, Replacement, RuleChange, SpellCost, Subtype, Subtypes, Supertypes,
-        Taken, TargetKind, TargetSpec, TextWord, TextWords, Trigger, TriggerEvent, TurnPhase,
-        TurnStep, Types, When, Zone, ZoneSet, card, card_with_shape, mana,
+        LibraryOrder, LibraryPosition, LibraryRest, ManaColor, ManaCost, ManaRestriction, ManaSet,
+        Modification, Named, Objects, Place, PlayerRules, Players, Prevention, Prompt, Protection,
+        Purpose, PutOnto, Recipients, Replacement, RuleChange, SpellCost, Subtype, Subtypes,
+        Supertypes, Taken, TargetKind, TargetSpec, TextWord, TextWords, Trigger, TriggerEvent,
+        TurnPhase, TurnStep, Types, When, Zone, ZoneSet, card, card_with_shape, mana,
     };
 }

@@ -5,7 +5,8 @@ use super::Ctx;
 use super::filters::{Kind, zone_name};
 use super::words::{number, ordinal, with_article};
 use crate::effect::{
-    Amount, Effect, ExileMatch, LibraryOrder, LibraryPosition, Objects, Players, PutOnto, Taken,
+    Amount, Effect, ExileMatch, LibraryOrder, LibraryPosition, LibraryRest, Objects, Players,
+    PutOnto, Taken,
 };
 use crate::ids::{Zone, ZoneSet};
 
@@ -33,26 +34,78 @@ impl Ctx {
         player: Players,
         look: Amount,
         take: Taken,
-        rest: LibraryOrder,
+        top: u8,
+        rest: LibraryRest,
     ) -> Vec<String> {
+        if matches!(take, Taken::None) && top == 0 && rest == LibraryRest::Top {
+            let looks = self.clause(player, ("look", "looks"), |c| {
+                let put = c.verb("put", "puts");
+                format!(
+                    "at {}, then {put} them back in any order",
+                    c.top_cards(player, look)
+                )
+            });
+            return vec![looks];
+        }
         let looks = self.clause(player, ("look", "looks"), |c| {
             format!("at {}", c.top_cards(player, look))
         });
-        let order = match rest {
-            LibraryOrder::Any => "any order",
-            LibraryOrder::Random => "a random order",
+        let rest_place = |library: &str| match rest {
+            LibraryRest::Bottom(LibraryOrder::Any) => {
+                format!("on the bottom of {library} library in any order")
+            }
+            LibraryRest::Bottom(LibraryOrder::Random) => {
+                format!("on the bottom of {library} library in a random order")
+            }
+            LibraryRest::Top => format!("on top of {library} library in any order"),
         };
         let takes = match take {
-            // One sentence puts both piles: "Put two of them into your hand and the rest on
-            // the bottom of your library in any order."
+            Taken::None => {
+                let puts = self.clause(player, ("put", "puts"), |c| {
+                    let library = c.possessive(player);
+                    let tail = rest_place(&library);
+                    if top > 0 {
+                        format!(
+                            "{} of them on top of {library} library and the rest {tail}",
+                            number(top)
+                        )
+                    } else {
+                        format!("them {tail}")
+                    }
+                });
+                return vec![looks, puts];
+            }
+            // One sentence puts every pile.
             Taken::Put(n) => {
                 let both = self.clause(player, ("put", "puts"), |c| {
                     let library = c.possessive(player);
-                    format!(
-                        "{} of them into {library} hand and the rest on the bottom of \
-                         {library} library in {order}",
-                        number(n)
-                    )
+                    if top > 0 {
+                        if let Amount::Fixed(total) = look
+                            && matches!(rest, LibraryRest::Bottom(_))
+                            && u16::from(n) + u16::from(top) + 1 == u16::from(total)
+                        {
+                            format!(
+                                "{} of those cards into {library} hand, {} on top of {library} \
+                                 library, and one on the bottom of {library} library",
+                                number(n),
+                                number(top)
+                            )
+                        } else {
+                            let tail = rest_place(&library);
+                            format!(
+                                "{} of those cards into {library} hand, {} on top of {library} \
+                                 library, and the rest {tail}",
+                                number(n),
+                                number(top)
+                            )
+                        }
+                    } else {
+                        let tail = rest_place(&library);
+                        format!(
+                            "{} of them into {library} hand and the rest {tail}",
+                            number(n)
+                        )
+                    }
                 });
                 return vec![looks, both];
             }
@@ -70,13 +123,19 @@ impl Ctx {
                 })
             }
         };
-        let rest = self.clause(player, ("put", "puts"), |c| {
-            format!(
-                "the rest on the bottom of {} library in {order}",
-                c.possessive(player)
-            )
+        let rest_clause = self.clause(player, ("put", "puts"), |c| {
+            let library = c.possessive(player);
+            let tail = rest_place(&library);
+            if top > 0 {
+                format!(
+                    "{} of the rest on top of {library} library and the rest {tail}",
+                    number(top)
+                )
+            } else {
+                format!("the rest {tail}")
+            }
         });
-        vec![looks, takes, rest]
+        vec![looks, takes, rest_clause]
     }
 
     /// "Look at the top card of target player's library. You may put that card on the

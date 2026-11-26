@@ -46,6 +46,6 @@ pub use operands::Operands;
 pub use reference::{Objects, Players, Recipients};
 pub use terms::{
     CastFace, CastTerms, CopyChange, CopyException, ExileMatch, Found, LibraryOrder,
-    LibraryPosition, Prevention, PutOnto, Regeneration, Taken,
+    LibraryPosition, LibraryRest, Prevention, PutOnto, Regeneration, Taken,
 };
 pub(crate) use traversal::Branches;

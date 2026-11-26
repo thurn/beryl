@@ -527,6 +527,13 @@
     }
   ],
   "Braingeyser": [],
+  "Brainstorm": [
+    {
+      "published_at": "2018-03-16",
+      "hash": "0e933ddc6706",
+      "covered": "Effect::Sequence"
+    }
+  ],
   "Brisela, Voice of Nightmares": [
     {
       "published_at": "2016-07-13",
@@ -2947,6 +2954,16 @@
       "published_at": "2017-08-25",
       "hash": "66faa379ad79",
       "untestable": "The Skydiver scenario covers a continuing change of control. A temporary theft spell such as Act of Treason needs a mandatory untap effect. The part about a player leaving needs a multiplayer scenario."
+    }
+  ],
+  "Telling Time": [
+    {
+      "published_at": "2005-10-01",
+      "hash": "cece22435116",
+      "scenario": [
+        "Telling Time with two cards puts one in hand and one on top",
+        "Telling Time with one card puts it into hand"
+      ]
     }
   ],
   "Tendrils of Agony": [

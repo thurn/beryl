@@ -105,7 +105,7 @@ const fn chosen_for(cost: &Cost) -> Option<&Filter> {
 /// The filter of the cards an [`Effect::Dig`] may take, where it has one.
 const fn taken_of(take: &Taken) -> Option<&Filter> {
     match take {
-        Taken::Put(_) => None,
+        Taken::None | Taken::Put(_) => None,
         Taken::MayReveal(filter) => Some(filter),
     }
 }

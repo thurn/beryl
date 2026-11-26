@@ -359,8 +359,9 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 player,
                 look,
                 take,
+                top,
                 rest,
-            } => library::dig_instruction(self, player, look, take, rest)?,
+            } => library::dig_instruction(self, player, look, take, top, rest)?,
             Effect::Fateseal {
                 player,
                 library,

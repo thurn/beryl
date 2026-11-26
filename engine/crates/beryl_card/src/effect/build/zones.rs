@@ -2,8 +2,8 @@
 //! mill and otherwise look through a library.
 
 use crate::effect::{
-    Amount, Effect, Found, LibraryOrder, LibraryPosition, Objects, Players, PutOnto, Regeneration,
-    Taken,
+    Amount, Effect, Found, LibraryOrder, LibraryPosition, LibraryRest, Objects, Players, PutOnto,
+    Regeneration, Taken,
 };
 use crate::filter::Filter;
 use crate::ids::Zone;
@@ -134,7 +134,39 @@ pub const fn dig(player: Players, look: u8, take: Taken, rest: LibraryOrder) -> 
         player,
         look: Amount::Fixed(look),
         take,
-        rest,
+        top: 0,
+        rest: LibraryRest::Bottom(rest),
+    }
+}
+
+/// [`Effect::Dig`]: "[player] looks at the top [look] cards of their library", takes some
+/// into their hand, puts `top` on top of their library in any order, and puts the rest on
+/// the bottom.
+pub const fn dig_with_top(
+    player: Players,
+    look: u8,
+    take: Taken,
+    top: u8,
+    rest: LibraryOrder,
+) -> Effect {
+    Effect::Dig {
+        player,
+        look: Amount::Fixed(look),
+        take,
+        top,
+        rest: LibraryRest::Bottom(rest),
+    }
+}
+
+/// [`Effect::Dig`]: "[player] looks at the top [look] cards of their library, then puts them
+/// back in any order".
+pub const fn reorder_top(player: Players, look: u8) -> Effect {
+    Effect::Dig {
+        player,
+        look: Amount::Fixed(look),
+        take: Taken::None,
+        top: 0,
+        rest: LibraryRest::Top,
     }
 }
 

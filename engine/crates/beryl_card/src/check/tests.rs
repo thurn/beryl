@@ -8,7 +8,7 @@ use crate::effect::build::{
     sequence, shuffle_into, target, target_player, that_player, those, unless, unless_pays,
     untap_up_to, you,
 };
-use crate::effect::{Found, LibraryOrder, Taken};
+use crate::effect::{Found, LibraryOrder, LibraryRest, Taken};
 use crate::ids::TurnStep;
 use crate::index::ExceptIx;
 use crate::mana::mana;
@@ -303,7 +303,8 @@ fn the_operands_of_every_entry_are_checked() {
         player: you(),
         look: Amount::ManaValue(target()),
         take: Taken::Put(1),
-        rest: LibraryOrder::Random,
+        top: 0,
+        rest: LibraryRest::Bottom(LibraryOrder::Random),
     })];
     const FATESEAL: &[Ability] = &[Ability::spell().effect(&fateseal(you(), target_player()))];
     const SEARCH: &[Ability] =

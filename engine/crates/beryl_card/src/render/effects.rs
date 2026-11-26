@@ -149,8 +149,9 @@ impl Ctx {
                 player,
                 look,
                 take,
+                top,
                 rest,
-            } => self.dig(player, look, take, rest),
+            } => self.dig(player, look, take, top, rest),
             Effect::Fateseal {
                 player,
                 library,

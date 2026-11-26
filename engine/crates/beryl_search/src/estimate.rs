@@ -228,6 +228,7 @@ impl Effects {
                 ..
             } => {
                 e.cards = match take {
+                    Taken::None => 0,
                     Taken::Put(n) => i16::from(n),
                     Taken::MayReveal(_) => 1,
                 };

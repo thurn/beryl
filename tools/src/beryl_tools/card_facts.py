@@ -585,8 +585,8 @@ class Cards:
         cards for the hand as one target list and the bottom order, in the same sense, from
         the choice queue."""
         dig = self.instruction(card, "Dig", face)
-        take = dig.get("take") if dig is not None else None
-        return take if isinstance(take, int) else None
+        take = None if dig is None or dig.get("top") else dig.get("take")
+        return take if isinstance(take, int) and take > 0 else None
 
     def flips_a_coin_each_turn(self, card: str) -> bool:
         """Whether `card` has a triggered ability at a step of each turn that flips a coin."""

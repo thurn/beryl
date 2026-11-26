@@ -207,6 +207,9 @@ pub struct Instruction {
     /// A dig's cards taken into the hand: a number, or `MayReveal` for "you may reveal one".
     #[serde(skip_serializing_if = "Option::is_none")]
     pub take: Option<Value>,
+    /// A dig's cards put on top of the library before the rest.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub top: Option<u8>,
     /// A dig's order for the rest, or where a search puts what it finds.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rest: Option<String>,
@@ -445,12 +448,19 @@ fn leaf(effect: &Effect, shape: &Shape) -> Instruction {
             out.optional = optional;
             out.hidden = hidden;
         }
-        Effect::Dig { take, rest, .. } => {
+        Effect::Dig {
+            take, top, rest, ..
+        } => {
             out.take = Some(match take {
+                Taken::None => Value::from(0),
                 Taken::Put(n) => Value::from(n),
                 Taken::MayReveal(_) => Value::from("MayReveal"),
             });
-            out.rest = Some(variant(&rest));
+            out.top = (top > 0).then_some(top);
+            out.rest = Some(match rest {
+                beryl_card::LibraryRest::Bottom(order) => variant(&order),
+                beryl_card::LibraryRest::Top => "Top".to_owned(),
+            });
         }
         Effect::Search { found, .. } => out.rest = Some(variant(&found)),
         Effect::DealDamage {

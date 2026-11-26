@@ -289,6 +289,7 @@ pub(super) fn local(effect: &'static Effect) -> Vec<(Kind, String, Effect)> {
             player,
             look,
             take,
+            top,
             rest,
         } => {
             player_count(
@@ -298,6 +299,7 @@ pub(super) fn local(effect: &'static Effect) -> Vec<(Kind, String, Effect)> {
                     player,
                     look,
                     take,
+                    top,
                     rest,
                 },
                 &mut add,

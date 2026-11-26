@@ -169,6 +169,8 @@ pub enum CopyChange {
 /// Which of the cards a player looks at they take into their hand ([`Effect::Dig`]).
 #[derive(Clone, Copy, Debug)]
 pub enum Taken {
+    /// Take none into your hand: all cards looked at go back to the library.
+    None,
     /// "Put [n] of them into your hand": that many, of the player's choice, or all of them
     /// if there are no more (CR 609.3).
     Put(u8),
@@ -190,6 +192,15 @@ pub enum LibraryOrder {
     Any,
     /// "In a random order".
     Random,
+}
+
+/// Where the remaining cards of an [`Effect::Dig`] go and in what order (CR 401.4).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum LibraryRest {
+    /// "On the bottom of [their] library in [order]".
+    Bottom(LibraryOrder),
+    /// Back on top of their library in any order.
+    Top,
 }
 
 /// Where the cards a search finds go ([`Effect::Search`]).

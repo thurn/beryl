@@ -11,7 +11,7 @@ use crate::mana::{ManaColor, ManaSet};
 use crate::prompt::Prompt;
 
 use crate::effect::{
-    Amount, CastFace, CastTerms, Condition, ExileMatch, Found, LibraryOrder, LibraryPosition,
+    Amount, CastFace, CastTerms, Condition, ExileMatch, Found, LibraryPosition, LibraryRest,
     Objects, Players, Prevention, PutOnto, Recipients, Regeneration, Taken,
 };
 
@@ -270,16 +270,18 @@ pub enum Effect {
     /// ([CR 701.24d](https://yawgatog.com/resources/magic-rules/#R70124d)).
     ShuffleInto { player: Players, cards: Objects },
     /// "[Player] looks at the top [look] cards of their library", takes some of them into
-    /// their hand ([`Taken`]) and puts "the rest on the bottom of their library" in an order
-    /// ([`LibraryOrder`]). Looking at cards of a library is an exception to
-    /// [CR 401.2](https://yawgatog.com/resources/magic-rules/#R4012): "Players can't look at
-    /// or change the order of cards in a library." With fewer cards in the library, the
-    /// player looks at them all (CR 609.3).
+    /// their hand ([`Taken`]), puts `top` of them on top of their library in any order, and
+    /// puts the rest where [`LibraryRest`] names. Looking at cards of a library is an
+    /// exception to [CR 401.2](https://yawgatog.com/resources/magic-rules/#R4012): "Players
+    /// can't look at or change the order of cards in a library." With fewer cards in the
+    /// library, the player looks at them all and follows the instructions in order for the
+    /// cards that are there (CR 609.3).
     Dig {
         player: Players,
         look: Amount,
         take: Taken,
-        rest: LibraryOrder,
+        top: u8,
+        rest: LibraryRest,
     },
     /// "[Player] looks at the top [count] cards of [library]'s library and may put them on
     /// the bottom of that library", as to fateseal, of any player's library
