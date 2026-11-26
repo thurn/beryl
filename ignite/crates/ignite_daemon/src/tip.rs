@@ -73,7 +73,7 @@ mod work;
 #[cfg(test)]
 mod tests;
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::sync::Arc;
 
@@ -301,6 +301,10 @@ pub trait TipWork: Send + Sync {
     /// name.
     fn covered_by(&self) -> BTreeMap<String, String> {
         BTreeMap::new()
+    }
+    /// Families declared `single_batch = true`, whose tip checks run in one claimable batch.
+    fn single_batch(&self) -> BTreeSet<String> {
+        BTreeSet::new()
     }
     /// The landings after `from` up to and including `to`, oldest first.
     fn landings(&self, ctx: &Context, from: &Commit, to: &Commit) -> Result<Vec<TipLanding>>;

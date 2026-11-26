@@ -349,3 +349,48 @@ fn a_command_started_directly_in_the_tree_keeps_its_build_outputs() {
     });
     assert!(!output.exists());
 }
+
+#[test]
+fn admission_evicts_free_ticket_trees_before_older_landing_trees() {
+    let f = Fixture::with_landing(2, 2, 1);
+    set_slot_budget(&f, 3);
+
+    // Populate both landing trees and release landing-1 first so its last_used is older than
+    // the ticket tree's, while landing-2 stays leased so all three slots are occupied.
+    f.clock.advance(1.0);
+    let landing = f.trees.lease_landing("tip", &f.tip()).unwrap().unwrap();
+    write(&landing.path, "out/compiled", "landing-1");
+    let landing2 = f.trees.lease_landing("tip-2", &f.tip()).unwrap().unwrap();
+    write(&landing2.path, "out/compiled", "landing-2");
+    assert_ne!(landing.tree, landing2.tree);
+    f.trees
+        .release_landing(&landing.tree, Some(&f.tip()))
+        .unwrap();
+
+    f.clock.advance(10.0);
+    let ticket = f.lease("T.1", false);
+    write(&ticket.path, "out/compiled", "ticket-1");
+    let newcomer = f.lease("T.2", false);
+    assert_ne!(ticket.tree, newcomer.tree);
+    store::release(
+        &f.trees.lock().db,
+        ticket.tree.as_str(),
+        Some(f.tip().as_str()),
+        &f.trees.now(),
+    )
+    .unwrap();
+
+    // A new ticket tree needs a slot while ordinary_count (1) < ordinary_limit (2) and must
+    // evict the free ticket tree, keeping landing-1 warm.
+    f.clock.advance(10.0);
+    let _slot = f
+        .trees
+        .take_build_slot(&newcomer.tree, &[], true)
+        .unwrap()
+        .expect("free ticket tree should be reclaimed");
+    assert!(!ticket.path.join("out").exists());
+    assert!(
+        landing.path.join("out/compiled").is_file(),
+        "warm landing tree should stay intact when a free ticket tree can be reclaimed"
+    );
+}

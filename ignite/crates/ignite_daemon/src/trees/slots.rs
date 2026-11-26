@@ -421,7 +421,14 @@ impl Trees {
                 if !evict || locked.build_space.reclaiming {
                     return Ok(None);
                 }
-                rows.sort_by(|a, b| a.last_used.cmp(&b.last_used).then_with(|| a.id.cmp(&b.id)));
+                // Evict free ticket and idle trees before landing trees, which tip verification
+                // and foreground landings reuse every round.
+                rows.sort_by(|a, b| {
+                    uses_ordinary_slot(b)
+                        .cmp(&uses_ordinary_slot(a))
+                        .then_with(|| a.last_used.cmp(&b.last_used))
+                        .then_with(|| a.id.cmp(&b.id))
+                });
                 let mut candidate = None;
                 for row in rows.iter().filter(|row| {
                     (!ordinary_full || uses_ordinary_slot(row)) && Self::reclaimable(&locked, row)

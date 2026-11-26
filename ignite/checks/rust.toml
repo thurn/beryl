@@ -142,6 +142,9 @@ list_needs = ["python-env"]
 always = true
 # A build check: a failure means the code does not type-check, so `green` does not move.
 builds = true
+# `run` executes `cargo clippy --workspace` regardless of `{checks}`, so every check belongs
+# in one tip batch.
+single_batch = true
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.rust clippy list"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.rust clippy run {checks}"
 inputs = [

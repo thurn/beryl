@@ -6,7 +6,7 @@
 //! time. Here the tree is opened and the family listed and keyed once, and each batch runs from
 //! that listing.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use ignite_core::ids::{CheckName, TreeId};
@@ -33,6 +33,18 @@ impl Checks {
     /// families list.
     pub(crate) fn covered_by(&self) -> &BTreeMap<String, String> {
         &self.settings.manifest.covered_by
+    }
+
+    /// The families declared `single_batch = true`, whose `run` command checks the whole
+    /// family regardless of `{checks}` and therefore runs in one tip batch.
+    pub(crate) fn single_batch(&self) -> BTreeSet<String> {
+        self.settings
+            .manifest
+            .families
+            .iter()
+            .filter(|(_, declared)| declared.family.single_batch)
+            .map(|(name, _)| name.clone())
+            .collect()
     }
 
     /// Runs `batches` of the family `family` in `tree`, listing and keying the family once.

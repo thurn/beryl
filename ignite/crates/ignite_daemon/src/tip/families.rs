@@ -27,7 +27,7 @@
 //! stores no verdict, so a later round still runs the checks if those claims lapse. A hub that
 //! cannot answer leaves the family to be built as before, so a failed lookup never loses a check.
 
-use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::thread;
@@ -283,25 +283,23 @@ impl TipVerifier {
     ) -> Result<FamilyRuns> {
         let after_master = phase == RunPhase::AfterMaster;
         let costs = |family: &str| family_costs(ctx, tip, family);
+        let queue = by_family(batches(
+            &self.listed,
+            to_run,
+            &costs,
+            &self.work.single_batch(),
+        ));
         let round = Round {
             verifier: self,
             ctx,
             tip,
             after_master,
-            claim_scopes: to_run
-                .iter()
-                .filter_map(|check| {
-                    Some((
-                        check.family.as_str(),
-                        (check.key.platform?, check.machine_relative),
-                    ))
-                })
-                .collect(),
+            claim_scopes: claim_scopes(to_run),
             keys: to_run
                 .iter()
                 .map(|check| (&check.check, &check.key))
                 .collect(),
-            queue: Mutex::new(by_family(batches(&self.listed, to_run, &costs)).into()),
+            queue: Mutex::new(queue.into()),
             ended: Mutex::new(None),
             failed_required: AtomicBool::new(false),
             runs: Mutex::new(Vec::new()),
@@ -399,6 +397,19 @@ pub(super) fn observe_failures(ctx: &Context, tip: &Commit, checks: Vec<ResultKe
     }
 }
 
+/// Claim names for checks scoped to an OS or to an individual verifier.
+fn claim_scopes<'a>(to_run: &[&'a TipCheck]) -> BTreeMap<&'a str, (Os, bool)> {
+    to_run
+        .iter()
+        .filter_map(|check| {
+            Some((
+                check.family.as_str(),
+                (check.key.platform?, check.machine_relative),
+            ))
+        })
+        .collect()
+}
+
 /// The batches grouped by family, keeping their order.
 fn by_family(batches: Vec<(String, u32, Vec<CheckName>)>) -> Vec<FamilyBatches> {
     let mut families: Vec<FamilyBatches> = Vec::new();
@@ -430,12 +441,14 @@ fn family_costs(ctx: &Context, tip: &Commit, family: &str) -> TipCosts {
 /// The checks to run, in claimable batches. Each family that has a check to run is cut from
 /// all its checks in `listed`, sorted by name, with the costs `costs` gives for it, so every
 /// machine cuts the same batches; each batch keeps only the checks in `to_run`, and a batch
-/// left empty is dropped with its number. Families with checks only this machine's platform
+/// left empty is dropped with its number. Families in `single_batch` keep all of their checks
+/// in batch `0` without cutting by cost. Families with checks only this machine's platform
 /// can run come first.
 fn batches(
     listed: &[Listed],
     to_run: &[&TipCheck],
     costs: &dyn Fn(&str) -> TipCosts,
+    single_batch: &BTreeSet<String>,
 ) -> Vec<(String, u32, Vec<CheckName>)> {
     let wanted: HashSet<&CheckName> = to_run.iter().map(|c| &c.check).collect();
     let working: HashSet<&str> = to_run.iter().map(|c| c.family.as_str()).collect();
@@ -453,6 +466,13 @@ fn batches(
     for ((_, family), mut names) in families {
         names.sort();
         names.dedup();
+        if single_batch.contains(family) {
+            let run: Vec<CheckName> = names.into_iter().filter(|n| wanted.contains(n)).collect();
+            if !run.is_empty() {
+                batches.push((family.to_owned(), 0, run));
+            }
+            continue;
+        }
         let family_costs = costs(family);
         for (index, cut) in tipround::cut(&names, &family_costs).into_iter().enumerate() {
             let batch = u32::try_from(index).unwrap_or(u32::MAX);
@@ -463,4 +483,68 @@ fn batches(
         }
     }
     batches
+}
+
+#[cfg(test)]
+mod tests {
+    use ignite_core::ids::{CheckName, InputHash};
+    use ignite_core::protocol::hub::ResultKey;
+    use ignite_core::tipround::TipCosts;
+
+    use super::*;
+    use crate::tip::TipCheckKind;
+
+    fn tip_check(name: &str) -> TipCheck {
+        let check = CheckName::new(name).unwrap();
+        let family = check.family().to_owned();
+        let key = ResultKey {
+            check: check.clone(),
+            hash: InputHash::new("a".repeat(64)).unwrap(),
+            platform: None,
+        };
+        TipCheck {
+            check,
+            family,
+            key,
+            inputs: Vec::new(),
+            runnable: true,
+            reuse: true,
+            machine_relative: false,
+            kind: TipCheckKind::Build,
+        }
+    }
+
+    #[test]
+    fn single_batch_keeps_all_family_checks_in_batch_zero_regardless_of_cost() {
+        let checks: Vec<TipCheck> = ["lint:a", "lint:b", "lint:c", "lint:d"]
+            .into_iter()
+            .map(tip_check)
+            .collect();
+        let listed: Vec<Listed> = checks
+            .iter()
+            .map(|c| Listed {
+                check: c.check.clone(),
+                family: c.family.clone(),
+                portable: true,
+            })
+            .collect();
+        let to_run: Vec<&TipCheck> = checks.iter().collect();
+        let high_costs = |_: &str| TipCosts {
+            claim_seconds: 60.0,
+            costs: checks
+                .iter()
+                .map(|c| (c.check.to_string(), 60.0))
+                .collect(),
+        };
+
+        let split = batches(&listed, &to_run, &high_costs, &BTreeSet::new());
+        assert_eq!(split.len(), 4);
+
+        let single = BTreeSet::from(["lint".to_owned()]);
+        let merged = batches(&listed, &to_run, &high_costs, &single);
+        assert_eq!(merged.len(), 1);
+        assert_eq!(merged[0].0, "lint");
+        assert_eq!(merged[0].1, 0);
+        assert_eq!(merged[0].2.len(), 4);
+    }
 }

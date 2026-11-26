@@ -319,3 +319,18 @@ fn deferral_names_only_the_platforms_that_run_a_family() {
         );
     }
 }
+
+#[test]
+fn single_batch_marks_a_family_that_runs_in_one_tip_batch() {
+    let plain = Manifest::from_files(&files(&[("checks/rust.toml", RUST)])).unwrap();
+    assert!(!plain.families["rust"].family.single_batch);
+    let batched = RUST.replacen(
+        "needs = [\"rust-tests\"]\n",
+        "needs = [\"rust-tests\"]\nsingle_batch = true\n",
+        1,
+    );
+    let (manifest, unknown) =
+        Manifest::from_files_with_unknown(&files(&[("checks/rust.toml", &batched)])).unwrap();
+    assert!(unknown.is_empty(), "{unknown:?}");
+    assert!(manifest.families["rust"].family.single_batch);
+}

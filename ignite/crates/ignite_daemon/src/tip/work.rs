@@ -153,6 +153,10 @@ impl TipWork for CheckTipWork {
         self.checks.covered_by().clone()
     }
 
+    fn single_batch(&self) -> std::collections::BTreeSet<String> {
+        self.checks.single_batch()
+    }
+
     /// One fewer than the landing trees, so that a landing always finds a tree free.
     fn parallel(&self) -> usize {
         self.landing_trees.saturating_sub(1).max(1)

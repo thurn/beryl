@@ -1791,6 +1791,9 @@ The fields:
   names and starts more threads when it rises, so its grant grows as cores free
   up. A build product takes the same field, and `ignite run --grows` does the
   same for one command.
+- `single_batch = true` keeps all of the family's checks in a single tip batch
+  (`0`) instead of cutting them by `tip.claim_seconds`, for a family whose `run`
+  command checks the whole workspace regardless of `{checks}` (such as Clippy).
 
 The domain tools in `tools/` stay as they are: the oracle exporters, the motion
 capture, the card tools. They become commands that families run. What leaves

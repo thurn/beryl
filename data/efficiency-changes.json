@@ -1035,5 +1035,10 @@
     "label": "The `counts` family keeps a constant target-directory owner across streamed worktrees instead of running `cargo clean` on every landing-tree switch, drops its `cores = 1` cap so Windows builds and runs Callgrind benchmarks in parallel up to `IGNITE_CORES`, and combines `counts:rollouts` with `counts:family/*` into one guest build and parallel Callgrind pool. On cygnus all 17 checks dropped from 290-926 s to 75 s wall time",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Whole-workspace families (`client-clippy` and `clippy`) declare `single_batch = true` so tip verification runs all of their checks in one batch instead of repeating `cargo clippy --workspace` once per 60-second cost slice (9-10 sequential ~35 s runs = 300-400 s per round on cygnus), and build-slot eviction clears free ticket trees before free landing trees so landing trees keep their warm build directories",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]

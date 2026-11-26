@@ -177,6 +177,12 @@ pub struct Family {
     /// own hashes still cover every file whole.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub listing_ignores_comments: bool,
+    /// The family's `run` command checks the whole family or workspace regardless of how many
+    /// `{checks}` are named (such as `cargo clippy --workspace`), so splitting its checks into
+    /// multiple tip batches repeats the entire command once per batch without saving work.
+    /// Tip verification runs all of the family's checks in one claimable batch (`0`).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub single_batch: bool,
 }
 
 impl Family {

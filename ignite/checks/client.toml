@@ -138,6 +138,9 @@ needs = ["python-env"]
 always = true
 # A build check: a failure means the code does not type-check, so `green` does not move.
 builds = true
+# `run` executes `cargo clippy --workspace --all-targets` regardless of `{checks}`, so
+# splitting into multiple tip batches repeated the ~35 s warm run 9-10 times on Windows.
+single_batch = true
 always_when = [
   "client/**",
   ".cargo/config.toml",
