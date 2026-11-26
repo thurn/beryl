@@ -6,6 +6,22 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Ending the turn with a copy removed the copy before the abilities it
+  exiled.** When a Forked Time Stop resolved with an ability on the stack, the
+  session's script check failed: the ability's removal named the copy as its
+  cause, but the copy had already ceased to exist. `turn::end::exile_stack`
+  moved the stack's spells to exile, which ends a copy (CR 707.10a), and only
+  then told of the abilities' stack entries leaving, all under the copy's
+  resolution. Fixed: the entries' departures are told first, while the resolving
+  spell is still on the stack, and the spells move after them. Guard: the
+  scenario "A Forked Time Stop exiles an ability on the stack" in
+  `engine/cards/cards_2004/chk/time_stop.rs`, whose spec moment fails
+  `beryl_cli script-check` from both seats without the fix, and
+  `the_game_that_forked_a_time_stop_replays` in `beryl_session/tests/fuzz.rs`.
+  No type orders the events of one resolution, so an effect that removes the
+  resolving object before other things it causes still relies on the script
+  check to catch it.
+
 - **Readers took one face's characteristics where the rules give an object
   another face or both.** The commonest class in this file: Tarmogoyf counted
   only the left half of a split card in a graveyard, a split card in a library

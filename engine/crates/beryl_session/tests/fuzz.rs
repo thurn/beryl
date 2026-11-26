@@ -365,3 +365,26 @@ fn the_game_that_read_an_invalid_face_replays() {
     println!("took {} of {} choices", taken.len(), game.choices.len());
     assert_eq!(result, Ok(()), "{}", report(&game, "failed"));
 }
+
+/// A game the fuzzer once failed in: a player Forked a Time Stop, and the copy ended the turn.
+/// The rules exiled the spells on the stack before they removed an ability there, so the
+/// script credited that ability's removal to the copy, which had already ceased to exist.
+#[test]
+fn the_game_that_forked_a_time_stop_replays() {
+    let game = Fuzz {
+        seed: 3_812_001_089,
+        deck: pool_deck,
+        choices: vec![
+            0, 1, 1, 0, 3, 0, 2, 1, 3, 1, 2, 1, 0, 0, 2, 0, 0, 5, 1, 3, 0, 0, 1, 6, 2, 0, 0, 0, 1,
+            1, 0, 1, 0, 0, 3, 3, 1, 2, 1, 0, 1, 2, 1, 0, 4, 4, 5, 2, 0, 0, 2, 0, 1, 3, 0, 1, 2, 0,
+            2, 0, 0, 1, 1, 3, 1, 1, 0, 1, 4, 4, 4, 4, 2, 0, 0, 1, 0, 0, 2, 0, 1, 0, 1, 1, 0, 1, 0,
+            2, 0, 1, 3, 1, 1, 1, 1, 2, 1, 2, 1, 0, 0, 1, 2, 1, 1, 0, 0, 2, 3, 2, 2, 2, 0, 0, 0, 1,
+            2, 1, 0, 0, 1, 6, 0, 1, 0, 1, 1, 1, 0, 1, 0, 6, 1, 5, 5, 5, 1, 3, 0, 0, 0, 0, 1, 2, 1,
+            0, 0, 0, 12, 11, 3, 1, 5, 3, 0, 0, 0, 2, 0, 5, 0, 1, 1, 4, 0, 0, 1, 3, 0, 2, 3, 1, 4,
+            3, 4, 0, 1, 0, 0, 1, 0, 0, 8, 0, 1, 1,
+        ],
+    };
+    let (taken, result) = game.play();
+    println!("took {} of {} choices", taken.len(), game.choices.len());
+    assert_eq!(result, Ok(()), "{}", report(&game, "failed"));
+}

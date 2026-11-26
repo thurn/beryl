@@ -41,11 +41,20 @@ pub(crate) fn end_the_turn<L: Layout>(
 /// transaction has taken its entry. Abilities have only stack entries, so removing
 /// those entries is enough.
 ///
+/// The entries' departures are reported before the spells move, because they name the
+/// resolving spell as their cause and a reader of the events must still find it on the stack.
+/// That spell can be a copy, which is gone after the move
+/// (see [CR 707.10a](https://yawgatog.com/resources/magic-rules/#R70710a)): "If a copy of a
+/// spell is in a zone other than the stack, it ceases to exist."
+///
 /// [CR 725.1b]: https://yawgatog.com/resources/magic-rules/#R7251b
 fn exile_stack<L: Layout>(game: &mut Game<'_, L>) -> Result<(), Full> {
     let s = &mut *game.state;
     let entries = s.stack().len();
     while s.take_top_of_stack().is_some() {}
+    for place in (0..entries).rev() {
+        game.sink.departed(|| place);
+    }
     let spells = s.in_zone(Zone::Stack);
     if !spells.is_empty() {
         event::move_batch(
@@ -57,9 +66,6 @@ fn exile_stack<L: Layout>(game: &mut Game<'_, L>) -> Result<(), Full> {
             Reason::Exile,
             Entry::default(),
         )?;
-    }
-    for place in (0..entries).rev() {
-        game.sink.departed(|| place);
     }
     game.sink.resolved();
     s.settle_captured_words();

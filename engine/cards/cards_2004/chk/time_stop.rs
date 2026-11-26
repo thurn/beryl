@@ -40,6 +40,39 @@ pub mod scenarios {
                 THEM.controls(Prop::Vanilla, 0),
                 advance_to(3, TurnStep::PrecombatMain),
             ]),
+        // The opponent casts Time Stop in response to P0's Mother of Runes, and P0 Forks the
+        // Time Stop. P0's copy resolves first and ends P0's turn: Mother of Runes's ability and
+        // the original Time Stop are exiled with the copy, which ceases to exist. A Lightning
+        // Bolt left in hand keeps priority with P0 while the copy waits on the stack.
+        Scenario::new("A Forked Time Stop exiles an ability on the stack")
+            .interaction(&[Card::Fork, Card::MotherOfRunes, Card::LightningBolt])
+            .hand(P0, &[Card::Fork, Card::LightningBolt])
+            .battlefield(
+                P0,
+                &[
+                    Card::MotherOfRunes,
+                    Prop::Vanilla,
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::Mountain,
+                ],
+            )
+            .hand(P1, &[STOP])
+            .battlefield(P1, &[Card::Island; 6])
+            .actions(&[
+                ME.activates(Card::MotherOfRunes, 0),
+                ME.targets(Prop::Vanilla),
+                ME.passes(),
+                THEM.casts(STOP),
+                ME.casts(Card::Fork),
+                Resolve,
+                Resolve,
+                stack(0),
+                THEM.has(Zone::Exile, STOP, 1),
+                ME.has(Zone::Graveyard, Card::Fork, 1),
+                ME.has(Zone::Hand, Card::LightningBolt, 1),
+                advance_to(2, TurnStep::PrecombatMain),
+            ]),
         Scenario::new("Time Stop gives a cleanup discard trigger a chance to resolve")
             .interaction(&[Card::CurrencyConverter])
             .hand(
