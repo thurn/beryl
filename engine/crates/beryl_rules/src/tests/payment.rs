@@ -825,3 +825,440 @@ fn a_summoning_sick_creature_offers_no_instant_mana_ability() {
     refresh(&mut s);
     assert!(offered(&s));
 }
+
+static TEST_SIGNET: CardDef = CardDef {
+    name: "Test Signet",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::ARTIFACT,
+        abilities: &[Ability::mana_of(
+            Cost::of(ManaCost::generic(1), &[CostPart::TAP]),
+            &[
+                beryl_card::Term::one(ManaColor::White),
+                beryl_card::Term::one(ManaColor::Blue),
+            ],
+        )],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+static TEST_FILTER_GATE: CardDef = CardDef {
+    name: "Test Filter Gate",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::LAND,
+        abilities: &[
+            Ability::tap_for_mana(beryl_card::ManaSet::one(ManaColor::Colorless)),
+            Ability::mana_of(
+                Cost::of(beryl_card::mana("{W/U}"), &[CostPart::TAP]),
+                &[beryl_card::Term::each_of(0b11, 2)],
+            ),
+        ],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+static TEST_KAROO: CardDef = CardDef {
+    name: "Test Karoo",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::LAND,
+        abilities: &[Ability::mana_of(
+            Cost::TAP,
+            &[
+                beryl_card::Term::one(ManaColor::White),
+                beryl_card::Term::one(ManaColor::Blue),
+            ],
+        )],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+static TEST_SWAMP: CardDef = CardDef {
+    name: "Test Swamp",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::LAND,
+        subtypes: beryl_card::SubtypeWords::new(beryl_card::Subtypes::of(&[
+            beryl_card::Subtype::Swamp,
+        ])),
+        abilities: &[Ability::tap_for_mana(beryl_card::ManaSet::one(
+            ManaColor::Black,
+        ))],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+static TEST_WASTES: CardDef = CardDef {
+    name: "Test Wastes",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::LAND,
+        abilities: &[Ability::tap_for_mana(beryl_card::ManaSet::one(
+            ManaColor::Colorless,
+        ))],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+static SWAMPS_YOU_CONTROL: beryl_card::Objects = beryl_card::Objects::InZoneOf {
+    zone: Zone::Battlefield,
+    players: &beryl_card::Players::You,
+    filter: beryl_card::Filter::Subtype(beryl_card::Subtype::Swamp),
+};
+
+static TEST_COFFERS: CardDef = CardDef {
+    name: "Test Coffers",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::LAND,
+        abilities: &[Ability::mana_of(
+            Cost::of(ManaCost::generic(2), &[CostPart::TAP]),
+            &[beryl_card::Term::counted(
+                ManaColor::Black,
+                beryl_card::Amount::Count(&SWAMPS_YOU_CONTROL),
+            )],
+        )],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+static TEST_SWAMP_COUNT_LAND: CardDef = CardDef {
+    name: "Test Swamp Count Land",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::LAND,
+        abilities: &[Ability::mana_of(
+            Cost::TAP,
+            &[beryl_card::Term::counted(
+                ManaColor::Black,
+                beryl_card::Amount::Count(&SWAMPS_YOU_CONTROL),
+            )],
+        )],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+/// `rich::pays`, `mana::payable`, `mana::plans` (under both `KeepMostPayable` and `Greedy`) and
+/// `Payment::Manual` agree with `reference_sequences` across 200 seeded boards of up to four
+/// priced sources and six lands.
+#[test]
+#[allow(clippy::too_many_lines)]
+fn rich_pays_and_plans_agree_with_reference_sequences_on_generated_boards() {
+    static CARDS: CardTable = CardTable::new(&[
+        &LAND,
+        &ISLAND,
+        &super::DUAL,
+        &TEST_SWAMP,
+        &TEST_WASTES,
+        &TEST_SIGNET,
+        &TEST_FILTER_GATE,
+        &TEST_KAROO,
+    ]);
+    let deck: &[(u8, &str)] = &[
+        (6, "Test Land"),
+        (6, "Test Island"),
+        (6, "Test Dual"),
+        (6, "Test Swamp"),
+        (6, "Test Wastes"),
+        (4, "Test Signet"),
+        (4, "Test Filter Gate"),
+        (4, "Test Karoo"),
+    ];
+    let t = crate::GameTable::new(
+        beryl_kernel::format::Format::CONSTRUCTED,
+        &CARDS,
+        [deck, deck],
+    )
+    .unwrap();
+    let plain_cards = [
+        "Test Land",
+        "Test Island",
+        "Test Dual",
+        "Test Swamp",
+        "Test Wastes",
+    ];
+    let priced_cards = ["Test Signet", "Test Filter Gate", "Test Karoo"];
+    let mut rng = SplitMix64::new(0x5160_E707);
+    let mut payable_count = 0usize;
+    let mut manual_steps = 0usize;
+    for board_ix in 0..200 {
+        let mut s = crate::State::new(&t, board_ix as u64 + 1, Profile::EXACT).unwrap();
+        super::begin(&t, &mut s);
+        let p = s.turn().starting_player();
+        let n_priced = rng.below(4) as usize + 1;
+        let n_plain = rng.below(7) as usize;
+        let mut placed = Vec::new();
+        for _ in 0..n_priced {
+            let name = priced_cards[rng.below(priced_cards.len() as u64) as usize];
+            if let Some(&slot) = s
+                .library(p)
+                .iter()
+                .find(|&&sl| s.definition_name(&t, sl) == name)
+            {
+                s.board().place(slot, Zone::Battlefield).unwrap();
+                placed.push(name);
+            }
+        }
+        for _ in 0..n_plain {
+            let name = plain_cards[rng.below(plain_cards.len() as u64) as usize];
+            if let Some(&slot) = s
+                .library(p)
+                .iter()
+                .find(|&&sl| s.definition_name(&t, sl) == name)
+            {
+                s.board().place(slot, Zone::Battlefield).unwrap();
+                placed.push(name);
+            }
+        }
+        let mut pool = ManaPool::default();
+        for color in [ManaColor::White, ManaColor::Blue, ManaColor::Colorless] {
+            pool[color] = rng.below(2) as u8;
+        }
+        s.board().set_mana(p, pool);
+        crate::continuous::layers::refresh(&mut s, &t, &mut Sink::off()).unwrap();
+        let cost = ManaCost::new(
+            rng.below(4) as u8,
+            [rng.below(3) as u8, rng.below(3) as u8, 0, 0, 0, 0],
+        );
+        let Some(expected) = crate::reference::reference_sequences(&s, &t, p, cost) else {
+            continue;
+        };
+        let ctx = format!(
+            "board {board_ix}: cost {cost:?}, pool {:?}, placed {placed:?}",
+            pool.amounts()
+        );
+        let funds = mana::Funds::of(&s, &t, p).unwrap();
+        assert_eq!(
+            funds.pays_for(&s, &t, cost, Bitboard::EMPTY, mana::Paying::NOTHING),
+            expected,
+            "Funds::pays_for disagreed: {ctx}"
+        );
+        assert_eq!(
+            mana::payable(&s, &t, p, cost, Bitboard::EMPTY, mana::Paying::NOTHING).unwrap(),
+            expected,
+            "mana::payable disagreed: {ctx}"
+        );
+        for greedy in [false, true] {
+            let plans = mana::plans(
+                &s,
+                &t,
+                &mut Sink::off(),
+                p,
+                cost,
+                Bitboard::EMPTY,
+                greedy,
+                mana::Paying::NOTHING,
+            )
+            .unwrap();
+            assert_eq!(
+                !plans.is_empty(),
+                expected,
+                "mana::plans(greedy={greedy}) disagreed: {ctx}"
+            );
+            if greedy {
+                assert!(plans.len() <= 1, "greedy returned >1 plan: {ctx}");
+            }
+            let mut seen_outcomes = Vec::new();
+            for plan in &plans {
+                let mut paid_state = s;
+                let mut sink = Sink::off();
+                mana::pay(
+                    &mut paid_state,
+                    &t,
+                    &mut sink,
+                    p,
+                    cost,
+                    Bitboard::EMPTY,
+                    plan,
+                    mana::Paying::NOTHING,
+                )
+                .unwrap();
+                assert_eq!(
+                    paid_state.player(p).mana().amounts(),
+                    plan.left,
+                    "plan.left mismatch: {ctx}"
+                );
+                assert!(
+                    !seen_outcomes.contains(&plan.left),
+                    "duplicate outcome {:?}: {ctx}",
+                    plan.left
+                );
+                seen_outcomes.push(plan.left);
+            }
+        }
+        if expected && !cost.is_zero() {
+            payable_count += 1;
+            // Under Payment::Manual, every sequence of offered options ends with the cost paid.
+            for trial in 0..3 {
+                let mut ms = s;
+                let mut rem = cost;
+                let mut guard = 0;
+                while !rem.is_zero() {
+                    let opts = mana::manual_options(
+                        &ms,
+                        &t,
+                        p,
+                        rem,
+                        Bitboard::EMPTY,
+                        mana::Paying::NOTHING,
+                    )
+                    .unwrap();
+                    assert!(
+                        !opts.is_empty(),
+                        "manual_options empty with remaining {rem:?} (trial {trial}): {ctx}"
+                    );
+                    let pick_ix = match trial {
+                        0 => 0,
+                        1 => opts.len() - 1,
+                        _ => rng.below(opts.len() as u64) as usize,
+                    };
+                    let opt = opts.as_slice()[pick_ix];
+                    rem = mana::manual_pay(
+                        &mut ms,
+                        &t,
+                        &mut Sink::off(),
+                        p,
+                        rem,
+                        opt,
+                        mana::Paying::NOTHING,
+                    )
+                    .unwrap()
+                    .0;
+                    manual_steps += 1;
+                    guard += 1;
+                    assert!(guard < 40, "manual payment did not terminate: {ctx}");
+                }
+            }
+        }
+    }
+    assert!(payable_count > 50, "only {payable_count} payable boards");
+    assert!(manual_steps > 100, "only {manual_steps} manual steps");
+}
+
+/// A mana ability whose term counts permanents on the battlefield ("for each Swamp you control")
+/// evaluates the count for the board as it stands, both unpriced and priced.
+#[test]
+#[allow(clippy::too_many_lines)]
+fn counted_mana_ability_reads_the_board() {
+    static CARDS: CardTable = CardTable::new(&[
+        &TEST_SWAMP,
+        &TEST_WASTES,
+        &TEST_COFFERS,
+        &TEST_SWAMP_COUNT_LAND,
+    ]);
+    let deck: &[(u8, &str)] = &[
+        (20, "Test Swamp"),
+        (12, "Test Wastes"),
+        (4, "Test Coffers"),
+        (4, "Test Swamp Count Land"),
+    ];
+    let t = crate::GameTable::new(
+        beryl_kernel::format::Format::CONSTRUCTED,
+        &CARDS,
+        [deck, deck],
+    )
+    .unwrap();
+    let mut s = crate::State::new(&t, 42, Profile::EXACT).unwrap();
+    super::begin(&t, &mut s);
+    let p = s.turn().starting_player();
+    let place = |s: &mut crate::State, name: &str| {
+        let &slot = s
+            .library(p)
+            .iter()
+            .find(|&&sl| s.definition_name(&t, sl) == name)
+            .unwrap();
+        s.board().place(slot, Zone::Battlefield).unwrap();
+    };
+    place(&mut s, "Test Swamp Count Land");
+    crate::continuous::layers::refresh(&mut s, &t, &mut Sink::off()).unwrap();
+    let b1 = ManaCost::new(0, [0, 0, 1, 0, 0, 0]);
+    let b3 = ManaCost::new(0, [0, 0, 3, 0, 0, 0]);
+    let b6 = ManaCost::new(0, [0, 0, 6, 0, 0, 0]);
+    // 0 Swamps -> produces 0 mana.
+    assert!(!mana::payable(&s, &t, p, b1, Bitboard::EMPTY, mana::Paying::NOTHING).unwrap());
+    assert_eq!(
+        crate::reference::reference_sequences(&s, &t, p, b1),
+        Some(false)
+    );
+    // Add 3 Swamps -> Test Swamp Count Land alone makes {B}{B}{B}, plus 3 Swamps = 6 {B}.
+    for _ in 0..3 {
+        place(&mut s, "Test Swamp");
+    }
+    crate::continuous::layers::refresh(&mut s, &t, &mut Sink::off()).unwrap();
+    assert!(mana::payable(&s, &t, p, b6, Bitboard::EMPTY, mana::Paying::NOTHING).unwrap());
+    assert_eq!(
+        crate::reference::reference_sequences(&s, &t, p, b6),
+        Some(true)
+    );
+    let plans = mana::plans(
+        &s,
+        &t,
+        &mut Sink::off(),
+        p,
+        b6,
+        Bitboard::EMPTY,
+        false,
+        mana::Paying::NOTHING,
+    )
+    .unwrap();
+    assert!(!plans.is_empty());
+    let mut paid = s;
+    mana::pay(
+        &mut paid,
+        &t,
+        &mut Sink::off(),
+        p,
+        b6,
+        Bitboard::EMPTY,
+        &plans.as_slice()[0],
+        mana::Paying::NOTHING,
+    )
+    .unwrap();
+    assert_eq!(paid.player(p).mana().amounts(), [0; 6]);
+    // Add Test Coffers ({2}, {T}: Add {B} for each Swamp) + 2 Wastes -> can pay 9 {B} total
+    // (3 Swamps + 3 from Swamp Count Land + 3 from Coffers paid by 2 Wastes).
+    place(&mut s, "Test Coffers");
+    place(&mut s, "Test Wastes");
+    place(&mut s, "Test Wastes");
+    crate::continuous::layers::refresh(&mut s, &t, &mut Sink::off()).unwrap();
+    let b9 = ManaCost::new(0, [0, 0, 9, 0, 0, 0]);
+    let b10 = ManaCost::new(0, [0, 0, 10, 0, 0, 0]);
+    assert!(mana::payable(&s, &t, p, b9, Bitboard::EMPTY, mana::Paying::NOTHING).unwrap());
+    assert!(!mana::payable(&s, &t, p, b10, Bitboard::EMPTY, mana::Paying::NOTHING).unwrap());
+    assert_eq!(
+        crate::reference::reference_sequences(&s, &t, p, b9),
+        Some(true)
+    );
+    assert_eq!(
+        crate::reference::reference_sequences(&s, &t, p, b10),
+        Some(false)
+    );
+    // And manual payment pays {B}{B}{B}{B}{B}{B}{B}{B}{B} cleanly.
+    let mut ms = s;
+    let mut rem = b9;
+    while !rem.is_zero() {
+        let opts =
+            mana::manual_options(&ms, &t, p, rem, Bitboard::EMPTY, mana::Paying::NOTHING).unwrap();
+        assert!(!opts.is_empty());
+        rem = mana::manual_pay(
+            &mut ms,
+            &t,
+            &mut Sink::off(),
+            p,
+            rem,
+            opts.as_slice()[0],
+            mana::Paying::NOTHING,
+        )
+        .unwrap()
+        .0;
+    }
+    let _ = b3;
+}

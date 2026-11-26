@@ -696,7 +696,10 @@ impl ManaFace {
 impl ManaFace {
     /// What `face` makes as a source, with its basic land types' mana ([`land_mana`]).
     pub fn of(face: &Face) -> ManaFace {
-        if face.abilities.iter().any(is_priced) {
+        if face.abilities.iter().any(|a| {
+            is_priced(a)
+                || (a.kind() == AbilityKind::Mana && a.produces() == beryl_card::ManaSet::NONE)
+        }) {
             return ManaFace::Priced;
         }
         let intrinsic = land_mana(face, &Words::NONE);

@@ -262,6 +262,20 @@ pub(crate) fn names_nothing<L: Layout>(
     without_resolution(s, t, &subject, |scene| scene.objects(objects).is_empty())
 }
 
+/// The value of `amount`, read for the permanent in `slot` as "this" and its controller as
+/// "you", through the permanent's words ([`State::words_of`]).
+#[inline]
+pub(crate) fn amount_of<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    slot: L::Slot,
+    amount: beryl_card::Amount,
+) -> u8 {
+    let (card, face) = s.definition(slot).record(t);
+    let subject = ability_of(s, slot, card, face, TriggeredAbility::default());
+    without_resolution(s, t, &subject, |scene| scene.amount(amount))
+}
+
 /// Whether `condition` holds for the permanent in `slot` as "this" and its controller as
 /// "you", where that can be read of the permanent and its controller's own zones: what a
 /// scene would answer ([`Scene::holds`]), with none made. None for any other condition. A

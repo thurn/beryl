@@ -71,6 +71,11 @@ impl<L: Layout> Funds<L> {
         })
     }
 
+    #[inline]
+    pub(super) fn player(&self) -> Seat {
+        self.player
+    }
+
     /// Whether the player can pay `cost` with none of `exclude` for no spell, as [`payable`]
     /// does with [`Paying::NOTHING`]. `s` is the state the funds were found in.
     pub(crate) fn pays(
@@ -219,7 +224,17 @@ pub(crate) fn payable<L: Layout>(
     exclude: Bitboard<L::Slot>,
     paying: Paying<L>,
 ) -> Result<bool, Full> {
-    Ok(available(s, t, player, exclude, paying)?.pays(cost))
+    if !t.can_either(Capability::PricedMana, Capability::ManaChanges) {
+        return Ok(available(s, t, player, exclude, paying)?.pays(cost));
+    }
+    let sources = super::sources::Sources::of(s, t, player, exclude, paying)?;
+    if sources
+        .units(s.player(player).mana().amounts(), &Table::filled(0))
+        .pays(cost)
+    {
+        return Ok(true);
+    }
+    Ok(super::rich::pays_with_sources(s, player, cost, &sources))
 }
 
 /// Pays one unit toward `remaining`: a colored or colorless symbol of its kind if one is

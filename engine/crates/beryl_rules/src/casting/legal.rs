@@ -228,6 +228,8 @@ fn refused<L: Layout, const TARGETS: bool>(
         f.pays(s, t, cost, Bitboard::EMPTY)
             || (t.can_either(Capability::RemembersMana, Capability::Delve)
                 && pays_otherwise(s, t, now, f, cost, player, slot, face_index, face, costs))
+            || (t.can_either(Capability::PricedMana, Capability::ManaChanges)
+                && f.pays_for(s, t, cost, Bitboard::EMPTY, mana::Paying::NOTHING))
     }) {
         return Some(Refusal::Mana);
     }
@@ -569,7 +571,7 @@ fn activatable<L: Layout, const TARGETS: bool>(
             let nothing = mana::Paying::NOTHING;
             parts::payable_with_substitutes(s, t, funds, cost, most, objects, spent, nothing)
         }
-        None => funds.pays(s, t, cost, spent),
+        None => funds.pays_for(s, t, cost, spent, mana::Paying::NOTHING),
     });
     paid && (!TARGETS || targetable(s, t, Some(a), player, Itself::default(), 0, Some(slot)))
 }

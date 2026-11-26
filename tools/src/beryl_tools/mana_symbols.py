@@ -28,3 +28,22 @@ def tap_text(ability: Json) -> str | None:
     if len(colors) != 1:
         return None
     return "{T}: Add " + SYMBOLS[colors[0]] * cast(int, produces["amount"])
+
+
+def has_priced_mana(abilities: list[Json]) -> bool:
+    """Whether any mana ability in `abilities` has a mana cost, such as a Signet."""
+    return any(
+        a["kind"] == "Mana" and bool(cast(Json, a.get("cost", {})).get("mana"))
+        for a in abilities
+    )
+
+
+def priced_mana_text(abilities: list[Json], paragraphs: list[str]) -> str | None:
+    """The Oracle text prefix of a card's single priced mana ability, for XMage's `tapSource`."""
+    mana = [a for a in abilities if a["kind"] == "Mana"]
+    if len(mana) != 1 or not cast(Json, mana[0].get("cost", {})).get("mana"):
+        return None
+    for p in paragraphs:
+        if ": Add " in p:
+            return p.rstrip(".")
+    return None

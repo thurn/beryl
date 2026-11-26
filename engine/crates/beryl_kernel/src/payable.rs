@@ -18,9 +18,8 @@ use crate::table::{is_sacrificed, is_tap_for_mana};
 pub enum Unpayable {
     /// A part of a cost that no code pays.
     Part(CostPart),
-    /// A mana ability whose cost is neither {T} nor {T} and sacrificing its source, or whose
-    /// product one [`beryl_card::ManaSet`] cannot say ([`beryl_card::Ability::mana_of`]): the
-    /// mana solver activates no other.
+    /// A mana ability whose cost is neither {T} (with optional mana, no {X}) nor {T} and
+    /// sacrificing its source: the mana solver activates no other.
     ManaAbility,
     /// An effect or an intervening "if" names what a cost took
     /// ([`beryl_card::Objects::Paid`]), which the engine does not keep.
@@ -85,18 +84,16 @@ pub fn pays_for_spell(part: &CostPart) -> bool {
 }
 
 /// Whether the engine pays the cost of this ability. A mana ability is paid by the mana
-/// solver, which taps its source or taps and sacrifices it, and pays nothing else
-/// ([`is_tap_for_mana`], restricted or not, and [`is_sacrificed`]), or is activated only at
-/// priority ([`is_instant_mana`]).
+/// solver, which taps its source (with optional mana, hybrid included, and no {X}) or taps and
+/// sacrifices it ([`is_tap_for_mana`], restricted or not, and [`is_sacrificed`]), or is
+/// activated only at priority ([`is_instant_mana`]).
 fn ability(a: &Ability) -> Result<(), Unpayable> {
     if is_instant_mana(a) {
         return Ok(());
     }
-    if a.kind() == AbilityKind::Mana && !is_tap_for_mana(a) && !is_sacrificed(a) {
-        return Err(Unpayable::ManaAbility);
-    }
-    // Several terms, or an amount that counts: no payment adds them yet.
-    if a.kind() == AbilityKind::Mana && a.produces() == beryl_card::ManaSet::NONE {
+    let tap_and_mana =
+        a.cost().mana.x == 0 && matches!(a.cost().parts(), [CostPart::This(CostAction::Tap)]);
+    if a.kind() == AbilityKind::Mana && !is_tap_for_mana(a) && !is_sacrificed(a) && !tap_and_mana {
         return Err(Unpayable::ManaAbility);
     }
     if let Some(part) = a.cost().parts().iter().find(|part| !pays_for_ability(part)) {
@@ -320,6 +317,19 @@ mod tests {
         }],
         tokens: &[],
     };
+    /// "Sacrifice a creature: Add {C}.": an outlet mana ability, which no payment plans yet.
+    static OUTLET: CardDef = CardDef {
+        name: "Outlet",
+        shape: beryl_card::definition::Shape::Single,
+        faces: &[Face {
+            abilities: &[Ability::mana(
+                Cost::of(ManaCost::NONE, &[SACRIFICE_A_CREATURE]),
+                ManaSet::one(ManaColor::Colorless),
+            )],
+            ..Face::EMPTY
+        }],
+        tokens: &[],
+    };
     static CARDS: CardTable = CardTable::new(&[
         &FILLER,
         &PAID,
@@ -331,6 +341,7 @@ mod tests {
         &TWICE_BENT,
         &FILTER_LAND,
         &KAROO,
+        &OUTLET,
         &REMEMBERER,
     ]);
 
@@ -346,6 +357,8 @@ mod tests {
     fn a_table_holds_every_cost_the_engine_pays() {
         assert!(table("Paid").is_ok());
         assert!(table("Rite").is_ok());
+        assert!(table("Filter Land").is_ok());
+        assert!(table("Karoo").is_ok());
     }
 
     /// A part no code pays would be skipped as its spell is cast or its ability activated:
@@ -376,12 +389,8 @@ mod tests {
             refused("Twice Bent", Unpayable::Part(CostPart::waterbend(1)))
         );
         assert_eq!(
-            table("Filter Land").err(),
-            refused("Filter Land", Unpayable::ManaAbility)
-        );
-        assert_eq!(
-            table("Karoo").err(),
-            refused("Karoo", Unpayable::ManaAbility)
+            table("Outlet").err(),
+            refused("Outlet", Unpayable::ManaAbility)
         );
     }
 

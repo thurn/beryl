@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import cast
 
 from .card_facts import Cards, Json, Unsupported, made_by
+from .mana_symbols import has_priced_mana, priced_mana_text
 from .xmage_java import java_string
 from .xmage_trace import Position
 
@@ -94,6 +95,16 @@ class Payments:
                 return self.as_made_taps(who, at, taps, list(mana))
             except Unsupported:
                 pass
+        priced_count = sum(
+            1
+            for name in taps
+            if name not in self.cards.modal_back
+            and has_priced_mana(self.cards.abilities(name))
+        )
+        if priced_count >= 2:
+            raise Unsupported(
+                "a payment chaining several priced mana abilities, which XMage cannot solve"
+            )
         if self.cards.change_land_types() or any(map(self.cards.mana_choice, taps)):
             if who in self.left_to_xmage:
                 raise Unsupported("a payment after one XMage chose the sources of")
@@ -102,6 +113,10 @@ class Payments:
         lines: list[str] = []
         for name in taps:
             text = self.cards.mana_text(name)
+            if text is None and name not in self.cards.modal_back:
+                text = priced_mana_text(
+                    self.cards.abilities(name), self.cards.paragraphs(name)
+                )
             if text is not None:
                 if who in self.left_to_xmage:
                     # XMage paid an earlier spell with sources of its own choosing, and may

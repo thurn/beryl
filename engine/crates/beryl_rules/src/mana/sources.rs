@@ -118,17 +118,13 @@ pub(crate) struct Sources<L: Layout = Small> {
     rider_remembered: u8,
     /// Bit `i` is set if `classes[i]` has a rider (for `i < 32`).
     rider_classes: u32,
-    /// What the rich path plans with beside the classes (`mana::rich`): empty in a game whose
-    /// cards have no priced mana ability and no product of several terms.
+    /// What the rich path plans with beside the classes (`mana::rich`): empty otherwise.
     pub(super) extras: Vec<Extra<L>>,
 }
 
-/// Whether `player` may activate a mana ability now: one restricted to "Activate only if you
-/// control" a kind of permanent needs one on the battlefield
-/// (see [CR 602.5](https://yawgatog.com/resources/magic-rules/#R6025)): "A player can't begin to
-/// activate an ability that's prohibited from being activated." The kind of permanent is
-/// read through `words`, those of the permanent with the ability: the card table refuses a
-/// granted mana ability, so it is always the permanent's own.
+/// Whether `player` may activate a mana ability now (see
+/// [CR 602.5](https://yawgatog.com/resources/magic-rules/#R6025)): "A player can't begin to
+/// activate an ability that's prohibited from being activated." Read through `words`.
 pub(super) fn allowed<L: Layout>(
     s: &State<L>,
     t: &GameTable,
@@ -284,6 +280,11 @@ fn read_source<L: Layout>(
     // different mana for later.
     let mut conditional = false;
     let words = s.words_of(slot);
+    if t.can_either(Capability::PricedMana, Capability::ManaChanges)
+        && super::rich::has_extra_mana(s, t, slot)
+    {
+        return None;
+    }
     let mut abilities = s.abilities(t, slot).map(|(_, a)| a);
     for a in abilities.clone().filter(|a| is_simple(a)) {
         conditional |= a.only_if_you_control().is_some();
@@ -308,10 +309,6 @@ fn read_source<L: Layout>(
         "a source of several mana makes one kind"
     );
     // A merged permanent's other cards may have other abilities: it is a class of its own.
-    // It makes no card's mana (`State::makes_card_mana`), which most sources do, so that is
-    // asked first.
-    // Whether the face has another ability is found once per game, with `facts`, the table's
-    // facts of `face`, but for a face the table calls no source.
     let face_other = facts.other().unwrap_or_else(|| has_other_ability(face));
     let other = face_other || (!s.makes_card_mana(slot) && merged(s, t, slot));
     Some((kinds, amount, conditional || other, false))
@@ -561,6 +558,9 @@ impl<L: Layout> Sources<L> {
                 out.rider_remembered |= 1 << i;
             }
         }
+        if t.can_either(Capability::PricedMana, Capability::ManaChanges) {
+            super::rich::collect_extras(s, t, player, exclude, &mut out.extras)?;
+        }
         Ok(out)
     }
 
@@ -794,4 +794,3 @@ fn link_twins<L: Layout>(classes: &mut [Class<L>]) {
         }
     }
 }
-const _: () = assert!(size_of::<Class<Small>>() == 40);

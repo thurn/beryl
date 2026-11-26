@@ -132,7 +132,7 @@ fn activations<L: Layout>(
             {
                 continue;
             }
-            options.push(activation(a)?);
+            options.push(activation_on(s, t, slot, a)?);
         }
         if !options.is_empty() {
             permanents.push(options);
@@ -141,9 +141,39 @@ fn activations<L: Layout>(
     Some(permanents)
 }
 
-/// The activation of a mana ability, read from its cost and product: `None` for a cost with a
-/// part besides {T} and sacrificing its source, or a product with an amount that counts, which
-/// this reference does not read yet.
+/// The activation of a mana ability on `slot`, read from its cost and product: `None` for a cost
+/// with a part besides {T} and sacrificing its source.
+fn activation_on<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    slot: L::Slot,
+    a: &crate::card::Ability,
+) -> Option<Activation> {
+    let tap_only = a.cost().does(CostAction::Tap)
+        && a.cost().parts().iter().all(|part| {
+            matches!(
+                part,
+                CostPart::This(CostAction::Tap | CostAction::Sacrifice)
+            )
+        });
+    if !tap_only {
+        return None;
+    }
+    let mut terms = Vec::new();
+    for term in a.product() {
+        let n = if let Amount::Fixed(n) = term.amount {
+            n
+        } else {
+            crate::interpret::amount_of(s, t, slot, term.amount)
+        };
+        if n > 0 {
+            terms.push((term.kinds, n, term.uniform));
+        }
+    }
+    Some(Activation::of(a.cost().mana, &terms))
+}
+
+#[cfg(test)]
 fn activation(a: &crate::card::Ability) -> Option<Activation> {
     let tap_only = a.cost().does(CostAction::Tap)
         && a.cost().parts().iter().all(|part| {

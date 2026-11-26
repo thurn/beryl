@@ -95,3 +95,58 @@ pub const FLOATING_MANA: &[Scenario] =
                 ME.controls(props::VANILLA.card, 1),
             ]),
     ];
+
+/// Priced mana abilities (CR 605.3a): activating a mana ability whose cost includes mana
+/// requires paying that mana from another source or the pool first, and sequences of priced
+/// sources must spend the right colors to leave the target cost payable.
+pub const PRICED_MANA: &[Scenario] = &[
+    Scenario::new("A priced mana source alone cannot pay for a one-mana spell")
+        .battlefield(P0, &[names::AZORIUS_SIGNET])
+        .hand(P0, &[props::EQUIPMENT.card, names::ISLAND])
+        .actions(&[
+            // Only Pass and playing the Island are legal: the Signet cannot pay its own {1}.
+            ME.deciding(DecisionKind::Priority, 2),
+            ME.has(Zone::Hand, props::EQUIPMENT.card, 1),
+            ME.controls(props::EQUIPMENT.card, 0),
+        ]),
+    Scenario::new("A Signet and an Island pay {W}{U}")
+        .battlefield(P0, &[names::AZORIUS_SIGNET, names::ISLAND])
+        .hand(P0, &[props::ARTIFACT.card, props::EQUIPMENT.card])
+        .actions(&[
+            // {W} from the Signet casts Portable Hole and leaves {U} floating, which pays {1}.
+            ME.casts(props::ARTIFACT.card),
+            ME.mana(ManaColor::Blue, 1),
+            Resolve,
+            ME.controls(props::ARTIFACT.card, 1),
+            ME.casts(props::EQUIPMENT.card),
+            Resolve,
+            ME.controls(props::EQUIPMENT.card, 1),
+            ME.tapped(names::AZORIUS_SIGNET, 1),
+            ME.tapped(names::ISLAND, 1),
+            ME.mana(ManaColor::Blue, 0),
+        ]),
+    Scenario::new("Two Signets and one land pay {1}{W}{W} only by spending {U} into the second")
+        .battlefield(
+            P0,
+            &[names::AZORIUS_SIGNET, names::AZORIUS_SIGNET, names::ISLAND],
+        )
+        .hand(P0, &[props::FLIER.card])
+        .actions(&[
+            ME.casts(props::FLIER.card),
+            Resolve,
+            ME.controls(props::FLIER.card, 1),
+            ME.tapped(names::AZORIUS_SIGNET, 2),
+            ME.tapped(names::ISLAND, 1),
+        ]),
+    Scenario::new("Mana left floating by a priced payment stays in the pool")
+        .battlefield(P0, &[names::AZORIUS_SIGNET, names::ISLAND])
+        .hand(P0, &[props::ARTIFACT.card])
+        .actions(&[
+            ME.casts(props::ARTIFACT.card),
+            ME.mana(ManaColor::Blue, 1),
+            ME.tapped(names::AZORIUS_SIGNET, 1),
+            ME.tapped(names::ISLAND, 1),
+            Resolve,
+            ME.controls(props::ARTIFACT.card, 1),
+        ]),
+];

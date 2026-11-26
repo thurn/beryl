@@ -393,6 +393,18 @@ def taps(
     if at is None:
         return []
     found = payment(action, actions, trace, index)
+    if any(
+        name not in cards.modal_back
+        and any(
+            a["kind"] == "Mana"
+            and bool(cast(JsonObject, a.get("cost", {})).get("mana"))
+            for a in cards.abilities(name)
+        )
+        for name in found
+    ):
+        raise Unsupported(
+            "a payment activating a priced mana ability, which Forge's auto-tapper cannot solve"
+        )
     mana = cast(list[JsonObject], trace[at].get("mana", []))[:]
     land_types_change = cards.change_land_types()
     tapped: list[str | JsonObject] = []

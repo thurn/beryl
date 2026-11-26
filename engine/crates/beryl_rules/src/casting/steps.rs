@@ -688,7 +688,9 @@ pub(crate) fn perform<L: Layout>(
             let paying = mana::Paying::entry(s, t, top(s));
             let (remaining, color) =
                 mana::manual_pay(s, t, sink, c.player, remaining, option, paying)?;
-            spent::record_one(s, t, &c, color)?;
+            if let Some(color) = color {
+                spent::record_one(s, t, &c, color)?;
+            }
             if remaining.is_zero() {
                 return after_mana(s, t, sink, c);
             }

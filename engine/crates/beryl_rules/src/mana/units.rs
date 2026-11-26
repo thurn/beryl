@@ -12,7 +12,7 @@ use crate::layout::{Layout, Table};
 /// Mana available to pay with, counted by the set of kinds each unit can be: a floating
 /// {W} is one unit of `{W}`, an untapped Tundra one unit of `{W, U}`, a Mana Crypt two units
 /// of `{C}`.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct Units {
     by_kinds: [u16; 1 << KINDS],
     /// A bit per set of kinds with a unit, so reading the units skips the empty sets.

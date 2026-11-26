@@ -15,14 +15,14 @@ use crate::replacement::event::{self, Sink};
 use crate::state::{
     AbilityRef, ManaAmounts, PendingTrigger, State, TriggeredAbility, Zone, ZoneKey,
 };
-use crate::table::{Capability, GameTable, is_instant_mana, is_sacrificed, is_simple};
+use crate::table::{Capability, GameTable, is_instant_mana, is_priced, is_sacrificed, is_simple};
 use beryl_kernel::reference::Permanent;
 
 use super::pool::{helps, pay_unit};
 use super::remembered::{self, Paying};
 use super::solver::{Plan, fixed_units, lowest_kind, spent_by_class};
 use super::sources::{Class, Sources, allowed, alternative_ability};
-use super::{KINDS, Taps};
+use super::{CLASSES, KINDS, Taps};
 
 /// Pays `cost` by `plan`: taps its sources for the mana it needs, sacrificing those whose
 /// ability says so, and spends it.
@@ -89,6 +89,9 @@ fn pay_whole<L: Layout>(
     plan: &Plan<L>,
     paying: Paying<L>,
 ) -> Result<ManaAmounts, Full> {
+    if plan.sequence.is_some() {
+        return super::rich::pay(s, t, sink, player, cost, exclude, plan, paying);
+    }
     let sources = Sources::of(s, t, player, exclude, paying)?;
     if sources.has_memory() {
         return pay_with_memory(s, t, sink, player, cost, plan, paying, &sources);
@@ -234,7 +237,7 @@ fn pay_units<L: Layout, const MEMORY: bool>(
 }
 
 /// The source in `slot`, which a payment's plan or option names from the battlefield as it is.
-fn tapped_source<L: Layout>(s: &State<L>, slot: L::Slot) -> Permanent<L> {
+pub(super) fn tapped_source<L: Layout>(s: &State<L>, slot: L::Slot) -> Permanent<L> {
     s.permanent_at(slot)
         .expect("a mana source on the battlefield")
 }
@@ -384,6 +387,17 @@ pub(crate) fn activate_consuming<L: Layout>(
     activate_as::<L, false>(s, t, sink, permanent, color, consume)
 }
 
+/// [`activate`] for a source's restricted mana ability (`mana::rich`).
+pub(super) fn activate_restricted<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    permanent: Permanent<L>,
+    color: ManaColor,
+) -> Result<(), Full> {
+    activate_as::<L, true>(s, t, sink, permanent, color, false)
+}
+
 /// [`activate_consuming`], for the source's restricted mana ability if `RESTRICTED`.
 fn activate_as<L: Layout, const RESTRICTED: bool>(
     s: &mut State<L>,
@@ -518,6 +532,8 @@ pub(crate) fn manual_options<L: Layout>(
 ) -> Result<L::Queue<Opt<L>, OPTIONS>, Full> {
     let sources = Sources::of(s, t, player, exclude, paying)?;
     let pool = s.player(player).mana().amounts();
+    let rich =
+        t.can_either(Capability::PricedMana, Capability::ManaChanges) && !sources.extras.is_empty();
     let mut out: L::Queue<Opt<L>, OPTIONS> = Default::default();
     for kind in 0..KINDS {
         if !helps(remaining, kind) {
@@ -536,10 +552,19 @@ pub(crate) fn manual_options<L: Layout>(
         } else {
             continue;
         }
-        if sources
+        let ok = sources
             .units_left(after, &Table::filled(0), spent)
             .pays(rest)
-        {
+            || (rich
+                && super::rich::pays_from_state(
+                    after,
+                    &sources,
+                    &Table::filled(0),
+                    spent,
+                    &[0; CLASSES],
+                    rest,
+                ));
+        if ok {
             out.push(Opt::Pool(ManaColor::ALL[kind]))?;
         }
     }
@@ -549,18 +574,33 @@ pub(crate) fn manual_options<L: Layout>(
         let mut taps: Taps<L> = Table::filled(0);
         taps[i] = 1;
         for kind in (0..KINDS).filter(|&k| c.kinds & (1 << k) != 0) {
-            if !helps(remaining, kind) {
-                continue;
-            }
-            let mut rest = remaining;
-            pay_unit(&mut rest, kind);
-            let mut after = pool;
-            after[kind] += c.amount - 1;
             // A source with a restricted class names it by its kind: [`activate`] taps for
             // the unrestricted ability if it makes the kind.
-            if (c.is_restricted() && classes_make(&sources, c, kind))
-                || !sources.units(after, &taps).pays(rest)
-            {
+            if c.is_restricted() && classes_make(&sources, c, kind) {
+                continue;
+            }
+            let spend_ok = helps(remaining, kind) && {
+                let mut rest = remaining;
+                pay_unit(&mut rest, kind);
+                let mut after = pool;
+                after[kind] = after[kind].saturating_add(c.amount - 1);
+                sources.units(after, &taps).pays(rest)
+                    || (rich
+                        && super::rich::pays_from_state(
+                            after,
+                            &sources,
+                            &taps,
+                            0,
+                            &[0; CLASSES],
+                            rest,
+                        ))
+            };
+            let float_ok = !spend_ok && rich && !c.is_restricted() && {
+                let mut after = pool;
+                after[kind] = after[kind].saturating_add(c.amount);
+                super::rich::pays_from_state(after, &sources, &taps, 0, &[0; CLASSES], remaining)
+            };
+            if !spend_ok && !float_ok {
                 continue;
             }
             // A source that may also sacrifice itself for mana names that ability: its
@@ -576,13 +616,15 @@ pub(crate) fn manual_options<L: Layout>(
             })?;
         }
     }
+    if rich {
+        super::rich::manual_extra_options(remaining, pool, &sources, &mut out)?;
+    }
     Ok(out)
 }
 
 /// Performs a manual payment option, returning what remains to pay and the kind of the mana
-/// it paid with. The source's tap and its mana are kept as one group, a part of the payment a
-/// player makes a source at a time: what they pay for (`Cause::entry`) says which payment each
-/// is of.
+/// it paid with, or `None` when the option only added mana to the pool (such as activating a
+/// priced mana source or floating mana for its price).
 pub(crate) fn manual_pay<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
@@ -591,8 +633,9 @@ pub(crate) fn manual_pay<L: Layout>(
     mut remaining: ManaCost,
     option: Opt<L>,
     paying: Paying<L>,
-) -> Result<(ManaCost, ManaColor), Full> {
+) -> Result<(ManaCost, Option<ManaColor>), Full> {
     let made = s.player(player).remembered_mana().len();
+    let rich = t.can_either(Capability::PricedMana, Capability::ManaChanges);
     let color = match option {
         Opt::Pool(color) => color,
         Opt::Mana { slot, color } => {
@@ -600,14 +643,26 @@ pub(crate) fn manual_pay<L: Layout>(
             let activated = activate(s, t, sink, tapped_source(s, slot), color);
             sink.apart();
             activated?;
+            if rich && !super::rich::manual_can_spend_after(s, t, player, remaining, color, paying)?
+            {
+                return Ok((remaining, None));
+            }
             color
         }
-        // A source's mana ability that sacrifices it ([`manual_options`]): its first kind
-        // that pays part of what remains.
+        // Either a priced/multi-term mana ability (adds mana to the pool after paying its price
+        // from the pool) or a source's twin sacrifice mana ability.
         Opt::Activate { slot, ability } => {
-            let kinds = (s.abilities(t, slot).find(|&(a, _)| a == ability))
-                .map(|(_, a)| a.produces().colors)
+            let a = s
+                .abilities(t, slot)
+                .find(|&(id, _)| id == ability)
+                .map(|(_, a)| a)
                 .expect("an ability offered");
+            if rich && (is_priced(a) || a.produces() == crate::card::ManaSet::NONE) {
+                return super::rich::manual_pay_extra(
+                    s, t, sink, player, remaining, slot, ability, paying,
+                );
+            }
+            let kinds = a.produces().colors;
             let kind = (0..KINDS)
                 .find(|&k| kinds & (1 << k) != 0 && helps(remaining, k))
                 .unwrap_or_else(|| lowest_kind(kinds));
@@ -616,6 +671,10 @@ pub(crate) fn manual_pay<L: Layout>(
             let activated = activate_consuming(s, t, sink, tapped_source(s, slot), color, true);
             sink.apart();
             activated?;
+            if rich && !super::rich::manual_can_spend_after(s, t, player, remaining, color, paying)?
+            {
+                return Ok((remaining, None));
+            }
             color
         }
         Opt::Pass
@@ -656,7 +715,7 @@ pub(crate) fn manual_pay<L: Layout>(
         remembered::spend(s, t, player, usize::from(at), paying)?;
     }
     pay_unit(&mut remaining, color.index());
-    Ok((remaining, color))
+    Ok((remaining, Some(color)))
 }
 
 /// Whether the class with the same member as the restricted class `c` makes `kind`: then that

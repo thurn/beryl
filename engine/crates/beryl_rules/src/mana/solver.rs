@@ -25,9 +25,10 @@ pub(crate) struct Plan<L: Layout = Small> {
     pub(super) spend: [u8; KINDS],
     pub(super) taps: Taps<L>,
     pub(crate) left: [u8; KINDS],
-    /// The mana that remembers it spends, a bit per entry of [`Sources::remembered`]: none
-    /// in a game whose cards make no restricted mana.
+    /// The mana that remembers it spends, a bit per entry of [`Sources::remembered`].
     pub(super) remembered: u8,
+    /// Priced or multi-term mana sequence (`mana::rich`), `None` for a plain plan.
+    pub(super) sequence: Option<Box<super::rich::Sequence>>,
 }
 
 impl<L: Layout> Default for Plan<L> {
@@ -37,6 +38,7 @@ impl<L: Layout> Default for Plan<L> {
             taps: Table::filled(0),
             left: [0; KINDS],
             remembered: 0,
+            sequence: None,
         }
     }
 }
@@ -453,6 +455,8 @@ fn wasteful<L: Layout, const MEMORY: bool>(
 ///   an activated mana ability whenever they have priority".
 fn floats_for_nothing<L: Layout>(sources: &Sources<L>, p: &Plan<L>, q: &Plan<L>) -> bool {
     if p == q
+        || p.sequence.is_some()
+        || q.sequence.is_some()
         || q.taps.iter().zip(p.taps.iter()).any(|(a, b)| a > b)
         || q.left.iter().zip(&p.left).any(|(a, b)| a > b)
         || sources.sacrificed(q) > sources.sacrificed(p)
@@ -646,9 +650,7 @@ pub(crate) fn plans_accepting<L: Layout, const CHECK: bool>(
             .sum();
         unique.saturating_sub(cost.total(0))
     });
-    // Scores decide only between plans of one remainder and number sacrificed, and whether a
-    // plan sacrificing more is dominated, so each is found when one of those first needs it:
-    // a payment with one way to leave each remainder scores none.
+    // Scores decide only between plans of one remainder and number sacrificed.
     let mut later: Option<L::Queue<Later<L>, 32>> = None;
     let mut score = |p: &Plan<L>| {
         let later = later.get_or_insert_with(|| {
@@ -664,8 +666,7 @@ pub(crate) fn plans_accepting<L: Layout, const CHECK: bool>(
     let mut outcomes: L::Queue<(u8, bool), 64> = Default::default();
     let mut scores: L::Queue<Scored, 64> = Default::default();
     let mut full = false;
-    // Two searches, so that a payment that can spend no mana that remembers compares plans
-    // without testing for it at each one.
+    // Two searches: a payment that can spend no mana that remembers skips testing for it.
     if sources.has_memory() {
         each_plan(cost, pool, &sources, &mut |p| {
             if accepted(p) {
@@ -722,7 +723,6 @@ pub(crate) fn plans_accepting<L: Layout, const CHECK: bool>(
     if full || failed.get() {
         return Err(Full);
     }
-    // The sequences of priced mana abilities, beside the plans of the classes.
     if rich {
         super::rich::plans(
             s,
@@ -737,9 +737,11 @@ pub(crate) fn plans_accepting<L: Layout, const CHECK: bool>(
         if failed.get() {
             return Err(Full);
         }
+        while scores.len() < out.len() {
+            scores.push(None)?;
+        }
     }
-    // A plan is dominated only by one sacrificing fewer, so with one number sacrificed among
-    // them all no score is needed and every plan is kept.
+    // A plan is dominated only by one sacrificing fewer.
     let fewest = out.iter().map(|p| sources.sacrificed(p)).min();
     if out.iter().any(|p| Some(sources.sacrificed(p)) != fewest) {
         for (p, sc) in out.iter().zip(scores.as_mut_slice()) {

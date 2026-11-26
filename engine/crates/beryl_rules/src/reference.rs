@@ -149,9 +149,14 @@ fn check_payments<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Resul
     let Ok(funds) = Funds::of(s, t, player) else {
         return Ok(());
     };
+    let rich = t.can_either(Capability::PricedMana, Capability::ManaChanges);
     for cost in PROBES.iter().copied().chain(hand).chain(abilities) {
         // X is announced before payment, as 0 here.
         let cost = ManaCost { x: 0, ..cost };
+        if rich {
+            check_sequences(s, t, player, &funds, cost)?;
+            continue;
+        }
         let expected = reference_pays(units.as_slice(), cost);
         let none = Bitboard::EMPTY;
         let Ok(prefilter) = mana::payable(s, t, player, cost, none, mana::Paying::NOTHING) else {
@@ -186,9 +191,6 @@ fn check_payments<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Resul
                 )?;
             }
         }
-        if t.can_either(Capability::PricedMana, Capability::ManaChanges) {
-            check_sequences(s, t, player, &funds, cost)?;
-        }
     }
     check_spell_payments(s, t, player, &funds)
 }
@@ -209,6 +211,13 @@ fn check_sequences<L: Layout>(
     };
     let at = Some(At::Player(player));
     let none = Bitboard::EMPTY;
+    if let Ok(prefilter) = mana::payable(s, t, player, cost, none, Paying::NOTHING) {
+        check(
+            prefilter == expected,
+            "the payability prefilter disagrees with the sequence reference",
+            at,
+        )?;
+    }
     check(
         funds.pays_for(s, t, cost, none, Paying::NOTHING) == expected,
         "the cached funds disagree with the sequence reference",
