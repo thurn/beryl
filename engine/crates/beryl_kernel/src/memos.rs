@@ -39,6 +39,7 @@ use crate::store::{Duration, Ended, Store};
 use crate::table::GameTable;
 
 mod combat;
+mod control;
 mod designation;
 mod face_down;
 mod graveyard_cast;
@@ -201,6 +202,12 @@ pub enum Memo<L: Layout = Small> {
     /// ([`beryl_card::Ability::cast_from_graveyard_each_turn`]) this turn. Each turn begins
     /// with none ([`State::forget_graveyard_casts`]); a permanent entering later is new.
     CastFromGraveyard,
+    /// The controller the layer results last gave this permanent, where that is not its base
+    /// controller: what the next results are compared with to find a permanent whose
+    /// controller a static ability changed ([`State::note_control_changes`]). Kept only in a
+    /// game with a card whose static ability changes control
+    /// ([`crate::Capability::StaticControl`]).
+    ControlledBy(Seat),
 }
 
 /// The kinds of memo among a store's entries: its index by kind, so that a reader of a kind
@@ -229,6 +236,7 @@ impl Kinds {
     const EXILED_FROM_PILE: u32 = 1 << 23;
     const TURNS_UP: u32 = 1 << 24;
     const CAST_FROM_GRAVEYARD: u32 = 1 << 25;
+    const CONTROLLED_BY: u32 = 1 << 26;
     /// The kinds whose memo names a slot ([`Memo::names`]).
     const NAMING: u32 = Kinds::EXILED_WITH
         | Kinds::EXILED_UNTIL

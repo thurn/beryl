@@ -171,6 +171,7 @@ impl<L: Layout> crate::state::State<L> {
             | Memo::Chosen(_)
             | Memo::Really(_)
             | Memo::PhasedOutUnder(_)
+            | Memo::ControlledBy(_)
             | Memo::PartOf(_)
             | Memo::FaceDownUnder(_)
             | Memo::Morphed

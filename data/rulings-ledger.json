@@ -772,6 +772,15 @@
       ]
     }
   ],
+  "Control Magic": [
+    {
+      "published_at": "2016-06-08",
+      "hash": "601154ca0ba8",
+      "scenario": [
+        "Control Magic doesn't take the Auras on the creature"
+      ]
+    }
+  ],
   "Crystal Spray": [
     {
       "published_at": "2004-10-04",

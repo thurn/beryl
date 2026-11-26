@@ -23,6 +23,9 @@ impl Ctx {
             Players::SubgameNonwinners => "each player who doesn't win the subgame".to_owned(),
             Players::Enchanted => "enchanted player".to_owned(),
             Players::Target(n) => self.target(n).unwrap_or_else(|| "that player".to_owned()),
+            Players::ControllerOf(Objects::Target(n)) if self.opponents_target(n) => {
+                "that opponent".to_owned()
+            }
             Players::ControllerOf(objects) => {
                 format!("{} controller", self.objects_possessive(objects))
             }
@@ -71,6 +74,21 @@ impl Ctx {
             | Players::SubgameNonwinners
             | Players::EachOther(_)) => format!("{}'s", self.player(other)),
         }
+    }
+
+    /// Whether the `n`th target, already said, is a permanent an opponent controls, whose
+    /// controller is then "that opponent": "Put target permanent an opponent controls on top
+    /// of its owner's library. That opponent may put ...".
+    fn opponents_target(&self, n: SpecIx) -> bool {
+        let opponents = |filter: &Filter| matches!(filter, Filter::Whose(Players::EachOpponent));
+        self.mentioned.get(n.index()).is_some_and(|&said| said)
+            && self.targets.get(n.index()).is_some_and(|spec| {
+                if let Filter::All(filters) = spec.filter {
+                    filters.iter().any(opponents)
+                } else {
+                    opponents(&spec.filter)
+                }
+            })
     }
 
     /// The `n`th target: its phrase the first time it is said, `None` after.

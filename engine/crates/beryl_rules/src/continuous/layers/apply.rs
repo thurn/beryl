@@ -101,6 +101,12 @@ pub(super) fn settle<L: Layout>(
         // nothing the layers change, a permanent's mana value.
         LayerChange::Read { .. } if reads_each::<L>(t, source, change) => change,
         LayerChange::Read { .. } => read(s, t, source, change, by, None),
+        // A static ability's "you control" names its permanent's controller as layer 2 has
+        // it so far ([CR 613.1b]): "Layer 2: Control-changing effects are applied." So
+        // whoever gains control of Control Magic gains control of the creature it enchants.
+        //
+        // [CR 613.1b]: https://yawgatog.com/resources/magic-rules/#R6131b
+        LayerChange::Control(_) if let Some(by) = by => LayerChange::Control(by.you),
         change @ (LayerChange::Control(_)
         | LayerChange::AddTypes(_)
         | LayerChange::RemoveTypes(_)
@@ -650,7 +656,8 @@ pub(super) fn existence_reads(spec: &beryl_card::LayerSpec) -> Characteristics {
     reads
 }
 
-/// The characteristics a static ability's change reads to get its amounts as the layer applies.
+/// The characteristics a static ability's change reads to get its amounts as the layer applies,
+/// or the player it names.
 pub(super) fn amount_reads(spec: &beryl_card::LayerSpec, change: LayerChange) -> Characteristics {
     fn of(amount: &Amount) -> Characteristics {
         match *amount {
@@ -681,8 +688,9 @@ pub(super) fn amount_reads(spec: &beryl_card::LayerSpec, change: LayerChange) ->
     }
     let part = match change {
         LayerChange::Read { part, .. } => part,
-        LayerChange::Control(_)
-        | LayerChange::AddTypes(_)
+        // A static "you control" reads its own permanent's controller ([`settle`]).
+        LayerChange::Control(_) => return Characteristics::CONTROLLER,
+        LayerChange::AddTypes(_)
         | LayerChange::RemoveTypes(_)
         | LayerChange::SetTypes(_)
         | LayerChange::AddSubtype(_)

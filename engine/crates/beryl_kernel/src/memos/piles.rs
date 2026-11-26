@@ -41,6 +41,7 @@ impl<L: Layout> State<L> {
                 | Memo::Really(_)
                 | Memo::PutOntoBattlefieldWith(_)
                 | Memo::PhasedOutUnder(_)
+                | Memo::ControlledBy(_)
                 | Memo::PartOf(_)
                 | Memo::FaceDownUnder(_)
                 | Memo::Morphed

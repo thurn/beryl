@@ -986,6 +986,14 @@ pub struct Derived {
   card pairs. The effect applied next is the earliest by timestamp that depends
   on nothing still waiting; with every one waiting, the earliest in a loop (CR
   613.8b).
+- **Control from a static ability.** Control Magic's "You control enchanted
+  creature" names its permanent's controller as layer 2 has it so far, so
+  whoever controls the Aura controls the creature. Such a change shows only in
+  the layer results, so in a game with such a card (`Capability::StaticControl`)
+  each state-based action check compares every permanent's controller with the
+  one the check before saw (a memo), and marks one that changed as not
+  continuously controlled since its controller's turn began (CR 302.6). The
+  check comes before any player can act (CR 704.3).
 - **A granted static ability.** An ability granted in layer 6 whose effect
   belongs to an earlier layer is found only after that layer has run, so the
   recompute runs the layers again with the abilities the run before found

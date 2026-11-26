@@ -27,6 +27,7 @@ impl<L: Layout> Memo<L> {
             Memo::CombatBand(_) => Kinds::COMBAT_BAND,
             Memo::Prepared(_) => Kinds::PREPARED,
             Memo::CastFromGraveyard => Kinds::CAST_FROM_GRAVEYARD,
+            Memo::ControlledBy(_) => Kinds::CONTROLLED_BY,
         }
     }
 
@@ -41,6 +42,7 @@ impl<L: Layout> Memo<L> {
             | Memo::Really(_)
             | Memo::PutOntoBattlefieldWith(_)
             | Memo::PhasedOutUnder(_)
+            | Memo::ControlledBy(_)
             | Memo::FaceDownUnder(_)
             | Memo::Morphed
             | Memo::TurnsUpWhenUsed
@@ -81,6 +83,7 @@ impl<L: Layout> Memo<L> {
             | Memo::Chosen(_)
             | Memo::Really(_)
             | Memo::PhasedOutUnder(_)
+            | Memo::ControlledBy(_)
             | Memo::FaceDownUnder(_)
             | Memo::Morphed
             | Memo::TurnsUpWhenUsed
@@ -115,6 +118,7 @@ impl<L: Layout> Memo<L> {
             | Memo::PutOntoBattlefieldWith(_)
             | Memo::Really(_)
             | Memo::PhasedOutUnder(_)
+            | Memo::ControlledBy(_)
             | Memo::Morphed
             | Memo::TurnsUpWhenUsed
             | Memo::CastFromGraveyard
@@ -146,6 +150,7 @@ impl<L: Layout> Memo<L> {
             Memo::Really(card) => Memo::Really(crate::relayout::card(card)),
             Memo::PutOntoBattlefieldWith(link) => Memo::PutOntoBattlefieldWith(link.relayout()),
             Memo::PhasedOutUnder(player) => Memo::PhasedOutUnder(player),
+            Memo::ControlledBy(player) => Memo::ControlledBy(player),
             Memo::PartOf(of) => Memo::PartOf(slot(of)),
             Memo::ExiledFromPileOf(by) => Memo::ExiledFromPileOf(by.relayout()),
             Memo::FaceDownUnder(knew) => Memo::FaceDownUnder(knew),

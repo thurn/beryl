@@ -45,6 +45,9 @@ pub(crate) fn check<L: Layout>(
         return Ok(true);
     }
     layers::refresh(s, t, sink)?;
+    if t.can(Capability::StaticControl) {
+        note_control_changes(s)?;
+    }
     // State triggers are no state-based actions (see CR 603.8: "Note that state triggers aren't the
     // same as state-based actions."), but they are found at the same moments.
     crate::stack::trigger::match_states(s, t)?;
@@ -64,6 +67,21 @@ pub(crate) fn check<L: Layout>(
         return Ok(false);
     }
     perform(s, t, sink, graveyard, tokens, extra, legends)
+}
+
+/// Marks the permanents whose controller a static ability changed since the last check as
+/// not continuously controlled since their controller's most recent turn began
+/// ([`State::note_control_changes`], see CR 302.6): such a change shows only in the layer
+/// results. [`check`] calls it after refreshing them, in a game with a card whose static
+/// ability changes control, and comes whenever a player would get priority (CR 704.3), so
+/// every change is noted before a player can attack with the permanent or activate its
+/// abilities. Out of line, and not in `layers::refresh`: code added to the recompute's path
+/// changes how the compiler inlines it, which cost the rollout benchmark 1.5% of its
+/// instructions.
+#[cold]
+#[inline(never)]
+fn note_control_changes<L: Layout>(s: &mut State<L>) -> Result<(), Full> {
+    s.note_control_changes()
 }
 
 /// The illegal attachments to detach and the completed Sagas to sacrifice.

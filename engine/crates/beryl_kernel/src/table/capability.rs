@@ -178,10 +178,15 @@ pub enum Capability {
     /// A card asks whether a player declared an attacker this turn
     /// ([`Condition::AttackedThisTurn`]), so each attacker declared is counted for its player.
     AttackersDeclared,
+    /// A card has a static ability that changes control ([`Modification::Control`]), as
+    /// Control Magic's "You control enchanted creature", so the permanents whose controller
+    /// the layers change are found at each state-based action check
+    /// ([`crate::State::note_control_changes`]).
+    StaticControl,
 }
 
 // The game keeps its capabilities in a `u64`.
-const _: () = assert!((Capability::AttackersDeclared as u32) < u64::BITS);
+const _: () = assert!((Capability::StaticControl as u32) < u64::BITS);
 
 impl Capability {
     /// The capabilities of every face and subtype the game can contain.
@@ -249,6 +254,12 @@ impl Capability {
                 || face.abilities.iter().any(crate::table::is_simple))
         {
             found |= Capability::SacrificeAlternative.bit();
+        }
+        if face.abilities.iter().chain(face.grants).any(|a| {
+            a.layer()
+                .is_some_and(|spec| spec.modifications.contains(&Modification::Control))
+        }) {
+            found |= Capability::StaticControl.bit();
         }
         // An ability a permanent is granted reads what one of its own does.
         if face.grants.iter().any(|a| a.layer().is_some()) {

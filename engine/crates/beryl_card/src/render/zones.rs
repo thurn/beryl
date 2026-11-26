@@ -307,24 +307,26 @@ impl Ctx {
 
     /// "Each player may put an artifact card from their hand onto the battlefield": each
     /// player's hidden pick of a card of their zone (CR 101.4a), and then the cards picked put
-    /// onto the battlefield under their owners' control, said as one instruction. `None` for
-    /// any other pair.
+    /// onto the battlefield under their owners' control, said as one instruction. One
+    /// player's pick, not inside [`Effect::ForEachPlayer`], says "that opponent may put ...".
+    /// `None` for any other pair.
     pub(super) fn hidden_put(&mut self, effect: &Effect, next: &Effect) -> Option<String> {
+        let (players, choose) = if let Effect::ForEachPlayer { players, effect } = *effect {
+            (Some(players), effect)
+        } else {
+            (None, effect)
+        };
         let (
-            &Effect::ForEachPlayer {
-                players,
-                effect:
-                    &Effect::Choose {
-                        player,
-                        among:
-                            Objects::InZoneOf {
-                                zone,
-                                players: whose,
-                                filter,
-                            },
-                        hidden: true,
-                        ..
+            &Effect::Choose {
+                player,
+                among:
+                    Objects::InZoneOf {
+                        zone,
+                        players: whose,
+                        filter,
                     },
+                hidden: true,
+                ..
             },
             &Effect::PutOntoBattlefield(&PutOnto {
                 objects: Objects::Those,
@@ -332,11 +334,14 @@ impl Ctx {
                 tapped,
                 linked: false,
             }),
-        ) = (effect, next)
+        ) = (choose, next)
         else {
             return None;
         };
-        let saved = self.group.replace(players);
+        let saved = match players {
+            Some(players) => self.group.replace(players),
+            None => self.group,
+        };
         self.may = true;
         let tapped = if tapped { " tapped" } else { "" };
         let clause = self.clause(player, ("put", "puts"), |c| {

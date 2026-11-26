@@ -24,9 +24,7 @@ use beryl_card::MODIFY_PARTS;
 use beryl_kernel::derive::Rederive;
 
 use crate::bitboard::Bitboard;
-use crate::card::{
-    Ability, AbilityIx, Colors, FaceIx, GrantIx, Layer, LayerSpec, Modification, Objects, Words,
-};
+use crate::card::{Ability, AbilityIx, Colors, FaceIx, GrantIx, Layer, LayerSpec, Objects, Words};
 use crate::decision::{Outcome, StallReason};
 use crate::fixed::Full;
 use crate::ids::CardId;
@@ -570,9 +568,8 @@ fn list_static<L: Layout>(
         .expect("a layer spec has at most MODIFY_PARTS parts");
     let mut changes = [LayerChange::SwitchPt; MODIFY_PARTS];
     for (&modification, part) in spec.modifications.iter().zip(0..parts) {
-        // No static ability of the cards changes control. One that did would name
-        // its source's controller as layer 2 has it, not as the permanent entered.
-        debug_assert_ne!(modification, Modification::Control);
+        // A static ability that changes control names `you` here, its permanent's base
+        // controller, and is read again as layer 2 applies (`apply::settle`).
         // "The chosen color" is the one chosen for this permanent. An amount read as its
         // layer applies is named by the ability that says it. The card table refuses a
         // granted ability with one (`Unapplied::GrantedAmount`).
