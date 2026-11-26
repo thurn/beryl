@@ -13,7 +13,7 @@
 //!   cores file, by growing (see `rank` in `ledger/order.rs`). Several such requests share the
 //!   reserve in the order they were first asked for.
 //! - A request with `Reserve::TipRound`, one of the round's other builds and checks before
-//!   `master` moves, takes up to all of the reserve that no `Reserve::TipBuild` request takes or
+//!   `master` moves or a run of a culprit search or revert, which the tip loop waits for, takes up to all of the reserve that no `Reserve::TipBuild` request takes or
 //!   holds, and starts at once on it. It takes the rest of what it wants from the shared cores
 //!   in its own class, `tip`, below agents. On 2026-11-25 one machine kept 2 cores for build
 //!   checks only, and its other tip commands waited up to 1,500 s for cores behind agent work,
@@ -41,11 +41,6 @@ use super::super::{Grant, GrantRequest};
 use super::{Held, Ledger, Origin, Waiter, gives_back};
 
 impl Ledger {
-    /// The cores of the tip reserve each waiting request on it would take if it started now:
-    /// what it wants, from what no grant holds, `Reserve::TipBuild` requests before
-    /// `Reserve::TipRound` ones, each kind in the order the requests were first asked for. A
-    /// request that cannot start for its resources or memory keeps its part until the next
-    /// step. None while the machine is `pressed` for memory, when nothing new starts.
     /// How many units of the resource `name` that `waiter` must leave free for requests on the
     /// tip reserve: one for each such request still waiting for `name`, other than those already
     /// `picked` in this step. Zero when `waiter` is itself on the reserve, so tip round requests
@@ -63,6 +58,11 @@ impl Ledger {
         u32::try_from(kept.count()).unwrap_or(u32::MAX)
     }
 
+    /// The cores of the tip reserve each waiting request on it would take if it started now:
+    /// what it wants, from what no grant holds, `Reserve::TipBuild` requests before
+    /// `Reserve::TipRound` ones, each kind in the order the requests were first asked for. A
+    /// request that cannot start for its resources or memory keeps its part until the next
+    /// step. None while the machine is `pressed` for memory, when nothing new starts.
     pub(super) fn reserve_parts(&self, pressed: bool) -> BTreeMap<u64, u32> {
         let mut free = if pressed { 0 } else { self.tip_reserve_free() };
         let mut parts = BTreeMap::new();

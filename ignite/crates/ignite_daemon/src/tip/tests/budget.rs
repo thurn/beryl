@@ -146,10 +146,14 @@ fn master_moves_once_the_budgeted_checks_pass_and_a_later_failure_holds_it() {
     );
     assert_eq!(world.master(), tip);
     assert_eq!(world.hub.regressions().len(), 1, "reported once");
-    // Running a cached failure again is work before the move too. The round's search for a
-    // landing to revert runs it afterwards, outside the round's checks, without the reserve.
+    // Running a cached failure again is work before the move too, and so is the round's
+    // search for a landing to revert, which the tip loop waits for.
     let second_round = world.work.pre_move.lock().unwrap()[first_round..].to_vec();
-    assert_eq!(second_round.first(), Some(&(name("unit:c"), true)));
+    assert!(!second_round.is_empty());
+    assert!(
+        second_round.iter().all(|(_, pre_move)| *pre_move),
+        "{second_round:?}"
+    );
 }
 
 #[test]

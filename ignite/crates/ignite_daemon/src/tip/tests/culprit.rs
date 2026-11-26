@@ -48,6 +48,10 @@ fn commits_no_landing_recorded_are_searched_one_by_one() {
     // The tip's own run, then one run of the search at the first candidate.
     let runs: Vec<Commit> = world.work.runs().into_iter().map(|run| run.1).collect();
     assert_eq!(runs, vec![tip, commit("cccc000")]);
+    // The search's run is on the tip reserve: the tip loop starts no newer round until the
+    // search ends, so it must not queue behind landings and agents for cores or resources.
+    let pre_move = world.work.pre_move.lock().unwrap().clone();
+    assert_eq!(pre_move.last(), Some(&(failing.check.clone(), true)));
 }
 
 /// A recorded landing keeps its commits together, and unrecorded commits beside it stand

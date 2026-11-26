@@ -1060,5 +1060,10 @@
     "label": "A shared resource such as `bench-vm` goes to a waiting tip round request (`Reserve::TipRound` or `Reserve::TipBuild`) before landings and agents, so a tip round's `counts` and `client-frame-counts` checks on jarvis no longer wait 120 to 763 s behind other classes' count runs",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
+  },
+  {
+    "label": "A tip round's culprit searches, reverts and revert build checks run on the tip reserve (`Reserve::TipRound`), so they no longer wait behind landings and agents for cores and the `bench-vm` resource while the machine's next tip round waits for them (one probe on jarvis waited 1,534 s)",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]

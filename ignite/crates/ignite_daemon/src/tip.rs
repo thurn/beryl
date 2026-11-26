@@ -260,8 +260,8 @@ pub trait TipWork: Send + Sync {
     }
     /// Runs the named checks at `commit` in a landing tree, in the `tip` class, storing their
     /// results. `rerun` ignores cached results. `pre_move` says the round runs them before
-    /// `master` moves, so their builds and commands may draw on the tip reserve
-    /// (`Reserve::TipRound`).
+    /// `master` moves, or that the tip loop waits for them (a culprit search, a revert), so
+    /// their builds and commands may draw on the tip reserve (`Reserve::TipRound`).
     fn run(
         &self,
         ctx: &Context,

@@ -230,8 +230,9 @@ pub fn ticketed_landings(ctx: &Context, commits: Vec<CommitPaths>) -> Result<Vec
 
 /// How a tip round runs checks. Before `master` moves, the round's builds and commands may draw
 /// on the cores the machine keeps for tip work (`Reserve::TipRound`), so that agents holding
-/// every other core cannot hold `master` back. Afterwards they take free cores like any other
-/// `tip` work.
+/// every other core cannot hold `master` back. So do culprit searches and reverts
+/// (`TipVerifier::probe`), which the tip loop waits for. Checks past the budget, after `master`
+/// moves, take free cores like any other `tip` work.
 fn options(rerun: bool, pre_move: bool) -> RunOptions {
     RunOptions {
         verb: "tip".to_owned(),

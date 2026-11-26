@@ -8,14 +8,14 @@
 //! - The report says how the search ended ([`CulpritSearch`]): one candidate, narrowed to one,
 //!   ended early with a range and why, or not run and why.
 
-use ignite_core::ids::Commit;
+use ignite_core::ids::{CheckName, Commit};
 use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::{FoundBy, RegressionReport};
 use ignite_core::tipround::CulpritSearch;
 use ignite_core::traits::Result;
 
 use super::revert::Handled;
-use super::{Culprit, MAX_RUNS, TipCheck, TipLanding, TipVerifier, tail, touches};
+use super::{Culprit, MAX_RUNS, TipCheck, TipLanding, TipRun, TipVerifier, tail, touches};
 use crate::server::Context;
 
 /// Narrows the landings between a pass at `good` and a known failure at the end of
@@ -138,6 +138,25 @@ pub(crate) fn with_culprit(
 }
 
 impl TipVerifier {
+    /// Runs `checks` at `at` for a culprit search, a revert or a revert's build checks, on the
+    /// tip reserve (`Reserve::TipRound`). These runs happen inside the tip loop, so the
+    /// machine starts no newer round until they finish, and a revert they lead to is what moves
+    /// `master` past a failure. Without the reserve they waited in the `tip` class behind every
+    /// landing's and agent's request for cores and shared resources. On 2026-11-26 jarvis, the
+    /// only Mac running `client-frame-counts`, searched for the culprit of a failure at tip
+    /// `fe6c757`, and one probe waited 1,534 s for the `bench-vm` resource while five landing
+    /// checks took turns with it. The newer tip's macOS checks waited for the search, and
+    /// `master` stood still for over an hour.
+    pub(super) fn probe(
+        &self,
+        ctx: &Context,
+        at: &Commit,
+        checks: &[CheckName],
+        rerun: bool,
+    ) -> Vec<TipRun> {
+        self.work.run(ctx, at, checks, rerun, true)
+    }
+
     /// The landing between `good` and `bad` that made `check` fail, or the range of landings a
     /// search that ran out of runs ended with. `None` when no commit lies between them.
     pub fn find_culprit(
@@ -149,8 +168,7 @@ impl TipVerifier {
     ) -> Result<Option<Culprit>> {
         let landings = self.work.landings(ctx, good, bad)?;
         Ok(bisect(&landings, &check.inputs, good, |at| {
-            self.work
-                .run(ctx, at, std::slice::from_ref(&check.check), false, false)
+            self.probe(ctx, at, std::slice::from_ref(&check.check), false)
                 .into_iter()
                 .find(|run| run.check == check.check)
                 .map(|run| run.outcome)
