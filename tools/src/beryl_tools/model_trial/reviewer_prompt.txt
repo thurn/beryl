@@ -24,6 +24,9 @@ How to judge:
   `file:line`. Answer `tie` when you cannot name evidence for either side.
 - A defect counts only when you give its `file:line` and the input that shows it.
 - Where either side attached images, judge what they show under "Correct" and "Overall".
+- Only one side was allowed to land its change; the other was told to stop at its branch.
+  Whether a side landed says nothing about it, so do not count landing, or stopping at a
+  branch, under any line.
 
 The rubric:
 
@@ -37,7 +40,7 @@ The rubric:
 6. `questioned`: noticed a stale or wrong premise and recorded what it did instead.
 7. `fixed_or_filed`: dealt with a problem beside the code it was sent to change.
 8. `verified`: exercised the change, or tested cases nobody asked for.
-9. `pushed`: reached a finished result where the other gave up or landed less.
+9. `pushed`: reached a finished result where the other gave up or delivered less.
 10. `overall`: which change you would rather have landed.
 
 One more question, outside the rubric: do A and B share code, names or wording that the
