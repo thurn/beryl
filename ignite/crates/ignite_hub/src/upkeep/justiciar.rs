@@ -234,7 +234,7 @@ pub(super) fn file_resource_stall(
 
 /// The oldest landing in the last week that came after the last verified tip, as its landing
 /// time and ticket, if there is one.
-fn oldest_unverified_landing(
+pub(super) fn oldest_unverified_landing(
     conn: &Connection,
     now: Timestamp,
 ) -> Result<Option<(Timestamp, String)>> {

@@ -13,6 +13,8 @@
 //! - files a P0 ticket for a person when a machine that is not off stops reporting for half
 //!   an hour ([`silent`]);
 //! - files justiciar tickets for sustained machine resource stalls ([`resource_stalls`]);
+//! - freezes landings across the fleet when `master` falls six hours behind, and ends the
+//!   freeze once it catches up ([`freeze`]);
 //! - files the copy of each meta-ticket whose schedule says one is due ([`schedules`]);
 //! - opens the tickets the hub filed pending once their automated source has a positive
 //!   allocation, its own or the General pool's ([`source_release`]);
@@ -47,6 +49,7 @@ pub(crate) mod culprit_affinity;
 pub mod explore;
 pub mod filing;
 mod flaky;
+pub mod freeze;
 mod invalid_checks;
 pub mod justiciar;
 pub mod machines;
@@ -69,6 +72,8 @@ mod unproven_holds;
 mod attachments_tests;
 #[cfg(test)]
 mod clearing_tests;
+#[cfg(test)]
+mod freeze_tests;
 #[cfg(test)]
 mod guard_tests;
 #[cfg(test)]
@@ -128,6 +133,9 @@ pub struct UpkeepReport {
     pub checks_restored: Vec<String>,
     /// Efficiency rows deleted for being older than any reader needs.
     pub metrics_deleted: usize,
+    /// `Some(true)` when this pass froze landings because `master` fell far behind, and
+    /// `Some(false)` when it ended the freeze because `master` caught up ([`freeze`]).
+    pub landings_frozen: Option<bool>,
     /// Tickets whose attachment files were removed.
     pub attachments_removed: Vec<String>,
     pub snapshot: Option<PathBuf>,
@@ -220,6 +228,14 @@ impl Upkeep {
         keep(silent::machines_silent(conn, now).map(|filed| note(&mut report, filed)));
         keep(stuck::stuck_epics(conn, now).map(|filed| note(&mut report, filed)));
         keep(justiciar::master_lag(conn, now).map(|filed| note(&mut report, filed)));
+        keep(freeze::pass(conn, now).map(|freeze| {
+            if freeze.lifted {
+                report.landings_frozen = Some(false);
+            } else if !freeze.filed.is_empty() {
+                report.landings_frozen = Some(true);
+            }
+            note(&mut report, freeze.filed);
+        }));
         keep(resource_stalls::file(conn, now).map(|filed| note(&mut report, filed)));
         keep(schedules::file_due(conn, now).map(|copies| report.tickets_filed.extend(copies)));
         if let Some(files) = self.attachments.clone()

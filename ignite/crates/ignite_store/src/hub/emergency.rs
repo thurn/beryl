@@ -64,15 +64,27 @@ pub fn change(conn: &Connection, change: &EmergencyChange, now: Timestamp) -> Re
         )));
     }
     let next = emergency::apply(stored(&tx)?, change, now).map_err(StoreError::Rejected)?;
-    let json =
-        serde_json::to_string(&next).map_err(|e| StoreError::Invalid(format!("emergency: {e}")))?;
-    tx.execute(
+    write(&tx, &next)?;
+    tx.commit()?;
+    Ok(next)
+}
+
+/// Stores `emergency` as given, without the rule of [`change`] that only a session holding an
+/// incident or justiciar ticket may declare. Hub upkeep uses it to freeze landings by itself
+/// when `master` falls far behind, since no session declares that emergency.
+pub fn impose(conn: &Connection, emergency: &Emergency) -> Result<()> {
+    write(conn, emergency)
+}
+
+fn write(conn: &Connection, emergency: &Emergency) -> Result<()> {
+    let json = serde_json::to_string(emergency)
+        .map_err(|e| StoreError::Invalid(format!("emergency: {e}")))?;
+    conn.execute(
         "INSERT INTO meta (key, value) VALUES (?1, ?2) \
          ON CONFLICT(key) DO UPDATE SET value = excluded.value",
         params![KEY, json],
     )?;
-    tx.commit()?;
-    Ok(next)
+    Ok(())
 }
 
 /// Ends the emergency, as `ignite pool resume --all` does.
