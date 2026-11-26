@@ -20,7 +20,7 @@ use beryl_kernel::reference::Permanent;
 
 use super::pool::{helps, pay_unit};
 use super::remembered::{self, Paying};
-use super::solver::{Plan, lowest_kind, spent_by_class};
+use super::solver::{Plan, fixed_units, lowest_kind, spent_by_class};
 use super::sources::{Class, Sources, allowed, alternative_ability};
 use super::{KINDS, Taps};
 
@@ -144,7 +144,8 @@ fn pay_units<L: Layout, const MEMORY: bool>(
             .filter(|(c, _)| c.amount == 1)
             .map(|(_, &n)| u32::from(n))
             .sum::<u32>();
-    let spent = spent_by_class(sources, plan, total - must);
+    let fixed = fixed_units::<L, MEMORY>(sources, plan);
+    let (spent, _) = spent_by_class(sources, plan, total - must, cost, fixed);
     let mut units: L::Queue<Unit<L::Slot>, 64> = Default::default();
     for (k, &n) in plan.spend.iter().enumerate() {
         for _ in 0..n {

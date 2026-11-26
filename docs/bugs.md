@@ -6,6 +6,22 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **The mana solver split the extra mana of several multi-mana sources without
+  looking at their colors.** With Svyelunite Temple and Mana Crypt untapped, the
+  solver found no way to pay {1}{U}{U}, though sacrificing the Temple for {U}{U}
+  and tapping the Crypt for {C}{C} pays it; fuzzing reported "the payment solver
+  disagrees with the reference". `spent_by_class` in `mana/solver.rs` gives each
+  tapped source of several mana at least one of its mana and then hands the rest
+  of the cost's total to those sources in class order, so the Crypt spent both
+  its {C} and the Temple only one {U}. Before the Temple, every source of several
+  mana made colorless mana, and the order never mattered. Fixed:
+  `spent_by_class` takes the cost, and where the sources of several mana make
+  different kinds and the first split does not pay, it tries the other splits
+  until one does; the payment in `mana/pay.rs` spends the same split. Guard: the
+  scenario "Svyelunite Temple and Mana Crypt pay for Sink into Stupor", and the
+  reference payability check (`reference::check_payments`), which compares the
+  solver with a matching of symbols to units at every fuzzed position.
+
 - **A land with both a {T} mana ability and a {T}, sacrifice mana ability was
   treated as making only the smaller amount.** Svyelunite Temple ("{T}: Add
   {U}." and "{T}, Sacrifice this land: Add {U}{U}.") alone could not pay for

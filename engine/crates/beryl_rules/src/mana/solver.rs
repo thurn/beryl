@@ -15,7 +15,7 @@ use crate::table::GameTable;
 
 use super::lookahead::{Later, later_costs, looking_ahead, still_payable};
 use super::remembered::Paying;
-use super::sources::Sources;
+use super::sources::{Class, Sources};
 use super::{CLASSES, KINDS, Taps, units::Units};
 
 /// One way to pay a cost: the floating mana spent by kind, how many sources of each class
@@ -152,33 +152,140 @@ fn walk<L: Layout, const MEMORY: bool>(
     true
 }
 
-/// How many units each tapped class spends under `plan`: all of a one-mana source's, and of
-/// the sources that make several, `need` spread over them, at least one each.
+/// The units `plan` spends that leave no choice: its floating mana, the mana that remembers it
+/// spends and each tapped source of one mana. With `MEMORY`, as in [`walk`].
+pub(super) fn fixed_units<L: Layout, const MEMORY: bool>(
+    sources: &Sources<L>,
+    plan: &Plan<L>,
+) -> Units {
+    let mut units = Units::NONE;
+    for (k, &n) in plan.spend.iter().enumerate() {
+        units.add(1 << k, u16::from(n));
+    }
+    if MEMORY {
+        for (i, &(_, kind, _)) in sources.remembered().iter().enumerate() {
+            if plan.remembered & (1 << i) != 0 {
+                units.add(1 << kind, 1);
+            }
+        }
+    }
+    for (c, &taps) in sources.classes().iter().zip(plan.taps.iter()) {
+        if c.amount == 1 {
+            units.add(c.kinds, u16::from(taps));
+        }
+    }
+    units
+}
+
+/// How many units each tapped class spends under `plan`, and whether those units with `fixed`
+/// ([`fixed_units`]) pay `cost`: all of a one-mana source's, and of the sources that make
+/// several, `need` spread over them, at least one each. The first spread tried gives each such
+/// class in order as much as it can. Where the sources of several mana make different kinds,
+/// the spread decides what they pay: Mana Crypt's {C}{C} and a sacrificed Svyelunite Temple's
+/// {U}{U} pay {1}{U}{U} only with both of the Temple's mana spent. There each spread is tried
+/// in turn until one pays, and the first is kept where none does.
 pub(super) fn spent_by_class<L: Layout>(
     sources: &Sources<L>,
     plan: &Plan<L>,
     need: u32,
-) -> L::Table<u32, CLASSES> {
+    cost: ManaCost,
+    fixed: Units,
+) -> (L::Table<u32, CLASSES>, bool) {
+    let classes = sources.classes();
     let mut spent: L::Table<u32, CLASSES> = Table::filled(0);
     let mut rest = need;
-    for (i, c) in sources.classes().iter().enumerate() {
+    // The kinds of the tapped sources of several mana, and whether they differ.
+    let mut several = None;
+    let mut mixed = false;
+    for (i, c) in classes.iter().enumerate() {
         let taps = u32::from(plan.taps[i]);
         if c.amount == 1 {
             spent[i] = taps;
         } else if taps > 0 {
             spent[i] = taps;
             rest -= taps;
+            mixed |= several.is_some_and(|k| k != c.kinds);
+            several = Some(c.kinds);
         }
     }
-    for (i, c) in sources.classes().iter().enumerate() {
-        if c.amount > 1 && plan.taps[i] > 0 {
-            let room = u32::from(plan.taps[i]) * u32::from(c.amount - 1);
+    let first = spread(classes, plan, 0, rest, &mut spent, &mut |spent| {
+        pays_with(classes, spent, cost, fixed)
+    });
+    // Sources of several mana that all make one kind pay the same however it is spread.
+    if first || !mixed {
+        return (spent, first);
+    }
+    let mut tried = spent.clone();
+    let mut any = |spent: &L::Table<u32, CLASSES>| pays_with(classes, spent, cost, fixed);
+    if spread_all(classes, plan, 0, rest, &mut tried, &mut any) {
+        return (tried, true);
+    }
+    (spent, false)
+}
+
+/// Gives each tapped class of several mana from `i` on as much of `rest` as it can make, and
+/// says whether `fits` accepts the result. The spread [`spent_by_class`] tries first.
+fn spread<L: Layout>(
+    classes: &[Class<L>],
+    plan: &Plan<L>,
+    i: usize,
+    mut rest: u32,
+    spent: &mut L::Table<u32, CLASSES>,
+    fits: &mut dyn FnMut(&L::Table<u32, CLASSES>) -> bool,
+) -> bool {
+    for (j, c) in classes.iter().enumerate().skip(i) {
+        if c.amount > 1 && plan.taps[j] > 0 {
+            let room = u32::from(plan.taps[j]) * u32::from(c.amount - 1);
             let more = room.min(rest);
-            spent[i] += more;
+            spent[j] += more;
             rest -= more;
         }
     }
-    spent
+    rest == 0 && fits(spent)
+}
+
+/// Tries every spread of `rest` over the tapped classes of several mana from `i` on, the most
+/// to the earliest class first, until `fits` accepts one, which `spent` then holds.
+fn spread_all<L: Layout>(
+    classes: &[Class<L>],
+    plan: &Plan<L>,
+    i: usize,
+    rest: u32,
+    spent: &mut L::Table<u32, CLASSES>,
+    fits: &mut dyn FnMut(&L::Table<u32, CLASSES>) -> bool,
+) -> bool {
+    let Some(j) = (i..classes.len()).find(|&j| classes[j].amount > 1 && plan.taps[j] > 0) else {
+        return rest == 0 && fits(spent);
+    };
+    let room = u32::from(plan.taps[j]) * u32::from(classes[j].amount - 1);
+    let base = u32::from(plan.taps[j]);
+    for more in (0..=room.min(rest)).rev() {
+        spent[j] = base + more;
+        if spread_all(classes, plan, j + 1, rest - more, spent, fits) {
+            return true;
+        }
+    }
+    spent[j] = base;
+    false
+}
+
+/// Whether `fixed` and the units the classes of several mana spend under `spent` pay `cost`.
+fn pays_with<L: Layout>(
+    classes: &[Class<L>],
+    spent: &L::Table<u32, CLASSES>,
+    cost: ManaCost,
+    fixed: Units,
+) -> bool {
+    let mut units = fixed;
+    for (c, &n) in classes.iter().zip(spent.iter()) {
+        if c.amount > 1 {
+            units.add(
+                c.kinds,
+                u16::try_from(n).expect("at most a byte of taps times a byte of mana"),
+            );
+        }
+    }
+    units.pays(cost)
 }
 
 /// Checks a plan's tap counts and floating spend: the mana it leaves floating when they pay
@@ -210,25 +317,9 @@ fn complete<L: Layout, const MEMORY: bool>(
     if several_taps > need || need > several_make || (several_taps == 0 && need > 0) {
         return None;
     }
-    let spent = spent_by_class(sources, plan, need);
-    let mut units = Units::NONE;
-    for (k, &n) in plan.spend.iter().enumerate() {
-        units.add(1 << k, u16::from(n));
-    }
-    if MEMORY {
-        for (i, &(_, kind, _)) in sources.remembered().iter().enumerate() {
-            if plan.remembered & (1 << i) != 0 {
-                units.add(1 << kind, 1);
-            }
-        }
-    }
-    for (c, &n) in classes.iter().zip(spent.iter()) {
-        units.add(
-            c.kinds,
-            u16::try_from(n).expect("at most a byte of taps times a byte of mana"),
-        );
-    }
-    if !units.pays(cost) {
+    let fixed = fixed_units::<L, MEMORY>(sources, plan);
+    let (spent, pays) = spent_by_class(sources, plan, need, cost, fixed);
+    if !pays {
         return None;
     }
     let mut left = pool;
