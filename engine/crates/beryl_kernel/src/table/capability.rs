@@ -163,9 +163,10 @@ pub enum Capability {
     CastsFromGraveyard,
     /// A card chooses a value as it enters ([`beryl_card::Replacement::choose_as_enters`]) or
     /// may enter as a copy of a permanent it chooses
-    /// ([`beryl_card::Replacement::enter_as_copy`]). Any permanent spell may then ask as it
-    /// resolves, so every resolution runs where it can pause (`beryl_rules`' `resolve`). An
-    /// Aura alone sets [`Capability::ChoosesAsEnters`] but not this one: a resolving Aura spell
+    /// ([`beryl_card::Replacement::enter_as_copy`]). A permanent spell whose face has such a
+    /// replacement then asks as it resolves, so `beryl_rules`' `resolve` reads the face of
+    /// each resolving permanent spell, and runs those that ask where they can pause. An Aura
+    /// alone sets [`Capability::ChoosesAsEnters`] but not this one: a resolving Aura spell
     /// chooses nothing (see CR 303.4f), so only a body that puts a permanent onto the
     /// battlefield may ask.
     ChoosesAsSpellResolves,

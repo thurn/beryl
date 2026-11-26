@@ -17,7 +17,7 @@ fn main() {
         let w = FamilyWorkload::new(family.name);
         let p = roll_paired(&w);
         println!(
-            "{{\"family\": \"{}\", \"positions\": {}, \"paired\": {}, \"skipped\": {}, \"capacity_stalls\": {}, \"rollouts\": {}, \"layer_recomputes\": {}, \"transactions\": {}}}",
+            "{{\"family\": \"{}\", \"positions\": {}, \"paired\": {}, \"skipped\": {}, \"capacity_stalls\": {}, \"rollouts\": {}, \"layer_recomputes\": {}, \"transactions\": {}, \"control_layer_recomputes\": {}, \"control_transactions\": {}}}",
             family.name,
             w.positions.len(),
             p.paired,
@@ -25,7 +25,9 @@ fn main() {
             p.capacity_stalls,
             w.starts.len(),
             p.layer_recomputes,
-            p.transactions
+            p.transactions,
+            p.control_layer_recomputes,
+            p.control_transactions
         );
     }
 }

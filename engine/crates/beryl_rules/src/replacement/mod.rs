@@ -26,7 +26,7 @@ use crate::interpret;
 use crate::layout::Layout;
 use crate::profile::Stops;
 use crate::replacement::event::{Entry, ReplacementKind, Sink};
-use crate::state::{MoveReplacement, State, Zone};
+use crate::state::{MoveReplacement, StackEntry, State, Zone};
 use crate::table::{Capability, GameTable};
 use beryl_kernel::reference::Spell;
 
@@ -366,25 +366,59 @@ pub(crate) fn may_ask(t: &GameTable) -> bool {
         || replaces.replaces(ReplacementKind::Damage)
 }
 
-/// Whether a resolution may meet a choice it did not declare it asks: a replacement effect's
-/// ([`may_ask`]), or a value a permanent chooses as it enters, which any resolution may put
-/// onto the battlefield in a game with a card that chooses one
-/// ([`Capability::ChoosesAsSpellResolves`]), or a mana ability's choice while a spell is
-/// being cast in the resolution ([`Capability::ManaAbilityChoices`]). An Aura chooses what to
-/// enchant as it enters by any means other than resolving as an Aura spell (see CR 303.4f: "If
-/// an Aura is entering the battlefield under a player's control by any means other than by
-/// resolving as an Aura spell, ... that player chooses what it will enchant"). So in a game
-/// whose only such card is an Aura ([`Capability::ChoosesAsEnters`]), a resolution may ask
-/// when its `ability`, `None` for a permanent spell, may put a permanent onto the battlefield.
-/// A game with none of them pays the ANDs [`may_ask`] does and two more.
+/// Whether the resolution of `entry` may meet a choice it did not declare it asks: a
+/// replacement effect's ([`may_ask`]), a mana ability's choice while a spell is being cast in
+/// the resolution ([`Capability::ManaAbilityChoices`]), or a choice a permanent makes as it
+/// enters.
+///
+/// A permanent makes such a choice only through a replacement effect of its own entering,
+/// "As this enters" or "enter as a copy" (see CR 614.1c: "Effects that read \"[This
+/// permanent] enters with . . . ,\" \"As [this permanent] enters . . . ,\" or \"[This
+/// permanent] enters as . . . \" are replacement effects"), or as an Aura that enters other
+/// than by resolving as an Aura spell (see CR 303.4f: "If an Aura is entering the battlefield
+/// under a player's control by any means other than by resolving as an Aura spell, ... that
+/// player chooses what it will enchant"). So in a game with such a card
+/// ([`Capability::ChoosesAsEnters`]), a spell or ability whose body, `ability`, may put a
+/// permanent onto the battlefield may ask, and a permanent spell (`ability` is `None`) may ask
+/// only when its own face makes such a choice ([`Capability::ChoosesAsSpellResolves`],
+/// [`enters_choosing`]). Every other resolution runs on the state itself, as in a game with no
+/// such card. A game with none of them pays the ANDs [`may_ask`] does and three more.
 #[inline]
-pub(crate) fn resolution_may_ask(t: &GameTable, ability: Option<&Ability>) -> bool {
+pub(crate) fn resolution_may_ask<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    entry: &StackEntry<L>,
+    ability: Option<&Ability>,
+) -> bool {
     may_ask(t)
-        || t.can_either(
-            Capability::ChoosesAsSpellResolves,
-            Capability::ManaAbilityChoices,
-        )
+        || t.can(Capability::ManaAbilityChoices)
         || (t.can(Capability::ChoosesAsEnters) && ability.is_some_and(Ability::may_enter_permanent))
+        || (t.can(Capability::ChoosesAsSpellResolves)
+            && ability.is_none()
+            && enters_choosing(s, t, entry))
+}
+
+/// Whether the permanent spell of `entry` has a replacement effect of its own entering that
+/// asks its controller: a value it chooses as it enters ([`Rewrite::Choose`]) or a permanent
+/// it may enter as a copy of ([`Rewrite::EnterAsCopy`]). Read from its copiable values, which
+/// are what it enters with (see CR 614.12: "to determine which replacement effects apply and
+/// how they apply, check the characteristics of the permanent as it would exist on the
+/// battlefield"), as entering replacements are read (`entering`). An entry with no spell may ask.
+#[cold]
+#[inline(never)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "a permanent spell has one printed face on the stack, the face it enters with"
+)]
+fn enters_choosing<L: Layout>(s: &State<L>, t: &GameTable, entry: &StackEntry<L>) -> bool {
+    let Some(spell) = entry.spell() else {
+        return true;
+    };
+    s.copiable(spell.slot).face(t).abilities.iter().any(|a| {
+        a.replacement().is_some_and(|r| {
+            matches!(r.rewrite, Rewrite::Choose(_) | Rewrite::EnterAsCopy { .. })
+        })
+    })
 }
 
 /// The answer to a choice `d` asked below code that has no resolution to ask through: a

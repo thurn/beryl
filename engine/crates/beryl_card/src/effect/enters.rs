@@ -1,7 +1,7 @@
 //! [`Effect::may_enter_permanent`]: whether carrying out an effect may put a permanent onto
 //! the battlefield.
 
-use super::Effect;
+use super::{Effect, Found};
 
 impl Effect {
     /// Whether carrying this out may put a permanent onto the battlefield, so that the
@@ -23,12 +23,12 @@ impl Effect {
             | Effect::PutOntoBattlefield(_)
             | Effect::ReturnTransformed(_)
             | Effect::Meld(_)
-            | Effect::Dig { .. }
-            | Effect::Search { .. }
             | Effect::CreateCopies { .. }
             // A subgame or a restarted game plays out whatever its cards do.
             | Effect::Subgame
             | Effect::RestartGame { .. } => true,
+            // A search puts what it finds onto the battlefield only when it says so.
+            Effect::Search { found, .. } => matches!(found, Found::OntoBattlefieldTapped),
             Effect::Sequence(_)
             | Effect::If { .. }
             | Effect::May { .. }
@@ -38,6 +38,8 @@ impl Effect {
             | Effect::ChooseValue { .. }
             | Effect::ChooseAtRandom(_)
             | Effect::LookAt { .. }
+            // A player takes the cards they dig for into their hand (`Taken`).
+            | Effect::Dig { .. }
             | Effect::Counter(_)
             | Effect::CounterInto { .. }
             | Effect::CopySpell { .. }

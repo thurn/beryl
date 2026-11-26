@@ -641,6 +641,11 @@ pub struct Pairing {
     /// `state_copies` the present side's steps made: the engine's whole-state copies for
     /// transactional replay, so the advances that ran as transactions.
     pub transactions: u64,
+    /// `layer_recomputes` the control side's paired steps made, so a gap between the sides
+    /// can be put down to the layers or to something else.
+    pub control_layer_recomputes: u64,
+    /// `state_copies` the control side made, building its states and stepping them.
+    pub control_transactions: u64,
 }
 
 /// One transition of the rollout, the one the present side counts: `c` applied to `s`, then
@@ -741,6 +746,8 @@ pub fn roll_paired(w: &FamilyWorkload) -> Pairing {
             pairing.capacity_stalls += 1;
         }
     }
+    pairing.control_layer_recomputes = xc.counts.layer_recomputes;
+    pairing.control_transactions = xc.counts.state_copies;
     pairing
 }
 

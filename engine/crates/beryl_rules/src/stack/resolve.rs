@@ -37,11 +37,10 @@ use crate::{interpret, replacement};
 /// Resolves the top of the stack, or continues a paused resolution with its record.
 ///
 /// While a replacement effect's choice can come up ([`replacement::may_ask`]), as a dredge for a
-/// card the body draws, every body runs on the copy, since any may meet it. So does every
-/// resolution of a game with a card that chooses a value as it enters
-/// ([`replacement::resolution_may_ask`]): a permanent spell, or a body that puts a permanent onto
-/// the battlefield, may meet that choice (in a game whose only such card is an Aura, only a
-/// body that puts a permanent onto the battlefield may). An inline source
+/// card the body draws, every body runs on the copy, since any may meet it. In a game with a
+/// card that chooses a value as it enters, so does a body that may put a permanent onto the
+/// battlefield, and a permanent spell that makes such a choice itself
+/// ([`replacement::resolution_may_ask`]). An inline source
 /// then answers each question as the run stops at it, and the body runs again with the
 /// answer recorded: the record holds a replacement's choice and the body's own questions in
 /// the order they came, so each run asks them alike.
@@ -102,7 +101,7 @@ fn resolve_top<L: Layout>(
         | Pending::CompanionPayment { .. }
         | Pending::ArrangePiles { .. } => Default::default(),
     };
-    let may_ask = replacement::resolution_may_ask(t, ability);
+    let may_ask = replacement::resolution_may_ask(s, t, &entry, ability);
     // The source is asked first: whether an ability written as data asks is read from its
     // effect, which a rollout's inline source never needs.
     let may_play_subgame =
