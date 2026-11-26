@@ -42,6 +42,9 @@ pub enum Random {
     Flip { player: Seat, won: bool },
     /// The subgame starts with this randomly chosen player.
     SubgameStarter(Seat),
+    /// One card chosen at random from a set of candidates: `owner` and `card` identify which
+    /// card was chosen (same representation as [`Random::Reveal`]).
+    Pick { owner: Seat, card: LargeCardIx },
 }
 
 /// Where a replay could not reproduce what the record says chance produced.
@@ -74,6 +77,7 @@ struct Recorded {
     reveals: VecDeque<(Seat, LargeCardIx)>,
     flips: VecDeque<(Seat, bool)>,
     subgame_starters: VecDeque<Seat>,
+    picks: VecDeque<(Seat, LargeCardIx)>,
 }
 
 impl Chance {
@@ -86,6 +90,7 @@ impl Chance {
                 Random::Reveal { owner, card } => r.reveals.push_back((owner, card)),
                 Random::Flip { player, won } => r.flips.push_back((player, won)),
                 Random::SubgameStarter(seat) => r.subgame_starters.push_back(seat),
+                Random::Pick { owner, card } => r.picks.push_back((owner, card)),
             }
         }
     }
@@ -96,7 +101,7 @@ impl Chance {
     }
 
     /// The first recorded outcome still to come while replaying, if any: a reveal before a
-    /// flip, and a flip before a subgame starter.
+    /// flip, a flip before a subgame starter, and a subgame starter before a random pick.
     pub fn next_recorded(&self) -> Option<Random> {
         let r = self.replaying.as_ref()?;
         r.reveals
@@ -112,6 +117,11 @@ impl Chance {
                     .front()
                     .copied()
                     .map(Random::SubgameStarter)
+            })
+            .or_else(|| {
+                r.picks
+                    .front()
+                    .map(|&(owner, card)| Random::Pick { owner, card })
             })
     }
 
@@ -308,6 +318,54 @@ pub fn subgame_starter<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, format: 
     }
     chance.happened.push(Random::SubgameStarter(starter));
     starter
+}
+
+/// Picks one object uniformly at random from `candidates` (which must be non-empty): one draw
+/// from the game's randomness, or while replaying, a candidate matching the recorded owner
+/// and card.
+pub fn pick_at_random<L: Layout>(
+    s: &mut State<L>,
+    sink: &mut Sink<L>,
+    candidates: Bitboard<L::Slot>,
+) -> L::Slot {
+    debug_assert!(!candidates.is_empty());
+    let count = u64::from(candidates.count());
+    let index = usize::try_from(s.rng.other.below(count))
+        .expect("the draw is less than the candidate count");
+    let drawn = candidates
+        .iter()
+        .nth(index)
+        .expect("candidates is non-empty");
+    let Some(chance) = sink.chance.as_deref_mut() else {
+        return drawn;
+    };
+    let mut chosen = drawn;
+    if let Some(r) = &mut chance.replaying {
+        let o = s.object(drawn);
+        let happened = Random::Pick {
+            owner: o.owner,
+            card: o.card.wide(),
+        };
+        match r.picks.pop_front() {
+            None => chance.mismatch(s, None, happened),
+            Some((owner, card)) => {
+                let matched = candidates.iter().find(|&slot| {
+                    let obj = s.object(slot);
+                    obj.owner == owner && obj.card.wide() == card
+                });
+                match matched {
+                    Some(slot) => chosen = slot,
+                    None => chance.mismatch(s, Some(Random::Pick { owner, card }), happened),
+                }
+            }
+        }
+    }
+    let o = s.object(chosen);
+    chance.happened.push(Random::Pick {
+        owner: o.owner,
+        card: o.card.wide(),
+    });
+    chosen
 }
 
 /// Whether the sink holds a chance that is replaying a record, which may have bound

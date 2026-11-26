@@ -189,6 +189,7 @@ impl Scope<'_> {
             | Effect::Unless { .. }
             | Effect::ForEachPlayer { .. }
             | Effect::Choose { .. }
+            | Effect::ChooseAtRandom(_)
             | Effect::LookAt { .. }
             | Effect::ChooseValue { .. }
             | Effect::Counter(_)

@@ -142,7 +142,8 @@ impl Effect {
             Effect::Unless { player, cost, .. } => {
                 Operands::of_players(player).filter(chosen_for(cost))
             }
-            Effect::Counter(objects)
+            Effect::ChooseAtRandom(objects)
+            | Effect::Counter(objects)
             | Effect::CounterInto {
                 spells: objects, ..
             }

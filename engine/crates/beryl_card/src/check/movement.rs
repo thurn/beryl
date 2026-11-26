@@ -33,6 +33,7 @@ pub(super) const fn moved_by(effect: &Effect) -> Option<&Objects> {
         | Effect::Unless { .. }
         | Effect::ForEachPlayer { .. }
         | Effect::Choose { .. }
+        | Effect::ChooseAtRandom(_)
         | Effect::Transform(_)
         | Effect::Flip(_)
         | Effect::Reveal(_)

@@ -98,6 +98,11 @@ pub enum Effect {
     /// instructs a player to choose a card name, the player must choose the name of a card in
     /// the Oracle card reference." The choice is made in public.
     ChooseValue { player: Players, kind: ChosenKind },
+    /// One object chosen uniformly at random among `[objects]` as the instruction is reached,
+    /// which the instruction after acts on as [`Objects::Those`]: "a creature card at random
+    /// from your graveyard". With none to choose among, nothing is chosen
+    /// ([CR 609.3](https://yawgatog.com/resources/magic-rules/#R6093)).
+    ChooseAtRandom(Objects),
     /// "[Player] looks at [cards]", cards of a hidden zone
     /// ([CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002)): "Hidden zones are
     /// zones in which not all players can be expected to see the cards' faces." The player

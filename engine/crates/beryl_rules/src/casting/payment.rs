@@ -219,6 +219,7 @@ fn unless_discards<L: Layout>(
         | Effect::Unless { .. }
         | Effect::ForEachPlayer { .. }
         | Effect::Choose { .. }
+        | Effect::ChooseAtRandom(_)
         | Effect::LookAt { .. }
         | Effect::ChooseValue { .. }
         | Effect::Counter(_)

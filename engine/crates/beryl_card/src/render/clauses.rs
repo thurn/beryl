@@ -230,6 +230,7 @@ impl Ctx {
             if let Some(clause) = effects.peek().and_then(|&next| {
                 self.hidden_put(effect, next)
                     .or_else(|| self.chosen_exile(effect, next))
+                    .or_else(|| self.chosen_at_random(effect, next))
             }) {
                 effects.next();
                 clauses.push(clause);
@@ -267,6 +268,38 @@ impl Ctx {
             previous = Some(effect);
         }
         clauses
+    }
+
+    /// A card chosen at random from a zone and returned to its owner's hand.
+    fn chosen_at_random(&mut self, choose: &Effect, next: &Effect) -> Option<String> {
+        let &Effect::ChooseAtRandom(Objects::InZoneOf {
+            zone,
+            players,
+            filter,
+        }) = choose
+        else {
+            return None;
+        };
+        let &Effect::ReturnToHand(Objects::Those) = next else {
+            return None;
+        };
+        self.discarded = None;
+        self.those_named = None;
+        self.plural = false;
+        Some(self.clause(Players::You, ("return", "returns"), |c| {
+            let kind = super::filters::Kind::Card(None);
+            let card = c.noun(filter, kind).indefinite(kind);
+            let from = c.possessive(*players);
+            let to = if *players == Players::You {
+                "your hand"
+            } else {
+                "its owner's hand"
+            };
+            format!(
+                "{card} at random from {from} {} to {to}",
+                super::filters::zone_name(zone)
+            )
+        }))
     }
 
     /// A player chooses a card from their own hand to exile.
@@ -542,6 +575,7 @@ pub(super) fn subject_of(effect: &Effect) -> Option<Players> {
         | Effect::AdditionalPhases { .. }
         | Effect::RestartGame { .. } => None,
         Effect::ForEachPlayer { .. }
+        | Effect::ChooseAtRandom(_)
         | Effect::Counter(_)
         | Effect::CopySpell { .. }
         | Effect::CounterInto { .. }

@@ -85,6 +85,7 @@ impl Effect {
             | Effect::ChangeText { .. }
             | Effect::Explore(_)
             | Effect::Choose { .. }
+            | Effect::ChooseAtRandom(_)
             | Effect::LookAt { .. }
             | Effect::ChooseValue { .. }
             | Effect::ManifestDread(_)

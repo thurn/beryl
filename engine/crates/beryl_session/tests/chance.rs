@@ -373,3 +373,36 @@ fn strip(value: &mut serde_json::Value, n: &mut usize) {
         _ => {}
     }
 }
+
+/// Haunted Fengraf picks a creature card at random from its controller's graveyard: the save
+/// records which card was picked (`Entry::Pick`), so replaying under other seeds returns the
+/// exact same card to hand.
+#[test]
+fn a_random_pick_replays_to_the_same_card_under_another_seed() {
+    let fengraf_deck: &Decklist = &[
+        (10, "Haunted Fengraf"),
+        (20, "Island"),
+        (15, "Wetland Sambar"),
+        (15, "Geist of the Moors"),
+    ];
+    let opponent_deck: &Decklist = &[(30, "Island"), (30, "Wetland Sambar")];
+    let (game, view) = (1u64..=20)
+        .map(|seed| played(seed, [fengraf_deck, opponent_deck]))
+        .find(|(g, _)| {
+            g.replay()
+                .log
+                .iter()
+                .any(|e| matches!(e, Entry::Pick { .. }))
+        })
+        .expect("a game with Haunted Fengraf should record an Entry::Pick");
+    let file = game.replay();
+    for mask in [0x5eed_0000_0000u64, 0x1234_5678, 0xdead_beef] {
+        let mut other = file.clone();
+        other.seed ^= mask;
+        let (again, replayed) = Game::from_replay(&CARDS, &other, SESSION).unwrap();
+        assert_eq!(meaning(again.replay()), meaning(file));
+        same_boards(again.table(), again.replay(), file);
+        assert_eq!(again.replay().chooser, file.chooser);
+        assert_eq!(seen(&replayed), seen(&view));
+    }
+}

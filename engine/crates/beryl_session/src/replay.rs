@@ -101,6 +101,9 @@ pub enum Entry {
     Flip { player: u8, won: bool },
     /// The seat randomly selected to start a subgame.
     SubgameStarter(u8),
+    /// A card chosen at random from a set of candidates: `card` is the name of `player`'s
+    /// card ([`Random::Pick`]).
+    Pick { player: u8, card: String },
     /// The board as a turn began, after the entry before it.
     Checkpoint(Box<Checkpoint>),
 }
@@ -117,6 +120,10 @@ impl Entry {
             Random::Flip { player, won } => Entry::Flip {
                 player: player.get(),
                 won,
+            },
+            Random::Pick { owner, card } => Entry::Pick {
+                player: owner.get(),
+                card: t.def(card).name.to_owned(),
             },
         }
     }
@@ -149,6 +156,19 @@ impl Entry {
                 player: seat(player)?,
                 won,
             },
+            Entry::Pick { player, card } => {
+                let owner = seat(*player)?;
+                let card = t
+                    .deck(owner)
+                    .chain(t.sideboard(owner))
+                    .find(|&c: &LargeCardIx| t.def(c).name == card)
+                    .ok_or_else(|| SessionError::BadReplay {
+                        reason: format!(
+                            "player {player}'s deck and sideboard have no {card} to pick"
+                        ),
+                    })?;
+                Random::Pick { owner, card }
+            }
             _ => return Ok(None),
         }))
     }

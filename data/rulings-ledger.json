@@ -1268,6 +1268,27 @@
       ]
     }
   ],
+  "Haunted Fengraf": [
+    {
+      "published_at": "2018-03-16",
+      "hash": "223ddcf0b163",
+      "covered": "Effect::ReturnToHand"
+    },
+    {
+      "published_at": "2018-03-16",
+      "hash": "4e082db561f7",
+      "scenario": [
+        "Haunted Fengraf can return a creature card put into the graveyard in response"
+      ]
+    },
+    {
+      "published_at": "2018-03-16",
+      "hash": "a3a82ffcd679",
+      "scenario": [
+        "Haunted Fengraf can return a creature card put into the graveyard in response"
+      ]
+    }
+  ],
   "Humility": [
     {
       "published_at": "2006-02-01",

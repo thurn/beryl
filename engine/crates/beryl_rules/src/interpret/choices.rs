@@ -488,6 +488,7 @@ pub(crate) fn may_instruction<L: Layout>(
         | Effect::Unless { .. }
         | Effect::ForEachPlayer { .. }
         | Effect::Choose { .. }
+        | Effect::ChooseAtRandom(_)
         | Effect::LookAt { .. }
         | Effect::ChooseValue { .. }
         | Effect::Counter(_)
@@ -623,4 +624,21 @@ pub(crate) fn choose_instruction<L: Layout>(
     Ok(chosen.map_or(Outcome::NOTHING, |slot| {
         Outcome::acted_on(Bitboard::single(slot))
     }))
+}
+
+/// [`Effect::ChooseAtRandom`]: picks one object uniformly at random from `among`, or nothing
+/// if `among` is empty (see [CR 609.3]). The outcome is the chosen object.
+///
+/// [CR 609.3]: https://yawgatog.com/resources/magic-rules/#R6093
+pub(crate) fn choose_at_random_instruction<L: Layout>(
+    run: &mut Run<'_, '_, L>,
+    among: Objects,
+) -> Outcome<L> {
+    let candidates = run.scene().objects(among);
+    if candidates.is_empty() {
+        return Outcome::NOTHING;
+    }
+    let game = run.game();
+    let chosen = crate::chance::pick_at_random(game.state, game.sink, candidates);
+    Outcome::acted_on(Bitboard::single(chosen))
 }

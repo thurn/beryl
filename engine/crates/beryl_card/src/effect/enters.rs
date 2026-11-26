@@ -35,6 +35,8 @@ impl Effect {
             | Effect::Unless { .. }
             | Effect::ForEachPlayer { .. }
             | Effect::Choose { .. }
+            | Effect::ChooseValue { .. }
+            | Effect::ChooseAtRandom(_)
             | Effect::LookAt { .. }
             | Effect::Counter(_)
             | Effect::CounterInto { .. }

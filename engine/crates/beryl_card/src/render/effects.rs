@@ -45,6 +45,7 @@ impl Ctx {
                 let what = super::replacements::chosen_kind(kind);
                 vec![self.clause(player, ("choose", "chooses"), |_| what.to_owned())]
             }
+            Effect::ChooseAtRandom(among) => self.choose_at_random(among),
             // Spells on the stack.
             Effect::Counter(spells) => vec![self.acts(("counter", "counters"), spells, "")],
             Effect::CounterInto { spells, zone } => self.counter_into(spells, zone),
@@ -328,6 +329,16 @@ impl Ctx {
     fn choose(&mut self, player: Players, among: Objects, optional: bool) -> Vec<String> {
         self.may |= optional;
         let clause = self.clause(player, ("choose", "chooses"), |c| c.one_of(among));
+        self.plural = false;
+        vec![clause]
+    }
+
+    /// "Choose a creature card in your graveyard at random", which later instructions name as
+    /// "it".
+    fn choose_at_random(&mut self, among: Objects) -> Vec<String> {
+        let clause = self.clause(Players::You, ("choose", "chooses"), |c| {
+            format!("{} at random", c.one_of(among))
+        });
         self.plural = false;
         vec![clause]
     }

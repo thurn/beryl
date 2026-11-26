@@ -183,6 +183,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 return Err(Stop::EndTurn);
             }
             Effect::Choose { .. }
+            | Effect::ChooseAtRandom(_)
             | Effect::LookAt { .. }
             | Effect::ChooseValue { .. }
             | Effect::Counter(_)
@@ -292,6 +293,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 optional,
                 hidden,
             } => choices::choose_instruction(self, player, among, prompt, (optional, hidden))?,
+            Effect::ChooseAtRandom(among) => choices::choose_at_random_instruction(self, among),
             Effect::LookAt { player, cards } => zones::look_at_instruction(self, player, cards),
             Effect::ChooseValue { player, kind } => super::named::instruction(self, player, kind)?,
             Effect::Counter(objects) => counter::instruction(self, objects)?,

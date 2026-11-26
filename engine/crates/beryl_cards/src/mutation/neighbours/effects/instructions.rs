@@ -128,6 +128,11 @@ pub(super) fn local(effect: &'static Effect) -> Vec<(Kind, String, Effect)> {
                 );
             }
         }
+        Effect::ChooseAtRandom(among) => {
+            for (name, among) in objects(among) {
+                add(Kind::EffectObjects, name, Effect::ChooseAtRandom(among));
+            }
+        }
         Effect::LookAt { player, cards } => {
             for (name, player) in chooser(player) {
                 add(Kind::EffectPlayers, name, Effect::LookAt { player, cards });

@@ -100,6 +100,10 @@ pub const fn choose_value(player: Players, kind: ChosenKind) -> Effect {
     Effect::ChooseValue { player, kind }
 }
 
+/// [`Effect::ChooseAtRandom`]: one of `among` chosen at random.
+pub const fn choose_at_random(among: Objects) -> Effect {
+    Effect::ChooseAtRandom(among)
+}
 /// [`Effect::LookAt`]: "[player] looks at [cards]".
 pub const fn look_at(player: Players, cards: Objects) -> Effect {
     Effect::LookAt { player, cards }

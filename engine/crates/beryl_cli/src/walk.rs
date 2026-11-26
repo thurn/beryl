@@ -123,7 +123,8 @@ impl Walk {
                     Entry::PassOn
                     | Entry::Reveal { .. }
                     | Entry::Flip { .. }
-                    | Entry::SubgameStarter(_),
+                    | Entry::SubgameStarter(_)
+                    | Entry::Pick { .. },
                 ) => {}
                 Some(Entry::Concede) => return Ok(Walked::Conceded),
                 entry => break entry,

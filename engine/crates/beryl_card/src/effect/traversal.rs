@@ -39,6 +39,7 @@ impl Effect {
             Effect::ForEachPlayer { effect, .. } => Branches::ForEachPlayer(effect),
             Effect::ExileUntil { when_found, .. } => Branches::WhenFound(when_found),
             Effect::Choose { .. }
+            | Effect::ChooseAtRandom(_)
             | Effect::LookAt { .. }
             | Effect::ChooseValue { .. }
             | Effect::Counter(_)
@@ -155,6 +156,7 @@ impl Effect {
             | Effect::Unless { .. }
             | Effect::ForEachPlayer { .. }
             | Effect::Choose { .. }
+            | Effect::ChooseAtRandom(_)
             | Effect::LookAt { .. }
             | Effect::ChooseValue { .. }
             | Effect::Counter(_)
@@ -302,6 +304,7 @@ impl Effect {
             | Effect::Unless { .. }
             | Effect::ForEachPlayer { .. }
             | Effect::Choose { .. }
+            | Effect::ChooseAtRandom(_)
             | Effect::LookAt { .. }
             | Effect::ChooseValue { .. }
             | Effect::Counter(_)

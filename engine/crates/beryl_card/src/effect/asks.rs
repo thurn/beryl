@@ -67,7 +67,8 @@ impl Effect {
             // A source of the controller's choice is chosen as the shield begins.
             Effect::PreventDamage { from, .. } => from.is_some(),
             Effect::Modify { modifications, .. } => Modification::any_asks(modifications),
-            Effect::LookAt { .. }
+            Effect::ChooseAtRandom(_)
+            | Effect::LookAt { .. }
             | Effect::Counter(_)
             | Effect::CounterInto { .. }
             | Effect::Destroy { .. }
@@ -160,6 +161,7 @@ impl Effect {
             | Effect::May { .. }
             | Effect::Unless { .. }
             | Effect::ForEachPlayer { .. }
+            | Effect::ChooseAtRandom(_)
             | Effect::LookAt { .. }
             | Effect::ChooseValue { .. }
             | Effect::Counter(_)

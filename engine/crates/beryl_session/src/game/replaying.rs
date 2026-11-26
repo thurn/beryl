@@ -509,6 +509,11 @@ impl Game {
                 player.get(),
                 if won { "won" } else { "lost" }
             ),
+            Random::Pick { owner, card } => format!(
+                "player {}'s {} chosen at random",
+                owner.get(),
+                self.table.def(card).name
+            ),
         }
     }
 
