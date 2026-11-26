@@ -352,6 +352,10 @@ fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) -
             player: side(player),
             slot: ObjectId(slot.num()),
         },
+        Event::ValueChosen { player, value } => GameEvent::ValueChosen {
+            player: side(player),
+            value: value.name(t),
+        },
         Event::LifeGain { player, amount } => GameEvent::LifeGain {
             player: side(player),
             amount,

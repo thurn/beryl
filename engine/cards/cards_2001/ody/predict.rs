@@ -110,6 +110,20 @@ pub mod scenarios {
             ME.has_cards(Zone::Hand, 2),
             ME.has_cards(Zone::Library, 0),
         ]),
+        Scenario::new("Predict missing on the shared library mills one and draws one")
+            .shared_library(&[Card::Plains, Card::Island, Card::Island])
+            .battlefield(P0, &[Card::Island; 2])
+            .hand(P0, &[PREDICT])
+            .actions(&[
+                ME.casts(PREDICT),
+                ME.targets_player(THEM),
+                Resolve,
+                ME.names(Card::Island),
+                ME.has(Zone::Graveyard, Card::Plains, 1),
+                THEM.has(Zone::Graveyard, Card::Plains, 1),
+                ME.has_cards(Zone::Hand, 1),
+                ME.has_cards(Zone::Library, 1),
+            ]),
         Scenario::new(
             "Predict targeting its caster after Memory Lapse mills the known card and draws two",
         )

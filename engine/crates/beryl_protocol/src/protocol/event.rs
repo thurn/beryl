@@ -41,6 +41,12 @@ pub enum GameEvent {
         player: Side,
         top: bool,
     },
+    /// A player chose a value (a card name, a color, a creature type, etc.) while applying
+    /// an effect.
+    ValueChosen {
+        player: Side,
+        value: String,
+    },
     /// In a shared-deck game `player` is whoever shuffles, and the library is the shared one.
     LibraryShuffled {
         player: Side,

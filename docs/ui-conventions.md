@@ -603,17 +603,17 @@ recordings do not show them.
   that card into your library{from}?", "Move that card{from}?". A cost of no
   mana: "Pay {0}." The opening choices: "Play or draw?", answered Play or Draw,
   and "Keep or mulligan?" over Arena's own buttons. Catalogs: "Choose Creature
-  Type", "Choose Card Name". Waterbend: "Tap permanents to Waterbend". What a
-  declared creature is aimed at: "Choose attack target", "Choose what to block".
-  Piles of a split: "Hand", "Exile", "Battlefield". The pass button's captions
-  for where Arena shows none: "To Untap", "To Upkeep", "To Main 1", "To Main 2",
-  "To Cleanup", "Nothing to play" under a halt and "To Opponent's Turn" under
-  the player's own End Turn. The own-target warning (exception 7) asks Arena's
-  question less its end, "Do you want to target {name}?", and a spell picked on
-  the stack reads "Target {name}", or the warning's question where it is the
-  player's own. Only the opponent's manifest dread, fateseal and put-back are
-  seen, and games begin with the first player chosen (pE4XSNi-nZc 28:43.5,
-  pE4XSNi-nZc 34:55.0, pE4XSNi-nZc 27:18.0, 0VsYGs88NXA 16:58.0).
+  Type". Waterbend: "Tap permanents to Waterbend". What a declared creature is
+  aimed at: "Choose attack target", "Choose what to block". Piles of a split:
+  "Hand", "Exile", "Battlefield". The pass button's captions for where Arena
+  shows none: "To Untap", "To Upkeep", "To Main 1", "To Main 2", "To Cleanup",
+  "Nothing to play" under a halt and "To Opponent's Turn" under the player's own
+  End Turn. The own-target warning (exception 7) asks Arena's question less its
+  end, "Do you want to target {name}?", and a spell picked on the stack reads
+  "Target {name}", or the warning's question where it is the player's own. Only
+  the opponent's manifest dread, fateseal and put-back are seen, and games begin
+  with the first player chosen (pE4XSNi-nZc 28:43.5, pE4XSNi-nZc 34:55.0,
+  pE4XSNi-nZc 27:18.0, 0VsYGs88NXA 16:58.0).
 - **Hand cards put on the bottom.** The split prompt is headed "Put cards on the
   bottom." The player orders any cards they put on the bottom and can press Done
   with all their cards in hand. The opponent resolves the spell and draws cards.

@@ -410,7 +410,10 @@ impl<'a> Builder<'a> {
             } => self.block(blocker, attacker, cause),
             &GameEvent::StepBegins { step, active } => self.step_begins(i, step, active),
             &GameEvent::GainControl { slot, player } => self.gain_control(slot, player, cause),
-            GameEvent::CoinFlip { .. } | GameEvent::Scry { .. } | GameEvent::TopOrBottom { .. } => {
+            GameEvent::CoinFlip { .. }
+            | GameEvent::Scry { .. }
+            | GameEvent::TopOrBottom { .. }
+            | GameEvent::ValueChosen { .. } => {
                 if let Some(notice) = notice(&events[i]) {
                     self.emit(Act::Announce { notice }, cause);
                 }
@@ -662,6 +665,10 @@ fn notice(event: &GameEvent) -> Option<Notice> {
             player: player @ Side::Opponent,
             top,
         } => Some(Notice::TopOrBottom { player, top }),
+        GameEvent::ValueChosen { player, ref value } => Some(Notice::Chosen {
+            player,
+            value: value.clone(),
+        }),
         _ => None,
     }
 }

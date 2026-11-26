@@ -300,6 +300,9 @@ pub enum Notice {
     /// "Top" or "Bottom": the end of their library the opponent chose for a card, beside that
     /// library. Never the viewer's own choice, which they just made.
     TopOrBottom { player: Side, top: bool },
+    /// A value (such as a card name) a player chose while resolving a spell or ability, shown
+    /// in a pill beside their life total.
+    Chosen { player: Side, value: String },
     /// A coin an ability of the permanent in `source` flipped: the card the banner names. The
     /// step's cause is the ability, as it resolves.
     Coin {

@@ -414,10 +414,11 @@ pub(crate) const fn wording(prompt: &Prompt, zone: Option<Zone>) -> Wording {
             ..NONE
         },
         // "Choose Color", under "Choose One" (`UrGalw_f35w 45:18.5`). Arena takes a color at
-        // a click; the other two catalogs, which no card asks yet, are composed on it.
+        // a click; Creature Type, which no card asks yet, is composed on it. Card Name is
+        // Arena's exact heading ("(Pithing Needle) Choose a card name.", `xc8o0M3H124 8:47.0`).
         Purpose::Color => picks("Choose Color"),
         Purpose::CreatureType => picks("Choose Creature Type"),
-        Purpose::CardName => picks("Choose Card Name"),
+        Purpose::CardName => picks("Choose a card name."),
         Purpose::Wish => picks("Choose a Card"),
         // Not seen in Arena, which reveals a companion before the game without asking.
         Purpose::Companion => picks("Choose Companion"),

@@ -229,6 +229,7 @@ fn times<L: Layout>(e: &Event<L>) -> u8 {
         | Event::DrawCard { .. }
         | Event::Scry { .. }
         | Event::TopOrBottom { .. }
+        | Event::ValueChosen { .. }
         | Event::LibraryShuffled { .. }
         | Event::Reveal { .. }
         | Event::LifeGain { .. }

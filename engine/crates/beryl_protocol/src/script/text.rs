@@ -421,6 +421,9 @@ impl Display for Notice {
                 let end = if top { "top" } else { "bottom" };
                 write!(f, "end {} {end}", wire(player))
             }
+            Notice::Chosen { player, ref value } => {
+                write!(f, "chosen {} {value}", wire(player))
+            }
             Notice::Coin {
                 player,
                 won,

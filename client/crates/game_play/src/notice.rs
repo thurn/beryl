@@ -42,7 +42,9 @@ impl Place {
     #[must_use]
     pub const fn of(notice: &Notice) -> Self {
         match notice {
-            Notice::Scry { player, .. } | Notice::TopOrBottom { player, .. } => Self::Pill(*player),
+            Notice::Scry { player, .. }
+            | Notice::TopOrBottom { player, .. }
+            | Notice::Chosen { player, .. } => Self::Pill(*player),
             Notice::Coin { .. } => Self::Coin,
             Notice::Turn { .. }
             | Notice::Roll { .. }
@@ -55,19 +57,14 @@ impl Place {
     }
 }
 
-/// The shares of a notice's run over which it fades in and out, as the web stage's
-/// `.stage-notice` rules in `ui/src/stage/stage.css` have them for its kind: the turn banner,
-/// the pill of a scry, and the other banners (a coin's among them). The values are in
-/// `data/client/notices.json`.
+/// The shares of a notice's run over which it fades in and out (`data/client/notices.json`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Fade {
     pub fade_in: f32,
     pub fade_out: f32,
-    /// How large it is drawn as it starts to fade in, as a multiple of its size, growing
-    /// linearly to its size as it finishes fading in.
+    /// Starting scale multiplier; grows linearly to 1.0 over `fade_in`.
     pub scale_from: f32,
-    /// How far down it has moved, in points, when its run ends; it starts to move at `ratio::TURN_BANNER_SLIDE_AT` of its
-    /// run, and moves linearly.
+    /// Vertical slide distance in points, starting at `ratio::TURN_BANNER_SLIDE_AT`.
     pub slide: f32,
 }
 
@@ -77,12 +74,10 @@ impl Fade {
     pub const fn of(notice: &Notice, tuning: Notices) -> Self {
         let shares = match notice {
             Notice::Turn { .. } => tuning.turn,
-            Notice::Scry { .. } | Notice::TopOrBottom { .. } => tuning.pill,
+            Notice::Scry { .. } | Notice::TopOrBottom { .. } | Notice::Chosen { .. } => tuning.pill,
             _ => tuning.banner,
         };
-        // The turn banner (`.turn-banner.stage-notice` in `ui/src/stage/stage.css`) starts at
-        // 0.93 of its size, and sinks 30 points toward the player whose turn it is at its end:
-        // up the table for the opponent's, down for ours.
+        // The turn banner starts at 0.93 scale and sinks toward the active player at its end.
         let (scale_from, slide) = match notice {
             Notice::Turn { active: Side::You } => {
                 (ratio::TURN_BANNER_START_SCALE, size::TURN_BANNER_SLIDE)

@@ -347,6 +347,7 @@ impl Builder<'_> {
             | GameEvent::LibraryShuffled { player }
             | GameEvent::Scry { player, .. }
             | GameEvent::TopOrBottom { player, .. }
+            | GameEvent::ValueChosen { player, .. }
             | GameEvent::Reveal { player, .. } => return Some(player),
             _ => {}
         }

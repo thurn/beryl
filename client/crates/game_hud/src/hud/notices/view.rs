@@ -14,6 +14,7 @@ pub(super) fn element(input: &Inputs<'_>) -> Element {
         Notice::Turn { active } => turn_banner(*active, input.turn_width),
         Notice::Scry { top, bottom, .. } => pill(&format!("Scry: {top} top, {bottom} bottom.")),
         Notice::TopOrBottom { top, .. } => pill(if *top { "Top" } else { "Bottom" }),
+        Notice::Chosen { value, .. } => pill(value),
         Notice::Coin { player, won, .. } => {
             let title = input.coin_source().unwrap_or("Coin flip");
             let who = who(*player);

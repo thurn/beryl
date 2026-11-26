@@ -149,6 +149,10 @@ fn announcements_pass_over_the_table_but_a_coin_is_waited_for() {
             player: Side::Opponent,
             top: false,
         },
+        Notice::Chosen {
+            player: Side::Opponent,
+            value: "Plains".into(),
+        },
     ];
     for notice in passing {
         let timing = announce(notice);

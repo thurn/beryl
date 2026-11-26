@@ -143,6 +143,12 @@ pub enum Event<L: Layout = Small> {
         player: Seat,
         top: bool,
     },
+    /// A player chose a value (card name, color, creature type) while applying an effect
+    /// (see [CR 608.2d](https://yawgatog.com/resources/magic-rules/#R6082d)).
+    ValueChosen {
+        player: Seat,
+        value: ChosenValue<L>,
+    },
     LibraryShuffled {
         player: Seat,
     },

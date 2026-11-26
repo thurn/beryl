@@ -250,6 +250,7 @@ impl<L: Layout> Event<L> {
             | Event::DrawCard { .. }
             | Event::Scry { .. }
             | Event::TopOrBottom { .. }
+            | Event::ValueChosen { .. }
             | Event::LibraryShuffled { .. }
             | Event::Reveal { .. }
             | Event::LifeGain { .. }

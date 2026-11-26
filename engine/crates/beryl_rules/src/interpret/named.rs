@@ -18,6 +18,7 @@ use crate::bitboard::Bitboard;
 use crate::card::Stop;
 use crate::interpret::{Outcome, Run, Scene, choices};
 use crate::layout::Layout;
+use beryl_kernel::event::Event;
 
 /// [`Effect::ChooseValue`](beryl_card::Effect::ChooseValue): "[player] chooses a [kind]", as
 /// the instruction is reached (see [CR 608.2d]): "If an effect of a spell or ability offers
@@ -41,6 +42,7 @@ pub(crate) fn instruction<L: Layout>(
     };
     let (game, resolution) = run.resolving();
     let value = choices::catalog(game, resolution, player, kind, Bitboard::EMPTY)?;
+    game.sink.note(Event::ValueChosen { player, value });
     run.remember_chosen(value);
     Ok(Outcome::of(Bitboard::EMPTY, 1))
 }

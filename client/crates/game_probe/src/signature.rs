@@ -447,6 +447,7 @@ fn notice_shape(notice: &Notice) -> Value {
             bottom,
         } => json!(["scry", player, top, bottom]),
         Notice::TopOrBottom { player, top } => json!(["topOrBottom", player, top]),
+        Notice::Chosen { player, value } => json!(["chosen", player, value]),
         Notice::Coin { player, won, .. } => json!(["coin", player, won]),
         Notice::Roll { sides, outcomes } => json!(["roll", sides, outcomes.len()]),
         Notice::Shuffle => json!("shuffle"),

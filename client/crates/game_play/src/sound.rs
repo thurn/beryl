@@ -248,7 +248,8 @@ fn pair(act: &Act, found: &Found<'_>) -> [Option<Cue>; 2] {
                 | Notice::Rewind { .. }
                 | Notice::Game { .. }
                 | Notice::Scry { .. }
-                | Notice::TopOrBottom { .. } => None,
+                | Notice::TopOrBottom { .. }
+                | Notice::Chosen { .. } => None,
             },
         ),
         Act::Flip { .. }
@@ -369,6 +370,7 @@ pub fn side_of(step: &Step, table: &Played) -> Option<Side> {
             Notice::Turn { active } => Some(*active),
             Notice::Scry { player, .. }
             | Notice::TopOrBottom { player, .. }
+            | Notice::Chosen { player, .. }
             | Notice::Coin { player, .. } => Some(*player),
             _ => None,
         },

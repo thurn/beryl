@@ -326,9 +326,11 @@ pub fn case_of(act: &Act, found: &Table, beside: &[&Act]) -> Option<&'static str
         }),
         Act::Announce { notice } => match notice {
             Notice::Turn { .. } => Some("turn banner"),
-            // The pill naming the end of a library the opponent chose stands as long as a
-            // scry's.
-            Notice::Scry { .. } | Notice::TopOrBottom { .. } => Some("scry pill"),
+            // The pill naming the end of a library the opponent chose or a value a player
+            // chose stands as long as a scry's.
+            Notice::Scry { .. } | Notice::TopOrBottom { .. } | Notice::Chosen { .. } => {
+                Some("scry pill")
+            }
             Notice::Coin { .. } => Some("coin"),
             _ => None,
         },

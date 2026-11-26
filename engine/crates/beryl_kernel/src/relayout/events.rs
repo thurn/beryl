@@ -114,6 +114,10 @@ impl<L: Layout> Relayout for Event<L> {
                 bottom,
             },
             &Event::TopOrBottom { player, top } => Event::TopOrBottom { player, top },
+            &Event::ValueChosen { player, value } => Event::ValueChosen {
+                player,
+                value: value.relayout(),
+            },
             &Event::LibraryShuffled { player } => Event::LibraryShuffled { player },
             &Event::DrawCard { slot: drawn } => Event::DrawCard { slot: slot(drawn) },
             &Event::Reveal {

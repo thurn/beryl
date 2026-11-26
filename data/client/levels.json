@@ -64,7 +64,7 @@
   "cap_lines": 12000,
   "cap_allowances": {
     "game_play": {
-      "lines": 12011,
+      "lines": 12008,
       "reason": "At 12,012 lines after the shared-pile moves: a draw from a shared library moves Arena's draw waypoints with the library. Considered moving the fly splines (verbs/fly.rs) into kit_space, but they read StepIn, Places and the game Layout, so moving them means first splitting those types out of game_play, a separate refactor."
     },
     "game_table": {
@@ -83,7 +83,7 @@
     "beryl_render": 1,
     "game_hud": 78,
     "game_manual": 55,
-    "game_play": 40,
+    "game_play": 38,
     "game_probe": 4,
     "game_table": 41,
     "kit_base": 16,
