@@ -4380,6 +4380,40 @@ full pause for a broken build, hub or daemon fault, or resource exhaustion.
 - When a declaration replaces another session's emergency, the earlier
   declarer's ticket gets a comment and an `ignite tell`.
 
+### The landings freeze
+
+The justiciar tickets filed after two hours did not end long stalls by
+themselves. In November 2026 `master` fell more than six hours behind `staging`
+five times in eight days, and three of those stalls lasted 15 to 27 hours,
+overnight. While landings continue, every landing moves the tip, so tip rounds
+are overtaken before they reach a verdict, culprit searches do not finish,
+reverts have to be rebuilt on newer tips, and new breakages pile onto the ones
+already failing. So upkeep stops landings by itself once `master` is six hours
+behind:
+
+- When the oldest landing on `staging` that `master` lacks has waited six hours
+  (`FREEZE_SECONDS` in the hub's `upkeep::freeze`), upkeep files a P0 justiciar
+  ticket under the signature `master-freeze` and declares a landings-only
+  emergency on it, as the session `ignite-upkeep`. Every daemon enforces it like
+  any other emergency, so `ignite land` refuses with exit code 6.
+- Each upkeep pass renews the emergency, so it does not lapse after two hours,
+  and lists every open regression, justiciar and incident ticket as allowed to
+  land, so the fixes get in. A tip round's reverts do not go through
+  `ignite land` and are never refused. A change to Ignite from an ordinary
+  ticket waits like any other landing; a justiciar ticket is the way to land an
+  Ignite fix during a freeze.
+- The freeze ends by itself once `master` holds every landing made before it.
+  Upkeep then comments on the ticket, which stays open until its worker has
+  fixed or filed what let `master` fall so far behind. The worker holding the
+  ticket can end the freeze sooner with `ignite pool resume --all`.
+- Upkeep does not freeze landings while another emergency is in force, or while
+  a tip has waited an hour on a machine that is not off and has not reported
+  since the tip arrived. Stopping landings does not bring that machine back, and
+  its own ticket covers it (see [Tip verification](#tip-verification)).
+- Once a session ends or replaces the freeze, upkeep does not declare it again
+  until `master` has caught up with the landings that were waiting when it
+  froze.
+
 ### Planning
 
 The `/ignite` skill is how a person starts work. It replaces `/enact` and
