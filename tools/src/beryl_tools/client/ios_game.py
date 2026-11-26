@@ -83,8 +83,9 @@ def run_ios_game(deck: str) -> int:
     bundle = ios_app("iphonesimulator", release=False, sign=False)
     run = out_dir("phone") / f"{run_name()}-ios-game"
     run.mkdir()
-    png = run / "screen.png"
+    png: Path = run / "screen.png"
     with system.file_lock(repo_paths.cache_root() / "ios-smoke.lock"):
+        udid: str
         udid, booted = mobile.simulator()
         mobile.boot(udid)
         try:
@@ -92,7 +93,7 @@ def run_ios_game(deck: str) -> int:
             container = mobile.run(
                 "xcrun", "simctl", "get_app_container", udid, BUNDLE, "data"
             )
-            documents = Path(container.stdout.strip()) / "Documents"
+            documents: Path = Path(container.stdout.strip()) / "Documents"
             documents.mkdir(parents=True, exist_ok=True)
             for old in [
                 *documents.glob("*.jsonl"),
