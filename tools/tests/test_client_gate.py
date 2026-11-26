@@ -146,6 +146,12 @@ def test_json_reports_the_measurements_even_when_a_budget_fails(
         "scaling": {},
         "trend": {"adjacent_percent": 5, "weekly_percent": 10},
     }
+    # `run_gate` reads the calibration of the machine's own verifier, which a machine such as a
+    # landing tree's may not have, so the test supplies one.
+    profile = calibration.Profile(
+        "fixture", "a" * 40, "client-frame-native/v1", {}, {"base": "budgets.json"}
+    )
+    monkeypatch.setattr(frame_profiles, "native", lambda: profile)
     monkeypatch.setattr(gate, "read_budgets", lambda: budgets)
     monkeypatch.setattr(
         gate, "play", lambda _names, *, json_output: ([board], enhanced)
