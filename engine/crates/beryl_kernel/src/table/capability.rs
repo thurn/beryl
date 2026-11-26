@@ -120,6 +120,12 @@ pub enum Capability {
     AttachmentStateChecks,
     /// A card has two halves with combined characteristics off the stack.
     Split,
+    /// A card is split ([`Capability::Split`]) or has mutate ([`Capability::Merges`]), so an
+    /// object may have the abilities of a face besides its face up, which
+    /// [`crate::State::abilities`] looks up out of line. It is one bit so that making that
+    /// iterator, which every game does often, tests one bit: two bits that are not adjacent
+    /// take one more instruction on ARM64.
+    OtherFaceAbilities,
     /// An ability depends on its permanent's Class level or solved designation.
     DesignatedAbilities,
     /// A spell can require sacrificing a permanent as part of its casting cost.
@@ -181,6 +187,9 @@ impl Capability {
             .any(|def| matches!(def.shape, Shape::Split { .. }))
         {
             capabilities |= Self::Split.bit();
+        }
+        if capabilities & (Self::Split.bit() | Self::Merges.bit()) != 0 {
+            capabilities |= Self::OtherFaceAbilities.bit();
         }
         if defs.iter().any(|def| def.shape == Shape::Prepared) {
             capabilities |= Self::Preparation.bit();

@@ -45,9 +45,9 @@ impl<L: Layout> State<L> {
     /// It costs what walking the face costs: with no permanent missing an ability, as most
     /// games go, the face's abilities come with no test each, after one test of a flag the
     /// layers store, and in a game with no card that grants an ability
-    /// ([`Capability::Grants`]) the granted part is skipped after one AND, as is the merged
-    /// part in a game with no card that merges ([`Capability::Merges`]), and the other half
-    /// in a game with no split card ([`Capability::Split`]).
+    /// ([`Capability::Grants`]) the granted part is skipped after one AND, as are the other
+    /// half and the merged part in a game with no split card and no card that merges
+    /// ([`Capability::OtherFaceAbilities`]).
     ///
     /// # Panics
     ///
@@ -70,8 +70,7 @@ impl<L: Layout> State<L> {
             own: face.iter(),
             // A split card off the stack has its other half's abilities too (see CR 709.4c),
             // which the out-of-line part looks up in a game with a split card.
-            half_read: false,
-            place: if t.can_either(Capability::Merges, Capability::Split) {
+            place: if t.can(Capability::OtherFaceAbilities) {
                 0
             } else {
                 OWN_ONLY
@@ -180,16 +179,16 @@ pub struct Abilities<'s, L: Layout> {
     slot: L::Slot,
     /// The abilities yet to come of the face up, then of each merged face in turn.
     own: std::slice::Iter<'static, Ability>,
-    /// Whether `own` has been given the abilities of the other half of a split card off the
-    /// stack ([`Copiable::other_half_abilities`]), which it walks once the face's are done,
-    /// numbered after them as [`ObjectAbility::Own`], or found there is none.
-    half_read: bool,
     /// The index on its face of the next of `own`.
     index: u8,
-    /// Which face `own` walks: 0 or [`OWN_ONLY`] for the face up, then `k + 1` for the
-    /// merged face at place `k` ([`Copiable::merged_faces`]), and [`DONE`] once none is
+    /// Which face `own` walks: 0 or [`OWN_ONLY`] for the face up, [`HALF`] for the other half
+    /// of a split card off the stack ([`Copiable::other_half_abilities`]), then `k + 1` for
+    /// the merged face at place `k` ([`Copiable::merged_faces`]), and [`DONE`] once none is
     /// left. [`OWN_ONLY`] is a game with no card that merges and no split card, where no
-    /// merged face or other half follows.
+    /// other half or merged face follows. The other half is a value of this byte rather than a
+    /// field of its own, so that making and walking the iterator, which every caller inlines,
+    /// does no more work in a game with no split card (a separate flag measured +0.07% on the
+    /// count gate's rollouts).
     place: u8,
     /// Some permanent lost an ability, so each of `own` is asked whether this one has it.
     check_lost: bool,
@@ -201,6 +200,11 @@ pub struct Abilities<'s, L: Layout> {
 
 /// [`Abilities::place`] in a game with no card that merges and no split card.
 const OWN_ONLY: u8 = 0x80;
+
+/// [`Abilities::place`] while `own` walks the other half of a split card off the stack,
+/// which the out-of-line part walks, so it is not 0 and below [`OWN_ONLY`]. No merged face
+/// has this place.
+const HALF: u8 = OWN_ONLY - 1;
 
 /// [`Abilities::place`] once no merged face is left.
 const DONE: u8 = u8::MAX;
@@ -214,20 +218,22 @@ impl<L: Layout> Abilities<'_, L> {
     fn next_merged(&mut self) -> Option<(ObjectAbility, &'static Ability)> {
         // The other half of a split card off the stack goes on from the face's own: the card
         // has one text box with each half's abilities in it (see CR 709.4c).
-        if self.place == 0 && !self.half_read {
-            self.half_read = true;
-            if self.table.can(Capability::Split) {
-                let half = self
-                    .state
-                    .copiable(self.slot)
-                    .other_half_abilities(self.table);
-                self.own = half.iter();
-                if let Some(ability) = self.own.next() {
-                    let index = AbilityIx::new(self.index);
-                    self.index += 1;
+        if self.place == 0 && self.table.can(Capability::Split) {
+            self.own = (self.state.copiable(self.slot))
+                .other_half_abilities(self.table)
+                .iter();
+            self.place = HALF;
+        }
+        if self.place == HALF {
+            for ability in self.own.by_ref() {
+                let index = AbilityIx::new(self.index);
+                self.index += 1;
+                if !self.check_lost || self.state.has_ability(self.slot, index) {
                     return Some((ObjectAbility::Own(index), ability));
                 }
             }
+            // The merged faces come next, as they do after the face's own.
+            self.place = 0;
         }
         if self.place == 0 && self.state.merged_values(self.table, self.slot).is_none() {
             self.place = DONE;
@@ -252,7 +258,7 @@ impl<L: Layout> Abilities<'_, L> {
                 return Some((ObjectAbility::Merged(self.place - 1, index), ability));
             }
             let next = self.state.copiable(self.slot).merged_face(self.place);
-            let Some((card, face)) = next.filter(|_| self.place + 1 < OWN_ONLY) else {
+            let Some((card, face)) = next.filter(|_| self.place + 1 < HALF) else {
                 self.place = DONE;
                 return None;
             };
