@@ -106,7 +106,8 @@ pub(crate) fn pick<L: Layout>(
     picked: L::Slot,
 ) -> Result<(), Full> {
     let (_, theirs) = next_to_arrange(s, group);
-    let lowest = s.arrange_lowest(picked, theirs)?;
+    // In the shared-deck format the cards have no owner, and the active player arranges them.
+    let lowest = s.arrange_lowest(picked, theirs, s.turn().active())?;
     let mut left = group;
     left.remove(lowest);
     if (left & theirs).count() < 2 {

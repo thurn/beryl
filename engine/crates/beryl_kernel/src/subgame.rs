@@ -4,7 +4,7 @@
 
 use crate::fixed::Full;
 use crate::format::Format;
-use crate::layout::{Large, Layout, Queue};
+use crate::layout::{Large, Layout, Piles, Table};
 use crate::object::Object;
 use crate::rng::Rng;
 use crate::state::{State, Zone};
@@ -151,6 +151,11 @@ impl<L: Layout> State<L> {
     /// subgame have any meaning in the other, except as defined by the effect that created
     /// the subgame."
     ///
+    /// A subgame of a game of the shared-deck format is one too, dealt from the shared library
+    /// once and shuffled once, and its cards have no owner there. When it ends the main game
+    /// resumes as it was suspended, its shared library among it, and the rules put the cards
+    /// back into it ([`State::leave_subgame`]).
+    ///
     /// [CR 730.2]: https://yawgatog.com/resources/magic-rules/#R7302
     /// [CR 730.1b]: https://yawgatog.com/resources/magic-rules/#R7301b
     pub fn deal_subgame(&self, format: Format) -> Result<Self, Full> {
@@ -166,7 +171,9 @@ impl<L: Layout> State<L> {
         );
         let mut seed = self.rng.other;
         inner.rng = Rng::new(seed.next_u64());
-        for player in self.players().in_seat_order() {
+        let shared = self.shares_zones();
+        debug_assert_eq!(shared, inner.shares_zones(), "a subgame of another format");
+        for player in self.zone_owners(Zone::Library).in_seat_order() {
             let p = player.index();
             for &slot in self.library(player) {
                 *inner.object_mut(slot) = Object {
@@ -177,8 +184,15 @@ impl<L: Layout> State<L> {
                     ..Object::EMPTY
                 };
                 // The library already fit this layout in the game it came from.
-                inner.zones.library[p].push_bounded(slot);
-                inner.zones.members[p][Zone::Library.index()].insert(slot);
+                if shared {
+                    inner.zones.library.push_shared(slot)?;
+                    for members in inner.zones.members.as_mut_slice() {
+                        members[Zone::Library.index()].insert(slot);
+                    }
+                } else {
+                    inner.zones.library.push(p, slot)?;
+                    inner.zones.members[p][Zone::Library.index()].insert(slot);
+                }
             }
             inner.shuffle_library(player)?;
         }

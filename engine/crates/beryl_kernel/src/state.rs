@@ -40,7 +40,7 @@ use crate::decision::Outcome;
 use crate::event::{Listens, Replaces};
 use crate::fixed::Full;
 use crate::ids::{Seat, Slot, SlotId};
-use crate::layout::{Layout, Queue, Small, Table};
+use crate::layout::{Layout, Piles, Queue, Small, Table};
 use crate::object::OFF_BATTLEFIELD;
 use crate::player_set::PlayerSet;
 use crate::profile::{Limits, Profile};
@@ -95,12 +95,20 @@ pub struct Zones<L: Layout = Small> {
     /// Membership by owner, indexed by `Zone::index` for the owned zones.
     pub(crate) members: L::PerPlayer<[Bitboard<L::Slot>; Zone::OWNED]>,
     pub(crate) stack: Bitboard<L::Slot>,
-    /// Bottom first: the top card is the last.
-    pub(crate) library: L::PerPlayer<L::Deck<L::Slot>>,
-    /// Bottom first: the top card is the last.
-    pub(crate) graveyard: L::PerPlayer<L::Deck<L::Slot>>,
+    /// The libraries, bottom first: the top card is the last. Player `p`'s is list
+    /// `p & mask` ([`crate::layout::Piles`]).
+    pub(crate) library: L::Piles,
+    /// The graveyards, bottom first, as the libraries are kept.
+    pub(crate) graveyard: L::Piles,
     /// The next battlefield timestamp.
     pub(crate) next_timestamp: u16,
+    /// 1 in a game where each player has their own library and graveyard, 0 where the players
+    /// share them ([`crate::format::ZoneRule`]): player `p`'s list of [`Zones::library`] and
+    /// [`Zones::graveyard`] is list `p & mask`, so a read needs no branch. Set as the state is
+    /// made, from its format, and never changed. It fills what was padding, so the state is no
+    /// larger, and nothing hashes it: a game never changes it, and games of two formats are
+    /// never compared.
+    pub(crate) mask: u8,
 }
 
 impl Copy for Zones<Small> {}
@@ -115,6 +123,7 @@ impl<L: Layout> std::hash::Hash for Zones<L> {
             library,
             graveyard,
             next_timestamp,
+            mask: _,
         } = self;
         members.hash(h);
         stack.hash(h);
@@ -122,6 +131,13 @@ impl<L: Layout> std::hash::Hash for Zones<L> {
         graveyard.hash(h);
         crate::repeats::next_timestamp(*next_timestamp).hash(h);
     }
+}
+
+/// Whether `zone` is one the shared-deck format shares: a library or a graveyard
+/// ([`crate::format::ZoneRule::SharedLibraryAndGraveyard`]).
+#[inline]
+pub(crate) fn is_shared(zone: Zone) -> bool {
+    matches!(zone, Zone::Library | Zone::Graveyard)
 }
 
 /// Counters toward the budgets of the profile (architecture §12.3).
@@ -483,22 +499,31 @@ impl<L: Layout> State<L> {
         }
     }
 
-    /// A player's library as slots, bottom first.
-    pub fn library(&self, player: Seat) -> &[L::Slot] {
-        self.zones.library[player.index()].as_slice()
+    /// The list of `player`'s library or graveyard in [`Zones`]: their own, or the shared one.
+    #[inline]
+    pub(crate) fn pile_of(&self, player: Seat) -> usize {
+        player.index() & usize::from(self.zones.mask)
     }
 
-    /// A player's graveyard as slots, bottom first.
+    /// A player's library as slots, bottom first: in the shared-deck format, the shared library
+    /// for either player.
+    #[inline]
+    pub fn library(&self, player: Seat) -> &[L::Slot] {
+        self.zones.library.list(self.pile_of(player))
+    }
+
+    /// A player's graveyard as slots, bottom first: in the shared-deck format, the shared
+    /// graveyard for either player.
+    #[inline]
     pub fn graveyard(&self, player: Seat) -> &[L::Slot] {
-        self.zones.graveyard[player.index()].as_slice()
+        self.zones.graveyard.list(self.pile_of(player))
     }
 
     /// Whether the players share a library and a graveyard ([`crate::format::ZoneRule`]). Copied
-    /// into the state at the deal, so a rollout never reads the format for it. No state is a
-    /// shared one yet: [`State::deal`] refuses a shared-deck table.
+    /// into the state at the deal (`Zones::mask`), so a rollout never reads the format for it.
     #[inline]
     pub fn shares_zones(&self) -> bool {
-        false
+        self.zones.mask == 0
     }
 
     /// The seats that hold distinct zones of kind `zone`: every player, or only [`Seat::P0`]
@@ -507,27 +532,31 @@ impl<L: Layout> State<L> {
     /// counted once.
     #[inline]
     pub fn zone_owners(&self, zone: Zone) -> PlayerSet {
-        let _ = zone;
-        self.players()
+        if self.shares_zones() && is_shared(zone) {
+            PlayerSet::only(Seat::P0)
+        } else {
+            self.players()
+        }
     }
 
-    /// Whether the object in `slot` has an owner. A card at rest in a shared library or
-    /// graveyard has none: its `owner` field holds [`Seat::P0`], which nothing may read as a
-    /// player. Every object has one in a game whose zones are not shared.
+    /// Whether the object in `slot` has an owner. A card in a shared library or graveyard has
+    /// none: its `owner` field holds [`Seat::P0`], which nothing may read as a player. Every
+    /// object has one in a game whose zones are not shared.
     #[inline]
     pub fn has_owner(&self, slot: L::Slot) -> bool {
-        let _ = slot;
-        true
+        !(self.shares_zones() && is_shared(self.object(slot).zone))
     }
 
     /// Whether the object in `slot` is in one of `player`'s zones: their library, hand or
     /// graveyard, or their part of the battlefield or exile. A card in a shared zone is in
     /// each player's zone of that kind (the shared-deck format: "Anything referring to 'your'
     /// graveyard or library is referencing the shared zone"), so rules that ask whether a
-    /// card is in a player's graveyard or library ask this, never its owner.
+    /// card is in a player's graveyard or library ask this, never its owner. Both players'
+    /// sets of a shared zone hold its cards, so this needs no branch on the format.
     #[inline]
     pub fn holds(&self, player: Seat, slot: L::Slot) -> bool {
-        self.object(slot).owner() == player
+        let zone = self.object(slot).zone;
+        zone.index() < Zone::OWNED && self.zone(ZoneKey::Of(player, zone)).contains(slot)
     }
 
     /// Slots on the battlefield, in the order they entered.

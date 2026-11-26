@@ -15,7 +15,7 @@ use crate::copiable::additions::Addition;
 use crate::event::Sink;
 use crate::fixed::Full;
 use crate::ids::{Seat, SlotId};
-use crate::layout::{Layout, Queue, Table};
+use crate::layout::{Layout, PileCards, Piles, Queue, Table};
 use crate::query::Copiable;
 use crate::stack::StackItem;
 use crate::state::{
@@ -194,6 +194,10 @@ impl<L: Layout> Board<'_, L> {
     /// Moves the object in `slot` to the top of `zone`. A permanent put onto the battlefield this
     /// way has been there since its controller's turn began, so it is not summoning sick
     /// (see [CR 302.6]).
+    ///
+    /// In the shared-deck format a card placed into the shared library or graveyard goes into
+    /// the shared one and has no owner there, as the zone move leaves it. A card placed out of
+    /// one is [`Seat::P0`]'s unless it was claimed first ([`State::claim`]).
     ///
     /// [CR 302.6]: https://yawgatog.com/resources/magic-rules/#R3026
     pub fn place(&mut self, slot: L::Slot, zone: Zone) -> Result<(), Full> {
@@ -427,7 +431,8 @@ impl<L: Layout> Board<'_, L> {
                 self.0.object_mut(slot).flags.set(Flag::Tapped, true);
             }
             Corruption::Unlisted => {
-                self.0.zones.library[owner].pop();
+                let list = self.0.pile_of(Seat::BOTH[owner]);
+                self.0.zones.library.pop(list);
             }
         }
     }
@@ -464,9 +469,11 @@ impl<L: Layout> Board<'_, L> {
     }
 
     /// Puts a player's library in the given order, top first. `top_first` must hold exactly
-    /// the slots of that library.
+    /// the slots of that library: in the shared-deck format, of the shared library, which is
+    /// either player's.
     pub fn order_library(&mut self, player: Seat, top_first: &[L::Slot]) {
-        let library = &mut self.0.zones.library[player.index()];
+        let list = self.0.pile_of(player);
+        let library = self.0.zones.library.list_mut(list);
         assert_eq!(library.len(), top_first.len(), "not the whole library");
         let distinct: crate::bitboard::Bitboard<L::Slot> = top_first.iter().copied().collect();
         assert_eq!(
@@ -475,13 +482,10 @@ impl<L: Layout> Board<'_, L> {
             "a slot twice"
         );
         for &slot in top_first {
-            assert!(
-                library.position(slot).is_some(),
-                "slot {slot} is not in the library"
-            );
+            assert!(library.contains(&slot), "slot {slot} is not in the library");
         }
         for (i, &slot) in top_first.iter().rev().enumerate() {
-            library.as_mut_slice()[i] = slot;
+            library[i] = slot;
         }
     }
 
@@ -528,19 +532,18 @@ impl<L: Layout> Board<'_, L> {
             matches!(self.0.pending, Pending::PlayOrDraw { .. }) && self.0.turn.number == 0,
             "the game has not begun"
         );
-        for player in Seat::BOTH {
-            let p = player.index();
-            let mut slots = self.0.zones.library[p].clone();
-            let mut cards = L::Deck::<L::Card>::default();
-            for &slot in slots.iter() {
+        for player in self.0.zone_owners(Zone::Library).in_seat_order() {
+            let list = self.0.pile_of(player);
+            let mut cards = PileCards::<L>::default();
+            for &slot in self.0.zones.library.list(list) {
                 // A card for each slot of the library, in a list as long as a library.
                 cards.push_bounded(self.0.object(slot).card);
             }
-            order(slots.as_mut_slice());
-            for (&slot, &card) in slots.iter().zip(cards.iter()) {
+            order(self.0.zones.library.list_mut(list));
+            let library = self.0.zones.library.clone();
+            for (&slot, &card) in library.list(list).iter().zip(cards.iter()) {
                 self.0.object_mut(slot).card = card;
             }
-            self.0.zones.library[p] = slots;
         }
     }
 }

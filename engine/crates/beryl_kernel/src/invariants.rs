@@ -6,7 +6,7 @@
 use crate::bitboard::Bitboard;
 use crate::format::Format;
 use crate::ids::{CardId, Seat, SlotId, SlotPlace};
-use crate::layout::{Layout, Queue, Table};
+use crate::layout::{Layout, Piles, Queue, Table};
 use crate::state::{AbilityTarget, Flag, Object, Pending, State, Zone};
 use crate::table::GameTable;
 use beryl_card::FaceIx;
@@ -69,12 +69,21 @@ impl<L: Layout> State<L> {
     }
 
     fn check_objects(&self, t: &GameTable) -> Result<(), Violation> {
+        // In the shared-deck format a deck slot's place names no owner: the shared deck's
+        // cards fill [`SlotId::shared_deck`]'s slots.
+        let shared_deck: Option<Bitboard<L::Slot>> = self.shares_zones().then(|| {
+            (0..t.deck_len(Seat::P0))
+                .map(L::Slot::shared_deck)
+                .collect()
+        });
+        let claimed = self.claimed_by_question();
         for slot in L::Slot::all() {
             let at = Some(At::Slot(slot.index()));
             let o = self.object(slot);
-            let (deck_owner, in_deck) = match slot.place() {
-                SlotPlace::Deck(player, card) => (Some(player), card < t.deck_len(player)),
-                SlotPlace::Pool(_) => (None, false),
+            let (deck_owner, in_deck) = match (slot.place(), shared_deck) {
+                (SlotPlace::Deck(_, _), Some(deck)) => (None, deck.contains(slot)),
+                (SlotPlace::Deck(player, card), None) => (Some(player), card < t.deck_len(player)),
+                (SlotPlace::Pool(_), _) => (None, false),
             };
             if o.zone == Zone::Nowhere {
                 check(
@@ -85,9 +94,20 @@ impl<L: Layout> State<L> {
                 continue;
             }
             let token = o.flags.has(Flag::Token);
-            if let Some(deck_owner) = deck_owner {
+            if matches!(slot.place(), SlotPlace::Deck(..)) {
                 check(in_deck && !token, "an object outside the deck slots", at)?;
+            }
+            if let Some(deck_owner) = deck_owner {
                 check(o.owner == deck_owner, "a deck card with another owner", at)?;
+            }
+            // A card in a shared zone has no owner, but one claimed while the question about
+            // its entering is open.
+            if shared_deck.is_some() && crate::state::is_shared(o.zone) && claimed != Some(slot) {
+                check(
+                    o.owner == Seat::P0 && o.base_controller == Seat::P0,
+                    "a card in a shared zone with an owner",
+                    at,
+                )?;
             }
             check(o.card.index() < t.len(), "no such card", at)?;
             for link in o.names() {
@@ -186,7 +206,22 @@ impl<L: Layout> State<L> {
         )
     }
 
-    fn check_zones(&self) -> Result<(), Violation> {
+    /// Each player's zone sets, the stack's and the phased-out permanents', as the objects'
+    /// zones say they are.
+    #[allow(
+        clippy::type_complexity,
+        reason = "the three sets the zones keep, by name"
+    )]
+    fn expected_members(
+        &self,
+    ) -> Result<
+        (
+            L::PerPlayer<[Bitboard<L::Slot>; Zone::OWNED]>,
+            Bitboard<L::Slot>,
+            Bitboard<L::Slot>,
+        ),
+        Violation,
+    > {
         let mut members: L::PerPlayer<_> = Table::filled([Bitboard::EMPTY; Zone::OWNED]);
         let mut stack = Bitboard::EMPTY;
         let mut phased_out = Bitboard::EMPTY;
@@ -206,6 +241,12 @@ impl<L: Layout> State<L> {
                     "a card in the merged zone is part of no permanent",
                     Some(At::Slot(slot.index())),
                 )?,
+                // Both players' sets of a shared zone hold its cards.
+                zone @ (Zone::Library | Zone::Graveyard) if self.shares_zones() => {
+                    for owned in members.as_mut_slice() {
+                        owned[zone.index()].insert(slot);
+                    }
+                }
                 zone @ (Zone::Library
                 | Zone::Hand
                 | Zone::Battlefield
@@ -213,6 +254,12 @@ impl<L: Layout> State<L> {
                 | Zone::Exile) => members[o.owner.index()][zone.index()].insert(slot),
             }
         }
+        self.check_shared_lists()?;
+        Ok((members, stack, phased_out))
+    }
+
+    fn check_zones(&self) -> Result<(), Violation> {
+        let (members, stack, phased_out) = self.expected_members()?;
         check(
             phased_out == self.phased_out,
             "the phased-out set disagrees with the objects' flags",
@@ -292,6 +339,30 @@ impl<L: Layout> State<L> {
             }
         }
         Ok(())
+    }
+
+    /// In a game whose players share a library and a graveyard, the second list of each is
+    /// empty: the first is the shared one ([`crate::layout::Piles`]).
+    fn check_shared_lists(&self) -> Result<(), Violation> {
+        check(
+            !self.shares_zones()
+                || (self.zones.library.list(1).is_empty()
+                    && self.zones.graveyard.list(1).is_empty()),
+            "a second library or graveyard in a game that shares them",
+            None,
+        )
+    }
+
+    /// The card in a shared zone that the open question is about, which was claimed for the
+    /// player it enters the battlefield under while that question is asked.
+    fn claimed_by_question(&self) -> Option<L::Slot> {
+        if let Pending::EnterPayingLife { slot, .. } | Pending::EnterChoosing { slot, .. } =
+            self.pending
+        {
+            Some(slot)
+        } else {
+            None
+        }
     }
 
     fn check_players(&self, format: Format) -> Result<(), Violation> {

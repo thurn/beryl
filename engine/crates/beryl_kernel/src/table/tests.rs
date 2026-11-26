@@ -441,8 +441,8 @@ fn a_shared_deck_table_takes_one_list_and_refuses_a_second_or_a_sideboard() {
         })
     );
 
-    assert_eq!(
-        State::new(&t, 0, Profile::EXACT).err(),
-        Some(crate::Misfit::SharedZones)
-    );
+    let state = State::new(&t, 0, Profile::EXACT).unwrap();
+    assert!(state.shares_zones());
+    assert_eq!(state.library(Seat::P0), state.library(Seat::P1));
+    assert_eq!(state.library(Seat::P0).len(), 5);
 }

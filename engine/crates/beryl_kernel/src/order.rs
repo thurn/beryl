@@ -9,10 +9,16 @@ use beryl_card::Zone;
 
 use crate::bitboard::Bitboard;
 use crate::fixed::Full;
-use crate::ids::Seat;
+use crate::ids::{Seat, Slot, SlotId};
 use crate::layout::{Layout, Queue};
 use crate::state::{State, ZoneKey};
 use crate::table::GameTable;
+
+/// The room of [`State::hand_by_definition`]'s list: every card a player can own in
+/// [`crate::Small`].
+pub const HAND: usize = Slot::SHARED_DECK_SLOTS;
+
+const _: () = assert!(Slot::DECK_SLOTS + crate::format::Format::MAX_SIDEBOARD <= HAND);
 
 impl<L: Layout> State<L> {
     /// Objects in a player's library, top first
@@ -42,16 +48,18 @@ impl<L: Layout> State<L> {
     }
 
     /// The cards in a hand by definition key. Each card belongs to the owner of the hand,
-    /// so a queue with room for their deck holds them all. see [CR 400.3]: "If an object would
-    /// go to any library, graveyard, or hand other than its owner's, it goes to its owner's
-    /// corresponding zone."
+    /// so a queue with room for every card they can own holds them all. See [CR 400.3]: "If an
+    /// object would go to any library, graveyard, or hand other than its owner's, it goes to
+    /// its owner's corresponding zone." In [`crate::Small`] a player owns at most the 60 cards
+    /// of their deck's slots and the 15 of their sideboard, or in the shared-deck format, which
+    /// has no sideboard, any of the shared deck's [`SlotId::SHARED_DECK_SLOTS`].
     ///
     /// [CR 400.3]: https://yawgatog.com/resources/magic-rules/#R4003
-    pub fn hand_by_definition(&self, player: Seat) -> L::Queue<L::Slot, 64> {
-        let mut hand: L::Queue<L::Slot, 64> = Default::default();
+    pub fn hand_by_definition(&self, player: Seat) -> L::Queue<L::Slot, HAND> {
+        let mut hand: L::Queue<L::Slot, HAND> = Default::default();
         for slot in self.zone(ZoneKey::Of(player, Zone::Hand)).iter() {
             if self.card_behind(slot).is_some() {
-                hand.push_bounded(slot); // One player's deck in either layout.
+                hand.push_bounded(slot); // Every card the player can own, as above.
             }
         }
         hand.as_mut_slice()

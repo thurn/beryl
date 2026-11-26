@@ -8,7 +8,7 @@
 use crate::bitboard::Bitboard;
 use crate::decision::{Candidates, Decision, Opt, Refusal, Step};
 use crate::ids::{CardId, SlotId};
-use crate::layout::{Item, Layout, Queue, Table, index};
+use crate::layout::{Item, Layout, Piles, Queue, Table, index};
 use crate::mana_memory::RememberedMana;
 use crate::pending::{LethalAssignment, hidden_pick_answer, hidden_pick_of};
 use crate::state::{
@@ -582,11 +582,30 @@ impl<L: Layout> Relayout for Zones<L> {
         Zones {
             members: per_player(&self.members, |owned| owned.map(bits)),
             stack: bits(self.stack),
-            library: per_player(&self.library, |q| queue(q.as_slice(), |&s| slot(s))),
-            graveyard: per_player(&self.graveyard, |q| queue(q.as_slice(), |&s| slot(s))),
+            library: piles::<L, M>(&self.library, self.mask),
+            graveyard: piles::<L, M>(&self.graveyard, self.mask),
             next_timestamp: self.next_timestamp,
+            // A game of the shared-deck format stays one in every layout.
+            mask: self.mask,
         }
     }
+}
+
+/// The libraries or graveyards `from` over the slots at the same places, kept as `mask` says:
+/// one list for each player, or the shared one.
+fn piles<L: Layout, M: Layout>(from: &L::Piles, mask: u8) -> M::Piles {
+    let mut to = M::Piles::default();
+    for list in 0..2 {
+        for &s in from.list(list) {
+            let pushed = if mask == 0 {
+                to.push_shared(slot(s))
+            } else {
+                to.push(list, slot(s))
+            };
+            pushed.expect("a list past the layout's capacity");
+        }
+    }
+    to
 }
 
 impl<L: Layout> Relayout for State<L> {

@@ -20,6 +20,14 @@ use crate::relayout::Relayout;
 use crate::state::State;
 use crate::subgame::{CompletedTurns, LargeOuter, OuterGame};
 
+mod piles;
+
+pub use piles::{LargePiles, Piles, SmallPiles};
+
+/// The cards of a library being dealt or shuffled, with room for a shared deck
+/// ([`SlotId::SHARED_DECK_SLOTS`] in [`Small`]).
+pub type PileCards<L> = <L as Layout>::Queue<<L as Layout>::Card, { Slot::SHARED_DECK_SLOTS }>;
+
 /// What a layout's arrays and queues hold: in [`Small`], always `Copy` values; in [`Large`],
 /// values that may hold queues of their own.
 pub trait Item: Clone + Debug + Eq + Hash + Send + Sync {}
@@ -141,7 +149,8 @@ pub type PerPlayer<L, T> = <L as Layout>::PerPlayer<T>;
 /// - how many players a game has ([`SlotId::PLAYERS`] of its slots, the length of its
 ///   [`Layout::PerPlayer`]);
 /// - how many cards a deck may have, and so a library and a graveyard
-///   ([`SlotId::DECK_SLOTS`], the capacity of its [`Layout::Deck`]);
+///   ([`SlotId::DECK_SLOTS`], the capacity of its [`Layout::Deck`], or
+///   [`SlotId::SHARED_DECK_SLOTS`] for a shared deck, which its [`Layout::Piles`] holds);
 /// - how many objects occupy the shared pool at once (its [`Layout::TOKEN_POOL`]);
 /// - how many objects a game holds ([`SlotId::COUNT`]) and how long each queue grows;
 /// - how many distinct cards a game contains, tokens and emblems among them
@@ -164,9 +173,11 @@ pub trait Layout: Copy + Debug + Default + Eq + Hash + Send + Sync + 'static {
     type Index: Item + Copy + Default + Ord + Into<usize> + Into<u16> + TryFrom<usize>;
     type Queue<T: Item + Default, const N: usize>: Queue<T>;
     type Table<T: Item, const N: usize>: Table<T>;
-    /// A list as long as a deck may be ([`SlotId::DECK_SLOTS`]): a library, a graveyard, the
-    /// cards of one being dealt.
+    /// A list as long as a deck may be ([`SlotId::DECK_SLOTS`]).
     type Deck<T: Item + Default>: Queue<T>;
+    /// The libraries, or the graveyards, of a game: one list for each player, or the one both
+    /// players share ([`Piles`]).
+    type Piles: Piles<Self::Slot>;
     /// One value for each player, indexed by [`Seat::index`]: as many entries as
     /// [`SlotId::PLAYERS`].
     type PerPlayer<T: Item>: Table<T>;
@@ -220,6 +231,7 @@ impl Layout for Small {
     type Queue<T: Item + Default, const N: usize> = Fixed<T, N>;
     type Table<T: Item, const N: usize> = [T; N];
     type Deck<T: Item + Default> = Fixed<T, { Slot::DECK_SLOTS }>;
+    type Piles = SmallPiles;
     type PerPlayer<T: Item> = PerSeat<T>;
     type AbilityMask = u16;
     type BlockList = [Option<Slot>; 3];
@@ -271,6 +283,7 @@ impl Layout for Large {
     type Queue<T: Item + Default, const N: usize> = Vec<T>;
     type Table<T: Item, const N: usize> = PerSlot<T>;
     type Deck<T: Item + Default> = Vec<T>;
+    type Piles = LargePiles;
     type PerPlayer<T: Item> = PerSeat<T>;
     type AbilityMask = u64;
     type BlockList = Vec<LargeSlot>;

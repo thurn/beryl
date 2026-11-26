@@ -67,6 +67,28 @@ pub trait SlotId:
         Self::from_index(player.index() * Self::DECK_SLOTS + i)
     }
 
+    /// How many cards a shared deck may have, the one library both players draw from in the
+    /// shared-deck format ([`crate::format::ZoneRule::SharedLibraryAndGraveyard`]): the first
+    /// player's deck slots of the narrowest numbering, [`Slot`]'s, then every one of the second
+    /// player's ([`SlotId::shared_deck`]). In [`Slot`]'s numbering that is both players'.
+    const SHARED_DECK_SLOTS: usize = Slot::DECK_SLOTS + Self::DECK_SLOTS;
+
+    /// The slot of the `i`th card of a shared deck, which must be below
+    /// [`SlotId::SHARED_DECK_SLOTS`]. A shared deck has no owner, so its cards fill the first
+    /// player's deck slots and then the second player's. They split where [`Slot`]'s first
+    /// player's slots end in every numbering, so that each card keeps its place
+    /// ([`SlotId::place`]) when a game is widened: in [`Slot`]'s numbering the slots are
+    /// `0..n`, and in a wider one they are not.
+    #[inline]
+    fn shared_deck(i: usize) -> Self {
+        debug_assert!(i < Self::SHARED_DECK_SLOTS);
+        if i < Slot::DECK_SLOTS {
+            Self::deck(Seat::P0, i)
+        } else {
+            Self::deck(Seat::P1, i - Slot::DECK_SLOTS)
+        }
+    }
+
     /// The slots of the shared pool, in ascending order
     /// ([`crate::Layout::TOKEN_POOL`]).
     #[inline]

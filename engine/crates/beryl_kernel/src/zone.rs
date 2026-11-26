@@ -12,10 +12,12 @@ use crate::chance;
 use crate::event::Sink;
 use crate::fixed::Full;
 use crate::ids::{Seat, SlotId};
-use crate::layout::{Layout, Queue, Table};
+use crate::layout::{Layout, PileCards, Piles, Queue, Table};
 use crate::reference::{CardIn, Library};
 use crate::rng::SplitMix64;
-use crate::state::{CombatRole, Counters, Derived, Flag, Object, State, Tracked, Zone, ZoneKey};
+use crate::state::{
+    CombatRole, Counters, Derived, Flag, Object, State, Tracked, Zone, ZoneKey, is_shared,
+};
 use crate::store::{Store, Stored};
 use beryl_card::FaceIx;
 
@@ -52,7 +54,46 @@ impl<L: Layout> State<L> {
     /// See [CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003): "If an object would go to any
     /// library, graveyard, or hand other than its owner's, it goes to its owner's corresponding
     /// zone." Zones are kept by owner, so that holds by construction.
+    ///
+    /// In the shared-deck format a card that enters the shared library or graveyard has no
+    /// owner again: its owner and base controller become [`Seat::P0`] once the move has done
+    /// what depends on who owned it ([`State::claim`]).
     pub fn move_object(
+        &mut self,
+        sink: &mut Sink<L>,
+        slot: L::Slot,
+        to: Zone,
+        place: Place,
+    ) -> Result<(), Full> {
+        // The format's one test for each zone move: what only the shared-deck format does is
+        // compiled out of the per-player move and kept out of line.
+        if self.zones.mask == 0 {
+            return self.move_shared(sink, slot, to, place);
+        }
+        self.move_in::<false>(sink, slot, to, place)
+    }
+
+    /// [`State::move_object`] in a game whose players share a library and a graveyard.
+    #[cold]
+    #[inline(never)]
+    fn move_shared(
+        &mut self,
+        sink: &mut Sink<L>,
+        slot: L::Slot,
+        to: Zone,
+        place: Place,
+    ) -> Result<(), Full> {
+        self.move_in::<true>(sink, slot, to, place)
+    }
+
+    /// [`State::move_object`], with `SHARED` saying whether the players share a library and a
+    /// graveyard.
+    #[allow(
+        clippy::inline_always,
+        reason = "each format's move is this body with the other format's code compiled out"
+    )]
+    #[inline(always)]
+    fn move_in<const SHARED: bool>(
         &mut self,
         sink: &mut Sink<L>,
         slot: L::Slot,
@@ -95,7 +136,7 @@ impl<L: Layout> State<L> {
         } else {
             None
         };
-        leave(self, slot, to);
+        leave::<L, SHARED>(self, slot, to);
         if self.keyed.contains(slot) {
             self.forget_moved_object(slot)?;
         }
@@ -115,10 +156,15 @@ impl<L: Layout> State<L> {
         o.face = FaceIx::FRONT;
         o.combat = CombatRole::None;
         let owner = o.owner.index();
+        let enters_shared = SHARED && is_shared(to);
+        if enters_shared {
+            enter_shared(self, slot, to, place)?;
+        }
         match to {
-            Zone::Library => place_in_library(&mut self.zones.library[owner], slot, place)?,
+            _ if enters_shared => {}
+            Zone::Library => place_in_library(&mut self.zones.library, owner, slot, place)?,
             Zone::Graveyard => {
-                self.zones.graveyard[owner].push(slot)?;
+                self.zones.graveyard.push(owner, slot)?;
                 self.flags.derived_dirty |= self.layers_read_graveyards();
             }
             Zone::Battlefield => {
@@ -135,7 +181,7 @@ impl<L: Layout> State<L> {
             Zone::Hand => self.flags.derived_dirty |= self.layers_read_hands(),
             Zone::Exile | Zone::Nowhere | Zone::Merged => {}
         }
-        if (to.index()) < Zone::OWNED {
+        if (to.index()) < Zone::OWNED && !enters_shared {
             self.zones.members[owner][to.index()].insert(slot);
         }
         if let Some(carried) = carried {
@@ -164,6 +210,11 @@ impl<L: Layout> State<L> {
         }
         if from == Zone::Hand && to == Zone::Library {
             forget_hand(self, Seat::BOTH[owner], slot);
+        }
+        // Last, once the reveal of a face-down card, the hand it left and the knowledge of that
+        // hand have read who owned it.
+        if enters_shared {
+            self.disown(slot);
         }
         if let Some(pile) = pile {
             self.move_pile(sink, slot, &pile, to, place)?;
@@ -237,17 +288,23 @@ impl<L: Layout> State<L> {
     /// handles (architecture §13), so a player who saw a slot move could follow its card. The
     /// two become new objects, which their owner knows ([`State::hide_library_order`]).
     ///
+    /// In the shared-deck format the cards have no owner, and `arranger` arranges them and
+    /// knows the two that trade identities. Otherwise `arranger` is not read.
+    ///
     /// [CR 731.3a]: https://yawgatog.com/resources/magic-rules/#R7313a
     pub fn arrange_lowest(
         &mut self,
         card: L::Slot,
         among: Bitboard<L::Slot>,
+        arranger: Seat,
     ) -> Result<L::Slot, Full> {
         let o = self.object(card);
-        let (owner, zone) = (o.owner, o.zone);
-        let list = match zone {
-            Zone::Graveyard => &mut self.zones.graveyard[owner.index()],
-            Zone::Library => &mut self.zones.library[owner.index()],
+        let shared = self.shares_zones();
+        let (owner, zone) = (if shared { arranger } else { o.owner }, o.zone);
+        let list = self.pile_of(o.owner);
+        let piles = match zone {
+            Zone::Graveyard => &mut self.zones.graveyard,
+            Zone::Library => &mut self.zones.library,
             Zone::Hand
             | Zone::Battlefield
             | Zone::Exile
@@ -255,19 +312,23 @@ impl<L: Layout> State<L> {
             | Zone::Nowhere
             | Zone::Merged => panic!("a card arranged outside a graveyard or library"),
         };
-        let lowest = (list.as_slice().iter())
+        let lowest = (piles.list(list).iter())
             .position(|&slot| among.contains(slot))
             .expect("the cards arranged in their owner's zone");
-        let low = list.as_slice()[lowest];
+        let low = piles.list(list)[lowest];
         if low == card {
             return Ok(card);
         }
         if zone == Zone::Graveyard {
-            let from = list
-                .position(card)
+            let from = piles
+                .position(list, card)
                 .expect("a card in its owner's graveyard");
-            list.remove(from);
-            list.insert(lowest, card)?;
+            piles.remove(list, from);
+            if shared {
+                piles.insert_shared(lowest, card)?;
+            } else {
+                piles.insert(list, lowest, card)?;
+            }
             return Ok(card);
         }
         if self.object(card).incarnation == u16::MAX || self.object(low).incarnation == u16::MAX {
@@ -314,6 +375,10 @@ impl<L: Layout> State<L> {
             self.player_mut(player).drew_from_empty = true;
             return Ok(None);
         };
+        // A card drawn from the shared library is the drawing player's.
+        if self.shares_zones() {
+            self.claim(slot, player);
+        }
         self.move_object(sink, slot, Zone::Hand, Place::Top)?;
         Ok(Some(slot))
     }
@@ -334,23 +399,30 @@ impl<L: Layout> State<L> {
     /// goes back to a shared zone. The shared-deck format: "The 'owner' of a card on the stack or
     /// permanent on the battlefield is considered to be the person who cast it."
     ///
-    /// No game has shared zones yet, so this panics.
+    /// The kernel does not check, as the card leaves, that it was claimed: a card claimed by
+    /// [`Seat::P0`] looks the same as one never claimed, so the rules' zone-change pipeline,
+    /// which knows who takes each card, makes that check.
     #[cold]
     #[inline(never)]
     pub fn claim(&mut self, slot: L::Slot, player: Seat) {
-        let _ = (slot, player);
-        panic!("shared zones are not built");
+        debug_assert!(
+            self.shares_zones() && is_shared(self.object(slot).zone),
+            "a card claimed outside a shared zone"
+        );
+        let o = self.object_mut(slot);
+        o.owner = player;
+        o.base_controller = player;
     }
 
     /// Undoes [`State::claim`] for a card whose move out of a shared zone was prepared and did
-    /// not happen: it has no owner again.
-    ///
-    /// No game has shared zones yet, so this panics.
+    /// not happen: it has no owner again. The zone move does the same for a card that enters
+    /// a shared zone.
     #[cold]
     #[inline(never)]
     pub fn disown(&mut self, slot: L::Slot) {
-        let _ = slot;
-        panic!("shared zones are not built");
+        let o = self.object_mut(slot);
+        o.owner = Seat::P0;
+        o.base_controller = Seat::P0;
     }
 
     /// Moves a card within its owner's library to its top or bottom. Not a zone change, so the
@@ -358,12 +430,17 @@ impl<L: Layout> State<L> {
     /// knows where they put each card.
     pub fn reorder_library(&mut self, card: CardIn<Library, L>, place: Place) -> Result<(), Full> {
         let slot = card.slot();
-        let library = &mut self.zones.library[self.objects[slot.index()].owner.index()];
+        let list = self.pile_of(self.objects[slot.index()].owner);
+        let library = &mut self.zones.library;
         let i = library
-            .position(slot)
+            .position(list, slot)
             .expect("a card in its owner's library");
-        library.remove(i);
-        place_in_library(library, slot, place)
+        library.remove(list, i);
+        if self.zones.mask == 0 {
+            place_in_shared_library(library, slot, place)
+        } else {
+            place_in_library(library, list, slot, place)
+        }
     }
 
     /// Shuffles a library.
@@ -378,15 +455,15 @@ impl<L: Layout> State<L> {
     /// See [CR 701.20d](https://yawgatog.com/resources/magic-rules/#R70120d): "If cards in a player's
     /// library are shuffled or otherwise reordered, any revealed cards that are reordered stop
     /// being revealed and become new objects."
+    ///
+    /// In the shared-deck format either player's library is the shared one.
     pub fn shuffle_library(&mut self, player: Seat) -> Result<(), Full> {
-        let p = player.index();
-        let library = self.zones.library[p].clone();
+        let list = self.pile_of(player);
+        let library = self.zones.library.clone();
         let mut rng = self.rng.shuffle;
-        self.rebind(library.as_slice(), &mut rng)?;
+        self.rebind(library.list(list), &mut rng)?;
         self.rng.shuffle = rng;
-        self.rng
-            .shuffle
-            .shuffle(self.zones.library[p].as_mut_slice());
+        self.rng.shuffle.shuffle(self.zones.library.list_mut(list));
         Ok(())
     }
 
@@ -404,7 +481,8 @@ impl<L: Layout> State<L> {
             self.move_object(sink, slot, Zone::Library, Place::Top)?;
         }
         if !self.restarted() {
-            self.zones.library[player.index()].as_mut_slice()[previous_top..].sort_unstable();
+            let list = self.pile_of(player);
+            self.zones.library.list_mut(list)[previous_top..].sort_unstable();
         }
         self.shuffle_library(player)
     }
@@ -428,9 +506,9 @@ impl<L: Layout> State<L> {
     /// [CR 701.20d]: https://yawgatog.com/resources/magic-rules/#R70120d
     pub(crate) fn rebind(&mut self, slots: &[L::Slot], rng: &mut SplitMix64) -> Result<(), Full> {
         let mut rebound = Bitboard::EMPTY;
-        let mut cards: L::Deck<L::Card> = Default::default();
+        let mut cards: PileCards<L> = Default::default();
         for &slot in slots {
-            // A library never holds more than its owner's deck slots.
+            // A library never holds more than its owner's deck slots, or a shared deck's.
             let object = self.object(slot);
             if object.incarnation == u16::MAX || rebound.contains(slot) {
                 return Err(Full);
@@ -459,7 +537,11 @@ impl<L: Layout> State<L> {
     /// [CR 704.5d]: https://yawgatog.com/resources/magic-rules/#R7045d
     pub fn cease_to_exist(&mut self, slot: L::Slot) -> Result<(), Full> {
         let incarnation = self.object(slot).incarnation.checked_add(1).ok_or(Full)?;
-        leave(self, slot, Zone::Nowhere);
+        if self.zones.mask == 0 {
+            leave::<L, true>(self, slot, Zone::Nowhere);
+        } else {
+            leave::<L, false>(self, slot, Zone::Nowhere);
+        }
         self.forget_stored(slot);
         *self.object_mut(slot) = Object {
             incarnation,
@@ -545,13 +627,24 @@ fn forget_hand<L: Layout>(s: &mut State<L>, owner: Seat, moved: L::Slot) {
     }
 }
 
-fn leave<L: Layout>(s: &mut State<L>, slot: L::Slot, to: Zone) {
+/// Takes the object in `slot` out of its zone's membership and order as it moves to `to`, with
+/// `SHARED` saying whether the players share a library and a graveyard.
+#[allow(
+    clippy::inline_always,
+    reason = "inlined into each format's move, which compiles out the other format's code"
+)]
+#[inline(always)]
+fn leave<L: Layout, const SHARED: bool>(s: &mut State<L>, slot: L::Slot, to: Zone) {
     let o = s.object(slot).clone();
+    if SHARED && is_shared(o.zone) {
+        leave_shared(s, slot, o.zone);
+        return;
+    }
     let owner = o.owner.index();
     match o.zone {
-        Zone::Library => remove_slot(&mut s.zones.library[owner], slot),
+        Zone::Library => s.zones.library.remove_item(owner, slot),
         Zone::Graveyard => {
-            remove_slot(&mut s.zones.graveyard[owner], slot);
+            s.zones.graveyard.remove_item(owner, slot);
             s.flags.derived_dirty |= s.layers_read_graveyards();
         }
         Zone::Battlefield => {
@@ -601,21 +694,76 @@ fn leave<L: Layout>(s: &mut State<L>, slot: L::Slot, to: Zone) {
     }
 }
 
+/// Takes a card out of the shared library or graveyard, `zone`, and out of both players' sets
+/// of it.
+#[cold]
+#[inline(never)]
+fn leave_shared<L: Layout>(s: &mut State<L>, slot: L::Slot, zone: Zone) {
+    if zone == Zone::Library {
+        s.zones.library.remove_item(0, slot);
+    } else {
+        s.zones.graveyard.remove_item(0, slot);
+        s.flags.derived_dirty |= s.layers_read_graveyards();
+    }
+    for members in s.zones.members.as_mut_slice() {
+        members[zone.index()].remove(slot);
+    }
+}
+
+/// Puts a card into the shared library, at `place`, or on top of the shared graveyard, `to`,
+/// and into both players' sets of it.
+#[cold]
+#[inline(never)]
+fn enter_shared<L: Layout>(
+    s: &mut State<L>,
+    slot: L::Slot,
+    to: Zone,
+    place: Place,
+) -> Result<(), Full> {
+    if to == Zone::Library {
+        place_in_shared_library(&mut s.zones.library, slot, place)?;
+    } else {
+        s.zones.graveyard.push_shared(slot)?;
+        s.flags.derived_dirty |= s.layers_read_graveyards();
+    }
+    for members in s.zones.members.as_mut_slice() {
+        members[to.index()].insert(slot);
+    }
+    Ok(())
+}
+
+/// Where `place` is in a library of `len` cards.
+#[inline]
+fn library_index(len: usize, place: Place) -> usize {
+    match place {
+        Place::Top => len,
+        Place::Bottom => 0,
+        Place::UnderTop(n) => len.saturating_sub(usize::from(n)),
+    }
+}
+
 #[inline]
 fn place_in_library<S: SlotId>(
-    library: &mut impl Queue<S>,
+    piles: &mut impl Piles<S>,
+    list: usize,
     slot: S,
     place: Place,
 ) -> Result<(), Full> {
     match place {
-        Place::Top => library.push(slot),
-        Place::Bottom => library.insert(0, slot),
-        Place::UnderTop(n) => library.insert(library.len().saturating_sub(usize::from(n)), slot),
+        Place::Top => piles.push(list, slot),
+        Place::Bottom | Place::UnderTop(_) => {
+            piles.insert(list, library_index(piles.list(list).len(), place), slot)
+        }
     }
 }
 
-fn remove_slot<S: SlotId>(list: &mut impl Queue<S>, slot: S) {
-    if let Some(i) = list.position(slot) {
-        list.remove(i);
-    }
+fn place_in_shared_library<S: SlotId>(
+    piles: &mut impl Piles<S>,
+    slot: S,
+    place: Place,
+) -> Result<(), Full> {
+    piles.insert_shared(library_index(piles.list(0).len(), place), slot)
 }
+
+#[cfg(test)]
+mod tests;

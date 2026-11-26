@@ -154,14 +154,23 @@ impl<L: Layout> State<L> {
 
     /// Active cards in a player's deck slots or admitted from a sideboard into pool slots.
     /// A subgame also keeps the pool slots of cards that entered through the parent's library.
+    /// In the shared-deck format the first player's deck is the shared one, whose slots are
+    /// [`SlotId::shared_deck`]'s, and the second player's is empty.
     pub(crate) fn in_game_card_slots(
         &self,
         table: &GameTable,
         player: Seat,
     ) -> impl Iterator<Item = L::Slot> + '_ {
         let subgame = self.in_subgame();
+        let shared = self.shares_zones();
         let deck = (0..table.deck_len(player))
-            .map(move |index| L::Slot::deck(player, index))
+            .map(move |index| {
+                if shared {
+                    L::Slot::shared_deck(index)
+                } else {
+                    L::Slot::deck(player, index)
+                }
+            })
             .filter(move |&slot| !subgame || self.object(slot).zone != Zone::Nowhere);
         let pool = (subgame || table.sideboard::<L::Card>(player).len() != 0)
             .then_some(())

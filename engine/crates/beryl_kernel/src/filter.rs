@@ -125,7 +125,13 @@ impl Evaluate for Filter {
             // See CR 108.4a: a card that is no permanent or spell has no controller, and "its
             // owner" is used instead, which is what the query answers.
             Filter::Whose(players) => is_for(players, s.controller(slot), you),
-            Filter::Owned(players) => is_for(players, o.owner, you),
+            // A card in a shared library or graveyard is each player's (the shared-deck
+            // format: "Anything referring to 'your' graveyard or library is referencing the
+            // shared zone").
+            Filter::Owned(players) => {
+                is_for(players, o.owner, you)
+                    || (s.zones.mask == 0 && owned_by_all(s, slot, players, you))
+            }
             Filter::Tapped => o.flags.has(Flag::Tapped),
             Filter::AttackedThisTurn => s.tracked(crate::trackers::Tracker::AttackedThisTurn, slot),
             Filter::Token => o.is_token(),
@@ -309,6 +315,16 @@ pub const fn reads(players: &Players) -> bool {
         players,
         Players::You | Players::EachOpponent | Players::EachPlayer
     )
+}
+
+/// Whether `players` owns the object in `slot` in a game whose players share a library and a
+/// graveyard: a card there is each player's. Out of line, so the per-player test of
+/// [`Filter::Owned`] stays as small as it was.
+#[cold]
+#[inline(never)]
+fn owned_by_all<L: Layout>(s: &State<L>, slot: L::Slot, players: &Players, you: Seat) -> bool {
+    crate::state::is_shared(s.object(slot).zone)
+        && Seat::BOTH.iter().any(|&p| is_for(players, p, you))
 }
 
 /// Whether `player` is one of the players `players` names, read for `you`. Every reading of

@@ -11,7 +11,7 @@ use crate::fit::Misfit;
 use crate::fixed::Full;
 use crate::format::{Format, StartingPlayer, ZoneRule};
 use crate::ids::{Seat, SlotId};
-use crate::layout::{Layout, Queue, Table};
+use crate::layout::{Layout, PileCards, Piles, Queue, Table};
 use crate::object::{Derived, Object};
 use crate::pending::Pending;
 use crate::player::{ManaPool, MulliganStatus, Player};
@@ -57,8 +57,8 @@ impl<L: Layout> State<L> {
     /// deck with more cards than the layout has slots for one is refused
     /// ([`Misfit::DeckTooLarge`]), and so is a table of more distinct cards than the layout's
     /// game index numbers ([`Misfit::TooManyCards`]): the game is dealt in a layout that has
-    /// them. A table of the shared-deck format is refused in every layout
-    /// ([`Misfit::SharedZones`]) until the kernel stores a shared library.
+    /// them. A shared deck, the one library of the shared-deck format, may have
+    /// [`SlotId::SHARED_DECK_SLOTS`] cards, all in the shared library.
     ///
     /// Each deck's cards are dealt into its slots by a permutation drawn from the hidden shuffle
     /// stream (architecture §4.2), so a slot number says nothing about the card in it. That
@@ -68,8 +68,8 @@ impl<L: Layout> State<L> {
     ///
     /// [CR 103.3]: https://yawgatog.com/resources/magic-rules/#R1033
     pub fn deal(t: &GameTable, seed: u64, profile: Profile) -> Result<State<L>, Misfit> {
-        if t.format().zones() != ZoneRule::PerPlayer {
-            return Err(Misfit::SharedZones);
+        if t.format().zones() == ZoneRule::SharedLibraryAndGraveyard {
+            return Self::deal_shared(t, seed, profile);
         }
         t.fits::<L>()?;
         for player in Seat::BOTH {
@@ -102,16 +102,70 @@ impl<L: Layout> State<L> {
                     ..Object::EMPTY
                 };
                 // A slot for each card of the deck, which was just found to fit.
-                s.zones.library[player.index()].push_bounded(slot);
+                s.zones
+                    .library
+                    .push(player.index(), slot)
+                    .expect("a deck that fits");
                 s.zones.members[player.index()][Zone::Library.index()].insert(slot);
             }
         }
-        s.pending = match format.starting_player() {
+        s.begin(format);
+        Ok(s)
+    }
+
+    /// [`State::deal`] for a table of the shared-deck format: its one deck is dealt into the
+    /// slots of a shared deck ([`SlotId::shared_deck`]), every card in the shared library and in
+    /// both players' sets of it, with no owner ([`Seat::P0`], [`State::has_owner`]). The
+    /// permutation that deals them is the one opening shuffle, as for a deck of each player's.
+    #[cold]
+    fn deal_shared(t: &GameTable, seed: u64, profile: Profile) -> Result<State<L>, Misfit> {
+        t.fits::<L>()?;
+        let cards = t.deck_len(Seat::P0);
+        if cards > L::Slot::SHARED_DECK_SLOTS {
+            return Err(Misfit::DeckTooLarge {
+                player: Seat::P0,
+                cards,
+                slots: L::Slot::SHARED_DECK_SLOTS,
+            });
+        }
+        let format = t.format();
+        let mut s: State<L> = State::empty_in(format, profile);
+        s.rng = Rng::new(seed);
+        let mut deck: PileCards<L> = Default::default();
+        for card in t.deck(Seat::P0) {
+            // The deck was just found to fit.
+            deck.push_bounded(card);
+        }
+        s.rng.shuffle.shuffle(deck.as_mut_slice());
+        for (i, &card) in deck.iter().enumerate() {
+            let slot = L::Slot::shared_deck(i);
+            *s.object_mut(slot) = Object {
+                card,
+                zone: Zone::Library,
+                owner: Seat::P0,
+                base_controller: Seat::P0,
+                ..Object::EMPTY
+            };
+            // A slot for each card of the deck, which was just found to fit.
+            s.zones
+                .library
+                .push_shared(slot)
+                .expect("a shared deck that fits");
+            for members in s.zones.members.as_mut_slice() {
+                members[Zone::Library.index()].insert(slot);
+            }
+        }
+        s.begin(format);
+        Ok(s)
+    }
+
+    /// Opens the game's first question, the coin flip winner's choice to play or draw.
+    fn begin(&mut self, format: Format) {
+        self.pending = match format.starting_player() {
             StartingPlayer::PlayOrDraw => Pending::PlayOrDraw {
-                chooser: chance::starting_player_chooser(&mut s, format),
+                chooser: chance::starting_player_chooser(self, format),
             },
         };
-        Ok(s)
     }
 
     /// A fresh game with the current players' physical cards. The marked cards stay in exile
@@ -126,6 +180,9 @@ impl<L: Layout> State<L> {
     ///
     /// [CR 728.2]: https://yawgatog.com/resources/magic-rules/#R7282
     /// [CR 728.5]: https://yawgatog.com/resources/magic-rules/#R7285
+    /// A restarted game of the shared-deck format is one too: every card that returns goes to
+    /// the shared library once, with no owner, and the library is shuffled once.
+    ///
     /// [CR 728.6]: https://yawgatog.com/resources/magic-rules/#R7286
     #[cold]
     pub fn restart(
@@ -138,38 +195,51 @@ impl<L: Layout> State<L> {
         next.set_starting_player(starter);
         next.rng = self.rng;
         next.sideboard_taken = self.sideboard_taken;
+        let shared = next.shares_zones();
         for player in self.players().in_seat_order() {
-            let index = player.index();
             for slot in self.in_game_card_slots(table, player) {
                 let previous = self.object(slot);
                 if previous.zone == Zone::Nowhere || previous.is_token() {
                     continue;
                 }
                 let kept_exiled = previous.zone == Zone::Exile && carried.contains(slot);
-                let zone = if kept_exiled {
-                    Zone::Exile
-                } else {
-                    Zone::Library
+                // In the shared-deck format a card in exile keeps the owner it had there, and
+                // a card in the shared library has none.
+                let (zone, owner) = match (kept_exiled, shared) {
+                    (true, true) => (Zone::Exile, previous.owner),
+                    (true, false) => (Zone::Exile, player),
+                    (false, true) => (Zone::Library, Seat::P0),
+                    (false, false) => (Zone::Library, player),
                 };
                 *next.object_mut(slot) = Object {
                     card: self.card_really_is(slot),
                     zone,
-                    owner: player,
-                    base_controller: player,
+                    owner,
+                    base_controller: owner,
                     ..Object::EMPTY
                 };
-                next.zones.members[index][zone.index()].insert(slot);
                 if kept_exiled {
+                    next.zones.members[owner.index()][zone.index()].insert(slot);
                     for known in next.knowledge.as_mut_slice() {
                         known.insert(slot);
                     }
+                } else if shared {
+                    next.zones.library.push_shared(slot)?;
+                    for members in next.zones.members.as_mut_slice() {
+                        members[zone.index()].insert(slot);
+                    }
                 } else {
-                    next.zones.library[index].push(slot)?;
+                    next.zones.members[owner.index()][zone.index()].insert(slot);
+                    next.zones.library.push(owner.index(), slot)?;
                 }
             }
+        }
+        for player in next.zone_owners(Zone::Library).in_seat_order() {
+            let list = next.pile_of(player);
             let objects = &next.objects;
-            next.zones.library[index]
-                .as_mut_slice()
+            next.zones
+                .library
+                .list_mut(list)
                 .sort_unstable_by_key(|slot| objects[slot.index()].card);
             next.shuffle_library(player)?;
         }
@@ -199,9 +269,10 @@ impl<L: Layout> State<L> {
             zones: Zones {
                 members: Table::filled([Bitboard::EMPTY; Zone::OWNED]),
                 stack: Bitboard::EMPTY,
-                library: Table::filled(Default::default()),
-                graveyard: Table::filled(Default::default()),
+                library: Default::default(),
+                graveyard: Default::default(),
                 next_timestamp: 0,
+                mask: u8::from(format.zones() == ZoneRule::PerPlayer),
             },
             players: Table::from_fn(|_| new_player(format)),
             turn: Turn {
