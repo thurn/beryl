@@ -7,7 +7,7 @@
 use std::sync::{Arc, Mutex};
 
 use beryl_cards::CARDS;
-use beryl_cards::decks::WU_CONTROL;
+use beryl_cards::decks::{FORGETFUL_FISH, WU_CONTROL};
 use beryl_cards::names::{
     ISLAND, MANA_CRYPT, PLAINS, STAFF_OF_THE_STORYTELLER, TEFERI_HERO_OF_DOMINARIA,
 };
@@ -37,6 +37,20 @@ fn new_game(seed: u64) -> Game {
         decks: [owned(WU_CONTROL), owned(WU_CONTROL)],
         human: Seat::P0,
         // Greedy has no random stream, so the same answers play the same game again.
+        opponent: "greedy".to_owned(),
+        stops: StopsSetting::SMART,
+        sideboards: Default::default(),
+    };
+    Game::new(&CARDS, &start, SESSION).unwrap()
+}
+
+/// [`new_game`], as a shared-deck game of [`FORGETFUL_FISH`]: one library and one graveyard.
+fn new_shared_game(seed: u64) -> Game {
+    let start = StartGame {
+        format: beryl_session::Format::SHARED_DECK,
+        seed,
+        decks: [owned(FORGETFUL_FISH), Vec::new()],
+        human: Seat::P0,
         opponent: "greedy".to_owned(),
         stops: StopsSetting::SMART,
         sideboards: Default::default(),
@@ -155,11 +169,10 @@ fn without_id(mut view: PlayerView) -> PlayerView {
     view
 }
 
-/// Plays `seed`'s game for `decisions` of the human's, and at every `every`th one with answers
+/// Plays `game` for `decisions` of the human's, and at every `every`th one with answers
 /// to take back, takes them back one by one in a copy of the game and checks each. Returns how
 /// many undos were checked.
-fn play_and_check(seed: u64, decisions: usize, every: usize) -> usize {
-    let mut game = new_game(seed);
+fn play_and_check(mut game: Game, decisions: usize, every: usize) -> usize {
     let mut view = to_human(&mut game);
     let mut answered: Vec<Answered> = Vec::new();
     let mut checked = 0;
@@ -240,9 +253,17 @@ fn check_undo(game: &Game, points: &[Answered], now: &PlayerView, all: bool) -> 
 fn each_undo_takes_back_one_answer_and_replays() {
     let checked: usize = [1, 2]
         .into_iter()
-        .map(|seed| play_and_check(seed, 160, 3))
+        .map(|seed| play_and_check(new_game(seed), 160, 3))
         .sum();
     assert!(checked >= 20, "only {checked} undos checked");
+}
+
+/// The same in a shared-deck game, whose cards are drawn from and put into the piles both
+/// players share.
+#[test]
+fn each_undo_in_a_shared_game_takes_back_one_answer_and_replays() {
+    let checked = play_and_check(new_shared_game(1), 160, 3);
+    assert!(checked >= 10, "only {checked} undos checked");
 }
 
 /// How many answers the undo checks take back, but now and then: a turn's worth or two.

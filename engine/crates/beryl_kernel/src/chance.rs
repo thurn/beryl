@@ -325,7 +325,7 @@ pub fn subgame_starter<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, format: 
 
 /// Picks one object uniformly at random from `candidates` (which must be non-empty): one draw
 /// from the game's randomness, or while replaying, a candidate matching the recorded owner
-/// and card.
+/// and card: the one drawn, if it does.
 pub fn pick_at_random<L: Layout>(
     s: &mut State<L>,
     sink: &mut Sink<L>,
@@ -352,10 +352,18 @@ pub fn pick_at_random<L: Layout>(
         match r.picks.pop_front() {
             None => chance.mismatch(s, None, happened),
             Some((owner, card)) => {
-                let matched = candidates.iter().find(|&slot| {
+                let recorded_as = |slot: L::Slot| {
                     let obj = s.object(slot);
                     obj.owner == owner && obj.card.wide() == card
-                });
+                };
+                // The candidate drawn as the game drew it, where it matches: another copy of
+                // the same card would be a different object, in a different place in its
+                // zone, and the replay's views would part from the game's.
+                let matched = if recorded_as(drawn) {
+                    Some(drawn)
+                } else {
+                    candidates.iter().find(|&slot| recorded_as(slot))
+                };
                 match matched {
                     Some(slot) => chosen = slot,
                     None => chance.mismatch(s, Some(Random::Pick { owner, card }), happened),

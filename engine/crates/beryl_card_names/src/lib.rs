@@ -27,6 +27,35 @@ pub mod decks {
             .collect()
     }
 
+    /// A deck a game may be started with, by the key a start request or a fixture names it with
+    /// ([`named`]).
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub struct NamedDeck {
+        /// The decklist: each player's own in a constructed game, the one both draw from in a
+        /// shared-deck game.
+        pub list: &'static [(u8, &'static str)],
+        /// Whether both players share the list as one library and one graveyard
+        /// (`Format::SHARED_DECK`), rather than each playing a copy of it.
+        pub shared: bool,
+    }
+
+    /// The deck the key `key` names: `wu-control` (each player plays [`WU_CONTROL`]) or
+    /// `forgetful-fish` (both players share [`FORGETFUL_FISH`]).
+    #[must_use]
+    pub fn named(key: &str) -> Option<NamedDeck> {
+        match key {
+            "wu-control" => Some(NamedDeck {
+                list: WU_CONTROL,
+                shared: false,
+            }),
+            "forgetful-fish" => Some(NamedDeck {
+                list: FORGETFUL_FISH,
+                shared: true,
+            }),
+            _ => None,
+        }
+    }
+
     /// The 40-card main deck of `docs/sample-decks/2025-11-18-17lands-cb8d5d5f-wu-control.txt`, the
     /// Milestone 1 mirror: a mythic drafter's deck from an Arena run of 2025-10-30.
     pub const WU_CONTROL: &[(u8, &str)] = &[

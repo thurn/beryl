@@ -165,7 +165,7 @@ pub fn case_of(act: &Act, found: &Table, beside: &[&Act]) -> Option<&'static str
         }),
         Act::Count { tally } => match tally {
             Tally::Life { player, life } => {
-                let was = found.piles(*player).life;
+                let was = found.player(*player).life;
                 match life.cmp(&was) {
                     std::cmp::Ordering::Equal => None,
                     std::cmp::Ordering::Greater => Some("life gain"),

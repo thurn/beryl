@@ -134,6 +134,12 @@ pub enum Side {
     Opponent,
 }
 
+/// The `owner` and `controller` of every object in a shared library or graveyard
+/// ([`PlayerView::shared`]), in every seat's view. No player owns such a card, and a client
+/// never reads either field for one; the session names one fixed side so that a seat's
+/// script can say what its view says.
+pub const SHARED_PILE_SIDE: Side = Side::You;
+
 /// The library and graveyard that both players share in a shared-deck game
 /// ([`PlayerView::shared`]).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -286,7 +292,8 @@ pub struct ObjectView {
     pub slot: ObjectId,
     pub zone: ZoneName,
     /// Who owns the card. In a shared-deck game a client never reads it for an object in the
-    /// shared library or graveyard ([`PlayerView::shared`]).
+    /// shared library or graveyard ([`PlayerView::shared`]), where it is [`SHARED_PILE_SIDE`],
+    /// as `controller` is.
     pub owner: Side,
     /// The player whose zone contains this card, when it differs from its owner.
     /// Only the manual table can put a card in another player's pile or hand. In a shared-deck

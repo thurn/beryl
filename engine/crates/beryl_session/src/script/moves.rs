@@ -2,7 +2,7 @@
 //! as it arrives, and its place in the pile it lands on.
 
 use super::build::Builder;
-use super::hear::Copied;
+use super::hear::{Cause, Copied};
 use super::{Act, Subject};
 use crate::protocol::ObjectId;
 use crate::protocol::{
@@ -174,8 +174,10 @@ impl Builder<'_> {
                     next.get_or_insert(ZoneName::Hand);
                     zone = ZoneName::Hand;
                 }
+                // A shared library is every player's, whoever shuffles it.
                 &GameEvent::LibraryShuffled { player } => {
-                    kept &= zone != ZoneName::Library || player != was.owner;
+                    kept &= zone != ZoneName::Library
+                        || (self.table.shared.is_none() && player != was.owner);
                 }
                 _ => {}
             }
@@ -282,7 +284,7 @@ impl Builder<'_> {
             return Some(copy.record.clone());
         }
         let base = was.or(end)?;
-        let owner = base.owner;
+        let owner = self.owner_after(i, base, to);
         // A library gives a slot another card when it is shuffled: what the view's end
         // calls the slot is then no name for this one.
         let reshuffled = later.iter().any(|e| {
@@ -309,6 +311,49 @@ impl Builder<'_> {
             token: base.token,
             ..ObjectView::hidden(slot, to, controller, owner)
         })
+    }
+
+    /// The owner of the card whose record is `base` once event `i` has put it in `to`. A card
+    /// in a shared library or graveyard has none, and its record names one fixed side
+    /// ([`Table::holder`](super::Table::holder)); the engine makes the player who takes a card
+    /// out of one its owner. Who that is: the owner the view's end names, where the card ends
+    /// out of the shared piles, else the player the event names or acts for.
+    fn owner_after(&self, i: usize, base: &ObjectView, to: ZoneName) -> Side {
+        let shares = |zone| self.table.shares(zone);
+        if shares(to) || !shares(base.zone) {
+            return self.table.holder(to, base.owner);
+        }
+        let end = self.after.objects.get(&base.slot);
+        end.filter(|o| !shares(o.zone))
+            .map(|o| o.owner)
+            .or_else(|| self.actor(i))
+            .unwrap_or(base.owner)
+    }
+
+    /// The player event `i` names as acting, or whose action or spell or ability caused it.
+    pub(super) fn actor(&self, i: usize) -> Option<Side> {
+        match self.events[i] {
+            GameEvent::Draw { player, .. }
+            | GameEvent::LibraryShuffled { player }
+            | GameEvent::Scry { player, .. }
+            | GameEvent::TopOrBottom { player, .. }
+            | GameEvent::Reveal { player, .. } => return Some(player),
+            _ => {}
+        }
+        let controller = |subject: Subject| match subject {
+            Subject::Player { player } => Some(player),
+            Subject::Object { slot } => self.table.objects.get(&slot).map(|o| o.controller),
+            Subject::Ability { .. } => self.table.stack.iter().find_map(|e| match e.item {
+                StackItem::Ability { controller, .. } if e.subject() == subject => Some(controller),
+                _ => None,
+            }),
+        };
+        match self.causes[i] {
+            Cause::Rules => None,
+            Cause::Player { player, .. } => Some(player),
+            Cause::Effect { entry } => entry.and_then(controller),
+            Cause::Object { slot, .. } => controller(Subject::Object { slot }),
+        }
     }
 
     /// Where in its pile `object` lands: the bottom of a library if the event says so, else

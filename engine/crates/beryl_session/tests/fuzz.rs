@@ -19,7 +19,7 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use beryl_cards::CARDS;
-use beryl_cards::decks::{fuzz_deck, fuzz_deck_from, keystone_family, pool_deck};
+use beryl_cards::decks::{FORGETFUL_FISH, fuzz_deck, fuzz_deck_from, keystone_family, pool_deck};
 use beryl_engine::{
     Choice, Decision, Format, GameTable, Layout, Observation, Profile, Seat, State,
 };
@@ -39,6 +39,9 @@ const MOST_CHOICES: usize = 600;
 struct Fuzz {
     seed: u64,
     deck: Deck,
+    /// Whether both players share one library and graveyard dealt from the first deck
+    /// (`Format::SHARED_DECK`).
+    shared: bool,
     choices: Vec<u16>,
 }
 
@@ -148,16 +151,21 @@ impl Fuzz {
 
     /// The game's session, its other seat playing `picks`.
     fn session(&self, picks: &Picks) -> Game {
-        let decks = [
-            (self.deck)(self.seed),
-            (self.deck)(self.seed.wrapping_add(1 << 32)),
-        ];
-        let table = GameTable::new(
-            Format::CONSTRUCTED,
-            &CARDS,
-            [decks[0].as_slice(), decks[1].as_slice()],
-        )
-        .unwrap();
+        let decks = if self.shared {
+            [(self.deck)(self.seed), Vec::new()]
+        } else {
+            [
+                (self.deck)(self.seed),
+                (self.deck)(self.seed.wrapping_add(1 << 32)),
+            ]
+        };
+        let format = if self.shared {
+            Format::SHARED_DECK
+        } else {
+            Format::CONSTRUCTED
+        };
+        let table =
+            GameTable::new(format, &CARDS, [decks[0].as_slice(), decks[1].as_slice()]).unwrap();
         let state = State::new(&table, self.seed, Profile::SMART).unwrap();
         let random = beryl_search::agent("random").unwrap();
         let stand_in = (random.new)(&table, self.seed, beryl_search::Budget::DEFAULT);
@@ -241,6 +249,17 @@ fn rng_from(first: u64) -> TestRng {
 /// Runs `cases` fuzz games of at most `most` choices, deterministically, and returns the game
 /// proptest shrank a failure to, with each choice as the index it took, and why it fails.
 fn shrink(cases: u32, most: usize, rng: TestRng, deck: Deck) -> Option<(Fuzz, String)> {
+    shrink_games(cases, most, rng, deck, false)
+}
+
+/// [`shrink`], for shared-deck games when `shared` says so.
+fn shrink_games(
+    cases: u32,
+    most: usize,
+    rng: TestRng,
+    deck: Deck,
+    shared: bool,
+) -> Option<(Fuzz, String)> {
     let config = Config {
         cases,
         failure_persistence: None,
@@ -253,6 +272,7 @@ fn shrink(cases: u32, most: usize, rng: TestRng, deck: Deck) -> Option<(Fuzz, St
             Fuzz {
                 seed,
                 deck,
+                shared,
                 choices,
             }
         });
@@ -264,6 +284,7 @@ fn shrink(cases: u32, most: usize, rng: TestRng, deck: Deck) -> Option<(Fuzz, St
                 Fuzz {
                     seed: game.seed,
                     deck,
+                    shared,
                     choices,
                 },
                 why.to_string(),
@@ -348,6 +369,22 @@ fn keystone_pool_games_keep_the_script_checks() {
     }
 }
 
+/// The 80-card shared library of the shared-deck format, whatever the seed.
+fn forgetful_fish(_: u64) -> Vec<(u8, &'static str)> {
+    FORGETFUL_FISH.to_vec()
+}
+
+/// The same, with shared-deck games of [`FORGETFUL_FISH`]: both players draw from one library
+/// and put cards in one graveyard, so that every script names the shared piles and the player
+/// who acts on them.
+#[test]
+#[ignore = "a handful of session games: `just fuzz` plays them"]
+fn shared_deck_games_keep_the_script_checks() {
+    if let Some((game, why)) = shrink_games(games(3), MOST_CHOICES, rng(), forgetful_fish, true) {
+        panic!("{}", report(&game, &why));
+    }
+}
+
 /// A game the fuzzer once panicked in, reading face 1 of a one-face card definition. It plays
 /// to the end of its choices now, and the session accepts every answer.
 #[test]
@@ -355,6 +392,7 @@ fn the_game_that_read_an_invalid_face_replays() {
     let game = Fuzz {
         seed: 2_226_390_732,
         deck: fuzz_deck,
+        shared: false,
         choices: vec![
             1, 1, 1, 1, 0, 1, 1, 0, 3, 1, 2, 1, 0, 2, 1, 1, 2, 1, 2, 0, 0, 2, 0, 3, 3, 2, 0, 0, 1,
             4, 1, 7, 5, 3, 4, 0, 0, 1, 2, 0, 3, 1, 3, 3, 0, 0, 1, 6, 9, 8, 8, 4, 3, 4, 4, 3, 1, 3,
@@ -374,6 +412,7 @@ fn the_game_that_forked_a_time_stop_replays() {
     let game = Fuzz {
         seed: 3_812_001_089,
         deck: pool_deck,
+        shared: false,
         choices: vec![
             0, 1, 1, 0, 3, 0, 2, 1, 3, 1, 2, 1, 0, 0, 2, 0, 0, 5, 1, 3, 0, 0, 1, 6, 2, 0, 0, 0, 1,
             1, 0, 1, 0, 0, 3, 3, 1, 2, 1, 0, 1, 2, 1, 0, 4, 4, 5, 2, 0, 0, 2, 0, 1, 3, 0, 1, 2, 0,

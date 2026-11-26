@@ -532,7 +532,7 @@ impl<'a> Builder<'a> {
     }
 
     fn life(&mut self, player: Side, by: i16, cause: Option<Subject>) {
-        let life = (self.table.piles(player).life + i32::from(by))
+        let life = (self.table.player(player).life + i32::from(by))
             .clamp(i32::from(i16::MIN), i32::from(i16::MAX));
         let tally = Tally::Life { player, life };
         self.emit(Act::Count { tally }, cause);

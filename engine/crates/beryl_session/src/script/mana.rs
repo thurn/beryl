@@ -100,8 +100,8 @@ impl Builder<'_> {
     /// Mana nothing in the script is paid with counts in its player's pool, as far as the
     /// view's end still has it there.
     fn pool(&mut self, player: Side, color: Mana, made: u8, cause: Option<Subject>) {
-        let mut end = self.after.piles(player).mana;
-        let mut mana = self.table.piles(player).mana;
+        let mut end = self.after.player(player).mana;
+        let mut mana = self.table.player(player).mana;
         let (now, end) = (amount(&mut mana, color), *amount(&mut end, color));
         let counted = now.saturating_add(u32::from(made)).min(end.max(*now));
         if counted != *now {
@@ -114,8 +114,8 @@ impl Builder<'_> {
     /// What `player`'s pool has lost by the view's end went into `to`: a streak of each
     /// color from the player, and the pool's count.
     pub(super) fn drain(&mut self, player: Side, to: Subject, cause: Option<Subject>) {
-        let mut end = self.after.piles(player).mana;
-        let mut mana = self.table.piles(player).mana;
+        let mut end = self.after.player(player).mana;
+        let mut mana = self.table.player(player).mana;
         let from = Some(Subject::Player { player });
         let mut spent = false;
         for color in COLORS {

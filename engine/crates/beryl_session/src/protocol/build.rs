@@ -2,7 +2,7 @@
 
 use beryl_engine::card::{
     Ability, AbilityKind, CastingOption, Designation, FaceAbility, FaceIx, Keywords, Measure, Part,
-    Purpose, Shape, Types,
+    Purpose, Types,
 };
 use beryl_engine::event::{Event, LossCause};
 use beryl_engine::layout::Queue;
@@ -11,15 +11,14 @@ use beryl_engine::state::{
 };
 use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{
-    Candidates, Decision, GameTable, Layout, Observation, Opt, Outcome, Seat, SlotId, Small, State,
-    Zone, ZoneKey,
+    Decision, GameTable, Layout, Observation, Outcome, Seat, SlotId, Small, State, Zone, ZoneKey,
 };
 
 use super::{
-    CardHandling, CardType, Combat, CounterView, DecisionId, DesignationView, Facing, Keyword,
-    ManaPool, ObjectId, ObjectView, PaidCost, PlayerState, PlayerView, Players, PowerToughness,
-    Side, StackItem, Status, StopsSetting, TargetRef, TurnView, decision_view, game_events,
-    halt_view, outcome_view, own_number,
+    CardType, Combat, CounterView, DecisionId, DesignationView, Facing, Keyword, ManaPool,
+    ObjectId, ObjectView, PaidCost, PlayerState, PlayerView, Players, PowerToughness,
+    SHARED_PILE_SIDE, SharedPiles, Side, StackItem, Status, StopsSetting, TargetRef, TurnView,
+    decision_view, game_events, halt_view, outcome_view, own_number,
 };
 
 /// Where the game stands, as the session knows it: what [`player_view`] turns into a [`Status`].
@@ -90,9 +89,8 @@ pub fn player_view<L: Layout>(
 ) -> PlayerView {
     let turn = obs.turn();
     let mut objects = Vec::new();
-    let mut player_state = |p: Seat| {
-        let state = player_state(t, obs, p);
-        for slots in [&state.library, &state.graveyard] {
+    let piles = |objects: &mut Vec<ObjectView>, library: &[ObjectId], graveyard: &[ObjectId]| {
+        for slots in [library, graveyard] {
             objects.extend(slots.iter().map(|&slot| {
                 object_view(
                     t,
@@ -101,6 +99,19 @@ pub fn player_view<L: Layout>(
                 )
             }));
         }
+    };
+    // A shared library and graveyard are sent once, as no player's
+    // ([`PlayerView::shared`]).
+    let shared = obs.shown().shares_zones().then(|| SharedPiles {
+        library: slots(obs.library(obs.viewer()).iter().copied()),
+        graveyard: slots(obs.graveyard(obs.viewer()).iter().copied()),
+    });
+    if let Some(shared) = &shared {
+        piles(&mut objects, &shared.library, &shared.graveyard);
+    }
+    let mut player_state = |p: Seat| {
+        let state = player_state(t, obs, p);
+        piles(&mut objects, &state.library, &state.graveyard);
         // Unordered zones: their objects say where they are.
         for slots in [Zone::Hand, Zone::Exile].map(|zone| obs.zone(ZoneKey::Of(p, zone))) {
             let slots = slots_by_id(slots);
@@ -152,13 +163,13 @@ pub fn player_view<L: Layout>(
     let handling = match moment {
         Moment::Thinking {
             decision: Some(d), ..
-        } if d.decider != viewer => card_handling(obs, d),
+        } if d.decider != viewer => super::handling::card_handling(obs, d),
         _ => None,
     };
     PlayerView {
         status,
         handling,
-        shared: None, // No game is dealt with shared piles yet.
+        shared,
         pending_attackers: pending_attackers(moment),
         turn: TurnView {
             number: turn.number(),
@@ -282,8 +293,8 @@ fn player_state<L: Layout>(t: &GameTable, obs: Observation<'_, L>, p: Seat) -> P
         lands_played: player.lands_played(),
         mulligans: player.mulligans(),
         mulligan: player.mulligan().into(),
-        library: slots(obs.library(p).iter().copied()),
-        graveyard: slots(obs.graveyard(p).iter().copied()),
+        library: own_pile(obs, obs.library(p)),
+        graveyard: own_pile(obs, obs.graveyard(p)),
         emblems: player
             .emblems()
             .iter()
@@ -293,18 +304,14 @@ fn player_state<L: Layout>(t: &GameTable, obs: Observation<'_, L>, p: Seat) -> P
     }
 }
 
-/// The first of the cards `d`'s prompt shows: a card of its object set, or else an object it
-/// offers. The cards shown share an owner and a zone, so the first in candidate order says
-/// whose they are and where they lie.
-pub(crate) fn shown<L: Layout>(d: &Decision<L>) -> Option<L::Slot> {
-    let about = d.about.min(|slot| slot);
-    about.or_else(|| match &d.candidates {
-        Candidates::Objects(_) => d.object_candidates().next(),
-        Candidates::Options(opts) => opts.iter().find_map(|&o| match o {
-            Opt::Object(slot) => Some(slot),
-            _ => None,
-        }),
-    })
+/// A player's own library or graveyard, `pile`: empty in a shared-deck game, whose piles are
+/// [`PlayerView::shared`]'s.
+fn own_pile<L: Layout>(obs: Observation<'_, L>, pile: &[L::Slot]) -> Vec<ObjectId> {
+    if obs.shown().shares_zones() {
+        Vec::new()
+    } else {
+        slots(pile.iter().copied())
+    }
 }
 
 /// Takes off the stack of `view`, a view of the game `s`, an opponent's ability whose cost is
@@ -324,38 +331,6 @@ pub fn hold_back_activation_being_paid<L: Layout>(view: &mut PlayerView, s: &Sta
         )
     {
         view.stack.pop();
-    }
-}
-
-/// What the opponent sees of the cards `d`'s prompt has its player look through: the hand or
-/// the library its object set lies in, or else its candidates, and how much of it.
-fn card_handling<L: Layout>(obs: Observation<'_, L>, d: &Decision<L>) -> Option<CardHandling> {
-    // A yes or no, or a mode, about a card shows the opponent nothing more than the table
-    // does: the card is revealed (an explore's) or being played (a land that may cost life, a
-    // card offered to cast). The two that are looks at hidden cards do.
-    if matches!(d.prompt.shape(), Shape::YesNo | Shape::Mode)
-        && !matches!(d.prompt.purpose, Purpose::Fateseal | Purpose::Mulligan)
-    {
-        return None;
-    }
-    let card = obs.object(shown(d)?);
-    let player = card.owner();
-    match card.zone() {
-        Zone::Library => {
-            // The top cards the prompt counts, or the whole library.
-            let size = obs.library(player).len();
-            let count = (d.prompt.count > 0)
-                .then(|| d.prompt.count.min(u8::try_from(size).unwrap_or(u8::MAX)));
-            Some(CardHandling::Library {
-                side: side(obs, player),
-                count,
-                scry: (d.prompt.purpose == Purpose::Scry).then_some(true),
-            })
-        }
-        Zone::Hand => Some(CardHandling::Hand {
-            side: side(obs, player),
-        }),
-        _ => None,
     }
 }
 
@@ -405,6 +380,17 @@ pub(super) fn face_name<L: Layout>(
     Some(t.def(obs.card(slot)?).face_name(face))
 }
 
+/// The owner and controller of the object in `slot`, as the viewer sees them. A card in a
+/// shared library or graveyard has no owner: its record names one fixed side for both.
+fn owner_and_controller<L: Layout>(obs: Observation<'_, L>, slot: L::Slot) -> (Side, Side) {
+    if obs.shown().has_owner(slot) {
+        let o = obs.object(slot);
+        (side(obs, o.owner()), side(obs, obs.controller(slot)))
+    } else {
+        (SHARED_PILE_SIDE, SHARED_PILE_SIDE)
+    }
+}
+
 fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot) -> ObjectView {
     let o = obs.object(slot);
     let on_battlefield = o.zone() == Zone::Battlefield;
@@ -424,12 +410,13 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
         .card(slot)
         .and_then(|card| super::rules_text::changed(t, card, o.face(), &obs.words_of(slot)));
     let (text, type_line) = changed.map_or((None, None), |(text, line)| (Some(text), Some(line)));
+    let (owner, controller) = owner_and_controller(obs, slot);
     ObjectView {
         slot: ObjectId(slot.num()),
         zone: o.zone().into(),
-        owner: side(obs, o.owner()),
+        owner,
         zone_side: None,
-        controller: side(obs, obs.controller(slot)),
+        controller,
         name: name(t, obs, slot).map(str::to_owned),
         // The session assigns printings once it deals a deck that has several.
         printing: None,

@@ -23,7 +23,8 @@ pub(crate) fn prompt_view<L: Layout>(
 ) -> PromptView {
     // The card the question is about, and the first of the cards the prompt shows.
     let about = d.about.min(|slot| slot);
-    let shown = shown(d).map(|slot| obs.object(slot));
+    let shown_slot = shown(d);
+    let shown = shown_slot.map(|slot| obs.object(slot));
     let cost = (d.prompt.cost != ManaCost::default()).then(|| mana_text(d.prompt.cost));
     let holes = Holes {
         count: d.prompt.count,
@@ -35,8 +36,17 @@ pub(crate) fn prompt_view<L: Layout>(
     };
     PromptView {
         about: slots(crate::protocol::slots_by_id(d.about)),
-        from: shown.as_ref().map(|card| Lies {
-            player: side(obs, card.owner()),
+        from: shown_slot.zip(shown.as_ref()).map(|(slot, card)| Lies {
+            // A card in a shared library or graveyard has no owner: the pile is named for the
+            // player who decides.
+            player: side(
+                obs,
+                if obs.shown().has_owner(slot) {
+                    card.owner()
+                } else {
+                    d.decider
+                },
+            ),
             zone: card.zone().into(),
         }),
         ..worded(&d.prompt, shown.map(|card| card.zone()), &holes)

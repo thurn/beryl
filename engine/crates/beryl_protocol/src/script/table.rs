@@ -9,8 +9,8 @@ use serde::Serialize;
 use super::{Act, Fact, Subject, Tally};
 use crate::protocol::ObjectId;
 use crate::protocol::{
-    ManaPool, ManualPiles, NamedCounter, ObjectView, PlayerState, PlayerView, Side, StackItem,
-    Step as TurnStep, ZoneName,
+    ManaPool, ManualPiles, NamedCounter, ObjectView, PlayerState, PlayerView, SHARED_PILE_SIDE,
+    Side, StackItem, Step as TurnStep, ZoneName,
 };
 
 /// What a seat's screen shows of the game.
@@ -204,6 +204,22 @@ impl Table {
     /// life and mana are not the player's (read them through [`Table::player`]).
     pub fn piles(&self, player: Side) -> &Piles {
         self.shared.as_ref().unwrap_or_else(|| self.player(player))
+    }
+
+    /// Whether `zone` is the shared library or graveyard of a shared-deck game.
+    pub fn shares(&self, zone: ZoneName) -> bool {
+        self.shared.is_some() && matches!(zone, ZoneName::Library | ZoneName::Graveyard)
+    }
+
+    /// The owner and controller a record of a card in `zone` names, where the card's owner is
+    /// `owner`: [`SHARED_PILE_SIDE`] for a card in a shared library or graveyard, which no
+    /// player owns, and `owner` otherwise.
+    pub fn holder(&self, zone: ZoneName, owner: Side) -> Side {
+        if self.shares(zone) {
+            SHARED_PILE_SIDE
+        } else {
+            owner
+        }
     }
 
     /// [`Table::piles`], to change.

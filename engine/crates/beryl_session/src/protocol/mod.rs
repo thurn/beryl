@@ -6,6 +6,7 @@ mod build;
 mod candidates;
 mod decide;
 mod event;
+mod handling;
 mod outcome;
 mod rules_text;
 
@@ -14,6 +15,7 @@ pub use build::*;
 pub(crate) use candidates::*;
 pub(crate) use decide::*;
 pub use event::*;
+pub(crate) use handling::shown;
 use outcome::outcome_view;
 
 #[cfg(test)]

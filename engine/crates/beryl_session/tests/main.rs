@@ -64,6 +64,7 @@ mod script_piles;
 mod script_spans;
 mod script_timing;
 mod sessions;
+mod shared_deck;
 mod smart_stops;
 mod splits;
 mod stop_places;

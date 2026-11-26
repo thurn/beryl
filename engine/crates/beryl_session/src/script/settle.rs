@@ -49,11 +49,14 @@ impl Builder<'_> {
                 .filter(|o| o.owner == side && o.zone == ZoneName::Hand)
                 .count()
         };
+        // Whose hand a mulligan's card left: its record in the shared library of a shared-deck
+        // game names no player.
         let shuffled: Vec<Side> = after
             .objects
             .values()
-            .filter(|o| self.mulligan(o) && hand(after, o.owner) >= hand(&self.table, o.owner))
-            .map(|o| o.owner)
+            .filter(|o| self.mulligan(o))
+            .filter_map(|o| self.table.objects.get(&o.slot).map(|was| was.owner))
+            .filter(|&side| hand(after, side) >= hand(&self.table, side))
             .collect();
         let redealt: Vec<ObjectId> = after
             .objects
@@ -78,7 +81,7 @@ impl Builder<'_> {
             let card = if next.zone == ZoneName::Library {
                 next.clone()
             } else {
-                unknown_in_library(next)
+                unknown_in_library(self.table.holder(ZoneName::Library, next.owner), next)
             };
             self.arrive(Some(ZoneName::Hand), &card, None, None);
         }
@@ -292,7 +295,7 @@ impl Builder<'_> {
     fn numbers(&mut self) {
         let after = self.after;
         for player in [Side::You, Side::Opponent] {
-            let (now, end) = (self.table.piles(player), after.piles(player));
+            let (now, end) = (self.table.player(player), after.player(player));
             let (life, mana) = (end.life, end.mana);
             let (counts_life, counts_mana) = (now.life != life, now.mana != mana);
             if counts_life {
@@ -379,11 +382,12 @@ impl Builder<'_> {
 }
 
 /// The card in `object`'s slot as a library holds it: unknown, with none of what a hand or
-/// the battlefield shows of it.
-fn unknown_in_library(object: &ObjectView) -> ObjectView {
+/// the battlefield shows of it, and `holder` as its owner and controller.
+fn unknown_in_library(holder: Side, object: &ObjectView) -> ObjectView {
     ObjectView {
         zone: ZoneName::Library,
-        controller: object.owner,
+        owner: holder,
+        controller: holder,
         name: None,
         other_face: None,
         types: Vec::new(),

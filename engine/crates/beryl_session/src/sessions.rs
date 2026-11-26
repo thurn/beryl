@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use beryl_card_names::decks;
 use beryl_engine::CardTable;
 use beryl_search::Budget;
 use serde_json::json;
@@ -25,19 +26,32 @@ use crate::{
     StartRequest, bugs, journal,
 };
 
-/// The game the UI's request starts: the default deck's mirror against the agent it names,
-/// the human in seat 0 under the smart stops.
-fn requested_game(request: &StartRequest) -> StartGame {
-    let deck = beryl_card_names::decks::default_deck();
-    StartGame {
+/// The game the UI's request starts: the deck it names against the agent it names, the human
+/// in seat 0 under the smart stops. A constructed deck is the mirror; a shared deck is the one
+/// library both players draw from (`decks[0]`, with `decks[1]` empty).
+fn requested_game(request: &StartRequest) -> Result<StartGame, SessionError> {
+    let named = decks::named(&request.deck).ok_or_else(|| SessionError::Deck {
+        reason: format!("no deck is named {:?}", request.deck),
+    })?;
+    let list: Vec<(u8, String)> = named
+        .list
+        .iter()
+        .map(|&(count, name)| (count, name.to_owned()))
+        .collect();
+    let (format, decks) = if named.shared {
+        (Format::SHARED_DECK, [list, Vec::new()])
+    } else {
+        (Format::CONSTRUCTED, [list.clone(), list])
+    };
+    Ok(StartGame {
         seed: request.seed.map_or_else(clock_seed, u64::from),
-        format: Format::CONSTRUCTED,
-        decks: [deck.clone(), deck],
+        format,
+        decks,
         human: Seat::P0,
         opponent: request.agent.clone(),
         stops: StopsSetting::SMART,
         sideboards: Default::default(),
-    }
+    })
 }
 
 type Emit = dyn Fn(GameUpdate) + Send + Sync;
@@ -133,7 +147,7 @@ impl Sessions {
     /// A fair deal is searched for before the game in progress is replaced, which takes up to
     /// about 6 s on the Mac.
     pub fn start(&self, request: &StartRequest) -> Result<SessionId, SessionError> {
-        let mut start = requested_game(request);
+        let mut start = requested_game(request)?;
         if request.fair {
             start.seed = fair::fair_seed(self.cards, &start, Fairness::THIS_DEVICE)?;
         }

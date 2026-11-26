@@ -312,6 +312,11 @@ impl<L: Layout> Table<'_, L> {
             Side::You => &players.you,
             Side::Opponent => &players.opponent,
         };
+        // A shared-deck game's library and graveyard are the shared ones, whoever looks.
+        let (library, graveyard) = match &self.view.shared {
+            Some(shared) => (&shared.library, &shared.graveyard),
+            None => (&player.library, &player.graveyard),
+        };
         let known = |slot: &ObjectId| self.object(*slot).is_some_and(|o| o.name.is_some());
         match lies.zone {
             ZoneName::Library => {
@@ -320,10 +325,10 @@ impl<L: Layout> Table<'_, L> {
                 } else {
                     usize::from(count)
                 };
-                let library = player.library.iter().rev().take(top);
+                let library = library.iter().rev().take(top);
                 library.copied().filter(known).collect()
             }
-            ZoneName::Graveyard => (player.graveyard.iter().rev().copied())
+            ZoneName::Graveyard => (graveyard.iter().rev().copied())
                 .filter(|&slot| self.object(slot).is_some_and(|o| !o.token))
                 .collect(),
             ZoneName::Hand => (self.view.objects.iter())

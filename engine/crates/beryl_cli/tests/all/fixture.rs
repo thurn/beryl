@@ -116,3 +116,23 @@ fn a_recording_from_across_the_table_shows_the_same_updates() {
         }
     }
 }
+
+/// A seeded fixture whose seats both name `forgetful-fish` records a shared-deck game, whose
+/// views show the shared piles.
+#[test]
+fn a_fixture_of_a_shared_deck_records_a_shared_game() {
+    let def: Definition = {
+        serde_json::from_value(serde_json::json!({
+            "name": "t",
+            "seed": 4,
+            "decks": ["forgetful-fish", "forgetful-fish"],
+            "agents": ["random", "random"],
+            "until": "first priority decision for seat 0",
+        }))
+        .unwrap()
+    };
+    let shared = record_game(&TEST, &def, false);
+    let views = views(&shared.unwrap());
+    assert!(!views.is_empty());
+    assert!(views.iter().all(|view| view.shared.is_some()));
+}

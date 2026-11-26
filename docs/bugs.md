@@ -6,6 +6,18 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **A replay took a different copy of a card picked at random.** In a
+  shared-deck game, Haunted Fengraf returned one of two Dandâns from the
+  graveyard at random; the replay returned the other one, so the two cards
+  traded places in the graveyard and the replayed game's last view differed from
+  the game's. `pick_at_random` in `beryl_kernel/src/chance.rs`, replaying a
+  recorded pick, took the first candidate by slot with the recorded owner and
+  card, though the candidate it had just drawn from the same randomness matched
+  too. Fixed: a replay keeps the drawn candidate where it matches the record.
+  Guard: `beryl_session/tests/shared_deck.rs` replays whole shared-deck games
+  and compares their last views; nothing stops another replay path from binding
+  a record to a different but equal object.
+
 - **The mana solver split the extra mana of several multi-mana sources without
   looking at their colors.** With Svyelunite Temple and Mana Crypt untapped, the
   solver found no way to pay {1}{U}{U}, though sacrificing the Temple for {U}{U}
