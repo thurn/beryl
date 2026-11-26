@@ -19,6 +19,14 @@ structure was rebuilt so that it would hold every Magic card (Project 50k): a
 kernel crate that owns the state, card behavior as effect data, set crates and a
 card store for the whole pool. The decisions of that rebuild are marked **K1**
 to **K29** and listed in the second appendix, with the measurements behind them.
+Two epics followed it. The rules keystones epic built 24 cards chosen because
+each forces rules machinery that would be expensive to retrofit (layers,
+replacement, copies, costs, identity, the decision protocol); its decisions are
+**R1** to **R16**. Part II of Project 50k built 29 more keystones that break the
+engine's assumptions about the shape of a game, a turn, a cast, combat and a
+card, and changed the engine's structure and the card workflow so that both hold
+at 50,000 cards; its decisions are **P1** to **P16**. Both sets are in the third
+appendix, with the keystone cards and the measurements behind them.
 
 ## 1. Goals
 
@@ -66,9 +74,10 @@ to **K29** and listed in the second appendix, with the measurements behind them.
   12 Performance cores with 64 KiB, 128-byte cache lines, 64 GiB of memory. A 20
   KiB state and its scratch buffers fit in L1 on either kind of core.
 
-**Non-goals.** Cards outside the supported decks, more than two players, hidden
-decklists, WebAssembly, parsing Oracle text, and any mode that plays a different
-game from the real one.
+**Non-goals.** More than two players, hidden decklists, WebAssembly, parsing
+Oracle text (**P1**), any mode that plays a different game from the real one,
+and the cards **P16** leaves out: dexterity cards, un-cards, Alchemy cards and
+cards that only matter during a draft.
 
 **The rules surface the cube needed.** Written for the earlier cube target; the
 supported decks' own list is drawn up once they are chosen. From the cube's card
@@ -85,8 +94,11 @@ Phyrexian mana, day and night (Outland Liberator), opponent choices during
 resolution (Karn, Scion of Urza), piles (Liliana of the Veil), face-down exile
 (Memory Jar, Shelldock Isle), manifest dread (Abhorrent Oculus), coin flips
 (Mana Crypt), and an alternative win condition (Jace, Wielder of Mysteries).
-Absent, and so not designed for: controlling another player, game restarts, the
-monarch, votes, phasing, infect, dungeons, wishes, dredge and morph.
+Absent, and so not designed for: the monarch, the initiative, votes, poison
+counters (the format records the threshold, §12.4, and nothing tracks poison),
+infect and dungeons. Controlling another player, game restarts, subgames,
+phasing, wishes, companions, dredge and morph were built since, for the keystone
+cards (third appendix).
 
 ## 2. Principles
 
@@ -155,6 +167,12 @@ loop {
 }
 ```
 
+**A game inside a game.** Only `State<Large>` can suspend a game: a subgame (CR
+730\) boxes the main game inside the state of a new one, and `next` and `apply`
+act on the innermost game. When it ends, the engine takes the main game back and
+gives the subgame's result to the resolution that started it. A restart (CR 728)
+replaces the state with a new game dealt from the same cards. Both are in §12.1.
+
 **Why the engine does not call the AI.** A synchronous callback is the fastest
 structure for a rollout, and the loop above matches it; inside a rollout the
 policy even answers mid-resolution choices inline (§7.3). It fails everywhere
@@ -214,26 +232,30 @@ const _: () = assert!(size_of::<State>() <= 20 * 1024);
   would save about 60 ns per copy, which a rollout pays once, and would not
   change what bounds tree memory, the search's node-storage policy (§19.1). So
   the layout stays generous.
+- Measured, `State<Small>` is 20,472 bytes against the assertion at 20,480
+  (**P14**). `beryl_kernel`'s contract lists what holds the bytes. What a card
+  creates goes to a store (**K4**), so a mechanism that needs a field of its own
+  must first take bytes back elsewhere.
 
 The engine is generic over the storage layout, `State<L: Layout>`, resolved at
 compile time. The struct above is `Small`, the layout search and rollouts run
 on. `Large` stores the same fields with `Vec` queues whose push never fails and
-tables with an entry per slot; it is `Clone`, not `Copy`. A player game starts
-in `Small`. When an engine call stalls it for a capacity, the session widens the
-state as it stood before the call (`State::widen`, which keeps every slot, queue
-order and knowledge bit) and makes the call again in `Large`, where the game
-stays. Effect data is the same for every layout, and only its interpreter is
-compiled for each; a Rust body, where a card has one, is a generic function
-instantiated once per layout (`custom_body`). The slot and index types are the
-layout's too (`Layout::Slot`, `Layout::Index`): `Large` has four times the
-slots, 1,024 (`LargeSlot`, a `u16`, with 1,024-bit bitboards), and grows the
-queues nested in other values (a stack entry's targets, a player's emblems, a
-paused resolution's choice record, a decision's options). So `ObjectRef`,
-`Decision`, `Opt`, `Pending` and `Event` take the layout as a parameter, and
-`Relayout` moves any of them to the other layout by slot number; the session
-keeps its own copies in `Large`. The mana solver (§10) grows too: in `Large` a
-payment holds any number of classes of interchangeable sources, plans and spent
-units.
+tables with an entry per slot; it is `Clone`, not `Copy`, and only it can hold a
+suspended game (§12.1). A player game starts in `Small`. When an engine call
+stalls it for a capacity, the session widens the state as it stood before the
+call (`State::widen`, which keeps every slot, queue order and knowledge bit) and
+makes the call again in `Large`, where the game stays. Effect data is the same
+for every layout, and only its interpreter is compiled for each; a Rust body,
+where a card has one, is a generic function instantiated once per layout
+(`custom_body`). The slot and index types are the layout's too (`Layout::Slot`,
+`Layout::Index`): `Large` has four times the slots, 1,024 (`LargeSlot`, a `u16`,
+with 1,024-bit bitboards), and grows the queues nested in other values (a stack
+entry's targets, a player's emblems, a paused resolution's choice record, a
+decision's options). So `ObjectRef`, `Decision`, `Opt`, `Pending` and `Event`
+take the layout as a parameter, and `Relayout` moves any of them to the other
+layout by slot number; the session keeps its own copies in `Large`. The mana
+solver (§10) grows too: in `Large` a payment holds any number of classes of
+interchangeable sources, plans and spent units.
 
 ### 4.2 Objects and slots
 
@@ -256,7 +278,8 @@ object in a slot:
 | `face`                        | 1    | Which face is up; a chosen color or type joins it with the first card that names one                           |
 | `combat: CombatRole`          | 5    | None; attacking a player, a planeswalker or nothing (blocked, struck first); or blocking up to three attackers |
 
-22 bytes, 24 as laid out (aligned to 4 bytes), so the table is about 6 KiB.
+22 bytes, aligned to two bytes so that none is padding, so the table is about
+5.5 KiB.
 
 - **Deck cards get fixed slots.** Each player's deck, up to 60 cards, is
   assigned slots by a random permutation drawn from the hidden RNG at game
@@ -274,23 +297,31 @@ object in a slot:
 
 - **Capacities** of `Small`, each a stall when exceeded (§4.1):
 
-  | Quantity                      | Capacity |
-  | ----------------------------- | -------- |
-  | Players                       | 2        |
-  | Object slots                  | 255      |
-  | Cards per deck                | 60       |
-  | Permanents on the battlefield | 128      |
-  | Stack entries                 | 64       |
-  | Pending triggers              | 64       |
-  | Delayed triggers              | 32       |
-  | Continuous effects            | 64       |
-  | Locked-in sets of an effect   | 4        |
-  | Memos                         | 32       |
-  | Rows of counters              | 32       |
-  | Targets per stack entry       | 8        |
-  | Choice record per process     | 32       |
-  | Source classes per payment    | 16       |
-  | Payment plans offered         | 64       |
+  | Quantity                                 | Capacity |
+  | ---------------------------------------- | -------- |
+  | Players                                  | 2        |
+  | Object slots                             | 255      |
+  | Cards per deck                           | 60       |
+  | Permanents on the battlefield            | 128      |
+  | Stack entries                            | 64       |
+  | Pending triggers                         | 64       |
+  | Delayed triggers                         | 32       |
+  | Continuous effects                       | 64       |
+  | Locked-in sets of an effect              | 4        |
+  | Memos                                    | 32       |
+  | Rows of counters                         | 32       |
+  | Targets per stack entry                  | 8        |
+  | Choice record per process                | 32       |
+  | Source classes per payment               | 16       |
+  | Payment plans offered                    | 64       |
+  | Rows of last-known information           | 16       |
+  | Spells kept after leaving the stack      | 2        |
+  | Copy exceptions per copiable value       | 3        |
+  | Effects that reach other zones           | 4        |
+  | Text-change sets kept by stack abilities | 4        |
+  | Entries of mana that remembers, per pool | 4        |
+  | Steps left in a turn plan                | 24       |
+  | Abilities a permanent can lose, by index | 16       |
 
   The heaviest known users: Brain Freeze and Tendrils of Agony at storm 10 to 20
   for the stack, Sheoldred, the Apocalypse against a Wheel of Fortune for
@@ -309,9 +340,14 @@ object in a slot:
   imprinted or hid it, so Skyclave Apparition, Chrome Mox, Memory Jar, Shelldock
   Isle and Agatha's Soul Cauldron need no fields of their own. Dauthi
   Voidwalker's void counters are ordinary counters on exiled objects.
-- **Companions.** A companion starts outside the game, in the sideboard. Whether
-  to support the mechanic is open (§20); if so, a per-player companion slot is
-  the whole cost.
+- **Cards outside the game** (CR 400.11). Each player's sideboard is a multiset
+  of card indices in the `GameTable`, with no slots. A wish asks its controller
+  to pick a matching card, as a search of a hidden set does, and the card takes
+  a free slot of the pool as a card, not a token
+  (`beryl_kernel/src/sideboard.rs` records which entered). A companion is
+  declared before the opening hands, where its condition holds for the deck
+  (`game/companion.rs`, `Pending::Companion`), and put into the hand by a {3}
+  special action.
 
 ### 4.4 Players and turn
 
@@ -324,19 +360,23 @@ log, which is the trap DeepScry fell into when its rollouts ran with the log
 off.
 
 `Turn` holds the turn number, active player, step, the priority holder and pass
-count. Extra turns are entries of the Effects store (§4.5). When a game's cards
-can add or skip steps or phases, the Turn Plan store holds the remaining steps.
-A step's ordinal identifies its occurrence within the turn. Its name still tells
-triggers, stops and the session what kind of step began.
+count, and the player controlling the active player, if any (CR 724). Extra
+turns are entries of the Effects store (§4.5). When a game's cards can add or
+skip steps or phases (`Capability::TurnStructure`), the turn also holds a plan
+of the steps still to come, a 24-entry queue in `Small`
+(`beryl_kernel/src/turn/plan.rs`, §12.1). A step's ordinal identifies its
+occurrence within the turn; its name still tells triggers, stops and the session
+what kind of step began.
 
 ### 4.5 Queues
 
-- `stack`: 32-byte entries with the object slot, kind (spell, activated,
-  triggered, copy), controller, up to eight targets with their damage divisions,
-  modes, X, the chosen costs, and an 8-byte last-known-information record for
-  triggers that need one.
+- `stack`: entries with the object slot, kind (a spell, an activated ability or
+  a triggered ability, each with only the fields of its kind), controller, up to
+  eight targets with their damage divisions, modes, X, the chosen costs, and
+  which set of captured text changes its words read (§9).
 - `triggers`: abilities that have triggered and wait to be put on the stack,
-  with their source, event payload and LKI.
+  with their source and event payload; what they read of an object that left is
+  a row of the last-known table (§5).
 - `delayed`: delayed triggered abilities with their duration and source (Mana
   Drain, Sneak Attack, Memory Jar, Fable's Reflection).
 - `effects`, `memos` and `trackers`: the three stores of what cards create
@@ -353,18 +393,64 @@ triggers, stops and the session what kind of step began.
 
 CR 400.7: an object that changes zones becomes a new object. The engine models
 that by bumping the slot's `incarnation` on every zone change and clearing the
-battlefield-only fields (damage, counters, attachments, flags). References
-elsewhere are `ObjectRef { slot: u8, incarnation: u16 }`, so a target that left
-and came back is recognized as a different object and the spell fizzles, as the
-rules require.
+battlefield-only fields (damage, counters, attachments, flags) and whatever the
+stores held about it. A reference is an `ObjectRef` (a slot and an incarnation),
+so a target that left and came back is recognized as a different object and the
+spell fizzles, as the rules require. Bumping past 65,535 stalls the game in
+either layout.
 
-Leaves-the-battlefield abilities look back in time (CR 603.10). The zone-move
-pipeline (§8.2) therefore matches look-back triggers **before** the move, using
-the object's derived characteristics as they were, and copies an 8-byte LKI
-record (power, toughness, counters, controller, types) into the pending trigger
-and later its stack entry. Effects read LKI from there. Token slots are not
-recycled until the state-based pass that removed them has finished enqueuing
-triggers.
+**Typed references** (**P7**). A rules function that acts on one kind of object
+takes a reference that says what the object was when the reference was made:
+`Permanent` (on the battlefield at this incarnation), `Spell` (a spell's object;
+ability entries are named by their place on the stack), `CardIn<Zone>` (a card,
+never a token or a copy, in one zone), and the sets `Permanents` and
+`Cards<Zone>`. Only kernel queries make one, and each checks:
+`State::permanent(raw)` returns `Option<Permanent>`, and
+`State::cards_in(player, Graveyard)` leaves tokens out. A function that takes
+one makes no `is_current` test of its own. A reference stored earlier, such as
+an ability's source, is read through `State::current` once, immediately before
+mutating. Phasing keeps the incarnation, so a stored battlefield reference is
+checked with `State::permanent`. The types are transparent wrappers, so the
+state does not grow, and `Relayout` maps them as it maps `ObjectRef`. Decisions
+and open questions name objects by bare slot, which means something only in the
+state that asked; the kernel's contract lists the other records that hold a bare
+slot and why each is safe.
+
+**Last-known information** (CR 603.10). Leaves-the-battlefield abilities look
+back in time. The zone-move pipeline (§8.2) matches look-back triggers
+**before** the move, reading each permanent's abilities from its layer results,
+so a creature that lost its abilities has no dies trigger. For each object an
+ability looked back at, the kernel writes a row of a table of the state
+(`beryl_kernel::last_known`, 16 rows in `Small`, keyed by the `ObjectRef` of the
+object that left): its layer result, counters, token flag, copiable values and
+what it was attached to. An effect reads any characteristic of an object that
+has left through `State::last_known`. The engine forgets the rows that no
+waiting trigger, stack entry or delayed trigger names each time a player would
+receive priority. A spell countered or otherwise taken off the stack while an
+ability of its own that copies it waits (CR 113.7a) is kept in a second table of
+two rows (`last_known::DepartedSpell`), only in a game whose cards ask. The
+interpreter keeps its own record of the targets an effect moves
+(`interpret::scene::Known`, CR 608.2h), which also holds every kind of counter
+and the mana value. Token slots are not recycled until the state-based pass that
+removed them has finished enqueuing triggers.
+
+**An ability as a target** is named by its place on the stack (**R10**). Only an
+entry above an ability can name it, so when an entry leaves from below the top,
+the kernel moves the names that pointed above it and marks those that pointed at
+it as gone. Stack entries get no identity field, which every rollout would copy.
+
+**Merged and melded permanents** (CR 731, CR 713) are one object in the slot the
+permanent always had (**R11**). The other cards wait in `Zone::Merged`, which no
+zone set holds, each with a `Memo::PartOf` naming the permanent, and leave with
+it. The permanent's copiable values are a copy effect: the top card's face and
+every ability of each other card. A melded permanent is the card with the meld
+ability as a copy of the combined back face (`Shape::Melded`), whose mana value
+is the sum of the two front faces.
+
+**Phased-out permanents** (CR 702.26) leave the battlefield list and bitboard
+and keep their zone, incarnation and everything stored about them, so nothing
+triggers and every walk of the battlefield skips them for free (**R11**). They
+are in a set of their own that the untap step reads.
 
 ## 6. Cards: typed data (D1, K1)
 
@@ -401,9 +487,18 @@ with `const fn`, so a definition is a static with no startup cost and no macro.
 
 ### 6.2 The table
 
-A `CardDef` is a name and one or two faces (DFC, MDFC, split, adventure). A face
-holds its printed characteristics and its abilities. An `Ability`'s fields are
-private, set by `const fn` builders (`beryl_card`'s `ability.rs`):
+A `CardDef` is a name, a `Shape` and the faces that shape has
+(`Shape::face_count`): `Single`, `Transforming`, `Modal`, `Split { fuse }`,
+`Adventure`, `Prepared`, `Flip`, `Meld { with, into }` and `Melded`, generated
+from the card store's layout. `check` refuses a face count the shape does not
+allow, and the rules read the shape where they branch on it, never inferring it
+from the faces. A split card off the stack answers with both halves combined
+(two names, both sets of types and colors, the sum of the mana values), and on
+the stack is the half cast (CR 709.4). A prototype's inset is a face of its own
+at `FaceIx::PROTOTYPE`, and a face-down spell or permanent uses `FaceIx::DOWN`,
+a nameless 2/2. A face holds its printed characteristics and its abilities. An
+`Ability`'s fields are private, set by `const fn` builders (`beryl_card`'s
+`ability.rs`):
 
 - its kind (spell, activated, mana, triggered, static, replacement), cost (mana,
   tap, sacrifice, discard, life, exile and the rest) and timing;
@@ -438,14 +533,15 @@ beside it.
   `beryl_cards` and do not recompile after a card file edit. Since the
   registry's build script only lists the set crates, an edit to a card file
   reruns no build script but its own crate's.
-- One file per card, `rust/cards/<crate>/<set>/<card>.rs`, by the card's first
+- One file per card, `engine/cards/<crate>/<set>/<card>.rs`, by the card's first
   printing (`just card path <name>` prints it). `data/set-groups.json` puts each
   first-printing set in the crate of its release year, `cards_2010`; a year of
   more than 1,200 cards, and the current year and later ones, are split into
   halves by release date (`cards_2024_h1`, `cards_2024_h2`), and a half of more
   than 1,200 into quarters (`cards_2026_q1`). The cap keeps the crate that a
-  one-card edit rechecks small. The file holds the `CardDef` and its black-box
-  scenarios (§17). Nothing lists the files by hand: a new card is a new file
+  one-card edit rechecks small. The file holds the `CardDef` and, unless its
+  generated scenarios meet the bar (§17.3), its black-box scenarios (§17.1).
+  Nothing lists the files by hand: a new card is a new file
   (`beryl_card_build`).
 - Nobody types a printed characteristic (**K2**). A set crate's build script
   writes a `Printed::<Face>` constant for each face of its cards, and a
@@ -479,6 +575,13 @@ Ability::spell()
     .target(&TargetSpec::spell())
     .effect(&sequence(&[return_to_hand(target()), draw(you(), 1)]))
 ```
+
+Compositions that many cards share are prelude functions in
+`beryl_card/src/phrases.rs` (**P9**): a documented `const fn` that names an
+operation and takes what varies by card as arguments, such as
+`when_enters(effect)`. Simple expressions such as `draw(you(), 3)` stay inline.
+The renderer checks every definition that uses one against its Oracle text, as
+it checks any other.
 
 The interpreter (`beryl_rules`' `interpret`) carries the instructions out in
 order. Each entry's arm calls a function of the rules library: free functions
@@ -541,9 +644,16 @@ expressed as an IR (the path **D1** rejected), were considered and dropped.
 ### 7.1 The decision value
 
 ```rust
-pub struct Decision { pub player: u8, pub kind: DecisionKind, pub candidates: Candidates, pub prompt: Prompt, pub about: Bitboard }
+pub struct Decision { pub player: Seat, pub decider: Seat, pub kind: DecisionKind, pub candidates: Candidates, pub prompt: Prompt, pub about: Bitboard }
 pub enum Candidates { Objects(Bitboard), Options(Fixed<Opt, 64>) }
 ```
+
+`player` is whose decision it is: whose resources it spends and what a card's
+"you" means for it. `decider` is who answers it: the same player, or the player
+controlling them this turn (CR 724, **R12**). A player-controlling effect is an
+Effects entry the controlled player's turn takes as it begins; every agent, the
+rollout loop and the session are asked for the decider, and the decider's view
+joins what both players know.
 
 `DecisionKind` is the closed list of factored single picks: a priority action
 (pass, cast a card with a given face or alternative cost, activate an ability,
@@ -647,6 +757,17 @@ which nothing can read, says it in `CustomBody::SAYS`. The alternative, a
 hand-written step enum per multi-step card, was rejected (**D1**) as the
 error-prone half of the work for no measurable speed.
 
+**The transaction around a step.** A replacement effect's choice can come up
+where no resolution is open: dredge in the draw step, or a damage multiplier
+against a prevention shield as combat damage is dealt. While the state says such
+a choice is possible (`replacement::may_ask`: a live optional replacement, or
+two that differ), the turn-based actions of a step run on the scratch copy too.
+They pause as `Pending::StepActions` and run again from the start with the
+record (**R6**). The answers of any run that may pause are in the sink
+(`beryl_kernel::asking`), so a choice can stop the run from any depth, and a
+resolution's own questions and a replacement's choice below it share one record.
+A game whose cards cannot make such a choice pays one AND for it.
+
 **Rollouts never pause.** Their answer source is the rollout policy, called
 inline, so a resolution that may ask runs once on the committed state, with no
 scratch copy and no re-run. This cube is full of such abilities: twelve
@@ -666,12 +787,23 @@ modifiers, choose a payment plan, pay, then emit the cast event. Spells whose
 cost cannot be paid or that have no legal target are never offered, so the
 machine never has to rewind an illegal cast.
 
-An effect can offer one cast from a set of cards during its resolution. The
-casting steps ask through the enclosing resolution's answer record. The cast and
-its costs commit when the enclosing resolution finishes. Its cast event can make
-triggers wait, and the next instruction runs before anyone gets priority. A
-payment during that cast uses the mana solver and can pause for a payment plan
-or for a choice made by a mana ability.
+**Casting inside a resolution** (CR 608.2g). An effect can offer a cast from a
+set of cards during its resolution (`Effect::MayCast`), and need not be the last
+instruction. The casting steps (`casting/steps.rs`) take each answer from an
+answer source: at priority it is `Pending::Casting`, one committed step an
+answer, so a rollout's decisions do not change; inside a resolution it is the
+resolution's own record, so the whole cast is part of the transaction (§7.3) and
+replays with it. The cast and its costs commit when the enclosing resolution
+finishes. Its cast event can make triggers wait, and the next instruction runs
+before anyone gets priority. A payment during that cast uses the mana solver and
+can pause for a payment plan or for a choice made by a mana ability. Cascade is
+effect data on this path (`Ability::cascade`). A cast event carries the zone the
+card was cast from, which "cast from a hand" triggers read.
+
+A search of a player's own library can offer a cast of each card a permission
+lets them cast while searching (Panglacial Wurm, `actions/search.rs`). The
+search reads the library again after each cast, and finding the first card ends
+the window.
 
 ## 8. Events, replacement effects, triggers, state-based actions (D10)
 
@@ -729,14 +861,28 @@ only a recording sink keeps, `Block`, one for each blocker, together.
 
 For each event a primitive builds:
 
-1. **Replacement lookup.** A per-kind bitmask index names the active replacement
-   and prevention effects that listen to this kind: static abilities of
-   permanents, floating effects, and the cube's few from other zones. Their
-   filters run against the event.
-2. **Ordering.** Self-replacement effects apply first (CR 616.1a). If two or
-   more others apply and are not equivalent, the affected player or the affected
-   object's controller orders them, one pick at a time (CR 616.1). Each applies
-   at most once to the event.
+1. **Proposal** (**R6**). Each replaceable happening builds a typed value before
+   it changes the state: a move with how a permanent enters
+   (`replacement::Move`), one card drawn, damage (`replacement::Damage`, with
+   whether it can be prevented) and a destruction. Replacement effects rewrite
+   that value; there is no general hook on events. A per-kind mask (`Replaces`,
+   at three levels: the game's cards, the battlefield now, one face) names who
+   could replace it, so with none the proposal is returned as built. The sources
+   are static abilities of objects in a zone where they work, entries of the
+   Effects store (prevention and regeneration shields) and the entering object's
+   own.
+2. **Ordering** (CR 616.1). Self-replacement effects apply first. Within a
+   class, effects whose rewrites are the same data are one candidate; if more
+   than one is left, the affected player or the affected object's controller
+   chooses (a decision of purpose `Replace`). Each applies at most once to the
+   event (CR 614.5, the sink's `applied` list), and the loop collects again
+   after each rewrite (CR 616.1f). Prevention is the same loop for damage
+   (`replacement::damage`): protection is a layer-6 result, shields are Effects
+   entries with what is left of them, and a multiplier against a shield of an
+   amount is the one question. An entering permanent's replacements are found
+   against the permanent as it would exist on the battlefield (§9). An Aura that
+   enters without being cast chooses what it enchants as part of its entry (CR
+   303.4f).
 3. **Look-back trigger matching** for zone changes off the battlefield,
    capturing LKI (§5).
 4. **Execution** of the final event: the actual mutation of `State`.
@@ -762,9 +908,23 @@ in APNAP order, each controller ordering their own non-equivalent ones.
 Intervening-if conditions are checked when the ability triggers and again on
 resolution. Reflexive triggers ("when you do") are enqueued by the effect that
 created the condition. Delayed triggers carry their duration and fire from
-step-boundary events. State triggers (Dark Depths) are checked with state-based
-actions and enqueued once until they resolve. Triggers from outside the
-battlefield are indexed too: Emrakul's cast trigger from the stack.
+step-boundary events, or wait for their source to leave
+(`delayed_triggers::fire_on_leaving`).
+
+- **What a card listens to** is `Listens`, a typed set of up to 64 `EventKind`s,
+  at the same three levels as `Replaces` (§8.2), so a game with no card of a
+  kind pays one AND for it.
+- **Abilities outside the battlefield** (CR 113.6). An ability says where it
+  works (`Ability::zones`), defaulting from its kind. The game table keeps the
+  triggered abilities that work in a graveyard, in exile or on the stack
+  (`listener::AWAY`) apart, and matching walks the objects in those zones whose
+  card works there; the state keeps no set of them. A library or a hand is
+  refused, since a card there may be dealt anew among hidden cards.
+- **State triggers** (CR 603.8, Dark Depths) are matched at each state-based
+  check. Whether one already waits or is on the stack is found by looking there
+  for the same source and ability, so nothing is stored.
+- **Look-back** (CR 603.10) reads each leaving permanent's layer results before
+  any of the batch moves, so a creature sees the others die with it (§5).
 
 ### 8.4 State-based actions
 
@@ -787,35 +947,83 @@ pub struct Derived {
     pub types: Types, pub supertypes: Supertypes, pub colors: Colors,
     pub controller: Seat,                // the layer-2 controller, which State::controller reads
     pub protection: Colors,
-    pub keywords: Keywords,              // flying, first strike, deathtouch, ...
+    pub keywords: Keywords,              // flying, first strike, banding, landwalks, intrinsic mana, ...
     pub subtypes: GameSubtypes,          // 128 bits by the GameTable's numbers of the subtypes its cards name
     pub granted: [Option<GrantRef>; 4],  // abilities granted by other objects
+    pub lost: AbilityMask,               // the face's abilities this permanent has lost: 16 bits in Small
 }
 ```
 
 - Any mutation that can change a layer result sets `derived_dirty`: a permanent
   entering or leaving, a counter, a floating effect starting or ending, a
-  control change, a transform, a chosen color.
-- The next query recomputes every battlefield object from base by applying the
-  active static abilities and floating effects in layer, sublayer and timestamp
-  order: copy (1), control (2), text (3), types (4), colors (5), abilities (6),
-  then characteristic-defining P/T, set P/T, modify P/T and counters, switch (7a
-  to 7d).
+  control change, a transform, a chosen color. A static ability may also read
+  what no layer writes, as Tarmogoyf reads the graveyards: each face declares
+  such inputs (`static_ability::Inputs`), and the zone move marks the cache
+  stale for a graveyard only while a permanent on the battlefield reads one.
+- The next query recomputes every battlefield object from base, **one layer at a
+  time**, because what an effect applies to depends on the layers before it
+  (**R5**): copy (1), control (2), types (4), colors (5), abilities (6), then
+  characteristic-defining P/T, set P/T, modify P/T and counters, switch (7a to
+  7d), then the rules static abilities change for players (CR 613.11). Within a
+  layer, effects apply in timestamp order. An effect that affects the permanents
+  a filter accepts finds its set against the results so far, and a set is locked
+  in when the effect has a part in a later layer (CR 611.2c, CR 613.6), so
+  Humility with Opalescence and Oko's Elk come out as the rules say.
 - When no continuous effect is active, which is most of a game, `derived` is a
   straight copy of base: one branch.
-- **CR 613.8 dependencies** are resolved by a pairwise test run only when two or
-  more effects share a layer: if applying B would change what A applies to or
-  what A does, A waits for B. The cube appears to have no same-layer dependency
-  today; the test corpus (§17) keeps that claim honest.
+- **Ability removal.** `State::has_ability` is the one question every rules
+  reader asks: trigger matching, activation, the static scan, the replacement
+  lookups, the rule changes and the mana solver. With no removal in effect it is
+  one test of a flag the recompute stores. An effect that removes abilities also
+  clears the keywords and grants applied before it. A removal past the mask's
+  width stalls the game into `Large`.
+- **Dependencies** (CR 613.8). In a layer with two or more effects, A depends on
+  B when applying B changes whether A exists, what it applies to or what it
+  does. Each layer change declares what it writes and each effect what it reads,
+  so a layer whose effects cannot affect one another is never searched, and a WU
+  mirror game runs no trial. For a pair that might depend, B is applied to a
+  scratch copy of the results and A is compared, never looked up in a table of
+  card pairs. The effect applied next is the earliest by timestamp that depends
+  on nothing still waiting; with every one waiting, the earliest in a loop (CR
+  613.8b).
+- **A granted static ability.** An ability granted in layer 6 whose effect
+  belongs to an earlier layer is found only after that layer has run, so the
+  recompute runs the layers again with the abilities the run before found
+  granted, at most three runs, in a game with such a card
+  (`Capability::GrantsLayerEffect`).
+- **Land types.** A land has the intrinsic mana ability of each basic land type
+  it has (CR 305.6), held as keyword bits (`Keywords::PLAINS_MANA` to
+  `FOREST_MANA`); setting a land's types (Blood Moon) replaces them and removes
+  its other abilities (CR 305.7). `State::intrinsic_mana` is what the mana
+  readers ask.
+- **Characteristics off the battlefield** (**R8**). An object elsewhere is
+  computed when read: its copiable values, its characteristic-defining power and
+  toughness, and the continuous effects that reach other zones, kept as a list
+  of at most four parts beside the layer results. A game with none pays a length
+  test, and there are no per-slot layer results outside the battlefield.
+- **Text changes** (CR 612, **R9**). A color word, basic land type or creature
+  type inside an ability is a value of a private type (`beryl_card::words`),
+  read only through the word changes of the object the ability is printed on
+  (`State::words_of`), so a missed reader is a compile error. Layer 3 is no pass
+  of its own: words are read through the changes wherever they are read, and a
+  permanent whose type line reads otherwise is rewritten before layer 4. An
+  ability on the stack keeps the words its source had then, in one of four
+  captured sets.
+- **As it would exist** (CR 614.12). The replacement pipeline asks how an
+  entering object would exist on the battlefield by moving it onto a copy of the
+  state and running the recompute there, only for an object whose entry can be
+  replaced and only when an effect could change the answer.
 - Reads never recompute. Legality checks and state-based actions read arrays.
-- Copy effects (layer 1) use copiable values: a copy is a token whose `card` is
-  the definition copied. A copy of a face-down permanent is a face-up token of
-  `FACE_DOWN_COPY`, a nameless 2/2 every game table holds (CR 707.2, 708.2). The
-  few exceptions (Metamorph is an artifact in addition, Phantasmal Image is an
-  Illusion with its sacrifice trigger) are flags the recompute honors.
+- Copy effects (layer 1) use copiable values (**R7**): a definition, its face
+  and up to three copy exceptions in `Small`. Copying an object copies its
+  exceptions and appends the copier's, so a copy of a copy never walks a chain
+  (CR 707.9). `Object::card` holds the definition the object has the values of,
+  and the card it really is, where that differs, is a memo. A copy of a
+  face-down permanent is a face-up token of `FACE_DOWN_COPY`, a nameless 2/2
+  every game table holds (CR 707.2, 708.2).
 
 The research found every engine's layer bugs in incremental apply-and-unapply
-schemes. Recomputing from base over compact arrays is simpler and, for a cube
+schemes. Recomputing from base over compact arrays is simpler and, for a game
 with at most a handful of active effects, faster.
 
 ## 10. Mana (D7)
@@ -881,6 +1089,25 @@ What becomes a decision:
 Mana abilities that target are not mana abilities (CR 605.1a): Deathrite
 Shaman's first ability uses the stack.
 
+**Mana that remembers.** A mana ability may restrict its mana (the spells it can
+pay for, "of the chosen type") and give it a rider, such as "that spell can't be
+countered". A player's pool holds up to four entries of such mana in `Small`,
+each with its kind, restriction, the chosen type captured as the mana is made
+and the source's card. Only a spell's payment reads restrictions. A source of
+restricted mana is a class of its own in the solver, and a plan that spends mana
+with a rider differs in outcome from one that does not, so both are offered
+(**D7**). Spent on a spell, the rider becomes a rule change on that spell.
+`Capability::RemembersMana` keeps all of it out of every other game.
+
+**The total cost** (CR 601.2f) is computed in one place, in the order the rule
+gives: the mana cost or an alternative cost, then additional costs and
+increases, then reductions, then an effect that sets a floor
+(`casting::costs::spell_cost`). A static cost change is a rule change asked of
+the permanents that make it, since its condition ("as long as this artifact is
+untapped") is the ability's; in a game whose cards make none, the check is one
+test of the table's set. Delve pays generic mana of the locked-in total, after
+any floor.
+
 ## 11. Combat (D8)
 
 Combat is factored into single picks with legality-aware candidates:
@@ -890,16 +1117,31 @@ Combat is factored into single picks with legality-aware candidates:
   creature that must attack still legally can, and restrictions are checked on
   each pick, so every completed declaration satisfies CR 508.1.
 - **Blockers**, one at a time: a blocker, then the attacker it blocks. Evasion
-  (flying and reach, shadow, menace, Questing Beast's restriction) prunes the
-  candidates; a menace attacker is offered only while two blockers remain
-  possible, so the declaration never dead-ends.
+  (flying and reach, shadow, menace, landwalk, Questing Beast's restriction)
+  prunes the candidates; a menace attacker is offered only while two blockers
+  remain possible, so the declaration never dead-ends.
 - **Damage.** Current rules have no damage assignment order: a blocked
   attacker's controller divides damage among blockers freely, and trample needs
   lethal assigned to every blocker before any reaches the player. A lone blocker
   without trample is automatic. Otherwise the engine enumerates the distinct
   outcomes, which blockers die and how much reaches the player, and offers
   those. Deathtouch makes one damage lethal. First-strike and regular damage
-  steps exist only when a first or double striker is in combat.
+  steps exist only when a first or double striker is in combat. The first damage
+  step records which creatures began it with first strike or double strike, and
+  the second step reads that record and who has double strike now (CR 702.4b).
+- **Who assigns.** `combat::assigner` answers who assigns a creature's combat
+  damage: its controller, except where banding moves the choice (CR 702.22j, CR
+  702.22k). A blocker that blocks several attackers divides its damage after the
+  attackers have assigned theirs, and each lethal pick belongs to its source, so
+  a creature can take damage from several sources.
+- **Bands** (CR 702.22), behind `Capability::Banding`. An attack option can
+  start a band or join one with the same attack target; each member has a combat
+  memo naming its band, and at most one member can join without banding. A
+  defender who can block one member blocks the whole band. When banding gives
+  the other player the assignment, the damage step offers exact shares for each
+  creature and deals them together. "Bands with other [quality]" is a static
+  ability holding the quality as a filter (`Ability::bands_with_other`), so
+  losing all abilities removes it.
 - **Special actions.** Ninjutsu is offered to the attacking player in the
   declare blockers step while an unblocked attacker exists. Crew taps creatures
   one pick at a time until the power requirement is met. Exalted, attack
@@ -912,18 +1154,48 @@ Combat is factored into single picks with legality-aware candidates:
 
 The turn is a small program of steps: untap, upkeep, draw, main, beginning of
 combat, declare attackers, declare blockers, combat damage (twice with first
-strike), end of combat, main, end, cleanup. Extra turns queue. If a custom body
-declares that it can edit the turn structure, the engine starts each turn with
-the format's step sequence. Insertions after a common anchor play newest first.
-Skipping a step removes it from the queue, and ending a turn can cut the queue
-to cleanup. A step-beginning event carries its turn number, so a repeated upkeep
-or untap is still presented in the correct turn. Priority passes in succession
-with an empty stack advance the step; with a non-empty stack they resolve the
-top object. Cleanup discards to hand size, removes damage and ends
+strike), end of combat, main, end, cleanup. Extra turns queue. Priority passes
+in succession with an empty stack advance the step; with a non-empty stack they
+resolve the top object. Cleanup discards to hand size, removes damage and ends
 until-end-of-turn effects, and repeats if that caused a trigger.
 
+- **The turn as a plan.** A game whose cards cannot change the turn keeps the
+  direct step transitions. When one can (`Capability::TurnStructure`), each turn
+  begins with a plan of its steps (`beryl_kernel/src/turn/plan.rs`), a 24-entry
+  queue in `Small`, filled from `TurnStep::ALL`. An additional step or phase is
+  an insertion at the place the rules give (CR 500.8, CR 500.9), and insertions
+  after a common anchor play newest first. A skipped step or phase is a removal.
+  A step is identified within its turn by its ordinal as played, so a second
+  upkeep and a second combat are distinct to the stops, the limits and the
+  script; a pass to a scheduled stop uses the entry's identity, which insertions
+  ahead of it do not change. An insertion past the queue's capacity is `Full`,
+  and the game goes on in `Large`.
+- **Ending the turn** (CR 725.1, `turn/end.rs`). Abilities that triggered and
+  are not yet on the stack cease to exist, every object on the stack is exiled
+  including the one resolving, state-based actions are checked with no priority,
+  combat ends and the plan is cut to cleanup. The resolution's transaction
+  commits without running its later instructions (`Stop::EndTurn`).
+- **Skipping a turn** replaces the start of a scheduled turn, a replacement
+  choice that pauses as a step's does (§7.3). Effects that wait for the next
+  turn a player actually takes keep waiting. A continuous rule that skips a step
+  of the beginning phase removes it just before it would begin.
+- **Restarting** (CR 728, `game/restart.rs`). `State::restart` builds a new
+  state as `State::deal` does, from the physical cards in the game, including
+  cards admitted from a sideboard; the resolving ability's controller starts.
+  Carried cards stay in exile through the mulligans and enter together before
+  the first untap. Effects, memos, trackers and counters begin empty, and the
+  turn limit starts again.
+- **Subgames** (CR 730, `beryl_kernel/src/subgame.rs`, `game/subgame.rs`). Only
+  `State<Large>` has `outer`: starting a subgame boxes the main game there and
+  deals a fresh state from each player's library over the same slots. In `Small`
+  the resolution returns `Full`, which widens the game. When the subgame ends,
+  the engine takes the main game back, shuffles each main-game library and gives
+  the result to the paused resolution as an entry in its record. The state hash,
+  layout conversion, cloning and determinization cover the suspended games, and
+  the turn limit counts turns across all of them (`State::elapsed_turns`).
+
 The game starts with the London mulligan: keep or mulligan, then the cards to
-bottom one pick at a time.
+bottom one pick at a time. A companion is declared before it (§4.3).
 
 ### 12.2 Outcomes
 
@@ -931,9 +1203,13 @@ bottom one pick at a time.
 pub enum Outcome { Win(u8), Draw, Stalled(StallReason) }
 ```
 
-`Draw` is a rules draw: both players lose at once. `Stalled` is the engine
-giving up, with a named reason, and it is distinct so that logs, tests and
-search statistics never confuse the two.
+`Draw` is a rules draw: both players lose at once, or a loop of mandatory
+actions (CR 104.4b, **R13**). The engine counts resolutions in a row in which no
+player chose among several answers; past eight it compares a canonical hash of
+the state (`beryl_kernel::repeats`, which reads incarnations and timestamps as
+ranks) with one it stores at each power of two, and a match is a draw. `Stalled`
+is the engine giving up, with a named reason, and it is distinct so that logs,
+tests and search statistics never confuse the two.
 
 ### 12.3 Budgets
 
@@ -953,6 +1229,41 @@ per-decision budgets a search undervalues such lines. The fix is a later profile
 meta-action that proposes a loop and a count as one decision in the spirit of
 the rules on shortcuts, executed as that many real activations; it is noted in
 §20 and not part of Milestone 1.
+
+### 12.4 The format and other modes
+
+`GameTable::format` gives the rules the shape of a game, a `Format`
+(`beryl_kernel/src/format.rs`, **P10**): the seats and teams, starting life and
+opening hand, the mulligan, who skips the first draw, the turn's steps, land
+plays, the hand limit, which zones each player has, the roles of a player's
+decklists (library, sideboard) and the losses. `Format::CONSTRUCTED`, two-player
+constructed, is its one value. `Format` is zero-sized, so every getter is a
+constant and a rollout reads nothing for it; the WU mirror's count did not move
+when it was built. A second value therefore needs `Format` to carry data first,
+and each getter then becomes a load from the table. The rules read the starting
+life, opening hand, mulligan, first draw, hand limit, land plays, losses and
+seats. Nothing reads the turn's steps (the plan fills from `TurnStep::ALL`) or
+the zones, and the poison threshold in the losses is recorded but not checked.
+
+`Seat`, `PerSeat` and `SlotId::PLAYERS` hold two players, and the kernel uses
+`Seat::BOTH` where it walks the players. Rules code and card code never assume
+one opponent (**K7**, the `two-player` check), so they ask for a player's
+opponents, the defending players or the next player in turn order. What each
+other mode would still need, checked against the code on 2026-11-25 ("value"
+means a value an existing getter of `Format` would return):
+
+| Mode             | Values of `Format`                     | Still to build                                                                                                                                                                                                    |
+| ---------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Commander        | 40 life                                | 100-card decks (`DECK_SLOTS` is 60 in both layouts); a `Zone::Command` variant; a third and fourth seat; a player leaving the game; attacking several players; the commander tax, damage and color identity rules |
+| Two-Headed Giant | Teams of two (`Teams` needs a variant) | Life shared by a team (life is per player); four seats; a shared turn; team blocks                                                                                                                                |
+| Planechase       | None                                   | A planar `DeckRole` variant; the planar die as a special action; plane and phenomenon cards as objects in the command zone                                                                                        |
+| Archenemy        | None                                   | `Teams` and `DeckRole` variants for one against many and a scheme deck; more seats; scheme cards                                                                                                                  |
+| DanDân           | 20 life                                | The shared library and graveyard: a shared `ZoneKey` variant, storage for it in `Zones`, a reader of `Format::zones`, and "your library" as a question separate from ownership                                    |
+
+Every mode with more than two players also needs `Seat`, `PerSeat` and
+`SlotId::PLAYERS` to grow past two. A subgame and a restart each take one
+starting player and carry no seat count, and the sideboard is per seat, keyed by
+`DeckRole::Sideboard`, so a command zone would be a role beside it.
 
 ## 13. Hidden information (D9, D19)
 
@@ -994,6 +1305,19 @@ slot.
   remainder of each decklist into that player's unknown slots, keeping
   everything the viewer knows. With public decklists the candidate multiset per
   hidden group is exact, so no belief model over the cube is needed.
+- **Hidden picks** (CR 101.4a, **R12**). When each player picks a card from a
+  zone the other cannot see, as Show and Tell asks, the question is asked of
+  every player and never answered silently, since which cards pass the filter is
+  hidden too. The answer is recorded as the slot picked, and determinization for
+  the other player deals that slot a card the filter accepts.
+- **Face-down spells** (CR 708). A card cast face down (morph, or any creature
+  card through Illusionary Mask) is a nameless 2/2 spell at `FaceIx::DOWN` that
+  only its controller may look at, and enters face down. It is revealed when it
+  leaves the stack or the battlefield and when the game ends. The hidden search
+  deals an opponent's face-down card from what its cast showed: a morph has
+  morph, and a card cast through the Mask is a creature card.
+- **Suspended games** (§12.1). A determinization samples hidden cards in the
+  active and suspended games alike, keeping each game's recorded knowledge.
 - **The information-independence test** runs in CI: the same agent must make
   identical decisions from the full state and from a re-determinized one over
   many games, which catches a leaking accessor.
@@ -1138,10 +1462,6 @@ searcher optimistic, which is tuned, not fixed.
 | `beryl_bench`          | Benchmark support and the `_counts`, `_abba` and `_timing` targets of the example and of the rollout benchmark                                                                                                                                                                                                                                                                                                                                                                   | `beryl_cards`, `beryl_engine`, `beryl_search`                                             |
 | `beryl_shell`          | Desktop data, logs and named profiles                                                                                                                                                                                                                                                                                                                                                                                                                                            | `beryl_session`                                                                           |
 
-The rules' module map is in `rust/crates/beryl_rules/src/lib.rs`. Each module
-declares the rules it implements. The kernel groups its modules by the state
-they store and declares the rules its operations enforce directly.
-
 The engine knows no card and no card knows the engine's internals: a card is
 effect data in `beryl_card`'s vocabulary, and `beryl_cards` takes from the
 engine only the table types, the decklists and, for scenarios, what a scenario
@@ -1157,22 +1477,76 @@ as the desktop app. The Quick Seer and Quick Searcher search at
 `beryl_search::Budget::QUICK` (64 iterations across four trees) on every
 platform.
 
+### 16.1 Modules by rule
+
+Each kernel and rules module declares the Comprehensive Rules it implements in
+one line of its `//!` header, which the citation tool reads (**P8**):
+
+```rust
+//! Implements: CR 601, CR 602.2, CR 118.8
+```
+
+A section or numbered rule claims its subrules; `only` after a number claims the
+rule's own text and none of its subrules, for a rule whose exceptions belong to
+other modules (the kernel's zone move declares `CR 400.7 only, CR 400.7a`, and
+the interpreter CR 400.7j). A module that implements no rule says why
+(`//! Implements: none. Holds scratch buffers.`). The `rule-ownership` check
+fails when a file cites a rule outside what it or an enclosing module declares,
+unless the citation is a cross-reference written with `see`; when two modules
+declare the same rule; and when a module declares a rule it never cites. Its
+allowlist is empty. Test files and card files are outside the check.
+`just citations coverage` lists every rule of the pinned release that no module
+owns, by section: 762 of 3,331 rule entries were owned on 2026-11-25, 651 by
+`beryl_rules` and 111 by the kernel, and 1,332 of the unowned ones are keyword
+abilities and actions in the 700s.
+
+The kernel groups its code by what it stores and declares a rule where its
+operations enforce it directly (the timestamp clock owns CR 613.7). The rules'
+directories are `game/`, `turn/`, `casting/`, `mana/`, `stack/`, `continuous/`
+(with `continuous/layers/`), `replacement/`, `combat/`, `zones/`, `objects/`,
+`actions/`, `keywords/`, `engine/` and `interpret/`, and
+`beryl_rules/src/lib.rs` lists what each owns. The 800-line limit stays
+(**K17**); a file that reaches it is split along a rule boundary. A rule no
+module implements yet starts from this table. A type or characteristic belongs
+to the card vocabulary, its stored value to the kernel, and its game procedure
+to the rules module that performs it.
+
+| Comprehensive Rules | Home in the engine                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 100–104             | Game format, setup and outcomes in `game/` and the kernel's game table and initial state. The interpreter handles APNAP choices (CR 101.4).                                                                                                                                                                                                                                                                                                                                                                                           |
+| 105–114, 200–213    | Characteristics in `beryl_card`, with queries in the kernel and derived characteristics in `continuous/layers/`. Mana goes to `mana/`, spells and abilities to `stack/`, and permanents, tokens and emblems to `zones/`. Printed illustrations and other information below the text box are printing metadata.                                                                                                                                                                                                                        |
+| 115–118             | Target and cost choices in `casting/`. The engine offers priority and routes special actions to their implementation, such as land play or turning a permanent face up.                                                                                                                                                                                                                                                                                                                                                               |
+| 119–123             | Life in `game/life.rs`, damage in `combat/damage.rs`, draws and counters in `zones/`, and sticker placement in `objects/` if added.                                                                                                                                                                                                                                                                                                                                                                                                   |
+| 300–315             | Type and subtype vocabulary in `beryl_card`. Spell timing and loyalty activation go to `casting/`. Attachments go to `actions/attach.rs` and `replacement/enchant.rs`. Attacking and protecting battles go to `combat/`. The state and procedures for dungeons and variant objects go to `zones/`, and the corresponding game procedures to `game/`.                                                                                                                                                                                  |
+| 400–408             | Zone identity in the kernel and zone-specific behavior in `zones/`. Stack order is in `stack/`. A rule that carries information across a move belongs to the procedure using it, such as a trigger or casting permission.                                                                                                                                                                                                                                                                                                             |
+| 500–514             | Turn structure in `turn/`. Combat owns its steps (CR 506–511), phasing at untap stays in `objects/phasing.rs`, and the kernel queues extra turns.                                                                                                                                                                                                                                                                                                                                                                                     |
+| 600–616             | Casting and loyalty activation in `casting/`, triggered abilities and resolution in `stack/`, and mana abilities in `mana/`. Static abilities and continuous effects go to `continuous/`, linked abilities and one-shot object changes to `objects/`, and replacement and prevention to `replacement/`. Effect execution, choices and last-known information go to `interpret/`.                                                                                                                                                      |
+| 700–706             | General effect choices in `interpret/`, keyword actions in `actions/`, keyword abilities beside the procedures they change or in `keywords/`, turn-based actions in the owning step, state-based actions in `sba.rs`, and coin flips and die rolls in `actions/` using the kernel's chance API.                                                                                                                                                                                                                                       |
+| 707–723             | Card shapes in `beryl_card` and characteristics in the kernel. Copies, face-down objects, flip and meld go to `objects/`, with individual keyword actions under `actions/`. Spell-side choices for split, Adventure, prototype and Omen belong in `casting/`. Sagas, Classes, Cases, levelers and Station use the turn, activation, trigger, layer, counter and state-based procedures each rule modifies. Substitute cards are printing and deck data. Attractions use a supplementary deck in `game/` and a step action in `turn/`. |
+| 724–734             | Player control, shortcut decisions and illegal-action recovery in the engine. Ending a turn goes to `turn/`, restart and subgames to `game/`, and merging to `objects/`. The monarch, initiative and day and night use game state, with their changes applied by `actions/` or the relevant turn step. Rad counters use `zones/counters.rs` and the precombat main step.                                                                                                                                                              |
+| 800–811, 900–905    | Variant setup and participation in `game/` and the kernel's format. Variant changes to turn order, combat, zone movement or priority belong to the module that performs each procedure.                                                                                                                                                                                                                                                                                                                                               |
+
+Rules functions are free functions in the module that owns the rule, generic
+over `L: Layout`, and the engine's entry points stay generic; methods on `Game`
+and concrete entry points per layout were measured and not adopted (third
+appendix, "Measurements behind Part II").
+
 ## 17. Testing and verification (D13)
 
 ### 17.1 Scenarios
 
-Each card file declares `SCENARIOS: &[Scenario]` in an inline `scenarios` module
-behind its crate's `scenarios` feature, which `beryl_cards`' feature of the same
-name passes on, and which tests and tools turn on and the app never does. They
-are built with a typed builder and serializable with serde. A scenario names its
-own card, that card's tokens, basic lands and the designated props
-(`beryl_cards::props`); one about two particular cards says so with
-`Scenario::interaction`, so one card's change cannot break another card's tests.
-A prop is named by its role (`Prop::Flier`, `Prop::Vanilla`), and its `Contract`
-lists everything a scenario may rely on about it: cost, types, subtypes, power
-and toughness or loyalty, keywords and a summary of its text. A test checks each
-contract against the card, so a scenario never needs to say which card a prop
-is.
+A card file that has hand-written scenarios declares `SCENARIOS: &[Scenario]` in
+an inline `scenarios` module behind its crate's `scenarios` feature, which
+`beryl_cards`' feature of the same name passes on, and which tests and tools
+turn on and the app never does. They are built with a typed builder and
+serializable with serde. A scenario names its own card, that card's tokens,
+basic lands and the designated props (`beryl_cards::props`); one about two
+particular cards says so with `Scenario::interaction`, so one card's change
+cannot break another card's tests. A prop is named by its role (`Prop::Flier`,
+`Prop::Vanilla`), and its `Contract` lists everything a scenario may rely on
+about it: cost, types, subtypes, power and toughness or loyalty, keywords and a
+summary of its text. A test checks each contract against the card, so a scenario
+never needs to say which card a prop is.
 
 - **Setup:** cards by `names::` constant in any zone for either player, life,
   counters, tapped, attachments, the top cards of a library in order, the turn
@@ -1185,7 +1559,17 @@ is.
 The runner drives Beryl through the public decision API only. It is strict:
 every decision the engine offers must be scripted or marked auto, and an
 unexpected decision fails the test. That is the opposite of XMage's lenient
-default, and it keeps the decision surface itself under test.
+default, and it keeps the decision surface itself under test. Every card's
+scenarios, written, rules-library and generated, play in both state layouts in
+lockstep (`plays_alike_in_both_layouts`): at every decision the widened `Small`
+state must equal the `Large` one and the decisions must match. A scenario of a
+card that can start a subgame or record mana spent on X starts in `Large`.
+
+A rules test that only drives decisions and reads the result is a scenario in
+disguise, and belongs in the rules library on a real card, where the oracles
+also play it. Tests of engine internals (payment profiles, candidate order,
+replay state) stay in `beryl_rules/src/tests/`, and opening decisions stay in
+whole-game tests, since scenarios start with the opening hands kept.
 
 ### 17.2 Oracles
 
@@ -1214,21 +1598,22 @@ trace. Python exporters in `tools/` generate:
   with the reason.
 
 `just oracle-setup` installs Maven with Homebrew if it is missing,
-shallow-clones XMage and Forge at pinned commits into
-`~/Library/Caches/beryl/oracles` and builds them once with JDK 21; agents run it
-unattended. `just oracle [cards]` exports the scenarios and runs them on both,
-in under a minute once built, and writes its full report to
-`oracles/logs/oracle.json` there. The nightly runs that full sweep on staging;
-`just ci`'s `oracle` lane plays the cards changed since master and a sample
-fixed by the commit, or every card when the exporters or harnesses changed
-(`oracle_selection.py`).
+shallow-clones XMage and Forge at pinned commits into `$BERYL_CACHE/oracles` and
+builds them once with JDK 21; agents run it unattended. `just oracle [cards]`
+exports the scenarios and runs them on both, in under a minute once built, and
+writes its full report to `oracles/logs/oracle.json` there. The nightly runs
+that full sweep on staging; `just ci`'s `oracle` lane plays the cards changed
+since master and a sample fixed by the commit, or every card when the exporters
+or harnesses changed (`oracle_selection.py`).
 
 - The dump ends each scenario that ends at a quiet position (priority over an
   empty stack) with its snapshot: assertions of the whole public position, life,
-  zone sizes, the public cards of each zone, each permanent's control, power and
-  toughness and counters, so an oracle compares more than the author asserted.
-  Which mana sources paid and which cards a shuffle dealt are left out: the
-  oracles choose and shuffle their own way.
+  zone sizes, the public cards of each zone, each permanent's control, colors,
+  card types, subtypes, keywords, power and toughness, counters, damage and
+  attachment, each mana pool, and the spells and abilities on a nonempty stack,
+  so an oracle compares more than the author asserted. Which mana sources paid
+  and which cards a shuffle dealt are left out: the oracles choose and shuffle
+  their own way.
 - The dump adds 100 generated scenarios (`beryl_cards::generate`, filed under
   "Generated"): a seeded turn 3 main phase of random lands, permanents and cards
   in hand from the cube, where player 0 takes one to three actions, either
@@ -1239,9 +1624,11 @@ fixed by the commit, or every card when the exporters or harnesses changed
   action could mean, and tap abilities of mana sources an oracle may have tapped
   to pay.
 - A generated scenario an oracle fails for a gap in its exporter, not a rules
-  difference, is listed with the gap in `oracles.py`'s `EXPORTER_GAPS` and
+  difference, is listed with the gap in `data/oracle-exporter-gaps.json` and
   reported as unsupported; an entry whose scenario no longer fails fails the
-  run.
+  run. Neither oracle can play a subgame, a band, exact damage shares, a cast
+  while searching, a sideboard or a companion, so those scenarios are reported
+  as unsupported with the reason, and the rulings ledger is their outside check.
 - A card an oracle does not implement, or a scenario outside its harness's
   vocabulary, is reported as unsupported, not failed.
 - A disagreement is a bug to investigate, and the Comprehensive Rules decide it.
@@ -1263,6 +1650,54 @@ effect applies or rule bites, replacement that modifies an event, and casting
 option a spell is cast with. A `beryl_cards` test fails on any no scenario
 exercises, and `just fuzz` reports those random play never reaches.
 
+**Where scenarios come from** (**K3**, **P2**). Hand-written scenarios belong to
+vocabulary entries, written once in the rules library
+(`beryl_cards/src/library/`, a tree that mirrors `beryl_rules`), and to cards
+with rulings the generator cannot reach. A card's other scenarios are generated
+from its definition (`beryl_cards/src/derive/`): player 0 acts at the first
+main-phase priority, in an attack and through turn 4, from hand-picked witnesses
+(position fragments under which a field's value changes the outcome), from a
+recipe that makes each event a trigger listens to or a replacement replaces
+happen, and from a position with a permanent that passes the card's filter and
+one that does not. `UNREACHED` lists the abilities no generated scenario
+reaches, and it may only shrink.
+
+**The mutation check** (`beryl_cards/src/mutation/`) changes one node of a
+definition to a neighbouring value (an effect, a target's optionality, a static
+modification and its affected set, a replacement's event and rewrite, a mana
+product, a trigger, a rule change, an activation or casting cost, a face
+keyword) and requires some scenario to tell the mutant from the card, at a
+scripted position or in the final snapshot. `EQUIVALENT` lists the mutants that
+always do the same as the card, with why.
+
+**The generated bar.** `just card check` reports the mutants that generated
+scenarios alone kill. A card whose generated scenarios kill them all, pass in at
+least one oracle and have no unexpected oracle failure needs no `scenarios`
+module. A kill counts only where the oracles could see it: a mutant that differs
+only at a scripted position (which land paid, what a mana ability added before
+the pool emptied) would let a wrong definition pass every oracle too. Those
+kills are listed in `ORACLE_BLIND` (`beryl_cards/src/mutation.rs`), which may
+only shrink and which `just card check` reports as "unconfirmed by oracles"; 6
+were left on 3 cards on 2026-11-25. A card with a surviving mutant gets a
+hand-written scenario for that mutant only, or a witness when the mutant is of a
+vocabulary entry many cards share. Specs and Playground use generated and
+rules-library scenarios when a card file supplies none. On 2026-11-25, 41 of the
+189 card files had no `scenarios` module. The condition held fully for one new
+card in eight in the pilot (third appendix): most new cards still need some
+hand-written scenario.
+
+**The rulings ledger** (**P6**). `data/rulings-ledger.json` records, for each
+card listed, each Scryfall ruling by its date and a hash of its text with one
+of: the scenarios that show it, the vocabulary entry or rules-library scenario
+that covers it for every card, or why no scenario can. The `rulings` check fails
+on a ruling with no entry, an entry naming a missing scenario, or an entry whose
+hash matches no ruling. Every keystone card is listed; any other card is listed
+when its writer chooses, so the ledger never blocks a simple card.
+
+**A card file cites the rules** only where the card relies on something no
+vocabulary entry says, such as a ruling about an unusual interaction (**P3**).
+Rules code and vocabulary entries keep their citations.
+
 ### 17.4 Other checks
 
 - **Invariants:** debug builds of `next` and `apply` check every state they
@@ -1271,7 +1706,14 @@ exercises, and `just fuzz` reports those random play never reaches.
   incarnation, no object is in two zones, `derived` is clean when read, counters
   and life are in range. Search plays its simulated games on a
   `Scratch::unchecked`, which skips them.
-- **Fuzzing:** random-agent games in debug builds, checked as above.
+- **Fuzzing:** random-agent games in debug builds, checked as above. Each
+  keystone family has a test whose games deal both decks from that family's
+  cards (`KEYSTONE_FAMILIES`, `fuzz_deck_from`) so that its cards meet, and
+  another deals both from the pool of every keystone and partner
+  (`decks::keystone_pool`), so that cards of different families meet. One game
+  in sixteen compares both layouts at every decision until it outgrows `Small`.
+  Ignite plays these on idle cores as exploration checks
+  (`fuzz:<target>/<first seed>+<games>`) and files a ticket for a failure.
 - **Shrinking:** a fuzz game is also a seed and a vector of choice indices that
   proptest generates (`beryl_search/tests/all/shrink.rs`). A failing game
   shrinks to the fewest choices that still fail and prints as a scenario, its
@@ -1284,6 +1726,10 @@ exercises, and `just fuzz` reports those random play never reaches.
   and a cap on decisions per scenario names the scenarios it cuts short. The
   fast check searches to depth 3; `just exhaust [card] --depth N` goes deeper. A
   failure prints as the scenario with the failing sequence after its actions.
+  `just exhaust --pool` (Ignite's `exhaust:pool/<first seed>+<games>`) plays
+  keystone-pool games in `Small` to a quiet priority of turns three to eight and
+  searches from there in `Large`; a failure prints the seed and every choice,
+  and `BERYL_POOL_GAME=<seed>:<choices>` prints that game as a scenario.
 - **References:** slow reference implementations of the fast paths, checked at
   every fuzz decision and scenario position, and at every 32nd checked step of
   any debug game: the layer results, listeners and knowledge against a recompute
@@ -1294,7 +1740,8 @@ exercises, and `just fuzz` reports those random play never reaches.
 - **Determinism:** the same decks, seed and choices reproduce the same state
   hash at every decision.
 - **Inline and replayed answers agree:** a rollout's inline answers, replayed
-  through `Replay`, give the same state hash at every decision (§7.3).
+  through `Replay`, give the same state hash at every decision (§7.3), including
+  a step's transaction and a cast inside a resolution.
 - **Information independence** (§13).
 - **No allocation:** a counting allocator in tests asserts zero heap allocations
   across a random game.
@@ -1422,6 +1869,19 @@ experiment, not the default.
   Observation, one tree each. The omniscient variant runs the same search on the
   true state and is labeled as cheating wherever a human meets it.
 
+**Game structure in search.** A search measures time in turns started across the
+playthrough (`State::elapsed_turns`), since a turn's number starts again in a
+restarted game and in a subgame. A rollout is never cut off inside a subgame: it
+plays the subgame out and stops at the first decision back in the main game, so
+no search compares a subgame's position with a main game's. A card's value
+combines its faces by its shape (`values::by_shape`): an Adventure or a prepared
+card is worth both faces, a transforming or flipping card the mean of its two,
+and a split, modal or prototype card its best face. The engine offers one cast
+option for each face and set of casting options of each card that is not
+interchangeable with another, and a search keys each option by its face and
+options. A rollout that runs out of `Small` scores as a draw, so a game whose
+cards record mana spent on X is misjudged by search until it has widened.
+
 **Node storage** beyond replay from the root is a later decision. At about
 10,000 new nodes per second per thread, a 20 KiB state in every node would be
 3.6 GB/s across 18 threads, or 36 GB for a 10-second search, and restoring one
@@ -1487,17 +1947,12 @@ and an `Undo` entry, so a replay goes back too. The engine is untouched.
 
 ## 20. Open questions
 
-- **Companions.** Supporting the mechanic costs a companion slot per player and
-  a special action; whether to is decided once the supported decks are chosen.
 - **Hidden decklists.** An opponent's 75 might not be shown, but the metagame
   narrows it to a few lists. Whether the AI keeps D19's public decklists or
   deals each world's list from the metagame is open.
-- **Sideboarding.** Best of three needs an agent that swaps cards between games,
-  and a session that carries a match across them.
-- **Loop shortcuts.** The "repeat N times" meta-action of §12.3, and how search
-  should propose counts.
-- **613.8 corpus.** Which interactions in the supported decks, if any, exercise
-  same-layer dependencies; the scenario suite should contain the candidates.
+- **Sideboarding.** The engine reads each player's sideboard for wishes and
+  companions (§4.3), but a session's game has none: best of three needs an agent
+  that swaps cards between games and a session that carries a match across them.
 - **Rollout horizon and node storage beyond Milestone 1** (§19.1): whether a few
   turns and an evaluation beat full games, and whether states in nodes visited
   twice beat replay from the root.
@@ -1506,6 +1961,24 @@ and an `Undo` entry, so a replay goes back too. The engine is untouched.
 - **To measure once the engine runs:** how often layers recompute with equipment
   attached all game (§9), and what declaring combat one creature at a time costs
   a rollout against declaring a whole attack at once (§11).
+
+### Designed, not built
+
+- **The repeat shortcut** (CR 733.2). The session replays a recorded run of
+  choices N times, matching each by what it does, as a save does, and search
+  proposes the count (§12.3). The engine needs nothing.
+- **Shared zones.** `ZoneKey`'s rustdoc says how a shared library joins it, and
+  `Format::zones` is where a format asks for one; "your library" then becomes a
+  question separate from ownership (§12.4, DanDân).
+- **Ante.** A zone per player that `Format::zones` would list; `Zone` has no
+  variant for it, and cards that mention ante are not written.
+- **A third seat.** `two_player.rs` says what breaks (§12.4).
+- **A card from outside the game in a subgame.** The subgame's table holds no
+  sideboard.
+- **Omen and Station cards**, the designations (the monarch, the initiative and
+  dungeons, day and night) and votes. Omens follow the Adventure pattern and
+  Stations are counters; the rest are new store entries.
+- **A session match:** best of three and sideboarding between games.
 
 ## Appendix: decisions
 
@@ -1568,29 +2041,6 @@ missing from the list were about how the rebuild was run.
 | K28 | The design language is data (`data/ui-conventions.json`): each verb, each mark, the numbered exceptions and the cases Arena does not show. `docs/ui-conventions.md` is generated from it.                                                                                                        | Nothing forced the code and the prose to agree.                                                                                                                                              |
 | K29 | What the recordings do not show is composed from existing verbs and shapes and listed. The phone shares the stage and keeps its own layout.                                                                                                                                                      | 50,000 cards cannot each need a decision, and the recordings are desktop only.                                                                                                               |
 
-### Decisions planned for Part II
-
-On 2026-11-15 a second set of structure decisions was taken, **P1** to **P16**
-in [project-50k-part-2.md](project-50k-part-2.md), with the measurements behind
-them. They are plans until that work lands, when this appendix states them as
-shipped. In brief:
-
-- A card stays a hand-written Rust file; Oracle text is never parsed (P1). A
-  count over the card store found that two thirds of cards have a sentence no
-  other card has.
-- A card needs no hand-written scenario when its generated scenarios kill every
-  mutant of its definition and agree with both oracles (P2, which carries out
-  **K3**), and a card file cites the rules only for card-specific rulings (P3).
-- The compiler refuses more: no wildcard match arm over an enum, no lossy
-  integer cast, no walk in slot order that mutates, and object references typed
-  by what they point at (P7).
-- Each engine module declares the Comprehensive Rules it implements, and a check
-  holds its citations to them (P8). **K17**'s 800-line limit stays; a file over
-  it is split along rule boundaries.
-- Helpers shared by cards are a phrase library keyed by the Oracle wording each
-  renders to (P9).
-- The engine reads the shape of a game from one `Format` value (P10).
-
 ### Measurements behind the structure
 
 Taken 2026-11-10 to 2026-11-12 on the development machine (M5 Max), under load
@@ -1646,3 +2096,305 @@ references and computed variables), there are 6,199 distinct entries, and the
 most common 1,600 fully cover 82.8% of scripts. 36% of scripts compute a value
 through a script variable, 28% chain sub-abilities and 12% keep remembered
 state.
+
+## Appendix: keystone decisions
+
+The decisions of the rules keystones epic (**R**, taken 2026-11-13) and of Part
+II of Project 50k (**P**, taken 2026-11-15 and revised 2026-11-20), as shipped.
+Where the work was built differently from the decision, the entry describes what
+was built.
+
+### The rules keystones (R)
+
+Seven principles ran through this work: every event, replacement, trigger and
+rule change is found through a per-kind mask of who listens, so a mechanism with
+no listener costs one AND; the game table records at game start which mechanisms
+either deck can produce (`table::Capability`), so a flag false all game makes
+its branch free; a mechanism that needs more room than `Small` has stalls into
+`Large`; the engine plays the exact rules and search gets its speed from
+profiles; a mechanism is a vocabulary entry and its arm in the rules; each lands
+with its numbers; and each rules question ("does this object have this ability",
+"what are its copiable values") is answered by one kernel query.
+
+| ID  | Decision                                                                                                                                                                                                                                                  | Why                                                                                                                                                                                      |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R1  | Keystone cards are chosen by what is expensive to retrofit: how card data is written, what the kernel assumes an object is, and what the decision protocol assumes. 24 keystones and their partners; no complete deck.                                    | Popular decks are mostly easy cards, so choosing by popularity delivers the hard cases late. Breadth is cheap to add later; a wrong assumption in the kernel is not.                     |
+| R2  | A mechanism the WU Control mirror does not use costs it nothing. The count gate is never raised for a mechanism (**K1**).                                                                                                                                 | This is the one bar an unattended run cannot argue its way past.                                                                                                                         |
+| R3  | Each family of keystones has a present-cost corpus. Every step of its rollouts is counted on the state and on the same state with the family taken out, and the family's steps stay within 1.25 times the controls' ([benchmarking.md](benchmarking.md)). | Two rollouts with and without a family play different games; one step from one state differs only by the mechanism. At 1.25 times, a search over such a board keeps 80% of its rollouts. |
+| R4  | `State<Small>` stays within 20,480 bytes. Last-known information is one table of the state rather than a record in every waiting trigger, and an `Object` is 22 bytes aligned to two.                                                                     | A state and its scratch copy must fit the 64 KiB first-level cache of a Performance core.                                                                                                |
+| R5  | The layers stay one full recompute from base, applied one layer at a time. A same-layer dependency is found by applying one effect to a scratch copy and seeing whether the other changed (§9).                                                           | A table of card pairs cannot cover 50,000 cards. The trial runs only when two effects share a layer and one writes what the other reads.                                                 |
+| R6  | Each replaceable happening builds a typed proposal before it changes the state, and replacement effects rewrite it (§8.2). A step that may have to ask a player runs on the scratch copy, as a resolution that can pause does (§7.3).                     | No general hook on events. A typed value per kind keeps each gate one AND and lets the compiler check each rewrite.                                                                      |
+| R7  | An object's copiable values are a face of a definition plus a short list of copy exceptions. `Object::card` holds the definition the object has the values of; the card it really is, where that differs, is a memo.                                      | `State::copiable` is on every hot path, so a copy must cost it nothing. One representation serves copies, copies of copies and merged permanents.                                        |
+| R8  | Outside the battlefield an object's characteristics are computed when read (§9).                                                                                                                                                                          | Layer results for all 255 slots would add 5 KiB, and effects that reach other zones are rare; a game without one pays a length test.                                                     |
+| R9  | A color word, land type or creature type in an ability is a value of a private type, read through the word changes of the object the ability is printed on; an ability on the stack reads its source's changes as they were.                              | A text change (CR 612) must reach every such word, and making the read the only way to the value turns a missed one into a compile error.                                                |
+| R10 | An ability on the stack is named by its place on the stack, which the kernel repairs when an entry below the top leaves (§5).                                                                                                                             | A field in each of 64 entries is copied by every rollout. Only an entry above an ability can name it, so the repair touches few entries.                                                 |
+| R11 | A merged permanent is one object in the slot it always had, its other cards in a zone of their own. A phased-out permanent leaves the battlefield list and bitboard and keeps its zone and incarnation (§5).                                              | Both keep "one slot is one object" true for every reader, and every walk of the battlefield skips the cards underneath and the phased-out permanents for free.                           |
+| R12 | A `Decision` names the player it belongs to and the player who answers it. A hidden pick constrains determinization. A named card is one of the game's cards or "another card".                                                                           | Each is an assumption of the session, the saves and the UI as well as the engine, so it was cheapest to settle while few cards depended on it.                                           |
+| R13 | A loop of mandatory actions is a draw (CR 104.4b), found by a repeated canonical hash (§12.2). The "repeat N times" shortcut for optional loops is designed and not built (§20).                                                                          | The draw is a rule. The shortcut is a search feature, and the longest line among the keystones is about 60 decisions against a budget of 500.                                            |
+| R14 | Every keystone is playable in the app from both seats with the prompt shapes and animation verbs that exist, and agents answer every new decision legally.                                                                                                | The protocol changes of R12 are proven only by a session, a save and a UI that use them. Polish for cards in no supported deck is not worth its cost.                                    |
+| R15 | Three foundation groups (events and listeners, layers, replacement) landed first and in order; five groups of keystones followed in parallel, with a review of each and an audit after the foundations.                                                   | The foundations edit the same kernel and rules files.                                                                                                                                    |
+| R16 | Nothing may assume a library or graveyard has one owner, so that a shared zone can join (§20). Subgames, restarts, banding and casting during a search were designed here and built by Part II.                                                           | A shared zone is a constraint on every change, not a feature of one.                                                                                                                     |
+
+### Part II (P)
+
+| ID  | Decision                                                                                                                                                                                                                                                                                                                                                                                                                                  | Why                                                                                                                                                                                                     |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P1  | A card is a hand-written Rust file. Oracle text is never parsed, at build time or run time. The brief's drafter reads Phase's published parse of every card as JSON at authoring time (`phase_draft.py`); nothing of Phase is built.                                                                                                                                                                                                      | Two thirds of cards have a sentence no other card has (measurements below), so a parser would need a grammar of composition. Rust files passed the 50,000-card rehearsal and are type checked for free. |
+| P2  | A card needs no hand-written scenario when its generated scenarios kill every mutant of its definition that the oracles can see and agree with XMage and Forge (§17.3). Hand-written scenarios belong to vocabulary entries and to cards with rulings the generator cannot reach. As built, the condition held fully for one new card in eight.                                                                                           | Scenarios were three quarters of card-file lines and of card compile cost. **K3** intended this.                                                                                                        |
+| P3  | A card file cites the Comprehensive Rules only where the card relies on something no vocabulary entry says. Rules code and vocabulary entries keep their citations.                                                                                                                                                                                                                                                                       | Half of a definition was quotes of rules the vocabulary entry already cites.                                                                                                                            |
+| P4  | The card workflow was built and measured on twelve candidate cards, six of which landed. No whole set was implemented.                                                                                                                                                                                                                                                                                                                    | A set run is its own epic; Part II was about structure.                                                                                                                                                 |
+| P5  | Three families of keystones were built, 29 cards: turn and game structure, casting and combat exceptions, and card shapes with face-down cards and cards from outside the game. Each item of logic that serves one keystone is behind a `Capability`.                                                                                                                                                                                     | The three change engine structure. The monarch, the initiative, day and night and voting are mostly new store entries, left to set work.                                                                |
+| P6  | The first keystones are audited with a rulings ledger, which a check holds complete, and with fuzzing and exhaustive search over a pool of only keystone cards (§17.3, §17.4).                                                                                                                                                                                                                                                            | Rulings are a bounded list of what each card must do. Lockstep games against the oracles would need a decision bridge that is fragile on exactly these cards.                                           |
+| P7  | The compiler refuses the bug classes it can: `clippy::wildcard_enum_match_arm` and the four cast lints are denied in `beryl_kernel`, `beryl_rules` and `beryl_card`; only the kernel walks a set in slot order; object references are typed by what they point at (§5); every scenario plays in both state layouts (§17.1). A memo that names an object which can leave while the memo lasts holds a link, its slot and incarnation byte. | The guard table below.                                                                                                                                                                                  |
+| P8  | Each engine module declares the Comprehensive Rules it implements, and the `rule-ownership` check holds a file's citations to that range (§16.1). The engine was reorganised once to match. The 800-line limit stays.                                                                                                                                                                                                                     | About 30 files had been cut at the limit instead of at a boundary. The same data is a coverage map of the rules.                                                                                        |
+| P9  | Shared card helpers are prelude functions that compose vocabulary (§6.3). The brief drafts definitions, and `just set plan` sorts a set's unwritten cards by what they need.                                                                                                                                                                                                                                                              | A named composition can cover many cards with one function.                                                                                                                                             |
+| P10 | The engine reads the shape of a game from one `Format` (§12.4). Only two-player constructed exists, as a zero-sized type whose getters are constants, so a second format needs it to carry data first.                                                                                                                                                                                                                                    | Subgames and restarts needed it, and the zero-sized form costs rollouts nothing.                                                                                                                        |
+| P11 | The engine's files moved to their rule-owned places first, in a chain of changes that moved nothing but paths. Each module then had one pass that converted it to typed references and simplified it. No line count was a gate.                                                                                                                                                                                                           | Learning a module is most of what a session costs, so two trips would cost twice. A keystone conflicts with a move and not with the rest of a pass, so only the moves came before the keystones.        |
+| P12 | Compile cost is measured by Ignite's rebuild counts, and Ignite's `slow-crate` rule files the work for the crate agents spend most on rebuilding. Every card's tests run on an engine change while the pool is small; they become a check family with one check a card once it is in the thousands.                                                                                                                                       | Per-card tests cost about 0.1 CPU-seconds a card: seconds at 189 cards and over an hour at 50,000. Ignite reruns a check only when its inputs change.                                                   |
+| P13 | New keystones have no UI bar. The session's views and animation scripts cover a new object state with existing prompt shapes and verbs, so the script checks keep passing.                                                                                                                                                                                                                                                                | The UI was moving to Beryl 3D.                                                                                                                                                                          |
+| P14 | The performance bars carry over: the count gate is never raised for a mechanism, a family's step stays within 1.25 times the same step without it, and `State<Small>` stays within 20,480 bytes. Subgames live only in `Large`.                                                                                                                                                                                                           | A mechanic the WU mirror does not use must cost it nothing.                                                                                                                                             |
+| P15 | Design, keystone and review work ran at the high tier; partner cards, sweeps and measurements at the middle tier; drafted cards at the light tier. None ran on Fable.                                                                                                                                                                                                                                                                     | The designs came from the one session that planned them.                                                                                                                                                |
+| P16 | Out of scope: dexterity cards, un-cards, Alchemy cards and cards that only matter during a draft. Ante is designed and not built. Omen and Station cards are left to set work (§20).                                                                                                                                                                                                                                                      | The target is every other known card.                                                                                                                                                                   |
+
+### The keystone cards
+
+A keystone is a card chosen because it forces one of the decisions above. A
+partner is a card its scenarios need, or the second half of a classic
+interaction. Every keystone and partner is listed in the rulings ledger and in a
+family of `beryl_card_names::KEYSTONE_FAMILIES`.
+
+| Group                | Keystone                  | What it forces                                                                        | Partners                                                   |
+| -------------------- | ------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Layers               | Blood Moon                | Layer 4 over a filtered set; a type change that removes abilities; a dependency       | Urborg, Tomb of Yawgmoth; Dryad Arbor; Glorious Anthem     |
+| Layers               | Humility                  | Ability removal and base power and toughness over every creature                      | Tarmogoyf, Dress Down                                      |
+| Layers               | Opalescence               | With Humility, the classic test of timestamps and CR 613.6                            |                                                            |
+| Layers               | Oko, Thief of Crowns      | One effect across layers 4, 5, 6 and 7b on a locked-in object; an exchange of control | Leonin Scimitar                                            |
+| Replacement          | Chains of Mephistopheles  | A draw replaced by instructions that themselves draw                                  | Notion Thief, Griselbrand                                  |
+| Replacement          | Life from the Loam        | Dredge: an optional replacement that works from the graveyard                         |                                                            |
+| Replacement          | Rest in Peace             | A replacement of every move to a graveyard                                            | Tarmogoyf                                                  |
+| Replacement          | Containment Priest        | A replacement that asks how the object got there                                      | Flickerwisp                                                |
+| Replacement          | Mother of Runes           | Protection: prevention, targeting, blocking and attachment at once                    | Circle of Protection: Red, Furnace of Rath, Lightning Bolt |
+| Other zones and text | Painter's Servant         | A color given to cards in every zone; a value chosen as it enters                     | Force of Will, Circle of Protection: Red                   |
+| Other zones and text | Mind Bend                 | A text change to color words and land types                                           | Dandân, Crystal Spray, Lord of Atlantis                    |
+| Other zones and text | Underworld Breach         | An ability given to cards in a graveyard; a cost that exiles other cards; a long loop | Lion's Eye Diamond, Brain Freeze                           |
+| Copies               | Phantasmal Image          | Entering as a copy; exceptions that become copiable values; a copy of a copy          | Quicksilver Gargantuan                                     |
+| Copies               | Thespian's Stage          | Becoming a copy while keeping an ability; a state trigger                             | Dark Depths                                                |
+| Copies               | Fork                      | A copy of a spell with its choices, new targets and a changed color                   | Tendrils of Agony, Braingeyser                             |
+| Costs                | Trinisphere               | The whole order of CR 601.2f                                                          | Thalia, Guardian of Thraben; Force of Will; Gurmag Angler  |
+| Costs                | Pithing Needle            | A card named from an open-ended set; a "can't" keyed on the chosen name               |                                                            |
+| Costs                | Cavern of Souls           | Mana that carries a restriction and a rider to the spell it pays for                  |                                                            |
+| Identity             | Stifle                    | Abilities on the stack as targets                                                     |                                                            |
+| Identity             | Animate Dead              | An Aura on a card in a graveyard; a mandatory loop                                    | Worldgorger Dragon                                         |
+| Identity             | Gemrazer                  | Mutate: one permanent made of several cards                                           |                                                            |
+| Identity             | Teferi's Protection       | Phasing; a life total that can't change; protection for a player                      |                                                            |
+| Decisions            | Show and Tell             | A pick hidden from the other player until both have made one                          | Griselbrand                                                |
+| Decisions            | Mindslaver                | The player who answers a decision is not the player it belongs to                     |                                                            |
+| Turn and game        | Time Stop                 | Ending the turn                                                                       | Sundial of the Infinite                                    |
+| Turn and game        | Paradox Haze              | An additional step; an Aura on a player                                               | Stasis                                                     |
+| Turn and game        | Relentless Assault        | An additional combat and main phase                                                   |                                                            |
+| Turn and game        | Time Vault                | Skipping a turn                                                                       | Final Fortune                                              |
+| Turn and game        | Karn Liberated            | Restarting the game                                                                   |                                                            |
+| Turn and game        | Shahrazad                 | A subgame                                                                             |                                                            |
+| Casting              | Bloodbraid Elf            | Cascade: casting inside a resolution                                                  |                                                            |
+| Casting              | Panglacial Wurm           | Casting during a library search                                                       | Sylvan Scrying                                             |
+| Casting              | Knowledge Pool            | A cast from exile replacing a cast from hand                                          | Possibility Storm                                          |
+| Combat               | Benalish Hero             | Banding: who assigns combat damage                                                    | Benalish Infantry, Palace Guard, Fencing Ace               |
+| Combat               | Master of the Hunt        | "Bands with other"                                                                    |                                                            |
+| Card shapes          | Fire // Ice               | A split card                                                                          |                                                            |
+| Card shapes          | Wear // Tear              | Fuse                                                                                  |                                                            |
+| Card shapes          | Bonecrusher Giant         | An Adventure                                                                          |                                                            |
+| Card shapes          | Adventurous Eater         | A prepared permanent                                                                  |                                                            |
+| Card shapes          | Valakut Awakening         | A modal double-faced card                                                             |                                                            |
+| Card shapes          | Delver of Secrets         | Transforming in place                                                                 |                                                            |
+| Card shapes          | Erayo, Soratami Ascendant | Flipping                                                                              |                                                            |
+| Card shapes          | Gisela, the Broken Blade  | Meld                                                                                  | Bruna, the Fading Light; Brisela                           |
+| Card shapes          | The Eldest Reborn         | A Saga                                                                                |                                                            |
+| Card shapes          | Wizard Class              | A Class                                                                               |                                                            |
+| Card shapes          | Case of the Crimson Pulse | A Case                                                                                |                                                            |
+| Card shapes          | Student of Warfare        | Level up                                                                              |                                                            |
+| Card shapes          | Arcane Proxy              | Prototype                                                                             |                                                            |
+| Face down            | Exalted Angel             | Morph: a face-down spell                                                              | Gathan Raiders                                             |
+| Face down            | Illusionary Mask          | Casting any creature face down; mana spent on X                                       |                                                            |
+| Outside the game     | Burning Wish              | A wish from the sideboard                                                             |                                                            |
+| Outside the game     | Lurrus of the Dream-Den   | A companion                                                                           |                                                            |
+
+### Measurements behind Part II
+
+**Where it started.** On 2026-11-15 and 16, at staging `bc14e0f8` and
+`950e3c614`: 121 card files with a median of 123 lines, of which a median of 28
+was the definition and 74.5% of all card-file lines were scenarios; 415 enum
+variants in `beryl_card`; 259 wildcard match arms and 158 integer `as` casts in
+the three engine crates, with the cast lints off; 16 of 287 engine source files
+between 745 and 800 lines; `State<Small>` at 20,240 bytes; and the 50,000-card
+cold check at 127.5 s under load.
+
+**Oracle text is not parsed** (P1). Normalising card names, numbers and mana
+symbols and counting sentence templates over the 32,496 cards of the card store:
+
+| Measure                                                | Cards |
+| ------------------------------------------------------ | ----: |
+| Every sentence also appears on at least one other card |   33% |
+| Every sentence appears on at least five cards          |   20% |
+| At least one sentence that no other card has           |   66% |
+| Fully covered by the 10,000 most common templates      |   45% |
+
+14,619 cards have exactly one unique sentence and 11,149 have none. A typical
+card is shared clauses composed in one new way, which is what the vocabulary
+models, so the cost of a card is in finding the clauses and testing the result.
+phase.rs spends about 694,000 lines on a grammar of composition.
+
+**From the bug log to guards** (P7). The 59 entries of [bugs.md](bugs.md) on
+2026-11-15, grouped by what would have stopped each, and the guard as built.
+Some entries belong to two classes.
+
+| Class of bug                                                                                                     | Entries | Guard as built                                                                                                                                            |
+| ---------------------------------------------------------------------------------------------------------------- | ------: | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A reader handled some kinds of a thing and skipped the rest                                                      |       9 | No wildcard arm over an enum; a reader that means "anything else" calls a predicate on the enum that is itself an exhaustive match                        |
+| Slot order reached an event, a save or a tie-break                                                               |       9 | `Bitboard::iter` is the kernel's; other crates use set queries and named orders (`State::in_game_order`); every scenario runs under three slot numberings |
+| A value was narrowed or widened wrongly between the `Small` and `Large` layouts                                  |       5 | The four cast lints; every card scenario compared in both layouts at every decision; the fuzzers compare one game in sixteen                              |
+| Two functions answered one rules question differently                                                            |      10 | One named query per question; one module owns each rule (`rule-ownership`); the module passes merged parallel readers                                     |
+| A cache or a flag went stale                                                                                     |       6 | Every cache compared with a recompute in debug builds (`beryl_rules/src/reference.rs`)                                                                    |
+| The wrong kind of object was assumed (a token counted as a card, a hidden card behind a copy, a spell that left) |       7 | Typed references made only by kernel queries that check (§5)                                                                                              |
+| A list ran out of room, or a push was ignored                                                                    |       5 | The `discarded-push` check                                                                                                                                |
+| A paused resolution or step replayed differently                                                                 |       4 | The replay differential, extended to a step's transaction and a cast inside a resolution                                                                  |
+| A card did less than its text                                                                                    |       4 | The `card-text` check, and the mutation check over every part of a definition                                                                             |
+
+Of the 46 entries added from 2026-11-20 to 2026-11-25, seven got past these
+guards: four from memos that hold a bare slot or walks inside the kernel, two
+slot-order walks inside the kernel, where `Bitboard::iter` is public by design,
+and two layout differences found before the both-layout comparison ran at every
+decision. The classes that recurred were a reader that saw only one face or kind
+of a card (9 entries), identity held as a bare slot (5), two functions answering
+one question (5) and a card doing less than its text (about 10). Every entry
+names the guard that now stops its class, or why none can.
+
+**The `L: Layout` parameter.** At `6780191a6`, 640 of 831 non-test declarations
+in `beryl_rules` named `L: Layout`. Moving `destroy` and `destroy_all` into one
+`impl<L: Layout> Game<'_, L>` took `actions/destroy.rs` from 90 to 93 lines,
+with six signature lines either way, and the other methods would need names that
+tell `tokens::create`, `emblems::create` and `delayed_triggers::create` apart on
+one type. Concrete `Small` and `Large` engine entry points, selected through
+`Layout::of`:
+
+| Prototype                                | Warm downstream check (s) | Rollout instructions |
+| ---------------------------------------- | ------------------------: | -------------------: |
+| Free functions                           |                      2.79 |          379,802,256 |
+| Methods for destroy                      |                      2.51 |          379,802,256 |
+| Methods and concrete engine entry points |                      3.57 |          382,373,878 |
+
+The concrete entry points halved `beryl_search`'s generated LLVM lines
+(1,174,938 to 583,060) but took the `beryl_rules` library unit from 3.2 s to
+42.7 s and the rollout count up 0.68%, so neither change was adopted.
+
+**The rehearsal with the card workflow** (P12). `just scale` clones three of
+every four cards from card files with no `scenarios` module and the fourth from
+files that keep one, as the pool will be. Two runs of `just scale --edits 8`,
+50,000 clones in 68 set crates, on a machine at a load of 13 to 19 on 10 cores:
+
+| Measure                  | All scenarios       | Three quarters none |
+| ------------------------ | ------------------- | ------------------- |
+| Cold check               | 269.2 s (550 CPU-s) | 127.5 s (295 CPU-s) |
+| Release build            | 80.7 s (216 CPU-s)  | 57.9 s (178 CPU-s)  |
+| One-edit rebuild, median | 2.0 s               | 1.8 s               |
+| Largest compiler process | 1.93 GiB            | 1.04 GiB            |
+| `target` after build     | 11.8 GB             | 7.6 GB              |
+
+The mix halves the cold check's CPU cost. `BUDGETS` holds the cold check to 140
+s under load; the 60 s target stays for an idle machine. On 2026-11-25, at
+`96105c07d` with 189 card files (41 with no `scenarios` module) and a load of 8
+to 10: cold check 88.9 s (276 CPU-s), release build 59.2 s, one-edit rebuild 1.7
+s, largest compiler process 1.11 GiB, and script checks 0.084 s a card, about
+5,300 CPU-seconds for 50,000 clones. The rehearsal's one-edit rebuild rechecks
+only the set crates; Ignite's `one-card` rebuild count for the real workspace,
+which also rebuilds every crate and test binary that depends on the card list,
+was 240 billion instructions over 73 crates at `d72ba5ca3`.
+
+**The card workflow, measured on twelve new cards** (P4). The first six
+unimplemented candidates in each of the `drafted` and `composed` tiers of
+`just set plan ths`, both worked on GPT-6.2 Sol:
+
+| Measure                                     | Drafted (light) | Composed (middle) | Median before 2026-11-20 |
+| ------------------------------------------- | --------------: | ----------------: | -----------------------: |
+| Candidates                                  |               6 |                 6 |                          |
+| Cards landed                                |               2 |                 4 |                          |
+| Escalated for missing vocabulary            |               0 |                 2 |                          |
+| Handed off for exporter or scenario work    |               4 |                 0 |                          |
+| Drafts correct as written                   |          5 of 6 |            0 of 6 |                          |
+| Passed the fast card check on its first run |          4 of 6 |            0 of 4 |                          |
+| Passed the full card check on its first run |          2 of 4 |            4 of 4 |                          |
+| Landed with no hand-written scenario        |          2 of 2 |            1 of 4 |                          |
+| Median lines per landed card file           |              14 |              32.5 |                      123 |
+| Tokens per landed card                      |         14.41 M |           10.14 M |                   8.58 M |
+| Direct dollars per landed card              |           $1.76 |             $1.27 |                    $1.29 |
+| Agent minutes per landed card               |            22.3 |              17.7 |                     12.0 |
+
+Both pilot tiers cost more per landed card than the median before, which covers
+11 files with session data. Three of the six landed cards passed using generated
+scenarios alone, but two of those had activation-cost mutants only Beryl could
+tell apart, so the generated bar held fully for one candidate in eight. The
+pilot's largest single cost was hand-written scenarios for gaps the generator
+shares across cards (an enters trigger of another permanent, the scry export),
+most of which were then fixed in the generator. `just set plan ths` against its
+first run: implemented 0 to 10, store 12 to 13, drafted 27 to 22, composed 35 to
+36, vocabulary 96 to 89, mechanism 41 to 41. The `vocabulary` tier, 44% of
+Theros, is where a set's cost is: its two largest groups (`static:Continuous`,
+21 cards, and heroic's `trigger:SpellCast`, 16) are one vocabulary entry each.
+
+**Present cost** (P14), each family's steps against its controls', bar 1.25:
+blank 0.9998, attachments 1.000, layers 0.9998, replacement 0.9996, costs
+0.9999, zones-and-text 1.000, copies 1.000, identity 1.000, two-faced 1.000,
+levels 1.000, face-down 1.000, outside 1.000, turn-structure 1.000, restart
+1.000, cast-in-resolution 1.000 and combat-assignment 1.000. A subgame step
+costs 1.095 times a plain `Large` step, unpaired (`just count-gate --subgame`).
+The control keeps the game's `GameTable`, so a family whose work is all behind a
+`Capability` pays its capability checks on both sides; those checks are in the
+absent cost, and such families measure 1.000.
+
+**The rollout count, the state and the code.** The WU mirror's rollouts measured
+378,210,316 instructions at the first change of Part II and about 380.7 million
+on 2026-11-25 (+0.66%, inside the gate's 1% tolerance), counting every change
+between, not only Part II's. Banding's +754,056 and one other rise of 141,601
+went over the zero-increase rule with the owner's approval. `State<Small>` went
+from 20,240 to 20,472 bytes: the subgame turn count, the turn plan, linked exile
+and the face-down flag. Non-test lines, counting each file up to its
+`#[cfg(test)]`:
+
+| Crate          | 2026-11-19 | 2026-11-25 |  Change |
+| -------------- | ---------: | ---------: | ------: |
+| `beryl_kernel` |     24,031 |     28,655 |  +4,624 |
+| `beryl_rules`  |     25,245 |     31,886 |  +6,641 |
+| `beryl_card`   |     14,850 |     19,857 |  +5,007 |
+| In all         |     64,126 |     80,398 | +16,272 |
+
+The module passes removed about 400 lines, so the growth is the mechanisms of
+the 29 keystones. Random play stalled in 0 of 2,000 games and the keystone pool
+in 2 of 1,000, both on the turn budget.
+
+**The census.** `just census` counts, over the pool's cards, which mechanics in
+Forge's card scripts the vocabulary lacks. It reads only kind names (ability
+APIs, trigger modes, static modes, replacement events and keywords) and never
+keeps a parameter or emits a definition (**K16**). `data/census-coverage.json`
+lists the kinds `beryl_card` covers, each with its entry, and a test fails when
+an entry no longer exists. The report goes to `$BERYL_CACHE/census.json`,
+ordered by the cards that only that kind blocks. On 2026-11-25, 6,878 of 32,177
+pool cards (21.4%) used only covered kinds, against 20.4% when Part II began;
+mapping the kinds the keystones built to their entries accounts for 0.8 points
+of that. The largest uncovered kinds:
+
+| Kind                  | Alone | Cards |
+| --------------------- | ----: | ----: |
+| `trigger:ChangesZone` | 2,008 | 6,641 |
+| `effect:ChangeZone`   | 1,294 | 5,155 |
+| `static:Continuous`   | 1,255 | 4,199 |
+| `effect:Effect`       |   341 | 1,622 |
+| `effect:PumpAll`      |   330 |   919 |
+| `effect:Animate`      |   257 |   781 |
+| `static:ReduceCost`   |   200 |   485 |
+| `effect:Tap`          |   198 | 1,426 |
+| `trigger:DamageDone`  |   196 |   799 |
+| `keyword:etbCounter`  |   173 |   463 |
+
+Some kinds are broader than one vocabulary entry (`ChangeZone` covers return,
+exile and put-into-library), so they stay uncovered until a single entry
+matches. The keystones built mechanisms, not breadth, so the first three rows
+are still the levers.

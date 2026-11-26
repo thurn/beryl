@@ -192,7 +192,13 @@ triggered ability, so its control is itself.
 
 What a paired step does not see: work the mechanism did earlier that changed the
 state, such as a card exiled where it would have gone to a graveyard. Both sides
-share that history, and its cost was counted at the step that did it.
+share that history, and its cost was counted at the step that did it. Nor does
+it see a capability check: the control keeps the game's `GameTable`, so a check
+behind a `Capability` the family's cards turn on runs on both sides. A family
+whose work is all behind such checks (every family from `two-faced` on) measures
+1.000, and what those checks cost is in the absent-cost count. Each family's
+measured ratio is in the architecture document's third appendix, "Measurements
+behind Part II".
 
 To add a family: add it to `family::FAMILIES`, add its name as a
 `#[bench::<name>(FamilyWorkload::new("<name>"))]` on both functions in

@@ -155,24 +155,23 @@
 //! and whether it was solved. **Trackers** holds what happened this turn that a card reads.
 //! [`State::signature`] compares a slot's entries in these stores and [`counters`].
 //!
-//! ### Where everything goes
+//! ### What each store holds
 //!
-//! | What milestone 3 left | Where it goes | Bead |
-//! | --- | --- | --- |
-//! | the `effects` queue, `Continuous::Layer` | Effects: an entry on an object, payload [`effects::Payload::Layer`] of a [`effects::LayerChange`] | by-w8gv.7.2, built |
-//! | `Continuous::ExileInsteadOfGraveyard` | Effects: an entry on an object, payload [`effects::Payload::Move`] | by-w8gv.7.2, built |
-//! | `Player::sorceries_as_flash` | Effects: an entry on a player, payload [`effects::Payload::Rule`], lasting until that player's next turn | by-w8gv.7.3, built |
-//! | the `Rule` mask (`rule_bit`, a `u8`) | [`rule_changes::Rules`], a set of the rule changes a game numbered; a static ability's rule changes for players are found with the layers ("Static rule changes") | by-w8gv.7.3, built; numbered by-w8gv.9.7 |
-//! | the `permissions` queue, `CastPermission`; its `this_turn` | Effects: an entry on the card, payload [`effects::Payload::Cast`] of an [`effects::Permission`] naming the player and the terms the spell is cast on; `this_turn` is [`store::Duration::EndOfTurn`], and either way it ends with the card's object. [`State::cast_permissions`] reads them | by-w8gv.7.4, built |
-//! | `CastPermission::extra`, `Casting::extra` | Effects: an [`effects::Payload::Cost`] on the spell, started as it is cast from the permission's terms. Before the cast the cost is read of the permission; from then on of the cost changes on the spell ([`State::cost_increase`]) | by-w8gv.7.4, built |
-//! | `CastPermission::exile` and `flashback`, `StackEntry::exile` and `flashback` | the permission's terms carry them to the cast, which starts an [`effects::Payload::Move`] on the spell: exile instead of a graveyard, or [`effects::MoveReplacement::Flashback`], exile instead of anywhere else (see CR 702.34a). Every move of the spell applies it where it applies any replacement (the rules' `replacement::moving`), and "was a flashback cost paid" is whether that replacement is on the spell | by-w8gv.7.4, built |
-//! | `State::entered_x` | Memos: the permanent's `X` ([`memos::Memo::X`]) | by-w8gv.7.6, built |
-//! | `ObjectFlags` `KICKED`, `OFFSPRING`, `IMPENDING`, `EVOKED` | Memos: the costs paid as the object was cast ([`memos::Memo::Paid`]), one entry holding the set of them, with a kind in the store's index for each kind of casting option of the vocabulary's list | by-w8gv.7.6, built |
-//! | `EXILED_UNTIL`, `EXILED_WITH`, `Object::linked`, `State::link`, `State::forget_links_to` | Memos: a memo of the exiled card naming what exiled it by slot and incarnation ([`memos::Memo::ExiledWith`], [`memos::Memo::ExiledUntil`]; "Duration and expiry" says how the first outlives that object), read by [`State::linked`] and [`State::exiled_until`] | by-w8gv.7.7, built |
-//! | a field naming the creature an Aura put onto the battlefield | Memos: a memo of the creature naming the Aura by slot and incarnation ([`memos::Memo::PutOntoBattlefieldWith`]), which outlives the Aura as [`memos::Memo::ExiledWith`] does, read by [`State::linked`] | by-bajq.8.2, built |
-//! | `LOYALTY_ACTIVATED`, `ENTERED_THIS_TURN` | Trackers, keyed by permanent: a kind of [`trackers::Tracker`] each, noted with [`State::track`] and read with [`State::tracked`] | by-w8gv.7.8, built |
-//! | [`state::Counters`]' long-tail pair (`other_kind`, `other`) | the counters table ([`counters::CounterTable`]), a row for each kind on each object, beside the three kinds the rules themselves read, which stay fields of the object. The kinds are the vocabulary's list (`beryl_card::counter_kinds`), and [`State::add_counters`], [`State::remove_counters`] and [`State::counters_of`] take any of them | by-w8gv.7.9, built |
-//! | `Flag::OneOne` | Effects: a copy effect on the token ([`effects::Payload::Copy`]) holding its copiable values with their exceptions ([`copiable::additions::Addition`], see CR 707.9b), behind [`state::Flag::Copy`] so that [`State::copiable`] of any other object is one bit test. The zone move carries a token's copy effect to its next incarnation ([`effects::copy`]). A card under a copy effect, such as one that entered as a copy ([`State::enter_as_copy`]) or became one ([`State::become_copy`]), remembers the card it really is ([`memos::Memo::Really`]), which [`State::card_really_is`] and [`State::definition_name`] read and the zone move makes it again | by-bajq.6.1 to 6.3, built |
+//! | What a card creates | Where it lives |
+//! | --- | --- |
+//! | a layer change on an object | Effects: an entry on the object, payload [`effects::Payload::Layer`] of a [`effects::LayerChange`] |
+//! | an object put somewhere else instead of a graveyard | Effects: an entry on the object, payload [`effects::Payload::Move`] |
+//! | a rule change for a player for a while ("you may cast sorceries as though they had flash" until their next turn) | Effects: an entry on the player, payload [`effects::Payload::Rule`]. A game numbers the rule changes its cards name ([`rule_changes::Rules`]); a static ability's rule changes for players are found with the layers ("Static rule changes") |
+//! | a permission to cast a card, for a turn or for as long as it stays in its zone | Effects: an entry on the card, payload [`effects::Payload::Cast`] of an [`effects::Permission`] naming the player and the terms the spell is cast on; "this turn" is [`store::Duration::EndOfTurn`], and either way it ends with the card's object. [`State::cast_permissions`] reads them |
+//! | an extra cost a permission's terms add | Effects: an [`effects::Payload::Cost`] on the spell, started as it is cast from the permission's terms. Before the cast the cost is read of the permission; from then on of the cost changes on the spell ([`State::cost_increase`]) |
+//! | a spell exiled as it leaves the stack because of how it was cast, or cast with flashback | the permission's terms carry it to the cast, which starts an [`effects::Payload::Move`] on the spell: exile instead of a graveyard, or [`effects::MoveReplacement::Flashback`], exile instead of anywhere else (see CR 702.34a). Every move of the spell applies it where it applies any replacement (the rules' `replacement::moving`), and "was a flashback cost paid" is whether that replacement is on the spell |
+//! | the X a permanent entered with | Memos: the permanent's `X` ([`memos::Memo::X`]) |
+//! | the costs paid as an object was cast (kicked, evoked, impending, offspring) | Memos: [`memos::Memo::Paid`], one entry holding the set of them, with a kind in the store's index for each kind of casting option of the vocabulary's list |
+//! | a card exiled with a permanent, or until it leaves | Memos: a memo of the exiled card naming what exiled it by slot and incarnation ([`memos::Memo::ExiledWith`], [`memos::Memo::ExiledUntil`]; "Duration and expiry" says how the first outlives that object), read by [`State::linked`] and [`State::exiled_until`] |
+//! | the creature an Aura put onto the battlefield | Memos: a memo of the creature naming the Aura by slot and incarnation ([`memos::Memo::PutOntoBattlefieldWith`]), which outlives the Aura as [`memos::Memo::ExiledWith`] does, read by [`State::linked`] |
+//! | a loyalty ability activated this turn, a permanent that entered this turn | Trackers, keyed by permanent: a kind of [`trackers::Tracker`] each, noted with [`State::track`] and read with [`State::tracked`] |
+//! | counters of a kind no object keeps in a field | the counters table ([`counters::CounterTable`]), a row for each kind on each object, beside the three kinds the rules themselves read, which stay fields of the object. The kinds are the vocabulary's list (`beryl_card::counter_kinds`), and [`State::add_counters`], [`State::remove_counters`] and [`State::counters_of`] take any of them |
+//! | a token's copiable values with a copy's exceptions | Effects: a copy effect on the token ([`effects::Payload::Copy`]) holding its copiable values with their exceptions ([`copiable::additions::Addition`], see CR 707.9b), behind [`state::Flag::Copy`] so that [`State::copiable`] of any other object is one bit test. The zone move carries a token's copy effect to its next incarnation ([`effects::copy`]). A card under a copy effect, such as one that entered as a copy ([`State::enter_as_copy`]) or became one ([`State::become_copy`]), remembers the card it really is ([`memos::Memo::Really`]), which [`State::card_really_is`] and [`State::definition_name`] read and the zone move makes it again |
 //!
 //! A fact about a permanent that ends with the turn (a loyalty ability was activated, it
 //! entered this turn) is a tracker keyed by object, not a memo with an expiry. A memo is
@@ -208,66 +207,9 @@
 //! the sets are a table of their own and never part of an entry. Counter kinds cannot be fields of
 //! each of 255 objects, so all but the three hot kinds are a keyed table.
 //!
-//! `size_of::<State<Small>>()` was 19,992 before the milestone and is 20,040 after by-w8gv.7.2: 40
-//! for the store's mask and the keyed slots, 8 of padding for the field order ([`State`]'s
-//! rustdoc). It is 20,040 after by-w8gv.7.3 too: the four bytes of rule sets are those
-//! `sorceries_as_flash` and its padding gave back. After by-w8gv.7.4 it is 19,832: the
-//! `permissions` queue gave back 80 and each of the stack's 64 entries two bytes,
-//! [`state::StackEntry`] being 58 bytes without its two flags. After by-w8gv.7.6 it is 19,880: the
-//! Memos store's 100 bytes less the 50 of `entered_x`. After by-w8gv.7.5, which landed after it, it
-//! is 20,016: the table of locked-in sets, 136. After by-w8gv.7.8 it is 20,080: the Trackers
-//! store's two sets of slots, 64. After by-w8gv.7.9 it is 20,176: the table of counters, 96. After
-//! by-w8gv.9.7 it is 20,216: each of the players' four sets of rule changes is a word, where it was
-//! a byte. It is 20,088 since [`state::StackEntry`] holds a [`state::StackItem`], a spell, an
-//! activated ability or a triggered ability with only the fields of its kind: each of the 64
-//! entries is 56 bytes, two fewer. It is 20,104 since what the permanents listen to is a 64-bit
-//! [`event::Listens`], where it was 16 bits, beside a 64-bit [`event::Replaces`] of what their
-//! static abilities replace: 16 more. After by-bajq.1.4 it is 20,112: the Trackers store's counts
-//! for each player, 8. It is 20,056 since last-known information is a table of the state
-//! ([`last_known`]): each of the 96 waiting and delayed triggers is 6 bytes smaller and each of the
-//! 64 stack entries 6, 960 in all, and the table of 16 rows of 56 bytes, with its length, takes 904
-//! of them. It was 20,184 when ability removal began (128 bytes that no change reported came
-//! between), and is 20,336 since each of the 128 [`state::Derived`] rows holds a mask of the
-//! abilities its permanent lost, packed to two-byte alignment, and 20,344 since a value chosen as a
-//! permanent enters. It is 19,840 since [`state::Object`] is aligned to two bytes and 22 bytes
-//! long, where it was 24: 504 fewer, the 510 of the 255 slots less 6 of padding. It is 19,856 since
-//! the list of effects that reach other zones ([`query::zone_characteristics`]): four entries of 3 bytes and the
-//! list's length, 16 with padding. It is 19,888 since a [`query::Copiable`] holds two copy
-//! exceptions: each of the 16 last-known rows is 60 bytes, 2 more. It is 19,920 since each player's
-//! pool holds up to four entries of mana that remembers ([`mana_memory`]), four bytes each with the
-//! queue's length. It is 20,008 since the table of four sets of text changes that abilities on the
-//! stack keep (88 bytes); the byte naming one in each stack entry fits the entry's padding. It is
-//! 20,016 since a decision names the player who answers it ([`decision::Decision::decider`]): the
-//! question a paused resolution keeps is 8 bytes longer, the decision having no spare byte;
-//! [`state::Turn::controller`] fits the turn's padding. It is 20,128 since spells that left the
-//! stack are kept for abilities of their own that copy them ([`last_known::DepartedSpell`]): two
-//! rows of 56 bytes, 112. It is 20,144 since the state counts resolutions in a row with no choice
-//! and keeps the hash a loop of mandatory actions is compared with ([`repeats`]): a `u16` and a
-//! `u64`, 16 with padding. It is 20,184 since a [`query::Copiable`] holds three copy exceptions,
-//! 40 bytes more in all. It was 20,216 when phasing began (32 bytes that no change reported
-//! came between), and is 20,248 since the set of phased-out permanents ([`phasing`]), 32 bytes.
-//! It is 20,456 with the turn plan, 20,464 with [`memos::Link`] and 20,472 with the face-down
-//! flag ([`State::any_face_down`]). The limit is 20,480. Each bead may change the size at its
-//! own push by at most its allotment, whatever landed before it, and reports it as the count:
-//!
-//! | Bead | Allotment | Why |
-//! | --- | --- | --- |
-//! | by-w8gv.7.4 | -200 or lower (landed: -208) | the `permissions` queue (80) and two bytes of each of 64 stack entries go; permissions share the 64 effects |
-//! | by-w8gv.7.5 | +136 (landed: +136) | the locked-in sets |
-//! | by-w8gv.7.6 | +88 (landed: +48) | the Memos store less `entered_x` (50) |
-//! | by-w8gv.7.8 | +64 (landed: +64) | two sets of slots |
-//! | by-w8gv.7.9 | +104 (landed: +96) | the counters table |
-//! | by-bajq.1.1 | +16 (landed: +16) | the listener mask grows from 16 to 64 bits, beside a 64-bit mask of what static abilities replace |
-//! | by-bajq.1.4 | +8 (landed: +8) | three counts for each of two players, padded |
-//! | by-bajq.1.2 | 0 or lower (landed: -56) | last-known information leaves every trigger record for a table of 16 rows |
-//! | by-bajq.4.3 | -300 or lower (landed: -504) | each object is 22 bytes, where alignment made it 24 |
-//! | by-bajq.5.1 | +48 (landed: +16) | up to four effects that reach other zones, beside the layer results |
-//! | by-bajq.5.3 | +136 (landed: +88) | a byte in each of the 64 stack entries naming its captured text changes, and the table of four captured sets |
-//! | by-bajq.6.1 | +72 (landed: +32, and +40 by by-bajq.6.10) | copy exceptions in each `Copiable`, which each of the 16 last-known rows holds: two, then three |
-//! | by-bajq.7.4 | +48 (landed: +32) | up to four entries of mana that remembers in each player's pool |
-//! | by-bajq.8.3 | +16 (landed: +16) | the count of mandatory resolutions in a row and the hash it compares, padded |
-//! | by-bajq.8.4 | +32 (landed: +32) | a set of the phased-out permanents' slots |
-//! | Turn plan | +160 | the queue of 24 remaining steps and their positions |
+//! `size_of::<State<Small>>()` is 20,472 bytes of the 20,480 that [`State`] asserts. A
+//! change that grows it reports the new size when it lands. New card state goes to a store,
+//! so a mechanism that needs a field of its own must take bytes back first.
 //!
 //! ### Affected sides and payloads
 //!
@@ -283,7 +225,7 @@
 //!
 //! An entry keeps the pair as two halves, the affected side ([`effects::Affects`]) and
 //! the payload ([`effects::Payload`]), because the pair as one enum is 32 bytes in
-//! [`Small`] and the two apart are 24 (measured in by-w8gv.9.6: a layer change is 16 bytes
+//! [`Small`] and the two apart are 24 (a layer change is 16 bytes
 //! with an alignment of 8, so a variant holding it beside what it is on is 24 before the
 //! entry's source, timestamp and duration). Both stay public to read, for a view, a tool
 //! and a comparison of two games.
@@ -401,54 +343,24 @@
 //! | a tracker or a count ([`State::track`], [`State::tracked`], [`State::count`], [`State::counted`]) | one AND of the table's capabilities where the rules would write it; a read finds an empty set or zero | a bit set or tested, or a byte written or read |
 //! | a count of counters ([`State::counters_of`]) | of a kind the object keeps in a field, one read; of any other, one bit test of the keyed slots | one pass over the table's rows, at most 32 of 3 bytes |
 //!
-//! Measured for by-w8gv.7.2 on the rollout benchmark (404,858,188 instructions before):
-//! the bit test in the zone move and the turn's two expiries cost about 0.03%; the store
-//! in the field order the compiler chose counted 406,151,164, nearly all of it loops that
-//! read fields whose offsets had moved; in [`State`]'s order now, 402,475,964.
+//! What the stores cost the rollout benchmark, measured as each was built:
 //!
-//! Measured for by-w8gv.7.3 (402,475,964 before, 398,897,988 after): the walk of the
-//! battlefield for a sorcery-speed limit at each priority decision was about 7.0 million
-//! instructions, 1.75%; the layers' pass that replaces it, run only with such a permanent
-//! out, is 1.7 million. The benchmark is built with the engine's `coverage` feature, so a
-//! hit recorded at each read costs it too: reporting the ability at every read of a
-//! player's rule, by finding it on the battlefield again, counted 410,363,089.
-//!
-//! Measured for by-w8gv.7.6 (396,070,902 before, 389,343,295 after): the benchmark's decks
-//! hold one card that makes a memo, a creature with evoke, so the kind is live in few of
-//! its states. A permanent enters with one write fewer, of its flags, and the record the
-//! rules carry for each object of a move is smaller by the flags' width; the zone move
-//! and [`State::signature`] pay the bit test of the keyed slots they paid already.
-//!
-//! Measured for by-w8gv.7.8 (387,956,541 before, 389,728,983 after, 0.46% more): the
-//! write as a permanent enters and the clearing as one leaves are about 0.03%, and
-//! [`State::signature`]'s two bits about as much. The rest is the check of whether a
-//! loyalty ability may be activated, which the benchmark's decisions make tens of
-//! thousands of times: a tracker read there is a load and a bit test of the state where
-//! the flag was a test of the object already in hand, and the loop about it compiled to
-//! more besides. It reads one tracker at most decisions, asking the timing first; with the
-//! store laid out at the far end of the state it counted 389,992,845, and with the check
-//! out of line 391,310,485.
+//! - The bit test of the keyed slots in the zone move and the turn's two expiries cost about
+//!   0.03%. The store's place in [`State`] matters: in the field order the compiler chose, the
+//!   loops that read fields whose offsets had moved counted 0.9% more.
+//! - Finding a player's sorcery-speed limit by walking the battlefield at each priority
+//!   decision was 1.75% of the count. The layers' pass that keeps the rules the static
+//!   abilities change ("Static rule changes") costs a fifth of that, and runs only with such a
+//!   permanent out.
+//! - Reading the tracker for a loyalty ability at each decision that offers one cost 0.46%:
+//!   a load and a bit test where a flag of the object in hand was a test. The table of
+//!   counters cost 0.06%, a read behind the keyed bit where a field was read.
+//! - [`State::signature`] compares all three stores through one view behind the keyed bit
+//!   (`store::Stored`), out of line, which is cheaper to build for each candidate than a view
+//!   of each store.
 //!
 //! The table of counters has no mask of kinds and no capability bit: a read is of one
 //! object, and the keyed slots already say whether anything is stored about it.
-//!
-//! Measured for by-w8gv.7.9 (389,728,983 before, 389,975,802 after, 0.06% more): the
-//! benchmark's decks hold one card with counters of a kind of the table, an artifact that
-//! gains one as creatures enter and spends them to draw. Offering its ability reads the
-//! count behind the keyed bit where it read a field of the object in hand, and
-//! [`State::signature`] compares two objects' rows, nearly always none.
-//!
-//! The milestone in all, as slow CI counted each bead's tip: 404,858,188 before, then
-//! 402,475,964 (by-w8gv.7.2), 398,897,988 (.3), 396,070,902 (.4), 389,343,295 (.6),
-//! 387,776,236 (.7), 387,956,541 (.5), 389,728,983 (.8), 389,975,802 (.9 and .10): 3.7%
-//! fewer, with the gate's bar lowered twice and never raised. The one rise of note is the
-//! Trackers store's, above.
-//!
-//! Measured for by-w8gv.7.11 (389,975,802 before, 389,230,361 after): comparing the
-//! effects on two objects as their memos and rows were compared, each store's view beside
-//! the object, counted 390,514,859; one view of all three behind the one bit
-//! (`store::Stored`), with the comparison out of line, is smaller to build for each
-//! candidate than the two views it replaced.
 //!
 //! ### Static rule changes
 //!
@@ -487,9 +399,8 @@
 //! - A resolved effect's change for a player is an [`effects::Payload::Rule`] entry on
 //!   that player. The Effects store keeps its own set of each player's rules, exact from
 //!   the moment an entry starts or ends, so starting or ending one changes no layer input
-//!   and the two sets never need each other. The contract first had one set for both
-//!   sources (by-w8gv.7.2); with two, an effect that ends dirties nothing and each owner
-//!   checks its own (the store's invariant, the engine's reference recompute).
+//!   and the two sets never need each other. With a set for each source, an effect that ends
+//!   dirties nothing and each owner checks its own (the store's invariant, the engine's reference recompute).
 //! - A rule change about the permanent with the ability asks its copiable values, which
 //!   a face-down permanent has none of. The Effects store keeps entries on an object too
 //!   ([`State::effect_rules_on`]), which no card starts: the table refuses an ability
@@ -515,7 +426,7 @@
 //! `store::Store`, in the store's own file, with `Clone` and equality, which it derives,
 //! `Hash` and [`relayout::Relayout`]. Nothing below grows with a new kind of entry. A new
 //! kind is its own entry and its reader, and the compiler asks for no more (tried with a
-//! scratch kind in each store, by-w8gv.7.11): of effect, a variant of [`effects::Continuous`]
+//! scratch kind in each store): of effect, a variant of [`effects::Continuous`]
 //! and of [`effects::Payload`], and its bit of the store's kinds; of memo, a variant of [`memos::Memo`] and its arm in
 //! each of the memo's own methods; of tracker, an entry of the list in [`trackers`] and
 //! the [`table::Capability`] of its name, with how a card is found to read it; of counter,
@@ -604,6 +515,8 @@
 //! | the colors a permanent has protection from | [`State::protection`] |
 //! | what an object that left was as it last existed (see CR 603.10a) | [`State::last_known`] |
 //! | what the color words and subtypes its text names read as after text changes (see CR 612.1); every reader of such a word ([`beryl_card::words`]) takes them | [`State::words_of`] |
+//! | the objects another record of the state names, which no twin stands in for (architecture §7.2) | [`State::named`] |
+//! | every ability it has now: its face's own it has not lost, then those granted to it (see CR 613.1f) | [`State::abilities`], [`State::has`] |
 //!
 //! The kernel's filter evaluation and every reader of an object that may be off the
 //! battlefield ask these. A reader that holds a permanent in a walk of the battlefield (the
@@ -612,11 +525,9 @@
 //! permanent's effect is a
 //! [`state::Derived`] `granted` entry that [`State::has_ability`] does not answer for, and
 //! trigger matching reads no granted ability.
-//! | the objects another record of the state names, which no twin stands in for (architecture §7.2) | [`State::named`] |
-//! | every ability it has now: its face's own it has not lost, then those granted to it (see CR 613.1f) | [`State::abilities`], [`State::has`] |
 //!
 //! A [`Copiable`] is a definition, the face of it that is up and the exceptions of the copy
-//! effects that made it ([`copiable::additions::Addition`], see CR 707.9b): two in `Small`, a third
+//! effects that made it ([`copiable::additions::Addition`], see CR 707.9b): three in `Small`, a fourth
 //! [`fixed::Full`]. An addition names an exception by the card whose face lists it and its
 //! place in that list ([`beryl_card::Face::excepts`]), so copying takes the exceptions with
 //! the rest and appends the copier's own, and no reader walks a chain of copies. It answers with the face's characteristics ([`Copiable::face`], the blank
@@ -641,9 +552,14 @@
 //!
 //! ## Format
 //!
-//! [`format::Format`] defines the seats and teams, starting life and hands, mulligans,
-//! first draw, turn steps, land plays, hand limit, zone ownership, deck roles and losses.
-//! [`GameTable::format`] supplies constant rules so rollouts incur no extra reads.
+//! [`format::Format`] is the shape of a game: the seats and teams, starting life and hands,
+//! mulligans, first draw, the turn's steps, land plays, hand limit, zone ownership, deck roles
+//! and losses. [`GameTable::format`] gives it to the rules. `Format::CONSTRUCTED` is its one
+//! value, and `Format` is zero-sized, so every getter is a constant and rollouts read
+//! nothing for it. A second value needs `Format` to carry data first. The rules read the
+//! starting life, opening hand, mulligan, first draw, hand limit, land plays, losses and
+//! seats; the turn plan fills from `TurnStep::ALL`, and nothing reads the zones or the
+//! poison threshold yet.
 //!
 //! ## Players
 //!
@@ -676,7 +592,7 @@
 //! How many players a game has, how many cards a deck, a library and a graveyard may hold,
 //! how many objects occupy the shared pool at once, how many objects there are in all and
 //! how many distinct cards a game contains are parameters of the [`Layout`], and nothing
-//! outside the layouts assumes them (by-w8gv.5.14, by-w8gv.5.15):
+//! outside the layouts assumes them:
 //!
 //! | parameter | where a layout sets it |
 //! |---|---|

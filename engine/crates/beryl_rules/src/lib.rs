@@ -62,10 +62,10 @@
 //! `zones::emblems::create`. A layout-dependent signature declares `L: Layout`. Engine callers
 //! use the same generic [`next`] and [`apply`] with either layout.
 //!
-//! The destruction prototype moved two operations onto `Game` and added three source lines,
-//! with the same six signature lines. Concrete engine entry points halved the generated LLVM
-//! IR in `beryl_search`. They raised the `beryl_rules` test-profile library build from
-//! 3.2 s to 42.7 s and increased the rollout instruction count by 0.68%.
+//! Methods on `Game` and concrete `Small` and `Large` engine entry points were both measured
+//! and rejected: methods saved no lines, and the concrete entry points made the `beryl_rules`
+//! library build thirteen times slower and rollouts 0.68% more expensive (architecture,
+//! "Measurements behind Part II").
 //!
 //! ## Resolution
 //!
@@ -132,9 +132,12 @@
 //! A library module is named for the rule it implements, so a rule number or the words on a
 //! card find the file.
 //!
-//! - [`game`] starts and ends games and changes life totals (see CR 103, see CR 104, see CR 119).
-//! - [`turn`] advances phases and steps and handles their turn-based actions (see CR 500,
-//!   see CR 502, see CR 504, see CR 514, see CR 703).
+//! - [`game`] starts and ends games, changes life totals, declares companions, restarts the
+//!   game and plays subgames (see CR 103, see CR 104, see CR 119, see CR 702.139a, see CR 728,
+//!   see CR 730).
+//! - [`turn`] advances phases and steps, follows the turn plan when cards can change it,
+//!   handles turn-based actions and ends the turn (see CR 500, see CR 502, see CR 504,
+//!   see CR 514, see CR 703, see CR 725).
 //! - [`casting`] handles land play, casting spells, activating abilities, selecting targets
 //!   and paying costs (see CR 115, see CR 116, see CR 118, see CR 601, see CR 602).
 //! - [`mana`] handles pools, mana abilities and the payment solver (see CR 106, see CR 605).
@@ -144,12 +147,14 @@
 //!   see CR 612, see CR 613).
 //! - [`replacement`] applies replacement and prevention effects, including protection
 //!   (see CR 614, see CR 615, see CR 616, see CR 702.16).
-//! - [`combat`] handles combat steps and damage (see CR 506, see CR 508, see CR 509,
-//!   see CR 510, see CR 511, see CR 120).
+//! - [`combat`] handles combat steps, damage, who assigns it and bands (see CR 506,
+//!   see CR 508, see CR 509, see CR 510, see CR 511, see CR 120, see CR 702.22).
 //! - [`zones`] moves objects between zones and handles libraries, drawing, tokens, emblems
 //!   and counters (see CR 400, see CR 401, see CR 111, see CR 114, see CR 121, see CR 122).
 //! - [`objects`] handles copies, linked abilities, one-shot effects, phasing, face-down
-//!   permanents and mutate (see CR 607, see CR 610, see CR 707, see CR 702.26, see CR 702.140).
+//!   permanents, mutate, Class levels, solved Cases and prepared permanents (see CR 607,
+//!   see CR 610, see CR 707, see CR 702.26, see CR 702.140, see CR 717, see CR 720,
+//!   see CR 723).
 //! - [`actions`] implements keyword actions and coin flips (see CR 701, see CR 705).
 //! - [`keywords`] implements flashback (see CR 702.34).
 //! - `engine.rs` and `engine/` build decisions, advance the game and apply answers
@@ -173,8 +178,9 @@
 //!    entry whose module is not written still has its arm there. Two entries that differ
 //!    only in where they put a card share one arm, which each one's own names
 //!    ([`zones`]'s for [`zones::library`]'s "put into a library").
-//! 4. The entry's English template, a constant directly above its arm. Milestone 8
-//!    writes them; none exists yet.
+//!
+//! An entry's English wording is not here: `beryl_card`'s `render/` turns a definition back
+//! into rules text.
 //!
 //! A file stays under 800 lines.
 //!
@@ -208,8 +214,8 @@
 //! names real cards, since the oracles play it, and rules code names none. They live in
 //! `beryl_cards`, in a tree that mirrors this one (`library/actions/scry.rs` for
 //! [`actions::scry`]), beside the cards' own. A scenario there uses basic lands, the
-//! designated prop cards and one card that has the effect. The bead that ports an entry
-//! writes its scenario and lists it in `beryl_cards::library::SCENARIOS` under that card,
+//! designated prop cards and one card that has the effect. A new entry's scenario is listed
+//! in `beryl_cards::library::SCENARIOS` under that card,
 //! the card crate's tests and the oracles play the tree as they play a card's, and its
 //! tiering test (`tests/vocabulary.rs`) holds that a hand-written scenario carries out every
 //! entry a card says.

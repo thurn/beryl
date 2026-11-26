@@ -97,8 +97,8 @@ pub mod decks {
         (1, names::TIMETWISTER),
     ];
 
-    /// The rules keystones (`docs/rules-coverage.md`, "The keystone cards") by family, each a name
-    /// and the keystones and partners played together in it. The names match the
+    /// The keystone cards (`docs/engine-architecture.md`, "The keystone cards") by family,
+    /// each a name and the keystones and partners played together in it. The names match the
     /// present-cost benchmarks where those exist. Random and agent games deal fuzz decks
     /// from one family's cards and the basic lands (`beryl_cards::decks::fuzz_deck_from`), so that
     /// the cards of a family meet each other far more often than in decks drawn from every card.

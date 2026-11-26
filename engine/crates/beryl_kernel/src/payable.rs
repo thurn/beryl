@@ -5,7 +5,7 @@
 //! total cost. ... Partial payments are not allowed. Unpayable costs can't be paid."
 //!
 //! The vocabulary says more than this ([`CostPart`]): a part the engine does not pay is a
-//! rule not yet implemented, listed in `docs/rules-coverage.md`.
+//! rule not yet implemented, and a card whose cost has one cannot be played.
 //!
 //! Implements: none. Checks whether the engine supports the costs in a card definition.
 

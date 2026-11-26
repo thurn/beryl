@@ -45,7 +45,8 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
   of `scenario` (a nonempty list of names from the card file or rules library),
   `covered` (the vocabulary entry or rules-library scenario that covers it), or
   `untestable` (the reason). `just card rulings <name> --add` adds missing
-  entries with blank reasons for the writer to fill.
+  entries with blank reasons for the writer to fill, and the `rulings` check
+  holds every listed card's rulings to an entry each.
 - `phase-data.json` pins the [Phase](https://github.com/phase-rs/phase)
   card-data release by its published `card_data_hash` and the SHA-256 of the
   JSON bytes. `just card brief` and `just card new` use Phase's typed parse as a
@@ -61,9 +62,9 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
 - `card-printings.csv`: the specific printing chosen for each card.
 - `rules-version.json`: the Comprehensive Rules release that every citation in
   the code is checked against.
-- `rule-ownership-allowlist.json`: kernel and rules source files still waiting
-  for an `Implements:` header of their own or in their parent module. Each
-  module pass removes its files from the list.
+- `rule-ownership-allowlist.json`: kernel and rules source files exempt from the
+  `rule-ownership` check. It is empty: every module declares the rules it
+  implements, and a new file starts with its `Implements:` header.
 - `oracle-divergences.json`: test scenarios where an oracle (XMage or Forge)
   gets the rules wrong, each with its rules citation. Never edit it by hand:
   `just card diverge` writes an entry, only when the other oracle agrees with
@@ -72,8 +73,10 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
   scenario requirements, reported by `by oracle-candidates`. Each source names
   its pinned test and supporting files. An adaptation names its Beryl scenario
   and the assertions that carry the original test's observation.
-- `oracle-exporter-gaps.json`: generated scenarios that an oracle's exporter
-  can't express, which are reported as unsupported.
+- `oracle-exporter-gaps.json`: scenarios that an oracle's exporter or harness
+  can't express or misplaces, each with the gap, which are reported as
+  unsupported (`oracles.py`). An entry whose scenario no longer fails fails the
+  oracle run.
 - `card-leaves-allowlist.json`: the crates that may depend on `beryl_cards` or a
   set crate outside `[dev-dependencies]` (`card_leaves.py`). It may only shrink;
   the check fails on an entry that no longer needs it.

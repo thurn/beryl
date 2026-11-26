@@ -1,7 +1,7 @@
 """The discarded-push check: the kernel, the rules and the cards never throw a failed push away.
 
 A push to a fixed list returns `Full` when the list has no room, and a game that runs out of
-room stalls into the layout whose lists grow (docs/rules-coverage.md, principle 3).
+room stalls into the layout whose lists grow (docs/engine-architecture.md, §4.1).
 `let _ = list.push(x)` plays on without what did not fit instead: an effect the layers never
 applied, a blocker that was dealt no damage. A comment beside it arguing that the list cannot
 fill is checked by nothing, and is wrong once the game outgrows what it assumed.

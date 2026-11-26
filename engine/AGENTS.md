@@ -16,8 +16,9 @@ heavy command.
   `crates/beryl_session` runs the engine session and supplies each seat's view
   and animation script. See `docs/engine-architecture.md` §16.
 - `crates/beryl_kernel/src/lib.rs` describes the state and mutator contract.
-  `crates/beryl_rules/src/lib.rs` maps rules to their modules. Use
-  `just citations coverage` to see which rules lack an ownership declaration.
+  `crates/beryl_rules/src/lib.rs` maps rules to their modules, and
+  `docs/engine-architecture.md` §16 says where a rule no module implements yet
+  belongs. `just citations coverage` lists the rules no module declares.
 - `crates/beryl_protocol` owns the shared views, scripts and IPC definitions,
   including the manual table commands in `src/ipc/table.rs`.
   `crates/beryl_card_records` supplies shared printing and art records.
@@ -52,8 +53,11 @@ Each of these checks explains itself when it fails.
 
 - `file-length`: no source file is over 800 lines, with exceptions in
   `data/file-length-allowlist.json`.
-- `rule-ownership`: kernel and rules modules declare the rules they implement in
-  an `Implements:` header and mark cross-references with `see`.
+- `rule-ownership`: each kernel and rules module declares the rules it
+  implements in an `Implements:` header (`//! Implements: CR 601, CR 602.2`, or
+  `none.` with the reason), cites only those or its parent module's, and marks a
+  citation of another module's rule with `see`. Two modules never declare the
+  same rule. `CR 400.7 only` claims a rule without its subrules.
 - `card-names`: no card names in generic code, with exceptions in its allowlist.
 - `two-player`: rules code and card code never assume there is exactly one other
   player. They ask the game state for a player's opponents, the defending
@@ -111,15 +115,31 @@ Each of these checks explains itself when it fails.
   the generated header and draft and reports how it renders.
 - `just card check <name>` builds the card, checks its scenarios and compares
   the rendered text with Oracle text. Use `--no-oracles` for a fast pass. The
-  `generated` line names any mutants that generated scenarios miss. When
-  generation kills every mutant and passes the oracle bar, the card needs a
-  hand-written scenario only for a card-specific ruling. The `card render`
-  subcommand prints the text comparison for one card or the match rate over
-  every card file with `--all`.
-- `just card rulings <name> --add` drafts ledger entries for a card audit.
-  Complete each in `data/rulings-ledger.json` with a scenario, existing coverage
-  or a reason the ruling is untestable. The `rulings` step in the names lane
-  checks every entry for a listed card.
+  `generated` line names any mutants that generated scenarios miss, and lists as
+  "unconfirmed by oracles" the ones they kill only where the oracles cannot see
+  (`ORACLE_BLIND` in `beryl_cards/src/mutation.rs`, which may only shrink). A
+  card whose generated scenarios kill every other mutant, pass in at least one
+  oracle and fail in none unexpectedly meets the generated bar: its file needs
+  no `scenarios` module, and gets a hand-written scenario only for a surviving
+  mutant or a card-specific ruling. The `card render` subcommand prints the text
+  comparison for one card or the match rate over every card file with `--all`.
+- Shared compositions of vocabulary are prelude functions in
+  `crates/beryl_card/src/phrases.rs`, each a documented `const fn` that takes
+  what varies by card as arguments (`when_enters(effect)`). The brief's
+  vocabulary search reads their doc comments, and the `card-text` check holds
+  the cards that use them. A card writer may add one that combines existing
+  vocabulary; a clause that needs a new variant or interpreter arm is escalated.
+- `just card rulings <name>` prints a card's Scryfall rulings beside their
+  entries in `data/rulings-ledger.json`, and `--add` drafts the missing ones.
+  Complete each with a scenario, existing coverage or a reason the ruling is
+  untestable. The `rulings` check fails on a listed card with a ruling that has
+  no entry, an entry naming a missing scenario, or an entry whose hash matches
+  no ruling. A card not listed is not checked; every keystone card is listed.
+- Every keystone card and partner is in a family of
+  `beryl_card_names::KEYSTONE_FAMILIES`. The fuzzers deal decks from one family
+  at a time and from the pool of all of them (`decks::keystone_pool`), and
+  `just exhaust --pool` searches from positions cut from pool games. A new
+  keystone joins a family in the same change.
 - Two checks hold a definition to its card. The `card-text` step of the rust
   lane renders every card file and fails on any difference from its Oracle text
   that `data/card-text-allowlist.json` doesn't pin exactly. The mutation check
@@ -163,6 +183,15 @@ and `just bench` measures time under the machine's normal load.
 `just count-gate` checks the rollout benchmark's instruction count against the
 limit in `engine/crates/beryl_bench/count-gate.toml`. That file's comments say
 when the limit may go up.
+
+`just count-gate --family <name>` is the present-cost gate: it rolls out
+positions with a family of cards in play and counts every step on that state and
+on the same state with the family's cards replaced by stand-ins without their
+abilities. The family's steps may cost at most 1.25 times the controls'. To add
+a family, add it to `beryl_bench::family::FAMILIES`, add its name on both
+benchmarks in `benches/family_counts.rs`, give it `[family.<name>]` and a limit
+for each verifier in `count-gate.toml`, and pin its corpus in `family/tests.rs`
+(`docs/benchmarking.md`, "The present-cost gate").
 
 ## Tournaments
 
