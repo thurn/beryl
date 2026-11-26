@@ -7,8 +7,11 @@ use std::path::Path;
 use clap::{Subcommand, ValueEnum};
 use serde_json::{Value, json};
 
-use ignite_core::fleet::{FleetSettings, FleetUpdate, FleetView, MachineState, TreeSpace, summary};
+use ignite_core::fleet::{
+    FleetSettings, FleetUpdate, FleetView, MachineState, SESSION_STATE_HOURS, TreeSpace, summary,
+};
 use ignite_core::protocol::client::{Exit, Reply};
+use ignite_core::time::Timestamp;
 
 use crate::client::session_from_env;
 use crate::ticket::http::{Failure, Hub, Result, usage};
@@ -20,6 +23,18 @@ pub enum FleetCommand {
         name: String,
         #[arg(long, value_enum)]
         state: Option<State>,
+        /// Return the machine to active after this many hours. A session that sets
+        /// checks-only or off gets 4 hours unless it passes --indefinitely.
+        #[arg(
+            long,
+            value_name = "HOURS",
+            requires = "state",
+            conflicts_with = "indefinitely"
+        )]
+        for_hours: Option<f64>,
+        /// Keep a checks-only or off state until someone changes it.
+        #[arg(long, requires = "state")]
+        indefinitely: bool,
         /// Absolute tree directory, or "default" to use the repository setting.
         #[arg(long)]
         trees_root: Option<String>,
@@ -69,12 +84,21 @@ impl From<State> for MachineState {
     }
 }
 
+/// When the edit is made and whether a session (rather than the operator) makes it.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Editor {
+    pub now: Timestamp,
+    pub session: bool,
+}
+
 impl FleetCommand {
-    fn apply(&self, settings: &mut FleetSettings) {
+    fn apply(&self, settings: &mut FleetSettings, editor: Editor) {
         match self {
             Self::Machine {
                 name,
                 state,
+                for_hours,
+                indefinitely,
                 trees_root,
                 tree_space_gb,
                 tree_ceiling_gb,
@@ -82,6 +106,12 @@ impl FleetCommand {
                 let mut machine = settings.machine(name);
                 if let Some(state) = state {
                     machine.state = (*state).into();
+                    let hours = for_hours.or_else(|| {
+                        (editor.session && !*indefinitely).then_some(SESSION_STATE_HOURS)
+                    });
+                    machine.state_until = hours
+                        .filter(|_| machine.state != MachineState::Active)
+                        .map(|hours| editor.now.plus_seconds(hours * 3600.0));
                 }
                 if let Some(root) = trees_root {
                     machine.trees.trees_root = (root != "default").then(|| root.clone());
@@ -136,18 +166,23 @@ impl FleetCommand {
 
 pub fn run(command: Option<&FleetCommand>, cwd: &Path) -> Reply {
     let env = |name: &str| std::env::var(name).ok();
-    let actor = session_from_env(env).map_or_else(|| "ignite".to_owned(), |id| id.to_string());
+    let session = session_from_env(env);
+    let editor = Editor {
+        now: ignite_core::traits::Clock::now(&ignite_core::time::SystemClock),
+        session: session.is_some(),
+    };
+    let actor = session.map_or_else(|| "ignite".to_owned(), |id| id.to_string());
     Hub::load(cwd, actor, env)
-        .and_then(|hub| execute(&hub, command))
+        .and_then(|hub| execute(&hub, command, editor))
         .unwrap_or_else(Failure::into_reply)
 }
 
-pub(crate) fn execute(hub: &Hub, command: Option<&FleetCommand>) -> Result<Reply> {
+pub(crate) fn execute(hub: &Hub, command: Option<&FleetCommand>, editor: Editor) -> Result<Reply> {
     let view: FleetView = serde_json::from_str(&hub.get(&["fleet"], &[])?.body).map_err(usage)?;
     let Some(command) = command else {
         return Ok(reply(render(&view), json!(view)));
     };
-    edit(command, view.settings, |update| {
+    edit(command, view.settings, editor, |update| {
         serde_json::from_str(&hub.put_versioned(&["fleet"], &json!(update))?.body).map_err(usage)
     })
 }
@@ -155,11 +190,12 @@ pub(crate) fn execute(hub: &Hub, command: Option<&FleetCommand>) -> Result<Reply
 fn edit(
     command: &FleetCommand,
     mut before: FleetSettings,
+    editor: Editor,
     mut put: impl FnMut(&FleetUpdate) -> Result<FleetSettings>,
 ) -> Result<Reply> {
     let mut attempt = |before: &FleetSettings| {
         let mut settings = before.clone();
-        command.apply(&mut settings);
+        command.apply(&mut settings, editor);
         settings.validate().map_err(usage)?;
         put(&FleetUpdate {
             version: before.version,
@@ -205,10 +241,14 @@ fn render(view: &FleetView) -> String {
         let space = trees
             .tree_space_gb
             .map_or_else(|| "unset".to_owned(), |space| space.to_string());
+        let _ = write!(text, "  machine {name}: {}", setting.state);
+        if let Some(until) = setting.state_until {
+            let _ = write!(text, " until {until}");
+        }
         let _ = write!(
             text,
-            "  machine {name}: {}, trees root {root}, tree space (GB) {space}, tree ceiling {} GB",
-            setting.state, trees.tree_ceiling_gb,
+            ", trees root {root}, tree space (GB) {space}, tree ceiling {} GB",
+            trees.tree_ceiling_gb,
         );
         for machine in view.machines.iter().filter(|machine| &machine.name == name) {
             let _ = write!(text, " | {}, last seen {}", machine.os, machine.last_seen);
@@ -269,6 +309,46 @@ fn render(view: &FleetView) -> String {
 mod tests {
     use super::*;
 
+    fn operator() -> Editor {
+        Editor {
+            now: Timestamp::EPOCH,
+            session: false,
+        }
+    }
+
+    fn machine(state: State, for_hours: Option<f64>, indefinitely: bool) -> FleetCommand {
+        FleetCommand::Machine {
+            name: "cygnus".to_owned(),
+            state: Some(state),
+            for_hours,
+            indefinitely,
+            trees_root: None,
+            tree_space_gb: None,
+            tree_ceiling_gb: None,
+        }
+    }
+
+    /// A session's checks-only or off state ends after four hours unless it says otherwise;
+    /// the operator's lasts until changed.
+    #[test]
+    fn a_session_state_gets_an_end_unless_kept_indefinitely() {
+        let now = Timestamp::parse("2026-11-26T12:42:00Z").unwrap();
+        let until = |command: &FleetCommand, session: bool| {
+            let mut settings = FleetSettings::default();
+            command.apply(&mut settings, Editor { now, session });
+            settings.machine("cygnus").state_until
+        };
+        let four = Some(now.plus_seconds(4.0 * 3600.0));
+        assert_eq!(until(&machine(State::ChecksOnly, None, false), true), four);
+        assert_eq!(until(&machine(State::Off, None, true), true), None);
+        assert_eq!(until(&machine(State::ChecksOnly, None, false), false), None);
+        assert_eq!(
+            until(&machine(State::Off, Some(1.0), false), false),
+            Some(now.plus_seconds(3600.0))
+        );
+        assert_eq!(until(&machine(State::Active, Some(1.0), false), true), None);
+    }
+
     #[test]
     fn a_conflict_reapplies_only_the_requested_fields_to_the_current_version() {
         let command = FleetCommand::Provider {
@@ -291,7 +371,7 @@ mod tests {
             .enabled = false;
 
         let mut calls = Vec::new();
-        let result = edit(&command, FleetSettings::default(), |update| {
+        let result = edit(&command, FleetSettings::default(), operator(), |update| {
             calls.push(update.clone());
             if calls.len() == 1 {
                 return Err(Failure {

@@ -34,9 +34,21 @@ pub struct Allocations {
 #[serde(default)]
 pub struct MachineSetting {
     pub state: MachineState,
+    /// When a `checks-only` or `off` state ends: hub upkeep then returns the machine to
+    /// `active`. `None` keeps the state until someone changes it. A state set by a session
+    /// gets [`SESSION_STATE_HOURS`] unless the session asks to keep it indefinitely, because a
+    /// mitigation outlived its reason on 2026-11-26: a justiciar set cygnus to `checks-only`
+    /// to stop Windows checks holding `master`, and the ticket that was to set it back waited
+    /// on a condition that never came true. Its 20 cores took no tickets for eight hours while
+    /// fifteen tickets waited for build slots on the two loaded Macs.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub state_until: Option<Timestamp>,
     #[serde(flatten)]
     pub trees: TreeSettings,
 }
+
+/// How long a `checks-only` or `off` state set by a session lasts unless it asks for longer.
+pub const SESSION_STATE_HOURS: f64 = 4.0;
 
 pub const DEFAULT_TREE_CEILING_GB: u32 = 60;
 
@@ -267,6 +279,31 @@ impl FleetSettings {
         self.machines.get(name).cloned().unwrap_or_default()
     }
 
+    /// The machines whose `checks-only` or `off` state has ended by `now`.
+    pub fn lapsed_states(&self, now: Timestamp) -> Vec<String> {
+        self.machines
+            .iter()
+            .filter(|(_, setting)| {
+                setting.state != MachineState::Active
+                    && setting.state_until.is_some_and(|until| until <= now)
+            })
+            .map(|(name, _)| name.clone())
+            .collect()
+    }
+
+    /// Drops an end time that no longer applies: `active` has none, and a state changed
+    /// without a new end time (from the dashboard, say) does not inherit the old one.
+    pub fn normalize_state_ends(&mut self, before: &Self) {
+        for (name, setting) in &mut self.machines {
+            let previous = before.machine(name);
+            if setting.state == MachineState::Active
+                || (setting.state != previous.state && setting.state_until == previous.state_until)
+            {
+                setting.state_until = None;
+            }
+        }
+    }
+
     pub fn provider(&self, name: &str) -> ProviderSetting {
         self.providers.get(name).copied().unwrap_or_default()
     }
@@ -317,6 +354,9 @@ pub fn summary(before: &FleetSettings, after: &FleetSettings) -> String {
         match after.machines.get(name) {
             Some(setting) if before.machines.get(name) != Some(setting) => {
                 let mut change = format!("machine {name}: {}", setting.state);
+                if let Some(until) = setting.state_until {
+                    let _ = write!(change, " until {until}");
+                }
                 let previous = before.machine(name).trees;
                 let trees = &setting.trees;
                 if previous.trees_root != trees.trees_root {

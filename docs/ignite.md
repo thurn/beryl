@@ -4646,8 +4646,17 @@ justiciar can edit policy. The public dashboard shows the saved settings.
 `ignite fleet` prints the fleet view, including the last 20 settings changes.
 Its edit commands are:
 
-- `ignite fleet machine <name> --state active|checks-only|off` changes the
-  machine's state.
+- `ignite fleet machine <name> --state active|checks-only|off [--for-hours <n>|--indefinitely]`
+  changes the machine's state. A `checks-only` or `off` state with an end time
+  ends by itself: hub upkeep sets the machine back to `active` and records the
+  change as `ignite upkeep: state ended`. A session that sets one of those
+  states gets an end four hours later unless it passes `--for-hours` or
+  `--indefinitely`. The operator's own edits, and the dashboard's, last until
+  changed. The end exists because a temporary state otherwise outlives its
+  reason: on 2026-11-26 a justiciar set cygnus to `checks-only`, and the ticket
+  that was to set it back waited on Windows catching up, which could not happen
+  while the machine was `checks-only`. Its cores took no tickets for eight hours
+  while tickets waited for build slots on the Macs.
 - `ignite fleet machine <name> --trees-root <path> --tree-space-gb <n|auto> --tree-ceiling-gb <n>`
   edits the tree settings. The root is an absolute path. Pass
   `--trees-root default` to use `repository.trees`. The sizes are decimal GB and

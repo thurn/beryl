@@ -281,7 +281,9 @@ pub fn set_machine_state(
     let before = settings(&transaction)?;
     if before.machine(&name).state != state {
         let mut proposed = before.clone();
-        proposed.machines.entry(name).or_default().state = state;
+        let setting = proposed.machines.entry(name).or_default();
+        setting.state = state;
+        setting.state_until = None;
         write(&transaction, &before, proposed, actor, now)?;
     }
     transaction.commit()?;
@@ -351,6 +353,7 @@ fn write(
     now: Timestamp,
 ) -> Result<FleetSettings> {
     proposed.validate().map_err(StoreError::Rejected)?;
+    proposed.normalize_state_ends(before);
     if proposed.allocations.is_none() {
         proposed.allocations.clone_from(&before.allocations);
     }
@@ -440,6 +443,7 @@ mod tests {
             "host".to_owned(),
             MachineSetting {
                 state: MachineState::Active,
+                state_until: None,
                 trees: TreeSettings {
                     tree_ceiling_gb: 150,
                     ..TreeSettings::default()
@@ -455,6 +459,7 @@ mod tests {
             stored.machine("host"),
             MachineSetting {
                 state: MachineState::ChecksOnly,
+                state_until: None,
                 trees: TreeSettings {
                     tree_ceiling_gb: 150,
                     ..TreeSettings::default()
@@ -579,6 +584,7 @@ mod tests {
             "host".to_owned(),
             MachineSetting {
                 state: MachineState::ChecksOnly,
+                state_until: None,
                 trees: TreeSettings {
                     tree_ceiling_gb: 200,
                     ..TreeSettings::default()

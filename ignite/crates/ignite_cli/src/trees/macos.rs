@@ -75,6 +75,8 @@ pub(super) fn run(cwd: &Path, state: bool, size_gb: u32) -> Reply {
     let command = FleetCommand::Machine {
         name: host.clone(),
         state: None,
+        for_hours: None,
+        indefinitely: false,
         trees_root: Some(root.clone()),
         tree_space_gb: None,
         tree_ceiling_gb: None,

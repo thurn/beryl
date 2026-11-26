@@ -1065,5 +1065,10 @@
     "label": "A tip round's culprit searches, reverts and revert build checks run on the tip reserve (`Reserve::TipRound`), so they no longer wait behind landings and agents for cores and the `bench-vm` resource while the machine's next tip round waits for them (one probe on jarvis waited 1,534 s)",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
+  },
+  {
+    "label": "A `checks-only` or `off` machine state set by a session ends after four hours by default and hub upkeep returns the machine to `active`, so a justiciar's mitigation cannot keep a machine out of the worker pool after its reason has passed (cygnus's 20 cores took no tickets for eight hours on 2026-11-26 while 15 tickets waited for build slots on the Macs)",
+    "metric": "bead.lead-minutes",
+    "expect": "down"
   }
 ]

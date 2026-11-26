@@ -44,7 +44,7 @@ fn state_description(state: MachineState) -> &'static str {
 }
 
 fn machine_settings(machine: &Machine, setting: MachineSetting, editable: bool) -> String {
-    let MachineSetting { state, trees } = setting;
+    let MachineSetting { state, trees, .. } = setting;
     let description = state_description(state);
     let state_control = if editable {
         let name = esc(&machine.name);

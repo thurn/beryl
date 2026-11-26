@@ -3,6 +3,8 @@
 //! Each pass of [`Upkeep::pass`]:
 //!
 //! - lapses expired reservations;
+//! - returns a machine to `active` when its `checks-only` or `off` state ends
+//!   ([`machine_states`]);
 //! - releases the claims of a machine that has not sent a heartbeat for 2 hours ([`offline`]);
 //! - marks a regression fixed once its ticket closed and its check has passed since
 //!   ([`regressions`]);
@@ -52,6 +54,7 @@ mod flaky;
 pub mod freeze;
 mod invalid_checks;
 pub mod justiciar;
+pub mod machine_states;
 pub mod machines;
 pub mod missed;
 pub mod offline;
@@ -204,6 +207,7 @@ impl Upkeep {
         keep(fleet::lapse(conn, now).map(|lapsed| {
             report.lapsed_reservations = u32::try_from(lapsed.len()).unwrap_or(u32::MAX);
         }));
+        keep(machine_states::lapse(conn, now).map(|_| ()));
         keep(ignite_store::hub::placement_deferrals::prune(conn));
         keep(offline::release_claims(conn, now).map(|released| report.released_claims = released));
         keep(offline::release_unheld(conn, now).map(|released| {
