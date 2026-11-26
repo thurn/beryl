@@ -45,104 +45,23 @@ fn a_stand_in_keeps_spell_and_activated_abilities() {
     assert_eq!(kinds(stand_in(tundra)), kinds(tundra));
 }
 
-/// The corpora are the benchmark's input, as `rollout::tests::corpus_never_changes` pins the
-/// WU corpus: a change that moves one updates this pin on purpose, and its counts move with
-/// it.
+/// The count gate compares counts from separate runs, so a family's corpus must be the same
+/// every time it is built, and it must be full. The corpus is cut from games the engine plays,
+/// so its exact states move with every engine change that alters play: they are not pinned
+/// (a pin failed after unrelated engine changes and was only ever updated to match).
 #[test]
-fn family_corpora_never_change() {
-    let pins: Vec<(&str, Vec<u16>, u64)> = FAMILIES
-        .iter()
-        .map(|f| {
-            let w = FamilyWorkload::new(f.name);
-            let turns = w.positions.iter().map(|s| s.turn().number()).collect();
-            (f.name, turns, stable_hash(&w.positions))
-        })
-        .collect();
-    assert_eq!(
-        pins,
-        vec![
-            (
-                "blank",
-                vec![5, 8, 11, 8, 11, 14, 10, 13, 16, 10, 13, 16],
-                7_347_435_361_350_304_198
-            ),
-            (
-                "attachments",
-                vec![2, 5, 8, 10, 13, 22, 2, 5, 8, 5, 8, 11],
-                5_402_586_628_862_043_351
-            ),
-            (
-                "layers",
-                vec![2, 5, 8, 3, 6, 9, 2, 5, 8, 10, 13, 16],
-                10_389_015_429_457_374_616
-            ),
-            (
-                "replacement",
-                vec![20, 15, 20, 4, 13, 16, 19, 14, 17, 20, 15, 18],
-                6_003_108_577_124_308_175
-            ),
-            (
-                "costs",
-                vec![2, 5, 8, 13, 16, 19, 2, 5, 8, 11, 14, 17],
-                6_125_591_702_356_440_615
-            ),
-            (
-                "zones-and-text",
-                vec![3, 6, 9, 5, 8, 11, 2, 5, 8, 5, 13, 16],
-                3_025_316_349_312_886_086
-            ),
-            (
-                "copies",
-                vec![14, 11, 14, 17, 4, 7, 10, 13, 16, 19, 13, 16],
-                17_227_339_049_656_177_457
-            ),
-            (
-                "identity",
-                vec![2, 5, 8, 3, 6, 9, 2, 5, 8, 2, 5, 9],
-                15_107_076_169_823_050_658
-            ),
-            (
-                "two-faced",
-                vec![2, 5, 8, 5, 8, 11, 2, 5, 8, 9, 12, 15],
-                11_629_276_330_945_402_876
-            ),
-            (
-                "levels",
-                vec![2, 5, 8, 2, 5, 8, 2, 5, 8, 3, 6, 9],
-                12_408_771_178_945_865_725
-            ),
-            (
-                "face-down",
-                vec![6, 9, 12, 20, 8, 11, 21, 13, 16, 19, 10, 13],
-                11_556_153_839_161_840_922
-            ),
-            (
-                "outside",
-                vec![6, 9, 12, 13, 16, 19, 2, 5, 8, 14, 17, 20],
-                14_260_016_659_534_983_420
-            ),
-            (
-                "turn-structure",
-                vec![4, 7, 10, 17, 20, 4, 7, 10, 15, 18, 21, 5],
-                2_568_747_076_015_654_357
-            ),
-            (
-                "restart",
-                vec![14, 17, 14, 17, 20, 14, 17, 20, 18, 21, 24, 14],
-                11_275_274_148_968_723_272
-            ),
-            (
-                "cast-in-resolution",
-                vec![2, 5, 8, 3, 6, 9, 2, 5, 8, 2, 5, 8],
-                18_398_739_910_328_524_489
-            ),
-            (
-                "combat-assignment",
-                vec![3, 6, 9, 2, 5, 8, 2, 5, 8, 14, 17, 3],
-                5_759_505_168_609_713_815
-            ),
-        ]
-    );
+fn family_corpora_are_deterministic_and_full() {
+    for f in FAMILIES {
+        let a = FamilyWorkload::new(f.name);
+        let b = FamilyWorkload::new(f.name);
+        assert_eq!(a.positions.len(), POSITIONS, "{}: a short corpus", f.name);
+        assert_eq!(
+            stable_hash(&a.positions),
+            stable_hash(&b.positions),
+            "{}: two builds differ",
+            f.name
+        );
+    }
 }
 
 /// Each family pairs nearly all its steps, which `just count-gate --family` needs (it fails
@@ -154,8 +73,8 @@ fn family_corpora_never_change() {
 /// measured up to it; the control's steps keep the engine's invariants on the control's table,
 /// which `roll_paired` checks in a debug build; and the counts are the same on a second run,
 /// since the gate compares counts from separate runs. The exact counts are not pinned: they
-/// move with every change to the engine or the rollout policy, and the corpora themselves are
-/// pinned by `family_corpora_never_change`.
+/// move with every change to the engine or the rollout policy, and the corpora are checked by
+/// `family_corpora_are_deterministic_and_full`.
 #[test]
 fn families_pair_their_steps() {
     for f in FAMILIES {

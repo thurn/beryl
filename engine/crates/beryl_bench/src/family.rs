@@ -582,7 +582,7 @@ pub struct FamilyWorkload {
 
 impl FamilyWorkload {
     /// Plays the family's seeded games, cuts its positions and reseeds its starts.
-    /// Deterministic: `family_corpora_never_change` pins it.
+    /// Deterministic: `family_corpora_are_deterministic_and_full` checks it.
     pub fn new(name: &str) -> FamilyWorkload {
         let family = family(name).unwrap_or_else(|| panic!("no family {name}"));
         let (table, in_table) = InTable::table(family);

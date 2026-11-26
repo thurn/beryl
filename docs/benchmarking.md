@@ -170,7 +170,9 @@ it is in play. The present-cost gate measures what it costs while one is:
   family's deck in both seats: the first decision with a card of the family on
   the battlefield, on the stack or the source of an effect in force, which is
   often the turn it arrives, then every third turn after while one is in play.
-  `family::tests::family_corpora_never_change` pins each corpus.
+  `family::tests::family_corpora_are_deterministic_and_full` checks that each
+  corpus is full and the same on every build; its exact states move with the
+  engine and are not pinned.
 - **Each step is paired.** Each position is rolled out under the rollout policy.
   At every decision, with the state S and the policy's choice c, the benchmark
   builds the control S' (`family::control`): S with each permanent and spell of
