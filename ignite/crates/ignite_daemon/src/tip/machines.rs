@@ -14,7 +14,12 @@ use crate::server::Context;
 impl TipVerifier {
     /// Starts the wait for each platform `tip` waits on that no earlier tip was waiting on,
     /// forgets platforms it no longer waits on, and reports each platform waited on for
-    /// [`MACHINE_WAIT_S`], once per tip.
+    /// [`MACHINE_WAIT_S`] until the hub files a ticket for `(tip, platform)`.
+    ///
+    /// When the hub returns no ticket (for example, because a machine on that platform is still
+    /// making progress within the slow-wait bound), `(tip, platform)` is not remembered in
+    /// `flagged`, so later rounds keep reporting the growing wait time until a ticket is filed or
+    /// the wait ends.
     ///
     /// A platform none of whose declared machines lists a waited check's family in its
     /// `families` can never pass those checks, so waiting an hour tells nobody anything: it is
@@ -54,7 +59,7 @@ impl TipVerifier {
             let mut checks: Vec<CheckName> = waited.into_iter().map(|(check, _)| check).collect();
             checks.sort();
             checks.dedup();
-            ctx.hub.tip_waiting(&TipWaiting {
+            let filed = ctx.hub.tip_waiting(&TipWaiting {
                 commit: tip.clone(),
                 machine: ctx.machine.clone(),
                 platform,
@@ -62,7 +67,9 @@ impl TipVerifier {
                 waited_s,
                 unrunnable,
             })?;
-            self.flagged.insert((tip.clone(), platform));
+            if !filed.tickets.is_empty() {
+                self.flagged.insert((tip.clone(), platform));
+            }
         }
         Ok(lines)
     }

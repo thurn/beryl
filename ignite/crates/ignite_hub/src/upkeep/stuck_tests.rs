@@ -677,3 +677,110 @@ fn a_wait_report_requires_work_matching_its_platform_and_scope() {
             .is_empty()
     );
 }
+
+#[test]
+fn a_slowly_progressing_platform_wait_escalates_past_the_age_bound() {
+    use super::clearing::HOLD_SECONDS;
+    use super::stuck::{self, TIP_SLOW_WAIT_SECONDS, TIP_WAIT_SECONDS};
+    use super::{Upkeep, filing::UPKEEP};
+    use ignite_core::config::Os;
+    use ignite_core::ids::{CheckName, Commit, InputHash, MachineId, RecordId};
+    use ignite_core::protocol::Outcome;
+    use ignite_core::protocol::hub::{
+        MachineRegister, NewResult, ResultCost, ResultKey, TipState, TipVerified, TipWaiting,
+    };
+
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    let mut upkeep = Upkeep::new(None).unwrap();
+    let windows = MachineId::new("m-w").unwrap();
+    let mac = MachineId::new("m-m").unwrap();
+    let reg = MachineRegister {
+        machine: windows.clone(),
+        name: "cygnus".to_owned(),
+        os: Os::Windows,
+        cores: 4,
+        memory_mb: 4096,
+        families: vec!["platform".to_owned()],
+        version: "v".to_owned(),
+    };
+    hub::fleet::register(&conn, &reg, clock.now()).unwrap();
+    let tip = Commit::new("abcd").unwrap();
+    hub::tips::seen(&conn, tip.as_str(), clock.now()).unwrap();
+    let awaited: Vec<CheckName> = ["platform:one", "platform:two", "platform:three"]
+        .into_iter()
+        .map(|name| CheckName::new(name).unwrap())
+        .collect();
+    let store_one = |conn: &mut rusqlite::Connection, seq: usize, at| {
+        let key = ResultKey {
+            check: awaited[0].clone(),
+            hash: InputHash::new(format!("{seq:064x}")).unwrap(),
+            platform: Some(Os::Windows),
+        };
+        let result = NewResult {
+            key,
+            outcome: Outcome::Pass,
+            machine: windows.clone(),
+            record: RecordId(seq as u64),
+            output: None,
+            cost: ResultCost::default(),
+            areas: Vec::new(),
+        };
+        hub::results::store(conn, &[result], at).unwrap();
+    };
+    let report = |waited_s| TipWaiting {
+        commit: tip.clone(),
+        machine: mac.clone(),
+        platform: Os::Windows,
+        checks: awaited.clone(),
+        waited_s,
+        unrunnable: Vec::new(),
+    };
+
+    // Store one awaited result every 10 minutes: suppressed at 1 hour, filed at 2 hours.
+    let (step, mut seq, mut elapsed) = (600.0, 1usize, 0.0);
+    while elapsed < TIP_SLOW_WAIT_SECONDS {
+        clock.advance(step);
+        elapsed += step;
+        store_one(&mut conn, seq, clock.now());
+        seq += 1;
+        if (elapsed - TIP_WAIT_SECONDS).abs() < f64::EPSILON {
+            let early = stuck::tip_waiting(&mut conn, UPKEEP, &report(elapsed), clock.now());
+            assert!(early.unwrap().is_empty());
+        }
+    }
+    let filed = stuck::tip_waiting(&mut conn, UPKEEP, &report(elapsed), clock.now()).unwrap();
+    assert_eq!(filed.len(), 1);
+    let id = &filed[0].ticket;
+    let tk = ticket(&conn, id);
+    assert_eq!((tk.status, tk.priority), (Status::Open, 1));
+    assert!(tk.title.contains("cygnus"), "{}", tk.title);
+    assert!(tk.body.contains("3 awaited checks remain"), "{}", tk.body);
+    assert!(tk.body.contains("7.0/hour"), "{}", tk.body);
+
+    // Continuing slow progress must not auto-close the slow-progress ticket.
+    for _ in 0..6 {
+        clock.advance(step);
+        store_one(&mut conn, seq, clock.now());
+        seq += 1;
+        let pass = upkeep.pass(&mut conn, clock.now()).unwrap();
+        assert!(!pass.tickets_closed.contains(id));
+    }
+
+    // Verifying the tip settles the slow-progress ticket.
+    let verified = TipVerified {
+        commit: tip,
+        machine: mac,
+        state: TipState::Verified,
+        regression_passes: None,
+        failed_descendant: None,
+        failure: None,
+    };
+    hub::tips::verified(&conn, &verified, clock.now()).unwrap();
+    let mut closed = Vec::new();
+    for _ in 0..=((2.0 * HOLD_SECONDS / step) as usize) {
+        clock.advance(step);
+        closed.extend(upkeep.pass(&mut conn, clock.now()).unwrap().tickets_closed);
+    }
+    assert!(closed.contains(id), "{closed:?}");
+}

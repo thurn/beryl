@@ -46,6 +46,10 @@ pub use incomplete::{ROUND_LIMIT, incomplete};
 /// How long a tip waits for a machine that has not reported before a ticket names it.
 pub const TIP_WAIT_SECONDS: f64 = 3_600.0;
 
+/// How long a tip may wait on another platform while its machines are still storing results
+/// before a ticket escalates the slow progress.
+pub const TIP_SLOW_WAIT_SECONDS: f64 = 2.0 * TIP_WAIT_SECONDS;
+
 /// Switches off caching for the audited check and files the ticket naming both runs.
 pub fn audit(
     conn: &mut Connection,
@@ -211,11 +215,14 @@ pub fn tip_waiting(
         })
         .collect();
     let scope = PlatformWait::from(report);
+    let working = scope.working_machine(conn, machines.iter(), now)?;
+    let slow = working.is_some() && report.waited_s >= TIP_SLOW_WAIT_SECONDS;
+    let scope = scope.with_slow(slow);
     let filings: Vec<Filing> = if !report.unrunnable.is_empty() {
         vec![unrunnable_filing(report, &listed)]
-    } else if scope.working_machine(conn, machines.iter(), now)?.is_some() {
-        // Recent progress on the work the tip is waiting for is evidence that the round is
-        // still moving. A silent machine can still be named by `tips_waiting`.
+    } else if working.is_some() && !slow {
+        // Recent progress within the slow-wait bound is evidence that the round is still moving.
+        // A silent machine can still be named by `tips_waiting`.
         Vec::new()
     } else if machines.is_empty() {
         vec![Filing {
@@ -224,7 +231,9 @@ pub fn tip_waiting(
             fields: TicketFields {
                 title: Some(format!("No {os} machine is registered to run its checks")),
                 body: Some(format!(
-                    "{waited}\nNo {os} machine is registered with the hub.\n\nchecks:\n- {listed}"
+                    "{waited}\nNo {os} machine is registered with the hub. {}.\n\n\
+                     checks:\n- {listed}",
+                    scope.remaining_summary()
                 )),
                 ticket_type: Some(TicketType::Bug),
                 priority: Some(1),
@@ -237,29 +246,8 @@ pub fn tip_waiting(
     } else {
         machines
             .iter()
-            .map(|machine| Filing {
-                signature: Signature::of_subject(&machine.id, "unreachable"),
-                evidence: format!("{}@{}", report.commit, machine.last_seen),
-                fields: TicketFields {
-                    title: Some(format!(
-                        "Tip verification has waited an hour on machine {}",
-                        machine.name
-                    )),
-                    body: Some(format!(
-                        "{waited}\nMachine {} ({}) runs {os} and last reported at {}.\n\n\
-                         checks:\n- {listed}",
-                        machine.name, machine.id, machine.last_seen
-                    )),
-                    ticket_type: Some(TicketType::Bug),
-                    priority: Some(1),
-                    labels: Some([labels[0].clone(), machine_label(&machine.name)].into()),
-                    needs_os: Some(Some(report.platform)),
-                    ..TicketFields::default()
-                },
-                deps: Vec::new(),
-                released: false,
-            })
-            .collect()
+            .map(|machine| scope.machine_filing(conn, report, machine, &waited, &listed, now))
+            .collect::<Result<Vec<_>>>()?
     };
     let mut filed = Vec::with_capacity(filings.len());
     for filing in filings {

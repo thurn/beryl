@@ -2963,8 +2963,13 @@ How a daemon verifies a tip:
   each with their instructions, and when `master` moved. `ignite status` shows
   it with the round's minutes.
 
-- A tip that has waited an hour for checks that only an unreachable machine can
-  run files one P1 ticket naming the machine. `master` waits for those checks.
+- A tip that has waited an hour for checks that only another platform's machines
+  can run files one P1 ticket naming each machine on that platform when none of
+  them has stored a matching result or listing within the hour. If a machine is
+  still storing results, the hub waits up to two hours total before filing the
+  ticket for slow progress. Each ticket states how many awaited checks remain
+  and how fast the machine has been storing results over the last hour. `master`
+  waits for those checks.
 
 - A cached failure stands for every later tip that leaves the check's inputs
   unchanged, so `master` cannot move past a broken check. It moves again at the

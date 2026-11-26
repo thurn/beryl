@@ -275,7 +275,11 @@ fn unreachable(
                 scope.commit
             )));
         }
-        if let Some(machine) = scope.working_machine(conn, enabled, world.now)? {
+        // A slow-progress ticket was filed despite recent results, so only tip verification or
+        // turning the machine off clears it.
+        if !scope.slow
+            && let Some(machine) = scope.working_machine(conn, enabled, world.now)?
+        {
             return Ok(Verdict::Cleared(format!(
                 "machine {} reported progress on the tip's {} work within the hour.",
                 machine.name,
