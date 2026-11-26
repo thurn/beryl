@@ -367,12 +367,22 @@ pub(crate) fn may_ask(t: &GameTable) -> bool {
 /// Whether a resolution may meet a choice it did not declare it asks: a replacement effect's
 /// ([`may_ask`]), or a value a permanent chooses as it enters, which any resolution may put
 /// onto the battlefield in a game with a card that chooses one
-/// ([`Capability::ChoosesAsEnters`]), or a mana ability's choice while a spell is being
-/// cast in the resolution ([`Capability::ManaAbilityChoices`]). A game with none of them
-/// pays the ANDs [`may_ask`] does and one more.
+/// ([`Capability::ChoosesAsSpellResolves`]), or a mana ability's choice while a spell is
+/// being cast in the resolution ([`Capability::ManaAbilityChoices`]). An Aura chooses what to
+/// enchant as it enters by any means other than resolving as an Aura spell (see CR 303.4f: "If
+/// an Aura is entering the battlefield under a player's control by any means other than by
+/// resolving as an Aura spell, ... that player chooses what it will enchant"). So in a game
+/// whose only such card is an Aura ([`Capability::ChoosesAsEnters`]), a resolution may ask
+/// when its `ability`, `None` for a permanent spell, may put a permanent onto the battlefield.
+/// A game with none of them pays the ANDs [`may_ask`] does and two more.
 #[inline]
-pub(crate) fn resolution_may_ask(t: &GameTable) -> bool {
-    may_ask(t) || t.can_either(Capability::ChoosesAsEnters, Capability::ManaAbilityChoices)
+pub(crate) fn resolution_may_ask(t: &GameTable, ability: Option<&Ability>) -> bool {
+    may_ask(t)
+        || t.can_either(
+            Capability::ChoosesAsSpellResolves,
+            Capability::ManaAbilityChoices,
+        )
+        || (t.can(Capability::ChoosesAsEnters) && ability.is_some_and(Ability::may_enter_permanent))
 }
 
 /// The answer to a choice `d` asked below code that has no resolution to ask through: a

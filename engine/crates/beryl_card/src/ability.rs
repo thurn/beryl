@@ -500,6 +500,16 @@ impl Ability {
         }
     }
 
+    /// Whether resolving this may put a permanent onto the battlefield other than as the
+    /// resolving permanent spell: what its effect data says ([`Effect::may_enter_permanent`]),
+    /// and always for a Rust body, which nothing can read.
+    pub fn may_enter_permanent(&self) -> bool {
+        match self.body {
+            Behavior::Data(effect) => effect.may_enter_permanent(),
+            Behavior::Custom(_) => true,
+        }
+    }
+
     /// Whether this body can suspend resolution to play a new game.
     pub const fn starts_subgame(&self) -> bool {
         match self.body {

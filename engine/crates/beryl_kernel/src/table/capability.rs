@@ -161,10 +161,18 @@ pub enum Capability {
     /// ([`beryl_card::Ability::cast_from_graveyard_each_turn`]), so priority decisions look in
     /// graveyards for spells it permits and the permanents remember using it.
     CastsFromGraveyard,
+    /// A card chooses a value as it enters ([`beryl_card::Replacement::choose_as_enters`]) or
+    /// may enter as a copy of a permanent it chooses
+    /// ([`beryl_card::Replacement::enter_as_copy`]). Any permanent spell may then ask as it
+    /// resolves, so every resolution runs where it can pause (`beryl_rules`' `resolve`). An
+    /// Aura alone sets [`Capability::ChoosesAsEnters`] but not this one: a resolving Aura spell
+    /// chooses nothing (see CR 303.4f), so only a body that puts a permanent onto the
+    /// battlefield may ask.
+    ChoosesAsSpellResolves,
 }
 
 // The game keeps its capabilities in a `u64`.
-const _: () = assert!((Capability::CastsFromGraveyard as u32) < u64::BITS);
+const _: () = assert!((Capability::ChoosesAsSpellResolves as u32) < u64::BITS);
 
 impl Capability {
     /// The capabilities of every face and subtype the game can contain.
@@ -334,7 +342,7 @@ fn replacement_capabilities(replacement: &Replacement) -> u64 {
         replacement.rewrite,
         Rewrite::Choose(_) | Rewrite::EnterAsCopy { .. }
     ) {
-        found |= Capability::ChoosesAsEnters.bit();
+        found |= Capability::ChoosesAsEnters.bit() | Capability::ChoosesAsSpellResolves.bit();
     }
     found
 }
