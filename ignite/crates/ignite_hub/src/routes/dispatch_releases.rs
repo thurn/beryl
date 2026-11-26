@@ -8,7 +8,9 @@
 //! holding back an emergency would stop the work that ends it. Nor is a ticket that is
 //! deferred to a later time when it is released: its worker found it was waiting on a clock
 //! (a block ticket of a model trial whose pairs are still running, say), deferred it and gave
-//! it back, and the next worker meets no obstacle once the deferral ends.
+//! it back, and the next worker meets no obstacle once the deferral ends. The same holds for a
+//! ticket with an open dependency: its worker found the work cannot start until the blocking
+//! ticket closes, so a later worker meets no obstacle once it does.
 
 use rusqlite::{Connection, TransactionBehavior, params};
 use serde_json::Value;
@@ -22,6 +24,7 @@ use ignite_core::protocol::tickets::{Operation, Status, Ticket, TicketFields};
 use ignite_core::time::Timestamp;
 use ignite_store::StoreError;
 use ignite_store::hub::releases::{self, Releases};
+use ignite_store::hub::tickets;
 
 use super::{
     Answer, SAVED_BRANCH, apply_in, done, failure, free_worker, holds, load, set_columns,
@@ -147,9 +150,16 @@ fn count(
     now: Timestamp,
 ) -> Result<Option<Releases>, StoreError> {
     let waiting = ticket.defer_until.is_some_and(|until| until > now);
+    // Rule 1 is the ticket's own state, which is in progress while it is released, so only the
+    // later rules (a dependency that has not closed) mean it is waiting on another ticket.
+    let blocked = tickets::readiness(tx, std::slice::from_ref(ticket), now)?
+        .remove(0)
+        .iter()
+        .any(|blocker| blocker.rule != 1);
     let counted = release.cause.counts()
         && release.needs.is_none()
         && !waiting
+        && !blocked
         && !ticket.labels.iter().any(|label| label == JUSTICIAR);
     if !counted {
         return Ok(None);

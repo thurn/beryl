@@ -212,6 +212,27 @@ fn a_ticket_deferred_before_its_release_is_not_held_back() {
 }
 
 #[test]
+fn a_ticket_blocked_by_an_open_dependency_is_not_held_back() {
+    let mut conn = open();
+    let ids = file(&mut conn, &[("first", &[], &[]), ("second", &[], &[])]);
+    let (first, second) = (ids[0].as_str(), ids[1].as_str());
+    let dep = json!({"ops": [{"op": "dep_add", "id": second, "on": first}]});
+    assert_eq!(tickets_route(&mut conn, "POST", "/batch", &dep).status, 200);
+    for (session, start) in [("local_a", 0.0), ("local_b", 10.0)] {
+        work_and_release(
+            &mut conn,
+            second,
+            session,
+            "Waiting on the blocker.",
+            None,
+            at(start),
+        );
+    }
+    assert!(justiciar_tickets(&conn).is_empty());
+    assert!(shown(&mut conn, second)["releases"].is_null());
+}
+
+#[test]
 fn editing_the_acceptance_offers_the_ticket_again() {
     let mut conn = open();
     let id = file(&mut conn, &[("vague", &[], &[])]).remove(0);
