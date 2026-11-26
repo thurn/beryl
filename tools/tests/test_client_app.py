@@ -154,11 +154,16 @@ def test_live_timing_windows_explain_gaps_and_exclude_pauses(tmp_path: Path) -> 
             "adaptive": {
                 "gap_ns": 40_000_000,
                 "work_ns": 28_000_000,
-                "missed": 3,
-                "window": 60,
-                "misses_needed": 3,
-                "roomy": 0,
-                "roomy_needed": 600,
+                "previous_ns": 30_000_000,
+                "missed": 60,
+                "window": 240,
+                "misses_needed": 60,
+                "late_intervals": 1.5,
+                "room_fraction": 0.5,
+                "run": 0,
+                "run_bad": 0,
+                "up_misses": 30,
+                "run_needed": 600,
             },
         }
     }
@@ -194,6 +199,8 @@ def test_live_timing_windows_explain_gaps_and_exclude_pauses(tmp_path: Path) -> 
     summary = app.report(attached)
     assert "callbacks 33.3 Hz, submissions 25.0 Hz" in summary
     assert "90.00 ms: 120 → 60 Hz" in summary
+    assert "frame before 30.00 ms, 60/240 misses (60 needed)" in summary
+    assert "run 0/600 frames with 0 late or without room (30 allowed)" in summary
     assert "skipped idle 1, timeout 1, 1 pauses and 1 resumes" in summary
     assert "#2 → #3: 54.00 ms" in summary
     assert "queued 18.00 ms, previous handler 43.00 ms" in summary

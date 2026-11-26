@@ -119,8 +119,8 @@ impl Draw for Screen {
                 self.timing.gpu_in_flight = gpu_in_flight;
                 Some(Shown {
                     waited,
-                    // The adaptive rule has always counted everything after drawable acquisition.
-                    encoded: total.saturating_sub(waited),
+                    encoded: total.saturating_sub(waited).saturating_sub(present),
+                    presented: present,
                 })
             }
             Presented::Skipped { reason, waited } => {

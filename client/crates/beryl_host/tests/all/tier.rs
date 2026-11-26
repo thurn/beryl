@@ -22,11 +22,16 @@ impl Ticks for AnyTicks {
     fn set_running(&mut self, _running: bool) {}
 }
 
+/// Shows every frame after 12 ms of encoding: more than half of a 60 Hz interval, so a late
+/// frame after it is a miss that drawing explains (`beryl_host::rate`).
 struct Shows;
 
 impl Draw for Shows {
     fn draw(&mut self, _frame: &Frame) -> Option<Shown> {
-        Some(Shown::default())
+        Some(Shown {
+            encoded: 12_000_000,
+            ..Shown::default()
+        })
     }
 }
 

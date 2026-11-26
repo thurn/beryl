@@ -29,7 +29,9 @@ from . import app, paths
 SETTLE_FRAMES: int = json.loads(
     (paths.DATA / "frame-rate.json").read_text(encoding="utf-8")
 )["settle_frames"]
-# How many animating frames after settling the drop may take.
+# How many animating frames after settling the drop may take. Every frame held back 25 ms
+# at 60 Hz is late, and the 25 ms explains the miss, so the rule drops the tier at the
+# 60th (`misses` in data/client/frame-rate.json).
 DROP_WITHIN = 120
 # What the app prints, followed by the path, when it has written its frame log.
 FRAME_LOG = "frame log: "

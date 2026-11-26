@@ -178,12 +178,19 @@ opening links and sharing files. A phone uses a native text field over the
 position of the focused element so the platform can supply the keyboard and text
 editing.
 
-Frame pacing compares presentation gaps with the rate the host asked for. In
-Automatic graphics mode, repeated late animation frames first trigger a switch
-to Baseline. The rate controller can then step down to a divisor of the display
-rate and step back up after a sustained run on time. The thresholds are in the
-runtime tuning. The frame log records the selected rate and tier alongside the
-presentation gaps.
+Frame pacing compares presentation gaps with the rate the host asked for
+(`client/crates/beryl_host/src/rate.rs`). A late frame counts toward a step down
+only when drawing explains it: the frame before it spent more than half the
+interval between the start of its tick and the return of its present call,
+including the wait for a drawable. A late tick after a short frame never steps
+down, because a lower rate does not help it. When 60 of the last 240 animation
+frames were explained misses, Automatic graphics mode first switches to
+Baseline, and then the rate steps down to the next divisor of the display rate.
+The rate steps back up after a run of 600 frames in which at most 30 were late
+or had too much work for the higher rate. A step down within 600 frames of a
+step up doubles the run the next step up needs. The thresholds are in
+`data/client/frame-rate.json`. The frame log records the selected rate and tier
+alongside the presentation gaps.
 
 **Low memory.** The client drops the full-size face cache and the renderer
 releases its full-size texture array. Board-size faces can still be drawn, and
@@ -567,6 +574,17 @@ the zero-allocation and native rank assertions.
   first. The same result held under downlevel limits. This is why the opaque
   pass draws nearer geometry first and why the fragment gate uses the driver's
   count.
+- **Rate rule on the development Mac, 2026-11-25.** The frame logs of 24 play
+  sessions on a 120 Hz ProMotion display held 1,110 late frames. On late frames
+  the client's work and encoding took 0.33 ms at the median. The old rule
+  stepped down when 3 of 60 frames were late for any reason, so 16 sessions
+  ended at 60 Hz or lower and 7 reached 30 Hz. The lower rates did not stop the
+  late frames: one session had 0.03% of frames late at 120 Hz and 1.9% at 30 Hz.
+  In 4 seconds at 120 Hz no session had more than 20 late frames, except one
+  2-second stretch that the display held to 60 Hz with 94, each waiting for a
+  drawable. That is why a step down needs 60 explained misses in 240 frames, and
+  why a step up allows 30 late frames in 600 (5%, above the 1.9% seen with
+  nothing wrong in the client).
 
 ## Checks and isolation
 

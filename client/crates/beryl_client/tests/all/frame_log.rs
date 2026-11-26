@@ -30,6 +30,7 @@ fn ticked(tick_ms: u64, since_last_ms: Option<u64>, shown: bool) -> Ticked {
         shown: shown.then_some(Shown {
             waited: 2 * MS,
             encoded: MS / 2,
+            presented: 0,
         }),
         hz: 120.0,
         step: None,
@@ -180,6 +181,7 @@ fn the_summary_gives_the_median_and_95th_percentile_wait_for_a_drawable() {
         frame.shown = Some(Shown {
             waited: wait * MS,
             encoded: 0,
+            presented: 0,
         });
         log.frame(&frame, &[], false);
     }

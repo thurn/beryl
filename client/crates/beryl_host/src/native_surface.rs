@@ -402,12 +402,18 @@ impl Draw for Screen {
         match &mut self.output {
             Output::Surface(surface) => {
                 match self.renderer.present(frame, surface.as_mut()?, || {}) {
-                    Presented::Shown { waited, .. } => {
+                    Presented::Shown {
+                        waited,
+                        present_cpu,
+                        ..
+                    } => {
                         let waited = waited.as_nanos() as u64;
+                        let presented = present_cpu.as_nanos() as u64;
                         let total = started.elapsed().as_nanos() as u64;
                         Some(Shown {
                             waited,
-                            encoded: total.saturating_sub(waited),
+                            encoded: total.saturating_sub(waited).saturating_sub(presented),
+                            presented,
                         })
                     }
                     Presented::Skipped { .. } => None,
@@ -419,6 +425,7 @@ impl Draw for Screen {
                 Some(Shown {
                     waited: 0,
                     encoded: started.elapsed().as_nanos() as u64,
+                    presented: 0,
                 })
             }
         }

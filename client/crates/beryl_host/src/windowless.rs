@@ -249,6 +249,7 @@ impl Draw for Offscreen {
         Some(Shown {
             waited: 0,
             encoded: started.elapsed().as_nanos() as u64,
+            presented: 0,
         })
     }
 

@@ -39,6 +39,17 @@ pub struct Shown {
     pub waited: u64,
     /// Encoding the frame's GPU commands and submitting them, after the drawable came.
     pub encoded: u64,
+    /// The present call, including what the host does just before it (`--slow-gpu` sleeps
+    /// there). Zero for a host that does not measure it apart from encoding.
+    pub presented: u64,
+}
+
+impl Shown {
+    /// The app's own work for the frame: encoding and presenting, without the wait.
+    #[must_use]
+    pub fn work(&self) -> u64 {
+        self.encoded + self.presented
+    }
 }
 
 /// Where a frame goes once the client has made it.
@@ -236,6 +247,9 @@ pub struct FrameLoop<T> {
     rate: Option<RateRule>,
     /// The rate frames are counted against: the rule's choice, or the fixed rate.
     hz: f32,
+    /// The last frame's time from the start of its tick to the return of its present call,
+    /// which says whether a miss of the frame after it is explained (`crate::rate`).
+    previous_total: u64,
     monitor: Monitor,
     timing_epoch: Option<Instant>,
     cpu: CpuTiming,
@@ -266,6 +280,7 @@ impl<T: Ticks> FrameLoop<T> {
             last: None,
             rate: None,
             hz: 60.0,
+            previous_total: 0,
             monitor: Monitor::default(),
             timing_epoch: None,
             cpu: CpuTiming::default(),
@@ -629,10 +644,16 @@ impl<T: Ticks> FrameLoop<T> {
     /// Feeds an animating frame to the rate rule, and carries out the step it returns: a
     /// tier for the client, a rate for the ticks.
     fn pace(&mut self, since_last: Option<u64>, client: u64, shown: Option<Shown>) -> Option<Step> {
+        let work = client + shown.map_or(0, |shown| shown.work());
+        let total = work + shown.map_or(0, |shown| shown.waited);
+        let previous = std::mem::replace(&mut self.previous_total, total);
         let rule = self.rate.as_mut()?;
         let gap = since_last?;
-        let work = client + shown.map_or(0, |shown| shown.encoded);
-        let step = rule.frame(Paced { gap, work })?;
+        let step = rule.frame(Paced {
+            gap,
+            work,
+            previous,
+        })?;
         let decision = rule.decision();
         let previous = (self.hz, self.client.tier());
         match step {

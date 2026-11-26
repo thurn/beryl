@@ -216,12 +216,25 @@ def describe_change(change: Row) -> str:
     )
     if (decision := change.get("adaptive")) is None:
         return line + ", graphics setting"
-    return (
-        line
-        + f", gap {ms(decision['gap_ns']):.2f} ms, work {ms(decision['work_ns']):.2f} ms,"
-        f" {decision['missed']}/{decision['window']} misses ({decision['misses_needed']} needed),"
-        f" {decision['roomy']}/{decision['roomy_needed']} frames with room"
+    line += (
+        f", gap {ms(decision['gap_ns']):.2f} ms, work {ms(decision['work_ns']):.2f} ms"
     )
+    if "previous_ns" in decision:
+        line += f", frame before {ms(decision['previous_ns']):.2f} ms"
+    line += (
+        f", {decision['missed']}/{decision['window']} misses"
+        f" ({decision['misses_needed']} needed)"
+    )
+    if "run" in decision:
+        # The rule since misses had to be explained: a run toward a step up that may hold
+        # `up_misses` frames that were late or lacked room.
+        return line + (
+            f", run {decision['run']}/{decision['run_needed']} frames"
+            f" with {decision['run_bad']} late or without room"
+            f" ({decision['up_misses']} allowed)"
+        )
+    # Logs written by the earlier rule, which stepped up after a run of frames all with room.
+    return line + f", {decision['roomy']}/{decision['roomy_needed']} frames with room"
 
 
 # The causes of a late frame, in the order `cause` tries them (the frame log's `late` line).

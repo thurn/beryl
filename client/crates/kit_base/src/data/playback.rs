@@ -45,6 +45,7 @@ pub struct FrameRate {
     pub room: f32,
     #[serde(deserialize_with = "nonzero_count")]
     pub up_frames: usize,
+    pub up_misses: usize,
     pub up_frames_most: usize,
     #[serde(deserialize_with = "nonzero_count")]
     pub lowest_hz: usize,
@@ -55,6 +56,9 @@ impl FrameRate {
         let rate: Self = read("frame-rate.json", text)?;
         if rate.misses > rate.window {
             return Err("frame-rate.json: misses exceeds the frame window".to_owned());
+        }
+        if rate.up_misses >= rate.up_frames {
+            return Err("frame-rate.json: up_misses is not below up_frames".to_owned());
         }
         if rate.up_frames_most < rate.up_frames {
             return Err("frame-rate.json: up_frames_most is below up_frames".to_owned());

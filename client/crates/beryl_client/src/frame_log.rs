@@ -98,7 +98,7 @@ pub struct Late {
     pub waited_ms: f64,
     /// `Client::frame`'s time.
     pub client_ms: f64,
-    /// Encoding and submitting its GPU commands.
+    /// Encoding and submitting its GPU commands, and presenting.
     pub encoded_ms: f64,
     /// The GPU's time, where it was measured. No host measures it yet.
     pub gpu_ms: Option<f64>,
@@ -211,7 +211,7 @@ pub struct Summary {
 pub struct Searching {
     pub frames: u64,
     pub late: u64,
-    /// The longest `Client::frame` took, and the longest the encode and submit took.
+    /// The longest `Client::frame` took, and the longest encoding, submitting and presenting took.
     pub worst_client_ms: f64,
     pub worst_encoded_ms: f64,
 }
@@ -563,7 +563,7 @@ impl FrameLog {
         };
         if searching {
             summary.searching.worst_encoded_ms =
-                summary.searching.worst_encoded_ms.max(ms(shown.encoded));
+                summary.searching.worst_encoded_ms.max(ms(shown.work()));
         }
         if summary.first_shown_ms.is_none() {
             let at = ms(ticked.tick);
@@ -605,7 +605,7 @@ impl FrameLog {
             since_last_ms: ms(gap),
             waited_ms: waited,
             client_ms: ms(ticked.client),
-            encoded_ms: ms(shown.encoded),
+            encoded_ms: ms(shown.work()),
             gpu_ms: None,
             verbs: verbs.iter().map(|verb| (*verb).to_owned()).collect(),
             searching,

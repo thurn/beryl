@@ -39,11 +39,16 @@ fn a_display_faster_than_the_rate_draws_only_on_the_ticks_the_rate_falls_on() {
     assert!(due(None, 5, 30.0, 120.0), "a first tick always draws");
 }
 
+/// Discards every frame after 12 ms of encoding: more than half of a 120 Hz interval, so a
+/// late frame after it is a miss that drawing explains (`beryl_host::rate`).
 struct Discard;
 
 impl Draw for Discard {
     fn draw(&mut self, _frame: &Frame) -> Option<Shown> {
-        Some(Shown::default())
+        Some(Shown {
+            encoded: 12_000_000,
+            ..Shown::default()
+        })
     }
 }
 
@@ -72,8 +77,9 @@ fn frames_that_keep_missing_120_hz_step_the_display_to_60_hz() {
     let mut frames = FrameLoop::new(client, Platform::default()).paced(120.0, false);
     assert!((frames.ticks_ref().hz() - 120.0).abs() < 1e-3);
     // Each frame comes three 120 Hz intervals after the last: late at 120 Hz, on time at 60.
+    // The rule settles for `settle_frames`, then needs `misses` explained misses.
     let mut now = 0;
-    for frame in 0..200 {
+    for frame in 0..300 {
         frames.handle(moved(frame as f32));
         frames
             .tick(now, &mut Discard)
