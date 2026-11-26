@@ -177,7 +177,7 @@ pub fn screen(
     let found: Mutex<Vec<(usize, Result<GameScreen, String>)>> = Mutex::new(Vec::new());
     thread::scope(|scope| {
         for _ in 0..games_at_once().min(all.len()) {
-            scope.spawn(|| {
+            crate::workers::spawn(scope, || {
                 loop {
                     let i = next_game.fetch_add(1, Ordering::Relaxed);
                     let Some(g) = all.get(i) else { break };

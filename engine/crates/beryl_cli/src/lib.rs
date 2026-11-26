@@ -30,6 +30,7 @@ pub mod transcript;
 pub mod value;
 mod walk;
 pub mod why;
+pub mod workers;
 
 pub use catalog::Catalog;
 

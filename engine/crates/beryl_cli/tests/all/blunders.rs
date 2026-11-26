@@ -415,3 +415,37 @@ fn runs_are_judged_by_their_choices() {
     assert_ne!(run_seed("a", 0), run_seed("b", 0));
     assert_ne!(run_seed("a", 0), run_seed("a", 1));
 }
+
+#[test]
+fn gate_writes_both_reports_to_the_given_directory() {
+    let dir = std::env::temp_dir().join(format!("beryl-gate-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    // A report already in the directory is overwritten.
+    std::fs::write(dir.join("champion.json"), "stale").unwrap();
+    let args: Vec<String> = [
+        &DEEP_SEARCHER.to_string(),
+        "--claims",
+        "none",
+        "--seeds",
+        "1",
+        "--work",
+        "3k",
+        "--out",
+        dir.to_str().unwrap(),
+    ]
+    .map(String::from)
+    .into();
+    beryl_cli::gate::main(&TEST, &args).unwrap();
+    for name in ["champion.json", "challenger.json"] {
+        let text = std::fs::read_to_string(dir.join(name)).unwrap();
+        let report: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(report["seeds"], 1, "{name}");
+        assert_eq!(report["budgets"].as_array().unwrap().len(), 1, "{name}");
+        let entries = report["entries"].as_array().unwrap();
+        assert!(!entries.is_empty());
+        for entry in entries {
+            assert_eq!(entry["runs"].as_array().unwrap().len(), 1, "{name}");
+        }
+    }
+    std::fs::remove_dir_all(&dir).unwrap();
+}

@@ -2,26 +2,30 @@
 
 use std::fmt::Write as _;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use beryl_search::DEEP_SEARCHER;
 use beryl_session::corpus::today;
 
 use crate::Catalog;
 use crate::blunders::{self, BUDGETS, Entry, EntryReport, Report};
+use crate::game::parse_work;
 use crate::ladder::{dropped_row, resolve};
 use crate::match_log::{cache, files};
 
 const USAGE: &str = "usage: beryl_cli gate <challenger family> --claims NAME,...|none \
-                     [--vs CHAMPION FAMILY]\n\
-                     Reports both suites at 3M and 30M from 10 seeds.";
+                     [--vs CHAMPION FAMILY] [--out DIR] [--seeds N] [--work A,B]\n\
+                     Reports both suites at 3M and 30M from 10 seeds, unless told otherwise. \
+                     --out replaces the reports in DIR.";
 const SEEDS: u32 = 10;
-const RUNS: usize = BUDGETS.len() * SEEDS as usize;
 
 pub fn main(catalog: &'static Catalog, args: &[String]) -> Result<(), String> {
     let mut challenger = None;
     let mut champion = None;
     let mut claims = None;
+    let mut out = None;
+    let mut seeds = SEEDS;
+    let mut budgets = BUDGETS.to_vec();
     let mut args = args.iter();
     while let Some(arg) = args.next() {
         let mut value = || {
@@ -31,6 +35,14 @@ pub fn main(catalog: &'static Catalog, args: &[String]) -> Result<(), String> {
         match arg.as_str() {
             "--claims" if claims.is_none() => claims = Some(value()?),
             "--vs" if champion.is_none() => champion = Some(value()?),
+            "--out" if out.is_none() => out = Some(PathBuf::from(value()?)),
+            "--seeds" => seeds = crate::number(arg, value()?)?,
+            "--work" => {
+                budgets = value()?
+                    .split(',')
+                    .map(|w| parse_work(w).ok_or_else(|| format!("--work: no budget {w:?}")))
+                    .collect::<Result<_, _>>()?;
+            }
             name if !name.starts_with('-') && challenger.is_none() => challenger = Some(name),
             _ => return Err(USAGE.to_owned()),
         }
@@ -44,15 +56,24 @@ pub fn main(catalog: &'static Catalog, args: &[String]) -> Result<(), String> {
     let claims = claims_list(claims.ok_or(USAGE)?, &entries)?;
     let date = today();
     let name = challenger.replace('/', "_");
-    let out = cache()
-        .join("ladder")
-        .join("gates")
-        .join(format!("{date}-{name}"));
+    let out = out.unwrap_or_else(|| {
+        cache()
+            .join("ladder")
+            .join("gates")
+            .join(format!("{date}-{name}"))
+    });
     fs::create_dir_all(&out).map_err(|e| format!("{}: {e}", out.display()))?;
     let _lock = files::lock(&out)?;
 
-    let champion = suite(catalog, &entries, &champion, "champion")?;
-    let challenger = suite(catalog, &entries, &challenger, "challenger")?;
+    let champion = suite(catalog, &entries, &champion, "champion", &budgets, seeds)?;
+    let challenger = suite(
+        catalog,
+        &entries,
+        &challenger,
+        "challenger",
+        &budgets,
+        seeds,
+    )?;
     save(&out.join("champion.json"), &champion)?;
     save(&out.join("challenger.json"), &challenger)?;
     println!("Reports saved to {}", out.display());
@@ -112,9 +133,11 @@ fn suite(
     entries: &[Entry],
     family: &str,
     role: &str,
+    budgets: &[u64],
+    seeds: u32,
 ) -> Result<Report, String> {
     eprintln!("{role}: {family}");
-    blunders::run(catalog, entries, family, &BUDGETS, SEEDS, 1, |line| {
+    blunders::run(catalog, entries, family, budgets, seeds, 1, |line| {
         eprintln!("{role}: {line}");
     })
 }
@@ -134,6 +157,7 @@ fn compare(date: &str, champion: &Report, challenger: &Report, claims: &[&str]) 
         "entry", "champion", "challenger", "delta"
     );
     let (mut champion_passes, mut challenger_passes) = (0, 0);
+    let runs = champion.budgets.len() * champion.seeds as usize;
     for (before, after) in champion.entries.iter().zip(&challenger.entries) {
         let name = before.name.as_str();
         let (before, after) = (passes(before), passes(after));
@@ -150,10 +174,10 @@ fn compare(date: &str, champion: &Report, challenger: &Report, claims: &[&str]) 
         let look = if difference >= 6 { "  look" } else { "" };
         let _ = writeln!(
             table,
-            "{name:<36} {before:>5}/{RUNS} {after:>7}/{RUNS} {delta:>5}{claim}{look}"
+            "{name:<36} {before:>5}/{runs} {after:>7}/{runs} {delta:>5}{claim}{look}"
         );
     }
-    let total = champion.entries.len() * RUNS;
+    let total = champion.entries.len() * runs;
     let _ = writeln!(
         table,
         "Champion {champion_passes}/{total}, {} fixed\n\
@@ -172,6 +196,8 @@ fn compare(date: &str, champion: &Report, challenger: &Report, claims: &[&str]) 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const RUNS: usize = BUDGETS.len() * SEEDS as usize;
     use crate::blunders::{Run, Standing};
 
     fn report(agent: &str, scores: &[(&str, usize)]) -> Report {
@@ -205,7 +231,7 @@ mod tests {
         .unwrap();
         Report {
             agent: agent.to_owned(),
-            budgets: Vec::new(),
+            budgets: vec![String::new(); BUDGETS.len()],
             seeds: SEEDS,
             open: u32::try_from(entries.len()).unwrap() - fixed,
             fixed,
@@ -231,6 +257,25 @@ mod tests {
             "| 2026-11-14 | challenger | champion | - | - | - | - | dropped | 398/400 → 399/400 | ? |\n"
         ));
         assert!(!table.contains("GATE:"));
+    }
+
+    #[test]
+    fn totals_are_out_of_the_runs_of_the_chosen_seeds_and_budgets() {
+        let mut one = report("a", &[("e", 1)]);
+        one.budgets.truncate(1);
+        one.seeds = 1;
+        let other = Report {
+            agent: "b".into(),
+            ..report("b", &[("e", 1)])
+        };
+        let other = Report {
+            budgets: one.budgets.clone(),
+            seeds: 1,
+            ..other
+        };
+        let table = compare("2026-11-14", &one, &other, &[]);
+        assert!(table.contains("1/1"), "{table}");
+        assert!(table.contains("Champion 1/1,"), "{table}");
     }
 
     #[test]

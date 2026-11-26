@@ -309,7 +309,7 @@ pub fn run(
     let workers = games_at_once().min(games as usize);
     thread::scope(|scope| {
         for _ in 0..workers {
-            scope.spawn(|| {
+            crate::workers::spawn(scope, || {
                 while !stop.load(Ordering::Relaxed) {
                     let g = next.fetch_add(1, Ordering::Relaxed);
                     if g >= games {

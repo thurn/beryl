@@ -266,6 +266,28 @@ pub fn run(
     budgets: &[u64],
     seeds: u32,
     allowed_misses: usize,
+    progress: impl FnMut(&str) + Send,
+) -> Result<Report, String> {
+    crate::workers::run(move || {
+        run_suite(
+            catalog,
+            entries,
+            agent,
+            budgets,
+            seeds,
+            allowed_misses,
+            progress,
+        )
+    })
+}
+
+fn run_suite(
+    catalog: &'static Catalog,
+    entries: &[Entry],
+    agent: &str,
+    budgets: &[u64],
+    seeds: u32,
+    allowed_misses: usize,
     mut progress: impl FnMut(&str),
 ) -> Result<Report, String> {
     let names: Vec<(String, String)> =

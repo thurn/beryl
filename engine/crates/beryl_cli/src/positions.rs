@@ -126,7 +126,7 @@ fn build_main(catalog: &'static Catalog, args: &[String]) -> Result<(), String> 
         }
     }
     let out = out.unwrap_or_else(default_dir);
-    if fs::read_dir(&out).is_ok_and(|mut d| d.next().is_some()) {
+    if holds_files(&out) {
         return Err(format!(
             "{} is not empty: pass another --out",
             out.display()
@@ -159,6 +159,17 @@ fn sample_main(catalog: &'static Catalog, args: &[String]) -> Result<(), String>
     };
     print!("{}", sample(catalog, Path::new(dir), count)?);
     Ok(())
+}
+
+/// Whether `dir` holds anything but empty directories, so a tree of empty directories (such as a
+/// freshly made output directory) can be built into.
+fn holds_files(dir: &Path) -> bool {
+    fs::read_dir(dir).is_ok_and(|entries| {
+        entries.flatten().any(|entry| {
+            let path = entry.path();
+            !path.is_dir() || holds_files(&path)
+        })
+    })
 }
 
 /// Where a set lives unless told otherwise.
@@ -194,7 +205,7 @@ pub fn build(
     let found: Mutex<Vec<(u32, Result<GameCuts, String>)>> = Mutex::new(Vec::new());
     thread::scope(|scope| {
         for _ in 0..games_at_once().min(b.games as usize) {
-            scope.spawn(|| {
+            crate::workers::spawn(scope, || {
                 loop {
                     let g = next_game.fetch_add(1, Ordering::Relaxed);
                     if g >= b.games {

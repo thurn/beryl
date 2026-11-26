@@ -330,7 +330,7 @@ pub fn main(catalog: &'static Catalog, args: &[String]) -> Result<(), String> {
         c.work,
         c.out.display()
     );
-    let result = run(catalog, &c, &clock);
+    let result = crate::workers::run(|| run(catalog, &c, &clock));
     write_json(
         &c.out.join("status.json"),
         &serde_json::json!({

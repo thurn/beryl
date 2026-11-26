@@ -300,7 +300,7 @@ blunders *args:
 why *args:
     RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "engine" / "Cargo.toml") }} -p beryl_cli_main -- why "$@"
 
-# Report both blunder suites and their totals without a verdict (<challenger> --claims NAME,...|none [--vs NAME])
+# Report both blunder suites and their totals without a verdict (<challenger> --claims NAME,...|none [--vs NAME] [--out DIR] [--seeds 10] [--work 3M,30M])
 [group('agents')]
 [no-cd]
 gate *args:
