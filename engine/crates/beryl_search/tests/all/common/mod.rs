@@ -12,7 +12,10 @@ use beryl_engine::{
     Decision, Format, GameTable, Layout, Observation, Outcome, Profile, Replay, Scratch, Seat,
     State, Step, apply, next, observe,
 };
-use beryl_search::{Agent, AgentDecision, RandomAgent};
+use beryl_search::{
+    Agent, AgentDecision, Budget, DEEP_SEARCHER, DEEP_SEER, DEEP_SEER_UNANCHORED, GameAgent,
+    RandomAgent, deep_family,
+};
 
 pub mod widening;
 
@@ -132,4 +135,37 @@ pub fn redeal<L: Layout>(
         ..det.profile()
     });
     det
+}
+
+/// The engine steps a long-think agent spends on a decision in the tests, in place of its usual
+/// 30M, so that a debug build plays a whole game in seconds.
+pub const SMALL_WORK: u64 = 2_000;
+
+/// The agent `name` with a small budget: the registry's own constructor for the agents that
+/// take a budget, and the long-think agents' families at [`SMALL_WORK`], since those ignore
+/// the budget they are given.
+pub fn cheap(
+    t: &GameTable,
+    name: &str,
+    new: fn(&GameTable, u64, Budget) -> Box<dyn GameAgent + Send>,
+    seed: u64,
+) -> Box<dyn GameAgent + Send> {
+    let family = match name {
+        "pimc18-omniscient-30m-anchor" => Some(DEEP_SEER),
+        "pimc72-hidden-30m-anchor" => Some(DEEP_SEARCHER),
+        "pimc18-omniscient-30m" => Some(DEEP_SEER_UNANCHORED),
+        _ => None,
+    };
+    match family {
+        Some(family) => deep_family(t, seed, family, SMALL_WORK),
+        None => new(
+            t,
+            seed,
+            Budget {
+                iterations: 16,
+                trees: 1,
+                parallel: false,
+            },
+        ),
+    }
 }

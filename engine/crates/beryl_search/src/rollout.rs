@@ -21,7 +21,11 @@
 //!   only when the unblocked damage would be lethal.
 //! - Say yes to every "may" and every "unless pays"; keep the cards worth most, take the best
 //!   a search finds, and scry to the bottom only the cards not worth drawing.
+//! - Change a word in the text of your own object to the one whose permanents both players
+//!   control most, and in the opponent's to the one with the fewest. Name the card known to be
+//!   on top of the library, else the one its deck list has most copies of left.
 
+mod catalog;
 mod play;
 mod policy;
 
@@ -37,6 +41,7 @@ use beryl_engine::{
 };
 
 use crate::values::{CardValues, Knowledge};
+use catalog::Catalog;
 
 pub use play::{Inline, rollout, rollout_to, soft_rollout, soft_rollout_after, soft_rollout_to};
 pub(crate) use play::{RolloutEnd, soft_rollout_after_within, soft_rollout_within};
@@ -302,6 +307,9 @@ impl RolloutPolicy {
             // A card leaving the player's own hand (a mulligan's, a discard's) is the one least
             // worth holding; anything else is taken by its value, as the legend to keep. Two
             // costs are paid with the least: a crew's creatures, an exile cost's cards.
+            DecisionKind::ChooseObject if let Some(catalog) = Catalog::of(&p, d) => {
+                pick.choose_fixed(d, |c| catalog.score(c))
+            }
             DecisionKind::ChooseObject => pick.choose(d, |c| match c {
                 Candidate::Option(Opt::Cast { slot, face, costs }) => {
                     Some(search_cast(&p, slot, face, costs))

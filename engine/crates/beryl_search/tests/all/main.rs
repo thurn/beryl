@@ -10,6 +10,7 @@ mod decking;
 mod estimate;
 mod expert;
 mod families;
+mod forgetful_fish;
 mod frozen;
 mod game_structure;
 mod games;

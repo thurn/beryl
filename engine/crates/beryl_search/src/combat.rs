@@ -16,7 +16,7 @@ use beryl_engine::state::CombatRole;
 use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{
     AdvanceUntil, Candidates, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome,
-    Scratch, Seat, Slot, State, Step, apply, next, next_within,
+    Scratch, Seat, Slot, State, Step, apply, next, next_within, rederive,
 };
 use beryl_engine::{Large, LargeSlot, Layout, Relayout, Small};
 
@@ -592,6 +592,10 @@ impl<'a, L: Layout, J: Judgments<L>> Sim<'a, L, J> {
             }
             apply(&mut s, self.t, self.x, &mut inline, c);
         }
+        // The loop can stop right after `apply`, before the engine's `next` recomputes the
+        // permanents' characteristics, so a change in combat (a creature that died to combat
+        // damage, say) would leave them stale for the score to read.
+        rederive(&mut s, self.t).ok()?;
         Some(self.score(&s, s.turn().active() == self.me))
     }
 

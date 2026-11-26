@@ -17,8 +17,8 @@ pub use beryl_card::{
     Keywords, Layer, LayerSpec, ManaColor, ManaCost, ManaSet, Measure, Modification, ObjectAbility,
     Objects, Part, Place, Players, Prompt, Purpose, Recipients, Replaced, Replacement, Rewrite,
     RuleChange, Says, Shape, SpecIx, Subject, Subtype, SubtypeWords, Subtypes, Supertypes, Taken,
-    Takes, TargetKind, TargetSpec, Timing, Trigger, TriggerEvent, Types, Words, counter_kinds,
-    mana,
+    Takes, TargetKind, TargetSpec, TextWord, Timing, Trigger, TriggerEvent, Types, Words,
+    counter_kinds, mana,
 };
 
 /// The result of a body, and of any step of a resolution that can stop it early. The engine
