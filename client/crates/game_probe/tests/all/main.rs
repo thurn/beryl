@@ -24,6 +24,7 @@ mod signature;
 mod sound;
 mod stories;
 mod table_compact;
+mod table_compact_picks;
 mod verbs_fly_draw;
 mod verbs_leaving;
 mod verbs_lift;

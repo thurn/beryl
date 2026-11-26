@@ -18,7 +18,7 @@ use kit_ui::input::{Insets, Size};
 use crate::common::{before, draw, empty_frame, frame};
 
 /// The compact windows used by the interface checks.
-fn compact_sizes() -> Vec<(f32, f32)> {
+pub(crate) fn compact_sizes() -> Vec<(f32, f32)> {
     let data = crate::test_data::data();
     let profile = data.profiles.for_size(Size {
         width: 393.0,
@@ -32,7 +32,7 @@ fn compact_sizes() -> Vec<(f32, f32)> {
 
 const MS: u64 = 1_000_000;
 
-fn compact_window(width: f32, height: f32) -> Window {
+pub(crate) fn compact_window(width: f32, height: f32) -> Window {
     let size = Size { width, height };
     let data = crate::test_data::data();
     Window {
@@ -58,7 +58,7 @@ fn uneven(width: f32, height: f32) -> Window {
 
 /// The table, alone, that a show draws for `view` at rest in `window`: no flat layer, whose
 /// controls the game screen lays out.
-fn frame_in(window: Window, view: &ViewBuilder) -> Frame {
+pub(crate) fn frame_in(window: Window, view: &ViewBuilder) -> Frame {
     let mut view = view.clone();
     view.script(ScriptBuilder::reset().build());
     let mut show = Show::new(Table::new(crate::test_data::data(), window));
@@ -81,7 +81,7 @@ fn context(window: Window) -> Context {
 }
 
 /// The faults `check` finds on cards.
-fn card_faults(
+pub(crate) fn card_faults(
     frame: &Frame,
     window: Window,
     check: fn(&Frame, &Context) -> Vec<kit_probe::agent::Fault>,
@@ -105,11 +105,11 @@ fn bounds(element: &Resolved) -> [f32; 4] {
     ]
 }
 
-fn centre(element: &Resolved) -> Vec2 {
+pub(crate) fn centre(element: &Resolved) -> Vec2 {
     element.corners.iter().copied().sum::<Vec2>() / 4.0
 }
 
-fn cards_at(frame: &Frame, place: Place) -> Vec<&Resolved> {
+pub(crate) fn cards_at(frame: &Frame, place: Place) -> Vec<&Resolved> {
     (frame.resolved.iter())
         .filter(|element| element.role == Role::Card && element.place == place.into())
         .filter(|element| element.opacity > 0.0)
@@ -862,7 +862,7 @@ fn a_crowded_row_leaves_an_attached_aura_a_square_to_press() {
     }
 }
 
-fn compact_bands(window: Window) -> Option<game_table::profiles::TableBands> {
+pub(crate) fn compact_bands(window: Window) -> Option<game_table::profiles::TableBands> {
     Profile::for_window(&crate::test_data::data().profiles, window).bands()
 }
 

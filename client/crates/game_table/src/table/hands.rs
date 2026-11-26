@@ -2,7 +2,7 @@
 
 use beryl_protocol::protocol::{ObjectView, Side, ZoneName};
 use glam::{Quat, Vec2};
-use kit_base::data::verbs::LiftHand;
+use kit_base::data::verbs::Lift;
 use kit_base::pose::Pose;
 use kit_space::arrange::{
     CentredFan, Container, Fan, Item, Limits, Policy, Region, Solved, arrange,
@@ -15,7 +15,7 @@ pub(super) fn hand(
     placement: &mut Placement,
     objects: &[&ObjectView],
     (side, scroll): (Side, usize),
-    (layout, lift): (&Layout, &LiftHand),
+    (layout, lift): (&Layout, &Lift),
     camera: &Camera,
     cache: Option<&mut HandFits>,
 ) {

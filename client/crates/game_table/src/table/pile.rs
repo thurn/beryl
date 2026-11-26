@@ -146,7 +146,7 @@ fn pile_place(side: Option<Side>, zone: ZoneName) -> Place {
 /// Fits the pile's anchor and facing. A fitted pile keeps its top card at the web's
 /// screen position and size. Its bottom moves, and its cards shrink slightly as the
 /// top rises toward the eye. Otherwise the pile starts at the table point under its slot.
-fn fit(
+pub(super) fn fit(
     layout: &Layout,
     camera: &Camera,
     (side, zone): (Option<Side>, ZoneName),

@@ -666,7 +666,7 @@ fn lay(
             placement,
             objects,
             (side, scroll.hand),
-            (layout, &lift.hand),
+            (layout, lift),
             camera,
             hands,
         ),
