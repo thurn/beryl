@@ -3088,8 +3088,7 @@ catching up on coverage from before `master`, still get regression tickets. A
 platform catching up from `master` itself has no promoted landing to blame, so
 its failures qualify like any other. So does a failed check that has a pass at
 `master` on its platform, however old the gap: the gap did not leave that check
-unverified. The stall setting is optional and
-independent of `broken_build`.
+unverified. The stall setting is optional and independent of `broken_build`.
 
 An eligible failure reverts its culprit when all of these hold, and otherwise
 gets a regression ticket:
@@ -4808,9 +4807,9 @@ at the last commit before the first deferral, unless the check has a pass at
 starts at `master`. A gap closes only when one round passes every check of the
 platform, so it can stay open for a day while the platform verifies every tip,
 and without this rule each failure then blamed hundreds of landings and could
-never be reverted. Once the platform verifies the
-tip, the warning clears. The hub skips filing wait tickets for off machines and
-closes existing tickets about waiting for them.
+never be reverted. Once the platform verifies the tip, the warning clears. The
+hub skips filing wait tickets for off machines and closes existing tickets about
+waiting for them.
 
 ## Records and metrics
 
