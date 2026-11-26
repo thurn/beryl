@@ -653,9 +653,7 @@ fn lay(
     let (layout, camera, scroll, fits, ids, lift) = rules;
     match group {
         Group::Pile { side, zone } => {
-            // The zones, not the layout, say whether the piles are shared: the table played
-            // over by a script is placed with no view to take the layout's shape from.
-            if side.is_none() != zones.shared {
+            if side.is_none() != layout.shape.is_shared() {
                 return;
             }
             if layout.pile_visible(zone) {
