@@ -6,7 +6,9 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 
 use beryl_engine::layout::Queue;
 use beryl_engine::state::{Count, Tracker};
-use beryl_engine::{AdvanceUntil, SlotId, apply, apply_decided, next_within, payable_responses};
+use beryl_engine::{
+    AdvanceUntil, SlotId, Zone, apply, apply_decided, next_within, payable_responses,
+};
 use serde::{Deserialize, Serialize};
 
 use super::{
@@ -192,7 +194,11 @@ fn observation_key<L: Layout>(obs: Observation<'_, L>, d: &Decision<L>, actions:
         for count in Count::ALL {
             obs.counted(count, seat).hash(&mut h);
         }
+    }
+    for seat in obs.zone_owners(Zone::Graveyard).in_seat_order() {
         obs.graveyard(seat).hash(&mut h);
+    }
+    for seat in obs.zone_owners(Zone::Library).in_seat_order() {
         for &slot in obs.library(seat) {
             // Which known cards occupy which positions matters. So does the
             // number of cards between them.

@@ -1419,7 +1419,9 @@ impl<L: Layout> Tree<L> {
             Sight::Hands => truth.object(slot).zone() == Zone::Hand,
             Sight::Omniscient => true,
         };
-        Seat::BOTH.iter().all(|&p| s.library(p) == truth.library(p))
+        s.zone_owners(Zone::Library)
+            .in_seat_order()
+            .all(|p| s.library(p) == truth.library(p))
             && L::Slot::all()
                 .all(|slot| !shown(slot) || s.card_behind(slot) == truth.card_behind(slot))
     }

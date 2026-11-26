@@ -19,6 +19,7 @@ mod mcts;
 mod outgrow;
 mod overlay;
 mod rollout;
+mod shared;
 mod shrink;
 mod turn;
 mod waste;

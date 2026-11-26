@@ -31,6 +31,9 @@ use crate::ids::{CardId, LargeCardIx, Seat};
 use crate::layout::Layout;
 use crate::state::{Flag, State, TurnStep, Zone, ZoneKey};
 
+#[cfg(test)]
+mod tests;
+
 /// The outcome of one random event.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Random {
@@ -222,7 +225,7 @@ fn settle_but<L: Layout>(
 /// to every player in `s`.
 pub fn adopt_unknown<L: Layout>(s: &mut State<L>, run: &State<L>) {
     let known = s.known_to_someone();
-    for p in Seat::BOTH {
+    for p in s.zone_owners(Zone::Library).in_seat_order() {
         for slot in (s.zone(ZoneKey::Of(p, Zone::Library)) & !known).iter() {
             s.object_mut(slot).card = run.object(slot).card;
         }
@@ -255,7 +258,7 @@ pub fn settle_all<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, cards: Bitboa
         return;
     }
     let mut settled = Bitboard::EMPTY;
-    for owner in Seat::BOTH {
+    for owner in s.zone_owners(Zone::Library).in_seat_order() {
         for i in (0..s.library(owner).len()).rev() {
             let slot = s.library(owner)[i];
             if cards.contains(slot) {

@@ -4,11 +4,14 @@
 //! Implements: none. Projects the game state using the viewer's recorded knowledge.
 
 mod subgames;
+#[cfg(test)]
+mod tests;
 
 use crate::bitboard::Bitboard;
 use crate::filter::{Evaluate, Filter};
 use crate::ids::{CardId, Seat, Slot, SlotId};
 use crate::layout::{Layout, Queue, Small};
+use crate::player_set::PlayerSet;
 use crate::rng::SplitMix64;
 use crate::state::{
     Derived, Flag, Object, Pending, PendingTrigger, Player, StackEntry, State, Turn, Zone, ZoneKey,
@@ -148,6 +151,12 @@ impl<'a, L: Layout> Observation<'a, L> {
         self.state.graveyard(player)
     }
 
+    /// The seats whose zones of kind `zone` are distinct: both in a per-player game, seat 0
+    /// alone for a shared library or graveyard ([`State::zone_owners`]).
+    pub fn zone_owners(&self, zone: Zone) -> PlayerSet {
+        self.state.zone_owners(zone)
+    }
+
     pub fn battlefield(&self) -> &'a [L::Slot] {
         self.state.battlefield()
     }
@@ -246,7 +255,9 @@ impl<'a, L: Layout> Observation<'a, L> {
     fn redeal(&self, t: &GameTable, rng: &mut SplitMix64, show_hands: bool, s: &mut State<L>) {
         let picks = self.unseen_hidden_picks(t);
         for player in Seat::BOTH {
-            const IN_GAME: usize = Slot::DECK_SLOTS + crate::format::Format::MAX_SIDEBOARD;
+            const IN_GAME: usize = Slot::SHARED_DECK_SLOTS;
+            const _: () =
+                assert!(Slot::DECK_SLOTS + crate::format::Format::MAX_SIDEBOARD <= IN_GAME);
             debug_assert!(
                 t.format().maximum_sideboard() <= crate::format::Format::MAX_SIDEBOARD,
                 "Small's determinization buffer fits at most {} sideboard cards",
@@ -264,7 +275,8 @@ impl<'a, L: Layout> Observation<'a, L> {
                 // (architecture decision D19). Only cards in the game are redealt.
                 let admitted = self.root.admitted(t, player).map(|(_, card)| card);
                 for card in t.deck(player).chain(admitted) {
-                    // The queue holds a small game's main deck and all its sideboard cards.
+                    // The queue holds a small game's main deck and all its sideboard cards,
+                    // or a shared deck.
                     remainder.push_bounded(card);
                 }
             }
