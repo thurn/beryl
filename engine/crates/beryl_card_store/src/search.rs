@@ -45,6 +45,8 @@ impl<'a> NameIndex<'a> {
         match kind {
             Kind::Card => &self.cards,
             Kind::Token => &self.tokens,
+            // A deck's printings are looked up by key, never searched by name.
+            Kind::Printing => &[],
         }
     }
 }

@@ -1,7 +1,7 @@
 //! The card store, `data/card-store.tsv`: a record for every card in the pool and every token
 //! or emblem a pool card makes, which `just cards` writes from Scryfall's bulk data. The
 //! format's specification is the header of `tools/src/beryl_tools/card_store.py`; in short,
-//! lines of `<key>\t<json>` sorted by their bytes, keys `card:<name>` and `token:<name>`, and
+//! lines of `<key>\t<json>` sorted by their bytes, keys `card:<name>`, `token:<name>` and `printing:<set>/<number>`, and
 //! alias values (`{"alias", "scryfall_id"}`) that send a face's name to its card's record.
 //!
 //! [`STORE`] embeds the file in the binary, so the desktop app, the phone apps, `beryl_cli`'s
@@ -123,6 +123,7 @@ enum Value {
 enum Kind {
     Card,
     Token,
+    Printing,
 }
 
 impl Kind {
@@ -130,6 +131,7 @@ impl Kind {
         match self {
             Kind::Card => format!("card:{name}"),
             Kind::Token => format!("token:{name}"),
+            Kind::Printing => format!("printing:{name}"),
         }
     }
 }
@@ -143,6 +145,14 @@ impl<'a> Store<'a> {
     /// The card named `name`, or with a face of that name.
     pub fn card(&self, name: &str) -> Option<Record> {
         self.records(Kind::Card, name).into_iter().next()
+    }
+
+    /// The record of the printing of set `set` with `collector_number` that a deck shows
+    /// (`data/deck-printings.csv`), under the key `printing:<set>/<collector_number>`.
+    pub fn printing(&self, set: &str, collector_number: &str) -> Option<Record> {
+        self.records(Kind::Printing, &format!("{set}/{collector_number}"))
+            .into_iter()
+            .next()
     }
 
     /// Finds the exact token or emblem printing named by a card's token link.

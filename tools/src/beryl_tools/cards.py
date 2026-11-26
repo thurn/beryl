@@ -23,6 +23,11 @@ are John Avon's full-art lands from Unstable. An English printing with a name of
 as a Through the Omenpaths card that Arena names differently from Scryfall's oracle, takes its
 printed name and text, so it is keyed by the name the engine knows.
 
+A deck's cards may show several printings, as the Secret Lair Dandân deck's Islands do:
+data/deck-printings.csv lists them (`deck,name,set,collector_number,copies`), and each row
+becomes a `printing:<set>/<collector_number>` record in the store, beside the card records. A
+row that names no English printing of that card in the bulk file fails the run.
+
 `--sample FILE NAME...` writes the printings of the decks' cards (`m1_names`) and the pinned
 ones, and every printing of each NAME, in the bulk file's shape: the tests' fixture.
 """
@@ -38,7 +43,7 @@ from collections import Counter, defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import cast
+from typing import NamedTuple, cast
 
 from . import card_store, catalogs, paths, scryfall, set_groups
 
@@ -90,6 +95,7 @@ TREATMENTS: frozenset[str] = frozenset(
     {"showcase", "extendedart", "etched", "inverted", "shatteredglass", "fullart"}
 )
 PRINTINGS: Path = DATA / "card-printings.csv"
+DECK_PRINTINGS: Path = DATA / "deck-printings.csv"
 EXCLUSIONS: Path = DATA / "card-pool-exclusions.json"
 IMAGE_VERSIONS = ("art_crop", "normal", "large")
 # The characteristics a store record's face keeps (CR 109.3), less name, colors and color
@@ -198,6 +204,38 @@ def printings(path: Path) -> dict[str, Printing]:
             for row in csv.DictReader(f):
                 pins[row["name"]] = (row["set"], row["collector_number"])
     return pins
+
+
+class DeckPrinting(NamedTuple):
+    """A row of data/deck-printings.csv: `copies` of the deck's `name` show this printing."""
+
+    deck: str
+    name: str
+    set: str
+    collector_number: str
+    copies: int
+
+    @property
+    def where(self) -> Printing:
+        return (self.set, self.collector_number)
+
+
+def deck_printings(path: Path = DECK_PRINTINGS) -> list[DeckPrinting]:
+    """The rows of `path`, in order; a LookupError names a printing listed twice."""
+    if not path.exists():
+        return []
+    with path.open(newline="") as f:
+        rows = [
+            DeckPrinting(
+                r["deck"], r["name"], r["set"], r["collector_number"], int(r["copies"])
+            )
+            for r in csv.DictReader(f)
+        ]
+    seen = Counter(r.where for r in rows)
+    twice = [where for where, n in seen.items() if n > 1]
+    if twice:
+        raise LookupError(f"{path.name} lists {twice} twice")
+    return rows
 
 
 def exclusions(path: Path) -> dict[str, str]:
@@ -376,6 +414,8 @@ class Pool:
     # Each card's first printing (`first_of`), by oracle id.
     first: dict[str, Json] = field(default_factory=dict)
     by_id: dict[str, Json] = field(default_factory=dict)
+    # The printings of data/deck-printings.csv, by set and collector number.
+    deck: dict[Printing, Json] = field(default_factory=dict)
     # Cards (oracle ids) out of the pool, per reason.
     dropped: Counter[str] = field(default_factory=Counter)
     # Cards out of the pool for not being legal in Vintage, per set type.
@@ -383,9 +423,13 @@ class Pool:
 
 
 def read_pool(
-    printings: Iterable[Json], pins: dict[str, Printing], excluded: dict[str, str]
+    printings: Iterable[Json],
+    pins: dict[str, Printing],
+    excluded: dict[str, str],
+    deck: Iterable[DeckPrinting] = (),
 ) -> Pool:
     pool = Pool()
+    wanted = {row.where for row in deck}
     groups: defaultdict[str, list[Json]] = defaultdict(list)
     out: dict[str, tuple[str, str]] = {}
     pinned = {printing: name for name, printing in pins.items()}
@@ -393,6 +437,9 @@ def read_pool(
     for raw in printings:
         card = pruned(raw)
         pool.by_id[str(card["id"])] = card
+        where = (str(card["set"]), str(card["collector_number"]))
+        if where in wanted and is_printed(card):
+            pool.deck[where] = card
         oracle = oracle_id(card)
         reason = drop_reason(card, excluded)
         if reason is not None:
@@ -418,6 +465,14 @@ def read_pool(
         ordered = sorted(found, key=released)
         pool.first[oracle] = first_of(ordered)
         pool.shown[oracle] = chosen.get(oracle) or choose(ordered)
+    for row in deck:
+        found = pool.deck.get(row.where)
+        if found is None or display_name(found) != row.name:
+            raise LookupError(
+                f"deck printing {tuple(row)} matches no printing in the bulk data"
+            )
+        if row.name not in {display_name(c) for c in pool.shown.values()}:
+            raise LookupError(f"deck printing {tuple(row)} is of a card not in the pool")
     missing = set(pinned) - {
         (str(c["set"]), str(c["collector_number"])) for c in chosen.values()
     }
@@ -655,6 +710,10 @@ def build_store(pool: Pool) -> Built:
         for alias in aliases(printing, record) if printing else []:
             token_alias: Json = {"alias": name, "scryfall_id": linked}
             built.lines.append(card_store.line("token", alias, token_alias))
+    for where, card in pool.deck.items():
+        record = store_record(card, False)
+        name = card_store.printing_name(*where)
+        built.lines.append(card_store.line("printing", name, record))
     built.counts["cards"] = len(named)
     built.counts["tokens"] = len(tokens)
     return built
@@ -665,9 +724,11 @@ def sample(path: Path, bulk: Path, built: Built, pool: Pool, names: list[str]) -
     their first printings, and every printing of each of `names`, pruned, one per line.
     """
     pinned = [n for n in printings(PRINTINGS) if n in built.by_name]
-    shown = [built.by_name[n] for n in dict.fromkeys(m1_names() + pinned)]
+    decked = [row.name for row in deck_printings()]
+    shown = [built.by_name[n] for n in dict.fromkeys(m1_names() + pinned + decked)]
     firsts = {str(pool.first[oracle_id(c)]["id"]) for c in shown}
     ids = {str(c["id"]) for c in shown} | firsts | set(token_parts(shown))
+    ids |= {str(c["id"]) for c in pool.deck.values()}
     wanted = set(names)
     with path.open("w", encoding="utf-8", newline="\n") as out:
         for raw in scryfall.objects(bulk):
@@ -696,7 +757,10 @@ def cards(args: argparse.Namespace) -> int:
         else scryfall.bulk_file("default_cards", args.refresh)
     )
     pool = read_pool(
-        scryfall.objects(bulk), printings(PRINTINGS), exclusions(EXCLUSIONS)
+        scryfall.objects(bulk),
+        printings(PRINTINGS),
+        exclusions(EXCLUSIONS),
+        deck_printings(),
     )
     built = build_store(pool)
     report(pool, built)

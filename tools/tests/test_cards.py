@@ -370,3 +370,40 @@ def test_split_halves_use_their_own_colors() -> None:
         token=False,
     )
     assert [face["colors"] for face in faces] == [["R", "G"], ["U"]]
+
+
+def test_the_forgetful_fish_printings_resolve_and_their_copies_sum_to_the_deck(
+    tmp_path: Path,
+) -> None:
+    rows = [r for r in cards.deck_printings() if r.deck == "forgetful-fish"]
+    assert len(rows) == 27
+    assert sum(r.copies for r in rows) == 80
+    assert all(r.set == "sld" for r in rows)
+    with card_store.Store(run(tmp_path)) as store:
+        for row in rows:
+            record = store.printing(row.set, row.collector_number)
+            assert record is not None, row
+            assert record["name"] == row.name
+            assert (record["set"], record["collector_number"]) == row.where
+    # A printing's record is not a card or a token.
+    with card_store.Store(run(tmp_path)) as store:
+        assert {kind for kind, _ in store} == {"card", "token"}
+
+
+def test_a_deck_printing_that_matches_nothing_fails_the_run_naming_the_row() -> None:
+    row = cards.DeckPrinting("forgetful-fish", "Island", "sld", "9999", 5)
+    with pytest.raises(LookupError, match="9999"):
+        cards.read_pool(
+            scryfall.objects(SAMPLE),
+            cards.printings(cards.PRINTINGS),
+            cards.exclusions(cards.EXCLUSIONS),
+            [row],
+        )
+    misnamed = cards.DeckPrinting("forgetful-fish", "Island", "sld", "2138", 5)
+    with pytest.raises(LookupError, match="2138"):
+        cards.read_pool(
+            scryfall.objects(SAMPLE),
+            cards.printings(cards.PRINTINGS),
+            cards.exclusions(cards.EXCLUSIONS),
+            [misnamed],
+        )

@@ -20,6 +20,11 @@ Scryfall id answers this key too. Aliases key each face's name of a card with se
 and a card's oracle name where its printing has a name of its own. An alias never shadows a
 card's own key.
 
+- `printing:<set>/<collector_number>`: one printing a deck shows (data/deck-printings.csv), by
+  its set code and collector number, whose value is a record like a card's with that
+  printing's `scryfall_id` and `artist`, so the app can draw its face and art. Readers that
+  list cards and tokens skip these.
+
 A record:
 
 - `name`, `oracle_id`; the printing shown: `scryfall_id`, `set`, `collector_number`, `layout`,
@@ -60,12 +65,17 @@ from . import paths
 STORE: Path = paths.REPO / "data" / "card-store.tsv"
 
 Json = dict[str, object]
-Kind = Literal["card", "token"]
+Kind = Literal["card", "token", "printing"]
 KINDS: tuple[Kind, ...] = ("card", "token")
 
 
 def key(kind: Kind, name: str) -> str:
     return f"{kind}:{name}"
+
+
+def printing_name(set_code: str, collector_number: str) -> str:
+    """The name part of a printing's key."""
+    return f"{set_code}/{collector_number}"
 
 
 def line(kind: Kind, name: str, value: Json) -> bytes:
@@ -147,6 +157,11 @@ class Store:
         found = self.records("card", name)
         return found[0] if found else None
 
+    def printing(self, set_code: str, collector_number: str) -> Json | None:
+        """The record of the printing `set_code` `collector_number`, if the store has one."""
+        found = self.entries(key("printing", printing_name(set_code, collector_number)))
+        return found[0] if found else None
+
     def tokens(self, name: str) -> list[Json]:
         """The tokens and emblems named `name`."""
         return self.records("token", name)
@@ -182,10 +197,12 @@ class Store:
         )
 
     def __iter__(self) -> Iterator[tuple[Kind, Json]]:
-        """Every record, cards before tokens, each once (aliases skipped)."""
+        """Every card and token record, cards before tokens, each once (aliases and printings
+        skipped)."""
         self.file.seek(0)
         for raw in self.file:
             name, _, value = raw.partition(b"\t")
             record = cast(Json, json.loads(value))
-            if "alias" not in record:
-                yield cast(Kind, name.split(b":", 1)[0].decode()), record
+            kind = name.split(b":", 1)[0].decode()
+            if "alias" not in record and kind in KINDS:
+                yield cast(Kind, kind), record

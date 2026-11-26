@@ -395,6 +395,23 @@ mod tests {
     }
 
     #[test]
+    fn two_arts_of_one_card_are_cached_under_their_own_keys() {
+        // Two printings of one card differ only in their Scryfall ids, which are the keys.
+        let (_dir, dir) = cache_dir();
+        let (origin, requests) = stub(vec![(200, b"first art"), (200, b"second art")]);
+        let cache = ArtCache::new(dir.clone(), both(&origin));
+
+        assert_eq!(cache.get(&path(ID)).unwrap(), b"first art");
+        assert_eq!(cache.get(&path(OTHER)).unwrap(), b"second art");
+        // Each is a hit now, and neither overwrote the other.
+        assert_eq!(cache.get(&path(ID)).unwrap(), b"first art");
+        assert_eq!(cache.get(&path(OTHER)).unwrap(), b"second art");
+        assert_ne!(path(ID), path(OTHER));
+        assert_eq!(requests.iter().take(2).count(), 2);
+        assert!(requests.try_recv().is_err());
+    }
+
+    #[test]
     fn a_failed_download_answers_an_error_and_caches_nothing() {
         let (_dir, dir) = cache_dir();
         let (origin, requests) = stub(vec![(404, b"missing")]);
