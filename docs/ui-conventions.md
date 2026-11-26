@@ -656,7 +656,9 @@ recordings do not show them.
   graveyard's sheet under exile's name, while one held by a permanent remains
   tucked under it. An emblem stands after its controller's other permanents, and
   its ability lifts from that card. Crowded rows overlap rather than shrinking
-  creature cards below 56px high. The phone centers a board at most 430px wide
+  creature cards below 56px high. A hand too large for one row takes further
+  rows above it, to the right of its player's piles, which stay in view. Its
+  newest cards stand in those rows. The phone centers a board at most 430px wide
   and scales a 375px board to fit narrower screens. Sounds follow the same
   steps. What the desktop shows around its table is composed for the phone from
   the same pieces. On the phone's start screen, the opponent list scrolls

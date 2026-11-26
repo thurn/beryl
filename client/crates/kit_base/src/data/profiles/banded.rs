@@ -99,6 +99,11 @@ pub struct Hand {
     pub gap: f32,
     #[serde(deserialize_with = "finite")]
     pub bias_degrees: f32,
+    /// Whether every row of the viewer's hand above the front row starts right of the viewer's
+    /// piles and Mana button, so that a hand too large for one row leaves them in view. A phone
+    /// held upright needs it; a window wide enough that one row holds an ordinary hand does not.
+    #[serde(default)]
+    pub clear_piles: bool,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]

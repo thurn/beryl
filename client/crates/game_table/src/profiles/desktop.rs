@@ -100,6 +100,7 @@ fn hand(data: anchored::Hand) -> HandData {
         bias_degrees: data.bias_degrees,
         across: 0.0,
         ceiling: f32::INFINITY,
+        back_left: None,
     }
 }
 

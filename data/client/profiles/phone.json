@@ -105,7 +105,8 @@
         "step_depth": 1.5,
         "fan_radius": 14,
         "gap": 4,
-        "bias_degrees": 0.6
+        "bias_degrees": 0.6,
+        "clear_piles": true
       },
       "opponent_hand": {
         "width": 24,

@@ -141,6 +141,10 @@ pub struct HandData {
     /// The highest the inner edge of the hand's back row may stand, in normalized device
     /// coordinates. Cards that cannot keep a press square below the ceiling scroll into view.
     pub ceiling: f32,
+    /// The leftmost any card of a row above the front row may reach, in logical points from
+    /// the window's left edge; none where back rows centre on the fan's middle as the front
+    /// row does. On the phone it keeps the viewer's piles and Mana button in view.
+    pub back_left: Option<f32>,
 }
 
 /// Where the stack's items stand, relative to the camera at the right of the screen (`stack`

@@ -19,3 +19,5 @@ mod motion;
 mod arrange;
 
 mod cascade_fan;
+
+mod fan_rows;

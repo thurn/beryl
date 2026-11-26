@@ -45,7 +45,7 @@ fn policy_catalog_lists_each_arrangement_kind() {
     assert_eq!(policies.map(Policy::kind).as_slice(), PolicyKind::ALL);
 }
 
-fn rectangles(count: usize, size: Vec2) -> Vec<Item> {
+pub(crate) fn rectangles(count: usize, size: Vec2) -> Vec<Item> {
     (0..count)
         .map(|key| Item {
             key: key as u64,
@@ -62,7 +62,7 @@ fn reference_camera() -> Camera {
     Camera::fit(profiles.fallback().table.camera, Window::default())
 }
 
-fn profiles() -> [(Camera, f32); 2] {
+pub(crate) fn profiles() -> [(Camera, f32); 2] {
     let profiles = Profiles::parse(&SHIPPED, crate::card_data()).unwrap();
     let compact = profiles.for_size(Size {
         width: 393.0,
@@ -477,6 +477,7 @@ fn a_centred_fan_wraps_before_scrolling_and_keeps_its_press_squares() {
                 bias: 0.6_f32.to_radians(),
                 inverted: false,
                 depth_step: 1.5,
+                back_left: None,
             })),
             limits: Limits {
                 press_points: target,
@@ -530,6 +531,7 @@ fn a_centred_fan_keeps_its_cards_within_the_available_width() {
                 bias: 0.0,
                 inverted: false,
                 depth_step: 1.5,
+                back_left: None,
             })),
             Limits {
                 press_points: target,
@@ -581,6 +583,7 @@ fn a_centred_fan_without_overlap_wraps_and_scrolls_with_disjoint_faces() {
             bias: 0.6_f32.to_radians(),
             inverted: false,
             depth_step: 1.5,
+            back_left: None,
         }));
         for press_points in [target, 0.0] {
             let limits = Limits {
@@ -634,7 +637,7 @@ fn verify_disjoint(items: &[Item], result: &Solved, camera: &Camera, target: f32
     }
 }
 
-fn projected_face(item: &Item, place: &Placed, camera: &Camera) -> [Vec2; 4] {
+pub(crate) fn projected_face(item: &Item, place: &Placed, camera: &Camera) -> [Vec2; 4] {
     let half = item.size / 2.0;
     [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)].map(|(x, y)| {
         camera.to_screen(place.pose.transform().transform_point3(Vec3::new(
@@ -645,7 +648,7 @@ fn projected_face(item: &Item, place: &Placed, camera: &Camera) -> [Vec2; 4] {
     })
 }
 
-fn verify(items: &[Item], result: &Solved, camera: &Camera, target: f32) {
+pub(crate) fn verify(items: &[Item], result: &Solved, camera: &Camera, target: f32) {
     assert_eq!(items.len(), result.items.len());
     let visible: Vec<_> = items
         .iter()

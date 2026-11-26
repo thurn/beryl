@@ -44,7 +44,7 @@ pub(crate) fn compact_window(width: f32, height: f32) -> Window {
 }
 
 /// A phone window whose safe area is a different distance in from every edge.
-fn uneven(width: f32, height: f32) -> Window {
+pub(crate) fn uneven(width: f32, height: f32) -> Window {
     Window {
         safe_area: Insets {
             top: 47.0,
@@ -94,7 +94,7 @@ pub(crate) fn card_faults(
 }
 
 /// The box around an element's corners: left, top, right, bottom.
-fn bounds(element: &Resolved) -> [f32; 4] {
+pub(crate) fn bounds(element: &Resolved) -> [f32; 4] {
     let xs = element.corners.map(|c| c.x);
     let ys = element.corners.map(|c| c.y);
     [
@@ -328,7 +328,7 @@ fn crowded_rows_scroll_and_every_card_in_view_can_be_pressed() {
 
 #[test]
 fn the_hand_runs_off_the_bottom_with_every_top_edge_in_reach() {
-    for count in [1, 5, 9, 14] {
+    for count in [1, 5, 7, 9, 14] {
         let mut view = ViewBuilder::new();
         for index in 0..count {
             view.card(ZoneName::Hand, Side::You, &format!("Card {index}"));
@@ -344,10 +344,10 @@ fn the_hand_runs_off_the_bottom_with_every_top_edge_in_reach() {
             };
             let cards = cards_at(&frame, hand);
             let label = format!("{count} cards at {width}x{height}");
-            // A hand of up to nine cards fits under the hand's ceiling in every phone window; a
-            // larger one shows as many as fit, at least nine, and scrolls.
+            // A hand of up to seven cards fits in every phone window; a larger one shows as
+            // many as fit, at least seven, and scrolls.
             assert!(
-                cards.len() == count || (count > 9 && (9..count).contains(&cards.len())),
+                cards.len() == count || (count > 7 && (7..count).contains(&cards.len())),
                 "{label}: {} shown",
                 cards.len()
             );
@@ -415,7 +415,7 @@ fn a_hand_of_several_rows_leaves_every_back_row_card_reachable() {
     }
 }
 
-/// A hand of more cards than one fan holds stands its back row in the viewer's strip, where a
+/// A hand of more cards than one row holds stands its back row in the viewer's strip, where a
 /// life total in the strip's middle would split that row's uncovered part into pieces too
 /// narrow to press. The table raises the viewer's total over the hand, never onto their
 /// creatures, and every streak or strike at the viewer aims where the total stands.

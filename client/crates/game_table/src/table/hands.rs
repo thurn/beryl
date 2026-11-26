@@ -144,6 +144,11 @@ fn fan_rests(
             bias: data.bias_degrees.to_radians(),
             inverted: !yours,
             depth_step: data.step_depth,
+            // The anchor stands at `data.across`, and the fan's units are halves of the
+            // window's height.
+            back_left: data.back_left.map(|left| {
+                (left - f32::midpoint(data.across, 1.0) * window.width) * 2.0 / window.height
+            }),
         })),
         limits: Limits {
             press_points: if yours { strip } else { 0.0 },

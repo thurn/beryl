@@ -15,6 +15,7 @@ mod effects_card;
 mod effects_light;
 mod effects_records;
 mod hand_order;
+mod hand_rows;
 mod light;
 mod motion;
 mod particles;

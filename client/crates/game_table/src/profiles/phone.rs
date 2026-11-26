@@ -27,6 +27,11 @@
 //!   (`stack_height`), 51 points wide at 375 by 647, so that a tapped creature, 56 points tall
 //!   there, keeps an uncovered strip a press can reach. The items stand in one row, and a stack
 //!   too long for it scrolls as a battlefield row does (`kit_space::arrange::Cascade`).
+//! - A hand too large for one row takes further rows above it, which stand in the viewer's
+//!   strip. Each starts right of the viewer's piles and the Mana button (`back_left`), so that
+//!   the piles stay in view and every card of an ordinary hand stays in view too. The newest
+//!   cards stand in those rows, at the right, where a drawn card is held up to be read, so a
+//!   card still flying to the hand lands clear of the cards held up after it.
 //! - Hands, piles, the stack and the players' anchors are placed relative to the camera, at
 //!   the web's places in points, converted for each window when the layout is made
 //!   (`layout`), never on the frame path.
@@ -240,11 +245,13 @@ fn hand_ceiling(camera: &Camera, lands_y: f32, target: f32) -> f32 {
 
 /// The viewer's hand: cards a quarter of the column wide, at most 100 points, 4 points apart
 /// while they have room, their top edges 8 points under the hand band's top (`placeHand`), and
-/// in rows no higher than `ceiling` points from the window's top (`hand_ceiling`).
+/// in rows no higher than `ceiling` points from the window's top (`hand_ceiling`). A hand too
+/// large for one row stands its further rows in the viewer's strip, so where the profile asks
+/// for it (`clear_piles`) those rows start `back_left` points from the window's left edge.
 fn your_hand(
     window: Window,
     bands: &TableBands,
-    ceiling: f32,
+    (ceiling, back_left): (f32, Option<f32>),
     (data, sizes, card): (Banded, Bands, Card),
 ) -> HandData {
     let width = bands.right - bands.left;
@@ -263,7 +270,18 @@ fn your_hand(
             .ndc(f32::midpoint(bands.left, bands.right), 0.0)
             .x,
         ceiling: window.size.ndc(0.0, ceiling).y,
+        back_left: back_left.filter(|_| data.hand.clear_piles),
     }
+}
+
+/// The leftmost a card of the viewer's hand above its front row may reach, in logical points
+/// from the window's left edge: a hand gap right of both the viewer's third pile and the manual
+/// table's Mana button, whose right edge is also left of where unspent mana ends in a game. A
+/// table with shared piles leaves this part of the strip empty, so the same line serves it.
+fn back_left(window: Window, data: Banded, pool_right: Option<f32>) -> f32 {
+    let piles = window.safe_area.left + data.piles.you.x.z + data.piles.you.width / 2.0;
+    let pool = pool_right.map_or(f32::NEG_INFINITY, |right| window.size.width / 2.0 - right);
+    piles.max(pool) + data.hand.gap
 }
 
 /// The opponent's hand: card backs along the top of their strip, at its right, short of the menu
@@ -288,6 +306,7 @@ fn opponent_hand(window: Window, bands: &TableBands, data: Banded, card: Card) -
         bias_degrees: 0.0,
         across: window.size.ndc(right - fan / 2.0, 0.0).x,
         ceiling: f32::INFINITY,
+        back_left: None,
     }
 }
 
@@ -310,8 +329,8 @@ pub(super) fn tray_in(
     let foot = bands.middle.bottom() + shape.inset;
     // The prompt's buttons stand on the dock's line while it holds cards up (`prompts::bar`):
     // the strip's middle, or over the top of the hand where it reaches higher. A hand with more
-    // cards than one fan holds stands its back row in the strip, its top `HAND_TOP` over the
-    // strip's top edge.
+    // cards than one row holds stands its back row in the strip, right of the viewer's piles and
+    // Mana button, its top `HAND_TOP` over the strip's top edge.
     let (button, gap) = (data.button_height, data.dock_gap);
     let hand_top = bands.your_strip.top - sizes.hand_top;
     let dock = bands.your_strip.middle().min(hand_top - gap - button / 2.0);
@@ -415,7 +434,14 @@ pub(super) fn layout(profile: &ProfileData, window: Window, data: Banded) -> Lay
         hand: your_hand(
             window,
             &bands,
-            hand_ceiling(&camera, table.lands.y, target),
+            (
+                hand_ceiling(&camera, table.lands.y, target),
+                Some(back_left(
+                    window,
+                    data,
+                    profile.manual.as_ref().map(|manual| manual.pool_right),
+                )),
+            ),
             (data, sizes, table.camera.card),
         ),
         opponent_hand: opponent_hand(window, &bands, data, table.camera.card),

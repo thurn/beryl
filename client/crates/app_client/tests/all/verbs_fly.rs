@@ -602,16 +602,30 @@ fn a_card_played_from_the_middle_of_a_big_hand_is_seen_as_it_flies() {
 /// `seat` in a window of `size` and checked at every tick. A flight's fault says its card was
 /// seen in fewer than `audit.seen` of the frames it flies in.
 fn unseen_steps(before: &GameUpdate, after: &GameUpdate, seat: Side, size: Size) -> Vec<String> {
+    let window = Window {
+        size,
+        ..Window::default()
+    };
+    unseen_steps_in(before, after, seat, window)
+}
+
+/// The "every step shown" faults of `unseen_steps`, in `window` with its safe area.
+fn unseen_steps_in(
+    before: &GameUpdate,
+    after: &GameUpdate,
+    seat: Side,
+    window: Window,
+) -> Vec<String> {
     let mut messages = vec![
         FixtureMessage::game_update(before),
         FixtureMessage::game_update(after),
     ];
     messages.insert(0, fixture_message(&messages, TokenMakers::NONE));
-    let mut page = Page::new(
+    let mut page = Page::in_window(
         crate::test_data::data(),
         Recording(messages).into(),
         seat,
-        size,
+        window,
     )
     .expect("the views can be read");
     page.check_all(Mode::EveryTick)
@@ -694,4 +708,69 @@ fn the_opponents_discard_is_seen_as_it_flies_to_their_graveyard() {
         let unseen = unseen_steps(&discarded_before, &returned, Side::You, size);
         assert!(unseen.is_empty(), "return at {width}x{height}: {unseen:?}");
     }
+}
+
+/// Seven cards drawn at once into a hand of one on a phone are each seen as they fly. The hand
+/// makes room for all eight at the start, so it takes a second row above its first, and that row
+/// stands in the viewer's strip right of their library: each card is seen as it leaves the
+/// library rather than starting under the hand. The drawn cards are named, so that they fly
+/// face up as the viewer's own draws do.
+#[test]
+fn seven_cards_drawn_into_a_narrow_window_hand_are_each_seen_as_they_fly() {
+    let mut builder = ViewBuilder::new();
+    for _ in 0..10 {
+        builder.card(ZoneName::Library, Side::You, "Plains");
+    }
+    builder.card(ZoneName::Hand, Side::You, "Island");
+    builder.script(ScriptBuilder::reset().build());
+    let before = builder.update();
+    let mut view = before.view.clone();
+    let mut flights = Vec::new();
+    for _ in 0..7 {
+        let slot = view
+            .players
+            .you
+            .library
+            .pop()
+            .expect("the library has a card");
+        let object = view
+            .objects
+            .iter_mut()
+            .find(|object| object.slot == slot)
+            .expect("the card is on the table");
+        object.zone = ZoneName::Hand;
+        object.name = Some("Plains".to_owned());
+        flights.push(Act::Fly {
+            from: ZoneName::Library,
+            why: Why::Draw,
+            object: object.clone(),
+            at: None,
+            item: None,
+            origin: None,
+        });
+    }
+    let mut script = ScriptBuilder::default();
+    script.beat(flights);
+    let mut script = script.build();
+    script.timing = time_script(&script, &Table::of(&before.view));
+    view.script = Some(script);
+    let after = GameUpdate {
+        session: before.session,
+        view,
+    };
+    let size = Size {
+        width: 393.0,
+        height: 759.0,
+    };
+    let window = Window {
+        size,
+        scale: 3.0,
+        safe_area: crate::test_data::data()
+            .profiles
+            .for_size(size)
+            .test_safe_area(),
+        ..Window::default()
+    };
+    let unseen = unseen_steps_in(&before, &after, Side::You, window);
+    assert!(unseen.is_empty(), "{unseen:?}");
 }
