@@ -40,9 +40,18 @@ def ios_smoke_arguments(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="run the UI test that touches, rotates and idles a live game instead of a replay",
     )
+    mode.add_argument(
+        "--game",
+        choices=("wu-control", "forgetful-fish"),
+        help="play a whole seeded game of this deck against the AI and check its result",
+    )
 
 
 def run_ios_smoke(args: argparse.Namespace) -> int:
+    if args.game:
+        from .ios_game import run_ios_game
+
+        return run_ios_game(args.game)
     if args.touch:
         from .ios_touch import run_ios_touch
 
