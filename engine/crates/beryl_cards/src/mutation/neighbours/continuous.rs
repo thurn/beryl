@@ -1,8 +1,8 @@
 //! Neighbours of static abilities, replacements and rules.
 
 use beryl_card::{
-    Ability, Condition, Draws, Duration, Filter, Governed, LayerSpec, Modification, Objects,
-    PlayerRules, Replaced, Replacement, Rewrite, RuleChange, SpellCost, Types, When, Zone,
+    Ability, Condition, Draws, Duration, Filter, Governed, LayerSpec, ManaCost, Modification,
+    Objects, PlayerRules, Replaced, Replacement, Rewrite, RuleChange, SpellCost, Types, When, Zone,
 };
 
 use super::{Kind, Neighbours, costs, leak, leak_slice, operands};
@@ -472,7 +472,94 @@ fn governed(what: Governed) -> Neighbours<Governed> {
             .into_iter()
             .map(|(name, f)| (name, G::SpendAsAnyColor(f)))
             .collect(),
+        what @ (G::MustBlock(_)
+        | G::MustBeBlocked(_)
+        | G::MustAttack(_)
+        | G::Alone { .. }
+        | G::CombatLimit { .. }
+        | G::AttackCost(_)) => combat_neighbours(what),
     }
+}
+
+/// The neighbours of a combat requirement, restriction or cost to attack: a requirement of the
+/// other side, the other declarations it restricts, other limits and other costs.
+fn combat_neighbours(what: Governed) -> Neighbours<Governed> {
+    use Governed as G;
+    match what {
+        G::MustBlock(o) => vec![("must be blocked".to_owned(), G::MustBeBlocked(o))],
+        G::MustBeBlocked(o) => vec![("must block".to_owned(), G::MustBlock(o))],
+        G::MustAttack(o) => vec![(
+            "can't attack alone".to_owned(),
+            G::Alone {
+                attack: true,
+                block: false,
+                creatures: o,
+            },
+        )],
+        G::Alone {
+            attack,
+            block,
+            creatures,
+        } => [(true, false), (false, true), (true, true)]
+            .into_iter()
+            .filter(|&flags| flags != (attack, block))
+            .map(|(attack, block)| {
+                (
+                    format!("alone attack {attack} block {block}"),
+                    G::Alone {
+                        attack,
+                        block,
+                        creatures,
+                    },
+                )
+            })
+            .collect(),
+        G::CombatLimit {
+            attackers,
+            blockers,
+        } => combat_limit_neighbours(attackers, blockers),
+        G::AttackCost(cost) => costs::unsigned(cost.generic)
+            .map(|generic| {
+                (
+                    format!("attack cost {generic}"),
+                    G::AttackCost(ManaCost { generic, ..cost }),
+                )
+            })
+            .collect(),
+        G::CastSpells(_)
+        | G::TakeStep(_)
+        | G::ActivateLoyaltyAbilities(_)
+        | G::Block(_)
+        | G::UntapInUntapStep(_)
+        | G::BlockAnyNumber(_)
+        | G::Attack { .. }
+        | G::ActivateAbilities { .. }
+        | G::Counter(_)
+        | G::PreventDamage
+        | G::SpellCosts { .. }
+        | G::Player(_)
+        | G::SpendAsAnyColor(_) => unreachable!("a combat rule"),
+    }
+}
+
+/// The neighbours of "no more than [attackers] creatures can attack, and [blockers] block, each
+/// combat": the limits swapped, and each limit one more or one fewer.
+fn combat_limit_neighbours(attackers: Option<u8>, blockers: Option<u8>) -> Neighbours<Governed> {
+    let limit = |attackers, blockers| Governed::CombatLimit {
+        attackers,
+        blockers,
+    };
+    let mut out = Vec::new();
+    if attackers != blockers {
+        out.push(("limits swapped".to_owned(), limit(blockers, attackers)));
+    }
+    for n in attackers.into_iter().flat_map(costs::unsigned) {
+        out.push((format!("attackers {n}"), limit(Some(n), blockers)));
+    }
+    for n in blockers.into_iter().flat_map(costs::unsigned) {
+        out.push((format!("blockers {n}"), limit(attackers, Some(n))));
+    }
+    out
 }
 
 fn player_rule_neighbours(changes: PlayerRules) -> Neighbours<Governed> {

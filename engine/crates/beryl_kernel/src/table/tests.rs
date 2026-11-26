@@ -446,3 +446,156 @@ fn a_shared_deck_table_takes_one_list_and_refuses_a_second_or_a_sideboard() {
     assert_eq!(state.library(Seat::P0), state.library(Seat::P1));
     assert_eq!(state.library(Seat::P0).len(), 5);
 }
+
+/// A combat requirement, restriction or cost to attack in each shape the declarations read:
+/// "All creatures able to block this creature do so.", "All creatures able to block enchanted
+/// creature do so.", "Target creature must be blocked this turn if able.", "This creature
+/// attacks each combat if able.", "This creature can't attack or block alone.", "No more than
+/// one creature can attack each combat." and "Creatures can't attack you unless their
+/// controller pays {2} for each creature they control that's attacking you."
+mod combat {
+    use beryl_card::{
+        Ability, CardDef, Cost, Face, Filter, Governed, ManaCost, Objects, Players, RuleChange,
+        SpecIx, TargetSpec, Types, When,
+    };
+
+    use crate::format::Format;
+    use crate::rule_changes::Unchecked;
+    use crate::table::{Capability, CardTable, GameTable, TableError};
+
+    const fn rule(players: Players, what: Governed) -> RuleChange {
+        RuleChange {
+            players,
+            what,
+            when: When::AsUsual,
+        }
+    }
+
+    static TAUNT: RuleChange = rule(Players::You, Governed::MustBlock(Objects::This));
+    static LURE: RuleChange = rule(Players::You, Governed::MustBlock(Objects::AttachedTo));
+    static PREY: RuleChange = rule(
+        Players::You,
+        Governed::MustBeBlocked(Objects::Target(SpecIx::new(0))),
+    );
+    static CYCLOPS: RuleChange = rule(Players::You, Governed::MustAttack(Objects::This));
+    static FLUNKIES: RuleChange = rule(
+        Players::You,
+        Governed::Alone {
+            attack: true,
+            block: true,
+            creatures: Objects::This,
+        },
+    );
+    static ARBITER: RuleChange = rule(
+        Players::EachPlayer,
+        Governed::CombatLimit {
+            attackers: Some(1),
+            blockers: None,
+        },
+    );
+    static PROPAGANDA: RuleChange = rule(Players::You, Governed::AttackCost(ManaCost::generic(2)));
+    static PREY_TARGET: [TargetSpec; 1] = [TargetSpec::permanent(Filter::Types(Types::CREATURE))];
+
+    static READ: [Ability; 7] = [
+        Ability::rule_change(&TAUNT),
+        Ability::rule_change(&LURE),
+        Ability::activated(Cost::NONE)
+            .targeting(&PREY_TARGET)
+            .starting(&PREY),
+        Ability::rule_change(&CYCLOPS),
+        Ability::rule_change(&FLUNKIES),
+        Ability::rule_change(&ARBITER),
+        Ability::rule_change(&PROPAGANDA),
+    ];
+
+    /// "Enchanted creature attacks each combat if able": no check finds it.
+    static ENCHANTED_ATTACKS: RuleChange =
+        rule(Players::You, Governed::MustAttack(Objects::AttachedTo));
+    /// "Each creature you control can't attack alone": of creatures other than its own.
+    static ALL_ALONE: RuleChange = rule(
+        Players::You,
+        Governed::Alone {
+            attack: true,
+            block: false,
+            creatures: Objects::All {
+                zone: beryl_card::Zone::Battlefield,
+                filter: Filter::Types(Types::CREATURE),
+            },
+        },
+    );
+    /// "No more than one creature can attack you each combat": a limit for one player.
+    static YOUR_LIMIT: RuleChange = rule(
+        Players::You,
+        Governed::CombatLimit {
+            attackers: Some(1),
+            blockers: None,
+        },
+    );
+    /// "Target creature attacks each combat if able", which an effect would start.
+    static TARGET_ATTACKS: RuleChange = rule(
+        Players::You,
+        Governed::MustAttack(Objects::Target(SpecIx::new(0))),
+    );
+
+    static REFUSED: [Ability; 5] = [
+        Ability::rule_change(&ENCHANTED_ATTACKS),
+        Ability::rule_change(&ALL_ALONE),
+        Ability::rule_change(&YOUR_LIMIT),
+        // A static ability has no target to be about.
+        Ability::rule_change(&PREY),
+        Ability::activated(Cost::NONE)
+            .targeting(&PREY_TARGET)
+            .starting(&TARGET_ATTACKS),
+    ];
+
+    /// The table of a game with a creature whose one ability is `ability`.
+    fn table_with(ability: &'static Ability) -> Result<GameTable, TableError> {
+        let card: &'static CardDef = Box::leak(Box::new(CardDef {
+            name: "Fighter",
+            shape: beryl_card::definition::Shape::Single,
+            faces: Box::leak(Box::new([Face {
+                types: Types::CREATURE,
+                power: Some(1),
+                toughness: Some(1),
+                abilities: std::slice::from_ref(ability),
+                ..Face::EMPTY
+            }])),
+            tokens: &[],
+        }));
+        let cards: &'static CardTable =
+            Box::leak(Box::new(CardTable::new(Box::leak(Box::new([card])))));
+        GameTable::new(Format::CONSTRUCTED, cards, [&[(1, "Fighter")], &[]])
+    }
+
+    #[test]
+    fn a_card_with_a_combat_rule_gives_its_game_the_capability() {
+        for ability in &READ {
+            let t = table_with(ability).unwrap();
+            assert!(
+                t.can(Capability::CombatRequirements),
+                "{:?}",
+                ability.rule()
+            );
+        }
+        let plain = table_with(Box::leak(Box::new(Ability::rule_change(
+            &crate::rule_changes::fixtures::LIMIT,
+        ))))
+        .unwrap();
+        assert!(!plain.can(Capability::CombatRequirements));
+    }
+
+    #[test]
+    fn a_combat_rule_in_a_shape_no_check_reads_is_refused() {
+        for ability in &REFUSED {
+            assert_eq!(
+                table_with(ability).err(),
+                Some(TableError::Rule {
+                    card: "Fighter",
+                    unchecked: Unchecked::Rule,
+                }),
+                "{:?}",
+                ability.rule()
+            );
+        }
+    }
+}

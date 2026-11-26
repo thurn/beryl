@@ -10,6 +10,7 @@ use beryl_card::{
 };
 
 use crate::event::Listens;
+use crate::rule_changes::RuleKind;
 use crate::static_ability::Inputs;
 use crate::subtypes::SubtypeNumbers;
 
@@ -201,10 +202,19 @@ pub enum Capability {
     /// grants it. `beryl_rules`' `match_states` then reads every state trigger at every
     /// state-based check, rather than only after the layer results were stored.
     UnwatchedStateTrigger,
+    /// A card has a combat requirement or restriction, or a cost to attack
+    /// ([`crate::rule_changes::RuleKind::is_combat`]), as "All creatures able to block this
+    /// creature do so." is, so the declarations of attackers and blockers ask which are in
+    /// force (`beryl_rules`' `combat_rules_on` and `combat_rules_for`). Without it they ask
+    /// nothing more than this one test (see [CR 508.1d], see [CR 509.1c]).
+    ///
+    /// [CR 508.1d]: https://yawgatog.com/resources/magic-rules/#R5081d
+    /// [CR 509.1c]: https://yawgatog.com/resources/magic-rules/#R5091c
+    CombatRequirements,
 }
 
 // The game keeps its capabilities in a `u64`.
-const _: () = assert!((Capability::UnwatchedStateTrigger as u32) < u64::BITS);
+const _: () = assert!((Capability::CombatRequirements as u32) < u64::BITS);
 
 impl Capability {
     /// The capabilities of every face and subtype the game can contain.
@@ -315,6 +325,11 @@ impl Capability {
                 .is_some_and(|rule| matches!(rule.what, beryl_card::Governed::TakeStep(_)))
             {
                 found |= Capability::TurnStructure.bit();
+            }
+            if a.rule()
+                .is_some_and(|rule| RuleKind::of(rule).is_ok_and(RuleKind::is_combat))
+            {
+                found |= Capability::CombatRequirements.bit();
             }
             if matches!(
                 a.designation(),

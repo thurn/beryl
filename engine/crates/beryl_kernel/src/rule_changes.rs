@@ -26,7 +26,9 @@ pub enum Unchecked {
     /// one with the ability, or their timing as the rules have it already; casting that no
     /// one can do; blocking or attacking with creatures other than the one with the ability,
     /// or when rather than whether one blocks or attacks; what a spell costs together with
-    /// when it is cast; or an effect starts one that is asked of a permanent.
+    /// when it is cast; a combat requirement or restriction about creatures the check does
+    /// not find it on ([`RuleKind::of`] lists those it does); or an effect starts one that
+    /// is asked of a permanent and is no combat requirement or restriction.
     Rule,
     /// It governs casting the spells a filter accepts, and the filter asks for more than a
     /// spell's own characteristics.
@@ -193,6 +195,46 @@ pub enum RuleKind {
     /// The affected player may spend mana as though it were mana of any color to activate
     /// abilities of permanents accepted by the rule's filter.
     SpendAsAnyColor,
+    /// Each creature able to block the creature this is about must block it (see
+    /// [CR 509.1c]): "The defending player checks each creature they control to see whether
+    /// it's affected by any requirements (effects that say a creature must block, or that it
+    /// must block if some condition is met)." About the creature with the ability, the one
+    /// its Aura or Equipment is attached to, or one an effect names.
+    ///
+    /// [CR 509.1c]: https://yawgatog.com/resources/magic-rules/#R5091c
+    MustBlock,
+    /// The creature this is about must be blocked if able (see [CR 509.1c]), a requirement
+    /// obeyed when one or more creatures block it.
+    ///
+    /// [CR 509.1c]: https://yawgatog.com/resources/magic-rules/#R5091c
+    MustBeBlocked,
+    /// The creature this is about attacks each combat if able (see [CR 508.1d]): "The active
+    /// player checks each creature they control to see whether it's affected by any
+    /// requirements (effects that say a creature attacks if able, or that it attacks if some
+    /// condition is met)."
+    ///
+    /// [CR 508.1d]: https://yawgatog.com/resources/magic-rules/#R5081d
+    MustAttack,
+    /// The creature this is about can't attack alone, block alone, or either (see
+    /// [CR 508.1c], see [CR 509.1b]): restrictions on a declaration in which it is the only
+    /// creature.
+    ///
+    /// [CR 508.1c]: https://yawgatog.com/resources/magic-rules/#R5081c
+    /// [CR 509.1b]: https://yawgatog.com/resources/magic-rules/#R5091b
+    Alone,
+    /// No more than a number of creatures can attack, or block, each combat (see [CR 508.1c],
+    /// see [CR 509.1b]). A rule of every player, kept with the other players' rules.
+    ///
+    /// [CR 508.1c]: https://yawgatog.com/resources/magic-rules/#R5081c
+    /// [CR 509.1b]: https://yawgatog.com/resources/magic-rules/#R5091b
+    CombatLimit,
+    /// Creatures can't attack the players this applies to unless their controller pays a cost
+    /// for each (see [CR 508.1h]): "If any of the chosen creatures require paying costs to
+    /// attack, or if any optional costs to attack were chosen, the active player determines
+    /// the total cost to attack." A rule of the defending player.
+    ///
+    /// [CR 508.1h]: https://yawgatog.com/resources/magic-rules/#R5081h
+    AttackCost,
 }
 
 impl RuleKind {
@@ -200,7 +242,7 @@ impl RuleKind {
         self as usize
     }
 
-    const COUNT: usize = Self::SpendAsAnyColor as usize + 1;
+    const COUNT: usize = Self::AttackCost as usize + 1;
 
     /// The kind of change `rule` is, or the part of it no code reads.
     pub fn of(rule: &RuleChange) -> Result<RuleKind, Unchecked> {
@@ -223,20 +265,7 @@ impl RuleKind {
             }
         };
         match (rule.what, rule.when) {
-            (Governed::CastSpells(filter), when) => {
-                if !of_a_spells_characteristics(filter) {
-                    return Err(Unchecked::Filter);
-                }
-                if !supported_players {
-                    return Err(Unchecked::Players);
-                }
-                Ok(match when {
-                    When::OnlyAsSorcery => RuleKind::CastOnlyAsSorcery,
-                    When::AsInstant => RuleKind::CastAsInstant,
-                    When::Never => RuleKind::CantCast,
-                    When::AsUsual => return Err(Unchecked::Rule),
-                })
-            }
+            (Governed::CastSpells(filter), when) => of_casting(filter, when, supported_players),
             (Governed::SpellCosts { spells, .. }, When::AsUsual) => {
                 if !of_a_spells_characteristics(spells) {
                     return Err(Unchecked::Filter);
@@ -290,6 +319,15 @@ impl RuleKind {
             }
             (Governed::Player(_), When::AsUsual) => for_players(RuleKind::Player),
             (
+                Governed::MustBlock(_)
+                | Governed::MustBeBlocked(_)
+                | Governed::MustAttack(_)
+                | Governed::Alone { .. }
+                | Governed::CombatLimit { .. }
+                | Governed::AttackCost(_),
+                _,
+            ) => of_combat(rule),
+            (
                 Governed::TakeStep(TurnStep::Untap | TurnStep::Upkeep | TurnStep::Draw),
                 When::Never,
             ) => for_players(RuleKind::SkipStep),
@@ -297,11 +335,10 @@ impl RuleKind {
                 for_controller(RuleKind::SpendAsAnyColor)
             }
             // A change to players said with a time, other permanents' loyalty abilities, attacks
-            // or blocks, a restriction to the
-            // timing the rules have already, a change to when a creature attacks or blocks, mana
-            // abilities or the timing of named sources' abilities, countering spells other than
-            // the one it is on, and a change to what a spell costs said with a change to when it
-            // is cast.
+            // or blocks, a restriction to the timing the rules have already, a change to when a
+            // creature attacks or blocks, mana abilities or the timing of named sources'
+            // abilities, countering spells other than the one it is on, a change to what a spell
+            // costs said with a change to when it is cast.
             (
                 Governed::ActivateLoyaltyAbilities(_)
                 | Governed::Block(_)
@@ -334,7 +371,47 @@ impl RuleKind {
                 | RuleKind::CantPreventDamage
                 | RuleKind::SkipStep
                 | RuleKind::SpendAsAnyColor
+                | RuleKind::CombatLimit
+                | RuleKind::AttackCost
         )
+    }
+
+    /// Whether a change of this kind is a combat requirement or restriction, or a cost to
+    /// attack, which the declarations of attackers and blockers read (see [CR 508.1c], see
+    /// [CR 508.1d], see [CR 509.1b], see [CR 509.1c]).
+    ///
+    /// [CR 508.1c]: https://yawgatog.com/resources/magic-rules/#R5081c
+    /// [CR 508.1d]: https://yawgatog.com/resources/magic-rules/#R5081d
+    /// [CR 509.1b]: https://yawgatog.com/resources/magic-rules/#R5091b
+    /// [CR 509.1c]: https://yawgatog.com/resources/magic-rules/#R5091c
+    #[inline]
+    pub const fn is_combat(self) -> bool {
+        matches!(
+            self,
+            RuleKind::MustBlock
+                | RuleKind::MustBeBlocked
+                | RuleKind::MustAttack
+                | RuleKind::Alone
+                | RuleKind::CombatLimit
+                | RuleKind::AttackCost
+        )
+    }
+
+    /// The combat kinds asked of the creature they are about ([`RuleKind::is_combat`]): the
+    /// only kinds asked of a permanent that a resolving effect may start about one, as an
+    /// Effects entry on it.
+    pub const OF_A_CREATURE_IN_COMBAT: [RuleKind; 4] = [
+        RuleKind::MustBlock,
+        RuleKind::MustBeBlocked,
+        RuleKind::MustAttack,
+        RuleKind::Alone,
+    ];
+
+    /// Whether a resolving effect may start a change of this kind about a permanent
+    /// ([`RuleKind::OF_A_CREATURE_IN_COMBAT`]).
+    #[inline]
+    const fn started_on_a_permanent(self) -> bool {
+        self.is_combat() && !self.of_players()
     }
 
     /// Whether a change of this kind reads a value the permanent that makes it chose as it
@@ -342,6 +419,85 @@ impl RuleKind {
     #[inline]
     const fn reads_a_chosen_value(self) -> bool {
         matches!(self, RuleKind::CantActivateNamed)
+    }
+}
+
+/// [`RuleKind::of`] for a change to when the spells `filter` accepts may be cast, for players
+/// a check can read if `supported_players`.
+fn of_casting(filter: Filter, when: When, supported_players: bool) -> Result<RuleKind, Unchecked> {
+    if !of_a_spells_characteristics(filter) {
+        return Err(Unchecked::Filter);
+    }
+    if !supported_players {
+        return Err(Unchecked::Players);
+    }
+    Ok(match when {
+        When::OnlyAsSorcery => RuleKind::CastOnlyAsSorcery,
+        When::AsInstant => RuleKind::CastAsInstant,
+        When::Never => RuleKind::CantCast,
+        When::AsUsual => return Err(Unchecked::Rule),
+    })
+}
+
+/// [`RuleKind::of`] for a combat requirement, restriction or cost to attack: the shapes the
+/// combat declarations find, each made with [`When::AsUsual`].
+fn of_combat(rule: &RuleChange) -> Result<RuleKind, Unchecked> {
+    if rule.when != When::AsUsual {
+        return Err(Unchecked::Rule);
+    }
+    match rule.what {
+        // The combat requirements and restrictions are asked of the creature they are about,
+        // so each is for "you" or for nobody, as "This creature can't block." is.
+        Governed::MustBlock(Objects::This | Objects::AttachedTo) => {
+            for_controller(rule, RuleKind::MustBlock)
+        }
+        // Of the creature with the ability, or of the creature an effect names as it
+        // resolves: the card table refuses a static ability about another ([`named_by`]).
+        Governed::MustBeBlocked(_) => for_controller(rule, RuleKind::MustBeBlocked),
+        Governed::MustAttack(Objects::This) => for_controller(rule, RuleKind::MustAttack),
+        Governed::Alone {
+            attack,
+            block,
+            creatures: Objects::This,
+        } if attack || block => for_controller(rule, RuleKind::Alone),
+        Governed::CombatLimit {
+            attackers,
+            blockers,
+        } if (attackers.is_some() || blockers.is_some())
+            && matches!(rule.players, Players::EachPlayer) =>
+        {
+            Ok(RuleKind::CombatLimit)
+        }
+        Governed::AttackCost(_) => for_controller(rule, RuleKind::AttackCost),
+        // About other creatures than a check finds it on, a restriction on nothing, or a
+        // limit for some players only.
+        Governed::MustBlock(_)
+        | Governed::MustAttack(_)
+        | Governed::Alone { .. }
+        | Governed::CombatLimit { .. }
+        | Governed::CastSpells(_)
+        | Governed::TakeStep(_)
+        | Governed::ActivateLoyaltyAbilities(_)
+        | Governed::Block(_)
+        | Governed::UntapInUntapStep(_)
+        | Governed::BlockAnyNumber(_)
+        | Governed::Attack { .. }
+        | Governed::ActivateAbilities { .. }
+        | Governed::Counter(_)
+        | Governed::PreventDamage
+        | Governed::SpellCosts { .. }
+        | Governed::Player(_)
+        | Governed::SpendAsAnyColor(_) => Err(Unchecked::Rule),
+    }
+}
+
+/// `kind`, a change asked of the permanent it is about, if it is for "you", the permanent's
+/// controller.
+fn for_controller(rule: &RuleChange, kind: RuleKind) -> Result<RuleKind, Unchecked> {
+    if matches!(rule.players, Players::You) {
+        Ok(kind)
+    } else {
+        Err(Unchecked::Players)
     }
 }
 
@@ -534,10 +690,19 @@ fn named_by(ability: &Ability, rules: &mut RuleChanges) -> Result<Replaces, Unch
     let id = rules.number(rule)?;
     let kind = RuleKind::of(rule)?;
     let of_players = kind.of_players();
-    match (ability.kind() == AbilityKind::Static, of_players) {
+    let is_static = ability.kind() == AbilityKind::Static;
+    match (is_static, of_players) {
         (true, true) if ability.condition().is_some() => Err(Unchecked::Condition),
         // A resolved effect has no permanent whose chosen value it could read.
         (false, _) if kind.reads_a_chosen_value() => Err(Unchecked::Rule),
+        // A static ability's combat rule is found on the creature with it or the one it is
+        // attached to, never on a creature another object names.
+        (true, false)
+            if kind.started_on_a_permanent()
+                && !matches!(rule.what.about(), Some(Objects::This | Objects::AttachedTo)) =>
+        {
+            Err(Unchecked::Rule)
+        }
         (true, true) => Ok(Replaces::PLAYER_RULE_CHANGE),
         // Asked of the permanent, with its condition, as the rule is applied.
         (true, false) => {
@@ -546,6 +711,9 @@ fn named_by(ability: &Ability, rules: &mut RuleChanges) -> Result<Replaces, Unch
         }
         // Started by the ability's effect, on the players it names as it resolves.
         (false, true) => Ok(Replaces::NONE),
+        // Started by the ability's effect, as an Effects entry on each creature it is about,
+        // which the combat declarations find (the rules' `combat_rules_on`).
+        (false, false) if kind.started_on_a_permanent() => Ok(Replaces::NONE),
         (false, false) => Err(Unchecked::Rule),
     }
 }
@@ -610,169 +778,4 @@ pub(crate) mod fixtures {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::fixtures::{FLASH, LIMIT, LOYALTY, table};
-    use super::*;
-
-    #[test]
-    fn a_game_numbers_the_rule_changes_its_cards_name_once_each() {
-        let t = table();
-        // In order of first appearance, whichever kind of ability names one.
-        let [loyalty, limit, flash] =
-            [&LOYALTY, &LIMIT, &FLASH].map(|rule| t.rule_id(rule).unwrap());
-        assert_eq!([loyalty.index(), limit.index(), flash.index()], [0, 1, 2]);
-        assert_eq!(t.rule_id(t.rule(limit)), Some(limit));
-        assert_eq!(
-            t.rules_of(RuleKind::CastOnlyAsSorcery),
-            Rules::NONE.with(limit)
-        );
-        assert_eq!(t.rules_of(RuleKind::CastAsInstant), Rules::NONE.with(flash));
-        assert_eq!(
-            t.rules_of(RuleKind::LoyaltyAsInstant),
-            Rules::NONE.with(loyalty)
-        );
-        assert_eq!(t.player_rules(), Rules::NONE.with(limit).with(flash));
-        let all = Rules::NONE.with(loyalty).with(limit).with(flash);
-        assert_eq!(all.iter().collect::<Vec<_>>(), [loyalty, limit, flash]);
-        assert!(all.without(t.player_rules()).contains(loyalty));
-        assert!(Rules::NONE.is_empty() && Rules::NONE.common(all).is_empty());
-    }
-
-    /// "This creature can't block" is checked of the creature with the ability; blocking
-    /// with other creatures, or a change to when one blocks, is refused.
-    #[test]
-    fn only_a_creatures_own_cant_block_is_checked() {
-        let block = |players, what, when| {
-            RuleKind::of(&RuleChange {
-                players,
-                what: Governed::Block(what),
-                when,
-            })
-        };
-        assert_eq!(
-            block(Players::You, Objects::This, When::Never),
-            Ok(RuleKind::CantBlock)
-        );
-        assert!(!RuleKind::CantBlock.of_players());
-        assert_eq!(
-            block(Players::EachOpponent, Objects::This, When::Never),
-            Err(Unchecked::Players)
-        );
-        assert_eq!(
-            block(Players::You, Objects::Carried, When::Never),
-            Err(Unchecked::Rule)
-        );
-        assert_eq!(
-            block(Players::You, Objects::This, When::AsInstant),
-            Err(Unchecked::Rule)
-        );
-    }
-
-    /// "This creature can't attack unless defending player controls an Island" is checked of
-    /// the creature with the ability; attacking with other creatures, or a change to when one
-    /// attacks, is refused.
-    #[test]
-    fn only_a_creatures_own_attack_restriction_is_checked() {
-        let attack = |players, attackers, when| {
-            RuleKind::of(&RuleChange {
-                players,
-                what: Governed::Attack {
-                    attackers,
-                    unless_defender_controls: Some(Filter::Any),
-                },
-                when,
-            })
-        };
-        assert_eq!(
-            attack(Players::You, Objects::This, When::Never),
-            Ok(RuleKind::CantAttack)
-        );
-        assert!(!RuleKind::CantAttack.of_players());
-        assert_eq!(
-            attack(Players::EachOpponent, Objects::This, When::Never),
-            Err(Unchecked::Players)
-        );
-        assert_eq!(
-            attack(Players::You, Objects::Carried, When::Never),
-            Err(Unchecked::Rule)
-        );
-        assert_eq!(
-            attack(Players::You, Objects::This, When::OnlyAsSorcery),
-            Err(Unchecked::Rule)
-        );
-    }
-
-    /// "Activated abilities of sources with the chosen name can't be activated unless they're
-    /// mana abilities" applies to players; mana abilities, or a change to when the abilities
-    /// may be activated, are refused.
-    #[test]
-    fn a_prohibition_on_named_sources_applies_to_players() {
-        let activate = |players, mana_abilities, when| {
-            RuleKind::of(&RuleChange {
-                players,
-                what: Governed::ActivateAbilities {
-                    sources: Named::Chosen,
-                    mana_abilities,
-                },
-                when,
-            })
-        };
-        let kind = activate(Players::EachPlayer, false, When::Never);
-        assert_eq!(kind, Ok(RuleKind::CantActivateNamed));
-        assert!(kind.unwrap().of_players());
-        assert_eq!(
-            activate(Players::EachPlayer, true, When::Never),
-            Err(Unchecked::Rule)
-        );
-        assert_eq!(
-            activate(Players::EachPlayer, false, When::AsInstant),
-            Err(Unchecked::Rule)
-        );
-    }
-
-    /// A change to what a spell costs is asked of the permanent that makes it, so its
-    /// condition is kept; one said with a change of timing, or whose filter reads more than
-    /// a spell's own characteristics, is refused.
-    #[test]
-    fn a_cost_change_is_asked_of_its_permanent() {
-        use beryl_card::SpellCost;
-        let rule = RuleChange::spell_costs(Players::EachPlayer, Filter::Any, SpellCost::AtLeast(3));
-        assert_eq!(RuleKind::of(&rule), Ok(RuleKind::SpellCost));
-        assert!(!RuleKind::SpellCost.of_players());
-        let timed = RuleChange {
-            when: When::AsInstant,
-            ..rule
-        };
-        assert_eq!(RuleKind::of(&timed), Err(Unchecked::Rule));
-        let tapped = RuleChange::spell_costs(Players::You, Filter::Tapped, SpellCost::More(1));
-        assert_eq!(RuleKind::of(&tapped), Err(Unchecked::Filter));
-        let cast_as_usual = RuleChange {
-            what: Governed::CastSpells(Filter::Any),
-            ..rule
-        };
-        assert_eq!(RuleKind::of(&cast_as_usual), Err(Unchecked::Rule));
-    }
-
-    /// Spending mana as any color for activations applies to its maker's controller as a player
-    /// rule with `When::AsUsual`, and rejects other players or timing changes.
-    #[test]
-    fn spend_as_any_color_is_a_player_rule_for_you_as_usual() {
-        let rule = RuleChange {
-            players: Players::You,
-            what: Governed::SpendAsAnyColor(Filter::Types(beryl_card::Types::CREATURE)),
-            when: When::AsUsual,
-        };
-        assert_eq!(RuleKind::of(&rule), Ok(RuleKind::SpendAsAnyColor));
-        assert!(RuleKind::SpendAsAnyColor.of_players());
-        let opponent = RuleChange {
-            players: Players::EachOpponent,
-            ..rule
-        };
-        assert_eq!(RuleKind::of(&opponent), Err(Unchecked::Players));
-        let never = RuleChange {
-            when: When::Never,
-            ..rule
-        };
-        assert_eq!(RuleKind::of(&never), Err(Unchecked::Rule));
-    }
-}
+mod tests;

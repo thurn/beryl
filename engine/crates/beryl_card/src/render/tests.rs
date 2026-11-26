@@ -382,3 +382,114 @@ fn a_product_of_terms_renders_as_oracle_text() {
         "{W/U}, {T}: Add {W}{W}, {W}{U}, or {U}{U}."
     );
 }
+
+/// The combat requirements, restrictions and cost to attack, each as the cards print it:
+/// Taunting Elf, Lure, Emergent Growth's second clause, Bloodrock Cyclops, Mogg Flunkies,
+/// Silent Arbiter's two abilities and Propaganda.
+#[test]
+fn a_combat_rule_says_what_it_requires_or_restricts() {
+    use crate::continuous::Duration;
+    use crate::effect::build::change_rule;
+    use crate::mana::ManaCost;
+    use crate::{Subtype, Subtypes};
+
+    const fn rule(players: Players, what: Governed) -> RuleChange {
+        RuleChange {
+            players,
+            what,
+            when: When::AsUsual,
+        }
+    }
+    static TAUNT: RuleChange = rule(Players::You, Governed::MustBlock(Objects::This));
+    static LURE: RuleChange = rule(Players::You, Governed::MustBlock(Objects::AttachedTo));
+    static PREY: RuleChange = rule(Players::You, Governed::MustBeBlocked(target()));
+    static CYCLOPS: RuleChange = rule(Players::You, Governed::MustAttack(Objects::This));
+    static FLUNKIES: RuleChange = rule(
+        Players::You,
+        Governed::Alone {
+            attack: true,
+            block: true,
+            creatures: Objects::This,
+        },
+    );
+    static ONE_ATTACKER: RuleChange = rule(
+        Players::EachPlayer,
+        Governed::CombatLimit {
+            attackers: Some(1),
+            blockers: None,
+        },
+    );
+    static ONE_BLOCKER: RuleChange = rule(
+        Players::EachPlayer,
+        Governed::CombatLimit {
+            attackers: None,
+            blockers: Some(1),
+        },
+    );
+    static PROPAGANDA: RuleChange = rule(Players::You, Governed::AttackCost(ManaCost::generic(2)));
+    static PREY_EFFECT: Effect = change_rule(&PREY, Duration::EndOfTurn);
+    static CREATURE: TargetSpec = TargetSpec::permanent(Filter::Types(Types::CREATURE));
+
+    static LURE_CARD: CardDef = one_face(
+        "Test Lure",
+        &[Face::EMPTY
+            .types(Types::ENCHANTMENT)
+            .subtypes(Subtypes::of(&[Subtype::Aura]))
+            .abilities(&[
+                Ability::spell().target(&CREATURE),
+                Ability::rule_change(&LURE),
+            ])],
+    );
+    static PROPAGANDA_CARD: CardDef = one_face(
+        "Test Propaganda",
+        &[Face::EMPTY
+            .types(Types::ENCHANTMENT)
+            .abilities(&[Ability::rule_change(&PROPAGANDA)])],
+    );
+    let creature = |ability: &'static RuleChange| {
+        let abilities: &'static [Ability] = Box::leak(Box::new([Ability::rule_change(ability)]));
+        let card: &'static CardDef = Box::leak(Box::new(one_face(
+            "Test Fighter",
+            Box::leak(Box::new([Face::EMPTY
+                .types(Types::CREATURE)
+                .abilities(abilities)])),
+        )));
+        render(card)
+    };
+    assert_eq!(
+        creature(&TAUNT),
+        "All creatures able to block this creature do so."
+    );
+    assert_eq!(
+        creature(&CYCLOPS),
+        "This creature attacks each combat if able."
+    );
+    assert_eq!(
+        creature(&FLUNKIES),
+        "This creature can't attack or block alone."
+    );
+    assert_eq!(
+        creature(&ONE_ATTACKER),
+        "No more than one creature can attack each combat."
+    );
+    assert_eq!(
+        creature(&ONE_BLOCKER),
+        "No more than one creature can block each combat."
+    );
+
+    assert_eq!(
+        render(&LURE_CARD),
+        "Enchant creature\nAll creatures able to block enchanted creature do so."
+    );
+
+    assert_eq!(
+        render_ability(&Ability::spell().target(&CREATURE).effect(&PREY_EFFECT)),
+        "Target creature must be blocked this turn if able."
+    );
+
+    assert_eq!(
+        render(&PROPAGANDA_CARD),
+        "Creatures can't attack you unless their controller pays {2} for each creature they \
+         control that's attacking you."
+    );
+}

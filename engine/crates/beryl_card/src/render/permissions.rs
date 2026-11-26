@@ -14,6 +14,11 @@ impl Ctx {
         if matches!(rule.what, Governed::PreventDamage) && duration == Duration::EndOfTurn {
             return vec![format!("{} this turn", self.rule_change(rule))];
         }
+        // "Target creature must be blocked this turn if able."
+        if let (Governed::MustBeBlocked(objects), Duration::EndOfTurn) = (rule.what, duration) {
+            let attackers = self.objects(objects);
+            return vec![format!("{attackers} must be blocked this turn if able")];
+        }
         let prefix = match duration {
             Duration::EndOfTurn => "until end of turn, ",
             Duration::UntilYourNextTurn => "until your next turn, ",

@@ -3,6 +3,7 @@
 use crate::characteristics::Types;
 use crate::effect::{Objects, Players};
 use crate::filter::Filter;
+use crate::mana::ManaCost;
 
 /// A change to a rule of the game rather than to an object's characteristics
 /// ([CR 613.11](https://yawgatog.com/resources/magic-rules/#R61311)): "Some continuous
@@ -112,6 +113,102 @@ pub enum Governed {
     ///
     /// [CR 107.4c]: https://yawgatog.com/resources/magic-rules/#R1074c
     SpendAsAnyColor(Filter),
+    /// "All creatures able to block [objects] do so.": each creature able to block one of
+    /// these attackers has, for each of them, a requirement to block it ([CR 509.1c]): "The
+    /// defending player checks each creature they control to see whether it's affected by
+    /// any requirements (effects that say a creature must block, or that it must block if
+    /// some condition is met)." Made with [`When::AsUsual`]. Of the creature with the
+    /// ability ([`Objects::This`]) or the one its Aura or Equipment is attached to
+    /// ([`Objects::AttachedTo`]).
+    ///
+    /// [CR 509.1c]: https://yawgatog.com/resources/magic-rules/#R5091c
+    MustBlock(Objects),
+    /// "[Objects] must be blocked if able": one requirement for each of these attackers,
+    /// obeyed when one or more creatures block it ([CR 509.1c]): "If the number of
+    /// requirements that are being obeyed is fewer than the maximum possible number of
+    /// requirements that could be obeyed without disobeying any restrictions, the
+    /// declaration of blockers is illegal." Made with [`When::AsUsual`], usually by an effect
+    /// about its target for a turn.
+    ///
+    /// [CR 509.1c]: https://yawgatog.com/resources/magic-rules/#R5091c
+    MustBeBlocked(Objects),
+    /// "[Objects] attacks each combat if able": a requirement of each of these creatures
+    /// ([CR 508.1d]): "The active player checks each creature they control to see whether
+    /// it's affected by any requirements (effects that say a creature attacks if able, or
+    /// that it attacks if some condition is met)." Made with [`When::AsUsual`].
+    ///
+    /// [CR 508.1d]: https://yawgatog.com/resources/magic-rules/#R5081d
+    MustAttack(Objects),
+    /// "[Creatures] can't attack or block alone": a restriction on each of these creatures
+    /// as an attacker if `attack`, and as a blocker if `block`, broken when it is the only
+    /// creature declared ([CR 508.1c]): "The active player checks each creature they control
+    /// to see whether it's affected by any restrictions (effects that say a creature can't
+    /// attack, or that it can't attack unless some condition is met)." And blocking
+    /// ([CR 509.1b]): "If any restrictions are being disobeyed, the declaration of blockers
+    /// is illegal." Made with [`When::AsUsual`].
+    ///
+    /// [CR 508.1c]: https://yawgatog.com/resources/magic-rules/#R5081c
+    /// [CR 509.1b]: https://yawgatog.com/resources/magic-rules/#R5091b
+    Alone {
+        attack: bool,
+        block: bool,
+        creatures: Objects,
+    },
+    /// "No more than [n] creatures can attack each combat", and the same of blocking: a
+    /// restriction on the declaration as a whole ([CR 508.1c], [CR 509.1b]), at most
+    /// `attackers` attackers and at most `blockers` blockers where each is given. Made with
+    /// [`When::AsUsual`] for each player.
+    ///
+    /// [CR 508.1c]: https://yawgatog.com/resources/magic-rules/#R5081c
+    /// [CR 509.1b]: https://yawgatog.com/resources/magic-rules/#R5091b
+    CombatLimit {
+        attackers: Option<u8>,
+        blockers: Option<u8>,
+    },
+    /// "Creatures can't attack you unless their controller pays [cost] for each creature they
+    /// control that's attacking you": a cost to attack the players it applies to, paid once
+    /// for each creature attacking them ([CR 508.1h]): "If any of the chosen creatures require
+    /// paying costs to attack, or if any optional costs to attack were chosen, the active
+    /// player determines the total cost to attack." A requirement to attack that only paying
+    /// it could obey need not be ([CR 508.1d]): "If a creature can't attack unless a player
+    /// pays a cost, that player is not required to pay that cost". Made with
+    /// [`When::AsUsual`] for "you".
+    ///
+    /// [CR 508.1h]: https://yawgatog.com/resources/magic-rules/#R5081h
+    /// [CR 508.1d]: https://yawgatog.com/resources/magic-rules/#R5081d
+    AttackCost(ManaCost),
+}
+
+impl Governed {
+    /// The objects this is about, if it names some: "this creature" of "This creature can't
+    /// block.", "target creature" of "Target creature must be blocked this turn if able."
+    pub const fn about(&self) -> Option<Objects> {
+        match *self {
+            Governed::ActivateLoyaltyAbilities(objects)
+            | Governed::Block(objects)
+            | Governed::UntapInUntapStep(objects)
+            | Governed::BlockAnyNumber(objects)
+            | Governed::Attack {
+                attackers: objects, ..
+            }
+            | Governed::Counter(objects)
+            | Governed::MustBlock(objects)
+            | Governed::MustBeBlocked(objects)
+            | Governed::MustAttack(objects)
+            | Governed::Alone {
+                creatures: objects, ..
+            } => Some(objects),
+            Governed::CastSpells(_)
+            | Governed::TakeStep(_)
+            | Governed::ActivateAbilities { .. }
+            | Governed::PreventDamage
+            | Governed::SpellCosts { .. }
+            | Governed::Player(_)
+            | Governed::CombatLimit { .. }
+            | Governed::AttackCost(_)
+            | Governed::SpendAsAnyColor(_) => None,
+        }
+    }
 }
 
 /// How a [`Governed::SpellCosts`] changes a spell's total cost ([CR 601.2f]).
@@ -303,6 +400,15 @@ impl RuleChange {
                 }
                 .to_owned()
             }
+            (
+                what @ (Governed::MustBlock(_)
+                | Governed::MustBeBlocked(_)
+                | Governed::MustAttack(_)
+                | Governed::Alone { .. }
+                | Governed::CombatLimit { .. }
+                | Governed::AttackCost(_)),
+                _,
+            ) => combat_words(what),
             (Governed::TakeStep(step), When::Never) => format!("skipping their {step:?} steps"),
             (Governed::TakeStep(step), When::OnlyAsSorcery | When::AsInstant) => {
                 format!("taking their {step:?} steps at a changed time")
@@ -313,6 +419,44 @@ impl RuleChange {
             }
             (_, When::AsUsual) => "with a rule changed in no way".to_owned(),
         }
+    }
+}
+
+/// [`RuleChange::words`] of a combat requirement, restriction or cost to attack.
+fn combat_words(what: Governed) -> String {
+    match what {
+        Governed::MustBlock(_) => {
+            "with creatures that all creatures able to block must block".to_owned()
+        }
+        Governed::MustBeBlocked(_) => "with creatures that must be blocked if able".to_owned(),
+        Governed::MustAttack(_) => "with creatures that attack each combat if able".to_owned(),
+        Governed::Alone { .. } => "with creatures that can't attack or block alone".to_owned(),
+        Governed::CombatLimit {
+            attackers,
+            blockers,
+        } => {
+            let limit = |n: Option<u8>, verb| n.map(|n| format!("at most {n} {verb}")).into_iter();
+            let limits: Vec<String> = limit(attackers, "attacking")
+                .chain(limit(blockers, "blocking"))
+                .collect();
+            format!("with {} creatures each combat", limits.join(" and "))
+        }
+        Governed::AttackCost(cost) => {
+            format!("attacked only by creatures whose controller pays {cost:?} for each")
+        }
+        Governed::CastSpells(_)
+        | Governed::TakeStep(_)
+        | Governed::ActivateLoyaltyAbilities(_)
+        | Governed::Block(_)
+        | Governed::UntapInUntapStep(_)
+        | Governed::BlockAnyNumber(_)
+        | Governed::Attack { .. }
+        | Governed::ActivateAbilities { .. }
+        | Governed::Counter(_)
+        | Governed::PreventDamage
+        | Governed::SpellCosts { .. }
+        | Governed::Player(_)
+        | Governed::SpendAsAnyColor(_) => unreachable!("a combat rule"),
     }
 }
 

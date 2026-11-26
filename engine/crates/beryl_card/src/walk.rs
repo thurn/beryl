@@ -190,7 +190,13 @@ impl Ability {
                 | Governed::Block(objects)
                 | Governed::UntapInUntapStep(objects)
                 | Governed::BlockAnyNumber(objects)
-                | Governed::Counter(objects) => {
+                | Governed::Counter(objects)
+                | Governed::MustBlock(objects)
+                | Governed::MustBeBlocked(objects)
+                | Governed::MustAttack(objects)
+                | Governed::Alone {
+                    creatures: objects, ..
+                } => {
                     objects.walk(visit);
                 }
                 Governed::Attack {
@@ -205,7 +211,9 @@ impl Ability {
                 Governed::ActivateAbilities { .. }
                 | Governed::Player(_)
                 | Governed::PreventDamage
-                | Governed::TakeStep(_) => {}
+                | Governed::TakeStep(_)
+                | Governed::CombatLimit { .. }
+                | Governed::AttackCost(_) => {}
             }
         }
         if let Some(filter) = &self.only_if_you_control() {

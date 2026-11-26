@@ -185,7 +185,13 @@ fn spells_of(rule: &RuleChange) -> Filter {
         | Governed::PreventDamage
         | Governed::TakeStep(_)
         | Governed::Player(_)
-        | Governed::SpendAsAnyColor(_) => unreachable!("a rule change about casting"),
+        | Governed::SpendAsAnyColor(_)
+        | Governed::MustBlock(_)
+        | Governed::MustBeBlocked(_)
+        | Governed::MustAttack(_)
+        | Governed::Alone { .. }
+        | Governed::CombatLimit { .. }
+        | Governed::AttackCost(_) => unreachable!("a rule change about casting"),
     }
 }
 
@@ -565,7 +571,8 @@ fn countered_never<L: Layout>(
 /// such rule change among the game's cards one test, and with none on this permanent two.
 ///
 /// No effect makes one: the card table refuses an ability whose effect would start a rule
-/// change that is asked of a permanent.
+/// change of these kinds about a permanent. The combat kinds, which an effect may start, are
+/// read by `combat_rules::combat_rules_on` instead.
 ///
 /// [CR 604.1]: https://yawgatog.com/resources/magic-rules/#R6041
 // Out of line, as the compiler had it before a second rule kind was asked of an object: inlined
@@ -596,7 +603,7 @@ pub(crate) fn own_rule_holds<L: Layout>(
 ///
 /// [CR 702.140e]: https://yawgatog.com/resources/magic-rules/#R702140e
 #[inline]
-fn object_rules<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> Rules {
+pub(super) fn object_rules<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> Rules {
     let own = s.definition(slot).rules(t);
     if t.can(Capability::Merges) {
         own.union(merged_rules(s, t, slot))
@@ -630,7 +637,12 @@ fn player_rules_of<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> Rul
 
 /// Whether the condition of the static ability of the permanent in `slot` that makes the
 /// rule change `id` for its own permanent holds, or it has none.
-fn own_condition_holds<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot, id: RuleId) -> bool {
+pub(super) fn own_condition_holds<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    slot: L::Slot,
+    id: RuleId,
+) -> bool {
     // Most conditions are read of the permanent, by the rule change's number; any other is
     // read in a scene, for the ability that has it.
     let holds = match t.rule_condition(id) {

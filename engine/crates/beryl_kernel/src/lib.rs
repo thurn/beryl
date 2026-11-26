@@ -176,6 +176,7 @@
 //! | a layer change on an object | Effects: an entry on the object, payload [`effects::Payload::Layer`] of a [`effects::LayerChange`] |
 //! | an object put somewhere else instead of a graveyard | Effects: an entry on the object, payload [`effects::Payload::Move`] |
 //! | a rule change for a player for a while ("you may cast sorceries as though they had flash" until their next turn) | Effects: an entry on the player, payload [`effects::Payload::Rule`]. A game numbers the rule changes its cards name ([`rule_changes::Rules`]); a static ability's rule changes for players are found with the layers ("Static rule changes") |
+//! | a combat requirement or restriction about a creature for a while ("target creature must be blocked this turn if able") | Effects: an entry on the creature, payload [`effects::Payload::Rule`] ("Static rule changes") |
 //! | a permission to cast a card, for a turn or for as long as it stays in its zone | Effects: an entry on the card, payload [`effects::Payload::Cast`] of an [`effects::Permission`] naming the player and the terms the spell is cast on; "this turn" is [`store::Duration::EndOfTurn`], and either way it ends with the card's object. [`State::cast_permissions`] reads them |
 //! | an extra cost a permission's terms add | Effects: an [`effects::Payload::Cost`] on the spell, started as it is cast from the permission's terms. Before the cast the cost is read of the permission; from then on of the cost changes on the spell ([`State::cost_increase`]) |
 //! | a spell exiled as it leaves the stack because of how it was cast, or cast with flashback | the permission's terms carry it to the cast, which starts an [`effects::Payload::Move`] on the spell: exile instead of a graveyard, or [`effects::MoveReplacement::Flashback`], exile instead of anywhere else (see CR 702.34a). Every move of the spell applies it where it applies any replacement (the rules' `replacement::moving`), and "was a flashback cost paid" is whether that replacement is on the spell |
@@ -419,8 +420,14 @@
 //!   dirties nothing and each owner checks its own (the store's invariant, the engine's reference recompute).
 //! - A rule change about the permanent with the ability asks its copiable values, which
 //!   a face-down permanent has none of. The Effects store keeps entries on an object too
-//!   ([`State::effect_rules_on`]), which no card starts: the table refuses an ability
-//!   whose effect would.
+//!   ([`State::effect_rules_on`]), with [`effects::Affects::Object`] and
+//!   [`effects::Payload::Rule`]. A resolving effect starts one only for a combat
+//!   requirement or restriction about a creature, one of
+//!   [`rule_changes::RuleKind::OF_A_CREATURE_IN_COMBAT`] ("target creature must be blocked
+//!   this turn if able"), on each creature the rule is about as the effect resolves. The
+//!   entry ends with its duration or when the creature leaves the battlefield, as any entry
+//!   on an object does. The table refuses an ability whose effect would start any other
+//!   kind asked of a permanent.
 //! - A change whose meaning depends on a value its permanent chose as it entered, as "sources
 //!   with the chosen name" does ([`rule_changes::RuleKind::CantActivateNamed`]), is numbered
 //!   once for the game like any other. Its check finds the permanents that make it only

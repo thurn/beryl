@@ -61,18 +61,7 @@ impl Ctx {
             Governed::ActivateAbilities {
                 sources: Named::Chosen,
                 mana_abilities,
-            } => {
-                let sources = "activated abilities of sources with the chosen name";
-                return match (rule.when, mana_abilities) {
-                    (When::Never, false) => {
-                        format!("{sources} can't be activated unless they're mana abilities")
-                    }
-                    (When::Never, true) => format!("{sources} can't be activated"),
-                    (When::OnlyAsSorcery | When::AsInstant | When::AsUsual, _) => {
-                        format!("{sources} can be activated only at a changed time")
-                    }
-                };
-            }
+            } => return named_sources(rule.when, mana_abilities),
             // "This spell can't be countered": of the spells, not of who would counter them.
             Governed::Counter(objects) => {
                 let spells = self.objects(objects);
@@ -107,6 +96,12 @@ impl Ctx {
                     "{who} may spend mana as though it were mana of any color to activate abilities of {permanents}"
                 );
             }
+            Governed::MustBlock(_)
+            | Governed::MustBeBlocked(_)
+            | Governed::MustAttack(_)
+            | Governed::Alone { .. }
+            | Governed::CombatLimit { .. }
+            | Governed::AttackCost(_) => return self.combat_rule(rule.what, &who),
         };
         match (rule.when, rule.what) {
             (When::Never, _) => format!("{who} can't {what}"),
@@ -118,6 +113,68 @@ impl Ctx {
             }
             (When::AsInstant, _) => format!("{who} may {what} as though they had flash"),
             (When::AsUsual, _) => format!("{who} {what} as usual"),
+        }
+    }
+
+    /// A combat requirement, restriction or cost to attack, said of the creatures it is about
+    /// or, of a cost to attack, of the players `who` it protects: "All creatures able to block
+    /// this creature do so.", "No more than one creature can attack each combat."
+    fn combat_rule(&mut self, what: Governed, who: &str) -> String {
+        match what {
+            Governed::MustBlock(objects) => {
+                let attackers = self.objects(objects);
+                format!("all creatures able to block {attackers} do so")
+            }
+            Governed::MustBeBlocked(objects) => {
+                let attackers = self.objects(objects);
+                format!("{attackers} must be blocked if able")
+            }
+            Governed::MustAttack(objects) => {
+                let verb = if self.is_plural(objects) {
+                    "attack"
+                } else {
+                    "attacks"
+                };
+                format!("{} {verb} each combat if able", self.objects(objects))
+            }
+            Governed::Alone {
+                attack,
+                block,
+                creatures,
+            } => {
+                let verbs = match (attack, block) {
+                    (true, true) => "attack or block",
+                    (true, false) => "attack",
+                    (false, true) => "block",
+                    (false, false) => "do nothing",
+                };
+                format!("{} can't {verbs} alone", self.objects(creatures))
+            }
+            Governed::CombatLimit {
+                attackers,
+                blockers,
+            } => combat_limit(attackers, blockers),
+            // Of the attackers, not of the players they would attack.
+            Governed::AttackCost(cost) => {
+                format!(
+                    "creatures can't attack {who} unless their controller pays {} for each \
+                     creature they control that's attacking {who}",
+                    super::words::mana_text(cost)
+                )
+            }
+            Governed::CastSpells(_)
+            | Governed::TakeStep(_)
+            | Governed::ActivateLoyaltyAbilities(_)
+            | Governed::Block(_)
+            | Governed::UntapInUntapStep(_)
+            | Governed::BlockAnyNumber(_)
+            | Governed::Attack { .. }
+            | Governed::ActivateAbilities { .. }
+            | Governed::Counter(_)
+            | Governed::PreventDamage
+            | Governed::SpellCosts { .. }
+            | Governed::Player(_)
+            | Governed::SpendAsAnyColor(_) => unreachable!("a combat rule"),
         }
     }
 
@@ -263,5 +320,41 @@ impl Ctx {
             None => "",
         };
         format!("Spend this mana only to cast {spell}{chosen}{rider}.")
+    }
+}
+
+/// "Activated abilities of sources with the chosen name can't be activated unless they're mana
+/// abilities": of the abilities, not of who would activate them.
+fn named_sources(when: When, mana_abilities: bool) -> String {
+    let sources = "activated abilities of sources with the chosen name";
+    match (when, mana_abilities) {
+        (When::Never, false) => {
+            format!("{sources} can't be activated unless they're mana abilities")
+        }
+        (When::Never, true) => format!("{sources} can't be activated"),
+        (When::OnlyAsSorcery | When::AsInstant | When::AsUsual, _) => {
+            format!("{sources} can be activated only at a changed time")
+        }
+    }
+}
+
+/// "No more than one creature can attack each combat", "no more than two creatures can block
+/// each combat" ([CR 508.1c](https://yawgatog.com/resources/magic-rules/#R5081c)).
+fn combat_limit(attackers: Option<u8>, blockers: Option<u8>) -> String {
+    let limit = |n: u8, verb: &str| {
+        let creatures = if n == 1 { "creature" } else { "creatures" };
+        format!(
+            "no more than {} {creatures} can {verb} each combat",
+            number(n)
+        )
+    };
+    let limits: Vec<String> = [(attackers, "attack"), (blockers, "block")]
+        .into_iter()
+        .filter_map(|(n, verb)| n.map(|n| limit(n, verb)))
+        .collect();
+    if limits.is_empty() {
+        "creatures attack and block as usual".to_owned()
+    } else {
+        limits.join(" and ")
     }
 }
