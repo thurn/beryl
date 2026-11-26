@@ -30,11 +30,6 @@ use kit_base::tokens::{color, size, type_style};
 use kit_text::text::TypeStyle;
 use kit_ui::element::{Anchor, Element, TextAlign, row, text};
 
-/// The share of a box's heading its name's type takes, and the least size it is drawn at, in
-/// stage pixels: `.stage-tray-label`'s `max(12px, calc(var(--heading) * 0.5))`.
-const LABEL_SHARE: f32 = 0.5;
-const LABEL_LEAST: f32 = size::SPLIT_LABEL_LEAST;
-
 /// What the flat layer shows for `prompt`: the prompt bar, and a box round each pile's place in
 /// the tray, its name in the strip over its cards; none for a fan, and none of their edges for
 /// a put-back. A pile ordered on the library has no name over it, and the words for its row's
@@ -49,7 +44,8 @@ pub(super) fn view(prompt: &PromptView, input: &HudIn, bar: Element) -> Element 
     let heading = space.heading / per_point;
     let label = TypeStyle {
         weight: 600,
-        size: ((space.heading * LABEL_SHARE).max(LABEL_LEAST) / per_point)
+        // `.stage-tray-label`'s `max(12px, calc(var(--heading) * 0.5))`.
+        size: ((space.heading * 0.5).max(size::SPLIT_LABEL_LEAST) / per_point)
             .max(input.profile.data().checks.text_points.unwrap_or(0.0)),
         line_height: 1.0,
         ..type_style::BODY

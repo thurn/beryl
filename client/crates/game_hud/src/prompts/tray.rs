@@ -85,6 +85,7 @@ impl<'a> Piles<'a> {
             count: 1,
             kind: Kind::Boxes,
         };
+        let closed_empty = |pile: &Pile| pile.closed && pile.cards.is_empty();
         match &prompt.body {
             ShapeBody::Pick { tray, .. } if !tray.is_empty() => Some(one(tray)),
             ShapeBody::YesNo { about, .. } if !about.is_empty() => Some(one(about)),
@@ -92,20 +93,20 @@ impl<'a> Piles<'a> {
                 Some(one(about))
             }
             ShapeBody::Split { piles } => match &piles[..] {
-                [first, second] if first.closed && first.cards.is_empty() => Some(Self {
-                    cards: [&second.cards, &[]],
-                    rooms: [second.exactly, None],
-                    indices: [1, 0],
-                    count: 1,
-                    kind: Kind::SingleBox,
-                }),
-                [first, second] if second.closed && second.cards.is_empty() => Some(Self {
-                    cards: [&first.cards, &[]],
-                    rooms: [first.exactly, None],
-                    indices: [0, 1],
-                    count: 1,
-                    kind: Kind::SingleBox,
-                }),
+                [first, second] if closed_empty(first) || closed_empty(second) => {
+                    let (shown, index) = if closed_empty(first) {
+                        (second, 1)
+                    } else {
+                        (first, 0)
+                    };
+                    Some(Self {
+                        cards: [&shown.cards, &[]],
+                        rooms: [shown.exactly, None],
+                        indices: [index, 1 - index],
+                        count: 1,
+                        kind: Kind::SingleBox,
+                    })
+                }
                 [first, second] => Some(Self {
                     cards: [&first.cards, &second.cards],
                     rooms: [first.exactly, second.exactly],
@@ -209,8 +210,10 @@ pub(super) fn marks(prompt: Option<Shown<'_>>) -> impl Iterator<Item = Span> + '
 /// written in `style` at the two ends of a strip `width` wide whose top left corner is `at`.
 pub(super) fn ends(words: &[String; 2], at: Vec2, width: f32, style: TypeStyle) -> Element {
     let word = |words: &str| text(words).style(style).color(color::GOLD);
-    let mut ends = row().name("ends").width(width);
-    ends = ends.justify_content(Justify::SpaceBetween);
+    let mut ends = row()
+        .name("ends")
+        .width(width)
+        .justify_content(Justify::SpaceBetween);
     ends = ends.child(word(&words[0])).child(word(&words[1]));
     ends.anchor = Some(Anchor::Point(at, Vec2::ZERO));
     ends

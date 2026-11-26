@@ -30,13 +30,10 @@ use kit_text::text::TypeStyle;
 use kit_ui::element::{Anchor, Element, Shown as Showing, row};
 use kit_ui::input::{FaceSize, Rect, Size};
 
-/// The space between the row and the words under it, their type's size and weight, and the
-/// widest they spread, in stage pixels: `.stage-order`'s `gap` and `.stage-order-ends`' `font`
-/// and `width` in `ui/src/stage/stage.css`.
+/// The space between the row and the words under it and their type's size in stage pixels:
+/// `.stage-order`'s `gap` and `.stage-order-ends`' `font` in `ui/src/stage/stage.css`.
 const ENDS_GAP: f32 = space::M;
 const ENDS_SIZE: f32 = size::ORDER_ENDS_SIZE;
-const ENDS_WEIGHT: u16 = 600;
-const ENDS_MOST: f32 = size::ORDER_ENDS_MOST;
 
 /// What the flat layer shows for `prompt`: the shade over the table, the waiting triggers in
 /// their row with the session's words for its two ends under it, and the prompt bar. The item
@@ -156,12 +153,12 @@ fn ends(prompt: &PromptView, count: usize, tray: (TraySpace, Size)) -> Element {
     let (space, size) = tray;
     let (per_point, area) = (per_point(tray), tray_area(space, size));
     let style = TypeStyle {
-        weight: ENDS_WEIGHT,
+        weight: 600,
         size: ENDS_SIZE / per_point,
         line_height: 1.0,
         ..type_style::BODY
     };
-    let width = area.width.min(ENDS_MOST / per_point);
+    let width = area.width.min(size::ORDER_ENDS_MOST / per_point);
     let row_bottom =
         row_top(count, tray) + item_width(count, tray) * tray.0.card.height / tray.0.card.width;
     let at = Vec2::new(
@@ -292,27 +289,9 @@ mod tests {
         let profile = Profile::for_window(&profiles, window);
         let tray = (profile.order_tray(), window.size);
         let row: Vec<_> = cells(3, tray).collect();
-        assert!(
-            row[0].x > row[1].x && row[1].x > row[2].x,
-            "the first to resolve lies at the right: {row:?}"
-        );
-        let left = row[2].x - 1.0;
-        let right = row[0].x + row[0].width + 1.0;
-        assert_eq!(
-            slot_in(3, tray, left),
-            3,
-            "past the left end is the last slot"
-        );
-        assert_eq!(
-            slot_in(3, tray, right),
-            0,
-            "past the right end is the front"
-        );
-        let between = row[1].x + row[1].width + 1.0;
-        assert_eq!(
-            slot_in(3, tray, between),
-            1,
-            "between the first two is before the second"
-        );
+        assert!(row[0].x > row[1].x && row[1].x > row[2].x);
+        assert_eq!(slot_in(3, tray, row[2].x - 1.0), 3);
+        assert_eq!(slot_in(3, tray, row[0].x + row[0].width + 1.0), 0);
+        assert_eq!(slot_in(3, tray, row[1].x + row[1].width + 1.0), 1);
     }
 }
