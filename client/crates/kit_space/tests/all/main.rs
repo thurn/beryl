@@ -17,3 +17,5 @@ fn card_data() -> kit_base::data::Card {
 mod motion;
 
 mod arrange;
+
+mod cascade_fan;

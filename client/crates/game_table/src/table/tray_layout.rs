@@ -507,11 +507,7 @@ pub fn tray_poses(held: &Held, space: TraySpace, camera: &Camera) -> TrayPoses {
     let library = (laid.library.into_iter())
         .flat_map(|area| {
             (0..backs).map(move |index| {
-                #[expect(
-                    clippy::cast_precision_loss,
-                    reason = "a deck is drawn with a few backs"
-                )]
-                let under = (backs - 1 - index) as f32;
+                let under = space.tuning.put_back.steps_under(index);
                 let offset = space.tuning.put_back.deck_offset * under;
                 let at = (area.x + offset.x, area.y + offset.y, area.width);
                 screen_pose(

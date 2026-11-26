@@ -12,6 +12,9 @@ pub struct CascadeFan {
     pub cascade_turns: Vec2,
     /// The rise of the base behind the cascade, as a fraction of item height.
     pub cascade_rise: f32,
+    /// How far above the raised base the pile is drawn, as by the card backs drawn behind a
+    /// put-back's pile, in the layout's units. The heading goes above that.
+    pub base_edge: f32,
     pub separation: f32,
     pub fan: FanShape,
     pub fan_min_step: f32,
@@ -49,7 +52,7 @@ impl CascadeFan {
         };
         let last = slots[slots.len() - 1];
         let cascade_band = clamp_band(
-            base.y - self.heading,
+            base.y - self.base_edge - self.heading,
             bottom(last).min(bottom(cascade.viewport)) + fit.gap,
             band,
         );
@@ -107,7 +110,17 @@ impl CascadeFan {
         [depth, room]: [usize; 2],
     ) -> (ScreenLayout, ScreenLayout, Vec<Rect>) {
         let gap = fit.gap.min(band.width / 4.0).min(band.height / 4.0);
-        let area = inset(band, gap);
+        let mut area = inset(band, gap);
+        // Stacked, the cascade has its band to itself and fills it, so its heading and the
+        // pile's drawn edge need room above it, as the fan's heading has below: otherwise the
+        // pile covers the heading, as a stacked put-back's pile covered "Top". Side by side,
+        // the cascade is centred in a band as tall as the fan's and the heading fits above it.
+        // The heading may use the gap the band is inset by.
+        if second.is_some() {
+            let heading = (self.heading + self.base_edge - gap).clamp(0.0, area.height / 2.0);
+            area.y += heading;
+            area.height -= heading;
+        }
         let hand = second.map_or(area, |second| {
             let mut second = inset(second, gap.min(second.height / 4.0));
             let heading = self.heading.min(second.height / 2.0);
@@ -136,6 +149,12 @@ impl CascadeFan {
                 .min(Grid::pitch(area.height, item.y, depth, 0.0))
                 .max(fit.press);
             let deck_height = item.y + deck_step * gaps(depth);
+            // Stacked, the base raised behind the cascade must stay below the heading too.
+            let rise = if second.is_some() {
+                self.cascade_rise * item.y
+            } else {
+                0.0
+            };
             let available = if second.is_some() {
                 hand.width
             } else {
@@ -146,7 +165,7 @@ impl CascadeFan {
                 .max(fit.press)
                 .min(Grid::pitch(available, width, room, 0.0).max(fit.press));
             let reserved = width + fan_step * gaps(room);
-            if deck_height > area.height
+            if deck_height + rise > area.height
                 || reserved > available
                 || (room > 1 && fan_step < self.fan_min_step * width)
             {
@@ -160,7 +179,7 @@ impl CascadeFan {
             };
             let deck = Rect {
                 x,
-                y: area.y + (area.height - deck_height) / 2.0,
+                y: area.y + rise + (area.height - rise - deck_height) / 2.0,
                 width,
                 height: deck_height,
             };

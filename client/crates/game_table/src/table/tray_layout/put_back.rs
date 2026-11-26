@@ -24,6 +24,7 @@ pub(super) fn put_back(held: &Held, space: &TraySpace, span: (f32, f32)) -> Laid
         cascade_step: shape.cascade,
         cascade_turns: shape.column_turns,
         cascade_rise: shape.pile_rise,
+        base_edge: shape.backs_edge(),
         separation: shape.between,
         fan: FanShape {
             step: shape.step,
