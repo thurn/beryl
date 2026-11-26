@@ -226,12 +226,9 @@ pub(crate) fn lay(
     }
 }
 
-/// Where cards lie beside `side`'s library while a player handles them, as Arena lays out the
-/// cards a short look takes: face down on the table at the library's size, raised off it and
-/// fanned toward the middle of the table (UI Conventions, "Cards the opponent looks at").
-/// `looker` is the player the cards belong to the handling of. `side` is none for the shared
-/// library, beside which the cards also lie half a card toward `looker`, so that they read as
-/// that player's.
+/// Where the cards `looker` handles lie beside `side`'s library, as Arena lays out the cards a
+/// short look takes (UI Conventions, "Cards the opponent looks at"): on the table at the
+/// library's size, fanned toward the middle. `side` is none for the shared library.
 fn beside_pile(
     (layout, camera, lift): (&Layout, &Camera, &Lift),
     (side, looker): (Option<Side>, Side),
@@ -242,17 +239,12 @@ fn beside_pile(
     let (direction, band, toward_looker) = beside_library(side, looker, layout);
     let mut pile = placement.piles[super::PileShown::index(side, ZoneName::Library)];
     if pile.count == 0 {
-        // The library is not placed yet (the shared piles come after both hands), or is empty.
+        // Not placed yet: the shared piles come after both hands.
         pile = super::pile::fit(layout, camera, (side, ZoneName::Library), (0, None));
     }
-    let beside = pile
-        .top
-        .and_then(|slot| placement.get(slot))
-        .map(|rest| rest.pose);
-    let card_height = layout.camera.card.height * scale;
-    let at = pile.base
-        + library.beside * scale * direction
-        + Vec2::Y * (card_height / 2.0) * toward_looker;
+    let beside = (pile.top.and_then(|slot| placement.get(slot))).map(|rest| rest.pose);
+    let half_card = layout.camera.card.height * scale / 2.0;
+    let at = pile.base + library.beside * scale * direction + Vec2::Y * half_card * toward_looker;
     (
         LiftedFan {
             columns: library.columns,
@@ -274,11 +266,11 @@ fn beside_pile(
     )
 }
 
-/// Which way the cards a look takes from `side`'s library lie beside it: along the table
-/// (`1.0` to the right), within which band of the screen, and how far toward the player who
-/// looks, in half cards. The shared library (`side` none) stands at one edge of the table,
-/// between the two players, so its cards lie beside it toward the middle of the table, and on
-/// the side of it of the player who looks: above it for the opponent, below it for the viewer.
+/// Which way the cards `looker` handles lie beside `side`'s library: along the table (`1.0` to
+/// the right), within which band of the screen, and how far toward `looker`, in half cards. The
+/// shared library stands between the players at one edge of the table, so its cards lie toward
+/// the middle of the table and on `looker`'s side of it: above it for the opponent, below it
+/// for the viewer.
 fn beside_library(side: Option<Side>, looker: Side, layout: &Layout) -> (f32, Range<f32>, f32) {
     match side {
         Some(Side::You) => (1.0, -1.0..0.0, 0.0),
@@ -342,12 +334,10 @@ fn held_turn(object: &ObjectView, backs: bool) -> f32 {
 /// Lays out the cards a player picked while a resolution is paused, apart from their hand:
 /// face up for their player and face down for the other ([CR 101.4a]): "each player must
 /// clearly indicate which face-down card they are choosing." On the desktop the viewer's
-/// picks use the held-up hand position, as in `pickedPlacements` (`ui/src/game/layout.ts`),
-/// and the opponent's use the upper corner where a held-up opening hand lies, clear of the
-/// permanents the viewer may still need to choose. On the phone each player's picks lie
-/// beside their library toward the table, as the cards a look takes from it do (UI
-/// Conventions, "A card picked face down"), because the held-up hand's place is over the
-/// opponent's creatures.
+/// picks use the held-up hand position (`pickedPlacements` in `ui/src/game/layout.ts`) and the
+/// opponent's the upper corner, clear of the permanents the viewer may still choose. On the
+/// phone both lie beside their library (UI Conventions, "A card picked face down"), since the
+/// held-up hand's place is over the opponent's creatures.
 ///
 /// [CR 101.4a]: https://yawgatog.com/resources/magic-rules/#R1014a
 pub(crate) fn lay_picked(
@@ -360,8 +350,12 @@ pub(crate) fn lay_picked(
         let library = (!layout.shape.is_shared()).then_some(side);
         beside_pile((layout, camera, lift), (library, side), placement)
     } else {
-        let upper_corner = side == Side::Opponent;
-        held_up(side, upper_corner, layout.hand.ceiling, &lift.hand)
+        held_up(
+            side,
+            side == Side::Opponent,
+            layout.hand.ceiling,
+            &lift.hand,
+        )
     };
     for (object, mut pose) in picked
         .iter()
