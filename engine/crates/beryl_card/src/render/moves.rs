@@ -12,26 +12,33 @@ use crate::ids::Zone;
 
 impl Ctx {
     /// "Counter target spell. If that spell is countered this way, exile it instead of
-    /// putting it into its owner's graveyard."
+    /// putting it into its owner's graveyard." (Or "put it on top of its owner's library
+    /// instead of into that player's graveyard.")
     pub(super) fn counter_into(&mut self, spells: Objects, zone: Zone) -> Vec<String> {
         let counter = self.acts(("counter", "counters"), spells, "");
-        let instead = match zone {
-            Zone::Exile => "exile it".to_owned(),
-            other @ (Zone::Library
-            | Zone::Hand
+        let second = match zone {
+            Zone::Exile => {
+                "if that spell is countered this way, exile it instead of putting it into its \
+                 owner's graveyard"
+                    .to_owned()
+            }
+            Zone::Library => {
+                "if that spell is countered this way, put it on top of its owner's library \
+                 instead of into that player's graveyard"
+                    .to_owned()
+            }
+            other @ (Zone::Hand
             | Zone::Battlefield
             | Zone::Graveyard
             | Zone::Stack
             | Zone::Nowhere
-            | Zone::Merged) => format!("put it into its owner's {}", zone_name(other)),
-        };
-        vec![
-            counter,
-            format!(
-                "if that spell is countered this way, {instead} instead of putting it into its \
-                 owner's graveyard"
+            | Zone::Merged) => format!(
+                "if that spell is countered this way, put it into its owner's {} instead of \
+                 putting it into its owner's graveyard",
+                zone_name(other)
             ),
-        ]
+        };
+        vec![counter, second]
     }
 
     /// "Destroy target creature", with "It can't be regenerated" when no shield applies.

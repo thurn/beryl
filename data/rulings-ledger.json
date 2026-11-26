@@ -1763,6 +1763,16 @@
       ]
     }
   ],
+  "Memory Lapse": [
+    {
+      "published_at": "2016-06-08",
+      "hash": "2a9a27ba449b",
+      "scenario": [
+        "Memory Lapse puts a countered spell on top of its owner's library even with Rest in Peace",
+        "Memory Lapse countering a spell cast with flashback exiles it"
+      ]
+    }
+  ],
   "Mind Bend": [
     {
       "published_at": "2004-10-04",
@@ -3159,6 +3169,15 @@
     }
   ],
   "Unmake": [],
+  "Unsubstantiate": [
+    {
+      "published_at": "2020-06-23",
+      "hash": "ee7d61580075",
+      "scenario": [
+        "Unsubstantiate returns an uncounterable spell to its owner's hand"
+      ]
+    }
+  ],
   "Urborg, Tomb of Yawgmoth": [
     {
       "published_at": "2021-03-19",

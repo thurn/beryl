@@ -22,6 +22,16 @@ pub const fn counter_and_exile(spells: Objects) -> Effect {
     }
 }
 
+/// [`Effect::CounterInto`] the top of its owner's library: "counter [spell]. If that spell is
+/// countered this way, put it on top of its owner's library instead of into that player's
+/// graveyard."
+pub const fn counter_to_top_of_library(spells: Objects) -> Effect {
+    Effect::CounterInto {
+        spells,
+        zone: Zone::Library,
+    }
+}
+
 /// [`Effect::Destroy`]: "destroy [permanents]".
 pub const fn destroy(objects: Objects) -> Effect {
     Effect::Destroy {

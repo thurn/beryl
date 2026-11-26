@@ -40,9 +40,8 @@ impl Scope<'_> {
                 ..
             } => Err(Malformed::Target),
             Effect::CounterInto { zone, .. } => match zone {
-                Zone::Exile => Ok(()),
-                Zone::Library
-                | Zone::Hand
+                Zone::Exile | Zone::Library => Ok(()),
+                Zone::Hand
                 | Zone::Battlefield
                 | Zone::Graveyard
                 | Zone::Stack

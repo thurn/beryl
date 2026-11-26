@@ -250,12 +250,36 @@ impl Ctx {
         if spec == TargetSpec::any_target() {
             return "any target".to_owned();
         }
-        let noun = self.noun(spec.filter, kind);
         let several = spec.count > 1;
-        let named = if several {
-            noun.plural(kind)
+        let (prefix, named) = if spec.kind == TargetKind::SpellOrPermanent
+            && let Filter::AnyOf(branches) = spec.filter
+            && branches.iter().any(|&branch| in_stack(branch))
+        {
+            let each: Vec<String> = branches
+                .iter()
+                .map(|&branch| {
+                    let branch_kind = if in_stack(branch) {
+                        Kind::Spell
+                    } else {
+                        Kind::Permanent
+                    };
+                    let one = self.noun(branch, branch_kind);
+                    if several {
+                        one.plural(branch_kind)
+                    } else {
+                        one.singular(branch_kind)
+                    }
+                })
+                .collect();
+            ("", list(&each, "or"))
         } else {
-            noun.singular(kind)
+            let noun = self.noun(spec.filter, kind);
+            let named = if several {
+                noun.plural(kind)
+            } else {
+                noun.singular(kind)
+            };
+            (prefix, named)
         };
         let other = if spec.other {
             if spec.count == 1 && !spec.optional {
@@ -408,5 +432,32 @@ impl Noun {
         }
         let phrase = self.singular(kind);
         format!("{} {phrase}", article(&phrase))
+    }
+}
+
+/// Whether `filter` restricts its matches to the stack (`Filter::InZone(Zone::Stack)`), directly
+/// or inside a conjunction.
+fn in_stack(filter: Filter) -> bool {
+    match filter {
+        Filter::InZone(Zone::Stack) => true,
+        Filter::All(parts) => parts.iter().any(|&part| in_stack(part)),
+        Filter::Any
+        | Filter::Types(_)
+        | Filter::Supertypes(_)
+        | Filter::SubtypeWord(_)
+        | Filter::ColorWords(_)
+        | Filter::Whose(_)
+        | Filter::Owned(_)
+        | Filter::Tapped
+        | Filter::AttackedThisTurn
+        | Filter::Token
+        | Filter::Named(_)
+        | Filter::ManaValueAtMost(_)
+        | Filter::PowerAtMost(_)
+        | Filter::ManaValueAtMostX
+        | Filter::ManaValueAtMostPower
+        | Filter::Not(_)
+        | Filter::AnyOf(_)
+        | Filter::InZone(_) => false,
     }
 }

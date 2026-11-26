@@ -104,7 +104,8 @@ pub enum Effect {
     /// putting it into its owner's graveyard": the second sentence changes where the first
     /// puts it ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c)): "later text
     /// on the card may modify the meaning of earlier text". The engine puts a countered spell
-    /// into exile and nowhere else ([`crate::Malformed::Countered`]).
+    /// into exile or on top of its owner's library (`Zone::Exile` or `Zone::Library`) and
+    /// nowhere else ([`crate::Malformed::Countered`]).
     CounterInto { spells: Objects, zone: Zone },
     /// "Copy [spells][ [count] times][, except ...]. You may choose new targets for the copy"
     /// ([CR 707.10]): "To copy a spell, activated ability, or triggered ability means to put a

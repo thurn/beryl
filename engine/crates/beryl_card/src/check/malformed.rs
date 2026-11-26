@@ -57,8 +57,8 @@ pub enum Malformed {
     EndTurn,
     /// [`Effect::RestartGame`] or [`Effect::Subgame`] outside a spell or nonmana ability.
     NewGame,
-    /// [`Effect::CounterInto`] a zone other than exile, which is the one place the engine
-    /// puts a countered spell instead of its owner's graveyard.
+    /// [`Effect::CounterInto`] a zone other than exile or the top of its owner's library, which
+    /// are the places the engine puts a countered spell instead of its owner's graveyard.
     Countered,
     /// [`Effect::Delay`] of an ability its face does not have, or of one that is not a
     /// delayed triggered ability ([`crate::Trigger::next`]): nothing would wait for it. Or
@@ -176,7 +176,7 @@ impl Malformed {
                 "`Effect::EndTurn` cannot be in a replacement ability: move it to a spell, or an activated or triggered ability"
             }
             Malformed::Countered => {
-                "`Effect::CounterInto` takes only `Zone::Exile`: escalate any other zone in `data/card-escalations.json`"
+                "`Effect::CounterInto` takes only `Zone::Exile` or `Zone::Library`: escalate any other zone in `data/card-escalations.json`"
             }
             Malformed::Cost => {
                 "an `Effect::Unless` cost must be mana alone or the discard of one card from hand: escalate any other cost in `data/card-escalations.json`"

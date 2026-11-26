@@ -2,10 +2,11 @@ use super::*;
 use crate::continuous::Duration;
 use crate::cost::CastingKind;
 use crate::effect::build::{
-    add_mana, carried_object, counter_and_exile, deal_damage_to, deal_damage_to_any_target, delay,
-    delay_with, destroy, discard, draw, exile, explore, fateseal, for_each_player, get_emblem,
-    if_then, may_cast_free, put_back, return_to_battlefield, search, sequence, shuffle_into,
-    target, target_player, that_player, those, unless, unless_pays, untap_up_to, you,
+    add_mana, carried_object, counter_and_exile, counter_to_top_of_library, deal_damage_to,
+    deal_damage_to_any_target, delay, delay_with, destroy, discard, draw, exile, explore, fateseal,
+    for_each_player, get_emblem, if_then, may_cast_free, put_back, return_to_battlefield, search,
+    sequence, shuffle_into, target, target_player, that_player, those, unless, unless_pays,
+    untap_up_to, you,
 };
 use crate::effect::{Found, LibraryOrder, Taken};
 use crate::ids::TurnStep;
@@ -169,7 +170,7 @@ fn mana_added_outside_a_mana_ability_is_refused() {
 }
 
 #[test]
-fn a_countered_spell_put_anywhere_but_exile_is_refused() {
+fn a_countered_spell_put_anywhere_but_exile_or_library_is_refused() {
     const A_SPELL: TargetSpec = TargetSpec::one(TargetKind::Spell, Filter::Any);
     const REMAND: &[Ability] =
         &[Ability::spell()
@@ -181,8 +182,12 @@ fn a_countered_spell_put_anywhere_but_exile_is_refused() {
     const DISSIPATE: &[Ability] = &[Ability::spell()
         .targeting(&[A_SPELL])
         .effect(&counter_and_exile(target()))];
+    const MEMORY_LAPSE: &[Ability] = &[Ability::spell()
+        .targeting(&[A_SPELL])
+        .effect(&counter_to_top_of_library(target()))];
     assert_eq!(checked(REMAND), Err(Malformed::Countered));
     assert_eq!(checked(DISSIPATE), Ok(()));
+    assert_eq!(checked(MEMORY_LAPSE), Ok(()));
 }
 
 #[test]
