@@ -419,7 +419,7 @@ impl Builder {
             Change::SetTable(TableEdit::SetPlayerCounters { seat, .. }) => {
                 let side = member.viewer.side(*seat);
                 let (next, _) = piles(member.table, *seat, member.slots);
-                let before = self.stage.piles(side);
+                let before = self.stage.player(side);
                 let counters = before.named_counters != next.named_counters;
                 if before.mana != next.mana {
                     self.emit(

@@ -29,3 +29,7 @@ game_table.workspace = true
 [build-dependencies]
 # Reads the audio manifest to generate the sound names.
 serde_json.workspace = true
+
+[dev-dependencies]
+# Builds synthetic protocol views and scripts for client tests.
+beryl_protocol = { workspace = true, features = ["testing"] }

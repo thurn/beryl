@@ -56,8 +56,8 @@ pub fn counting(acts: Vec<Act>) -> (Client, Vec<(u64, u64)>) {
         (Side::You, &mut after.view.players.you),
         (Side::Opponent, &mut after.view.players.opponent),
     ] {
-        state.life = table.piles(side).life;
-        state.mana = table.piles(side).mana;
+        state.life = table.player(side).life;
+        state.mana = table.player(side).mana;
     }
     after.view.script = Some(script);
     client.handle(Input::Update(Box::new(start)));

@@ -265,7 +265,7 @@ fn count(tally: &Tally, found: &Found<'_>) -> [Option<Cue>; 2] {
     let table = found.table;
     match tally {
         Tally::Life { player, life } => {
-            let was = table.piles(*player).life;
+            let was = table.player(*player).life;
             if *life > was {
                 return at(Edge::Start, Some("gain"));
             }
@@ -290,7 +290,7 @@ fn count(tally: &Tally, found: &Found<'_>) -> [Option<Cue>; 2] {
             };
             at(
                 Edge::Start,
-                (sum(mana) > sum(&table.piles(*player).mana)).then_some("mana"),
+                (sum(mana) > sum(&table.player(*player).mana)).then_some("mana"),
             )
         }
         Tally::Counters { counter, object } => {
