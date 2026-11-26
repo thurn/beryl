@@ -7,7 +7,7 @@
 
 use std::sync::OnceLock;
 
-pub use beryl_card_records::{TokenMakers, token_printing_key};
+pub use beryl_card_records::{TokenMakers, add_printings, token_printing_key};
 use beryl_card_store::Record;
 use beryl_engine::CardTable;
 pub use beryl_protocol::card_records::*;

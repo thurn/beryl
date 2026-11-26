@@ -203,7 +203,9 @@ fn way_face(
             match candidate.option {
                 Candidate::Cast { face, .. } => return faces.face_of(name, face),
                 Candidate::PlayLand { .. } => {
-                    return faces.land_face(name).or_else(|| faces.find(name));
+                    return (object.printing.and_then(|ix| faces.printing(ix)))
+                        .or_else(|| faces.land_face(name))
+                        .or_else(|| faces.find(name));
                 }
                 _ => candidate.nth.unwrap_or(0),
             }

@@ -566,10 +566,14 @@ impl Table {
     ) {
         let shown = &view.objects[object.view_index as usize];
         let name = shown.name.as_deref().unwrap_or("");
-        let (printed, layer) = shown
-            .token_printing
-            .as_deref()
-            .map_or((None, None), |printing| faces.listed_board(printing));
+        // A card's own printing is drawn when its art is resident, else the ordinary art.
+        let (printed, layer) = match shown.printing.map(|ix| faces.listed_board_printing(ix)) {
+            Some((listed, Some(layer))) => (listed, Some(layer)),
+            _ => shown
+                .token_printing
+                .as_deref()
+                .map_or((None, None), |printing| faces.listed_board(printing)),
+        };
         let (listed, face) = if printed.is_some() && layer.is_some() {
             (printed, layer)
         } else {
@@ -768,12 +772,12 @@ impl Table {
     }
 }
 
-/// The board-size layer of the face of the card `shown` records, if it has one. A token's
-/// printing tells apart tokens that share a name, so its face is found by that first.
+/// The board-size layer of the face of the card `shown` records, if it has one. A card's
+/// printing, or a token's, which tells apart tokens that share a name, is found first.
 pub(super) fn face_of(faces: &Faces, shown: &ObjectView) -> Option<u16> {
-    shown
-        .token_printing
-        .as_deref()
-        .and_then(|printing| faces.board_layer(printing))
+    (shown.printing.and_then(|ix| faces.printing_layer(ix)))
+        .or_else(|| {
+            (shown.token_printing.as_deref()).and_then(|printing| faces.board_layer(printing))
+        })
         .or_else(|| faces.board_layer(shown.name.as_deref().unwrap_or("")))
 }

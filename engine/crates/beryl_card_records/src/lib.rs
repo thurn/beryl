@@ -90,6 +90,16 @@ pub fn printing_entry(ix: PrintingIx) -> Option<CardEntry> {
     STORE.printing(p.set, p.collector_number).map(entry)
 }
 
+/// Adds to `records` the entry of each printing in `ixs`, so that a client draws an object
+/// whose `printing` names one with that printing's art. An index with no record is skipped.
+pub fn add_printings(records: &mut CardRecords, ixs: impl IntoIterator<Item = PrintingIx>) {
+    for ix in ixs {
+        if let Some(entry) = printing_entry(ix) {
+            records.printings.insert(ix, entry);
+        }
+    }
+}
+
 /// The cards that make each token name, as `(token name, card name)` pairs in the order the
 /// cards are preferred. When several printings share a token's name, the one shown is the
 /// printing linked by the first of these cards whose record links a token of that name, else

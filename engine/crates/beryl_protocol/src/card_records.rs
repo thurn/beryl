@@ -46,6 +46,10 @@ pub struct CardRecords {
     pub cards: BTreeMap<String, CardEntry>,
     /// The tokens and emblems named so: of each, the printing the card that makes it links.
     pub tokens: BTreeMap<String, CardEntry>,
+    /// The printings that `ObjectView::printing` can name in the game these records are for,
+    /// each with the card as printed there. Empty for a game whose decks have no printings.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub printings: BTreeMap<PrintingIx, CardEntry>,
 }
 
 /// A card's printing and faces, as the UI draws them.
@@ -96,6 +100,7 @@ impl CardRecords {
             nameless_token: image("art_crop", "front", NAMELESS_TOKEN_ID),
             cards: BTreeMap::new(),
             tokens: BTreeMap::new(),
+            printings: BTreeMap::new(),
         }
     }
 }

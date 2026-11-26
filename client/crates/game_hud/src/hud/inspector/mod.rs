@@ -129,9 +129,9 @@ impl StateUpdate<Inspector> for Draw<'_> {
 
     fn apply(self, state: &mut Inspector) -> (bool, Self::Output) {
         state.observe(self.hovered, self.until);
-        let inspected = self
-            .view
-            .and_then(|_| state.inspected_now(self.frame, self.faces, self.prompt, self.decision));
+        let inspected = self.view.and_then(|view| {
+            state.inspected_now(self.frame, (view, self.faces), self.prompt, self.decision)
+        });
         if !state.refresh(inspected) {
             return (false, None);
         }
@@ -269,7 +269,7 @@ impl Inspector {
     fn inspected_now(
         &self,
         frame: &Frame,
-        faces: &FaceList,
+        (view, faces): (&PlayerView, &FaceList),
         prompt: Option<&PromptView>,
         decision: Option<DecisionId>,
     ) -> Option<Inspected> {
@@ -294,7 +294,11 @@ impl Inspector {
             return None;
         }
         let name = frame.name(element.name);
-        let face = faces.find(name)?;
+        // The card's printing, when its object has one, has the art the table drew it with.
+        let face = (view.objects.iter())
+            .find(|object| object.slot == slot)
+            .and_then(|object| faces.find_object(object))
+            .or_else(|| faces.find(name))?;
         let x = element.corners.iter().map(|corner| corner.x).sum::<f32>() / f32::from(4_u8);
         let bounds = kit_scene::hit::bounds(element);
         Some(Inspected {

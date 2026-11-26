@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use beryl_protocol::PlayerView;
-use beryl_protocol::card_records::{CardEntry, CardFace, CardImages, CardRecords};
+use beryl_protocol::card_records::{CardEntry, CardFace, CardImages, CardRecords, PrintingIx};
 #[cfg(feature = "stories")]
 use beryl_protocol::ipc::{CARD_RECORDS, FixtureMessage};
 #[cfg(feature = "stories")]
@@ -397,6 +397,9 @@ struct Card {
     power_toughness: Option<PowerToughness>,
     #[cfg(feature = "stories")]
     token: bool,
+    /// The printing the card shows, from `printing(N)`, an index into the printing records.
+    #[cfg(feature = "stories")]
+    printing: Option<PrintingIx>,
 }
 
 impl Card {
@@ -458,8 +461,20 @@ impl Card {
         } else {
             (false, tail)
         };
+        let (first, rest) = word(tail);
+        let (printing, tail) = if let Some(value) = first
+            .strip_prefix("printing(")
+            .and_then(|s| s.strip_suffix(')'))
+        {
+            let ix = value
+                .parse()
+                .map_err(|_| "write a card's printing as printing(3)".to_owned())?;
+            (Some(PrintingIx(ix)), rest)
+        } else {
+            (None, tail)
+        };
         #[cfg(not(feature = "stories"))]
-        let _ = (side, power_toughness, token);
+        let _ = (side, power_toughness, token, printing);
         let (states, count) = repeat(tail)?;
         let mut card = Self {
             name,
@@ -477,6 +492,8 @@ impl Card {
             power_toughness,
             #[cfg(feature = "stories")]
             token,
+            #[cfg(feature = "stories")]
+            printing,
         };
         for state in parse_states(states, &GAME_LABELS)? {
             let bit = match state.as_str() {
@@ -517,6 +534,7 @@ impl Card {
             card.note.clone_from(&self.note);
             card.pt = self.power_toughness;
             card.token = self.token;
+            card.printing = self.printing;
             if self.states.has(StateBits::FACE_DOWN) {
                 card.facing = Facing::Down;
             }
@@ -645,34 +663,50 @@ pub fn placeholder_records(views: &[PlayerView]) -> CardRecords {
     let mut records = CardRecords::none();
     for object in views.iter().flat_map(|view| &view.objects) {
         let Some(name) = &object.name else { continue };
+        // Each printing is a face of its own, as in a game.
+        if let Some(ix) = object.printing {
+            records.printings.entry(ix).or_insert_with(|| {
+                // The printing's real art when the card store has one, which draws once the
+                // art is in the cache; its frame, as every placeholder is, until then.
+                beryl_card_records::printing_entry(ix)
+                    .unwrap_or_else(|| placeholder(name, &format!("stress-printing-{}", ix.0)))
+            });
+        }
         let entries = if object.token {
             &mut records.tokens
         } else {
             &mut records.cards
         };
-        entries.entry(name.clone()).or_insert_with(|| CardEntry {
-            name: name.clone(),
-            scryfall_id: String::new(),
-            set: String::new(),
-            collector_number: String::new(),
-            layout: "normal".to_owned(),
-            artist: String::new(),
-            faces: vec![CardFace {
-                name: name.clone(),
-                mana_cost: None,
-                type_line: String::new(),
-                oracle_text: None,
-                power: None,
-                toughness: None,
-                loyalty: None,
-                colors: Vec::new(),
-                images: CardImages {
-                    art_crop: String::new(),
-                    normal: String::new(),
-                    large: format!("stress-{}", object.slot.0),
-                },
-            }],
-        });
+        entries
+            .entry(name.clone())
+            .or_insert_with(|| placeholder(name, &format!("stress-{}", object.slot.0)));
     }
     records
+}
+
+/// A card named `name` whose only face has the image `large`, which names no scan.
+fn placeholder(name: &str, large: &str) -> CardEntry {
+    CardEntry {
+        name: name.to_owned(),
+        scryfall_id: String::new(),
+        set: String::new(),
+        collector_number: String::new(),
+        layout: "normal".to_owned(),
+        artist: String::new(),
+        faces: vec![CardFace {
+            name: name.to_owned(),
+            mana_cost: None,
+            type_line: String::new(),
+            oracle_text: None,
+            power: None,
+            toughness: None,
+            loyalty: None,
+            colors: Vec::new(),
+            images: CardImages {
+                art_crop: String::new(),
+                normal: String::new(),
+                large: large.to_owned(),
+            },
+        }],
+    }
 }

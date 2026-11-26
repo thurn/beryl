@@ -14,6 +14,8 @@ stories = ["beryl_protocol/testing"]
 
 [dependencies]
 beryl_protocol.workspace = true
+# The art of the printing a story card names with `printing(N)`.
+beryl_card_records = { path = "../../../engine/crates/beryl_card_records" }
 glam.workspace = true
 # Writes captured story catalogs with the same JSON codec as recording messages.
 serde.workspace = true

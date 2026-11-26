@@ -150,6 +150,18 @@ impl Printings {
     }
 }
 
+/// Every printing of the deck in `data/deck-printings.csv` whose list is one of `lists`, in the
+/// file's order: the printings a game dealt from these decklists can show. Empty when no list
+/// is a printed deck.
+pub fn printings_of(lists: &[Vec<(u8, String)>]) -> Vec<PrintingIx> {
+    let keys: Vec<_> = lists.iter().filter_map(|list| printed_deck(list)).collect();
+    (0u32..)
+        .zip(PRINTINGS.iter())
+        .filter(|(_, p)| keys.contains(&p.deck))
+        .map(|(i, _)| PrintingIx(i))
+        .collect()
+}
+
 /// The key of the deck in `data/deck-printings.csv` whose list is `list`, if one is.
 fn printed_deck(list: &[(u8, String)]) -> Option<&'static str> {
     if list.is_empty() {

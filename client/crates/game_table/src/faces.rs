@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 
-use beryl_protocol::card_records::{CardEntry, CardRecords};
+use beryl_protocol::card_records::{CardEntry, CardRecords, PrintingIx};
 use beryl_protocol::protocol::{ObjectView, PlayerView, StackItem, ZoneName};
 
 use kit_ui::input::{AssetReady, FaceId, FaceSize};
@@ -106,6 +106,9 @@ pub struct FaceList {
     /// for. It is worked out from the card's record, because the halves of a split card share
     /// one scan and so one listed face.
     mana_values: BTreeMap<String, u32>,
+    /// The face of each printing that an object's `printing` can name. Printing faces are
+    /// found only by this map, never by name: a card's name still finds its ordinary face.
+    printings: BTreeMap<PrintingIx, FaceId>,
 }
 
 impl FaceList {
@@ -128,7 +131,47 @@ impl FaceList {
             list.add_entry(asked, entry, true);
         }
         list.add_plates();
+        // Printing faces come last and get no plates: an ability on the stack shows its
+        // source card's ordinary face, as it has no printing of its own.
+        for (&ix, entry) in &records.printings {
+            list.add_printing(ix, entry);
+        }
         list
+    }
+
+    /// Lists the first face of `entry` as the picture of printing `ix`.
+    fn add_printing(&mut self, ix: PrintingIx, entry: &CardEntry) {
+        let Some(face) = entry.faces.first() else {
+            return;
+        };
+        let printed = face
+            .power
+            .as_deref()
+            .zip(face.toughness.as_deref())
+            .and_then(|(power, toughness)| Some([power.parse().ok()?, toughness.parse().ok()?]));
+        let text = PrintedText {
+            mana_cost: face.mana_cost.clone(),
+            type_line: face.type_line.clone(),
+            rules: face.oracle_text.clone(),
+            power: face.power.clone(),
+            toughness: face.toughness.clone(),
+            loyalty: face.loyalty.clone(),
+            token: false,
+        };
+        // The name only labels the placeholder drawn until the art arrives, so it is not
+        // registered for lookup by name.
+        let id = self.add(&face.images.large, Vec::new(), &face.colors, printed, text);
+        let listed = &mut self.faces[usize::from(id.0)];
+        if listed.names.is_empty() {
+            listed.names.push(entry.name.clone());
+        }
+        self.printings.insert(ix, id);
+    }
+
+    /// The face of printing `ix`, if the match lists it. Allocates nothing.
+    #[must_use]
+    pub fn printing(&self, ix: PrintingIx) -> Option<FaceId> {
+        self.printings.get(&ix).copied()
     }
 
     /// Lists a plate face for each paragraph of each face's rules text that says a triggered
@@ -267,13 +310,13 @@ impl FaceList {
         faces
     }
 
-    /// The face that shows `object`, from its token printing first, which tells apart tokens
-    /// that share a name, and then from its name. `None` for a card whose name the viewer
+    /// The face that shows `object`, from its printing first, then its token printing, which
+    /// tells apart tokens that share a name, and then from its name. `None` for a card whose name the viewer
     /// does not know.
     #[must_use]
     pub fn find_object(&self, object: &ObjectView) -> Option<FaceId> {
-        (object.token_printing.as_deref())
-            .and_then(|printing| self.find(printing))
+        (object.printing.and_then(|ix| self.printing(ix)))
+            .or_else(|| (object.token_printing.as_deref()).and_then(|printing| self.find(printing)))
             .or_else(|| self.find(object.name.as_deref()?))
     }
 
@@ -664,6 +707,16 @@ impl Faces {
         self.list.get(self.list.find(name)?)
     }
 
+    /// The listed face of the printing `ix` and its board-size layer, if resident.
+    pub(crate) fn listed_board_printing(
+        &self,
+        ix: PrintingIx,
+    ) -> (Option<&ListedFace>, Option<u16>) {
+        self.list.printing(ix).map_or((None, None), |id| {
+            (self.list.get(id), self.board_layer_of(id))
+        })
+    }
+
     /// The listed face and its board-size layer, if resident, from one name lookup.
     pub(crate) fn listed_board(&self, name: &str) -> (Option<&ListedFace>, Option<u16>) {
         self.list.find(name).map_or((None, None), |id| {
@@ -676,6 +729,12 @@ impl Faces {
     #[must_use]
     pub fn board_layer(&self, name: &str) -> Option<u16> {
         self.board_layer_of(self.list.find(name)?)
+    }
+
+    /// The board-size layer of the face that shows printing `ix`, once it has one.
+    #[must_use]
+    pub fn printing_layer(&self, ix: PrintingIx) -> Option<u16> {
+        self.board_layer_of(self.list.printing(ix)?)
     }
 
     /// The board-size layer of `face`, once it has one.

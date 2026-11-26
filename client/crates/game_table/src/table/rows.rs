@@ -335,6 +335,8 @@ pub(super) fn twins(a: &ObjectView, b: &ObjectView) -> bool {
 
 fn same_pile_face(a: &ObjectView, b: &ObjectView) -> bool {
     a.name == b.name
+        // Copies drawn with different art are different to the player.
+        && a.printing == b.printing
         && a.facing == b.facing
         && a.zone == b.zone
         && a.owner == b.owner

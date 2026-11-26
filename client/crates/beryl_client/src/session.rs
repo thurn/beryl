@@ -284,11 +284,13 @@ impl Live {
         };
         // A sideboard card can enter the game (a wish's pick, a companion), so it needs a
         // record as a main deck card does.
+        let printings = beryl_session::printings::printings_of(&replay.decks);
         let lists: Vec<_> = replay.decks.into_iter().chain(replay.sideboards).collect();
         if self.cards_for.as_ref() == Some(&lists) {
             return;
         }
-        let records = decklist_records(&lists);
+        let mut records = decklist_records(&lists);
+        beryl_session::card_records::add_printings(&mut records, printings);
         self.inbox.send(Input::Cards(Box::new(records)));
         self.cards_for = Some(lists);
     }

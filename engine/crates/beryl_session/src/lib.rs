@@ -18,7 +18,7 @@ mod ledger;
 pub mod migrate;
 pub mod perturb;
 pub mod preview;
-mod printings;
+pub mod printings;
 pub mod prompt;
 pub mod protocol;
 pub mod replay;
