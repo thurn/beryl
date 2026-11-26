@@ -1618,13 +1618,14 @@ fixed in the same session. Newest first.
   on an ownerless slot; callers on off-battlefield cards must check
   `State::has_owner`.
 
-- **`without_floating` panicked on a source that can sacrifice itself for mana.**
-  `beryl_session::game::playing::without_floating` asserts that every candidate
-  after the first `Opt::Mana` is also an `Opt::Mana`. A source with both a `{T}`
-  and a `{T}`-and-sacrifice mana ability (Svyelunite Temple) lists its sacrifice
-  as an `Opt::Activate` after its `Opt::Mana`, so recording any spec moment of
-  the Temple panicked with "mana activations come last". Fixed: the assertion
-  accepts `Opt::Activate` there, and the function drops every candidate from the
-  first `Opt::Mana` on. Prevention: the `svyelunite-temple` spec moments
-  (`just client spec svyelunite-temple`) now play the Temple's scenarios through
-  this function from both seats. No type states the list's order.
+- **`without_floating` panicked on a source that can sacrifice itself for
+  mana.** `beryl_session::game::playing::without_floating` asserts that every
+  candidate after the first `Opt::Mana` is also an `Opt::Mana`. A source with
+  both a `{T}` and a `{T}`-and-sacrifice mana ability (Svyelunite Temple) lists
+  its sacrifice as an `Opt::Activate` after its `Opt::Mana`, so recording any
+  spec moment of the Temple panicked with "mana activations come last". Fixed:
+  the assertion accepts `Opt::Activate` there, and the function drops every
+  candidate from the first `Opt::Mana` on. Prevention: the `svyelunite-temple`
+  spec moments (`just client spec svyelunite-temple`) now play the Temple's
+  scenarios through this function from both seats. No type states the list's
+  order.
