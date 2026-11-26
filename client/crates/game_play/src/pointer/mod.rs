@@ -432,12 +432,35 @@ fn raised(rest: &Pose, camera: &Camera, (scale, mm): (f32, f32), tuning: &Pointe
     let [right, up, back] = camera.axes();
     let grown = (scale - 1.0) * camera.data.card.height / 2.0;
     let position = rest.position + up * (mm + grown) * rest.scale;
-    kit_space::arrange::spot(
+    let mut pose = kit_space::arrange::spot(
         camera.eye + (position - camera.eye) * tuning.nearer,
         Quat::from_mat3(&Mat3::from_cols(right, up, back)),
         rest.scale * scale * tuning.nearer,
         *rest,
-    )
+    );
+    let (corners, _) = camera.card_box(&pose);
+    let left = corners
+        .iter()
+        .fold(f32::INFINITY, |left, corner| left.min(corner.x));
+    let right_edge = corners
+        .iter()
+        .fold(f32::NEG_INFINITY, |right, corner| right.max(corner.x));
+    let safe_left = camera.window.safe_area.left;
+    let safe_right = camera.window.size.width - camera.window.safe_area.right;
+    let shift = if right_edge - left > safe_right - safe_left {
+        ((safe_left + safe_right) - (left + right_edge)) * 0.5
+    } else if left < safe_left {
+        safe_left - left
+    } else if right_edge > safe_right {
+        safe_right - right_edge
+    } else {
+        0.0
+    };
+    let points_per_millimetre = camera.points_per_millimetre(pose.position);
+    if shift != 0.0 && points_per_millimetre > 0.0 {
+        pose.position += right * (shift / points_per_millimetre);
+    }
+    pose
 }
 
 /// Finds the card under the pointer in `frame`, the frame just built at `now`, and marks it

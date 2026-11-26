@@ -10,10 +10,11 @@ use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use game_table::table::Place;
 use glam::Vec2;
 use kit_frame::frame::{Frame, Role};
-use kit_probe::agent::Rule;
+use kit_probe::agent::checks::on_screen;
+use kit_probe::agent::{Context, Fault, Rule};
 use kit_scene::hit::uncovered;
 use kit_ui::input::Input as DeviceInput;
-use kit_ui::input::Size;
+use kit_ui::input::{Insets, Size};
 
 const SMALL: Size = Size {
     width: 375.0,
@@ -23,6 +24,11 @@ const SMALL: Size = Size {
 const MIDDLE: Size = Size {
     width: 393.0,
     height: 759.0,
+};
+
+const LARGE: Size = Size {
+    width: 430.0,
+    height: 932.0,
 };
 
 /// One notch of a wheel turned down, toward a line's right end.
@@ -180,4 +186,46 @@ fn a_touch_fling_advances_the_group_window_after_release() {
     );
     assert_eq!(drawn(page.frame(), ZoneName::Hand)[0].0, left);
     assert_eq!(unreachable(&mut page), 0);
+}
+
+fn on_screen_card_faults(page: &mut Page) -> Vec<Fault> {
+    let data = page.data().clone();
+    let profile = data.profiles.for_size(page.size());
+    let context = Context {
+        size_class: profile.size_class,
+        checks: profile.checks,
+        audit: data.audit,
+        size: page.size(),
+        safe_area: Insets::default(),
+        at: page.now(),
+    };
+    on_screen(page.frame(), &context)
+        .into_iter()
+        .filter(|fault| {
+            fault
+                .elements
+                .iter()
+                .any(|subject| subject.locator.starts_with("card "))
+        })
+        .collect()
+}
+
+#[test]
+fn a_raised_hand_card_stays_within_the_safe_area_sides_on_phones() {
+    for size in [SMALL, MIDDLE, LARGE] {
+        let mut page = page(&table(ZoneName::Hand, "Card", 12), size);
+        let in_view = drawn(page.frame(), ZoneName::Hand).len();
+        for index in [0, in_view - 1] {
+            let point = on_card(&mut page, ZoneName::Hand, index);
+            page.move_to(point);
+            page.still();
+            let faults = on_screen_card_faults(&mut page);
+            assert!(
+                faults.is_empty(),
+                "raised card {index} in {}x{} has on-screen faults: {faults:?}",
+                size.width,
+                size.height
+            );
+        }
+    }
 }
