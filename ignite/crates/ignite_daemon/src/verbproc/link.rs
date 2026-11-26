@@ -154,13 +154,25 @@ impl Link {
         let Some(started) = started else {
             return;
         };
-        let previous = lock(&self.daemon).replace(started.clone());
-        if previous.is_some_and(|previous| previous != *started) {
+        let previous = lock(&self.daemon).clone();
+        if previous
+            .as_ref()
+            .is_some_and(|previous| previous != started)
+        {
             let current = lock(&self.current).clone();
-            let _ = self.host.hello(&self.hello).and_then(|reply| {
-                self.notice(reply.stop || !reply.running);
-                self.host.step(&current)
-            });
+            if self
+                .host
+                .hello(&self.hello)
+                .and_then(|reply| {
+                    self.notice(reply.stop || !reply.running);
+                    self.host.step(&current)
+                })
+                .is_ok()
+            {
+                *lock(&self.daemon) = Some(started.clone());
+            }
+        } else if previous.is_none() {
+            *lock(&self.daemon) = Some(started.clone());
         }
     }
 

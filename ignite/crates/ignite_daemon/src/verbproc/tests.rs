@@ -571,6 +571,41 @@ fn a_verb_sends_its_step_again_when_the_daemon_restarted_without_failing_a_call(
 }
 
 #[test]
+fn a_verb_retries_reporting_its_step_after_a_restart_if_the_first_attempt_failed() {
+    let (_, handle) = running_test();
+    let host = Arc::new(FakeHost::default());
+    host.set_daemon_started("2026-11-18T10:00:00.000Z");
+    let link = Link::new(
+        host.clone(),
+        Hello {
+            handle: handle.clone(),
+            protocol: PROTOCOL_VERSION,
+            executable: "1a2b3c4".to_owned(),
+            pid: 42,
+        },
+        timing(),
+    );
+    link.hello().unwrap();
+    let update = StepUpdate {
+        handle,
+        step: Some("running checks".to_owned()),
+        waiting: Vec::new(),
+        class: None,
+        ticket: None,
+    };
+    link.step(&update).unwrap();
+
+    // The daemon restarts and drops the first attempts: reintroduction retries until hello and
+    // step both succeed.
+    host.set_daemon_started("2026-11-18T11:00:00.000Z");
+    host.drop_each_once(true);
+    link.poll().unwrap();
+    assert!(host.hellos().len() >= 2);
+    assert!(host.steps().len() >= 2);
+    assert_eq!(host.steps().last(), Some(&update));
+}
+
+#[test]
 fn the_lock_lives_in_the_handle_folder() {
     let handle = Handle::new("L-6").unwrap();
     assert_eq!(

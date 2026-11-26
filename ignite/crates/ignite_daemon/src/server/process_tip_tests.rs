@@ -798,3 +798,70 @@ fn a_started_tip_round_that_makes_no_progress_is_ended_and_a_new_round_starts() 
     assert!(until(|| lock(&machine.hung.lock).is_some()));
     assert_hung_round_recovers(&machine, ctx, tip, waiting, 1);
 }
+
+#[test]
+fn an_adopted_tip_round_with_a_long_step_is_not_ended_and_no_second_round_starts() {
+    let machine = TipMachine::new("adopted-long-step");
+    let ctx = machine.threads.ctx.clone();
+    let tip = Commit::new("bbbb000").unwrap();
+    let (first, first_loop) = machine.daemon();
+    machine.switch.set(Some(first.clone()));
+    let cut = turn_on_a_thread(first_loop, ctx.clone());
+    assert!(until(|| machine.commands.begun() == 1));
+    let (handle, _) = first.running_internal(ROUND_VERB).unwrap();
+
+    // Restart the daemon while the round's step is running; leave the switch empty past one
+    // mirror poll so the verb process notices the restart and re-reports its step.
+    machine.switch.set(None);
+    drop(first);
+    std::thread::sleep(Duration::from_millis(30));
+    let (second, second_loop) = machine.daemon();
+    machine.switch.set(Some(second.clone()));
+
+    // The adopted round's step becomes visible on the new daemon.
+    assert!(until(|| {
+        second
+            .steps()
+            .by_handle(&handle)
+            .is_some_and(|activity| activity.view().step.is_some())
+    }));
+    let doing = second.steps().by_handle(&handle).unwrap().view().doing();
+    assert!(
+        !doing.contains("step not reported"),
+        "unexpected doing: {doing}"
+    );
+
+    let waiting = turn_on_a_thread(second_loop, ctx.clone());
+    // Advance past STALL_LIMIT twice while the step is still running: it is not ended, and
+    // starting another internal round returns the running one instead of starting a second.
+    for _ in 0..2 {
+        machine
+            .clock
+            .advance(crate::server::process::STALL_LIMIT.as_secs_f64() + 1.0);
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    let second_start = second.start_internal(
+        Arc::new(TipRoundVerb::new(
+            machine.in_daemon.clone(),
+            "test",
+            "jarvis",
+            Some(machine.scratch.home.join("daemon.db")),
+        )),
+        TipRoundVerb::request(&tip, Seq(0), &ctx.repo),
+    );
+    assert_eq!(second_start, handle);
+    assert_eq!(machine.hung.ends.load(Ordering::SeqCst), 0);
+    assert_eq!(machine.threads.started.load(Ordering::SeqCst), 1);
+    assert_eq!(machine.commands.begun(), 1);
+    let row = handle_store::get(&lock(&machine.db), handle.as_str())
+        .unwrap()
+        .unwrap();
+    assert_eq!(row.state, "running");
+
+    machine.commands.finish_all();
+    let (_, turn) = waiting.join().unwrap();
+    assert_eq!(turn.unwrap(), Some((tip.clone(), TipOutcome::Verified)));
+    let (_, cut_turn) = cut.join().unwrap();
+    assert_eq!(cut_turn.unwrap(), Some((tip, TipOutcome::Verified)));
+    assert_eq!(machine.threads.started.load(Ordering::SeqCst), 1);
+}

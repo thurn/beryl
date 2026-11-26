@@ -438,6 +438,9 @@ impl Server {
     /// on a thread of the daemon as `verb`. An internal verb is never run again: if its verb
     /// process dies, its handle ends `incomplete` and the loop starts afresh.
     pub fn start_internal(&self, verb: Arc<dyn Verb>, req: Request) -> Handle {
+        if let Some((existing, _)) = self.running_internal(&req.verb) {
+            return existing;
+        }
         let handle = self.handles.create_for(&req.verb, None, None, Some(&req));
         if self.runs_in_process(&req.verb) {
             match self.start_process(&handle) {

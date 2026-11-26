@@ -26,10 +26,11 @@
 
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use ignite_core::ids::Handle;
 use ignite_core::time::Timestamp;
+use ignite_os::usage::UsageReader as _;
 
 use super::Shared;
 use crate::host::Host;
@@ -39,6 +40,11 @@ use crate::stop::EndVerbProcess;
 /// between commands only lists checks and reads results, which takes seconds to minutes, so
 /// twenty minutes without a step, output or command is a stuck process.
 pub const STALL_LIMIT: Duration = Duration::from_mins(20);
+
+/// Minimum wall-clock window between CPU samples for [`Stall::cpu_busy`], and minimum fraction
+/// of one core over that window to count as active work rather than a 1-second `host-poll` loop.
+const CPU_WINDOW_S: f64 = 5.0;
+const CPU_ACTIVE_RATE: f64 = 0.02;
 
 /// What the watch of a stuck verb process needs: the limit, how to end the process, and the
 /// host that says whether the daemon is doing something for it.
@@ -50,6 +56,8 @@ pub(crate) struct Stall {
     /// The progress last seen, and when it was first seen.
     seen: Progress,
     since: Timestamp,
+    /// Last sampled process-group CPU seconds and wall-clock time.
+    cpu: Option<(f64, Instant)>,
     /// Set once the process was ended, or could not be, so it is not tried again.
     ended: bool,
 }
@@ -86,6 +94,7 @@ impl Stall {
                 log_len: 0,
             },
             since: shared.ctx.clock.now(),
+            cpu: None,
             ended: false,
         };
         Some(Stall {
@@ -103,6 +112,30 @@ impl Stall {
         }
     }
 
+    fn cpu_busy(&mut self, shared: &Shared, handle: &Handle) -> bool {
+        let Some(pid) = shared
+            .row(handle)
+            .and_then(|row| row.pid)
+            .and_then(|pid| u32::try_from(pid).ok())
+        else {
+            return false;
+        };
+        let Ok(usage) = ignite_os::Native.sample(pid) else {
+            return false;
+        };
+        let now = Instant::now();
+        let Some((prev_cpu, prev_at)) = self.cpu else {
+            self.cpu = Some((usage.cpu_s, now));
+            return false;
+        };
+        let elapsed = now.duration_since(prev_at).as_secs_f64();
+        if elapsed < CPU_WINDOW_S {
+            return false;
+        }
+        self.cpu = Some((usage.cpu_s, now));
+        (usage.cpu_s - prev_cpu) / elapsed >= CPU_ACTIVE_RATE
+    }
+
     /// Looks at the verb process once, as its watch does on each round, and ends it when it has
     /// made no progress for the limit.
     pub(super) fn look(&mut self, shared: &Shared, handle: &Handle) {
@@ -111,7 +144,7 @@ impl Stall {
         }
         let now = shared.ctx.clock.now();
         let progress = self.progress(shared, handle);
-        if progress != self.seen || self.host.busy(handle) {
+        if progress != self.seen || self.host.busy(handle) || self.cpu_busy(shared, handle) {
             self.seen = progress;
             self.since = now;
             return;
