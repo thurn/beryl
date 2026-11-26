@@ -462,7 +462,13 @@ def run_gate(args: Sequence[str], root: Path) -> tuple[int, str]:
 
 
 def trend(
-    root: Path, measured: int, bar: int, ok: bool, verifier: str, digest: str
+    root: Path,
+    measured: int,
+    bar: int,
+    ok: bool,
+    verifier: str,
+    digest: str,
+    tracked: dict[str, int] | None = None,
 ) -> None:
     """Stores the verified commit's count and updates tickets the trend calls for. A failure here
     never changes the check's outcome."""
@@ -471,6 +477,11 @@ def trend(
             verified_commit(root), measured, bar, ok, IgniteTickets(), verifier, digest
         ):
             print(line, file=sys.stderr)
+        for series, count in (tracked or {}).items():
+            for line in count_trend.track_at(
+                series, verified_commit(root), count, verifier, digest
+            ):
+                print(line, file=sys.stderr)
     except Exception as error:  # noqa: BLE001 - best effort by design
         print(f"count trend: {error}", file=sys.stderr)
 
@@ -492,6 +503,7 @@ def run_rollouts(root: Path) -> dict[str, Any]:
         bool(found["ok"]),
         str(found["verifier"]),
         str(found["calibration"]),
+        found.get("tracked"),
     )
     result: dict[str, Any] = {"outcome": "pass" if found["ok"] else "fail"}
     if not found["ok"]:
@@ -581,6 +593,7 @@ def run_counts(names: Sequence[str], root: Path, results: Path) -> None:
                     bool(found["ok"]),
                     str(found["verifier"]),
                     str(found["calibration"]),
+                    found.get("tracked"),
                 )
                 result: dict[str, Any] = {"outcome": "pass" if found["ok"] else "fail"}
                 if not found["ok"]:

@@ -261,6 +261,17 @@ def test_the_gate_counts_only_its_benchmark_as_json() -> None:
     assert harness == ["--output-format=json", GATE.benchmark]
 
 
+def test_the_dandan_benchmark_is_counted_after_the_gated_one_with_no_bar() -> None:
+    (cmd,) = count_gate.tracked_cargo()
+    assert cmd[cmd.index("--bench") + 1] == "dandan_counts"
+    assert cmd[cmd.index("--") + 1 :] == [
+        "--output-format=json",
+        "dandan_counts::dandan_rollout::rollouts::corpus",
+    ]
+    gate_file = (bench.paths.REPO / count_gate.GATE_FILE).read_text()
+    assert "dandan" not in gate_file.lower()
+
+
 def summary(module_path: str, ir: int) -> str:
     metrics = {"Ir": {"values": {"new": ir}}}
     profile = {"tool": "Callgrind", "data": {"total": {"metrics": metrics}}}
@@ -318,9 +329,11 @@ def test_count_jobs_uses_grant_on_windows_and_caps_lima(
 def test_parallel_gate_body_builds_once_and_runs_both_sides_in_parallel() -> None:
     body = count_gate.parallel_gate_body(GATE, ["blank", "two-faced"], jobs=6)
     assert (
-        "--bench rollout_counts --bench family_counts --bench family_steps --no-run"
-        in body
+        "--bench rollout_counts --bench dandan_counts --bench family_counts "
+        "--bench family_steps --no-run" in body
     )
+    assert "launch dandan \"$dandan_bin\" --bench --output-format=json" in body
+    assert "dandan_counts::dandan_rollout::rollouts::corpus" in body
     assert "count_jobs=6" in body
     assert "wait -n || failed=1" in body
     assert "rollout_counts::cube_rollout::rollouts::corpus" in body

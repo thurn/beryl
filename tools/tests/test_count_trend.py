@@ -195,3 +195,22 @@ def test_only_a_verified_tip_can_close_a_ticket(
     monkeypatch.setattr(count_trend, "git", lambda *args: (0, "local"))
     count_trend.report_at(None, 994_000, 994_000, True, tickets, "mac", "new")
     assert not tickets.closed
+
+
+def test_a_tracked_count_is_stored_with_its_step_and_files_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        count_trend, "history_path", lambda verifier, digest: tmp_path / "gated.jsonl"
+    )
+    monkeypatch.setattr(count_trend, "git", lambda *args: (0, "tip"))
+    monkeypatch.setattr(count_trend, "proper_ancestor", lambda head: lambda c: c == "a")
+    path = count_trend.tracked_path("dandan", "mac", "lima")
+    assert path != tmp_path / "gated.jsonl" and path.name == "dandan-lima.jsonl"
+    assert count_trend.track_at("dandan", "a", 1_000_000, "mac", "lima") == []
+    lines = count_trend.track_at("dandan", "b", 1_010_000, "mac", "lima")
+    assert lines and "+1.00% since a" in lines[0] and "not gated" in lines[0]
+    assert [r.instructions for r in count_trend.load(path.read_text())] == [
+        1_000_000,
+        1_010_000,
+    ]

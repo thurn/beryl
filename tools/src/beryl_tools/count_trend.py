@@ -71,6 +71,11 @@ def history_path(verifier: str, digest: str) -> Path:
     return paths.cache_root() / "ci" / "counts" / verifier / f"{digest}.jsonl"
 
 
+def tracked_path(series: str, verifier: str, digest: str) -> Path:
+    """The counts of a tracked benchmark, which has no bar, beside the gated one's."""
+    return history_path(verifier, digest).with_name(f"{series}-{digest}.jsonl")
+
+
 @dataclass(frozen=True)
 class Record:
     commit: str
@@ -372,6 +377,35 @@ def report_at(
             digest,
         )
         lines.append(f"count gate: {f.lower}: {said}")
+    return lines
+
+
+def track_at(
+    series: str, head: str | None, measured: int, verifier: str, digest: str
+) -> list[str]:
+    """Records a tracked benchmark's count on the verified commit `head` and returns a line
+    with its change since the last measured ancestor. It has no bar, so it files nothing."""
+    path = tracked_path(series, verifier, digest)
+    try:
+        records = load(path.read_text()) if path.exists() else []
+    except OSError:
+        records = []
+    _, local = git("rev-parse", "HEAD")
+    check = proper_ancestor(head or local)
+    previous = next((r for r in reversed(records) if check(r.commit)), None)
+    lines = []
+    if previous:
+        lines.append(
+            f"{series}: {percent(measured, previous.instructions):+.2f}% since "
+            f"{previous.commit[:12]} ({previous.instructions:,}), tracked and not gated"
+        )
+    if head is not None:
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a") as out:
+                out.write(dump(Record(head, measured, 0)) + "\n")
+        except OSError as e:
+            print(f"count history: {e}", file=sys.stderr)
     return lines
 
 

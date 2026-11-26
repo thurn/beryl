@@ -119,7 +119,11 @@ pub struct Workload {
 
 impl Workload {
     pub fn new() -> Workload {
-        let corpus = Corpus::new();
+        Workload::of(Corpus::new())
+    }
+
+    /// Everything the benchmarks measure for `corpus`, which may be another table's.
+    pub fn of(corpus: Corpus) -> Workload {
         let starts = corpus.starts();
         let policy = RolloutPolicy::new(&corpus.table);
         let (scripts, samples, summary) = record(&corpus.table, &starts, &policy);
@@ -148,7 +152,12 @@ impl Default for Workload {
 
 /// Plays one seeded game under smart stops, keeping the state at its first decision on or
 /// after each turn in [`CUTS`], until the last cut or the end of the game.
-fn cut(t: &GameTable, seed: u64, agents: &mut [Box<dyn Agent>; 2], out: &mut Vec<State>) {
+pub(crate) fn cut(
+    t: &GameTable,
+    seed: u64,
+    agents: &mut [Box<dyn Agent>; 2],
+    out: &mut Vec<State>,
+) {
     let mut s = State::new(t, seed, Profile::SMART).expect("decks that fit Small");
     let mut x = Scratch::new();
     let mut cuts = CUTS.iter().peekable();

@@ -79,3 +79,11 @@ harness = false
 [[test]]
 name = "allocations"
 harness = false
+
+[[bench]]
+name = "dandan_timing"
+harness = false
+
+[[bench]]
+name = "dandan_counts"
+harness = false

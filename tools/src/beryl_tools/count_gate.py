@@ -77,6 +77,21 @@ def gate_cargo(gate: Gate) -> list[str]:
     )
 
 
+# The tracked, ungated benchmark: Dandân rollouts (docs/benchmarking.md). Counted in the gate's
+# run and written to the trend beside the gated count, with no bar.
+TRACKED = {"dandan": "dandan_counts::dandan_rollout::rollouts::corpus"}
+
+
+def tracked_cargo() -> list[list[str]]:
+    """Builds and counts each tracked benchmark after the gated one, as JSON."""
+    return [
+        bench.cargo_bench(
+            ["--bench", name.split("::")[0], "--", "--output-format=json", name]
+        )
+        for name in TRACKED.values()
+    ]
+
+
 def counted(stdout: str, benchmark: str) -> int | None:
     """The benchmark's instructions (Callgrind's `Ir`) from Gungraun's JSON lines."""
     for line in stdout.splitlines():
@@ -265,6 +280,8 @@ def parallel_gate_build(rollout: Gate | None, families: list[str]) -> list[str]:
     benches: list[str] = []
     if rollout is not None:
         benches += ["--bench", rollout.benchmark.split("::")[0]]
+        for name in TRACKED.values():
+            benches += ["--bench", name.split("::")[0]]
     if families:
         benches += ["--bench", FAMILY_BENCH, "--bench", FAMILY_STEPS]
     return bench.cargo_bench([*benches, "--no-run", "--message-format=json"])
@@ -293,6 +310,11 @@ def parallel_gate_body(rollout: Gate | None, families: list[str], jobs: int) -> 
             f"rollout_bin=$(printf '%s\\n' \"$bins\" | awk '$1==\"{rollout_target}\"{{print $2}}')"
         )
         lines.append('test -n "$rollout_bin"')
+        for series, name in TRACKED.items():
+            lines.append(
+                f"{series}_bin=$(printf '%s\\n' \"$bins\" | awk '$1==\"{name.split('::')[0]}\"{{print $2}}')"
+            )
+            lines.append(f'test -n "${series}_bin"')
     if families:
         lines.append(
             f"family_bin=$(printf '%s\\n' \"$bins\" | awk '$1==\"{FAMILY_BENCH}\"{{print $2}}')"
@@ -325,6 +347,12 @@ def parallel_gate_body(rollout: Gate | None, families: list[str], jobs: int) -> 
             'launch rollouts "$rollout_bin" --bench --output-format=json '
             + shlex.quote(rollout.benchmark)
         )
+    for series, name in TRACKED.items():
+        if rollout is not None:
+            lines.append(
+                f'launch {series} "${series}_bin" --bench --output-format=json '
+                + shlex.quote(name)
+            )
     if families:
         lines.append(
             'launch steps "$steps_bin" --bench '
@@ -464,10 +492,19 @@ def count_gate(args: argparse.Namespace) -> int:
         body = parallel_gate_body(gate, families, bench.count_jobs())
         code, out = bench.run_count(build, bench.GATE_NAME, body=body)
     else:
-        code, out = bench.run_count(gate_cargo(gate), bench.GATE_NAME)
+        code, out = bench.run_count(
+            gate_cargo(gate), bench.GATE_NAME, then=tracked_cargo()
+        )
     if code != 0:
         return vm_host.vm_failed(code, bench.VM)
     measured = counted(out, gate.benchmark)
+    tracked = {
+        series: n
+        for series, name in TRACKED.items()
+        if (n := counted(out, name)) is not None
+    }
+    for series, n in tracked.items():
+        bench.log(f"{TRACKED[series]}: {n:,} instructions, tracked and not gated")
     if measured is None:
         bench.log(f"Gungraun reported no count for {gate.benchmark}")
         return 2
@@ -484,6 +521,7 @@ def count_gate(args: argparse.Namespace) -> int:
                     "message": message,
                     "verifier": setup.profile.verifier,
                     "calibration": setup.profile.digest,
+                    "tracked": tracked,
                 }
             )
             + "\n"

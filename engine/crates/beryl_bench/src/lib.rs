@@ -7,12 +7,15 @@
 //! - [`example`]: the sample subject the `example_*` benchmarks measure.
 //! - [`rollout`]: the rollout benchmark, the `rollout_*` benchmarks' corpus and
 //!   subjects.
+//! - [`dandan`]: the same benchmark over the Dandân deck in the shared-deck format, tracked
+//!   and not gated, the `dandan_*` benchmarks' corpus.
 //! - [`subgame`]: a rollout step inside a subgame against one in a plain game, in `Large`.
 //! - [`family`]: the present-cost benchmark, `family_*`: each family's corpus and its
 //!   rollouts, every step paired with the same step on a control state.
 
 pub mod abba;
 pub mod cores;
+pub mod dandan;
 pub mod example;
 pub mod family;
 pub mod rng;
