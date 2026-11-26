@@ -3,11 +3,12 @@
 //! the opponent's turn it searches as the plain hidden-information search does.
 
 use beryl_cards::{CARDS, names};
+use beryl_engine::Choice;
 use beryl_engine::GameTable;
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{Observation, Opt, Replay, Scratch, Step, TurnStep, apply, next};
 use beryl_scenario::{P0, P1, Permanent, Scenario, position};
-use beryl_search::{Agent, AgentDecision, Family, LongSearch, Settings};
+use beryl_search::{Agent, AgentDecision, Family, LongSearch, Search, Settings};
 
 const FAMILY: &str = "turn72/hidden/rollout/tuned/anchor+guard";
 const ISLAND: Permanent = Permanent::new(names::ISLAND);
@@ -138,4 +139,94 @@ fn opponent_turn_priority_uses_the_same_search_as_pimc() {
     );
     assert_eq!(turn.last_search(), pimc.last_search());
     assert!(turn.last_search().unwrap().turn.is_none());
+}
+
+const RACE: &str = "turnbudget72/hidden/rollout/tuned/anchor+guard+race";
+const PLAINS: Permanent = Permanent::new(names::PLAINS);
+/// P0's Gurmag Angler can attack P1, at 5 life, for lethal damage this turn. Casting Damn
+/// from P0's hand would destroy it, and casting Humility would shrink it to 1/1.
+const LETHAL: Scenario = Scenario::new("lethal attack")
+    .at(4, P0, TurnStep::PrecombatMain)
+    .life(P1, 5)
+    .permanents(P0, &[PLAINS; 4])
+    .battlefield(P0, &[names::GURMAG_ANGLER])
+    .library(P0, LIBRARY)
+    .library(P1, LIBRARY);
+
+/// Searches the first decision of `scenario` with `family` and returns the choice, the
+/// default greedy's answer, and the search's report.
+fn search(scenario: &Scenario, family: &str) -> (Choice, Choice, Search) {
+    let (t, mut state) = position(&CARDS, scenario).unwrap();
+    let Step::Decide(d) = next(&mut state, &t, &mut Scratch::new(), &mut Replay) else {
+        panic!("priority in main");
+    };
+    let obs = Observation::new(&state, d.decider);
+    let default = family
+        .parse::<Family>()
+        .unwrap()
+        .rollout_policy(&t)
+        .choose(&t, obs, &d);
+    let mut searcher = agent(&t, 300_000, family);
+    let choice = searcher.choose(obs, &d, AgentDecision(0));
+    (choice, default, searcher.last_search().unwrap().clone())
+}
+
+/// With three root moves (pass, play Plains, cast Damn on P0's own attacker), `race` drops
+/// Damn after the first checks and spends the work on more worlds for the other two. Without
+/// it, every root is scored in every world and nothing is dropped. Both choose alike, and
+/// a second search from the same seed answers the same.
+#[test]
+fn race_drops_a_losing_root_and_scores_more_worlds() {
+    let lethal = LETHAL.hand(P0, &[names::DAMN, names::PLAINS]);
+    let (plain_choice, _, plain) =
+        search(&lethal, "turnbudget72/hidden/rollout/tuned/anchor+guard");
+    let (choice, default, raced) = search(&lethal, RACE);
+    assert_eq!(raced.visits.len(), 3);
+    assert_eq!(choice, plain_choice);
+    assert_eq!(search(&lethal, RACE), (choice, default, raced.clone()));
+
+    let plain_report = plain.turn.unwrap();
+    assert_eq!(plain_report.dropped, 0);
+    assert!(
+        plain
+            .visits
+            .iter()
+            .all(|&n| u64::from(n) == plain_report.worlds)
+    );
+
+    let report = raced.turn.unwrap();
+    assert!(report.dropped >= 1, "{report:?}");
+    assert!(
+        report.worlds > plain_report.worlds,
+        "{report:?} {plain_report:?}"
+    );
+    assert_eq!(
+        u64::from(raced.visits[usize::from(default.0)]),
+        report.worlds
+    );
+    assert!(raced.work <= 300_000);
+}
+
+/// Greedy casts Humility, which keeps the Angler from dealing lethal damage: the worst of the
+/// two roots. The race never drops the default's root, so it is scored in every world.
+#[test]
+fn race_never_drops_the_defaults_root() {
+    let (choice, default, raced) = search(&LETHAL.hand(P0, &[names::HUMILITY]), RACE);
+    let report = raced.turn.unwrap();
+    let other = Choice(1 - default.0);
+    assert!(raced.means[usize::from(default.0)] < raced.means[usize::from(other.0)]);
+    assert_eq!(report.dropped, 0);
+    assert!(report.worlds > 48);
+    assert!(raced.visits.iter().all(|&n| u64::from(n) == report.worlds));
+    assert_eq!(choice, other);
+}
+
+#[test]
+fn race_requires_the_budgeted_turn_search() {
+    assert!(RACE.parse::<Family>().is_ok());
+    assert_eq!(RACE.parse::<Family>().unwrap().to_string(), RACE);
+    let err = "turn72/hidden/rollout/tuned/anchor+race"
+        .parse::<Family>()
+        .unwrap_err();
+    assert!(err.contains("requires the method turnbudget72"), "{err}");
 }

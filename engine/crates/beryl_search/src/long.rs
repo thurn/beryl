@@ -198,6 +198,11 @@ pub struct Options {
     /// The root uses the fitted values ([`Family::root_policy`]), and everything simulated
     /// keeps the tuned ones. Requires `tuned` knowledge; see [`Options::fitroll`].
     pub fitroot: bool,
+    /// The budgeted turn search ([`Method::TurnBudget`]) stops scoring a root move once the
+    /// leader clearly beats it in the worlds both were scored in ([`turn::RACE_ERRORS`]), so
+    /// the work saved scores more worlds for the roots still in the race. The default's root
+    /// and the leader are never dropped. Requires `turnbudget72`.
+    pub race: bool,
 }
 
 /// A searcher's settings.
@@ -334,9 +339,9 @@ impl FromStr for Family {
                  hidden, hands or omniscient; \
                  rollout, cutN or eval; estimate, tuned or fitted; options anchor, expert, \
                  guard, mid, means, hold, waste, combat, order, sure, paired, first, walker, prior, bonus, \
-                 fitroll and fitroot joined by + in \
-                 that order; expert, guard, sure and paired require anchor; first requires paired; \
-                 walker requires combat; fitroll and fitroot require tuned, one at a time)"
+                 fitroll, fitroot and race joined by + in that order; expert, guard, sure and \
+                 paired require anchor; first requires paired; walker requires combat; fitroll \
+                 and fitroot require tuned, one at a time; race requires turnbudget72)"
             )
         };
         let parts: Vec<&str> = s.split('/').collect();
@@ -367,6 +372,7 @@ impl FromStr for Family {
                         "bonus" => &mut o.bonus,
                         "fitroll" => &mut o.fitroll,
                         "fitroot" => &mut o.fitroot,
+                        "race" => &mut o.race,
                         _ => return Err(bad()),
                     };
                     if *flag {
@@ -418,7 +424,7 @@ impl FromStr for Family {
             "fitted" => Knowledge::Fitted,
             _ => return Err(bad()),
         };
-        fit_halves(s, options, knowledge)?;
+        requirements(s, options, method, knowledge)?;
         Ok(Family {
             method,
             sight,
@@ -430,8 +436,20 @@ impl FromStr for Family {
 }
 
 /// Checks that [`Options::fitroll`] and [`Options::fitroot`] in the family named `s` are
-/// set on `tuned` knowledge, and not both, with an error that says why.
-fn fit_halves(s: &str, options: Options, knowledge: Knowledge) -> Result<(), String> {
+/// set on `tuned` knowledge, and not both, and that [`Options::race`] is set only on
+/// `turnbudget72`, with an error that says why.
+fn requirements(
+    s: &str,
+    options: Options,
+    method: Method,
+    knowledge: Knowledge,
+) -> Result<(), String> {
+    if options.race && method != Method::TurnBudget {
+        return Err(format!(
+            "{s:?}: race drops losing root moves from the budgeted turn search's scoring \
+             worlds, so it requires the method turnbudget72"
+        ));
+    }
     if options.fitroll && options.fitroot {
         return Err(format!(
             "{s:?}: fitroll and fitroot together put fitted values both at the root and in \
@@ -451,7 +469,7 @@ fn fit_halves(s: &str, options: Options, knowledge: Knowledge) -> Result<(), Str
 impl Options {
     /// The options as a family's name spells them, joined by `+` in this order:
     /// `anchor+expert+guard+mid+means+hold+waste+combat+order+sure+paired+first+walker+prior`
-    /// `+bonus+fitroll+fitroot`; empty for none.
+    /// `+bonus+fitroll+fitroot+race`; empty for none.
     fn to_name(self) -> String {
         [
             (self.anchor, "anchor"),
@@ -471,6 +489,7 @@ impl Options {
             (self.bonus, "bonus"),
             (self.fitroll, "fitroll"),
             (self.fitroot, "fitroot"),
+            (self.race, "race"),
         ]
         .into_iter()
         .filter_map(|(on, name)| on.then_some(name))

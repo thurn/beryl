@@ -28,6 +28,12 @@ const PROPOSAL_WORLDS: u64 = 24;
 const MIN_SCORING_WORLDS: u16 = 48;
 const MAX_SCORING_WORLDS: u16 = 4_096;
 const WIDTH: usize = 8;
+/// With [`super::Options::race`], scoring worlds between checks for roots to drop, after the
+/// first [`MIN_SCORING_WORLDS`].
+const RACE_INTERVAL: u16 = 16;
+/// With [`super::Options::race`], a root is dropped when the leader's mean lead over it, in
+/// the worlds both were scored in, exceeds this many standard errors of the paired difference.
+pub(super) const RACE_ERRORS: f64 = 3.0;
 
 /// Deterministic work and line counts for one turn search.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -41,6 +47,12 @@ pub struct TurnReport {
     pub fallbacks: u64,
     /// The root kept its default because there were too few comparable scores.
     pub defaulted: bool,
+    /// Root moves dropped from scoring by [`super::Options::race`].
+    #[serde(default)]
+    pub dropped: u64,
+    /// Scoring worlds in which every root still in the race was scored.
+    #[serde(default)]
+    pub worlds: u64,
 }
 
 impl<L: Layout> LongSearch<L> {
@@ -123,18 +135,7 @@ fn search<L: Layout>(
 
     let mean = |xs: &Vec<f64>| (!xs.is_empty()).then(|| xs.iter().sum::<f64>() / xs.len() as f64);
     let means: Vec<_> = rewards.iter().map(mean).collect();
-    let best = roots
-        .iter()
-        .copied()
-        .filter(|c| means[usize::from(c.0)].is_some())
-        .reduce(|a, b| {
-            if means[usize::from(a.0)] >= means[usize::from(b.0)] {
-                a
-            } else {
-                b
-            }
-        })
-        .unwrap_or(default);
+    let best = best(&roots, &rewards, &means, default);
     let comparable = rewards[usize::from(default.0)].len() >= usize::from(MIN_SCORING_WORLDS);
     let anchor = (comparable && guarded(best)).then(|| {
         let leads: Vec<_> = rewards[usize::from(best.0)]
@@ -179,6 +180,59 @@ fn search<L: Layout>(
         turn: Some(search.report),
     };
     (choice, summary)
+}
+
+/// The scored root with the highest mean reward, or `default` when none was scored.
+///
+/// A root dropped by [`super::Options::race`] has fewer rewards than the default, which is
+/// never dropped. It is never chosen: the leader clearly beat it. The roots left were scored
+/// in every world, so the best and the default compare over the same worlds.
+fn best(roots: &[Choice], rewards: &[Vec<f64>], means: &[Option<f64>], default: Choice) -> Choice {
+    let raced = rewards[usize::from(default.0)].len();
+    roots
+        .iter()
+        .copied()
+        .filter(|c| means[usize::from(c.0)].is_some() && rewards[usize::from(c.0)].len() == raced)
+        .reduce(|a, b| {
+            if means[usize::from(a.0)] >= means[usize::from(b.0)] {
+                a
+            } else {
+                b
+            }
+        })
+        .unwrap_or(default)
+}
+
+/// Drops from `racing` each root that the leader, the root with the highest mean reward,
+/// beats by more than [`RACE_ERRORS`] standard errors of their paired difference. The leader
+/// and `default` stay. Returns how many roots were dropped.
+///
+/// Every root in `racing` was scored in every world so far with that world's seed, so the
+/// rewards pair up world by world.
+fn race_out(racing: &mut Vec<Choice>, rewards: &[Vec<f64>], default: Choice) -> u64 {
+    let scores = |c: Choice| &rewards[usize::from(c.0)];
+    let mean = |c: Choice| scores(c).iter().sum::<f64>() / scores(c).len() as f64;
+    let Some(leader) = racing
+        .iter()
+        .copied()
+        .reduce(|a, b| if mean(a) >= mean(b) { a } else { b })
+    else {
+        return 0;
+    };
+    let before = racing.len();
+    racing.retain(|&c| {
+        if c == leader || c == default {
+            return true;
+        }
+        let leads: Vec<f64> = scores(leader)
+            .iter()
+            .zip(scores(c))
+            .map(|(lead, other)| lead - other)
+            .collect();
+        let (lead, error) = mean_and_error(&leads);
+        lead <= RACE_ERRORS * error
+    });
+    (before - racing.len()) as u64
 }
 
 /// Observations include the offered actions, including duplicate ordinals, but
@@ -691,20 +745,34 @@ impl<L: Layout> TurnSearch<'_, L> {
         rng: &mut SplitMix64,
     ) {
         let limit = agent.settings.work;
+        let race = agent.settings.family.options.race;
+        // The default is sorted first and kept by `search`.
+        let default = roots[0];
+        let mut racing = roots.to_vec();
         let leaf = agent.settings.family.leaf;
         let worlds = if agent.settings.family.method == Method::TurnBudget {
             MAX_SCORING_WORLDS
         } else {
             MIN_SCORING_WORLDS
         };
-        for _ in 0..worlds {
+        for scored in 0..worlds {
+            if race
+                && scored >= MIN_SCORING_WORLDS
+                && (scored - MIN_SCORING_WORLDS).is_multiple_of(RACE_INTERVAL)
+            {
+                self.report.dropped += race_out(&mut racing, rewards, default);
+                // The default alone is left: another world would compare nothing.
+                if racing.len() == 1 {
+                    break;
+                }
+            }
             if !self.room(limit, WORLD_STEPS + 1) {
                 break;
             }
             let world = self.deal(obs, agent.settings.family.sight, rng);
             let seed = rng.next_u64();
-            let mut round = Vec::with_capacity(roots.len());
-            for &first in roots {
+            let mut round = Vec::with_capacity(racing.len());
+            for &first in &racing {
                 let i = usize::from(first.0);
                 let reward = if wide_roots[i] {
                     self.score_wide(&world, first, learned[i].as_ref(), None, leaf, seed, limit)
@@ -720,6 +788,7 @@ impl<L: Layout> TurnSearch<'_, L> {
             for (i, reward) in round {
                 rewards[i].push(reward);
             }
+            self.report.worlds += 1;
         }
     }
 

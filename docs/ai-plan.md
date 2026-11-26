@@ -585,6 +585,20 @@ configuration is the 3M family:
 turnbudget72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker@3M
 ```
 
+With `race` (`Options::race`), built but not yet measured, the budgeted search
+stops scoring root moves that are clearly losing. It checks after the first 48
+scoring worlds and then after every 16. At a check, the leader is the root with
+the highest mean reward. A root is dropped when the leader's mean lead over it,
+in the worlds both were scored in, exceeds 3 standard errors of that paired
+difference (`RACE_ERRORS`). The default's root and the leader are never dropped,
+and a dropped root is never chosen. The roots still in the race are scored in
+every later world with that world's seed, so their rewards stay paired, and the
+work saved becomes more worlds for them. When only the default is left,
+scoring stops. `race` requires `turnbudget72`.
+
+- **Claims:** more scoring worlds for the roots that matter at the same budget.
+- **Measure:** the suite and a 3M match against the champion, `stronger`.
+
 ### 6.10 Rung 9: `bonus`, speed as a bounded bonus
 
 Built (`Options::bonus`), not yet measured. Every family scores a win
