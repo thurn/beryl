@@ -334,5 +334,19 @@
     "scenario": "a split half escapes for its half's mana cost",
     "cr": "CR 709.3 (https://yawgatog.com/resources/magic-rules/#R7093): \"A player chooses which half of a split card they are casting before putting it onto the stack.\"",
     "reason": "XMage's UnderworldBreachEffect attaches EscapeAbility only to the main card object and never to either half of a split card. Beryl and Forge both allow escaping Ice for its half's mana cost plus exiling three cards."
+  },
+  {
+    "oracle": "forge",
+    "card": "Svyelunite Temple",
+    "scenario": "Svyelunite Temple alone pays for Lord of Atlantis",
+    "cr": "CR 601.2g (https://yawgatog.com/resources/magic-rules/#R6012g): \"If the total cost includes a mana payment, the player then has a chance to activate mana abilities (see rule 605, 'Mana Abilities'). Mana abilities must be activated before costs are paid.\"",
+    "reason": "Forge's payment never activates Svyelunite Temple's {T}, Sacrifice ability, so with only the Temple it cannot pay {U}{U} and does not cast Lord of Atlantis. The Temple's two mana abilities are separate abilities, and its controller may activate either to pay."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Svyelunite Temple",
+    "scenario": "generated 4: cast Wetland Sambar paying beside Island",
+    "cr": "CR 601.2g (https://yawgatog.com/resources/magic-rules/#R6012g): \"If the total cost includes a mana payment, the player then has a chance to activate mana abilities (see rule 605, 'Mana Abilities'). Mana abilities must be activated before costs are paid.\"",
+    "reason": "XMage's automatic payment for Wetland Sambar activates Svyelunite Temple's {T}, Sacrifice ability and leaves the Island untapped, where the scenario's payment taps the Island and taps the Temple for {U}. Both payments are legal; the player chooses which mana abilities to activate, and XMage made a choice the scenario did not script."
   }
 ]

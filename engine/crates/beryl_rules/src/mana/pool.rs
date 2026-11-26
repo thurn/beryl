@@ -8,10 +8,10 @@ use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::state::State;
-use crate::table::GameTable;
+use crate::table::{Capability, GameTable};
 
 use super::remembered::{self, Paying};
-use super::sources::{available, controlled, source};
+use super::sources::{available, capacity, controlled, sacrifice_alternative, source};
 use super::{
     CLASSES,
     units::{Groups, Units},
@@ -42,10 +42,19 @@ impl<L: Layout> Funds<L> {
         // The classes [`Sources::of`] would form, so that more than it holds is `Full` here
         // too.
         let mut classes: L::Queue<_, CLASSES> = Default::default();
+        let alternatives = t.can(Capability::SacrificeAlternative);
         for (slot, d) in controlled(s, player) {
             if let Some((kinds, amount, other, consumed)) = source(s, t, player, slot, d) {
                 slots.insert(slot);
-                units.add(kinds, u16::from(amount));
+                // A source that may also sacrifice itself for mana: its twin class too.
+                let alternative = (!consumed)
+                    .then(|| sacrifice_alternative(s, t, player, slot, alternatives))
+                    .flatten();
+                if let Some((kinds, amount)) = alternative {
+                    classes.push((kinds, amount, true, Some(s.definition(slot).key())))?;
+                }
+                let (most, n) = capacity(kinds, amount, alternative);
+                units.add(most, u16::from(n));
                 // Sources a plan consumes are a class per card.
                 let card = consumed.then(|| s.definition(slot).key());
                 let class = (kinds, amount, other, card);
@@ -81,9 +90,14 @@ impl<L: Layout> Funds<L> {
 
     #[inline]
     fn without_sources(&self, s: &State<L>, t: &GameTable, excluded: Bitboard<L::Slot>) -> Units {
+        let alternatives = t.can(Capability::SacrificeAlternative);
         excluded.fold(self.units, |mut units, slot| {
-            let (kinds, amount, _, _) =
+            let (kinds, amount, _, consumed) =
                 source(s, t, self.player, slot, s.derived(slot)).expect("a source");
+            let alternative = (!consumed)
+                .then(|| sacrifice_alternative(s, t, self.player, slot, alternatives))
+                .flatten();
+            let (kinds, amount) = capacity(kinds, amount, alternative);
             units.take(kinds, u16::from(amount));
             units
         })

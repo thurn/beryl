@@ -194,6 +194,12 @@ pub(super) fn only_idle<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>)
         Candidates::Options(list) => list.iter().all(|o| match *o {
             Opt::Pass => true,
             Opt::Mana { .. } => floats,
+            // A source's mana ability that sacrifices it, offered beside its `Opt::Mana`.
+            Opt::Activate { slot, ability }
+                if floats && mana::is_alternative(s, t, slot, ability) =>
+            {
+                true
+            }
             Opt::Activate { slot, ability } => quiet && casting::pointless(s, t, slot, ability),
             Opt::PlayLand(_)
             | Opt::Play

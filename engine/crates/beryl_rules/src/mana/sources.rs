@@ -4,6 +4,7 @@
 //! Implements: CR 302.6, CR 702.10c
 
 use crate::bitboard::Bitboard;
+use crate::card::AbilityKind;
 #[cfg(doc)]
 use crate::card::ManaColor;
 use crate::card::{Ability, AbilityIx, Face, Keywords, ObjectAbility, Types, Words};
@@ -29,7 +30,7 @@ pub(super) struct Class<L: Layout = Small> {
     pub(super) members: Bitboard<L::Slot>,
     /// Whether tapping one for mana also sacrifices it: a plan's taps of this class are the
     /// permanents it consumes (§10).
-    consumed: bool,
+    pub(super) consumed: bool,
     /// The least card among the members, which orders classes of one rank.
     least: crate::query::DefinitionKey<L::Card>,
     /// Whether its members are tapped for their restricted mana ability, which the payment's
@@ -39,8 +40,10 @@ pub(super) struct Class<L: Layout = Small> {
     pub(super) rider: bool,
     /// Of a restricted class, the class of the same member's unrestricted mana, if it has
     /// one, and of that class, the restricted one: tapping the permanent for one leaves it
-    /// tapped for the other. [`NO_TWIN`] for none: a byte, so that the class stays 40 bytes,
-    /// which a plan's search copies.
+    /// tapped for the other. Likewise of a consumed class whose member also taps for mana
+    /// without being sacrificed ([`sacrifice_alternative`]), and of that other class.
+    /// [`NO_TWIN`] for none: a byte, so that the class stays 40 bytes, which a plan's search
+    /// copies.
     twin: u8,
 }
 
@@ -58,10 +61,10 @@ impl<L: Layout> Class<L> {
         u8::try_from(L::Slot::COUNT).is_ok() || self.members.count() < u32::from(u8::MAX)
     }
 
-    /// Whether it is a restricted class whose member has another class: its taps are counted
-    /// with that class's.
+    /// Whether it is a restricted or consumed class whose member has another class: its taps
+    /// are counted with that class's.
     pub(super) fn is_twin(&self) -> bool {
-        self.restricted && self.twin != NO_TWIN
+        (self.restricted || self.consumed) && self.twin != NO_TWIN
     }
 
     /// The class of the same member's other mana, if it has one ([`Class::twin`]).
@@ -81,8 +84,9 @@ pub(crate) struct Sources<L: Layout = Small> {
     remembered: L::Queue<(u8, u8, bool), 4>,
     /// Whether a class is restricted.
     restricted: bool,
-    /// Whether a class is restricted or the pool holds mana that remembers the payment
-    /// accepts ([`Sources::has_memory`]), found once as the sources are.
+    /// Whether a class is restricted, a source has twin classes ([`Class::twin`]) or the pool
+    /// holds mana that remembers the payment accepts ([`Sources::has_memory`]), found once as
+    /// the sources are.
     memory: bool,
 }
 
@@ -276,6 +280,93 @@ fn read_source<L: Layout>(
     Some((kinds, amount, conditional || other, false))
 }
 
+/// The second way an untapped source `player` controls makes mana, the permanent in `slot`,
+/// which [`source`] found makes mana for {T} alone: its mana ability that costs {T} and
+/// sacrificing it ([`is_sacrificed`]), as "{T}, Sacrifice this land: Add {U}{U}." beside
+/// "{T}: Add {U}.". The kinds of mana it makes and how much. Each is a mana ability of its own,
+/// and its controller chooses which to activate (see
+/// [CR 605.3a](https://yawgatog.com/resources/magic-rules/#R6053a)): "A player may activate an
+/// activated mana ability whenever they have priority". `alternatives` is whether the game's cards have such a face
+/// ([`Capability::SacrificeAlternative`]): in a game with none, nothing more is read.
+#[inline]
+pub(super) fn sacrifice_alternative<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+    slot: L::Slot,
+    alternatives: bool,
+) -> Option<(u8, u8)> {
+    if !alternatives {
+        return None;
+    }
+    read_alternative(s, t, player, slot)
+}
+
+/// [`sacrifice_alternative`] in a game whose cards have such a face. Out of line.
+#[cold]
+#[inline(never)]
+fn read_alternative<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+    slot: L::Slot,
+) -> Option<(u8, u8)> {
+    find_alternative(s, t, player, slot).map(|(_, made)| (made.colors, made.amount))
+}
+
+/// The ability of the permanent in `slot` that [`sacrifice_alternative`] activates.
+pub(super) fn alternative_ability<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    slot: L::Slot,
+) -> Option<ObjectAbility> {
+    find_alternative(s, t, s.controller(slot), slot).map(|(ability, _)| ability)
+}
+
+/// The first mana ability of the permanent in `slot` that costs {T} and sacrificing it and
+/// that `player` may activate now, and the mana it makes.
+fn find_alternative<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+    slot: L::Slot,
+) -> Option<(ObjectAbility, crate::card::ManaSet)> {
+    let words = s.words_of(slot);
+    s.abilities(t, slot)
+        .find(|&(_, a)| is_sacrificed(a) && allowed(s, t, a, player, &words))
+        .map(|(ability, a)| (ability, a.produces()))
+}
+
+/// Whether `ability` of the permanent in `slot` is the mana ability [`sacrifice_alternative`]
+/// finds: one that costs {T} and sacrificing it, of a source that also makes mana for {T}
+/// alone, which priority offers as an option of its own.
+pub(crate) fn is_alternative<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    slot: L::Slot,
+    ability: ObjectAbility,
+) -> bool {
+    t.can(Capability::SacrificeAlternative)
+        && s.abilities(t, slot).any(|(a, printed)| {
+            a == ability && printed.kind() == AbilityKind::Mana && is_sacrificed(printed)
+        })
+        && source(s, t, s.controller(slot), slot, s.derived(slot))
+            .is_some_and(|(.., consumed)| !consumed)
+}
+
+/// The most a source makes that can tap for `kinds` and `amount` or, as its twin, for
+/// `twin`'s kinds and amount, as one count of units of some kinds: the larger amount of one
+/// kind where both make the same kinds, and one amount of either's kinds where they differ.
+/// Where the two differ in both kinds and amount, this is the smaller amount, which never
+/// says that a source pays what it cannot.
+pub(super) fn capacity(kinds: u8, amount: u8, twin: Option<(u8, u8)>) -> (u8, u8) {
+    match twin {
+        None => (kinds, amount),
+        Some((k, n)) if k == kinds => (kinds, amount.max(n)),
+        Some((k, n)) => (kinds | k, amount.min(n)),
+    }
+}
+
 impl<L: Layout> Sources<L> {
     /// The untapped sources `player` controls, but those in `exclude`, for a payment of what
     /// `paying` is for.
@@ -288,6 +379,8 @@ impl<L: Layout> Sources<L> {
     ) -> Result<Self, Full> {
         // Built in place: a copy of its classes costs every payment.
         let mut out = Sources::<L>::default();
+        let alternatives = t.can(Capability::SacrificeAlternative);
+        let mut twins = false;
         let classes = &mut out.classes;
         for (slot, d) in controlled(s, player) {
             if exclude.contains(slot) {
@@ -312,7 +405,11 @@ impl<L: Layout> Sources<L> {
                 // Only permanents of one card are interchangeable when spending one: the
                 // payment sacrifices whichever comes first.
                 let same = |c: &Class<L>| {
-                    c.consumed && c.has_room() && c.least == s.definition(slot).key()
+                    c.consumed && c.has_room() && c.least == s.definition(slot).key() && {
+                        // A twin's class has its one member.
+                        let member = c.members.min(|m| m).expect("a class has a member");
+                        sacrifice_alternative(s, t, player, member, alternatives).is_none()
+                    }
                 };
                 if let Some(i) = classes.iter().position(same) {
                     classes.as_mut_slice()[i].members.insert(slot);
@@ -320,6 +417,26 @@ impl<L: Layout> Sources<L> {
                     classes.push(class)?;
                 }
                 continue;
+            }
+            // A source that may also sacrifice itself for mana has a consumed class of its
+            // own beside its other class, its twin: a plan taps it for one or the other.
+            if let Some((kinds, amount)) = sacrifice_alternative(s, t, player, slot, alternatives) {
+                debug_assert!(
+                    other,
+                    "a source with a second mana ability is a class of its own"
+                );
+                classes.push(Class {
+                    kinds,
+                    amount,
+                    rank: CONSUMED_RANK,
+                    members: Bitboard::single(slot),
+                    consumed: true,
+                    least: s.definition(slot).key(),
+                    restricted: false,
+                    rider: false,
+                    twin: NO_TWIN,
+                })?;
+                twins = true;
             }
             let rank = u8::try_from(kinds.count_ones()).expect("number of bits in a byte") * 2
                 + u8::from(other);
@@ -357,20 +474,22 @@ impl<L: Layout> Sources<L> {
             out.remembered = remembered::accepted_entries(s, t, player, paying);
             out.memory = out.restricted || !out.remembered.is_empty();
         }
+        out.memory |= twins;
         // Classes of one rank by card, never by slot, which the game's randomness chose as it
         // dealt the cards to their slots: by the least card of each, as a class may hold
         // several, such as Islands and a modal double-faced card's land face.
         out.classes
             .as_mut_slice()
             .sort_by_key(|c| (c.rank, c.least));
-        if out.restricted {
+        if out.restricted || twins {
             link_twins(out.classes.as_mut_slice());
         }
         Ok(out)
     }
 
-    /// Whether a class is restricted or the pool holds mana that remembers the payment
-    /// accepts: never in a game whose cards make no restricted mana.
+    /// Whether a class is restricted, a source has twin classes or the pool holds mana that
+    /// remembers the payment accepts: never in a game whose cards make no restricted mana and
+    /// have no [`sacrifice_alternative`].
     #[inline]
     pub(super) fn has_memory(&self) -> bool {
         self.memory
@@ -425,8 +544,8 @@ impl<L: Layout> Sources<L> {
     }
 
     /// [`Sources::units`], less the mana that remembers in `spent`, a bit per entry of
-    /// [`Sources::remembered`]. An untapped permanent with a restricted class and another is
-    /// one unit of either's kinds.
+    /// [`Sources::remembered`]. An untapped permanent with twin classes makes what
+    /// [`capacity`] says.
     #[inline]
     pub(super) fn units_left(&self, pool: [u8; KINDS], tapped: &Taps<L>, spent: u8) -> Units {
         let mut u = Units::NONE;
@@ -452,12 +571,14 @@ impl<L: Layout> Sources<L> {
             if c.is_twin() {
                 continue;
             }
-            let (mut kinds, mut left) = (c.kinds, c.count().saturating_sub(taps));
-            if let Some(twin) = c.twin() {
-                kinds |= classes[usize::from(twin)].kinds;
+            let mut left = c.count().saturating_sub(taps);
+            let other = c.twin().map(|twin| {
+                let other = &classes[usize::from(twin)];
                 left = left.saturating_sub(tapped[usize::from(twin)]);
-            }
-            u.add(kinds, u16::from(c.amount) * u16::from(left));
+                (other.kinds, other.amount)
+            });
+            let (kinds, amount) = capacity(c.kinds, c.amount, other);
+            u.add(kinds, u16::from(amount) * u16::from(left));
         }
     }
 
@@ -527,11 +648,12 @@ fn restricted_classes<L: Layout>(
     Ok(added)
 }
 
-/// Links each restricted class with the class of its member's unrestricted mana, if it has one
+/// Links each restricted class with the class of its member's unrestricted mana, if it has one,
+/// and each consumed class with the class of its member's mana for {T} alone
 /// ([`Class::twin`]), once the classes are in their order.
 fn link_twins<L: Layout>(classes: &mut [Class<L>]) {
     for i in 0..classes.len() {
-        if !classes[i].restricted {
+        if !classes[i].restricted && !classes[i].consumed {
             continue;
         }
         let member = classes[i].members;

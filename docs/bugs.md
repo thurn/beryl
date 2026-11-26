@@ -6,6 +6,24 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **A land with both a {T} mana ability and a {T}, sacrifice mana ability was
+  treated as making only the smaller amount.** Svyelunite Temple ("{T}: Add
+  {U}." and "{T}, Sacrifice this land: Add {U}{U}.") alone could not pay for
+  Lord of Atlantis. The mana solver's `read_source` in `mana/sources.rs`
+  described each permanent as one source and looked at a sacrifice mana ability
+  only when the permanent had no {T}-only one, as a Treasure has none. A
+  scenario's `Activate` of the sacrifice ability also matched the {T}-only
+  ability's `Opt::Mana`, which names only a color. Fixed: such a source gets a
+  second, consumed class linked to its first as a twin (`Class::twin`), so a
+  plan taps it for one ability or the other; the payment activates the sacrifice
+  ability for the consumed class; and priority and manual payment offer that
+  ability as `Opt::Activate`. Guard: the scenario "Svyelunite Temple alone pays
+  for Lord of Atlantis" and the card's mutation test, and the reference
+  payability check (`reference::check_payments`), which now counts such a source
+  at its larger amount and so compares the solver against it on every scenario
+  position. No type ties the solver's description of a source to the set of mana
+  abilities the permanent has.
+
 - **Ending the turn with a copy removed the copy before the abilities it
   exiled.** When a Forked Time Stop resolved with an ability on the stack, the
   session's script check failed: the ability's removal named the copy as its

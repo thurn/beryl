@@ -133,7 +133,7 @@ fn walk<L: Layout, const MEMORY: bool>(
     let i = position - KINDS - remembered;
     let class = classes[i];
     // A permanent tapped for its other class's mana is tapped for this one's too.
-    let room = match class.restricted.then(|| class.twin()).flatten() {
+    let room = match class.is_twin().then(|| class.twin()).flatten() {
         Some(twin) if MEMORY => class.count() - plan.taps[usize::from(twin)],
         _ => class.count(),
     };

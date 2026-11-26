@@ -436,7 +436,7 @@ pub(crate) fn pay_mana<L: Layout>(
         | Opt::Object(_)
         | Opt::TurnFaceUp(_)
         | Opt::Companion) => {
-            mana::manual_pay(s, t, sink, player, remaining, option, mana::Paying::NOTHING)?
+            mana::manual_pay(s, t, sink, player, remaining, option, mana::Paying::NOTHING)?.0
         }
     })
 }

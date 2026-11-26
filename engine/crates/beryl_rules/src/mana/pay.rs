@@ -4,25 +4,24 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityIx, ChosenKind, CostAction, FaceIx, Hybrid, INTRINSIC_MANA, ManaColor,
-    ManaCost, ObjectAbility, Types,
+    Ability, AbilityIx, CostAction, FaceIx, Hybrid, INTRINSIC_MANA, ManaColor, ManaCost,
+    ObjectAbility, Types,
 };
-use crate::decision::{Candidates, OPTIONS, Opt};
+use crate::decision::{OPTIONS, Opt};
 use crate::fixed::Full;
 use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Table};
 use crate::replacement::event::{self, Sink};
 use crate::state::{
-    AbilityRef, ManaAmounts, Pending, PendingTrigger, State, TriggeredAbility, Zone, ZoneKey,
+    AbilityRef, ManaAmounts, PendingTrigger, State, TriggeredAbility, Zone, ZoneKey,
 };
 use crate::table::{Capability, GameTable, is_instant_mana, is_sacrificed, is_simple};
-use beryl_kernel::chosen::ChosenValue;
 use beryl_kernel::reference::Permanent;
 
 use super::pool::{helps, pay_unit};
 use super::remembered::{self, Paying};
 use super::solver::{Plan, lowest_kind, spent_by_class};
-use super::sources::{Class, Sources, allowed, can_tap, controlled, source};
+use super::sources::{Class, Sources, allowed, alternative_ability};
 use super::{KINDS, Taps};
 
 /// Pays `cost` by `plan`: taps its sources for the mana it needs, sacrificing those whose
@@ -72,6 +71,8 @@ enum From<S> {
     Remembered(u8),
     /// This source's unrestricted mana ability.
     Tap(S),
+    /// This source's mana ability that sacrifices it, of a class the plan consumes.
+    Consumed(S),
     /// This source's restricted mana ability.
     Restricted(S),
 }
@@ -172,12 +173,10 @@ fn pay_units<L: Layout, const MEMORY: bool>(
         } else {
             s.mana_payment_sources(c.members, plan.taps[i])?
         };
-        let from = |slot| {
-            if MEMORY && c.restricted {
-                From::Restricted(slot)
-            } else {
-                From::Tap(slot)
-            }
+        let from = |slot| match (MEMORY && c.restricted, c.consumed) {
+            (true, _) => From::Restricted(slot),
+            (false, true) => From::Consumed(slot),
+            (false, false) => From::Tap(slot),
         };
         if c.amount == 1 {
             for &slot in tapped.iter() {
@@ -217,12 +216,13 @@ fn pay_units<L: Layout, const MEMORY: bool>(
         match unit.from {
             From::Remembered(_) => {}
             From::Restricted(slot) => {
-                activate_as::<L, true>(s, t, sink, tapped_source(s, slot), color)?;
+                activate_as::<L, true>(s, t, sink, tapped_source(s, slot), color, false)?;
                 let last = s.player(player).remembered_mana().len() - 1;
                 remembered::spend(s, t, player, last, paying)?;
             }
-            From::Tap(slot) => {
-                activate(s, t, sink, tapped_source(s, slot), color)?;
+            From::Tap(slot) | From::Consumed(slot) => {
+                let consume = matches!(unit.from, From::Consumed(_));
+                activate_consuming(s, t, sink, tapped_source(s, slot), color, consume)?;
                 s.spend_mana(player, color, unit.n);
             }
             From::Pool => s.spend_mana(player, color, unit.n),
@@ -357,6 +357,8 @@ fn push_hybrid<L: Layout>(hybrid: Hybrid, symbols: &mut L::Queue<u8, 64>) -> Res
 ///
 /// It taps for an unrestricted mana ability that makes the mana if it has one, and for its
 /// restricted mana ability otherwise ([`remembered`]), whose mana remembers its restriction.
+/// Of its unrestricted mana abilities, it activates one that doesn't sacrifice it if it has
+/// one ([`activate_consuming`]).
 pub(crate) fn activate<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
@@ -364,16 +366,31 @@ pub(crate) fn activate<L: Layout>(
     permanent: Permanent<L>,
     color: ManaColor,
 ) -> Result<(), Full> {
-    activate_as::<L, false>(s, t, sink, permanent, color)
+    activate_consuming(s, t, sink, permanent, color, false)
 }
 
-/// [`activate`], for the source's restricted mana ability if `RESTRICTED`.
+/// [`activate`], for a mana ability that sacrifices the source ([`is_sacrificed`]) if
+/// `consume` and it has one that makes the mana, and for one that doesn't otherwise if it has
+/// one: the source's controller chooses which of its mana abilities to activate.
+pub(crate) fn activate_consuming<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    permanent: Permanent<L>,
+    color: ManaColor,
+    consume: bool,
+) -> Result<(), Full> {
+    activate_as::<L, false>(s, t, sink, permanent, color, consume)
+}
+
+/// [`activate_consuming`], for the source's restricted mana ability if `RESTRICTED`.
 fn activate_as<L: Layout, const RESTRICTED: bool>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
     permanent: Permanent<L>,
     color: ManaColor,
+    consume: bool,
 ) -> Result<(), Full> {
     let restricted = RESTRICTED;
     let slot = permanent.slot();
@@ -381,13 +398,26 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
     // The card table refuses a card that grants a mana ability (`TableError::Granted`), so
     // the one found is the permanent's own, or, of a merged permanent, that of a card under
     // it (see CR 702.140e), printed on that card's face.
-    let printed = s.abilities(t, slot).find_map(|(ability, a)| match ability {
-        ObjectAbility::Own(i) if !restricted && makes_now(s, t, slot, a, color) => {
-            Some((card, face, i, a))
-        }
-        ObjectAbility::Merged(..) if !restricted => merged_mana(s, t, slot, ability, color),
-        ObjectAbility::Own(_) | ObjectAbility::Granted(_) | ObjectAbility::Merged(..) => None,
-    });
+    let find = |preferred: bool| {
+        s.abilities(t, slot)
+            .filter(move |&(_, a)| !preferred || is_sacrificed(a) == consume)
+            .find_map(|(ability, a)| match ability {
+                ObjectAbility::Own(i) if !restricted && makes_now(s, t, slot, a, color) => {
+                    Some((card, face, i, a))
+                }
+                ObjectAbility::Merged(..) if !restricted => merged_mana(s, t, slot, ability, color),
+                ObjectAbility::Own(_) | ObjectAbility::Granted(_) | ObjectAbility::Merged(..) => {
+                    None
+                }
+            })
+    };
+    // The ability `consume` names first, then any other: a Treasure has only the one that
+    // sacrifices it. A game with no source of both kinds has nothing to prefer.
+    let printed = if t.can(Capability::SacrificeAlternative) {
+        find(true).or_else(|| find(false))
+    } else {
+        find(false)
+    };
     if printed.is_none()
         && (restricted || s.intrinsic_mana(t, slot) & (1 << color.index()) == 0)
         && let Some((_, ability)) = remembered::makes(s, t, permanent, color)
@@ -532,6 +562,13 @@ pub(crate) fn manual_options<L: Layout>(
             {
                 continue;
             }
+            // A source that may also sacrifice itself for mana names that ability: its
+            // option for the kind is its other mana ability's.
+            if c.is_twin() && c.consumed {
+                let ability = alternative_ability(s, t, slot).expect("a twin's ability");
+                out.push(Opt::Activate { slot, ability })?;
+                break;
+            }
             out.push(Opt::Mana {
                 slot,
                 color: ManaColor::ALL[kind],
@@ -541,9 +578,10 @@ pub(crate) fn manual_options<L: Layout>(
     Ok(out)
 }
 
-/// Performs a manual payment option, returning what remains to pay. The source's tap and
-/// its mana are kept as one group, a part of the payment a player makes a source at a time:
-/// what they pay for (`Cause::entry`) says which payment each is of.
+/// Performs a manual payment option, returning what remains to pay and the kind of the mana
+/// it paid with. The source's tap and its mana are kept as one group, a part of the payment a
+/// player makes a source at a time: what they pay for (`Cause::entry`) says which payment each
+/// is of.
 pub(crate) fn manual_pay<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
@@ -552,13 +590,29 @@ pub(crate) fn manual_pay<L: Layout>(
     mut remaining: ManaCost,
     option: Opt<L>,
     paying: Paying<L>,
-) -> Result<ManaCost, Full> {
+) -> Result<(ManaCost, ManaColor), Full> {
     let made = s.player(player).remembered_mana().len();
     let color = match option {
         Opt::Pool(color) => color,
         Opt::Mana { slot, color } => {
             sink.together();
             let activated = activate(s, t, sink, tapped_source(s, slot), color);
+            sink.apart();
+            activated?;
+            color
+        }
+        // A source's mana ability that sacrifices it ([`manual_options`]): its first kind
+        // that pays part of what remains.
+        Opt::Activate { slot, ability } => {
+            let kinds = (s.abilities(t, slot).find(|&(a, _)| a == ability))
+                .map(|(_, a)| a.produces().colors)
+                .expect("an ability offered");
+            let kind = (0..KINDS)
+                .find(|&k| kinds & (1 << k) != 0 && helps(remaining, k))
+                .unwrap_or_else(|| lowest_kind(kinds));
+            let color = ManaColor::ALL[kind];
+            sink.together();
+            let activated = activate_consuming(s, t, sink, tapped_source(s, slot), color, true);
             sink.apart();
             activated?;
             color
@@ -578,7 +632,6 @@ pub(crate) fn manual_pay<L: Layout>(
         | Opt::Block(_)
         | Opt::Lethal(_)
         | Opt::Cast { .. }
-        | Opt::Activate { .. }
         | Opt::Number(_)
         | Opt::Plan(_)
         | Opt::Player(_)
@@ -601,7 +654,7 @@ pub(crate) fn manual_pay<L: Layout>(
         remembered::spend(s, t, player, usize::from(at), paying)?;
     }
     pay_unit(&mut remaining, color.index());
-    Ok(remaining)
+    Ok((remaining, color))
 }
 
 /// Whether the class with the same member as the restricted class `c` makes `kind`: then that
@@ -609,176 +662,4 @@ pub(crate) fn manual_pay<L: Layout>(
 fn classes_make<L: Layout>(sources: &Sources<L>, c: &Class<L>, kind: usize) -> bool {
     c.twin()
         .is_some_and(|twin| sources.classes()[usize::from(twin)].kinds & (1 << kind) != 0)
-}
-
-/// The standalone mana activations offered at priority, under manual payment or to the player
-/// [`crate::Profile::taps_mana`] names
-/// ([CR 605.3a](https://yawgatog.com/resources/magic-rules/#R6053a)): "A player may activate
-/// an activated mana ability whenever they have priority". Otherwise tapping ahead of a
-/// payment is dominated by tapping during it (§10), so nothing is offered.
-///
-/// One per kind of mana each untapped source makes, of each set of interchangeable objects
-/// (§7.2), not of each class of sources: a player taps the permanent they mean, an Island
-/// rather than the Mox Sapphire that makes the same mana. A list these would fill takes as
-/// many as fit: tapping ahead is never needed, as a payment taps for itself.
-pub(crate) fn standalone_options<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    player: Seat,
-    out: &mut L::Queue<Opt<L>, OPTIONS>,
-) {
-    let sources: Bitboard<L::Slot> = controlled(s, player)
-        .filter(|&(slot, d)| source(s, t, player, slot, d).is_some())
-        .map(|(slot, _)| slot)
-        .collect();
-    let sources = crate::engine::collapse(s, sources);
-    add_activations(s, t, player, out, sources);
-}
-
-/// The mana abilities `player` may activate only while they have priority
-/// ([`is_instant_mana`]), one option for each, for each set of interchangeable permanents
-/// (§7.2). The mana solver never activates such an ability, so it is offered here whatever
-/// the profile: "Activate only as an instant" lets it be activated at priority alone
-/// (see [CR 117.1a]): "A player may cast an instant spell any time they have priority." A game
-/// whose cards have none pays one test of the table.
-///
-/// [CR 117.1a]: https://yawgatog.com/resources/magic-rules/#R1171a
-pub(crate) fn instant_options<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    player: Seat,
-    out: &mut L::Queue<Opt<L>, OPTIONS>,
-) -> Result<(), Full> {
-    if !t.can(Capability::InstantMana) {
-        return Ok(());
-    }
-    list_instant_options(s, t, player, out)
-}
-
-/// [`instant_options`] in a game whose cards have such an ability. Out of line.
-#[inline(never)]
-fn list_instant_options<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    player: Seat,
-    out: &mut L::Queue<Opt<L>, OPTIONS>,
-) -> Result<(), Full> {
-    let instant = |slot: L::Slot| {
-        let words = s.words_of(slot);
-        s.abilities(t, slot).filter(move |&(ability, a)| {
-            matches!(ability, ObjectAbility::Own(_) | ObjectAbility::Merged(..))
-                && is_instant_mana(a)
-                && (!a.cost().does(CostAction::Tap) || can_tap(s, player, slot, s.derived(slot)))
-                && allowed(s, t, a, player, &words)
-        })
-    };
-    let objects: Bitboard<L::Slot> = (s.battlefield().iter().copied())
-        .filter(|&slot| s.controller(slot) == player && instant(slot).next().is_some())
-        .collect();
-    Candidates::<L>::extend_options(out, crate::engine::collapse(s, objects), |out, slot| {
-        for (ability, _) in instant(slot) {
-            out.push(Opt::Activate { slot, ability })?;
-        }
-        Ok(())
-    })
-}
-
-/// Activates the mana ability `ability` of `permanent`, one activated only as an
-/// instant ([`is_instant_mana`]): at once if it makes one kind of mana, or once its
-/// controller has chosen the color of "any one color" ([`Pending::ManaColor`]). That color
-/// is chosen as the ability resolves, after its costs are paid, but here it is asked before
-/// anything is paid: what paying shows changes none of the colors the player may choose.
-pub(crate) fn begin_instant<L: Layout>(
-    s: &mut State<L>,
-    t: &GameTable,
-    sink: &mut Sink<L>,
-    permanent: Permanent<L>,
-    ability: ObjectAbility,
-) -> Result<(), Full> {
-    let slot = permanent.slot();
-    let kinds = s
-        .abilities(t, slot)
-        .find(|&(a, _)| a == ability)
-        .map(|(_, a)| a.produces().colors)
-        .expect("an ability offered");
-    // See CR 117.3c: "If a player has priority when they ... activate an ability ..., that player
-    // receives priority afterward."
-    s.reset_passes();
-    if kinds.is_power_of_two() {
-        let color = ManaColor::ALL[lowest_kind(kinds)];
-        return activate(s, t, sink, permanent, color);
-    }
-    s.ask(Pending::ManaColor { slot, ability });
-    Ok(())
-}
-
-/// Activates the mana ability [`Pending::ManaColor`] asked about, of `permanent`, for the
-/// color the answer `opt` names.
-pub(crate) fn activate_chosen<L: Layout>(
-    s: &mut State<L>,
-    t: &GameTable,
-    sink: &mut Sink<L>,
-    permanent: Permanent<L>,
-    opt: Option<Opt<L>>,
-) -> Result<(), Full> {
-    let ChosenValue::Color(colors) = crate::interpret::catalog::value(ChosenKind::Color, opt)
-    else {
-        unreachable!("a color among a color's candidates");
-    };
-    activate(s, t, sink, permanent, ManaColor::ALL[lowest_kind(colors.0)])
-}
-
-/// Whether `ability` of the permanent in `slot` is a mana ability activated only as an
-/// instant, which [`begin_instant`] activates rather than the casting steps.
-pub(crate) fn is_instant<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    slot: L::Slot,
-    ability: ObjectAbility,
-) -> bool {
-    t.can(Capability::InstantMana)
-        && s.abilities(t, slot)
-            .any(|(a, printed)| a == ability && is_instant_mana(printed))
-}
-
-/// Exact sources the human can activate before paying Waterbend, even when a twin
-/// would make the same mana. see [CR 601.2g](https://yawgatog.com/resources/magic-rules/#R6012g):
-/// "the player then has a chance to activate mana abilities".
-pub(crate) fn waterbend_mana_options<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    player: Seat,
-    out: &mut L::Queue<Opt<L>, OPTIONS>,
-) {
-    let sources = controlled(s, player).map(|(slot, _)| slot).collect();
-    add_activations(s, t, player, out, sources);
-}
-
-fn add_activations<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    player: Seat,
-    out: &mut L::Queue<Opt<L>, OPTIONS>,
-    sources: Bitboard<L::Slot>,
-) {
-    let restricted = remembered::restricted_sources(s, t, player).unwrap_or_default();
-    // Tapping ahead is optional, so a full list keeps the options it already holds.
-    let _full = Candidates::<L>::extend_options(out, sources, |out, slot| {
-        // Its restricted mana too: the mana remembers what it may be spent on.
-        let more = (restricted.iter().find(|r| r.slot == slot)).map_or(0, |r| r.kinds);
-        let Some(kinds) = source(s, t, player, slot, s.derived(slot))
-            .map(|(kinds, ..)| kinds | more)
-            .or((more != 0).then_some(more))
-        else {
-            return Ok(());
-        };
-        for kind in (0..KINDS).filter(|&k| kinds & (1 << k) != 0) {
-            let option = Opt::Mana {
-                slot,
-                color: ManaColor::ALL[kind],
-            };
-            out.push(option)?;
-        }
-        Ok(())
-    });
 }

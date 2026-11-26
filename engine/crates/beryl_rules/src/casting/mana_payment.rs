@@ -194,7 +194,7 @@ pub(super) fn options<L: Layout>(
         let rest = crate::coverage::without_recording(|| {
             let mut sink = Sink::off();
             let rest =
-                mana::manual_pay(&mut after, t, &mut sink, player, remaining, option, paying)?;
+                mana::manual_pay(&mut after, t, &mut sink, player, remaining, option, paying)?.0;
             crate::continuous::layers::refresh(&mut after, t, &mut sink)?;
             Ok(rest)
         })?;

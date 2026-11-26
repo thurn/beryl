@@ -2,6 +2,7 @@
 
 use beryl_engine::card::{ChosenKind, ManaSet, Purpose};
 use beryl_engine::chosen::ChosenValue;
+use beryl_engine::table::{is_sacrificed, is_simple};
 use beryl_engine::{Choice, Decision, GameTable, Layout, Opt, State};
 
 use crate::{Action, Pick};
@@ -46,11 +47,16 @@ pub(super) fn takes<L: Layout>(t: &GameTable, s: &State<L>, action: &Action, o: 
         Action::Activate { card, ability, .. } => match o {
             Opt::Activate { slot, ability: a } => name(slot) == card && a == ability,
             // A mana ability activated at priority is offered as the mana it makes
-            // (`Profile::taps_mana`): the one kind this ability makes.
+            // (`Profile::taps_mana`): the one kind this ability makes. A source's mana ability
+            // that sacrifices it, beside one that costs {T} alone, is offered as
+            // `Opt::Activate` instead, and the color names the other.
             Opt::Mana { slot, color } => {
                 name(slot) == card
                     && s.abilities(t, slot).any(|(ix, a)| {
-                        ix == ability && a.produces().colors == ManaSet::one(color).colors
+                        ix == ability
+                            && a.produces().colors == ManaSet::one(color).colors
+                            && !(is_sacrificed(a)
+                                && s.abilities(t, slot).any(|(_, other)| is_simple(other)))
                     })
             }
             _ => false,

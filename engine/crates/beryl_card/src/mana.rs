@@ -378,6 +378,14 @@ impl ManaSet {
         }
     }
 
+    /// `amount` mana of one kind, as "Add {U}{U}." says.
+    pub const fn of(color: ManaColor, amount: u8) -> ManaSet {
+        ManaSet {
+            colors: 1 << color.index(),
+            amount,
+        }
+    }
+
     /// `amount` mana of any one color, as "Add three mana of any one color." says: the
     /// five colors, not colorless.
     pub const fn any_color(amount: u8) -> ManaSet {

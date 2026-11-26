@@ -169,10 +169,16 @@ pub enum Capability {
     /// chooses nothing (see CR 303.4f), so only a body that puts a permanent onto the
     /// battlefield may ask.
     ChoosesAsSpellResolves,
+    /// A card has a mana ability that costs {T} and sacrificing its source
+    /// ([`crate::table::is_sacrificed`]) on a face that also makes mana for {T} alone, as
+    /// "{T}: Add {U}." and "{T}, Sacrifice this land: Add {U}{U}." do, so the mana solver
+    /// looks at each source it may tap for a second way to make mana
+    /// (`beryl_rules`' `mana::sources`).
+    SacrificeAlternative,
 }
 
 // The game keeps its capabilities in a `u64`.
-const _: () = assert!((Capability::ChoosesAsSpellResolves as u32) < u64::BITS);
+const _: () = assert!((Capability::SacrificeAlternative as u32) < u64::BITS);
 
 impl Capability {
     /// The capabilities of every face and subtype the game can contain.
@@ -234,6 +240,12 @@ impl Capability {
             }) {
                 found |= Capability::PlayerAttachments.bit();
             }
+        }
+        if face.abilities.iter().any(crate::table::is_sacrificed)
+            && (face.types.intersects(beryl_card::Types::LAND)
+                || face.abilities.iter().any(crate::table::is_simple))
+        {
+            found |= Capability::SacrificeAlternative.bit();
         }
         // An ability a permanent is granted reads what one of its own does.
         if face.grants.iter().any(|a| a.layer().is_some()) {

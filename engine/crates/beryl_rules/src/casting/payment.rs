@@ -99,7 +99,7 @@ pub fn pay<L: Layout>(
             let left =
                 mana::manual_pay(s, t, sink, player, remaining, option, mana::Paying::NOTHING);
             sink.leave();
-            remaining = left?;
+            remaining = left?.0;
         }
         return Ok(());
     }

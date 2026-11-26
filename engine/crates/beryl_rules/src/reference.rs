@@ -339,8 +339,15 @@ fn reference_units<L: Layout>(
             {
                 continue;
             }
-            if amount.is_some_and(|n| n != a.produces().amount) {
-                return None;
+            if let Some(n) = amount.filter(|&n| n != a.produces().amount) {
+                // Mana abilities that make different amounts of the same kinds, as "{T}: Add
+                // {U}." and "{T}, Sacrifice this land: Add {U}{U}.": the most one of them
+                // makes, as its controller chooses which to activate (see CR 605.3a).
+                if kinds != a.produces().colors {
+                    return None;
+                }
+                amount = Some(n.max(a.produces().amount));
+                continue;
             }
             amount = Some(a.produces().amount);
             kinds |= a.produces().colors;
