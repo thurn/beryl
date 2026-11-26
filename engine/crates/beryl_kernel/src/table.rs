@@ -594,6 +594,8 @@ pub struct FaceFacts {
     /// The kinds of mana the intrinsic abilities of its basic land types make that its
     /// abilities do not write out, a bit per [`beryl_card::ManaColor`] ([`land_mana`]).
     pub land_mana: u8,
+    /// Whether the face has a `{T}` mana ability whose mana is restricted (`Ability::spend`).
+    pub has_restricted_mana: bool,
     /// What its static abilities read as the layers apply that no layer writes.
     pub inputs: Inputs,
     /// A bit per [`AbilityIx`] of its activated abilities.
@@ -605,6 +607,7 @@ impl FaceFacts {
     const NONE: FaceFacts = FaceFacts {
         mana: ManaFace::Read { other: false },
         land_mana: 0,
+        has_restricted_mana: false,
         inputs: Inputs::NONE,
         activated: 0,
     };
@@ -640,6 +643,10 @@ impl FaceFacts {
         let mut facts = FaceFacts {
             mana: ManaFace::of(face),
             land_mana: land_mana(face, &Words::NONE),
+            has_restricted_mana: face
+                .abilities
+                .iter()
+                .any(|a| is_tap_for_mana(a) && a.spend().is_some()),
             inputs: Inputs::of(face),
             activated: 0,
         };

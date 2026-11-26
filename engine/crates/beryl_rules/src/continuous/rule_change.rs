@@ -13,7 +13,7 @@
 //!
 //! Implements: none. Reads rule changes after continuous effects have applied.
 
-use beryl_card::{Governed, ManaCost, PlayerRules, RuleChange, SpellCost};
+use beryl_card::{Governed, PlayerRules, RuleChange};
 use beryl_kernel::reference::Spell;
 
 use crate::bitboard::Bitboard;
@@ -196,6 +196,7 @@ pub(crate) fn accepts(filter: Filter, face: &Face) -> bool {
     match filter {
         Filter::Any => true,
         Filter::Types(types) => face.types.intersects(types),
+        Filter::Not(&Filter::Types(types)) => !face.types.intersects(types),
         filter @ (Filter::Supertypes(_)
         | Filter::SubtypeWord(_)
         | Filter::ColorWords(_)
@@ -299,14 +300,17 @@ pub(crate) fn unprohibited<L: Layout>(
     if objects.is_empty() {
         return objects;
     }
+    let lost = s.any_abilities_lost();
     let mut allowed = objects;
     for (maker, name) in s.chosen_names(t) {
         let made = player_rules_of(s, t, maker).common(rules);
         if made.iter().any(|id| {
-            filter::is_for(&t.rule(id).players, player, s.derived(maker).controller)
-                && maker_of(s, t, maker, id).is_some()
+            let p = &t.rule(id).players;
+            (matches!(p, beryl_card::Players::EachPlayer)
+                || filter::is_for(p, player, s.derived(maker).controller))
+                && (!lost || maker_of(s, t, maker, id).is_some())
         }) {
-            allowed = allowed.filter(|slot| !s.copiable(slot).has_name(t, name));
+            allowed = allowed.filter(|slot| !s.has_name(t, slot, name));
         }
     }
     allowed
@@ -509,7 +513,7 @@ fn object_rules<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> Rules 
 /// a card that merges comes here.
 #[cold]
 #[inline(never)]
-fn merged_rules<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> Rules {
+pub(super) fn merged_rules<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> Rules {
     s.merged_faces_now(t, slot)
         .map(|(card, face)| crate::definition::Definition::<L>::of_face(card, face).rules(t))
         .fold(Rules::NONE, Rules::union)
@@ -544,101 +548,12 @@ fn own_condition_holds<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot, id
     holds
 }
 
-/// `cost`, the total cost of the spell `face` would be before the rule changes in force
-/// ([`crate::cast`]'s `spell_cost`), as those that change what casting it costs `player`
-/// leave it, as "Noncreature spells cost {1} more to cast." does. While the game's cards
-/// make no such change, one test and `cost` as it was.
-#[inline]
-pub(crate) fn spell_cost<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    player: Seat,
-    face: &Face,
-    cost: ManaCost,
-) -> ManaCost {
-    let of_kind = t.rules_of(RuleKind::SpellCost);
-    if of_kind.is_empty() {
-        return cost;
-    }
-    changed_cost(s, t, of_kind, player, face, cost)
-}
-
-/// [`spell_cost`] while the game's cards make a change of what a spell costs: each
-/// permanent whose static ability makes one of `rules` for `player`, whose condition holds
-/// and whose filter accepts the spell changes it. "Each opponent" and "you" are read for
-/// the permanent's controller (see [CR 109.5]): "For a static ability, this is the current
-/// controller of the object it's on." Casting applies these changes in order (see [CR 601.2f]): "The
-/// total cost is the mana cost or alternative cost (as determined in rule 601.2b), plus all
-/// additional costs and cost increases, and minus all cost reductions. If multiple cost
-/// reductions apply, the player may apply them in any order. If the mana component of the
-/// total cost is reduced to nothing by cost reduction effects, it is considered to be {0}.
-/// It can't be reduced to less than {0}." Then the greatest floor, an effect that directly
-/// affects the total cost: "Once the total cost is determined, any effects that directly
-/// affect the total cost are applied." A reduction and a floor's difference are generic
-/// mana, and X counts at its value, as `cost` already has it. A reduction leaves the colored
-/// and hybrid symbols as they are (see [CR 118.7a]): "Effects that reduce a cost by an amount
-/// of generic mana affect only the generic mana component of that cost. They can't affect the
-/// colored or colorless mana components of that cost." Out of line, so that the casting code
-/// is the same while no such change is among the game's cards.
-///
-/// Each permanent's own abilities are searched for the maker ([`maker_of`]), rather than
-/// its face's numbered rules ([`own_rule_holds`] reads those): a read of them here changed
-/// how the checks every game makes are compiled, and the rollout benchmark counted 0.17%
-/// more instructions with it.
-///
-/// [CR 109.5]: https://yawgatog.com/resources/magic-rules/#R1095
-/// [CR 118.7a]: https://yawgatog.com/resources/magic-rules/#R1187a
-/// [CR 601.2f]: https://yawgatog.com/resources/magic-rules/#R6012f
-#[cold]
-#[inline(never)]
-fn changed_cost<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    rules: Rules,
-    player: Seat,
-    face: &Face,
-    mut cost: ManaCost,
-) -> ManaCost {
-    let (mut more, mut less, mut floor) = (0u8, 0u8, 0u8);
-    for (slot, d) in s.permanents_with_derived() {
-        for id in rules.iter() {
-            let rule = t.rule(id);
-            let Governed::SpellCosts { spells, change } = rule.what else {
-                unreachable!("a rule change about what a spell costs");
-            };
-            if !(filter::is_for(&rule.players, player, d.controller)
-                && accepts_composed(spells, face))
-            {
-                continue;
-            }
-            let Some((index, ability)) = maker_of(s, t, slot, id) else {
-                continue;
-            };
-            if ability.condition().is_none()
-                || interpret::static_condition_holds(s, t, slot, index, ability)
-            {
-                #[cfg(debug_assertions)]
-                crate::coverage::hit(ability);
-                match change {
-                    SpellCost::More(n) => more = more.saturating_add(n),
-                    SpellCost::Less(n) => less = less.saturating_add(n),
-                    SpellCost::AtLeast(n) => floor = floor.max(n),
-                }
-            }
-        }
-    }
-    cost.generic = cost.generic.saturating_add(more).saturating_sub(less);
-    let short = u32::from(floor).saturating_sub(cost.total(0));
-    cost.generic = cost
-        .generic
-        .saturating_add(u8::try_from(short).unwrap_or(u8::MAX));
-    cost
-}
+pub(crate) use super::spell_cost::{SpellCosts, spell_cost};
 
 /// The static ability of the permanent in `slot` that makes the rule change `id`, and its
 /// place among the permanent's abilities: one of the face that is up, or of a card under a
 /// merged permanent ([`State::abilities`]).
-fn maker_of<L: Layout>(
+pub(super) fn maker_of<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     slot: L::Slot,
@@ -660,7 +575,12 @@ fn maker_of<L: Layout>(
 /// Whether the condition of the static ability of the permanent in `slot` that makes the
 /// rule change `id` holds, read in a scene.
 #[cold]
-fn in_a_scene<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot, id: RuleId) -> bool {
+pub(super) fn in_a_scene<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    slot: L::Slot,
+    id: RuleId,
+) -> bool {
     maker_of(s, t, slot, id).is_some_and(|(index, ability)| {
         interpret::static_condition_holds(s, t, slot, index, ability)
     })

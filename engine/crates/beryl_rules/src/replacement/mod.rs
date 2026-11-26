@@ -23,7 +23,7 @@ use crate::decision::{Choice, Decision};
 use crate::filter::Evaluate;
 use crate::fixed::{Fixed, Full};
 use crate::interpret;
-use crate::layout::Layout;
+use crate::layout::{Layout, Queue};
 use crate::profile::Stops;
 use crate::replacement::event::{Entry, ReplacementKind, Sink};
 use crate::state::{MoveReplacement, StackEntry, State, Zone};
@@ -391,10 +391,71 @@ pub(crate) fn resolution_may_ask<L: Layout>(
 ) -> bool {
     may_ask(t)
         || t.can(Capability::ManaAbilityChoices)
-        || (t.can(Capability::ChoosesAsEnters) && ability.is_some_and(Ability::may_enter_permanent))
+        || (t.can(Capability::ChoosesAsEnters)
+            && ability.is_some_and(|a| {
+                a.may_enter_permanent() && body_may_enter_choosing(s, t, entry, a)
+            }))
         || (t.can(Capability::ChoosesAsSpellResolves)
             && ability.is_none()
             && enters_choosing(s, t, entry))
+}
+
+/// Whether a printed face is an Aura or has an entering replacement that asks its controller.
+#[inline]
+fn face_enters_choosing_or_aura(face: &crate::card::Face) -> bool {
+    face.subtypes
+        .read(&crate::card::Words::NONE)
+        .contains(crate::card::Subtype::Aura)
+        || face.abilities.iter().any(|a| {
+            a.replacement().is_some_and(|r| {
+                matches!(r.rewrite, Rewrite::Choose(_) | Rewrite::EnterAsCopy { .. })
+            })
+        })
+}
+
+/// Whether `ability`'s body (which [`Ability::may_enter_permanent`] said may put a permanent
+/// onto the battlefield) can actually put a permanent that chooses as it enters or an Aura
+/// onto the battlefield for this `entry`.
+#[cold]
+#[inline(never)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "checks printed faces of an entering permanent for entering replacements or Aura"
+)]
+fn body_may_enter_choosing<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    entry: &StackEntry<L>,
+    ability: &Ability,
+) -> bool {
+    let crate::card::Behavior::Data(effect) = ability.body() else {
+        return true;
+    };
+    effect.any(&|e| {
+        if !e.enters_itself() {
+            return false;
+        }
+        if matches!(*e, crate::card::Effect::ReturnTransformed(_)) && entry.targets.is_empty() {
+            t.def(entry.card())
+                .faces
+                .iter()
+                .any(face_enters_choosing_or_aura)
+        } else if matches!(
+            *e,
+            crate::card::Effect::CreateCopies {
+                of: crate::card::Objects::Target(_),
+                ..
+            }
+        ) {
+            entry.targets.iter().any(|target| {
+                target
+                    .as_object()
+                    .is_some_and(|obj| face_enters_choosing_or_aura(s.copiable(obj.slot).face(t)))
+            })
+        } else {
+            true
+        }
+    })
 }
 
 /// Whether the permanent spell of `entry` has a replacement effect of its own entering that

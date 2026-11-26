@@ -2,6 +2,34 @@
 //! the battlefield.
 
 use super::{Effect, Found};
+use crate::characteristics::Supertypes;
+use crate::filter::Filter;
+
+/// Whether `filter` requires the Basic supertype: a basic land never chooses as it enters
+/// and is never an Aura.
+fn requires_basic(filter: Filter) -> bool {
+    match filter {
+        Filter::Supertypes(s) => s.contains(Supertypes::BASIC),
+        Filter::All(fs) => fs.iter().any(|&f| requires_basic(f)),
+        Filter::Any
+        | Filter::Types(_)
+        | Filter::SubtypeWord(_)
+        | Filter::ColorWords(_)
+        | Filter::Whose(_)
+        | Filter::Owned(_)
+        | Filter::Tapped
+        | Filter::AttackedThisTurn
+        | Filter::Token
+        | Filter::Named(_)
+        | Filter::ManaValueAtMost(_)
+        | Filter::PowerAtMost(_)
+        | Filter::ManaValueAtMostX
+        | Filter::ManaValueAtMostPower
+        | Filter::Not(_)
+        | Filter::AnyOf(_)
+        | Filter::InZone(_) => false,
+    }
+}
 
 impl Effect {
     /// Whether carrying this out may put a permanent onto the battlefield, so that the
@@ -16,7 +44,7 @@ impl Effect {
     /// Whether this instruction, not one inside it, may put a permanent onto the battlefield.
     /// One that does so only later, as a delayed trigger does, does not: that resolves apart.
     #[allow(clippy::too_many_lines)] // One exhaustive match, a line per instruction.
-    const fn enters_itself(&self) -> bool {
+    pub fn enters_itself(&self) -> bool {
         match *self {
             Effect::ExileUntil { .. }
             | Effect::ReturnToBattlefield(_)
@@ -27,8 +55,11 @@ impl Effect {
             // A subgame or a restarted game plays out whatever its cards do.
             | Effect::Subgame
             | Effect::RestartGame { .. } => true,
-            // A search puts what it finds onto the battlefield only when it says so.
-            Effect::Search { found, .. } => matches!(found, Found::OntoBattlefieldTapped),
+            // A search puts what it finds onto the battlefield only when it says so, and a
+            // basic land never chooses as it enters.
+            Effect::Search { filter, found, .. } => {
+                matches!(found, Found::OntoBattlefieldTapped) && !requires_basic(filter)
+            }
             Effect::Sequence(_)
             | Effect::If { .. }
             | Effect::May { .. }

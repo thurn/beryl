@@ -123,7 +123,7 @@ pub(crate) struct Restricted<L: Layout = Small> {
     /// The kinds of mana it makes, a bit per [`ManaColor`].
     pub(super) kinds: u8,
     /// Its restriction, by the game's number.
-    pub(super) restriction: RestrictionId,
+    pub(crate) restriction: RestrictionId,
     /// The creature type the permanent chose as it entered, by the game's number.
     pub(super) chosen_type: u8,
 }
@@ -146,7 +146,7 @@ fn restricted_ability<L: Layout>(
     slot: L::Slot,
     d: &Derived<L>,
 ) -> Option<(AbilityIx, &'static beryl_card::Ability)> {
-    if !can_tap(s, player, slot, d) {
+    if !s.definition(slot).facts(t).has_restricted_mana || !can_tap(s, player, slot, d) {
         return None;
     }
     // Its own abilities, which `State::abilities` gives only while it has them.
@@ -165,6 +165,32 @@ fn restricted_ability<L: Layout>(
 /// The sources of restricted mana a [`Small`] payment considers. One past it is [`Full`].
 pub(crate) const RESTRICTED: usize = 4;
 
+/// The restricted source info for `slot` if `player` may tap it for restricted mana now.
+#[cold]
+#[inline(never)]
+pub(super) fn restricted_of_slot<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+    slot: L::Slot,
+    d: &Derived<L>,
+) -> Option<Restricted<L>> {
+    let (_, a) = restricted_ability(s, t, player, slot, d)?;
+    debug_assert_eq!(
+        a.produces().amount,
+        1,
+        "a restricted source makes one mana: more would float as mana that remembers"
+    );
+    Some(Restricted {
+        slot,
+        kinds: a.produces().colors,
+        restriction: (a.spend())
+            .and_then(|r| t.restriction_id(r))
+            .expect("numbered"),
+        chosen_type: chosen_type(s, slot),
+    })
+}
+
 /// The permanents `player` controls with a restricted mana ability they may tap now, whatever
 /// it would pay for: none in a game whose cards make no restricted mana.
 pub(crate) fn restricted_sources<L: Layout>(
@@ -177,20 +203,11 @@ pub(crate) fn restricted_sources<L: Layout>(
         return Ok(out);
     }
     for (slot, d) in super::sources::controlled(s, player) {
-        if let Some((_, a)) = restricted_ability(s, t, player, slot, d) {
-            debug_assert_eq!(
-                a.produces().amount,
-                1,
-                "a restricted source makes one mana: more would float as mana that remembers"
-            );
-            out.push(Restricted {
-                slot,
-                kinds: a.produces().colors,
-                restriction: (a.spend())
-                    .and_then(|r| t.restriction_id(r))
-                    .expect("numbered"),
-                chosen_type: chosen_type(s, slot),
-            })?;
+        if !s.definition(slot).facts(t).has_restricted_mana {
+            continue;
+        }
+        if let Some(r) = restricted_of_slot(s, t, player, slot, d) {
+            out.push(r)?;
         }
     }
     Ok(out)

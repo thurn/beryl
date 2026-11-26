@@ -83,6 +83,12 @@ impl<L: Layout> State<L> {
         }
     }
 
+    /// Whether any permanent in the game has lost an ability in layer 6.
+    #[inline]
+    pub fn any_abilities_lost(&self) -> bool {
+        self.flags.abilities_lost
+    }
+
     /// Whether the object in `slot` has `ability` now ([`State::abilities`]): one of its own
     /// it has not lost ([`State::has_ability`]), or a granted one that is still granted.
     #[inline]

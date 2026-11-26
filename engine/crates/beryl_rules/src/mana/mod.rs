@@ -40,7 +40,7 @@ pub(crate) use priority::{
     activate_chosen, begin_instant, instant_options, is_instant, standalone_options,
     waterbend_mana_options,
 };
-pub(crate) use remembered::Paying;
+pub(crate) use remembered::{Paying, RESTRICTED, Restricted, restricted_sources};
 pub(crate) use solver::{Plan, plans, plans_accepting};
 pub(crate) use sources::is_alternative;
 pub use sources::mana_contribution;

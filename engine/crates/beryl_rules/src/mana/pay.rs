@@ -174,7 +174,7 @@ fn pay_units<L: Layout, const MEMORY: bool>(
         } else {
             s.mana_payment_sources(c.members, plan.taps[i])?
         };
-        let from = |slot| match (MEMORY && c.restricted, c.consumed) {
+        let from = |slot| match (MEMORY && c.is_restricted(), c.is_consumed()) {
             (true, _) => From::Restricted(slot),
             (false, true) => From::Consumed(slot),
             (false, false) => From::Tap(slot),
@@ -558,14 +558,14 @@ pub(crate) fn manual_options<L: Layout>(
             after[kind] += c.amount - 1;
             // A source with a restricted class names it by its kind: [`activate`] taps for
             // the unrestricted ability if it makes the kind.
-            if (c.restricted && classes_make(&sources, c, kind))
+            if (c.is_restricted() && classes_make(&sources, c, kind))
                 || !sources.units(after, &taps).pays(rest)
             {
                 continue;
             }
             // A source that may also sacrifice itself for mana names that ability: its
             // option for the kind is its other mana ability's.
-            if c.is_twin() && c.consumed {
+            if c.is_twin() && c.is_consumed() {
                 let ability = alternative_ability(s, t, slot).expect("a twin's ability");
                 out.push(Opt::Activate { slot, ability })?;
                 break;

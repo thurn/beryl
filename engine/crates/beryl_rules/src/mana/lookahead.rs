@@ -22,7 +22,7 @@ use super::{Taps, units::Units};
 /// activation cost and the permanent it taps.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub(super) struct Later<L: Layout = Small> {
-    cost: ManaCost,
+    pub(super) cost: ManaCost,
     /// The permanent whose {T} the cost includes, or none.
     taps: Option<L::Slot>,
 }
@@ -97,9 +97,12 @@ pub(super) fn still_payable<L: Layout>(
     plan: &Plan<L>,
     later: &[Later<L>],
 ) -> (u32, usize, u32) {
-    let units = sources.units(plan.left, &plan.taps);
+    if later.is_empty() {
+        return (0, 0, 0);
+    }
+    let groups = sources.units(plan.left, &plan.taps).groups();
     let payable = later.iter().filter(|l| match l.taps {
-        None => units.pays(l.cost),
+        None => groups.pays(l.cost),
         Some(slot) => {
             if sources.taps_slot(&plan.taps, slot) {
                 return false;

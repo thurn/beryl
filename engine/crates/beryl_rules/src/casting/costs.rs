@@ -116,10 +116,7 @@ pub(super) fn x_range_start(face: &Face, costs: Castings, free: bool) -> Option<
 /// [CR 601.2f]: https://yawgatog.com/resources/magic-rules/#R6012f
 #[allow(clippy::too_many_arguments)]
 #[inline]
-pub(super) fn spell_cost<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    player: Seat,
+pub(super) fn base_spell_cost(
     face: &Face,
     costs: Castings,
     x: u8,
@@ -131,11 +128,26 @@ pub(super) fn spell_cost<L: Layout>(
     } else {
         with_options(face, costs, free)
     };
-    let cost = ManaCost {
+    ManaCost {
         generic: cost.generic.saturating_add(increase),
         ..cost
     }
-    .with_x(x);
+    .with_x(x)
+}
+
+#[allow(clippy::too_many_arguments)]
+#[inline]
+pub(super) fn spell_cost<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+    face: &Face,
+    costs: Castings,
+    x: u8,
+    increase: u8,
+    free: bool,
+) -> ManaCost {
+    let cost = base_spell_cost(face, costs, x, increase, free);
     rule_change::spell_cost(s, t, player, face, cost)
 }
 

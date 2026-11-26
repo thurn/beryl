@@ -8,7 +8,7 @@ use crate::card::AbilityKind;
 #[cfg(doc)]
 use crate::card::ManaColor;
 use crate::card::{Ability, AbilityIx, Face, Keywords, ObjectAbility, Types, Words};
-use crate::ids::{Seat, SlotId};
+use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::state::{Derived, State};
 use crate::table::{Capability, GameTable, ManaFace, has_other_ability, is_sacrificed, is_simple};
@@ -27,17 +27,13 @@ pub(super) struct Class<L: Layout = Small> {
     /// The flexibility rank (§10): fewer kinds first, then sources with no other ability,
     /// and sources a plan consumes last. Lower ranks are tapped first.
     rank: u8,
+    /// How many members are in `members`, kept beside it so `count()` is a byte load.
+    count: u8,
     pub(super) members: Bitboard<L::Slot>,
-    /// Whether tapping one for mana also sacrifices it: a plan's taps of this class are the
-    /// permanents it consumes (§10).
-    pub(super) consumed: bool,
     /// The least card among the members, which orders classes of one rank.
     least: crate::query::DefinitionKey<L::Card>,
-    /// Whether its members are tapped for their restricted mana ability, which the payment's
-    /// restriction accepts ([`super::remembered`]): one member, a class of its own.
-    pub(super) restricted: bool,
-    /// Whether that mana's restriction has a rider.
-    pub(super) rider: bool,
+    /// Bit flags: [`CLASS_CONSUMED`], [`CLASS_RESTRICTED`], [`CLASS_RIDER`].
+    flags: u8,
     /// Of a restricted class, the class of the same member's unrestricted mana, if it has
     /// one, and of that class, the restricted one: tapping the permanent for one leaves it
     /// tapped for the other. Likewise of a consumed class whose member also taps for mana
@@ -47,24 +43,44 @@ pub(super) struct Class<L: Layout = Small> {
     twin: u8,
 }
 
+const CLASS_CONSUMED: u8 = 1;
+const CLASS_RESTRICTED: u8 = 2;
+const CLASS_RIDER: u8 = 4;
+
 /// [`Class::twin`] of a class with none.
 const NO_TWIN: u8 = u8::MAX;
 
 impl<L: Layout> Class<L> {
+    #[inline]
     pub(super) fn count(&self) -> u8 {
-        u8::try_from(self.members.count()).expect("a class holds at most 255 sources")
+        self.count
+    }
+
+    #[inline]
+    pub(super) fn is_consumed(&self) -> bool {
+        self.flags & CLASS_CONSUMED != 0
+    }
+
+    #[inline]
+    pub(super) fn is_restricted(&self) -> bool {
+        self.flags & CLASS_RESTRICTED != 0
+    }
+
+    #[inline]
+    pub(super) fn has_rider(&self) -> bool {
+        self.flags & CLASS_RIDER != 0
     }
 
     /// Whether another source fits: a plan counts a class's taps in a `u8`, so in a layout of
     /// more slots than that, sources past 255 interchangeable ones form another class.
     fn has_room(&self) -> bool {
-        u8::try_from(L::Slot::COUNT).is_ok() || self.members.count() < u32::from(u8::MAX)
+        self.count < u8::MAX
     }
 
     /// Whether it is a restricted or consumed class whose member has another class: its taps
     /// are counted with that class's.
     pub(super) fn is_twin(&self) -> bool {
-        (self.restricted || self.consumed) && self.twin != NO_TWIN
+        (self.flags & (CLASS_RESTRICTED | CLASS_CONSUMED) != 0) && self.twin != NO_TWIN
     }
 
     /// The class of the same member's other mana, if it has one ([`Class::twin`]).
@@ -75,6 +91,7 @@ impl<L: Layout> Class<L> {
 
 /// A player's untapped sources, by class in rank order.
 #[derive(Clone, Debug, Default)]
+#[allow(clippy::struct_excessive_bools)]
 pub(crate) struct Sources<L: Layout = Small> {
     classes: L::Queue<Class<L>, CLASSES>,
     /// The mana that remembers in the pool that the payment's restriction accepts: each
@@ -84,10 +101,18 @@ pub(crate) struct Sources<L: Layout = Small> {
     remembered: L::Queue<(u8, u8, bool), 4>,
     /// Whether a class is restricted.
     restricted: bool,
+    /// Whether any class is consumed when tapped.
+    has_consumed: bool,
+    /// Whether any class makes more than one mana per tap.
+    has_several: bool,
     /// Whether a class is restricted, a source has twin classes ([`Class::twin`]) or the pool
     /// holds mana that remembers the payment accepts ([`Sources::has_memory`]), found once as
     /// the sources are.
     memory: bool,
+    /// Bit `i` is set if `remembered[i]` has a rider.
+    rider_remembered: u8,
+    /// Bit `i` is set if `classes[i]` has a rider (for `i < 32`).
+    rider_classes: u32,
 }
 
 /// Whether `player` may activate a mana ability now: one restricted to "Activate only if you
@@ -370,6 +395,7 @@ pub(super) fn capacity(kinds: u8, amount: u8, twin: Option<(u8, u8)>) -> (u8, u8
 impl<L: Layout> Sources<L> {
     /// The untapped sources `player` controls, but those in `exclude`, for a payment of what
     /// `paying` is for.
+    #[allow(clippy::too_many_lines)]
     pub(crate) fn of(
         s: &State<L>,
         t: &GameTable,
@@ -380,39 +406,52 @@ impl<L: Layout> Sources<L> {
         // Built in place: a copy of its classes costs every payment.
         let mut out = Sources::<L>::default();
         let alternatives = t.can(Capability::SacrificeAlternative);
+        let reads_restrictions = paying.reads_restrictions(t);
+        let mut restricted_slots: L::Queue<L::Slot, 16> = Default::default();
         let mut twins = false;
         let classes = &mut out.classes;
         for (slot, d) in controlled(s, player) {
             if exclude.contains(slot) {
                 continue;
             }
+            if reads_restrictions
+                && s.definition(slot).facts(t).has_restricted_mana
+                && can_tap(s, player, slot, d)
+            {
+                restricted_slots.push(slot)?;
+            }
             let Some((kinds, amount, other, consumed)) = source(s, t, player, slot, d) else {
                 continue;
             };
+            if amount > 1 {
+                out.has_several = true;
+            }
             if consumed {
                 debug_assert!(!other);
+                out.has_consumed = true;
                 let class = Class {
                     kinds,
                     amount,
                     rank: CONSUMED_RANK,
+                    count: 1,
                     members: Bitboard::single(slot),
-                    consumed: true,
                     least: s.definition(slot).key(),
-                    restricted: false,
-                    rider: false,
+                    flags: CLASS_CONSUMED,
                     twin: NO_TWIN,
                 };
                 // Only permanents of one card are interchangeable when spending one: the
                 // payment sacrifices whichever comes first.
                 let same = |c: &Class<L>| {
-                    c.consumed && c.has_room() && c.least == s.definition(slot).key() && {
+                    c.is_consumed() && c.has_room() && c.least == s.definition(slot).key() && {
                         // A twin's class has its one member.
                         let member = c.members.min(|m| m).expect("a class has a member");
                         sacrifice_alternative(s, t, player, member, alternatives).is_none()
                     }
                 };
                 if let Some(i) = classes.iter().position(same) {
-                    classes.as_mut_slice()[i].members.insert(slot);
+                    let c = &mut classes.as_mut_slice()[i];
+                    c.members.insert(slot);
+                    c.count += 1;
                 } else {
                     classes.push(class)?;
                 }
@@ -425,15 +464,18 @@ impl<L: Layout> Sources<L> {
                     other,
                     "a source with a second mana ability is a class of its own"
                 );
+                out.has_consumed = true;
+                if amount > 1 {
+                    out.has_several = true;
+                }
                 classes.push(Class {
                     kinds,
                     amount,
                     rank: CONSUMED_RANK,
+                    count: 1,
                     members: Bitboard::single(slot),
-                    consumed: true,
                     least: s.definition(slot).key(),
-                    restricted: false,
-                    rider: false,
+                    flags: CLASS_CONSUMED,
                     twin: NO_TWIN,
                 })?;
                 twins = true;
@@ -444,7 +486,7 @@ impl<L: Layout> Sources<L> {
             // costs that ability, so it is never interchangeable.
             if let Some(i) = classes.iter().position(|c| {
                 !other
-                    && !c.consumed
+                    && !c.is_consumed()
                     && c.kinds == kinds
                     && c.amount == amount
                     && c.rank == rank
@@ -452,6 +494,7 @@ impl<L: Layout> Sources<L> {
             }) {
                 let c = &mut classes.as_mut_slice()[i];
                 c.members.insert(slot);
+                c.count += 1;
                 c.least = c.least.min(s.definition(slot).key());
             } else {
                 let mut members = Bitboard::EMPTY;
@@ -460,18 +503,28 @@ impl<L: Layout> Sources<L> {
                     kinds,
                     amount,
                     rank,
+                    count: 1,
                     members,
-                    consumed: false,
                     least: s.definition(slot).key(),
-                    restricted: false,
-                    rider: false,
+                    flags: 0,
                     twin: NO_TWIN,
                 })?;
             }
         }
-        if paying.reads_restrictions(t) {
-            out.restricted = restricted_classes(s, t, player, exclude, paying, &mut out.classes)?;
-            out.remembered = remembered::accepted_entries(s, t, player, paying);
+        if reads_restrictions {
+            if !restricted_slots.is_empty() {
+                out.restricted = restricted_classes(
+                    s,
+                    t,
+                    player,
+                    restricted_slots.as_slice(),
+                    paying,
+                    &mut out.classes,
+                )?;
+            }
+            if !s.player(player).remembered_mana().is_empty() {
+                out.remembered = remembered::accepted_entries(s, t, player, paying);
+            }
             out.memory = out.restricted || !out.remembered.is_empty();
         }
         out.memory |= twins;
@@ -484,6 +537,18 @@ impl<L: Layout> Sources<L> {
         if out.restricted || twins {
             link_twins(out.classes.as_mut_slice());
         }
+        if out.restricted {
+            for (i, c) in out.classes.iter().enumerate() {
+                if c.has_rider() && i < 32 {
+                    out.rider_classes |= 1 << i;
+                }
+            }
+        }
+        for (i, &(_, _, rider)) in out.remembered.iter().enumerate() {
+            if rider {
+                out.rider_remembered |= 1 << i;
+            }
+        }
         Ok(out)
     }
 
@@ -493,6 +558,21 @@ impl<L: Layout> Sources<L> {
     #[inline]
     pub(super) fn has_memory(&self) -> bool {
         self.memory
+    }
+
+    #[inline]
+    pub(super) fn has_consumed(&self) -> bool {
+        self.has_consumed
+    }
+
+    #[inline]
+    pub(super) fn has_several(&self) -> bool {
+        self.has_several
+    }
+
+    #[inline]
+    pub(super) fn has_rider(&self) -> bool {
+        self.rider_remembered != 0 || self.rider_classes != 0 || self.classes().len() > 32
     }
 
     /// The mana that remembers in the pool that the payment accepts
@@ -508,10 +588,24 @@ impl<L: Layout> Sources<L> {
         if !self.memory {
             return false;
         }
-        let tapped = (self.classes().iter().zip(plan.taps.iter())).any(|(c, &n)| c.rider && n > 0);
-        let spent = (self.remembered().iter().enumerate())
-            .any(|(i, &(_, _, rider))| rider && plan.remembered & (1 << i) != 0);
-        tapped || spent
+        if self.rider_remembered & plan.remembered != 0 {
+            return true;
+        }
+        let mut bits = self.rider_classes;
+        while bits != 0 {
+            let i = bits.trailing_zeros() as usize;
+            if plan.taps[i] > 0 {
+                return true;
+            }
+            bits &= bits - 1;
+        }
+        if self.classes().len() > 32 {
+            return (self.classes()[32..]
+                .iter()
+                .zip(plan.taps.as_slice()[32..].iter()))
+            .any(|(c, &n)| c.has_rider() && n > 0);
+        }
+        false
     }
 
     /// What a plan does but which sources it taps: the mana it leaves floating, the sources
@@ -561,9 +655,11 @@ impl<L: Layout> Sources<L> {
     #[cold]
     #[inline(never)]
     fn restricted_units(&self, u: &mut Units, tapped: &Taps<L>, spent: u8) {
-        for (i, &(_, kind, _)) in self.remembered().iter().enumerate() {
-            if spent & (1 << i) == 0 {
-                u.add(1 << kind, 1);
+        if !self.remembered.is_empty() {
+            for (i, &(_, kind, _)) in self.remembered().iter().enumerate() {
+                if spent & (1 << i) == 0 {
+                    u.add(1 << kind, 1);
+                }
             }
         }
         let classes = self.classes();
@@ -571,23 +667,34 @@ impl<L: Layout> Sources<L> {
             if c.is_twin() {
                 continue;
             }
-            let mut left = c.count().saturating_sub(taps);
-            let other = c.twin().map(|twin| {
+            let (kinds, amount, left) = if let Some(twin) = c.twin() {
                 let other = &classes[usize::from(twin)];
-                left = left.saturating_sub(tapped[usize::from(twin)]);
-                (other.kinds, other.amount)
-            });
-            let (kinds, amount) = capacity(c.kinds, c.amount, other);
-            u.add(kinds, u16::from(amount) * u16::from(left));
+                let left = c
+                    .count()
+                    .saturating_sub(taps)
+                    .saturating_sub(tapped[usize::from(twin)]);
+                let (kinds, amount) =
+                    capacity(c.kinds, c.amount, Some((other.kinds, other.amount)));
+                (kinds, amount, left)
+            } else {
+                (c.kinds, c.amount, c.count() - taps)
+            };
+            if left > 0 {
+                u.add(kinds, u16::from(amount) * u16::from(left));
+            }
         }
     }
 
     /// How many sources a plan sacrifices.
+    #[inline]
     pub(super) fn sacrificed(&self, plan: &Plan<L>) -> u8 {
+        if !self.has_consumed {
+            return 0;
+        }
         self.classes()
             .iter()
             .zip(plan.taps.iter())
-            .filter(|(c, _)| c.consumed)
+            .filter(|(c, _)| c.is_consumed())
             .map(|(_, &n)| n)
             .sum()
     }
@@ -623,24 +730,36 @@ fn restricted_classes<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     player: Seat,
-    exclude: Bitboard<L::Slot>,
+    restricted_slots: &[L::Slot],
     paying: Paying<L>,
     classes: &mut L::Queue<Class<L>, CLASSES>,
 ) -> Result<bool, Full> {
     let mut added = false;
-    for r in remembered::restricted_sources(s, t, player)?.iter() {
-        if exclude.contains(r.slot) || !paying.accepts(t, r.restriction, r.chosen_type) {
+    let mut found = 0usize;
+    for &slot in restricted_slots {
+        let Some(r) = remembered::restricted_of_slot(s, t, player, slot, s.derived(slot)) else {
+            continue;
+        };
+        found += 1;
+        if found > remembered::RESTRICTED {
+            return Err(Full);
+        }
+        if !paying.accepts(t, r.restriction, r.chosen_type) {
             continue;
         }
+        let rider = if t.restriction(r.restriction).rider.is_some() {
+            CLASS_RIDER
+        } else {
+            0
+        };
         classes.push(Class {
             kinds: r.kinds,
             amount: 1,
             rank: RESTRICTED_RANK,
+            count: 1,
             members: Bitboard::single(r.slot),
-            consumed: false,
             least: s.definition(r.slot).key(),
-            restricted: true,
-            rider: t.restriction(r.restriction).rider.is_some(),
+            flags: CLASS_RESTRICTED | rider,
             twin: NO_TWIN,
         })?;
         added = true;
@@ -653,7 +772,7 @@ fn restricted_classes<L: Layout>(
 /// ([`Class::twin`]), once the classes are in their order.
 fn link_twins<L: Layout>(classes: &mut [Class<L>]) {
     for i in 0..classes.len() {
-        if !classes[i].restricted && !classes[i].consumed {
+        if !classes[i].is_restricted() && !classes[i].is_consumed() {
             continue;
         }
         let member = classes[i].members;

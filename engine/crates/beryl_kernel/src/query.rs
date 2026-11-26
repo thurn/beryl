@@ -101,6 +101,17 @@ impl<L: Layout> State<L> {
         }
     }
 
+    /// Whether the object in `slot` has the card name `name` (from its copiable values).
+    #[inline]
+    pub fn has_name(&self, t: &GameTable, slot: L::Slot, name: &str) -> bool {
+        let o = self.object(slot);
+        if o.on_battlefield() && !o.flags.has(Flag::Copy) {
+            self.definition(slot).name(t) == name
+        } else {
+            self.copiable(slot).has_name(t, name)
+        }
+    }
+
     /// Whether a copy effect supplies the face in `slot` (see CR 712.6d). A merge uses
     /// the same store for the characteristics of its top component (see CR 731.2a).
     #[inline]

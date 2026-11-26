@@ -105,6 +105,12 @@ impl GameTable {
         self.restrictions[id.index()]
     }
 
+    /// All mana restrictions named by the game's cards.
+    #[inline]
+    pub fn restrictions(&self) -> &[&'static ManaRestriction] {
+        &self.restrictions
+    }
+
     /// The number of `restriction` in the game, if a card of it names it.
     #[inline]
     pub fn restriction_id(&self, restriction: &'static ManaRestriction) -> Option<RestrictionId> {

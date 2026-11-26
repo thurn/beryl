@@ -14,6 +14,7 @@ use beryl_kernel::reference::{Permanent, Permanents};
 pub(crate) mod arrival_timestamps;
 pub(crate) mod layers;
 pub(crate) mod rule_change;
+pub(crate) mod spell_cost;
 pub(crate) mod text;
 
 use crate::additions::Addition;

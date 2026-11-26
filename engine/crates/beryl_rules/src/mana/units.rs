@@ -4,7 +4,10 @@
 //! Implements: CR 107.4a, CR 107.4e
 
 use super::KINDS;
+use super::solver::Plan;
+use super::sources::Sources;
 use crate::card::ManaCost;
+use crate::layout::{Layout, Table};
 
 /// Mana available to pay with, counted by the set of kinds each unit can be: a floating
 /// {W} is one unit of `{W}`, an untapped Tundra one unit of `{W, U}`, a Mana Crypt two units
@@ -148,7 +151,7 @@ fn pays(cost: ManaCost, total: u32, cover: impl Fn(u8) -> u32) -> bool {
 
 /// The kinds `cost` has colored or colorless symbols of, a bit per kind.
 #[inline]
-fn symbol_kinds(cost: ManaCost) -> u8 {
+pub(super) fn symbol_kinds(cost: ManaCost) -> u8 {
     (0..KINDS)
         .filter(|&k| cost.symbols[k] > 0)
         .fold(0u8, |m, k| m | (1 << k))
@@ -191,6 +194,98 @@ fn pays_hybrid(cost: ManaCost, total: u32, cover: impl Fn(u8) -> u32) -> bool {
         mask = (mask - 1) & present;
     }
     true
+}
+
+/// Whether `plan` (whose total units equal `cost.total(0)` with no multi-mana source tapped)
+/// covers all colored/colorless/hybrid symbols of `cost`. Fast-paths 0-, 1- and 2-color
+/// non-hybrid costs without building a 136-byte [`Units`] table.
+#[inline]
+pub(super) fn exact_pays<L: Layout, const MEMORY: bool>(
+    cost: ManaCost,
+    sources: &Sources<L>,
+    plan: &Plan<L>,
+) -> bool {
+    let classes = sources.classes();
+    if cost.hybrid.is_empty() {
+        let present = symbol_kinds(cost);
+        match present.count_ones() {
+            0 => return true,
+            1 => {
+                let k = present.trailing_zeros() as usize;
+                let mut have = u32::from(plan.spend[k]);
+                if MEMORY {
+                    for (i, &(_, kind, _)) in sources.remembered().iter().enumerate() {
+                        if plan.remembered & (1 << i) != 0 && usize::from(kind) == k {
+                            have += 1;
+                        }
+                    }
+                }
+                for (c, &n) in classes.iter().zip(plan.taps.iter()) {
+                    if n > 0 && c.kinds & present != 0 {
+                        have += u32::from(n);
+                    }
+                }
+                return have >= u32::from(cost.symbols[k]);
+            }
+            2 => {
+                let k1 = present.trailing_zeros() as usize;
+                let b1 = 1u8 << k1;
+                let b2 = present & !b1;
+                let k2 = b2.trailing_zeros() as usize;
+                let (need1, need2) = (u32::from(cost.symbols[k1]), u32::from(cost.symbols[k2]));
+                let mut have1 = u32::from(plan.spend[k1]);
+                let mut have2 = u32::from(plan.spend[k2]);
+                let mut have_both = have1 + have2;
+                if MEMORY {
+                    for (i, &(_, kind, _)) in sources.remembered().iter().enumerate() {
+                        if plan.remembered & (1 << i) != 0 {
+                            let bit = 1u8 << kind;
+                            if bit == b1 {
+                                have1 += 1;
+                                have_both += 1;
+                            } else if bit == b2 {
+                                have2 += 1;
+                                have_both += 1;
+                            }
+                        }
+                    }
+                }
+                for (c, &n) in classes.iter().zip(plan.taps.iter()) {
+                    if n > 0 && c.kinds & present != 0 {
+                        let n = u32::from(n);
+                        have_both += n;
+                        if c.kinds & b1 != 0 {
+                            have1 += n;
+                        }
+                        if c.kinds & b2 != 0 {
+                            have2 += n;
+                        }
+                    }
+                }
+                return have1 >= need1 && have2 >= need2 && have_both >= need1 + need2;
+            }
+            _ => {}
+        }
+    }
+    let mut units = Units::NONE;
+    for (k, &n) in plan.spend.iter().enumerate() {
+        if n > 0 {
+            units.add(1 << k, u16::from(n));
+        }
+    }
+    if MEMORY {
+        for (i, &(_, kind, _)) in sources.remembered().iter().enumerate() {
+            if plan.remembered & (1 << i) != 0 {
+                units.add(1 << kind, 1);
+            }
+        }
+    }
+    for (c, &n) in classes.iter().zip(plan.taps.iter()) {
+        if n > 0 {
+            units.add(c.kinds, u16::from(n));
+        }
+    }
+    units.pays(cost)
 }
 
 #[cfg(test)]

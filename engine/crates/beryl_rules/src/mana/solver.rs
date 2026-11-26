@@ -51,20 +51,33 @@ pub(super) fn each_plan<L: Layout>(
     f: &mut dyn FnMut(&Plan<L>) -> bool,
 ) {
     let total = cost.total(0);
+    let pool_sum: u32 = pool.iter().map(|&n| u32::from(n)).sum();
+    let mut rem = pool_sum;
+    if sources.has_memory() {
+        rem += u32::try_from(sources.remembered().len()).expect("remembered fits in u32");
+    }
+    for c in sources.classes() {
+        rem += u32::from(c.count()) * u32::from(c.amount);
+    }
+    if rem < total {
+        return;
+    }
+    let start = if pool_sum == 0 { KINDS } else { 0 };
     let mut plan = Plan::default();
     if sources.has_memory() {
-        walk::<L, true>(cost, total, pool, sources, 0, 0, &mut plan, f);
+        walk::<L, true>(cost, total, pool, sources, start, 0, 0, rem, &mut plan, f);
     } else {
-        walk::<L, false>(cost, total, pool, sources, 0, 0, &mut plan, f);
+        walk::<L, false>(cost, total, pool, sources, start, 0, 0, rem, &mut plan, f);
     }
 }
 
 /// The plan search: positions `0..KINDS` choose floating mana to spend, the next whether to
 /// spend each mana that remembers the payment accepts, and the rest how many sources of each
-/// class to tap. `must` counts the units that must be spent so far. `MEMORY`: whether the
-/// sources have a restricted class or the pool mana that remembers ([`Sources::has_memory`]),
-/// so that a search of any other payment reads none of it.
-#[allow(clippy::too_many_arguments)]
+/// class to tap. `must` counts the units that must be spent so far, `have_max` the most mana
+/// chosen positions can make together, and `rem` an upper bound on mana from positions still to
+/// visit. `MEMORY`: whether the sources have a restricted class or the pool mana that
+/// remembers ([`Sources::has_memory`]), so that a search of any other payment reads none of it.
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 fn walk<L: Layout, const MEMORY: bool>(
     cost: ManaCost,
     total: u32,
@@ -72,6 +85,8 @@ fn walk<L: Layout, const MEMORY: bool>(
     sources: &Sources<L>,
     position: usize,
     must: u32,
+    have_max: u32,
+    rem: u32,
     plan: &mut Plan<L>,
     f: &mut dyn FnMut(&Plan<L>) -> bool,
 ) -> bool {
@@ -81,9 +96,22 @@ fn walk<L: Layout, const MEMORY: bool>(
     } else {
         0
     };
-    if position == KINDS + remembered + classes.len() {
+    if position == KINDS + remembered + classes.len() || must == total {
+        if !sources.has_several() {
+            if must == total && super::units::exact_pays::<L, MEMORY>(cost, sources, plan) {
+                let mut left = pool;
+                for (l, &spent) in left.iter_mut().zip(&plan.spend) {
+                    *l -= spent;
+                }
+                plan.left = left;
+                return f(plan);
+            }
+            return true;
+        }
         return match complete::<L, MEMORY>(cost, total, pool, sources, plan) {
-            Some(left) if !wasteful::<L, MEMORY>(cost, total, pool, sources, plan) => {
+            Some((left, has_several))
+                if !has_several || !wasteful::<L, MEMORY>(cost, total, pool, sources, plan) =>
+            {
                 plan.left = left;
                 f(plan)
             }
@@ -91,9 +119,13 @@ fn walk<L: Layout, const MEMORY: bool>(
         };
     }
     if position < KINDS {
+        let next_rem = rem - u32::from(pool[position]);
         for n in (0..=pool[position]).rev() {
             if must + u32::from(n) > total {
                 continue;
+            }
+            if have_max + u32::from(n) + next_rem < total {
+                break;
             }
             plan.spend[position] = n;
             if !walk::<L, MEMORY>(
@@ -103,6 +135,8 @@ fn walk<L: Layout, const MEMORY: bool>(
                 sources,
                 position + 1,
                 must + u32::from(n),
+                have_max + u32::from(n),
+                next_rem,
                 plan,
                 f,
             ) {
@@ -114,24 +148,41 @@ fn walk<L: Layout, const MEMORY: bool>(
     }
     if MEMORY && position < KINDS + remembered {
         let bit = 1 << (position - KINDS);
+        let next_rem = rem - 1;
         for spent in [true, false] {
-            if spent && must + 1 > total {
+            let add = u32::from(spent);
+            if must + add > total {
                 continue;
+            }
+            if have_max + add + next_rem < total {
+                break;
             }
             plan.remembered = if spent {
                 plan.remembered | bit
             } else {
                 plan.remembered & !bit
             };
-            let must = must + u32::from(spent);
-            if !walk::<L, MEMORY>(cost, total, pool, sources, position + 1, must, plan, f) {
+            if !walk::<L, MEMORY>(
+                cost,
+                total,
+                pool,
+                sources,
+                position + 1,
+                must + add,
+                have_max + add,
+                next_rem,
+                plan,
+                f,
+            ) {
                 return false;
             }
         }
+        plan.remembered &= !bit;
         return true;
     }
     let i = position - KINDS - remembered;
     let class = classes[i];
+    let next_rem = rem - u32::from(class.count()) * u32::from(class.amount);
     // A permanent tapped for its other class's mana is tapped for this one's too.
     let room = match class.is_twin().then(|| class.twin()).flatten() {
         Some(twin) if MEMORY => class.count() - plan.taps[usize::from(twin)],
@@ -142,9 +193,24 @@ fn walk<L: Layout, const MEMORY: bool>(
         if must + u32::from(n) > total {
             continue;
         }
+        let add_max = u32::from(n) * u32::from(class.amount);
+        if have_max + add_max + next_rem < total {
+            break;
+        }
         plan.taps[i] = n;
-        let must = must + if class.amount == 1 { u32::from(n) } else { 0 };
-        if !walk::<L, MEMORY>(cost, total, pool, sources, position + 1, must, plan, f) {
+        let next_must = must + if class.amount == 1 { u32::from(n) } else { 0 };
+        if !walk::<L, MEMORY>(
+            cost,
+            total,
+            pool,
+            sources,
+            position + 1,
+            next_must,
+            have_max + add_max,
+            next_rem,
+            plan,
+            f,
+        ) {
             return false;
         }
     }
@@ -289,14 +355,14 @@ fn pays_with<L: Layout>(
 }
 
 /// Checks a plan's tap counts and floating spend: the mana it leaves floating when they pay
-/// `cost` exactly.
+/// `cost` exactly, and whether the plan tapped any source making several mana.
 fn complete<L: Layout, const MEMORY: bool>(
     cost: ManaCost,
     total: u32,
     pool: [u8; KINDS],
     sources: &Sources<L>,
     plan: &Plan<L>,
-) -> Option<[u8; KINDS]> {
+) -> Option<([u8; KINDS], bool)> {
     let classes = sources.classes();
     let mut must: u32 = plan.spend.iter().map(|&n| u32::from(n)).sum::<u32>();
     if MEMORY {
@@ -317,6 +383,16 @@ fn complete<L: Layout, const MEMORY: bool>(
     if several_taps > need || need > several_make || (several_taps == 0 && need > 0) {
         return None;
     }
+    if several_taps == 0 {
+        if !super::units::exact_pays::<L, MEMORY>(cost, sources, plan) {
+            return None;
+        }
+        let mut left = pool;
+        for (l, &spent) in left.iter_mut().zip(&plan.spend) {
+            *l -= spent;
+        }
+        return Some((left, false));
+    }
     let fixed = fixed_units::<L, MEMORY>(sources, plan);
     let (spent, pays) = spent_by_class(sources, plan, need, cost, fixed);
     if !pays {
@@ -335,7 +411,7 @@ fn complete<L: Layout, const MEMORY: bool>(
             *floating = floating.saturating_add(remainder);
         }
     }
-    Some(left)
+    Some((left, true))
 }
 
 /// Whether a paying plan taps a source it could leave untapped, spending the same floating
@@ -409,34 +485,54 @@ pub(super) fn lowest_kind(kinds: u8) -> usize {
 /// with `MEMORY` (a payment that can spend mana that remembers), they also spend the same
 /// such mana and give the spell the same rider ([`Sources::outcome`]). Returns whether `out`
 /// is full.
+type Score = (u32, usize, u32);
+type Scored = Option<(Score, bool)>;
+
 fn offer<L: Layout, const MEMORY: bool>(
     sources: &Sources<L>,
     out: &mut L::Queue<Plan<L>, 64>,
-    scores: &mut L::Queue<Option<(u32, usize, u32)>, 64>,
-    score: &mut impl FnMut(&Plan<L>) -> (u32, usize, u32),
+    outcomes: &mut L::Queue<(u8, bool), 64>,
+    scores: &mut L::Queue<Scored, 64>,
+    score: &mut impl FnMut(&Plan<L>) -> (Score, usize),
     p: &Plan<L>,
 ) -> bool {
+    let sacrificed = sources.sacrificed(p);
+    let rides = if MEMORY { sources.rides(p) } else { false };
     let found = if MEMORY {
-        let outcome = sources.outcome(p);
-        (out.iter()).position(|q| q.left == p.left && sources.outcome(q) == outcome)
+        (out.iter().zip(outcomes.iter())).position(|(q, &(q_sac, q_rides))| {
+            q.left == p.left
+                && q_sac == sacrificed
+                && q.remembered == p.remembered
+                && q_rides == rides
+        })
     } else {
-        let sacrificed = sources.sacrificed(p);
-        (out.iter()).position(|q| q.left == p.left && sources.sacrificed(q) == sacrificed)
+        (out.iter().zip(outcomes.iter()))
+            .position(|(q, &(q_sac, _))| q.left == p.left && q_sac == sacrificed)
     };
     match found {
         // The first plan of a remainder taps the least flexible sources; a later one
         // replaces it only by keeping more costs payable.
         Some(i) => {
             let q = &out.as_slice()[i];
-            let first = *scores.as_mut_slice()[i].get_or_insert_with(|| score(q));
-            let this = score(p);
+            let (first, saturated) = *scores.as_mut_slice()[i].get_or_insert_with(|| {
+                let (sc, n) = score(q);
+                (sc, sc.1 == n)
+            });
+            if saturated {
+                return false;
+            }
+            let (this, n) = score(p);
             if this > first {
                 out.as_mut_slice()[i] = p.clone();
-                scores.as_mut_slice()[i] = Some(this);
+                scores.as_mut_slice()[i] = Some((this, this.1 == n));
             }
             false
         }
-        None => out.push(p.clone()).is_err() || scores.push(None).is_err(),
+        None => {
+            out.push(p.clone()).is_err()
+                || outcomes.push((sacrificed, rides)).is_err()
+                || scores.push(None).is_err()
+        }
     }
 }
 
@@ -516,29 +612,97 @@ pub(crate) fn plans_accepting<L: Layout, const CHECK: bool>(
         }
         return Ok(out);
     }
+    let max_outcomes = if pool == [0; KINDS]
+        && !sources.has_consumed()
+        && !sources.has_several()
+        && sources.remembered().is_empty()
+    {
+        Some(if sources.has_memory() && sources.has_rider() {
+            2
+        } else {
+            1
+        })
+    } else {
+        None
+    };
+    let rem_mana = max_outcomes.map(|_| {
+        let unique: u32 = sources
+            .classes()
+            .iter()
+            .filter(|c| !c.is_twin())
+            .map(|c| u32::from(c.count()))
+            .sum();
+        unique.saturating_sub(cost.total(0))
+    });
     // Scores decide only between plans of one remainder and number sacrificed, and whether a
     // plan sacrificing more is dominated, so each is found when one of those first needs it:
     // a payment with one way to leave each remainder scores none.
     let mut later: Option<L::Queue<Later<L>, 32>> = None;
     let mut score = |p: &Plan<L>| {
-        let later = later.get_or_insert_with(|| later_costs(s, t, player));
-        still_payable(&sources, p, later.as_slice())
+        let later = later.get_or_insert_with(|| {
+            let mut l = later_costs(s, t, player);
+            if let Some(rem) = rem_mana {
+                l.retain(|item| item.cost.total(0) <= rem);
+            }
+            l
+        });
+        let slice = later.as_slice();
+        (still_payable(&sources, p, slice), slice.len())
     };
-    let mut scores: L::Queue<Option<(u32, usize, u32)>, 64> = Default::default();
+    let mut outcomes: L::Queue<(u8, bool), 64> = Default::default();
+    let mut scores: L::Queue<Scored, 64> = Default::default();
     let mut full = false;
     // Two searches, so that a payment that can spend no mana that remembers compares plans
     // without testing for it at each one.
     if sources.has_memory() {
         each_plan(cost, pool, &sources, &mut |p| {
             if accepted(p) {
-                full |= offer::<L, true>(&sources, &mut out, &mut scores, &mut score, p);
+                full |= offer::<L, true>(
+                    &sources,
+                    &mut out,
+                    &mut outcomes,
+                    &mut scores,
+                    &mut score,
+                    p,
+                );
+                if max_outcomes == Some(out.len()) {
+                    let all_sat = scores.as_mut_slice().iter_mut().enumerate().all(|(i, sc)| {
+                        let (_, sat) = *sc.get_or_insert_with(|| {
+                            let (v, n) = score(&out.as_slice()[i]);
+                            (v, v.1 == n)
+                        });
+                        sat
+                    });
+                    if all_sat {
+                        return false;
+                    }
+                }
             }
             !full
         });
     } else {
         each_plan(cost, pool, &sources, &mut |p| {
             if accepted(p) {
-                full |= offer::<L, false>(&sources, &mut out, &mut scores, &mut score, p);
+                full |= offer::<L, false>(
+                    &sources,
+                    &mut out,
+                    &mut outcomes,
+                    &mut scores,
+                    &mut score,
+                    p,
+                );
+                if max_outcomes == Some(out.len()) {
+                    let all_sat = scores.as_mut_slice().iter_mut().enumerate().all(|(i, sc)| {
+                        let (_, sat) = *sc.get_or_insert_with(|| {
+                            let (v, n) = score(&out.as_slice()[i]);
+                            (v, v.1 == n)
+                        });
+                        sat
+                    });
+                    if all_sat {
+                        return false;
+                    }
+                }
             }
             !full
         });
@@ -551,13 +715,17 @@ pub(crate) fn plans_accepting<L: Layout, const CHECK: bool>(
     let fewest = out.iter().map(|p| sources.sacrificed(p)).min();
     if out.iter().any(|p| Some(sources.sacrificed(p)) != fewest) {
         for (p, sc) in out.iter().zip(scores.as_mut_slice()) {
-            sc.get_or_insert_with(|| score(p));
+            sc.get_or_insert_with(|| {
+                let (s, n) = score(p);
+                (s, s.1 == n)
+            });
         }
         let mut dominated: L::Queue<bool, 64> = Default::default();
         for (p, &sc) in out.iter().zip(scores.iter()) {
             let sacrificed = sources.sacrificed(p);
+            let sc = sc.expect("scored").0;
             dominated.push(out.iter().zip(scores.iter()).any(|(q, &other)| {
-                sources.sacrificed(q) < sacrificed && other.expect("scored") >= sc.expect("scored")
+                sources.sacrificed(q) < sacrificed && other.expect("scored").0 >= sc
             }))?;
         }
         let mut i = 0;

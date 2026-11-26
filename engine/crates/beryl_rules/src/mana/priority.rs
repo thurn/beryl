@@ -186,13 +186,18 @@ fn add_activations<L: Layout>(
     out: &mut L::Queue<Opt<L>, OPTIONS>,
     sources: Bitboard<L::Slot>,
 ) {
-    let restricted = remembered::restricted_sources(s, t, player).unwrap_or_default();
+    let remembers = t.can(Capability::RemembersMana);
     let alternatives = t.can(Capability::SacrificeAlternative);
     // Tapping ahead is optional, so a full list keeps the options it already holds.
     let _full = Candidates::<L>::extend_options(out, sources, |out, slot| {
+        let d = s.derived(slot);
         // Its restricted mana too: the mana remembers what it may be spent on.
-        let more = (restricted.iter().find(|r| r.slot == slot)).map_or(0, |r| r.kinds);
-        let Some(kinds) = source(s, t, player, slot, s.derived(slot))
+        let more = if remembers && s.definition(slot).facts(t).has_restricted_mana {
+            remembered::restricted_of_slot(s, t, player, slot, d).map_or(0, |r| r.kinds)
+        } else {
+            0
+        };
+        let Some(kinds) = source(s, t, player, slot, d)
             .map(|(kinds, ..)| kinds | more)
             .or((more != 0).then_some(more))
         else {

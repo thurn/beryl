@@ -133,14 +133,37 @@ impl<L: Layout> Funds<L> {
         exclude: Bitboard<L::Slot>,
         paying: Paying<L>,
     ) -> bool {
-        let mut u = self.without_sources(s, t, exclude & self.slots);
         // More sources of restricted mana than a [`Small`] payment holds: say it may be paid,
         // so that the payment's own scan finds the layout `Full` and the game goes on in
         // `Large`.
         let Ok(restricted) = remembered::restricted_sources(s, t, self.player) else {
             return true;
         };
-        for r in restricted.iter() {
+        self.pays_restricted_with(s, t, cost, exclude, paying, restricted.as_slice())
+    }
+
+    /// [`Funds::pays_restricted`] with the player's restricted sources already found for this
+    /// decision.
+    #[cold]
+    #[inline(never)]
+    pub(crate) fn pays_restricted_with(
+        &self,
+        s: &State<L>,
+        t: &GameTable,
+        cost: ManaCost,
+        exclude: Bitboard<L::Slot>,
+        paying: Paying<L>,
+        restricted: &[remembered::Restricted<L>],
+    ) -> bool {
+        let entries = remembered::accepted_entries(s, t, self.player, paying);
+        let any_source = restricted
+            .iter()
+            .any(|r| !exclude.contains(r.slot) && paying.accepts(t, r.restriction, r.chosen_type));
+        if !any_source && entries.is_empty() {
+            return false;
+        }
+        let mut u = self.without_sources(s, t, exclude & self.slots);
+        for r in restricted {
             if exclude.contains(r.slot) || !paying.accepts(t, r.restriction, r.chosen_type) {
                 continue;
             }
@@ -152,7 +175,7 @@ impl<L: Layout> Funds<L> {
                 _ => u.add(r.kinds, 1),
             }
         }
-        for &(_, kind, _) in remembered::accepted_entries(s, t, self.player, paying).iter() {
+        for &(_, kind, _) in entries.iter() {
             u.add(1 << kind, 1);
         }
         u.pays(cost)

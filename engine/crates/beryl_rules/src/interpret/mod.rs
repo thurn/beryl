@@ -276,6 +276,10 @@ pub(crate) fn without_a_scene<L: Layout>(
         Condition::EnteredThisTurn(Objects::This) => {
             Some(s.tracked(Tracker::EnteredThisTurn, slot))
         }
+        Condition::Is(Objects::This, Filter::Tapped) => Some(s.object(slot).is_tapped()),
+        Condition::Is(Objects::This, Filter::Not(&Filter::Tapped)) => {
+            Some(!s.object(slot).is_tapped())
+        }
         Condition::Compare(left, comparison, right) => {
             let you = s.controller(slot);
             let (left, right) = (own_amount(s, you, left)?, own_amount(s, you, right)?);

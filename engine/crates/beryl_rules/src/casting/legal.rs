@@ -21,7 +21,7 @@ use crate::mana::{self, Funds};
 use crate::state::{RuleKind, State, Tracker, Zone, ZoneKey};
 use crate::table::{Capability, GameTable};
 
-use super::costs::{From, option_sets, spell_cost, x_range_start};
+use super::costs::{From, base_spell_cost, option_sets, x_range_start};
 use super::delve;
 use super::mana_payment;
 use super::parts;
@@ -50,6 +50,8 @@ pub(super) struct Situation<L: Layout = Small, const TARGETS: bool = true> {
     /// None once found if more classes of sources than [`Funds`] holds: a stall for whatever
     /// needed them.
     funds: OnceCell<Option<Funds<L>>>,
+    restricted: OnceCell<Option<L::Queue<mana::Restricted<L>, { mana::RESTRICTED }>>>,
+    spell_costs: OnceCell<rule_change::SpellCosts>,
     full: Cell<bool>,
 }
 
@@ -58,12 +60,12 @@ impl<L: Layout, const TARGETS: bool> Situation<L, TARGETS> {
         Situation {
             player,
             funds: OnceCell::new(),
+            restricted: OnceCell::new(),
+            spell_costs: OnceCell::new(),
             full: Cell::new(false),
         }
     }
 
-    /// The player's funds. Most priority decisions offer nothing that costs mana, as an
-    /// opponent's turn with no instant in hand, so the source scan waits until a check needs it.
     fn funds(&self, s: &State<L>, t: &GameTable) -> Option<&Funds<L>> {
         let funds = self
             .funds
@@ -73,6 +75,29 @@ impl<L: Layout, const TARGETS: bool> Situation<L, TARGETS> {
             self.full.set(true);
         }
         funds
+    }
+
+    fn restricted(&self, s: &State<L>, t: &GameTable) -> Option<&[mana::Restricted<L>]> {
+        self.restricted
+            .get_or_init(|| mana::restricted_sources(s, t, self.player).ok())
+            .as_ref()
+            .map(Queue::as_slice)
+    }
+
+    #[inline]
+    fn apply_spell_cost(
+        &self,
+        s: &State<L>,
+        t: &GameTable,
+        face: &Face,
+        cost: ManaCost,
+    ) -> ManaCost {
+        if t.rules_of(RuleKind::SpellCost).is_empty() {
+            return cost;
+        }
+        self.spell_costs
+            .get_or_init(|| rule_change::SpellCosts::of(s, t, self.player))
+            .apply(s, t, self.player, face, cost)
     }
 
     /// `Full` if a check needed more classes of sources than [`Funds`] holds, so that its answer was
@@ -111,48 +136,47 @@ fn in_time<L: Layout, const TARGETS: bool>(
     }
 }
 
-/// Whether restricted mana the spell accepts pays `cost` for casting the card in `slot` as its
-/// face `face`, where unrestricted mana does not: never in a game whose cards make no
-/// restricted mana ([`mana::Paying`]).
-#[cold]
-#[inline(never)]
-fn restricted_pays<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    funds: &Funds<L>,
-    cost: ManaCost,
-    slot: L::Slot,
-    face: FaceIx,
-) -> bool {
-    let paying = mana::Paying::casting(s, t, slot, face);
-    paying.reads_restrictions(t) && funds.pays_restricted(s, t, cost, Bitboard::EMPTY, paying)
-}
-
-/// Whether `cost` for casting the card in `slot` as its face `face` is paid some way other
-/// than with unrestricted mana: with restricted mana the spell accepts, or with cards delve
-/// exiles (see CR 702.66a). Never in a game whose cards make no restricted mana and have no
-/// delve, which the caller tests first.
+/// Whether `cost` is paid with restricted mana or delve (see CR 702.66a).
 #[cold]
 #[inline(never)]
 #[allow(clippy::too_many_arguments)]
-#[allow(
-    clippy::disallowed_methods,
-    reason = "reads the face being cast (see CR 709.3b)"
-)]
-fn pays_otherwise<L: Layout>(
+fn pays_otherwise<L: Layout, const TARGETS: bool>(
     s: &State<L>,
     t: &GameTable,
+    now: &Situation<L, TARGETS>,
     funds: &Funds<L>,
     cost: ManaCost,
     player: Seat,
     slot: L::Slot,
     face: FaceIx,
+    face_ref: &Face,
     costs: Castings,
 ) -> bool {
-    (t.can(Capability::RemembersMana) && restricted_pays(s, t, funds, cost, slot, face))
-        || (t.can(Capability::Delve)
-            && delve::delves(s.copiable(slot).turned(t, face).face(t))
-            && delve::delve_pays(s, t, funds, player, slot, face, costs, cost))
+    if t.can(Capability::RemembersMana)
+        && t.restrictions()
+            .iter()
+            .any(|r| rule_change::accepts(r.cast, face_ref))
+    {
+        let Some(restricted) = now.restricted(s, t) else {
+            return true;
+        };
+        let has_pool = !s.player(now.player).remembered_mana().is_empty();
+        if has_pool
+            || restricted
+                .iter()
+                .any(|r| rule_change::accepts(t.restriction(r.restriction).cast, face_ref))
+        {
+            let paying = mana::Paying::casting(s, t, slot, face);
+            if paying.reads_restrictions(t)
+                && funds.pays_restricted_with(s, t, cost, Bitboard::EMPTY, paying, restricted)
+            {
+                return true;
+            }
+        }
+    }
+    t.can(Capability::Delve)
+        && delve::delves(face_ref)
+        && delve::delve_pays(s, t, funds, player, slot, face, costs, cost)
 }
 
 /// Why `player` may not cast the card in `slot` with this face and these casting options:
@@ -199,11 +223,11 @@ fn refused<L: Layout, const TARGETS: bool>(
     // [CR 118.3](https://yawgatog.com/resources/magic-rules/#R1183): "A player can't pay a
     // cost without having the necessary resources to pay it fully."
     let x = x_range_start(face, costs, free).unwrap_or(0);
-    let cost = spell_cost(s, t, player, face, costs, x, increase, free);
+    let cost = now.apply_spell_cost(s, t, face, base_spell_cost(face, costs, x, increase, free));
     if !now.funds(s, t).is_some_and(|f| {
         f.pays(s, t, cost, Bitboard::EMPTY)
             || (t.can_either(Capability::RemembersMana, Capability::Delve)
-                && pays_otherwise(s, t, f, cost, player, slot, face_index, costs))
+                && pays_otherwise(s, t, now, f, cost, player, slot, face_index, face, costs))
     }) {
         return Some(Refusal::Mana);
     }
