@@ -530,3 +530,188 @@ fn shared_piles_counts_browsers_castable_graveyard_and_known_top() {
         "castable shared graveyard card belongs in the viewer's hand fan"
     );
 }
+
+/// Builds a view with an open `Order Cards` second-part split prompt whose first `"Top"` pile
+/// is closed and empty and whose second `"Top"` pile holds three looked-at library cards.
+fn order_cards_view() -> (ViewBuilder, beryl_protocol::PlayerView, ObjectId) {
+    use beryl_protocol::SessionId;
+    use beryl_protocol::prompt::{
+        ButtonId, Lies, Marked, PartName, Pile, PlaceName, PromptButton, Purpose, ShapeBody,
+    };
+    use beryl_protocol::protocol::{DecisionId, DecisionView, Facing, Kind, Status};
+    use beryl_protocol::script::{Mark, Subject};
+    use beryl_protocol::testing;
+
+    let mut builder = ViewBuilder::new();
+    builder.script(ScriptBuilder::reset().build());
+    let island = builder.card(ZoneName::Library, Side::You, "Island").slot;
+    let plains = builder.card(ZoneName::Library, Side::You, "Plains").slot;
+    let swamp = builder.card(ZoneName::Library, Side::You, "Swamp").slot;
+    let cards = [island, plains, swamp];
+    let mut view = builder.build();
+    for object in &mut view.objects {
+        if let Some((_, name)) = [(island, "Island"), (plains, "Plains"), (swamp, "Swamp")]
+            .iter()
+            .find(|(slot, _)| *slot == object.slot)
+        {
+            object.facing = Facing::Up;
+            object.name = Some((*name).to_owned());
+        }
+    }
+    let mut prompt = testing::prompt(
+        Purpose::Arrange,
+        "Order Cards",
+        vec![PromptButton {
+            id: ButtonId::Confirm,
+            label: "Done".to_owned(),
+            caption: String::new(),
+            enabled: true,
+            primary: true,
+        }],
+        ShapeBody::Split {
+            piles: vec![
+                Pile {
+                    label: "Top".to_owned(),
+                    place: Some(PlaceName::Top),
+                    cards: Vec::new(),
+                    exactly: None,
+                    closed: true,
+                },
+                Pile {
+                    label: "Top".to_owned(),
+                    place: Some(PlaceName::Top),
+                    cards: cards.to_vec(),
+                    exactly: None,
+                    closed: false,
+                },
+            ],
+        },
+    );
+    prompt.part = PartName::Second;
+    "Done".clone_into(&mut prompt.words.confirm);
+    prompt.words.piles = ["Top".to_owned(), "Top".to_owned()];
+    prompt.count = Some(3);
+    prompt.from = Some(Lies {
+        player: Side::You,
+        zone: ZoneName::Library,
+    });
+    prompt.marks = cards
+        .iter()
+        .map(|&slot| Marked {
+            on: Subject::Object { slot },
+            mark: Mark::Eligible,
+        })
+        .collect();
+    view.status = Status::Deciding {
+        decision: DecisionView {
+            id: DecisionId {
+                session: SessionId(1),
+                seq: 1,
+            },
+            kind: Kind::ChooseObject,
+            candidates: Vec::new(),
+            resolving: None,
+            prompt: Box::new(prompt),
+            pass_to: None,
+            pass_on: None,
+            source: None,
+            acting_for: None,
+            halt: false,
+            cancellable: false,
+            undo: 0,
+            undo_depth: 0,
+            refused: Vec::new(),
+        },
+    };
+    (builder, view, island)
+}
+
+#[test]
+fn a_split_with_a_closed_empty_first_pile_shows_one_box_and_drops_into_the_open_pile() {
+    use app_client::command::SessionCommand;
+    use beryl_protocol::SessionId;
+    use beryl_protocol::prompt::{Click, ClickRequest};
+    use beryl_protocol::script::Subject;
+    use kit_scene::hit::bounds;
+    use kit_ui::input::{Button, Modifiers, Pointer, PointerKind, PointerPhase};
+
+    let size = Size {
+        width: 1440.0,
+        height: 900.0,
+    };
+    let (builder, view, island) = order_cards_view();
+    let mut client = client();
+    client.handle(Input::Device(DeviceInput::Surface {
+        size,
+        scale: 1.0,
+        safe_area: Insets::default(),
+    }));
+    client.handle(Input::Update(Box::new(builder.update())));
+    client.frame(0);
+    client.handle(Input::Update(Box::new(GameUpdate {
+        session: SessionId(1),
+        view,
+    })));
+    client.frame(MS);
+    client.frame(5_000 * MS);
+    let settled = 10_000 * MS;
+    let frame = client.frame(settled);
+
+    let top_regions: Vec<_> = frame
+        .resolved
+        .iter()
+        .filter(|el| el.role == Role::Region && frame.name(el.name) == "Top")
+        .collect();
+    assert_eq!(
+        top_regions.len(),
+        1,
+        "only the open pile gets a Top box, not the closed empty pile"
+    );
+    let top_box = bounds(top_regions[0]);
+    let island_el = frame
+        .resolved
+        .iter()
+        .find(|el| el.role == Role::Card && el.id.0 == u32::from(island.0))
+        .expect("Island card drawn in tray");
+    let island_rect = bounds(island_el);
+    let start = Vec2::new(
+        island_rect.x + island_rect.width / 2.0,
+        island_rect.y + island_rect.height / 2.0,
+    );
+    let end = Vec2::new(
+        top_box.x + top_box.width - 4.0,
+        top_box.y + top_box.height / 2.0,
+    );
+    for (phase, position) in [
+        (PointerPhase::Down, start),
+        (PointerPhase::Move, start + Vec2::new(30.0, 2.0)),
+        (PointerPhase::Move, end),
+        (PointerPhase::Up, end),
+    ] {
+        client.handle(Input::Device(DeviceInput::Pointer(Pointer {
+            id: 0,
+            kind: PointerKind::Mouse,
+            phase,
+            position,
+            button: Button::Primary,
+            wheel: Vec2::ZERO,
+            modifiers: Modifiers::default(),
+        })));
+    }
+    client.frame(settled + MS);
+    let command = client.next_command();
+    assert!(
+        matches!(
+            command,
+            Some(SessionCommand::Click(ClickRequest {
+                click: Click::Drop {
+                    on: Subject::Object { slot },
+                    pile: 1,
+                    at: 3,
+                },
+                ..
+            })) if slot == island
+        ),
+        "dragging in the single open box maps to prompt pile 1, got {command:?}"
+    );
+}

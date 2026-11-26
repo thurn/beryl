@@ -233,9 +233,10 @@ impl Client {
         let on = u16::try_from(slot).map(|slot| Subject::Object {
             slot: ObjectId(slot),
         });
-        // A card in a tray of piles is carried from pile to pile, as the web's `#piled` has it.
-        let piled = (self.show.table().held()).is_some_and(|held| held.piles.len() > 1)
-            && self.show.table().in_tray(slot);
+        // A card in a tray of piles is carried within or between piles, as the web's `#piled` has it.
+        let piled = (self.show.table().held()).is_some_and(|held| {
+            held.piles.len() > 1 || matches!(held.kind, game_table::table::TrayKind::SingleBox)
+        }) && self.show.table().in_tray(slot);
         (in_hand || piled) && (prompt.marks.iter()).any(|marked| Ok(marked.on) == on)
     }
 
@@ -252,17 +253,20 @@ impl Client {
         else {
             return;
         };
-        let (ShapeBody::Split { piles }, Some(held)) = (&prompt.body, prompts::Piles::of(prompt))
+        let (ShapeBody::Split { piles }, Some(shown)) = (&prompt.body, prompts::Piles::of(prompt))
         else {
             return;
         };
         let table = self.show.table();
-        let held = held.held(table.held());
+        let held = shown.held(table.held());
         let Ok(card) = u16::try_from(slot) else {
             return;
         };
         let landed = table.tray_landing(&held, at, ObjectId(card));
-        let Some((pile, before)) = landed else {
+        let Some((box_index, before)) = landed else {
+            return;
+        };
+        let Some(&pile) = shown.pile_indices().get(box_index) else {
             return;
         };
         if piles.get(pile).is_none_or(|pile| pile.closed) {

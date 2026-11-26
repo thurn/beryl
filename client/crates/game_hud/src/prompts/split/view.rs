@@ -49,25 +49,31 @@ pub(super) fn view(prompt: &PromptView, input: &HudIn, bar: Element) -> Element 
     };
     let edged = !held.put_back();
     let boxes = tray_boxes(&held.held(None), space, size);
-    bar.children(piles.iter().zip(boxes).map(|(pile, area)| {
-        let mut pile_box = row()
-            .name(&pile.label)
-            .width(area.width)
-            .height(area.height)
-            .passes(true);
-        if edged {
-            pile_box = (pile_box.border((color::TRAY_PILE_RIM, size::TRAY_PILE_BORDER)))
-                .radius(size::TRAY_PILE_RADIUS);
-        }
-        pile_box = pile_box.child(
-            text(&pile.label)
-                .style(label)
-                .color(color::GOLD)
-                .text_align(TextAlign::Center)
-                .grow(1.0)
-                .height(heading),
-        );
-        pile_box.anchor = Some(Anchor::Point(Vec2::new(area.x, area.y), Vec2::ZERO));
-        pile_box
-    }))
+    bar.children(
+        held.pile_indices()
+            .iter()
+            .filter_map(|&index| piles.get(index))
+            .zip(boxes)
+            .map(|(pile, area)| {
+                let mut pile_box = row()
+                    .name(&pile.label)
+                    .width(area.width)
+                    .height(area.height)
+                    .passes(true);
+                if edged {
+                    pile_box = (pile_box.border((color::TRAY_PILE_RIM, size::TRAY_PILE_BORDER)))
+                        .radius(size::TRAY_PILE_RADIUS);
+                }
+                pile_box = pile_box.child(
+                    text(&pile.label)
+                        .style(label)
+                        .color(color::GOLD)
+                        .text_align(TextAlign::Center)
+                        .grow(1.0)
+                        .height(heading),
+                );
+                pile_box.anchor = Some(Anchor::Point(Vec2::new(area.x, area.y), Vec2::ZERO));
+                pile_box
+            }),
+    )
 }

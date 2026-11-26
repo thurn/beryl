@@ -22,14 +22,18 @@ use game_table::table::{Held, TrayKind};
 pub struct Piles<'a> {
     cards: [&'a [ObjectId]; 2],
     rooms: [Option<u8>; 2],
+    /// The index of each held pile in `ShapeBody::Split::piles` (identity `[0, 1]` when both
+    /// piles are shown, or `[1, 0]` with `count == 1` when the first pile is closed and empty).
+    indices: [usize; 2],
     count: usize,
     kind: Kind,
 }
 
-/// How a tray of two piles is laid out (`TrayKind`), without a fan's order.
+/// How a tray of piles is laid out (`TrayKind`), without a fan's order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Kind {
     Boxes,
+    SingleBox,
     Fan,
     PutBack,
 }
@@ -73,6 +77,7 @@ impl<'a> Piles<'a> {
         let one = |cards: &'a [ObjectId]| Self {
             cards: [cards, &[]],
             rooms: [None; 2],
+            indices: [0, 1],
             count: 1,
             kind: Kind::Boxes,
         };
@@ -83,9 +88,24 @@ impl<'a> Piles<'a> {
                 Some(one(about))
             }
             ShapeBody::Split { piles } => match &piles[..] {
+                [first, second] if first.closed && first.cards.is_empty() => Some(Self {
+                    cards: [&second.cards, &[]],
+                    rooms: [second.exactly, None],
+                    indices: [1, 0],
+                    count: 1,
+                    kind: Kind::SingleBox,
+                }),
+                [first, second] if second.closed && second.cards.is_empty() => Some(Self {
+                    cards: [&first.cards, &[]],
+                    rooms: [first.exactly, None],
+                    indices: [0, 1],
+                    count: 1,
+                    kind: Kind::SingleBox,
+                }),
                 [first, second] => Some(Self {
                     cards: [&first.cards, &second.cards],
                     rooms: [first.exactly, second.exactly],
+                    indices: [0, 1],
                     count: 2,
                     kind: Kind::of(first, second),
                 }),
@@ -93,6 +113,12 @@ impl<'a> Piles<'a> {
             },
             _ => None,
         }
+    }
+
+    /// The index in `ShapeBody::Split::piles` for each pile held in the tray.
+    #[must_use]
+    pub fn pile_indices(&self) -> &[usize] {
+        &self.indices[..self.count]
     }
 
     /// The piles as the table holds them up. A fan keeps the order of `up`, the tray held up
@@ -103,6 +129,7 @@ impl<'a> Piles<'a> {
         let piles = &self.cards[..self.count];
         let kind = match self.kind {
             Kind::Boxes => TrayKind::Boxes,
+            Kind::SingleBox => TrayKind::SingleBox,
             Kind::PutBack => TrayKind::PutBack,
             Kind::Fan => {
                 let all = || piles.iter().rev().flat_map(|pile| pile.iter().copied());

@@ -101,12 +101,14 @@ pub struct Second {
     pub height: f32,
 }
 
-/// How a tray of two piles is laid out, as the web's `Tray.picks` and `Tray.putBack` say.
+/// How a tray of piles is laid out, as the web's `Tray.picks` and `Tray.putBack` say.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum TrayKind {
-    /// Each pile in a box of its own, side by side.
+    /// Each pile in a box of its own, side by side (one pile lays out in unboxed rows).
     #[default]
     Boxes,
+    /// One pile in a single centred box (a split whose other pile is closed and empty).
+    SingleBox,
     /// The first pile's cards picked out of the second's, which stay in the library: every card
     /// in one fan, in `order`, the order they were dealt in, kept from the tray up before so
     /// that a card clicked stays where it lies.
@@ -306,31 +308,24 @@ fn in_order(
         .collect()
 }
 
-/// The room each pile of `held` is laid out for: what it must come to hold, or all the tray
-/// holds, as the web's `roomsOf`.
+/// The room each pile of `held` is laid out for: what it must come to hold, or all the tray holds.
 fn rooms_of(held: &Held) -> Vec<usize> {
     let total = held.piles.iter().map(Vec::len).sum();
     (0..held.piles.len())
-        .map(|pile| {
-            held.rooms
-                .get(pile)
-                .copied()
-                .flatten()
-                .unwrap_or(total)
-                .max(1)
-        })
+        .map(|i| held.rooms.get(i).copied().flatten().unwrap_or(total).max(1))
         .collect()
 }
 
-/// Piles of `counts` cards laid out in `span`: one pile in rows, several in boxes with room for
-/// `rooms` (every card of the tray for a pile with none).
+/// Piles of `counts` cards laid out in `span`: one unboxed pile in rows, otherwise in boxes
+/// with room for `rooms` (every card of the tray for a pile with none).
 fn laid_piles(
     counts: &[usize],
     rooms: &[Option<usize>],
     space: &TraySpace,
     span: (f32, f32),
+    boxed_single: bool,
 ) -> Laid {
-    if counts.len() == 1 {
+    if counts.len() == 1 && !boxed_single {
         return rows(counts[0], space, span);
     }
     let total = counts.iter().sum();
@@ -365,9 +360,10 @@ fn laid_out(held: &Held, mut space: TraySpace, size: Size) -> Laid {
     let mut laid = match &held.kind {
         TrayKind::PutBack if held.piles.len() == 2 => put_back(held, space, span),
         TrayKind::Fan { order } => fan(&held.piles, order, space, span),
-        _ => {
+        kind => {
             let counts: Vec<usize> = held.piles.iter().map(Vec::len).collect();
-            laid_piles(&counts, &held.rooms, space, span)
+            let boxed = *kind == TrayKind::SingleBox;
+            laid_piles(&counts, &held.rooms, space, span, boxed)
         }
     };
     for area in &mut laid.boxes {
@@ -492,7 +488,7 @@ pub fn tray<T>(piles: &[&[T]], mut space: TraySpace, camera: &Camera) -> Vec<Pos
     let counts: Vec<usize> = piles.iter().map(|pile| pile.len()).collect();
     let rooms: Vec<Option<usize>> = counts.iter().copied().map(Some).collect();
     let span = across(&space, stage_width);
-    let laid = laid_piles(&counts, &rooms, &space, span);
+    let laid = laid_piles(&counts, &rooms, &space, span, false);
     poses(&laid, &space, stage_width, camera)
 }
 
