@@ -372,9 +372,8 @@ pub(crate) fn may_ask(t: &GameTable) -> bool {
 /// enters.
 ///
 /// A permanent makes such a choice only through a replacement effect of its own entering,
-/// "As this enters" or "enter as a copy" (see CR 614.1c: "Effects that read \"[This
-/// permanent] enters with . . . ,\" \"As [this permanent] enters . . . ,\" or \"[This
-/// permanent] enters as . . . \" are replacement effects"), or as an Aura that enters other
+/// "As this enters" or "enter as a copy" (see CR 614.12: "Such effects may come from the
+/// permanent itself if they affect only that permanent"), or as an Aura that enters other
 /// than by resolving as an Aura spell (see CR 303.4f: "If an Aura is entering the battlefield
 /// under a player's control by any means other than by resolving as an Aura spell, ... that
 /// player chooses what it will enchant"). So in a game with such a card
@@ -401,7 +400,7 @@ pub(crate) fn resolution_may_ask<L: Layout>(
 /// Whether the permanent spell of `entry` has a replacement effect of its own entering that
 /// asks its controller: a value it chooses as it enters ([`Rewrite::Choose`]) or a permanent
 /// it may enter as a copy of ([`Rewrite::EnterAsCopy`]). Read from its copiable values, which
-/// are what it enters with (see CR 614.12: "to determine which replacement effects apply and
+/// are what it enters with (see CR 614.12: "To determine which replacement effects apply and
 /// how they apply, check the characteristics of the permanent as it would exist on the
 /// battlefield"), as entering replacements are read (`entering`). An entry with no spell may ask.
 #[cold]
