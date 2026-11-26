@@ -53,6 +53,19 @@ pub mod scenarios {
                 ME.has_cards(Zone::Hand, 3),
                 ME.has_cards(Zone::Graveyard, 2),
             ]),
+        Scenario::new("Chart a Course discards a card when you did not attack in a shared game")
+            .shared_library(&[Card::Island, Card::Plains])
+            .hand(P0, &[CHART])
+            .battlefield(P0, &[Card::Island, Card::Island])
+            .actions(&[
+                ME.casts(CHART),
+                Resolve,
+                ME.picks(Card::Plains),
+                ME.has_cards(Zone::Hand, 1),
+                ME.has(Zone::Hand, Card::Island, 1),
+                ME.has(Zone::Graveyard, Card::Plains, 1),
+                THEM.has(Zone::Graveyard, Card::Plains, 1),
+            ]),
         Scenario::new(
             "Chart a Course does not discard after attacking with Dandân in a shared game",
         )
