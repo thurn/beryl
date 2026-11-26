@@ -43,12 +43,7 @@ fn entries_column(entries: &[String], chosen: Option<u16>, input: &HudIn) -> Ele
     );
     let rows = (entries.iter().enumerate()).map(|(index, words)| {
         let index = u16::try_from(index).unwrap_or(u16::MAX);
-        let entry = entry(words, index, chosen == Some(index));
-        if slot.is_some() {
-            entry.shrink(0.0)
-        } else {
-            entry
-        }
+        entry(words, index, chosen == Some(index)).shrink(0.0)
     });
     let entries = list("entries", rows)
         .gap(size::ENTRY_GAP)

@@ -12,7 +12,8 @@
 //! For those the session sends the definition's own text, as `beryl_card::render` writes it.
 
 use beryl_card::render::{
-    render_ability, render_ability_of, render_casting_option, render_face_read,
+    render_ability, render_ability_of, render_ability_of_read, render_ability_read,
+    render_casting_option, render_face_read,
 };
 use beryl_card_store::STORE;
 use beryl_engine::card::{CastingOption, FaceAbility, FaceIx, Words};
@@ -50,6 +51,28 @@ pub(super) fn unprinted(
     }
 }
 
+/// Like [`unprinted`], reading the ability's color words and subtypes through `words`. When
+/// `words` changes any word, returns the rendered ability text even when the card's printed
+/// text has a paragraph for it, because the printed paragraph no longer says what the ability
+/// does ([CR 612.1](https://yawgatog.com/resources/magic-rules/#R6121)).
+pub(super) fn unprinted_read(
+    t: &GameTable,
+    card: impl CardId,
+    face: FaceIx,
+    a: FaceAbility,
+    words: &Words,
+) -> Option<String> {
+    if words.is_none() {
+        return unprinted(t, card, face, a);
+    }
+    let def = t.def(card);
+    let ability = def.face(face).ability(a);
+    if let FaceAbility::Grant(_) = a {
+        return Some(render_ability_read(ability, words));
+    }
+    Some(render_ability_of_read(def, face, ability, words))
+}
+
 /// The words of the special action that turns a face-down permanent of `card` face up: its
 /// morph line ([CR 702.37e](https://yawgatog.com/resources/magic-rules/#R70237e)), which
 /// names the cost. None for a card with no morph ability, as a manifested card turned up for
@@ -85,6 +108,7 @@ pub(super) fn changed(
     let printed = STORE
         .card(def.face_name(face))
         .into_iter()
+        .chain(STORE.tokens(def.face_name(face)))
         .flat_map(|record| record.faces)
         .find(|f| f.name == def.face_name(face))
         .map_or_else(String::new, |f| f.type_line);

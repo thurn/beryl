@@ -228,11 +228,13 @@ impl Badges {
 }
 
 /// The one line a permanent shows near its top: its manual table note, or else the value it
-/// chose as it entered, as the web's `Look` passes `object.note ?? object.chosen`.
+/// chose as it entered, as the web's `Look` passes `object.note ?? object.chosen`, or a short
+/// tag when a text-changing effect has altered its text or type line.
 fn said(object: &ObjectView) -> Option<&str> {
     (object.note.as_deref())
         .or(object.chosen.as_deref())
         .filter(|said| !said.is_empty())
+        .or_else(|| (object.text.is_some() || object.type_line.is_some()).then_some("Text changed"))
 }
 
 /// The room a note's line has, in points: the card's width less the panel's margins and its

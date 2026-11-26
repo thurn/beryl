@@ -760,7 +760,13 @@ pub(super) fn stack_item_cast<L: Layout>(
                 )
                 .then_some(true),
                 nth,
-                text: super::rules_text::unprinted(t, e.card(), e.face(), ability),
+                text: super::rules_text::unprinted_read(
+                    t,
+                    e.card(),
+                    e.face(),
+                    ability,
+                    &obs.entry_words(e),
+                ),
                 controller: side(obs, e.controller()),
                 manual: None,
                 targets,

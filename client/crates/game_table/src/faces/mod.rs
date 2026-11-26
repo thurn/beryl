@@ -4,7 +4,11 @@
 //! [`FaceId`]. The host reads the list (`Client::faces`) so that its asset workers prepare each
 //! face, and each worker reports the layer a face landed in as an `AssetReady::Face`.
 
+mod dynamic;
+
 use std::collections::BTreeMap;
+
+use self::dynamic::{ChangedFace, CustomPlate};
 
 use beryl_protocol::card_records::{CardEntry, CardFace, CardRecords, PrintingIx};
 use beryl_protocol::protocol::{ObjectView, PlayerView, StackItem, ZoneName};
@@ -109,6 +113,10 @@ pub struct FaceList {
     /// The face of each printing that an object's `printing` can name. Printing faces are
     /// found only by this map, never by name: a card's name still finds its ordinary face.
     printings: BTreeMap<PrintingIx, FaceId>,
+    /// Faces registered during play for objects whose text or type line was changed.
+    changed_faces: Vec<ChangedFace>,
+    /// Plate faces registered during play for abilities whose text differs from printed.
+    custom_plates: Vec<CustomPlate>,
 }
 
 impl FaceList {
@@ -233,10 +241,16 @@ impl FaceList {
         nth: u8,
         text: Option<&str>,
     ) -> Option<FaceId> {
-        text.is_none()
-            .then(|| self.plate(name, triggered, nth))
-            .flatten()
-            .or_else(|| self.find(name))
+        let source = self.find(name)?;
+        if let Some(rules) = text {
+            return self
+                .find_custom_plate(source, triggered, rules)
+                .or(Some(source));
+        }
+        self.plates
+            .get(&(source, triggered, nth))
+            .copied()
+            .or(Some(source))
     }
 
     /// The centered plate of an activated ability read in the mode chooser.
@@ -295,9 +309,18 @@ impl FaceList {
 
     /// The face that shows `object`, from its printing first, then its token printing, which
     /// tells apart tokens that share a name, and then from its name. `None` for a card whose name the viewer
-    /// does not know.
+    /// does not know. When a text-changing effect has altered `object`'s text or type line and
+    /// [`Self::sync_view`] has registered a frame face for it, returns that face.
     #[must_use]
     pub fn find_object(&self, object: &ObjectView) -> Option<FaceId> {
+        let base = self.find_printed_object(object)?;
+        if object.type_line.is_some() || object.text.is_some() {
+            return self.find_changed_object(base, object).or(Some(base));
+        }
+        Some(base)
+    }
+
+    pub(super) fn find_printed_object(&self, object: &ObjectView) -> Option<FaceId> {
         (object.printing.and_then(|ix| self.printing(ix)))
             .or_else(|| (object.token_printing.as_deref()).and_then(|printing| self.find(printing)))
             .or_else(|| self.find(object.name.as_deref()?))

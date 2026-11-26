@@ -531,9 +531,20 @@ impl Page {
     }
 
     fn give(&mut self, input: Input) {
+        let before = self.client.face_generation();
         self.inputs.push(input.clone());
         self.given_at.push(self.now);
         self.client.handle(input);
+        if self.stub_atlas && self.client.face_generation() != before {
+            let ready: Vec<AssetReady> = self.client.faces().all_ready().collect();
+            for ready in ready {
+                self.inputs
+                    .push(Input::Device(DeviceInput::Assets(ready.clone())));
+                self.given_at.push(self.now);
+                self.client
+                    .handle(Input::Device(DeviceInput::Assets(ready)));
+            }
+        }
     }
 
     /// Gives the client the recording's initial inputs and views. Text tools supply stub atlas

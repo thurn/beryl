@@ -149,5 +149,28 @@ pub mod scenarios {
             ME.has(Zone::Graveyard, Card::Dandan, 1),
             THEM.has(Zone::Graveyard, Card::Dandan, 1),
         ]),
+        // Crystal Spray changes Dandân's "Island" to "Swamp" until end of turn while P0
+        // controls a Swamp, draws from the shared library, and reverts at end of turn.
+        Scenario::new(
+            "Crystal Spray on Dandân in a shared game ends at end of turn and draws from the shared library",
+        )
+        .shared_library(&[Card::Island, Card::Island, Card::Island])
+        .interaction(&[Card::Dandan])
+        .battlefield(
+            P0,
+            &[Card::Dandan, Card::Island, Card::Island, Card::Island, Card::Swamp],
+        )
+        .hand(P0, &[SPRAY])
+        .actions(&[
+            ME.casts(SPRAY),
+            ME.targets(Card::Dandan),
+            Resolve,
+            ME.chooses_word(ISLAND),
+            ME.chooses_word(SWAMP),
+            ME.has(Zone::Hand, Card::Island, 1),
+            ME.controls(Card::Dandan, 1),
+            advance_to(2, TurnStep::Upkeep),
+            ME.controls(Card::Dandan, 1),
+        ]),
     ];
 }

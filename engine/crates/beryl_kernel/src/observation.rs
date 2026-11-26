@@ -210,6 +210,12 @@ impl<'a, L: Layout> Observation<'a, L> {
         self.state.words_of(slot)
     }
 
+    /// The text changes a spell or ability on the stack reads its text through
+    /// ([`State::entry_words`]), which every player sees.
+    pub fn entry_words(&self, entry: &crate::state::StackEntry<L>) -> Words {
+        self.state.entry_words(entry)
+    }
+
     /// The committed state behind the view, unmasked. Reading it is cheating: only the
     /// omniscient search, which is labeled as cheating wherever a human meets it, does
     /// (architecture §19.1). The information-independence test holds every other agent to the

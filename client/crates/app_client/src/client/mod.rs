@@ -261,6 +261,7 @@ impl Client {
             self.update_start(&start::Message::NewSession);
         }
         self.views += 1;
+        self.show.faces_mut().sync_view(&update.view);
         self.take_session(&update);
         if self.features.screen == Screen::Game && self.features.sheet.is_none() {
             // Reconciled buttons can keep their IDs when a new decision repeats their labels.

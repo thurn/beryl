@@ -132,5 +132,23 @@ pub mod scenarios {
             ME.has(Zone::Graveyard, DANDAN, 1),
             THEM.has(Zone::Graveyard, DANDAN, 1),
         ]),
+        // Dandân's "Island" becomes "Swamp" while P0 controls a Swamp, so Dandân stays on
+        // the battlefield with its changed attack restriction and sacrifice trigger text.
+        Scenario::new(
+            "Magical Hack on Dandân in a shared game keeps it on the battlefield with Swamp text",
+        )
+        .shared_library(&[Card::Island, Card::Island])
+        .interaction(&[DANDAN])
+        .battlefield(P0, &[DANDAN, Card::Island, Card::Swamp])
+        .battlefield(P1, &[Card::Island])
+        .hand(P0, &[HACK])
+        .actions(&[
+            ME.casts(HACK),
+            ME.targets(DANDAN),
+            Resolve,
+            ME.chooses_word(ISLAND),
+            ME.chooses_word(SWAMP),
+            ME.controls(DANDAN, 1),
+        ]),
     ];
 }

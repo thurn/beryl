@@ -53,7 +53,8 @@ mod zones;
 mod tests;
 
 pub use card::{
-    render, render_ability, render_ability_of, render_casting_option, render_face, render_face_read,
+    render, render_ability, render_ability_of, render_ability_of_read, render_ability_read,
+    render_casting_option, render_face, render_face_read,
 };
 pub use words::mana_text;
 

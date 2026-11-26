@@ -264,6 +264,14 @@ fn state(input: &CardInputs<'_>) -> Vec<String> {
             .as_ref()
             .map(|chosen| format!("Chosen: {chosen}")),
     );
+    if let Some(type_line) = &object.type_line {
+        lines.push(type_line.clone());
+    }
+    if let Some(rules) = &object.text {
+        for line in rules.lines().filter(|line| !line.is_empty()) {
+            lines.push(line.to_owned());
+        }
+    }
     lines.extend((object.really.as_ref()).map(|really| format!("Copy. Card: {really}")));
     if object.phased_out {
         lines.push("Phased out".to_owned());

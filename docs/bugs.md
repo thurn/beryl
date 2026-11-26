@@ -1629,3 +1629,15 @@ fixed in the same session. Newest first.
   spec moments (`just client spec svyelunite-temple`) now play the Temple's
   scenarios through this function from both seats. No type states the list's
   order.
+
+- **`State::words_by` panicked on a popped stack entry after `captured_words`
+  cleared.** When an ability whose source had an active text change finished
+  resolving and emptied the stack, `State::settle_captured_words` cleared
+  `captured_words` while a text-changing effect remained active on the table.
+  Building the resolving stack view in `beryl_session` then passed that popped
+  `StackEntry` to `State::words_by`, which indexed `captured_words` out of
+  bounds. Fixed: `State::words_by` uses `.get(...)` on `captured_words` and
+  falls back to the source object's current changed words when the captured
+  entry is no longer present. Prevention: `beryl_session`'s
+  `undo::each_undo_in_a_shared_game_takes_back_one_answer_and_replays` builds
+  resolving views after a text-changed Dandân trigger empties the stack.

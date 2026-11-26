@@ -33,6 +33,7 @@ pub fn render_face(def: &CardDef, face: FaceIx) -> String {
 /// red" reads "protection from blue" once "red" reads "blue".
 ///
 /// [CR 612.1]: https://yawgatog.com/resources/magic-rules/#R6121
+/// [CR 305.6]: https://yawgatog.com/resources/magic-rules/#R3056
 pub fn render_face_read(def: &CardDef, face: FaceIx, words: &Words) -> String {
     let fuse = def.shape.has_fuse() && face != FaceIx::DOWN && face != FaceIx::FUSED;
     let name = def.face_name(face);
@@ -69,8 +70,36 @@ pub fn render_face_read(def: &CardDef, face: FaceIx, words: &Words) -> String {
     let mut previous: Option<&Ability> = None;
     // The mana the mana abilities on the last line add between them.
     let mut mana: Option<ManaSet> = None;
+    let printed_basics =
+        crate::characteristics::BasicLandTypes::of(face.subtypes.read(&Words::NONE));
+    let read_basics = crate::characteristics::BasicLandTypes::of(face.subtypes.read(words));
+    let lost_bits = printed_basics.minus(read_basics).mana().intrinsic_mana();
+    let gained_bits = read_basics.minus(printed_basics).mana().intrinsic_mana();
     for (index, ability) in face.abilities.iter().enumerate() {
         if !printed(ability) || overloaded.contains(&index) {
+            continue;
+        }
+        // A basic land type's intrinsic "{T}: Add [mana]" changes with its subtype ([CR 305.6]).
+        if lost_bits != 0
+            && ability.kind() == AbilityKind::Mana
+            && ability.only_if_you_control().is_none()
+            && ability.spend().is_none()
+            && ability.produces().amount == 1
+            && ability.produces().colors == lost_bits
+        {
+            if gained_bits != 0 {
+                let gained = ManaSet {
+                    colors: gained_bits,
+                    amount: 1,
+                };
+                lines.push(format!(
+                    "{}: Add {}.",
+                    ctx.cost_text(ability.cost()),
+                    mana_set(gained)
+                ));
+            }
+            mana = None;
+            previous = Some(ability);
             continue;
         }
         if let (Some(run), Some(before), Some(last)) = (mana, previous, lines.last_mut())
@@ -114,12 +143,32 @@ pub fn render_face_read(def: &CardDef, face: FaceIx, words: &Words) -> String {
 /// "this spell" or "this permanent", and what it names by its place on a face (a delayed
 /// or granted ability) renders as a marked placeholder.
 pub fn render_ability(ability: &Ability) -> String {
-    Ctx::bare(ability.kind()).paragraph(ability)
+    render_ability_read(ability, &Words::NONE)
+}
+
+/// [`render_ability`] with its color words and subtypes read through `words`.
+pub fn render_ability_read(ability: &Ability, words: &Words) -> String {
+    let mut ctx = Ctx::bare(ability.kind());
+    ctx.words = *words;
+    ctx.paragraph(ability)
 }
 
 /// One ability of a face of `def` as its rules text, the way [`render_face`] writes it.
 pub fn render_ability_of(def: &CardDef, face: FaceIx, ability: &Ability) -> String {
+    render_ability_of_read(def, face, ability, &Words::NONE)
+}
+
+/// [`render_ability_of`] with its color words and subtypes read through `words` ([CR 612.1]).
+///
+/// [CR 612.1]: https://yawgatog.com/resources/magic-rules/#R6121
+pub fn render_ability_of_read(
+    def: &CardDef,
+    face: FaceIx,
+    ability: &Ability,
+    words: &Words,
+) -> String {
     let mut ctx = Ctx::of_face(def.face(face), def.face_name(face));
+    ctx.words = *words;
     ctx.meld = def.shape.meld_pair();
     ctx.paragraph(ability)
 }

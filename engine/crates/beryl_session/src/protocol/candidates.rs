@@ -266,16 +266,28 @@ fn ability_nth<L: Layout>(t: &GameTable, obs: Observation<'_, L>, o: Opt<L>) -> 
 
 /// [`CandidateView::text`].
 fn ability_text<L: Layout>(t: &GameTable, obs: Observation<'_, L>, o: Opt<L>) -> Option<String> {
-    let (card, face, ability) = match o {
+    let (card, face, ability, words) = match o {
         Opt::TurnFaceUp(slot) => return super::rules_text::turn_face_up(t, obs.card(slot)?),
-        Opt::Activate { slot, ability } => face_ability(obs, slot, ability)?,
+        Opt::Activate { slot, ability } => {
+            let (card, face, ability) = face_ability(obs, slot, ability)?;
+            (card, face, ability, obs.words_of(slot))
+        }
         Opt::Trigger(index) => {
             let trigger = obs.triggers()[Into::<usize>::into(index)];
-            (trigger.of.card, trigger.of.face, trigger.of.ability.get())
+            let words = trigger
+                .of
+                .source
+                .map_or(beryl_engine::card::Words::NONE, |r| obs.words_of(r.slot));
+            (
+                trigger.of.card,
+                trigger.of.face,
+                trigger.of.ability.get(),
+                words,
+            )
         }
         _ => return None,
     };
-    super::rules_text::unprinted(t, card, face, ability)
+    super::rules_text::unprinted_read(t, card, face, ability, &words)
 }
 
 /// The card, face and ability of that face that ability `ability` of the object in `slot`

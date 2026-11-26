@@ -138,7 +138,12 @@ impl<L: Layout> State<L> {
         match words {
             AS_PRINTED => Words::NONE,
             READ_NOW => source.map_or(Words::NONE, |slot| self.changed_words(slot)),
-            n => self.captured_words.as_slice()[usize::from(n - 1)],
+            n => self
+                .captured_words
+                .as_slice()
+                .get(usize::from(n - 1))
+                .copied()
+                .unwrap_or_else(|| source.map_or(Words::NONE, |slot| self.changed_words(slot))),
         }
     }
 
