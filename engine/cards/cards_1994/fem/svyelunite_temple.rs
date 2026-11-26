@@ -32,17 +32,23 @@ pub mod scenarios {
                 ME.controls(Card::LordOfAtlantis, 1),
                 ME.has(Zone::Graveyard, Card::SvyeluniteTemple, 1),
             ]),
-        // {1}{U}{U} from the Temple's {U}{U} and one of Mana Crypt's {C}{C}: the
+        // Dissolve's {1}{U}{U} from the Temple's {U}{U} and one of Mana Crypt's {C}{C}: the
         // sacrificed Temple must spend both its mana, and the Crypt the rest.
-        Scenario::new("Svyelunite Temple and Mana Crypt pay for Sink into Stupor")
-            .interaction(&[Card::ManaCrypt, Card::SinkIntoStupor])
+        Scenario::new("Svyelunite Temple and Mana Crypt pay for Dissolve")
+            .interaction(&[Card::ManaCrypt, Card::Dissolve, Card::MotherOfRunes])
             .battlefield(P0, &[Card::SvyeluniteTemple, Card::ManaCrypt])
-            .battlefield(P1, &[Card::MotherOfRunes])
-            .hand(P0, &[Card::SinkIntoStupor])
+            .hand(P0, &[Card::Dissolve])
+            .library(P0, &[Card::Island])
+            .battlefield(P1, &[Card::Plains])
+            .hand(P1, &[Card::MotherOfRunes])
+            .at(2, P1, TurnStep::PrecombatMain)
             .actions(&[
-                ME.casts(Card::SinkIntoStupor),
+                THEM.casts(Card::MotherOfRunes),
+                ME.casts(Card::Dissolve),
                 Action::Resolve,
-                THEM.has(Zone::Hand, Card::MotherOfRunes, 1),
+                // Scry 1: the Island stays on top.
+                ME.done_picking(),
+                THEM.has(Zone::Graveyard, Card::MotherOfRunes, 1),
                 ME.has(Zone::Graveyard, Card::SvyeluniteTemple, 1),
             ]),
     ];

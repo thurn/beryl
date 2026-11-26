@@ -341,5 +341,12 @@
     "scenario": "Svyelunite Temple alone pays for Lord of Atlantis",
     "cr": "CR 601.2g (https://yawgatog.com/resources/magic-rules/#R6012g): \"If the total cost includes a mana payment, the player then has a chance to activate mana abilities (see rule 605, 'Mana Abilities'). Mana abilities must be activated before costs are paid.\"",
     "reason": "Forge's payment never activates Svyelunite Temple's {T}, Sacrifice ability, so with only the Temple it cannot pay {U}{U} and does not cast Lord of Atlantis. The Temple's two mana abilities are separate abilities, and its controller may activate either to pay."
+  },
+  {
+    "oracle": "forge",
+    "card": "Svyelunite Temple",
+    "scenario": "Svyelunite Temple and Mana Crypt pay for Dissolve",
+    "cr": "CR 601.2g (https://yawgatog.com/resources/magic-rules/#R6012g): \"If the total cost includes a mana payment, the player then has a chance to activate mana abilities (see rule 605, 'Mana Abilities'). Mana abilities must be activated before costs are paid.\"",
+    "reason": "Forge's payment never activates Svyelunite Temple's {T}, Sacrifice ability, so with the Temple and Mana Crypt it cannot pay {1}{U}{U} and does not cast Dissolve. The Temple's two mana abilities are separate abilities, and its controller may activate either to pay."
   }
 ]

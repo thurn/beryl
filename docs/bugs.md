@@ -18,7 +18,7 @@ fixed in the same session. Newest first.
   `spent_by_class` takes the cost, and where the sources of several mana make
   different kinds and the first split does not pay, it tries the other splits
   until one does; the payment in `mana/pay.rs` spends the same split. Guard: the
-  scenario "Svyelunite Temple and Mana Crypt pay for Sink into Stupor", and the
+  scenario "Svyelunite Temple and Mana Crypt pay for Dissolve", and the
   reference payability check (`reference::check_payments`), which compares the
   solver with a matching of symbols to units at every fuzzed position.
 
