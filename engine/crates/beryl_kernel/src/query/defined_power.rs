@@ -148,7 +148,7 @@ impl<L: Layout> State<L> {
     /// (see [CR 108.2]) and counts for nothing in the moment before it ceases to exist
     /// (see [CR 111.7]): "A token that's in a zone other than the battlefield ceases to exist." The
     /// player each graveyard belongs to is nothing to the count, so they are read in seat
-    /// order. The layers read it too, for a permanent's characteristic-defining ability.
+    /// order, a shared graveyard once. The layers read it too, for a permanent's characteristic-defining ability.
     ///
     /// A split card has the card types of both halves there (see [CR 709.4c]): "A split card
     /// has each card type specified on either of its halves". The effects that change the
@@ -162,7 +162,7 @@ impl<L: Layout> State<L> {
     /// [CR 709.4c]: https://yawgatog.com/resources/magic-rules/#R7094c
     pub fn card_types_in_graveyards(&self, t: &GameTable) -> usize {
         let mut types = Types::NONE;
-        for player in self.players().in_seat_order() {
+        for player in self.zone_owners(Zone::Graveyard).in_seat_order() {
             for &slot in self.graveyard(player) {
                 if self.object(slot).is_token() {
                     continue;

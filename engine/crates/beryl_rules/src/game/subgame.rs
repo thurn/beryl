@@ -2,7 +2,7 @@
 //!
 //! Implements: CR 730.3, CR 730.5
 
-use beryl_card::Prompt;
+use beryl_card::{Prompt, Zone};
 use beryl_card::prompt::Purpose;
 use beryl_kernel::chance;
 
@@ -41,7 +41,8 @@ impl<L: Layout> Resolution<'_, L> {
         if let Some(answer) = game.sink.asking.recorded() {
             game.state.spend_subgame_seed();
             // The physical cards never left these library slots in the suspended position.
-            for player in game.state.players().in_seat_order() {
+            // A shared library is one library, shuffled once.
+            for player in game.state.zone_owners(Zone::Library).in_seat_order() {
                 shuffle::shuffle(game, player)?;
             }
             return Ok(if answer.0 == 0 {
