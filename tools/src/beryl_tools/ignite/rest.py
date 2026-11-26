@@ -461,27 +461,14 @@ def run_gate(args: Sequence[str], root: Path) -> tuple[int, str]:
     return done.returncode, done.stdout + done.stderr
 
 
-def trend(
-    root: Path,
-    measured: int,
-    bar: int,
-    ok: bool,
-    verifier: str,
-    digest: str,
-    tracked: dict[str, int] | None = None,
-) -> None:
+def trend(root: Path, found: dict[str, Any]) -> None:
     """Stores the verified commit's count and updates tickets the trend calls for. A failure here
     never changes the check's outcome."""
     try:
-        for line in count_trend.report_at(
-            verified_commit(root), measured, bar, ok, IgniteTickets(), verifier, digest
+        for line in count_trend.report_found(
+            verified_commit(root), found, IgniteTickets()
         ):
             print(line, file=sys.stderr)
-        for series, count in (tracked or {}).items():
-            for line in count_trend.track_at(
-                series, verified_commit(root), count, verifier, digest
-            ):
-                print(line, file=sys.stderr)
     except Exception as error:  # noqa: BLE001 - best effort by design
         print(f"count trend: {error}", file=sys.stderr)
 
@@ -496,15 +483,7 @@ def run_rollouts(root: Path) -> dict[str, Any]:
         if not measure.is_file():
             return {}
         found = json.loads(measure.read_text())
-    trend(
-        root,
-        int(found["measured"]),
-        int(found["bar"]),
-        bool(found["ok"]),
-        str(found["verifier"]),
-        str(found["calibration"]),
-        found.get("tracked"),
-    )
+    trend(root, found)
     result: dict[str, Any] = {"outcome": "pass" if found["ok"] else "fail"}
     if not found["ok"]:
         result["message"] = clip(str(found["message"]))
@@ -586,15 +565,7 @@ def run_counts(names: Sequence[str], root: Path, results: Path) -> None:
             batch: list[dict[str, Any]] = []
             if measure.is_file():
                 found = json.loads(measure.read_text())
-                trend(
-                    root,
-                    int(found["measured"]),
-                    int(found["bar"]),
-                    bool(found["ok"]),
-                    str(found["verifier"]),
-                    str(found["calibration"]),
-                    found.get("tracked"),
-                )
+                trend(root, found)
                 result: dict[str, Any] = {"outcome": "pass" if found["ok"] else "fail"}
                 if not found["ok"]:
                     result["message"] = clip(str(found["message"]))

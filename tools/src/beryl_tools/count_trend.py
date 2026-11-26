@@ -29,7 +29,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Protocol
+from typing import Any, Callable, Protocol
 
 from . import paths
 
@@ -384,7 +384,8 @@ def track_at(
     series: str, head: str | None, measured: int, verifier: str, digest: str
 ) -> list[str]:
     """Records a tracked benchmark's count on the verified commit `head` and returns a line
-    with its change since the last measured ancestor. It has no bar, so it files nothing."""
+    with its change since the last measured ancestor. It has no bar, so it files nothing.
+    """
     path = tracked_path(series, verifier, digest)
     try:
         records = load(path.read_text()) if path.exists() else []
@@ -406,6 +407,24 @@ def track_at(
                 out.write(dump(Record(head, measured, 0)) + "\n")
         except OSError as e:
             print(f"count history: {e}", file=sys.stderr)
+    return lines
+
+
+def report_found(head: str | None, found: dict[str, Any], store: Tickets) -> list[str]:
+    """The lines for a gate run's `--measure` file: the gated count's trend, then each tracked
+    benchmark's."""
+    verifier, digest = str(found["verifier"]), str(found["calibration"])
+    lines = report_at(
+        head,
+        int(found["measured"]),
+        int(found["bar"]),
+        bool(found["ok"]),
+        store,
+        verifier,
+        digest,
+    )
+    for series, count in (found.get("tracked") or {}).items():
+        lines += track_at(series, head, int(count), verifier, digest)
     return lines
 
 

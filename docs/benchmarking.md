@@ -99,15 +99,15 @@ and `rollouts_never_change` every corpus rollout's answers and ending.
 
 ## The Dandân rollout benchmark
 
-`dandan_*` are the rollout benchmark over the Dandân deck (`decks::FORGETFUL_FISH`
-in `Format::SHARED_DECK`, where both players draw from one library), so that a
-Dandân rollout getting slower shows in the trend. They use `rollout`'s constants,
-`Corpus::starts`, `Workload` and subjects, with the same four (`copy`,
-`next_apply`, `policy`, `rollouts`) over positions cut from seeded games of
-`greedy` agents on both seats, because the frozen expert names WU Control cards
-(`beryl_bench::dandan`). `dandan::tests::corpus_never_changes` and
-`rollouts_never_change` pin them. Unlike the WU Control corpus they are not in
-`tests/allocations.rs`: a Dandân rollout allocates, because each resolution's
+`dandan_*` are the rollout benchmark over the Dandân deck
+(`decks::FORGETFUL_FISH` in `Format::SHARED_DECK`, where both players draw from
+one library), so that a Dandân rollout getting slower shows in the trend. They
+use `rollout`'s constants, `Corpus::starts`, `Workload` and subjects, with the
+same four (`copy`, `next_apply`, `policy`, `rollouts`) over positions cut from
+seeded games of `greedy` agents on both seats, because the frozen expert names
+WU Control cards (`beryl_bench::dandan`). `dandan::tests::corpus_never_changes`
+and `rollouts_never_change` pin them. Unlike the WU Control corpus they are not
+in `tests/allocations.rs`: a Dandân rollout allocates, because each resolution's
 repeated-position check (`State::canonical_hash`) copies the state into the
 `Large` layout.
 

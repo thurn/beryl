@@ -332,7 +332,7 @@ def test_parallel_gate_body_builds_once_and_runs_both_sides_in_parallel() -> Non
         "--bench rollout_counts --bench dandan_counts --bench family_counts "
         "--bench family_steps --no-run" in body
     )
-    assert "launch dandan \"$dandan_bin\" --bench --output-format=json" in body
+    assert 'launch dandan "$dandan_bin" --bench --output-format=json' in body
     assert "dandan_counts::dandan_rollout::rollouts::corpus" in body
     assert "count_jobs=6" in body
     assert "wait -n || failed=1" in body
