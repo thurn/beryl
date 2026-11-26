@@ -207,5 +207,5 @@ robin for over 2 hours.
 - Reviewers (the sessions that evaluate AI changes) rerun only the matches that
   decide whether a change is accepted, never the ones that are only reported.
 - Each game of a `just ladder` match is its own process, so a game that crashes
-  twice at the same decision is recorded as crashed and its pair is skipped,
-  and the rest of the match goes on.
+  twice at the same decision is recorded as crashed and its pair is skipped, and
+  the rest of the match goes on.
