@@ -9,6 +9,7 @@ use super::super::tuning::{finite, nonnegative, positive, vector};
 #[serde(deny_unknown_fields)]
 pub struct Banded {
     pub piles: Piles,
+    pub shared_piles: SharedPiles,
     pub stack: Stack,
     pub hand: Hand,
     pub opponent_hand: OpponentHand,
@@ -40,6 +41,22 @@ pub struct Pile {
     /// The minimum distance below the top safe inset.
     #[serde(default, deserialize_with = "nonnegative")]
     pub below_safe: f32,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct SharedPiles {
+    #[serde(deserialize_with = "positive")]
+    pub width: f32,
+    /// The left pile's centre from the left edge of the safe area, in logical points.
+    #[serde(deserialize_with = "positive")]
+    pub left: f32,
+    /// The right pile's centre from the right edge of the safe area, in logical points.
+    #[serde(deserialize_with = "positive")]
+    pub right: f32,
+    /// Vertical offset from the seam between the two middle rows, in logical points.
+    #[serde(default, deserialize_with = "finite")]
+    pub y_offset: f32,
 }
 
 fn centres<'de, D: Deserializer<'de>>(de: D) -> Result<Vec3, D::Error> {

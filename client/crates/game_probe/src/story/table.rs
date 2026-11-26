@@ -9,7 +9,7 @@ use beryl_protocol::card_records::{CardEntry, CardFace, CardImages, CardRecords}
 use beryl_protocol::ipc::{CARD_RECORDS, FixtureMessage};
 #[cfg(feature = "stories")]
 use beryl_protocol::protocol::{
-    CardType, Facing, ObjectId, PlayerState, RowName, StackItem, Status,
+    CardType, Facing, ObjectId, PlayerState, RowName, SharedPiles, StackItem, Status,
 };
 use beryl_protocol::protocol::{PowerToughness, Side, ZoneName};
 #[cfg(feature = "stories")]
@@ -45,6 +45,7 @@ impl TableStory {
         let mut scripts = Vec::new();
         let mut neutral = false;
         let mut manual = false;
+        let mut shared = false;
         let mut actions = Vec::new();
         let mut battlefield_order = false;
         let mut lines = lines.iter();
@@ -76,6 +77,7 @@ impl TableStory {
                 "life" => read_life(&mut life, value).map_err(why)?,
                 "neutral" if value.is_empty() => neutral = true,
                 "manual" if value.is_empty() => manual = true,
+                "shared" if value.is_empty() => shared = true,
                 "action" if !value.is_empty() => actions.push(value.to_owned()),
                 "battlefield-order" if value.is_empty() => battlefield_order = true,
                 "handling" if handling.is_none() => {
@@ -108,6 +110,18 @@ impl TableStory {
 
         let mut start = builder.build();
         slots.apply(&mut start);
+        if shared {
+            let mut library = std::mem::take(&mut start.players.you.library);
+            library.extend(std::mem::take(&mut start.players.opponent.library));
+            let mut graveyard = std::mem::take(&mut start.players.you.graveyard);
+            graveyard.extend(std::mem::take(&mut start.players.opponent.graveyard));
+            for object in &mut start.objects {
+                if matches!(object.zone, ZoneName::Library | ZoneName::Graveyard) {
+                    object.zone_side = None;
+                }
+            }
+            start.shared = Some(SharedPiles { library, graveyard });
+        }
         stack.finish(&mut start)?;
         [start.players.you.life, start.players.opponent.life] = life;
         if manual {
@@ -409,8 +423,10 @@ impl Card {
         } else {
             (place, Side::You)
         };
-        let Some(Place::Card { zone, side, row }) = Place::from_label(place) else {
-            return Err(format!("{place:?} is not a card's zone"));
+        let (zone, side, row) = match Place::from_label(place) {
+            Some(Place::Card { zone, side, row }) => (zone, side, row),
+            Some(Place::SharedPile(zone)) => (zone, Side::You, None),
+            _ => return Err(format!("{place:?} is not a card's zone")),
         };
         if row.is_some() && zone != ZoneName::Battlefield {
             return Err("only a battlefield place takes a row".to_owned());

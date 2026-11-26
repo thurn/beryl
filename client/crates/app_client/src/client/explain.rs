@@ -273,7 +273,7 @@ fn table_place(
             zone,
             ZoneName::Library | ZoneName::Graveyard | ZoneName::Exile
         ) {
-            return placement.piles[PileShown::index(side, zone)].count;
+            return placement.piles[PileShown::index(Some(side), zone)].count;
         }
         placement
             .rests

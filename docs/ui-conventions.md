@@ -690,6 +690,14 @@ recordings do not show them.
   strip of each uncovered shows as many as fit, scrolls one group for each notch
   of the wheel or 48 points of a sideways drag, and shows the number of cards
   off each end, as "+12".
+- **Shared piles.** A shared-deck table draws one shared library, one shared
+  graveyard and one shared exile pile with the same card look, tilt and scale as
+  per-player piles, placed at new positions from each profile's `shared_piles`
+  data: on desktop, the library at the middle left and the graveyard and exile
+  at the middle right; on phone and wide-compact, the library at the left edge
+  and the graveyard at the right edge of the seam between the two players'
+  creature rows, with exile beneath the graveyard. The per-player pile places
+  stay empty.
 
 ## Verbs
 

@@ -17,11 +17,16 @@ pub struct ContainerInfo {
 /// Describes the resting groups and the prompt tray in the fitted layout.
 pub fn containers(layout: &Layout) -> impl Iterator<Item = ContainerInfo> + '_ {
     let groups = Group::ALL.into_iter().map(|group| {
-        let (zone, side, row, container, policy, file) = match group {
+        let (place, container, policy, file) = match group {
             Group::Pile { side, zone } => (
-                zone,
-                side,
-                None,
+                match side {
+                    Some(side) => Place::Card {
+                        zone,
+                        side,
+                        row: None,
+                    },
+                    None => Place::SharedPile(zone),
+                },
                 if layout.pile_visible(zone) {
                     "zone pile"
                 } else {
@@ -31,25 +36,31 @@ pub fn containers(layout: &Layout) -> impl Iterator<Item = ContainerInfo> + '_ {
                 "pile.rs",
             ),
             Group::Hand(side) => (
-                ZoneName::Hand,
-                side,
-                None,
+                Place::Card {
+                    zone: ZoneName::Hand,
+                    side,
+                    row: None,
+                },
                 "centred hand",
                 PolicyKind::Fan,
                 "hands.rs",
             ),
             Group::Row { side, row } => (
-                ZoneName::Battlefield,
-                side,
-                Some(row),
+                Place::Card {
+                    zone: ZoneName::Battlefield,
+                    side,
+                    row: Some(row),
+                },
                 "battlefield row",
                 PolicyKind::Row,
                 "rows.rs",
             ),
             Group::Stack => (
-                ZoneName::Stack,
-                Side::You,
-                None,
+                Place::Card {
+                    zone: ZoneName::Stack,
+                    side: Side::You,
+                    row: None,
+                },
                 if layout.centred_stack_line().is_some() {
                     "centred stack"
                 } else {
@@ -60,7 +71,7 @@ pub fn containers(layout: &Layout) -> impl Iterator<Item = ContainerInfo> + '_ {
             ),
         };
         ContainerInfo {
-            name: Place::Card { zone, side, row }.label(),
+            name: place.label(),
             container,
             policy: policy.word(),
             source: file,

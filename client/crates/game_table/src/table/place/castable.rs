@@ -14,14 +14,18 @@ pub fn in_hand_fan(object: &ObjectView) -> bool {
         && side_of(object) == Side::You
 }
 
-/// The cards of `side`'s graveyard, in the pile's order, split into those the pile shows and
-/// those the hand shows (`in_hand_fan`).
+/// The cards of `side`'s graveyard (or the shared graveyard when `side` is `None`), in the
+/// pile's order, split into those the pile shows and those the hand shows (`in_hand_fan`).
 pub(super) fn graveyard_pile<'a>(
     zones: &Zones<'a>,
-    side: Side,
+    side: Option<Side>,
 ) -> (Vec<&'a ObjectView>, Vec<&'a ObjectView>) {
+    let slots = match side {
+        Some(side) => zones.piles[side_index(side)][1],
+        None => zones.shared_piles[1],
+    };
     zones
-        .listed(zones.piles[side_index(side)][1])
+        .listed(slots)
         .into_iter()
         .partition(|object| !in_hand_fan(object))
 }

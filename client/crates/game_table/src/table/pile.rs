@@ -19,6 +19,9 @@
 //!   are as wide as the web's and lean back toward the camera until they are as tall. Otherwise
 //!   (the phone layout) the pile's bottom card stands on the point of the table under it.
 
+mod edges;
+use edges::edges;
+
 use beryl_protocol::protocol::{ObjectId, ObjectView, Side, ZoneName};
 use glam::{Affine3A, Mat3, Vec2, Vec3};
 
@@ -36,20 +39,18 @@ use kit_frame::frame::{
 use kit_space::arrange::Pile;
 
 /// The element id of the first pile, the viewer's library: past every card's, every ability's
-/// and every face's in the Revealed Cards pile. The six piles count up from it in the order of
-/// `PileShown::index`.
+/// and every face's in the Revealed Cards pile. The nine pile slots count up from it in the
+/// order of `PileShown::index` (six per-player piles, then the three shared piles).
 pub const PILE_IDS: u32 = REVEALED_FACE + (1 << 16);
+
+/// The total number of pile slots: six per-player piles plus three shared piles.
+pub const PILE_SLOTS: usize = 9;
 
 /// The zones a side has a pile for, in the order of their places in `Layout::piles`.
 const ZONES: [ZoneName; 3] = [ZoneName::Library, ZoneName::Graveyard, ZoneName::Exile];
 
-/// The colors of the edge of a card beneath a pile's top two, as the web interface's
-/// `.pile-card-rim` (`ui/src/screens/styles/card-layer.css`) paints it: a dark fill, and a light
-/// line of card stock on the side toward the table's middle.
+/// The dark fill color of a card beneath a pile's top two.
 const RIM_FILL: [u8; 4] = [0x21, 0x1b, 0x18, 255];
-const RIM_LINE: [u8; 4] = [0xa3, 0x97, 0x87, 255];
-/// The color of the opponent's rims' left edges, which face away from the light.
-const RIM_SHADE: [u8; 4] = [0x6b, 0x61, 0x55, 255];
 
 /// The deepest card beneath a pile's top card that the web interface draws.
 const DEEPEST: usize = 63;
@@ -73,14 +74,15 @@ pub struct PileShown {
 }
 
 impl PileShown {
-    /// The place of `side`'s pile of `zone` among the six: the viewer's library, graveyard and
-    /// exile, then the opponent's.
+    /// The place of `side`'s pile of `zone` among the nine slots: the viewer's library,
+    /// graveyard and exile, then the opponent's, then the three shared piles.
     #[must_use]
-    pub fn index(side: Side, zone: ZoneName) -> usize {
+    pub fn index(side: Option<Side>, zone: ZoneName) -> usize {
         let zone = ZONES.iter().position(|z| *z == zone).unwrap_or(2);
         match side {
-            Side::You => zone,
-            Side::Opponent => 3 + zone,
+            Some(Side::You) => zone,
+            Some(Side::Opponent) => 3 + zone,
+            None => 6 + zone,
         }
     }
 
@@ -104,23 +106,40 @@ impl PileShown {
 
     /// The side and zone of the pile at `index`, the inverse of `index`.
     #[must_use]
-    pub fn of_index(index: usize) -> (Side, ZoneName) {
-        let side = if index < 3 { Side::You } else { Side::Opponent };
+    pub fn of_index(index: usize) -> (Option<Side>, ZoneName) {
+        let side = match index / 3 {
+            0 => Some(Side::You),
+            1 => Some(Side::Opponent),
+            _ => None,
+        };
         (side, ZONES[index % 3])
     }
 }
 
-/// What a pile is called, as the web interface's `pileName` calls it: "Your library",
-/// "Opponent's graveyard".
+/// What a pile is called: "Your library", "Opponent's graveyard", or "Library" for a shared pile.
 #[must_use]
-pub fn pile_name(side: Side, zone: ZoneName) -> &'static str {
+pub fn pile_name(side: Option<Side>, zone: ZoneName) -> &'static str {
     match (side, zone) {
-        (Side::You, ZoneName::Library) => "Your library",
-        (Side::You, ZoneName::Graveyard) => "Your graveyard",
-        (Side::You, _) => "Your exile",
-        (Side::Opponent, ZoneName::Library) => "Opponent's library",
-        (Side::Opponent, ZoneName::Graveyard) => "Opponent's graveyard",
-        (Side::Opponent, _) => "Opponent's exile",
+        (Some(Side::You), ZoneName::Library) => "Your library",
+        (Some(Side::You), ZoneName::Graveyard) => "Your graveyard",
+        (Some(Side::You), _) => "Your exile",
+        (Some(Side::Opponent), ZoneName::Library) => "Opponent's library",
+        (Some(Side::Opponent), ZoneName::Graveyard) => "Opponent's graveyard",
+        (Some(Side::Opponent), _) => "Opponent's exile",
+        (None, ZoneName::Library) => "Library",
+        (None, ZoneName::Graveyard) => "Graveyard",
+        (None, _) => "Exile",
+    }
+}
+
+fn pile_place(side: Option<Side>, zone: ZoneName) -> Place {
+    match side {
+        Some(side) => Place::Card {
+            zone,
+            side,
+            row: None,
+        },
+        None => Place::SharedPile(zone),
     }
 }
 
@@ -130,11 +149,11 @@ pub fn pile_name(side: Side, zone: ZoneName) -> &'static str {
 fn fit(
     layout: &Layout,
     camera: &Camera,
-    (side, zone): (Side, ZoneName),
+    (side, zone): (Option<Side>, ZoneName),
     (count, top): (usize, Option<ObjectId>),
 ) -> PileShown {
     let index = PileShown::index(side, zone);
-    let (side_index, zone_index) = (index / 3, index % 3);
+    let zone_index = index % 3;
     let nominal = nominal_scale(layout, side);
     let mut pile = PileShown {
         count,
@@ -143,13 +162,24 @@ fn fit(
         ..PileShown::default()
     };
     let Some(fitted) = layout.fitted_piles else {
-        pile.base = camera.on_table(layout.piles[side_index][zone_index]);
+        let anchor = match side {
+            Some(_) => layout.piles[index / 3][zone_index],
+            None => layout.shared_piles[zone_index],
+        };
+        pile.base = camera.on_table(anchor);
         return pile;
     };
 
-    pile.tilt = fitted.tilt[side_index];
-    pile.skew = fitted.skew[side_index][zone_index];
-    let at = fitted.tops[side_index][zone_index];
+    let at = if side.is_some() {
+        let side_index = index / 3;
+        pile.tilt = fitted.tilt[side_index];
+        pile.skew = fitted.skew[side_index][zone_index];
+        fitted.tops[side_index][zone_index]
+    } else {
+        pile.tilt = fitted.shared_tilt;
+        pile.skew = fitted.shared_skew[zone_index];
+        fitted.shared_tops[zone_index]
+    };
     let bottom = Pile::vertical(camera.data.card).fit_top(camera, at, count, nominal, pile.tilt);
     pile.scale = bottom.scale;
     pile.base = bottom.position.truncate();
@@ -165,10 +195,11 @@ fn bottom_pose(card: Card, base: Vec2, scale: f32, tilt: f32, skew: f32) -> Pose
 }
 
 /// How large `side`'s pile cards are against a card's printed size.
-pub(super) fn nominal_scale(layout: &Layout, side: Side) -> f32 {
+pub(super) fn nominal_scale(layout: &Layout, side: Option<Side>) -> f32 {
     match side {
-        Side::You => layout.pile_scale[0],
-        Side::Opponent => layout.pile_scale[1],
+        Some(Side::You) => layout.pile_scale[0],
+        Some(Side::Opponent) => layout.pile_scale[1],
+        None => layout.shared_pile_scale,
     }
 }
 
@@ -182,7 +213,7 @@ pub(super) fn nominal_scale(layout: &Layout, side: Side) -> f32 {
 pub(super) fn lay_pile(
     placement: &mut Placement,
     objects: &[&ObjectView],
-    (side, zone): (Side, ZoneName),
+    (side, zone): (Option<Side>, ZoneName),
     (layout, camera): (&Layout, &Camera),
 ) {
     let count = objects.len();
@@ -196,6 +227,8 @@ pub(super) fn lay_pile(
     let layers = Pile::vertical(card);
     let bottom = bottom_pose(card, pile.base, pile.scale, pile.tilt, pile.skew);
     let rim_scale = layout.fitted_piles.map(|fit| fit.rim_scale);
+    let rim_side = side.unwrap_or(Side::You);
+    let place = pile_place(side, zone);
     for (height, object) in objects.iter().enumerate() {
         let mut pose = Pose {
             turn: turn(object),
@@ -205,15 +238,10 @@ pub(super) fn lay_pile(
             && height + 2 == count
         {
             let top = layers.pose(bottom, count - 1);
-            let offset = rim_offset(&layout.pile, side, 1.0) * rim_scale;
+            let offset = rim_offset(&layout.pile, rim_side, 1.0) * rim_scale;
             let point = camera.to_screen(top.position) + offset;
             pose.position = layer_centre(camera, top, point, card.layer);
         }
-        let place = Place::Card {
-            zone,
-            side,
-            row: None,
-        };
         placement.set(
             object.slot,
             Rest {
@@ -232,9 +260,9 @@ pub(super) fn lay_pile(
 #[derive(Clone, Copy, Debug, Default)]
 pub(super) struct PilesNow {
     /// How many of each pile's cards at rest, in `PileShown::index` order, are off it.
-    left: [usize; 6],
+    left: [usize; PILE_SLOTS],
     /// The slots of the top two cards still on each pile, top first, with their heights.
-    top: [[Option<(usize, f32)>; 2]; 6],
+    top: [[Option<(usize, f32)>; 2]; PILE_SLOTS],
     /// Whether `top` was worked out: at rest it is not, and every card is drawn as it rests.
     worked_out: bool,
 }
@@ -263,11 +291,12 @@ impl PilesNow {
 pub(super) fn uncovered(resting: SceneObject, last: Option<SceneObject>) -> bool {
     let in_pile = matches!(
         resting.place,
-        Place::Card {
-            zone: ZoneName::Library | ZoneName::Graveyard | ZoneName::Exile,
-            row: None,
-            ..
-        }
+        Place::SharedPile(_)
+            | Place::Card {
+                zone: ZoneName::Library | ZoneName::Graveyard | ZoneName::Exile,
+                row: None,
+                ..
+            }
     );
     in_pile
         && !resting.visible
@@ -284,12 +313,18 @@ pub(super) fn uncovered(resting: SceneObject, last: Option<SceneObject>) -> bool
 pub(super) fn lay_unseen_exile(
     placement: &mut Placement,
     objects: &[&ObjectView],
-    side: Side,
+    side: Option<Side>,
     (layout, camera): (&Layout, &Camera),
 ) {
     let scale = nominal_scale(layout, side);
-    let graveyard = PileShown::index(side, ZoneName::Graveyard);
-    let at = camera.on_table(layout.piles[graveyard / 3][graveyard % 3]);
+    let anchor = match side {
+        Some(_) => {
+            let graveyard = PileShown::index(side, ZoneName::Graveyard);
+            layout.piles[graveyard / 3][graveyard % 3]
+        }
+        None => layout.shared_piles[1],
+    };
+    let at = camera.on_table(anchor);
     let pile = Pile { step: Vec3::ZERO };
     let card = camera.data.card;
     let bottom = Pose {
@@ -297,15 +332,11 @@ pub(super) fn lay_unseen_exile(
         scale,
         ..Pose::default()
     };
+    let place = pile_place(side, ZoneName::Exile);
     for (layer, object) in objects.iter().enumerate() {
         let pose = Pose {
             turn: turn(object),
             ..pile.pose(bottom, layer)
-        };
-        let place = Place::Card {
-            zone: ZoneName::Exile,
-            side,
-            row: None,
         };
         placement.set(
             object.slot,
@@ -339,7 +370,7 @@ impl Table {
     /// `side`'s pile of `zone` as the table shows it at rest: how many cards it holds and its
     /// top card's corners on screen, in logical points. None for an empty pile.
     #[must_use]
-    pub fn pile(&self, side: Side, zone: ZoneName) -> Option<(usize, [Vec2; 4])> {
+    pub fn pile(&self, side: Option<Side>, zone: ZoneName) -> Option<(usize, [Vec2; 4])> {
         let pile = self.objects.piles[PileShown::index(side, zone)];
         let top = usize::from(pile.top?.0);
         // A prompt may hold the top card in a tray, or a step may already have moved it
@@ -364,14 +395,14 @@ impl Table {
         let low = corners.into_iter().reduce(Vec2::min)?;
         let high = corners.into_iter().reduce(Vec2::max)?;
         let (point, align, offset) = match side {
-            Side::You => (
+            Some(Side::You) | None => (
                 corners[0]
                     .midpoint(corners[2])
                     .midpoint(corners[1].midpoint(corners[3])),
                 Vec2::splat(0.5),
                 Vec2::ZERO,
             ),
-            Side::Opponent => {
+            Some(Side::Opponent) => {
                 corners.sort_unstable_by(|a, b| a.y.total_cmp(&b.y));
                 (
                     Vec2::new(f32::midpoint(corners[2].x, corners[3].x), corners[3].y),
@@ -423,13 +454,14 @@ impl Table {
             let Some(resting) = resting else {
                 continue;
             };
-            let Place::Card {
-                zone: zone @ (ZoneName::Library | ZoneName::Graveyard | ZoneName::Exile),
-                side,
-                row: None,
-            } = resting.place
-            else {
-                continue;
+            let (side, zone) = match resting.place {
+                Place::Card {
+                    zone: zone @ (ZoneName::Library | ZoneName::Graveyard | ZoneName::Exile),
+                    side,
+                    row: None,
+                } => (Some(side), zone),
+                Place::SharedPile(zone) => (None, zone),
+                _ => continue,
             };
             // The phone keeps exile under the graveyard, never drawn (`lay_unseen_exile`).
             if !self.layout().pile_visible(zone) {
@@ -498,7 +530,12 @@ impl Table {
                 continue;
             };
             if self.layout().style.show_pile_sides {
-                write_side(builder, (self.layout(), self.camera()), &present, side);
+                write_side(
+                    builder,
+                    (self.layout(), self.camera()),
+                    &present,
+                    side.unwrap_or(Side::You),
+                );
             }
             // A pile writes no element over its top card while a prompt holds that card up in
             // its tray, or once it has left the pile: a press, and the checks that ask what a
@@ -509,16 +546,11 @@ impl Table {
             let element = builder.resolved(
                 pile_name(side, zone),
                 Resolved {
-                    id: ElementId(PILE_IDS + u32::try_from(index).expect("six piles")),
+                    id: ElementId(PILE_IDS + u32::try_from(index).expect("nine pile slots")),
                     parent: u32::MAX,
                     role: Role::Pile,
                     name: NameRef::default(),
-                    place: Place::Card {
-                        zone,
-                        side,
-                        row: None,
-                    }
-                    .into(),
+                    place: pile_place(side, zone).into(),
                     pose: Some(top),
                     corners: self.camera().card_corners(top.transform()),
                     depth: self.camera().depth(top.position),
@@ -549,11 +581,9 @@ impl Table {
 
 impl Table {
     /// Whether the card in `slot` rests in `side`'s pile of `zone`.
-    fn lies_in(&self, slot: usize, side: Side, zone: ZoneName) -> bool {
+    fn lies_in(&self, slot: usize, side: Option<Side>, zone: ZoneName) -> bool {
         let object = self.objects.cards.get(slot).copied().flatten();
-        object.is_some_and(|object| {
-            matches!(object.place, Place::Card { zone: z, side: s, .. } if z == zone && s == side)
-        })
+        object.is_some_and(|object| object.place == pile_place(side, zone))
     }
 }
 
@@ -578,26 +608,6 @@ fn layer_centre(camera: &Camera, top: Pose, point: Vec2, below: f32) -> Vec3 {
     let ray = camera.on_plane(point, top.position.z) - camera.eye;
     let distance = (top.position - camera.eye).dot(normal) - below;
     camera.eye + ray * (distance / ray.dot(normal))
-}
-
-/// One side of a pile's cards whose edges show beneath its top card, in the table's space.
-struct Edge {
-    /// The way out of the card across the edge.
-    normal: Vec3,
-    /// The way along the edge.
-    along: Vec3,
-    /// Half the card's size across the edge and along it.
-    half_across: f32,
-    half_along: f32,
-    /// How wide the web's line along the edge is.
-    line: f32,
-    tint: [u8; 4],
-    /// Whether the spread lines are drawn individually. The opponent's left
-    /// edges step less than their line is wide, so they draw one band.
-    stripes: bool,
-    /// How far behind its card the edge is drawn, so that where two edges of one card
-    /// meet at a corner, the light line covers the shaded one.
-    below: f32,
 }
 
 /// Writes the side of `pile` beneath its top two cards as the web interface draws it: the edge
@@ -733,47 +743,4 @@ fn write_side(
             );
         }
     }
-}
-
-/// The sides of `side`'s pile cards, `scale` times their printed size, whose edges show
-/// beneath the top card. The web's lines are 2 pixels wide for the light one and 1 for the
-/// shaded one, at the reference card width.
-fn edges(
-    card: Card,
-    geometry: &PileGeometry,
-    side: Side,
-    scale: f32,
-) -> impl Iterator<Item = Edge> {
-    let (width, height) = (card.width * scale, card.height * scale);
-    let pixel = width / geometry.rim_card_width;
-    let right = Edge {
-        normal: Vec3::X,
-        along: Vec3::Y,
-        half_across: width / 2.0,
-        half_along: height / 2.0,
-        line: 2.0 * pixel,
-        tint: RIM_LINE,
-        stripes: true,
-        below: 0.0,
-    };
-    let near = Edge {
-        normal: Vec3::NEG_Y,
-        along: Vec3::X,
-        half_across: height / 2.0,
-        half_along: width / 2.0,
-        ..right
-    };
-    let left = Edge {
-        normal: Vec3::NEG_X,
-        line: pixel,
-        tint: RIM_SHADE,
-        stripes: false,
-        below: card.layer * geometry.rim_shade_layer,
-        ..right
-    };
-    let edges = match side {
-        Side::You => [Some(right), None],
-        Side::Opponent => [Some(near), Some(left)],
-    };
-    edges.into_iter().flatten()
 }

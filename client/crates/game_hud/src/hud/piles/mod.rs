@@ -201,6 +201,9 @@ fn count_of(key: u64) -> usize {
 /// How many cards `view` has in the pile at `index`.
 fn count_in(view: &PlayerView, index: usize) -> usize {
     let (side, zone) = PileShown::of_index(index);
+    let Some(side) = side else {
+        return 0;
+    };
     let player = player(view, side);
     match zone {
         ZoneName::Library => player.library.len(),

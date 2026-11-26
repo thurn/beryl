@@ -36,6 +36,7 @@ impl RegionFit {
             layout.row_zoom = Some(fit.zoom);
             layout.fitted_piles = Some(fit.piles);
             layout.pile_scale = fit.piles.scale;
+            layout.shared_pile_scale = fit.piles.shared_scale;
             layout.tabletop_shade = fit.tabletop_shade;
         }
     }
@@ -192,6 +193,11 @@ pub struct FittedPiles {
     pub tilt: [f32; 2],
     /// The skew of each pile's cards, ordered as `tops`.
     pub skew: [[f32; 3]; 2],
+    /// The shared piles' top centres in logical points, ordered library, graveyard and exile.
+    pub shared_tops: [Vec2; 3],
+    pub shared_scale: f32,
+    pub shared_tilt: f32,
+    pub shared_skew: [f32; 3],
     /// Scales the offsets of exposed card edges into the current window.
     pub rim_scale: Vec2,
 }

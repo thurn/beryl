@@ -74,7 +74,7 @@ impl<'a> Zones<'a> {
     /// The group `object` belongs in: `Group::of`, or for a card that lies under a permanent
     /// (`host`), that permanent's row.
     pub fn group_of(&self, object: &ObjectView) -> Option<Group> {
-        Group::of(self.host(object).unwrap_or(object))
+        Group::of_in(self.host(object).unwrap_or(object), self.shared)
     }
 
     /// The permanent `object` lies under, if it lies under one (`host_slot`).

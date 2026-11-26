@@ -232,6 +232,9 @@
       "do": [
         "wheel card \"Stress 045\" 0,-16"
       ]
+    },
+    "Shared piles": {
+      "open": "Covered by the standalone stories `story/game_table/shared-piles`, `shared-piles-opponent`, `shared-piles-phone`, `shared-piles-phone-opponent`, `shared-piles-wide-compact` and `shared-piles-wide-compact-opponent`; no engine recording of a shared-deck game exists yet."
     }
   }
 }

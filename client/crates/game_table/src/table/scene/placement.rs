@@ -26,14 +26,37 @@ impl Table {
     /// bottom first, for this window.
     #[must_use]
     pub fn placement(&self, view: &PlayerView, abilities: &[u32]) -> Placement {
-        self.placement_of(&Zones::of_view(view, abilities))
+        let mut layout = self.layout;
+        layout.shape = crate::table::TableShape::of_view(view);
+        let placement = place_zones(
+            &Zones::of_view(view, abilities),
+            (
+                &layout,
+                &self.camera,
+                &self.scroll,
+                &self.row_fits,
+                None,
+                &self.data.verbs.lift,
+            ),
+        );
+        self.placed.add(placement.count());
+        placement
     }
 
     /// Runs the placement solver with its optional decision side table enabled.
     pub fn placement_for_probe(&self, view: &PlayerView, abilities: &[u32]) -> Placement {
+        let mut layout = self.layout;
+        layout.shape = crate::table::TableShape::of_view(view);
         solve_zones(
             &Zones::of_view(view, abilities),
-            self.placement_rules(None),
+            (
+                &layout,
+                &self.camera,
+                &self.scroll,
+                &self.row_fits,
+                None,
+                &self.data.verbs.lift,
+            ),
             Some(Box::default()),
         )
     }

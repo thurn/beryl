@@ -370,7 +370,7 @@ fn place_in_row(
 fn row_in(frame: &Frame, slot: ObjectId) -> Option<RowName> {
     match Place::in_frame(card_element(frame, slot)?.place)? {
         Place::Card { row, .. } => row,
-        Place::Layer | Place::Revealed => None,
+        Place::Layer | Place::Revealed | Place::SharedPile(_) => None,
     }
 }
 

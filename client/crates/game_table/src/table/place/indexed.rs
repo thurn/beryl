@@ -38,6 +38,18 @@ impl<'a> Zones<'a> {
         (groups, tucked, object_order): ReplayGroups<'a>,
     ) -> Self {
         let piles = |piles: &'a Piles| [&piles.library[..], &piles.graveyard[..]];
+        let (shared, piles, shared_piles) = match &table.shared {
+            Some(shared) => (
+                true,
+                [[&[][..], &[][..]], [&[][..], &[][..]]],
+                piles(shared),
+            ),
+            None => (
+                false,
+                [piles(&table.you), piles(&table.opponent)],
+                [&[][..], &[][..]],
+            ),
+        };
         Self {
             in_view_order: None,
             slots: Cow::Borrowed(slots),
@@ -47,7 +59,9 @@ impl<'a> Zones<'a> {
             battlefield: &table.battlefield,
             stack: Cow::Borrowed(stack),
             stack_items: super::policy::StackItems::Played(&table.stack),
-            piles: [piles(&table.you), piles(&table.opponent)],
+            shared,
+            piles,
+            shared_piles,
             handling: None,
             arrival: None,
         }

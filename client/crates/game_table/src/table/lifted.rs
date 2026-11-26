@@ -31,7 +31,7 @@ pub(crate) fn group_of(handling: CardHandling) -> Option<Group> {
             pile: ZoneName::Library,
             ..
         } => Some(Group::Pile {
-            side,
+            side: Some(side),
             zone: ZoneName::Library,
         }),
         CardHandling::Hand { side: Side::You } => Some(Group::Hand(Side::You)),
@@ -161,8 +161,8 @@ pub(crate) fn lay(
             let library = lift.pile;
             let scale = super::pile::nominal_scale(layout, side);
             let (direction, band) = match side {
-                Side::You => (1.0, -1.0..0.0),
-                Side::Opponent => (-1.0, 0.0..1.0),
+                Some(Side::You) | None => (1.0, -1.0..0.0),
+                Some(Side::Opponent) => (-1.0, 0.0..1.0),
             };
             // A short look follows Arena: cards lie at library size beside the pile,
             // toward the middle of the table (UI Conventions, "Cards the opponent looks at").

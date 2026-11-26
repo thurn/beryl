@@ -87,6 +87,11 @@
           "below_safe": 23
         }
       },
+      "shared_piles": {
+        "width": 44,
+        "left": 27,
+        "right": 27
+      },
       "stack": {
         "width": 68,
         "step": 52,

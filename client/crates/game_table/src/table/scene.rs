@@ -14,13 +14,13 @@ use super::badges;
 use super::hands::hand_top;
 use super::look::{Dress, Look};
 use super::own::{self, Fights};
-use super::pile::{PileShown, PilesNow, uncovered};
+use super::pile::{PILE_SLOTS, PileShown, PilesNow, uncovered};
 use super::place::{Placement, Rest, RowFits, Rows, Scroll, Zooms};
 use super::shadows::Floors;
 use super::shown::Shown;
 use super::tray::TrayMotion;
 use super::tray_layout::Held;
-use super::{Camera, Layout, Place, PlayerAnchor, ScreenProjection, takes_pointer};
+use super::{Camera, Layout, Place, PlayerAnchor, ScreenProjection, TableShape, takes_pointer};
 use crate::faces::{CARD_BACK, Faces};
 use crate::table::labels::{COPY_NOTE, FACE_NOTE, OVERLAPPED, PHASED_OUT, PICKED, TAPPED};
 use kit_base::data::Data;
@@ -66,7 +66,7 @@ pub struct Objects {
     /// The numbers assigned to the stack's abilities, bottom first.
     pub(crate) numbers: Vec<u32>,
     /// Each library, graveyard and exile pile, by `PileShown::index`.
-    pub(crate) piles: [PileShown; 6],
+    pub(crate) piles: [PileShown; PILE_SLOTS],
     rows: Rows,
     /// The cards among `cards` that lie on the table, for contact shadows.
     pub(crate) floors: Floors,
@@ -303,6 +303,7 @@ impl Table {
     /// Puts every object of `view` at its resting place, and forgets the objects it no longer
     /// holds, as an update with a reset script must. Cards a prompt holds up rest in its tray.
     pub fn apply(&mut self, view: &PlayerView) {
+        self.layout.shape = TableShape::of_view(view);
         let numbers = std::mem::take(&mut self.objects.numbers);
         let placement = self.placement(view, &numbers);
         if let Some(dock) = self.layout.life_dock {

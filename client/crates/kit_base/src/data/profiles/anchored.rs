@@ -9,6 +9,7 @@ use super::super::tuning::{finite, nonnegative, positive, positive_fraction, vec
 #[serde(deny_unknown_fields)]
 pub struct Anchored {
     pub piles: Piles,
+    pub shared_piles: SharedPiles,
     pub tray: Tray,
     pub hand: Hand,
     pub opponent_hand: Hand,
@@ -41,6 +42,19 @@ pub struct Pile {
     pub middle: Vec2,
     #[serde(deserialize_with = "vector")]
     pub inner: Vec2,
+    #[serde(deserialize_with = "positive")]
+    pub scale: f32,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct SharedPiles {
+    #[serde(deserialize_with = "vector")]
+    pub left: Vec2,
+    #[serde(deserialize_with = "vector")]
+    pub middle: Vec2,
+    #[serde(deserialize_with = "vector")]
+    pub right: Vec2,
     #[serde(deserialize_with = "positive")]
     pub scale: f32,
 }

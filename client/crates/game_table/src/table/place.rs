@@ -9,9 +9,11 @@ use beryl_protocol::protocol::{
 };
 use beryl_protocol::script::{Piles, Table as Played};
 
+mod group;
 mod indexed;
 mod policy;
 mod probe;
+pub use group::{Group, NO_GROUP};
 pub use indexed::arrival;
 pub use policy::PileRules;
 pub use probe::ContainerDecision;
@@ -29,10 +31,10 @@ pub use under::{host_slot, names_host};
 
 use super::RowWindow;
 use super::hands::{HandFits, hand};
-use super::pile::{PileShown, lay_pile, lay_unseen_exile};
+use super::pile::{PILE_SLOTS, PileShown, lay_pile, lay_unseen_exile};
 use super::rows::{NameIds, face_up};
 use super::stack::{OnStack, on_stack, place_stack, spells};
-use super::{Camera, Layout, Place, lifted};
+use super::{Camera, Layout, Place, TableShape, lifted};
 use kit_base::data::verbs::Lift;
 use kit_base::pose::Pose;
 
@@ -64,7 +66,7 @@ pub struct Placement {
     /// The abilities on the stack, sorted by number.
     pub abilities: Vec<(u32, Rest)>,
     /// Each library, graveyard and exile pile, by `PileShown::index`.
-    pub piles: [PileShown; 6],
+    pub piles: [PileShown; PILE_SLOTS],
     /// Which groups of each battlefield row, and which cards of the viewer's hand and the
     /// stack, are in view.
     pub rows: Rows,
@@ -165,10 +167,12 @@ pub fn place(
     scroll: &Scroll,
     lift: &Lift,
 ) -> Placement {
-    let fits = RowFits::new(layout, camera);
+    let mut layout = *layout;
+    layout.shape = TableShape::of_view(view);
+    let fits = RowFits::new(&layout, camera);
     place_zones(
         &Zones::of_view(view, abilities),
-        (layout, camera, scroll, &fits, None, lift),
+        (&layout, camera, scroll, &fits, None, lift),
     )
 }
 
@@ -290,159 +294,6 @@ pub(crate) type Rules<'r> = (
     &'r Lift,
 );
 
-/// What `Zones::of_table_grouped` holds for a slot with no object, or one the table does not
-/// show: no `Group::number`.
-pub const NO_GROUP: u8 = u8::MAX;
-
-/// A part of the table whose objects are placed together and apart from every other part: a
-/// pile, a hand, a battlefield row or the stack. Rows also read the pile rules, since the
-/// stack names some permanents and lands in other rows count toward the land threshold.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Group {
-    /// A library, graveyard or exile pile.
-    Pile {
-        side: Side,
-        zone: ZoneName,
-    },
-    Hand(Side),
-    Row {
-        side: Side,
-        row: RowName,
-    },
-    Stack,
-}
-
-/// The groups of one side, in the order `place` lays them out.
-const fn side_groups(side: Side) -> [Group; 7] {
-    [
-        Group::Pile {
-            side,
-            zone: ZoneName::Library,
-        },
-        Group::Pile {
-            side,
-            zone: ZoneName::Graveyard,
-        },
-        Group::Pile {
-            side,
-            zone: ZoneName::Exile,
-        },
-        Group::Hand(side),
-        Group::Row { side, row: ROWS[0] },
-        Group::Row { side, row: ROWS[1] },
-        Group::Row { side, row: ROWS[2] },
-    ]
-}
-
-impl Group {
-    /// Every group, in the order `place` lays them out: the viewer's, the opponent's and then
-    /// the stack.
-    pub const ALL: [Group; 15] = {
-        let [a0, a1, a2, a3, a4, a5, a6] = side_groups(Side::You);
-        let [b0, b1, b2, b3, b4, b5, b6] = side_groups(Side::Opponent);
-        [
-            a0,
-            a1,
-            a2,
-            a3,
-            a4,
-            a5,
-            a6,
-            b0,
-            b1,
-            b2,
-            b3,
-            b4,
-            b5,
-            b6,
-            Group::Stack,
-        ]
-    };
-
-    /// `index`, as one byte.
-    pub fn number(self) -> u8 {
-        u8::try_from(self.index()).expect("fewer than 256 groups")
-    }
-
-    /// Its place in `ALL`.
-    pub fn index(self) -> usize {
-        let first = |side| match side {
-            Side::You => 0,
-            Side::Opponent => 7,
-        };
-        match self {
-            Group::Pile { side, zone } => {
-                first(side)
-                    + match zone {
-                        ZoneName::Library => 0,
-                        ZoneName::Graveyard => 1,
-                        _ => 2,
-                    }
-            }
-            Group::Hand(side) => first(side) + 3,
-            Group::Row { side, row } => first(side) + 4 + row_index(row),
-            Group::Stack => 14,
-        }
-    }
-
-    /// Whether it lays its objects out in the order the table lists every object, which a view
-    /// and the table a script plays over list differently: by the view's order, and by slot.
-    /// The other groups follow lists the two keep alike (the battlefield's, a library's or
-    /// graveyard's) or, the stack, are placed again after every step.
-    pub fn in_object_order(self) -> bool {
-        matches!(
-            self,
-            Group::Hand(_)
-                | Group::Pile {
-                    zone: ZoneName::Exile,
-                    ..
-                }
-        )
-    }
-
-    /// The group of an object resting at `place`, which only that group's placement gives.
-    pub fn at(place: Place) -> Option<Group> {
-        let Place::Card { zone, side, row } = place else {
-            return None;
-        };
-        Some(match (zone, row) {
-            // A card in exile that lies under a permanent rests in that permanent's row.
-            (ZoneName::Battlefield | ZoneName::Merged | ZoneName::Exile, Some(row)) => {
-                Group::Row { side, row }
-            }
-            (ZoneName::Library | ZoneName::Graveyard | ZoneName::Exile, _) => {
-                Group::Pile { side, zone }
-            }
-            (ZoneName::Hand, _) => Group::Hand(side),
-            (ZoneName::Stack, _) => Group::Stack,
-            _ => return None,
-        })
-    }
-
-    /// The group `object` belongs in, by its zone, if the table shows it. A card that lies under
-    /// a permanent (a merged permanent's, or one it holds in exile) belongs in that permanent's
-    /// row, which only `Zones::group_of` can find.
-    pub fn of(object: &ObjectView) -> Option<Group> {
-        let side = side_of(object);
-        if in_hand_fan(object) {
-            return Some(Group::Hand(side));
-        }
-        Some(match object.zone {
-            ZoneName::Library | ZoneName::Graveyard | ZoneName::Exile => Group::Pile {
-                side,
-                zone: object.zone,
-            },
-            ZoneName::Hand => Group::Hand(side),
-            ZoneName::Battlefield => Group::Row {
-                side,
-                row: row_of(object),
-            },
-            ZoneName::Stack => Group::Stack,
-            _ => return None,
-        })
-    }
-}
-
 /// `row`'s place in `ROWS`.
 pub(super) fn row_index(row: RowName) -> usize {
     ROWS.iter()
@@ -479,8 +330,12 @@ pub struct Zones<'a> {
     stack: Cow<'a, [OnStack]>,
     /// The stack items that may name a battlefield permanent.
     stack_items: policy::StackItems<'a>,
+    /// Whether this view or played table uses the shared library, graveyard and exile piles.
+    pub(super) shared: bool,
     /// Each side's library and graveyard, bottom first: the viewer's and then the opponent's.
     piles: [[&'a [ObjectId]; 2]; 2],
+    /// The shared library and graveyard, bottom first, when `shared` is true.
+    shared_piles: [&'a [ObjectId]; 2],
     /// The cards the opponent is handling, which rest lifted off their pile (`lifted`).
     pub(crate) handling: Option<lifted::Handled>,
     /// For the table a script plays over, the order in which its hands and exile piles list
@@ -518,6 +373,18 @@ impl<'a> Zones<'a> {
             abilities,
             stack_slots(view.objects.iter()),
         );
+        let (shared, piles, shared_piles) = match &view.shared {
+            Some(shared) => (
+                true,
+                [[&[][..], &[][..]], [&[][..], &[][..]]],
+                [&shared.library[..], &shared.graveyard[..]],
+            ),
+            None => (
+                false,
+                [player(&view.players.you), player(&view.players.opponent)],
+                [&[][..], &[][..]],
+            ),
+        };
         let zones = Self {
             in_view_order: Some(&view.objects),
             slots: Cow::Owned(slots),
@@ -527,7 +394,9 @@ impl<'a> Zones<'a> {
             battlefield: &view.battlefield,
             stack: Cow::Owned(stack),
             stack_items: policy::StackItems::View(view),
-            piles: [player(&view.players.you), player(&view.players.opponent)],
+            shared,
+            piles,
+            shared_piles,
             handling: None,
             arrival: None,
         };
@@ -543,6 +412,18 @@ impl<'a> Zones<'a> {
             .objects
             .last_key_value()
             .map_or(0, |(slot, _)| usize::from(slot.0) + 1);
+        let (shared, piles, shared_piles) = match &table.shared {
+            Some(shared) => (
+                true,
+                [[&[][..], &[][..]], [&[][..], &[][..]]],
+                piles(shared),
+            ),
+            None => (
+                false,
+                [piles(&table.you), piles(&table.opponent)],
+                [&[][..], &[][..]],
+            ),
+        };
         Self {
             in_view_order: None,
             slots: Cow::Owned(by_slot(end, table.objects.values())),
@@ -556,7 +437,9 @@ impl<'a> Zones<'a> {
                 stack_slots(table.objects.values()),
             )),
             stack_items: policy::StackItems::Played(&table.stack),
-            piles: [piles(&table.you), piles(&table.opponent)],
+            shared,
+            piles,
+            shared_piles,
             handling: None,
             arrival: None,
         }
@@ -590,14 +473,14 @@ impl<'a> Zones<'a> {
         self.slots.get(usize::from(slot.0)).copied().flatten()
     }
 
-    /// The objects in one side's `zone`, in the order the table lists them, but for the cards
-    /// in exile that lie under a permanent, in its row (`host`).
-    fn in_zone(&self, side: Side, zone: ZoneName) -> Vec<&'a ObjectView> {
+    /// The objects in one side's `zone` (or the shared exile pile when `side` is `None`), in
+    /// the order the table lists them, but for the cards in exile that lie under a permanent,
+    /// in its row (`host`).
+    fn in_zone(&self, side: Option<Side>, zone: ZoneName) -> Vec<&'a ObjectView> {
         let mut found: Vec<&'a ObjectView> = if let Some(order) = self.object_order {
-            let group = if zone == ZoneName::Hand {
-                Group::Hand(side)
-            } else {
-                Group::Pile { side, zone }
+            let group = match (zone, side) {
+                (ZoneName::Hand, Some(side)) => Group::Hand(side),
+                _ => Group::Pile { side, zone },
             };
             // The hand's group also orders the viewer's graveyard cards it shows (`in_hand_fan`),
             // which `members` adds from the graveyard itself, so only the zone's own are kept.
@@ -609,7 +492,9 @@ impl<'a> Zones<'a> {
                 .collect()
         } else {
             self.objects()
-                .filter(|object| object.zone == zone && side_of(object) == side)
+                .filter(|object| {
+                    object.zone == zone && side.is_none_or(|side| side_of(object) == side)
+                })
                 .filter(|object| zone != ZoneName::Exile || self.host(object).is_none())
                 .collect()
         };
@@ -647,18 +532,29 @@ fn by_slot<'a>(
 /// The objects of `group`, in the order it lays them out from.
 pub(crate) fn members<'a>(zones: &Zones<'a>, group: Group) -> Vec<&'a ObjectView> {
     match group {
+        Group::Pile { side, .. } if side.is_none() != zones.shared => Vec::new(),
         Group::Pile {
-            side,
+            side: Some(side),
             zone: ZoneName::Library,
         } => zones.listed(zones.piles[side_index(side)][0]),
+        Group::Pile {
+            side: None,
+            zone: ZoneName::Library,
+        } => zones.listed(zones.shared_piles[0]),
         Group::Pile {
             side,
             zone: ZoneName::Graveyard,
         } => graveyard_pile(zones, side).0,
         Group::Pile { side, zone } => zones.in_zone(side, zone),
         Group::Hand(side) => {
-            let mut hand = zones.in_zone(side, ZoneName::Hand);
-            hand.extend(graveyard_pile(zones, side).1);
+            let mut hand = zones.in_zone(Some(side), ZoneName::Hand);
+            if zones.shared {
+                if side == Side::You {
+                    hand.extend(graveyard_pile(zones, None).1);
+                }
+            } else {
+                hand.extend(graveyard_pile(zones, Some(side)).1);
+            }
             hand
         }
         Group::Row { side, row } => {
@@ -678,13 +574,27 @@ pub fn zone_members<'a>(zones: &Zones<'a>) -> Vec<Vec<&'a ObjectView>> {
     // The viewer's graveyard cards they may cast from there, which the hand lists after its
     // own cards once those are in order.
     let mut castable = Vec::new();
-    for side in [Side::You, Side::Opponent] {
-        let [library, graveyard] =
-            [ZoneName::Library, ZoneName::Graveyard].map(|zone| Group::Pile { side, zone }.index());
-        all[library] = zones.listed(zones.piles[side_index(side)][0]);
+    if zones.shared {
+        let [library, graveyard] = [ZoneName::Library, ZoneName::Graveyard]
+            .map(|zone| Group::Pile { side: None, zone }.index());
+        all[library] = zones.listed(zones.shared_piles[0]);
         let fan;
-        (all[graveyard], fan) = graveyard_pile(zones, side);
+        (all[graveyard], fan) = graveyard_pile(zones, None);
         castable.extend(fan);
+    } else {
+        for side in [Side::You, Side::Opponent] {
+            let [library, graveyard] = [ZoneName::Library, ZoneName::Graveyard].map(|zone| {
+                Group::Pile {
+                    side: Some(side),
+                    zone,
+                }
+                .index()
+            });
+            all[library] = zones.listed(zones.piles[side_index(side)][0]);
+            let fan;
+            (all[graveyard], fan) = graveyard_pile(zones, Some(side));
+            castable.extend(fan);
+        }
     }
     // The cards that lie under permanents, each put after the permanents of its row.
     let mut under = Vec::new();
@@ -694,7 +604,7 @@ pub fn zone_members<'a>(zones: &Zones<'a>) -> Vec<Vec<&'a ObjectView>> {
         if held {
             under.push(object);
         } else if matches!(object.zone, ZoneName::Hand | ZoneName::Exile)
-            && let Some(group) = Group::of(object)
+            && let Some(group) = Group::of_in(object, zones.shared)
         {
             all[group.index()].push(object);
         }
@@ -743,6 +653,9 @@ fn lay(
     let (layout, camera, scroll, fits, ids, lift) = rules;
     match group {
         Group::Pile { side, zone } => {
+            if side.is_none() != layout.shape.is_shared() {
+                return;
+            }
             if layout.pile_visible(zone) {
                 lay_pile(placement, objects, (side, zone), (layout, camera));
             } else {

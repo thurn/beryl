@@ -15,6 +15,8 @@ pub enum Place {
         side: Side,
         row: Option<RowName>,
     },
+    /// A card in the shared library, graveyard or exile pile of a shared-deck table.
+    SharedPile(ZoneName),
     Revealed,
 }
 
@@ -53,6 +55,12 @@ macro_rules! zone_labels {
                 _ => None,
             }
         }
+
+        const fn shared_label(zone: ZoneName) -> &'static str {
+            match zone {
+                $(ZoneName::$zone => $word,)*
+            }
+        }
     };
 }
 
@@ -75,6 +83,7 @@ impl Place {
         match self {
             Self::Layer => "",
             Self::Revealed => REVEALED,
+            Self::SharedPile(zone) => shared_label(zone),
             Self::Card { zone, side, row } => {
                 let row = match row {
                     None => 0,
@@ -98,9 +107,16 @@ impl Place {
         let side = if zone == ZoneName::Stack {
             Side::You
         } else {
-            match parts.next()? {
-                "yours" => Side::You,
-                "theirs" => Side::Opponent,
+            match parts.next() {
+                None if matches!(
+                    zone,
+                    ZoneName::Library | ZoneName::Graveyard | ZoneName::Exile
+                ) =>
+                {
+                    return Some(Self::SharedPile(zone));
+                }
+                Some("yours") => Side::You,
+                Some("theirs") => Side::Opponent,
                 _ => return None,
             }
         };

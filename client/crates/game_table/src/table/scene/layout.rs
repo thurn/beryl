@@ -57,8 +57,10 @@ impl Table {
         let window = self.data.profiles.resolve_window(window);
         let profile = Profile::for_window(&self.data.profiles, window)
             .with_region_fit(self.layout.region_fit);
+        let shape = self.layout.shape;
         self.screen_projection = profile.screen_projection();
         self.layout = profile.layout();
+        self.layout.shape = shape;
         if self.hand_away {
             // The stage fills the height of the window, so two normalized device units span
             // its full height in stage points.

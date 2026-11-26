@@ -32,7 +32,7 @@ mod stack;
 mod tray;
 mod tray_layout;
 
-use beryl_protocol::protocol::{Side, ZoneName};
+use beryl_protocol::protocol::{PlayerView, Side, ZoneName};
 use glam::Vec2;
 
 use crate::profiles::TableBands;
@@ -42,7 +42,7 @@ pub use kit_base::data::profiles::TableStyle;
 use kit_base::geometry::Rect;
 pub use kit_space::camera::{Camera, CameraData};
 pub use look::{Dress, Look};
-pub use pile::{PILE_IDS, PileShown, pile_name};
+pub use pile::{PILE_IDS, PILE_SLOTS, PileShown, pile_name};
 pub use place::{
     ContainerDecision, Placement, ROWS, Rest, RowDecision, Rows, Scroll, Scroller, place,
 };
@@ -184,10 +184,36 @@ pub struct PlayerAnchor {
     pub pool: Vec2,
 }
 
+/// Whether the table lays out per-player piles (six) or one shared set of piles (three).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum TableShape {
+    #[default]
+    PerPlayerPiles,
+    SharedPiles,
+}
+
+impl TableShape {
+    /// Chooses the table shape from whether `view` carries a shared library and graveyard.
+    #[must_use]
+    pub const fn of_view(view: &PlayerView) -> Self {
+        if view.shared.is_some() {
+            Self::SharedPiles
+        } else {
+            Self::PerPlayerPiles
+        }
+    }
+
+    #[must_use]
+    pub const fn is_shared(self) -> bool {
+        matches!(self, Self::SharedPiles)
+    }
+}
+
 /// Everything placement needs to know about a layout. Positions are for the viewer's side;
 /// the opponent's are the same turned half a turn about the table's centre.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Layout {
+    pub shape: TableShape,
     pub camera: CameraData,
     /// The least strip of an overlapped card left uncovered, in logical points, both across and
     /// along it.
@@ -218,6 +244,10 @@ pub struct Layout {
     /// How large a pile's cards are against a card's printed size, the viewer's then the
     /// opponent's.
     pub pile_scale: [f32; 2],
+    /// Where each shared pile lies in normalized device coordinates: library, graveyard and exile.
+    pub shared_piles: [Vec2; 3],
+    /// How large a shared pile's cards are against a card's printed size.
+    pub shared_pile_scale: f32,
     /// The space the cards a prompt holds up are laid out in.
     pub tray: TraySpace,
     pub(crate) stack: StackPlacement,

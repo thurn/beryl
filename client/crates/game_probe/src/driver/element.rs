@@ -25,7 +25,7 @@ impl Element {
     #[must_use]
     pub fn zone(&self) -> Option<ZoneName> {
         match GamePlace::in_frame(self.place)? {
-            GamePlace::Card { zone, .. } => Some(zone),
+            GamePlace::Card { zone, .. } | GamePlace::SharedPile(zone) => Some(zone),
             GamePlace::Layer | GamePlace::Revealed => None,
         }
     }

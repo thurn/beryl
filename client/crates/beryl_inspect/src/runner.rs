@@ -139,10 +139,16 @@ pub fn tests(filter: &str, windows: Windows) -> Result<Vec<Test>, String> {
             continue;
         }
         let story_windows = recording.starts_with(crate::stories::PREFIX).then(|| {
-            let class = crate::stories::open(&recording)
+            let story = crate::stories::open(&recording).ok();
+            let class = story
+                .as_ref()
                 .map_or(SizeClass::Regular, |story| story.header().size_class);
             if class == SizeClass::Regular && windows == Windows::Class(SizeClass::Compact) {
                 Vec::new()
+            } else if let Some(name) = story.as_ref().and_then(|story| story.profile())
+                && let Ok(profile) = crate::pages::inspection_profile(name)
+            {
+                Windows::Profile(profile).windows()
             } else {
                 Windows::Class(class).windows()
             }

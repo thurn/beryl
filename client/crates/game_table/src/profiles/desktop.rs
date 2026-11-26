@@ -3,7 +3,7 @@
 use super::row;
 use crate::table::{
     Across, HandData, Layout, PlayerAnchor, RegionFit, RowZoom, StackData, StackPlacement,
-    TraySpace,
+    TableShape, TraySpace,
 };
 use kit_base::data::Card;
 use kit_base::data::profiles::{Anchored, ProfileData, TrayTuning, anchored};
@@ -13,6 +13,7 @@ pub(super) fn reference(profile: &ProfileData, data: &Anchored) -> Layout {
     let table = &profile.table;
     let piles = [data.piles.you, data.piles.opponent];
     Layout {
+        shape: TableShape::PerPlayerPiles,
         camera: table.camera,
         strip: table.strip,
         creatures: row(table.creatures, true),
@@ -27,6 +28,12 @@ pub(super) fn reference(profile: &ProfileData, data: &Anchored) -> Layout {
         beneath_step: table.beneath_step,
         piles: piles.map(|pile| [pile.outer, pile.middle, pile.inner]),
         pile_scale: piles.map(|pile| pile.scale),
+        shared_piles: [
+            data.shared_piles.left,
+            data.shared_piles.middle,
+            data.shared_piles.right,
+        ],
+        shared_pile_scale: data.shared_piles.scale,
         tray: tray(
             data.tray,
             table.tray_tuning,

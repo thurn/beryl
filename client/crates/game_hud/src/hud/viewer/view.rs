@@ -117,7 +117,7 @@ pub fn pile_title(side: Side, zone: ZoneName) -> &'static str {
     match (side, zone) {
         (Side::You, ZoneName::Library) => "Library",
         (Side::Opponent, ZoneName::Library) => "Opponent's Library",
-        _ => pile_name(side, zone),
+        _ => pile_name(Some(side), zone),
     }
 }
 

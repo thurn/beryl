@@ -206,6 +206,23 @@ fn piles(camera: &Camera, bands: &TableBands, data: Banded) -> ([[Vec2; 3]; 2], 
     (piles, scale)
 }
 
+/// Where the shared library, graveyard and exile sit on a banded layout: library at the left edge
+/// and graveyard at the right edge of the seam between the two players' creature rows, with exile
+/// beneath the graveyard.
+fn shared_piles(camera: &Camera, bands: &TableBands, data: Banded) -> ([Vec2; 3], f32) {
+    let window = camera.window;
+    let inset = window.safe_area;
+    let y = bands.middle.middle() + data.shared_piles.y_offset;
+    let library = window.size.ndc(inset.left + data.shared_piles.left, y);
+    let graveyard = window
+        .size
+        .ndc(window.size.width - inset.right - data.shared_piles.right, y);
+    let base = camera.on_table(library).extend(0.0);
+    let scale =
+        data.shared_piles.width / (camera.data.card.width * camera.points_per_millimetre(base));
+    ([library, graveyard, graveyard], scale)
+}
+
 /// The highest the top edge of the viewer's hand may reach on a phone, in logical points from the
 /// window's top: low enough that each card of the viewer's back row, tapped, keeps a strip the
 /// phone's touch target tall above it, and a cell of the hit test's grid more at each edge. A
@@ -339,6 +356,7 @@ pub(super) fn layout(profile: &ProfileData, window: Window, data: Banded) -> Lay
     let camera = Camera::fit_inside(table.camera, window, area);
     let bands = bands_with(&camera, sizes, table.creatures.y, table.lands.y);
     let (piles, pile_scale) = piles(&camera, &bands, data);
+    let (shared_piles, shared_pile_scale) = shared_piles(&camera, &bands, data);
     let target = profile.checks.target_points;
     let middle = bands.middle.middle();
     let (stack_left, stack_height) = if data.stack.side_width > 0.0 {
@@ -368,6 +386,7 @@ pub(super) fn layout(profile: &ProfileData, window: Window, data: Banded) -> Lay
     };
     let anchor = |strip: Band| life_anchor(window, strip.middle(), data.pool_offset);
     Layout {
+        shape: crate::table::TableShape::PerPlayerPiles,
         camera: table.camera,
         camera_area: Some(area),
         strip: table.strip,
@@ -383,6 +402,8 @@ pub(super) fn layout(profile: &ProfileData, window: Window, data: Banded) -> Lay
         beneath_step: table.beneath_step,
         piles,
         pile_scale,
+        shared_piles,
+        shared_pile_scale,
         tray: tray_in(
             window,
             &bands,
