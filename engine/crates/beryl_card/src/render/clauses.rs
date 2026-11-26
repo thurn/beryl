@@ -636,6 +636,7 @@ pub(super) fn subject_of(effect: &Effect) -> Option<Players> {
         | Effect::BecomeCopy { .. }
         | Effect::Attach { .. }
         | Effect::ChangeRule { .. }
+        | Effect::ChangeMana { .. }
         | Effect::GainFlashback(_)
         | Effect::ControlPlayer(_)
         | Effect::Wish { .. }

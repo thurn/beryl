@@ -17,6 +17,7 @@
 //! sacrificing more, when it keeps more later costs payable (§10).
 
 mod add;
+mod changes;
 mod lookahead;
 mod pay;
 mod pool;

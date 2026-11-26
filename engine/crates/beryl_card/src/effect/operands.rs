@@ -123,6 +123,19 @@ impl Effect {
             | Effect::Subgame
             | Effect::AdditionalPhases { .. }
             | Effect::EndTurn => Operands::NONE,
+            Effect::ChangeMana { change, .. } => match change {
+                crate::ManaChange::Adds {
+                    tapped: crate::Tapped::A(filter),
+                    ..
+                }
+                | crate::ManaChange::Multiplies { tapped: filter, .. } => {
+                    Operands::NONE.filter(Some(filter))
+                }
+                crate::ManaChange::Adds {
+                    tapped: crate::Tapped::AttachedTo,
+                    ..
+                } => Operands::NONE,
+            },
             Effect::RestartGame { filter } => Operands::NONE.filter(Some(filter)),
             Effect::May { player, .. }
             | Effect::ForEachPlayer {

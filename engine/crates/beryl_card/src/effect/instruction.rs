@@ -554,6 +554,14 @@ pub enum Effect {
         rule: &'static RuleChange,
         duration: Duration,
     },
+    /// "[Duration], whenever a player taps [tapped] for mana, that player adds an additional
+    /// [added]": a continuous effect from a resolving spell or ability that creates a triggered
+    /// mana ability ([CR 605.1b](https://yawgatog.com/resources/magic-rules/#R6051b)) or
+    /// mana-multiplying replacement ([`crate::ManaChange`]).
+    ChangeMana {
+        change: &'static crate::ManaChange,
+        duration: Duration,
+    },
     /// "[Cards] gain flashback until end of turn. The flashback cost is equal to its mana
     /// cost": a keyword ability granted to a card that is no permanent
     /// ([CR 702.34a](https://yawgatog.com/resources/magic-rules/#R70234a)): "'Flashback

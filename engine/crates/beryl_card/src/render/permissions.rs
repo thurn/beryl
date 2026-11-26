@@ -3,7 +3,8 @@
 //! "until end of turn, you may play lands from your graveyard".
 
 use super::Ctx;
-use crate::continuous::{Duration, Governed, RuleChange};
+use super::filters::Kind;
+use crate::continuous::{Added, Duration, Governed, ManaChange, RuleChange, Tapped};
 use crate::effect::{Amount, CastFace, CastTerms, Objects, Players};
 
 impl Ctx {
@@ -19,6 +20,50 @@ impl Ctx {
             Duration::Indefinite => "",
         };
         vec![format!("{prefix}{}", self.rule_change(rule))]
+    }
+
+    /// A mana change from a resolving spell or ability, with how long it lasts:
+    /// "until end of turn, whenever a player taps an Island for mana, that player adds an
+    /// additional {U}".
+    pub(super) fn change_mana(&mut self, change: &ManaChange, duration: Duration) -> Vec<String> {
+        let prefix = match duration {
+            Duration::EndOfTurn => "until end of turn, ",
+            Duration::UntilYourNextTurn => "until your next turn, ",
+            Duration::Indefinite => "",
+        };
+        let body = match *change {
+            ManaChange::Adds { tapped, added } => {
+                let what = match tapped {
+                    Tapped::A(filter) => self
+                        .noun(filter, Kind::Permanent)
+                        .indefinite(Kind::Permanent),
+                    Tapped::AttachedTo => "enchanted permanent".to_owned(),
+                };
+                let mana = match added {
+                    Added::Of(set) => super::words::mana_set(set),
+                    Added::TypeProduced => {
+                        "one mana of any type that permanent produced".to_owned()
+                    }
+                };
+                format!(
+                    "whenever a player taps {what} for mana, that player adds an additional {mana}"
+                )
+            }
+            ManaChange::Multiplies { tapped, by } => {
+                let what = self
+                    .noun(tapped, Kind::Permanent)
+                    .indefinite(Kind::Permanent);
+                let times = match by {
+                    2 => "twice".to_owned(),
+                    3 => "three times".to_owned(),
+                    n => format!("{n} times"),
+                };
+                format!(
+                    "if you tap {what} for mana, it produces {times} as much of that mana instead"
+                )
+            }
+        };
+        vec![format!("{prefix}{body}")]
     }
 
     /// "Target instant card in your graveyard gains flashback until end of turn. The

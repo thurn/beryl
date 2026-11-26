@@ -1,7 +1,7 @@
 //! Builders for continuous effects, control changes and a permanent's status: tapped,
 //! phased out, attached, prepared or regenerating.
 
-use crate::continuous::{Duration, Modification, RuleChange};
+use crate::continuous::{Duration, ManaChange, Modification, RuleChange};
 use crate::effect::{Amount, Effect, Objects, Players};
 
 /// [`Effect::Modify`]: "[objects] get, gain or become [modifications] [duration]", the
@@ -37,6 +37,12 @@ pub const fn exchange_control(first: Objects, second: Objects) -> Effect {
 /// [`Effect::ChangeRule`]: "[rule change] [duration]".
 pub const fn change_rule(rule: &'static RuleChange, duration: Duration) -> Effect {
     Effect::ChangeRule { rule, duration }
+}
+
+/// [`Effect::ChangeMana`]: "[duration], whenever a player taps ... for mana, that player adds
+/// an additional ...".
+pub const fn change_mana(change: &'static ManaChange, duration: Duration) -> Effect {
+    Effect::ChangeMana { change, duration }
 }
 
 /// [`Effect::SetPrepared`]: "[permanents] become prepared."

@@ -27,7 +27,6 @@ use crate::fixed::Full;
 use crate::ids::{CardId, Seat, SlotId};
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::object::ObjectRef;
-use crate::observation::Observation;
 use crate::query::Copiable;
 use crate::reference::{Permanent, Spell};
 use crate::rule_changes::{RuleId, Rules};
@@ -40,6 +39,7 @@ mod change;
 pub mod control;
 pub mod copy;
 pub mod extra_turn;
+mod mana;
 mod on;
 pub mod prevention;
 pub mod regeneration;
@@ -48,6 +48,7 @@ mod store;
 pub mod text;
 
 pub use change::{Characteristics, LayerChange, read_layer};
+pub use mana::ManaEffect;
 pub use on::EffectsOn;
 pub use prevention::{ChosenSource, Shield, ShieldAt};
 use sets::Sets;
@@ -108,24 +109,28 @@ pub enum Continuous<L: Layout = Small> {
     Control { controlled: Seat, controller: Seat },
     /// The player takes an extra turn after the current one ([`extra_turn`]).
     ExtraTurn(Seat, Option<AbilityRef<L, TriggeredAbility>>),
+    /// A mana-changing effect applied to every player whenever a matching permanent is tapped
+    /// for mana (see [CR 605.1b](https://yawgatog.com/resources/magic-rules/#R6051b)).
+    Mana(ManaEffect),
 }
 
 impl<L: Layout> Continuous<L> {
-    /// What it affects: an object, or the player a rule is changed for.
+    /// What it affects: an object, a player, or the game as a whole.
     #[inline]
-    pub fn subject(self) -> Subject<L> {
+    pub fn affected(self) -> Affects<L> {
         match self {
             Continuous::Layer(permanent, _) | Continuous::Regeneration(permanent) => {
-                Subject::Object(permanent.into())
+                Affects::object(permanent.into())
             }
-            Continuous::Cost(spell, _) => Subject::Object(spell.into()),
+            Continuous::Cost(spell, _) => Affects::object(spell.into()),
             Continuous::Move(object, _)
             | Continuous::Cast(object, _)
             | Continuous::Copy(object, _)
-            | Continuous::Text(object, _) => Subject::Object(object),
-            Continuous::Rule(subject, _) | Continuous::Prevent(subject, _) => subject,
-            Continuous::Control { controlled, .. } => Subject::Player(controlled),
-            Continuous::ExtraTurn(player, _) => Subject::Player(player),
+            | Continuous::Text(object, _) => Affects::object(object),
+            Continuous::Rule(subject, _) | Continuous::Prevent(subject, _) => subject.stored(),
+            Continuous::Control { controlled, .. } => Affects::Player(controlled),
+            Continuous::ExtraTurn(player, _) => Affects::Player(player),
+            Continuous::Mana(_) => Affects::Game,
         }
     }
 
@@ -144,6 +149,7 @@ impl<L: Layout> Continuous<L> {
             Continuous::Text(_, change) => Payload::Text(change),
             Continuous::Control { controller, .. } => Payload::Control(controller),
             Continuous::ExtraTurn(_, trigger) => Payload::ExtraTurn(trigger),
+            Continuous::Mana(effect) => Payload::Mana(effect),
         }
     }
 }
@@ -208,6 +214,8 @@ pub enum Affects<L: Layout = Small> {
     /// since (see [CR 611.2c](https://yawgatog.com/resources/magic-rules/#R6112c)): "After that
     /// point, the set won't change." [`State::locked_in`] reads them.
     Set(LockedIn<L>),
+    /// Every player in the game (such as a mana-changing effect from a resolving spell).
+    Game,
 }
 
 impl<L: Layout> Affects<L> {
@@ -225,7 +233,7 @@ impl<L: Layout> Affects<L> {
     pub fn as_object(self) -> Option<ObjectRef<L>> {
         match self {
             Affects::Object { slot, incarnation } => Some(ObjectRef { slot, incarnation }),
-            Affects::Player(_) | Affects::Set(_) => None,
+            Affects::Player(_) | Affects::Set(_) | Affects::Game => None,
         }
     }
 }
@@ -337,6 +345,9 @@ pub enum Payload<L: Layout = Small> {
     Control(Seat),
     /// The affected player takes an extra turn after the current one ([`extra_turn`]).
     ExtraTurn(Option<AbilityRef<L, TriggeredAbility>>),
+    /// Adds to or modifies mana when a matching permanent is tapped for mana
+    /// (see [CR 605.1b](https://yawgatog.com/resources/magic-rules/#R6051b)).
+    Mana(ManaEffect),
 }
 
 impl<L: Layout> Payload<L> {
@@ -355,6 +366,7 @@ impl<L: Layout> Payload<L> {
             Payload::Text(_) => Kinds::TEXT,
             Payload::Control(_) => Kinds::CONTROL,
             Payload::ExtraTurn(_) => Kinds::EXTRA_TURN,
+            Payload::Mana(_) => Kinds::MANA,
         }
     }
 }
@@ -376,6 +388,7 @@ impl Kinds {
     const TEXT: u16 = 1 << 8;
     const CONTROL: u16 = 1 << 9;
     const EXTRA_TURN: u16 = 1 << 10;
+    const MANA: u16 = 1 << 11;
 }
 
 /// A continuous effect from a resolved spell or ability
@@ -413,6 +426,7 @@ impl<L: Layout> std::hash::Hash for Affects<L> {
             }
             Affects::Player(seat) => seat.hash(h),
             Affects::Set(set) => set.hash(h),
+            Affects::Game => {}
         }
     }
 }
@@ -520,7 +534,7 @@ impl<L: Layout> Effects<L> {
                 done.any = true;
                 done.layer_input |= matches!(
                     e.payload,
-                    Payload::Layer(_) | Payload::Copy(_) | Payload::Text(_)
+                    Payload::Layer(_) | Payload::Copy(_) | Payload::Text(_) | Payload::Mana(_)
                 );
             }
             kept
@@ -621,18 +635,18 @@ impl<L: Layout> State<L> {
         duration: Duration,
         timestamp: u16,
     ) -> Result<(), Full> {
-        let subject = effect.subject();
+        let affected = effect.affected();
         let payload = effect.payload();
         let pushed = self.effects.entries.push(ContinuousEffect {
             source,
             timestamp,
             duration,
-            affected: subject.stored(),
+            affected,
             payload,
         });
         if pushed.is_ok() {
             self.effects.kinds.0 |= payload.kind();
-            if let Subject::Object(object) = subject {
+            if let Some(object) = affected.as_object() {
                 debug_assert!(self.is_current(object));
                 self.keyed.insert(object.slot);
             }
@@ -642,6 +656,9 @@ impl<L: Layout> State<L> {
                     *rules = rules.with(rule);
                 }
                 Continuous::Copy(object, values) => self.take_copied_values(object, values)?,
+                Continuous::Mana(_) => {
+                    self.flags.mana_changed = true;
+                }
                 Continuous::Rule(Subject::Object(_), _)
                 | Continuous::Layer(..)
                 | Continuous::Regeneration(_)
@@ -765,23 +782,6 @@ impl<L: Layout> State<L> {
                     .contains(rule)
             }
         }
-    }
-}
-
-impl<'a, L: Layout> Observation<'a, L> {
-    /// The continuous effects, in the order they began. Every one is public: a spell or
-    /// ability resolves in the open, and what it affects is an object every player sees or
-    /// a slot, which is a public handle.
-    pub fn effects(&self) -> &'a [ContinuousEffect<L>] {
-        self.shown().effects()
-    }
-
-    /// Who may cast which card from a zone it could not otherwise be cast from, and on what
-    /// terms: public, as the effects that grant them are. A card exiled until someone casts
-    /// it is face up (see [CR 406.3](https://yawgatog.com/resources/magic-rules/#R4063): "Exiled
-    /// cards are, by default, kept face up and may be examined by any player at any time").
-    pub fn cast_permissions(&self) -> impl Iterator<Item = Permitted<L>> + 'a {
-        self.shown().cast_permissions()
     }
 }
 

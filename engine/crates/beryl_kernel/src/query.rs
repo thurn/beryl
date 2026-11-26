@@ -264,6 +264,9 @@ impl<L: Layout> State<L> {
     #[cold]
     #[inline(never)]
     fn keeps_card_mana(&self, slot: L::Slot) -> bool {
+        if self.has_mana_changes() {
+            return false;
+        }
         self.battlefield_position(slot).is_none_or(|i| {
             debug_assert!(!self.flags.derived_dirty, "derived read while dirty");
             let d = self.derived[i];

@@ -36,8 +36,12 @@ pub(crate) fn standalone_options<L: Layout>(
     player: Seat,
     out: &mut L::Queue<Opt<L>, OPTIONS>,
 ) {
+    let mana_changes = t.can(Capability::ManaChanges) && s.has_mana_changes();
     let sources: Bitboard<L::Slot> = controlled(s, player)
-        .filter(|&(slot, d)| source(s, t, player, slot, d).is_some())
+        .filter(|&(slot, d)| {
+            source(s, t, player, slot, d).is_some()
+                || (mana_changes && super::changes::standalone_kinds(s, t, player, slot, d) != 0)
+        })
         .map(|(slot, _)| slot)
         .collect();
     let sources = crate::engine::collapse(s, sources);
@@ -188,6 +192,7 @@ fn add_activations<L: Layout>(
 ) {
     let remembers = t.can(Capability::RemembersMana);
     let alternatives = t.can(Capability::SacrificeAlternative);
+    let mana_changes = t.can(Capability::ManaChanges) && s.has_mana_changes();
     // Tapping ahead is optional, so a full list keeps the options it already holds.
     let _full = Candidates::<L>::extend_options(out, sources, |out, slot| {
         let d = s.derived(slot);
@@ -197,9 +202,14 @@ fn add_activations<L: Layout>(
         } else {
             0
         };
+        let extra_kinds = if mana_changes {
+            super::changes::standalone_kinds(s, t, player, slot, d)
+        } else {
+            0
+        };
         let Some(kinds) = source(s, t, player, slot, d)
             .map(|(kinds, ..)| kinds | more)
-            .or((more != 0).then_some(more))
+            .or(((more | extra_kinds) != 0).then_some(more | extra_kinds))
         else {
             return Ok(());
         };

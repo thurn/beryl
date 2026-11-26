@@ -263,6 +263,7 @@ impl Ctx {
                 duration_suffix(duration)
             )],
             Effect::ChangeRule { rule, duration } => self.change_rule(rule, duration),
+            Effect::ChangeMana { change, duration } => self.change_mana(change, duration),
             Effect::GainFlashback(cards) => self.gain_flashback(cards),
             Effect::PermitCast {
                 player,

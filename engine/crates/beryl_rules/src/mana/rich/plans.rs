@@ -202,7 +202,14 @@ fn try_finish<L: Layout, F: FnMut(&Plan<L>) -> bool>(
             continue;
         }
         let outcome = ctx.sources.outcome(&plan);
-        if ctx.out.iter().any(|q| ctx.sources.outcome(q) == outcome) {
+        if let Some(pos) = ctx
+            .out
+            .iter()
+            .position(|q| ctx.sources.outcome(q) == outcome)
+        {
+            if plan_taps(&plan) < plan_taps(&ctx.out.as_slice()[pos]) {
+                ctx.out.as_mut_slice()[pos] = plan;
+            }
             continue;
         }
         if ctx.out.push(plan).is_err() {
@@ -214,6 +221,13 @@ fn try_finish<L: Layout, F: FnMut(&Plan<L>) -> bool>(
             return;
         }
     }
+}
+
+/// Total number of sources a plan taps (plain sources plus rich steps).
+fn plan_taps<L: Layout>(plan: &Plan<L>) -> usize {
+    let base: usize = plan.taps.as_slice().iter().map(|&n| usize::from(n)).sum();
+    let extra = plan.sequence.as_deref().map_or(0, |seq| seq.steps.len());
+    base + extra
 }
 
 /// Whether `cost` could still be paid from `init_pool` with one fewer extra activation or one

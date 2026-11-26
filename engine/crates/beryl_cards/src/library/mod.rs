@@ -259,6 +259,7 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
     ("mana", names::MANA_CRYPT, mana::FLOATING_MANA),
     ("mana", crate::props::VANILLA.card, mana::EQUIVALENT_SOURCES),
     ("mana", names::AZORIUS_SIGNET, mana::PRICED_MANA),
+    ("mana", names::HIGH_TIDE, mana::HIGH_TIDE),
     (
         "replacement",
         names::CLEVER_IMPERSONATOR,

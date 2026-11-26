@@ -113,6 +113,7 @@ impl Effect {
             | Effect::FlipCoin(_)
             | Effect::DealDamage { .. }
             | Effect::ChangeRule { .. }
+            | Effect::ChangeMana { .. }
             | Effect::Delay { .. }
             | Effect::GetEmblem { .. }
             | Effect::WinGame(_)
@@ -224,6 +225,7 @@ impl Effect {
             | Effect::ExchangeControl(..)
             | Effect::Attach { .. }
             | Effect::ChangeRule { .. }
+            | Effect::ChangeMana { .. }
             | Effect::GainFlashback(_)
             | Effect::PermitCast { .. }
             | Effect::MayCast { .. }

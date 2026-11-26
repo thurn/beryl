@@ -80,6 +80,7 @@ pub(super) const fn moved_by(effect: &Effect) -> Option<&Objects> {
         | Effect::ExchangeControl(..)
         | Effect::Attach { .. }
         | Effect::ChangeRule { .. }
+        | Effect::ChangeMana { .. }
         | Effect::GainFlashback(_)
         | Effect::PermitCast { .. }
         | Effect::MayCast { .. }

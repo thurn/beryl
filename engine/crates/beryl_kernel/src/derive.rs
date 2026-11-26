@@ -135,7 +135,7 @@ impl<L: Layout> Rederive<'_, L> {
             }
         }
         s.flags.abilities_lost = removed;
-        s.flags.mana_changed = removed || land_types;
+        s.flags.mana_changed = removed || land_types || s.has_mana_changes();
         s.flags.face_down = face_down;
         s.flags.derived_dirty = false;
         // A stored result may change a state trigger's condition ([`State::states_due`]).

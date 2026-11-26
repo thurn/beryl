@@ -150,3 +150,119 @@ pub const PRICED_MANA: &[Scenario] = &[
             ME.controls(props::ARTIFACT.card, 1),
         ]),
 ];
+
+/// Triggered mana abilities from a resolving spell (CR 605.1b, CR 106.12): High Tide adds
+/// an additional {U} whenever any player taps an Island for mana until end of turn.
+pub const HIGH_TIDE: &[Scenario] = &[
+    Scenario::new("High Tide makes an Island produce {U}{U}")
+        .battlefield(P0, &[names::ISLAND; 2])
+        .hand(P0, &[names::HIGH_TIDE, props::VANILLA.card])
+        .actions(&[
+            ME.casts(names::HIGH_TIDE),
+            Resolve,
+            ME.casts(props::VANILLA.card),
+            Resolve,
+            ME.controls(props::VANILLA.card, 1),
+            ME.tapped(names::ISLAND, 2),
+            ME.mana(ManaColor::Blue, 0),
+        ]),
+    Scenario::new("Two High Tides make an Island produce three {U}")
+        .battlefield(P0, &[names::ISLAND; 3])
+        .hand(
+            P0,
+            &[
+                names::HIGH_TIDE,
+                names::HIGH_TIDE,
+                props::VANILLA.card,
+                props::EQUIPMENT.card,
+            ],
+        )
+        .actions(&[
+            ME.casts(names::HIGH_TIDE),
+            Resolve,
+            ME.casts(names::HIGH_TIDE),
+            Resolve,
+            // Empty the floating {U} from the second High Tide before testing one Island.
+            advance_to(1, TurnStep::PostcombatMain),
+            ME.mana(ManaColor::Blue, 0),
+            ME.casts(props::VANILLA.card),
+            ME.mana(ManaColor::Blue, 1),
+            Resolve,
+            ME.controls(props::VANILLA.card, 1),
+            ME.casts(props::EQUIPMENT.card),
+            ME.mana(ManaColor::Blue, 0),
+            Resolve,
+            ME.controls(props::EQUIPMENT.card, 1),
+            ME.tapped(names::ISLAND, 3),
+        ]),
+    Scenario::new("Tundra tapped for {W} under High Tide adds an additional {U}")
+        .battlefield(P0, &[names::ISLAND, props::NONBASIC_LAND.card])
+        .hand(P0, &[names::HIGH_TIDE, props::ARTIFACT.card])
+        .actions(&[
+            ME.casts(names::HIGH_TIDE),
+            Resolve,
+            ME.casts(props::ARTIFACT.card),
+            ME.mana(ManaColor::Blue, 1),
+            ME.tapped(props::NONBASIC_LAND.card, 1),
+            Resolve,
+            ME.controls(props::ARTIFACT.card, 1),
+        ]),
+    Scenario::new("High Tide adds {U} when the opponent taps an Island for mana")
+        .at(2, P1, TurnStep::PrecombatMain)
+        .battlefield(P0, &[names::ISLAND])
+        .hand(P0, &[names::HIGH_TIDE])
+        .battlefield(P1, &[names::ISLAND])
+        .hand(P1, &[props::VANILLA.card])
+        .actions(&[
+            ME.casts(names::HIGH_TIDE),
+            THEM.casts(props::VANILLA.card),
+            THEM.controls(props::VANILLA.card, 1),
+            THEM.tapped(names::ISLAND, 1),
+        ]),
+    Scenario::new("High Tide ends at cleanup")
+        .battlefield(P0, &[names::ISLAND])
+        .hand(P0, &[names::HIGH_TIDE, props::VANILLA.card])
+        .library(P0, &[props::EQUIPMENT.card; 2])
+        .library(P1, &[props::EQUIPMENT.card; 2])
+        .actions(&[
+            ME.casts(names::HIGH_TIDE),
+            Resolve,
+            advance_to(3, TurnStep::PrecombatMain),
+            // Only Pass and casting the drawn Equipment are legal; Vanilla ({1}{U}) cannot be paid.
+            ME.deciding(DecisionKind::Priority, 2),
+            ME.controls(props::VANILLA.card, 0),
+        ]),
+    Scenario::new("A spell paid with one Island under High Tide leaves {U} floating")
+        .battlefield(P0, &[names::ISLAND; 2])
+        .hand(P0, &[names::HIGH_TIDE, props::EQUIPMENT.card])
+        .actions(&[
+            ME.casts(names::HIGH_TIDE),
+            Resolve,
+            ME.casts(props::EQUIPMENT.card),
+            ME.mana(ManaColor::Blue, 1),
+            Resolve,
+            ME.controls(props::EQUIPMENT.card, 1),
+        ]),
+    Scenario::new("Under High Tide, paying {2}{B} taps one Island instead of two Plains")
+        .battlefield(
+            P0,
+            &[
+                names::ISLAND,
+                names::ISLAND,
+                names::PLAINS,
+                names::PLAINS,
+                names::SWAMP,
+            ],
+        )
+        .hand(P0, &[names::HIGH_TIDE, props::FLASH_CREATURE.card])
+        .actions(&[
+            ME.casts(names::HIGH_TIDE),
+            Resolve,
+            ME.casts(props::FLASH_CREATURE.card),
+            ME.tapped(names::ISLAND, 2),
+            ME.tapped(names::SWAMP, 1),
+            ME.tapped(names::PLAINS, 0),
+            Resolve,
+            ME.controls(props::FLASH_CREATURE.card, 1),
+        ]),
+];

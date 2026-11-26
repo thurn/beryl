@@ -100,6 +100,7 @@ impl Effect {
             | Effect::ExchangeControl(..)
             | Effect::Attach { .. }
             | Effect::ChangeRule { .. }
+            | Effect::ChangeMana { .. }
             | Effect::GainFlashback(_)
             | Effect::PermitCast { .. }
             | Effect::MayCast { .. }
@@ -218,6 +219,7 @@ impl Effect {
             | Effect::ExchangeControl(..)
             | Effect::Attach { .. }
             | Effect::ChangeRule { .. }
+            | Effect::ChangeMana { .. }
             | Effect::GainFlashback(_)
             | Effect::PermitCast { .. }
             | Effect::MayCast { .. }
@@ -367,6 +369,7 @@ impl Effect {
             | Effect::ChangeText { .. }
             | Effect::ExchangeControl(..)
             | Effect::Attach { .. }
+            | Effect::ChangeMana { .. }
             | Effect::GainFlashback(_)
             | Effect::PermitCast { .. }
             | Effect::MayCast { .. }
@@ -381,6 +384,58 @@ impl Effect {
             | Effect::AdditionalStep(_)
             | Effect::AdditionalPhases { .. }
             | Effect::ExtraTurn(..) => None,
+        }
+    }
+
+    /// The `part`-th [`Effect::ChangeMana`] instruction inside this effect in pre-order traversal.
+    pub fn mana_change_at(&self, part: u8) -> Option<&'static crate::ManaChange> {
+        let mut seen = 0u8;
+        self.find_mana_change(&mut |change| {
+            let found = seen == part;
+            seen = seen.saturating_add(1);
+            found.then_some(change)
+        })
+    }
+
+    /// The pre-order index of `target` (by pointer identity) among the [`Effect::ChangeMana`]
+    /// instructions inside this effect.
+    pub fn mana_change_part(&self, target: &'static crate::ManaChange) -> Option<u8> {
+        let mut seen = 0u8;
+        self.find_mana_change(&mut |change| {
+            let index = seen;
+            seen = seen.saturating_add(1);
+            core::ptr::eq(change, target).then_some(index)
+        })
+    }
+
+    fn find_mana_change<T>(
+        &self,
+        visit: &mut impl FnMut(&'static crate::ManaChange) -> Option<T>,
+    ) -> Option<T> {
+        if let Effect::ChangeMana { change, .. } = *self
+            && let Some(found) = visit(change)
+        {
+            return Some(found);
+        }
+        match self.branches() {
+            Branches::Sequence(effects) => {
+                for effect in effects {
+                    if let Some(found) = effect.find_mana_change(visit) {
+                        return Some(found);
+                    }
+                }
+                None
+            }
+            Branches::If {
+                then, otherwise, ..
+            } => then
+                .find_mana_change(visit)
+                .or_else(|| otherwise.and_then(|e| e.find_mana_change(visit))),
+            Branches::May(effect)
+            | Branches::Unless(effect, _)
+            | Branches::ForEachPlayer(effect)
+            | Branches::WhenFound(effect) => effect.find_mana_change(visit),
+            Branches::Single => None,
         }
     }
 }

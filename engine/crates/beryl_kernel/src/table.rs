@@ -106,6 +106,9 @@ pub enum TableError {
     /// The cards of the game, with the tokens and emblems they make, print, ask about or
     /// give more subtypes than a state numbers ([`crate::subtypes::GAME_SUBTYPES`]).
     Subtypes { count: usize },
+    /// A card of the game, or a token or emblem one makes, has a mana change
+    /// ([`beryl_card::ManaChange`]) that the engine does not support yet.
+    ManaChange { card: &'static str },
 }
 
 /// The format and card indices for a game. Search threads share the table read-only.
@@ -216,6 +219,33 @@ fn listed(def: &CardDef, defs: &[&'static CardDef]) -> Result<(), TableError> {
     }
 }
 
+/// Refuses any [`beryl_card::ManaChange`] variant that the engine does not implement yet.
+fn check_mana_changes(def: &CardDef) -> Result<(), TableError> {
+    use beryl_card::{Added, Behavior, Effect, ManaChange, Tapped};
+    for face in def.faces {
+        for ability in face.abilities.iter().chain(face.grants) {
+            if let Behavior::Data(effect) = ability.body()
+                && effect.any(&|instruction| {
+                    matches!(
+                        instruction,
+                        Effect::ChangeMana { change, .. }
+                            if !matches!(
+                                **change,
+                                ManaChange::Adds {
+                                    tapped: Tapped::A(_),
+                                    added: Added::Of(mana),
+                                } if mana.amount > 0 && mana.colors.is_power_of_two()
+                            )
+                    )
+                })
+            {
+                return Err(TableError::ManaChange { card: def.name });
+            }
+        }
+    }
+    Ok(())
+}
+
 impl GameTable {
     /// Assigns indices in order of first appearance across the decks, then to the tokens
     /// and emblems they can create, and finally to [`beryl_card::FACE_DOWN_COPY`].
@@ -274,6 +304,7 @@ impl GameTable {
                 card: def.name,
                 unpayable,
             })?;
+            check_mana_changes(def)?;
         }
         let mut here = Indexed::default();
         let mut away = Indexed::default();

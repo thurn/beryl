@@ -154,6 +154,14 @@ impl<L: Layout> Store<L> for Effects<L> {
                     sets += 1;
                     None
                 }
+                Affects::Game => {
+                    check(
+                        matches!(e.payload, Payload::Mana(_)),
+                        "a game-wide effect that is no mana change",
+                        None,
+                    )?;
+                    None
+                }
             };
             check(e.source.index() < t.len(), "an effect of no card", at)?;
         }
@@ -186,7 +194,7 @@ impl<L: Layout> Store<L> for Effects<L> {
                 // A save says a copy by its permanent's exceptions, and a permission by its
                 // player and card.
                 (Affects::Object { .. }, Payload::Cast(_) | Payload::Copy(_))
-                | (Affects::Player(_), _) => {
+                | (Affects::Player(_) | Affects::Game, _) => {
                     return None;
                 }
                 (Affects::Object { slot, .. }, _) => name(slot).to_owned(),
@@ -259,6 +267,7 @@ impl<L: Layout> Relayout for ContinuousEffect<L> {
                 },
                 Affects::Player(player) => Affects::Player(player),
                 Affects::Set(set) => Affects::Set(set.relayout()),
+                Affects::Game => Affects::Game,
             },
             payload: self.payload.relayout(),
         }

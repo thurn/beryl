@@ -104,6 +104,7 @@ impl Effect {
             | Effect::FlipCoin(_)
             | Effect::DealDamage { .. }
             | Effect::ChangeRule { .. }
+            | Effect::ChangeMana { .. }
             | Effect::MayCast { .. }
             | Effect::UntapUpTo { .. }
             | Effect::Delay { .. }

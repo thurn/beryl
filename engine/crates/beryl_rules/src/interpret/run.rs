@@ -258,6 +258,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             | Effect::ExchangeControl(..)
             | Effect::Attach { .. }
             | Effect::ChangeRule { .. }
+            | Effect::ChangeMana { .. }
             | Effect::GainFlashback(_)
             | Effect::PermitCast { .. }
             | Effect::MayCast { .. }
@@ -455,6 +456,9 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             }
             Effect::ChangeRule { rule, duration } => {
                 continuous::change_rule_instruction(self, rule, duration)?
+            }
+            Effect::ChangeMana { change, duration } => {
+                continuous::change_mana_instruction(self, change, duration)?
             }
             Effect::ControlPlayer(players) => {
                 continuous::control_player_instruction(self, players)?

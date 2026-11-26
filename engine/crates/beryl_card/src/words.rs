@@ -173,6 +173,16 @@ impl ColorChanges {
     pub const NONE: ColorChanges = ColorChanges(0b100_011_010_001_000);
 }
 
+/// The basic land type words of a [`Words`] alone, in two bytes: for each basic land type in
+/// [`BasicLandTypes::SUBTYPES`]' order, three bits naming the basic land type it reads as.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct LandChanges(u16);
+
+impl LandChanges {
+    /// Each basic land type word reads as itself.
+    pub const NONE: LandChanges = LandChanges(0b100_011_010_001_000);
+}
+
 impl Words {
     /// Its color words alone.
     pub fn color_changes(&self) -> ColorChanges {
@@ -184,12 +194,31 @@ impl Words {
         ColorChanges(packed)
     }
 
+    /// Its basic land type words alone.
+    pub fn land_changes(&self) -> LandChanges {
+        let mut packed = 0u16;
+        for (i, reads) in self.land_types.iter().enumerate() {
+            packed |= u16::from(reads.0) << (3 * i);
+        }
+        LandChanges(packed)
+    }
+
     /// Words whose color words read as `changes` say, and whose subtypes read as printed.
     pub fn of_color_changes(changes: ColorChanges) -> Words {
+        Self::of_changes(changes, LandChanges::NONE)
+    }
+
+    /// Words whose color words read as `colors` say and whose basic land type words read as
+    /// `lands` say.
+    pub fn of_changes(colors: ColorChanges, lands: LandChanges) -> Words {
         let mut words = Words::NONE;
         for (i, color) in words.colors.iter_mut().enumerate() {
-            let n = usize::from((changes.0 >> (3 * i)) & 0b111);
+            let n = usize::from((colors.0 >> (3 * i)) & 0b111);
             *color = Colors::EACH.get(n).copied().unwrap_or(*color);
+        }
+        for (i, land) in words.land_types.iter_mut().enumerate() {
+            let n = usize::from((lands.0 >> (3 * i)) & 0b111);
+            *land = BasicLandWord::EACH.get(n).copied().unwrap_or(*land);
         }
         words
     }

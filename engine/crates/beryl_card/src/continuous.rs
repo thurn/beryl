@@ -6,8 +6,10 @@ use crate::effect::{Amount, Condition, Objects};
 use crate::index::{AbilityIx, GrantIx};
 use crate::words::{ColorWords, LandTypeWords, SubtypeWord, Words};
 
+mod mana_change;
 mod rule_change;
 
+pub use mana_change::{Added, ManaChange, Tapped};
 pub use rule_change::{Governed, Named, PlayerRules, RuleChange, SpellCost, When};
 
 mod replacement;

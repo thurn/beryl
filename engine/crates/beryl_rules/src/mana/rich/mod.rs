@@ -60,7 +60,7 @@ pub(super) struct RichActivation {
     /// `None` for the intrinsic mana ability of a basic land type (see CR 305.6).
     pub(super) ability: Option<ObjectAbility>,
     pub(super) price: ManaCost,
-    pub(super) terms: [EvaluatedTerm; 3],
+    pub(super) terms: [EvaluatedTerm; 8],
     pub(super) term_count: u8,
     pub(super) consumed: bool,
 }
@@ -204,10 +204,14 @@ pub(crate) struct Sequence {
     pub(super) final_spend: [u8; KINDS],
 }
 
-/// Whether the permanent in `slot` has any priced mana ability or multi-term/counted mana ability.
+/// Whether the permanent in `slot` has any priced mana ability, multi-term/counted mana
+/// ability, or live mana-changing effect that applies to it.
 #[cold]
 #[inline(never)]
 pub(super) fn has_extra_mana<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> bool {
+    if s.has_mana_changes() && super::changes::matches_any(s, t, slot) {
+        return true;
+    }
     s.abilities(t, slot).any(|(_, a)| {
         is_priced(a) || (a.kind() == AbilityKind::Mana && a.produces() == ManaSet::NONE)
     })
@@ -246,21 +250,28 @@ fn collect_extra<L: Layout>(
         return Ok(());
     }
     let words = s.words_of(slot);
+    let extra_mana = if s.has_mana_changes() {
+        super::changes::matching_added(s, t, slot)?
+    } else {
+        [0; KINDS]
+    };
     let mut activations = Vec::new();
     let intrinsic = s.intrinsic_mana(t, slot);
     for k in 0..KINDS {
         if intrinsic & (1 << k) != 0 {
-            let mut terms = [EvaluatedTerm::default(); 3];
+            let mut terms = [EvaluatedTerm::default(); 8];
             terms[0] = EvaluatedTerm {
                 kinds: 1 << k,
                 amount: 1,
                 uniform: false,
             };
+            let mut count = 1usize;
+            super::changes::append_extra_mana(&mut terms, &mut count, extra_mana)?;
             activations.push(RichActivation {
                 ability: None,
                 price: ManaCost::NONE,
                 terms,
-                term_count: 1,
+                term_count: u8::try_from(count).expect("fits u8"),
                 consumed: false,
             });
         }
@@ -273,7 +284,7 @@ fn collect_extra<L: Layout>(
         {
             continue;
         }
-        let Some(act) = eval_activation(s, t, slot, obj_ability, a) else {
+        let Some(act) = eval_activation(s, t, slot, obj_ability, a, extra_mana)? else {
             continue;
         };
         if act.total_mana() > 0 {
@@ -312,14 +323,15 @@ fn eval_activation<L: Layout>(
     slot: L::Slot,
     obj_ability: ObjectAbility,
     a: &Ability,
-) -> Option<RichActivation> {
+    extra_mana: [u8; KINDS],
+) -> Result<Option<RichActivation>, Full> {
     let sacrificed = is_sacrificed(a);
     let tap_and_mana =
         a.cost().mana.x == 0 && matches!(a.cost().parts(), [CostPart::This(CostAction::Tap)]);
     if !sacrificed && !tap_and_mana {
-        return None;
+        return Ok(None);
     }
-    let mut terms = [EvaluatedTerm::default(); 3];
+    let mut terms = [EvaluatedTerm::default(); 8];
     let mut count = 0usize;
     for term in a.product() {
         let amount = if let Amount::Fixed(n) = term.amount {
@@ -337,13 +349,16 @@ fn eval_activation<L: Layout>(
         };
         count += 1;
     }
-    Some(RichActivation {
+    if a.cost().does(CostAction::Tap) {
+        super::changes::append_extra_mana(&mut terms, &mut count, extra_mana)?;
+    }
+    Ok(Some(RichActivation {
         ability: Some(obj_ability),
         price: a.cost().mana,
         terms,
-        term_count: u8::try_from(count).expect("at most 3 terms"),
+        term_count: u8::try_from(count).expect("fits u8"),
         consumed: sacrificed,
-    })
+    }))
 }
 
 /// Whether `player`, whose funds the plain path found are `funds`, can pay `cost` with none of
@@ -649,6 +664,11 @@ pub(super) fn activate_extra_step<L: Layout>(
         }
     }
     let permanent = tapped_source(s, slot);
+    let extra = if act.ability.is_none() && s.has_mana_changes() {
+        super::changes::matching_added(s, t, slot)?
+    } else {
+        [0; KINDS]
+    };
     event::set_tapped(s, t, sink, permanent, true)?;
     if act.consumed {
         event::move_one(
@@ -664,10 +684,7 @@ pub(super) fn activate_extra_step<L: Layout>(
     let (card, face) = s.definition(slot).record(t);
     match act.ability {
         None => {
-            let color_ix = made
-                .iter()
-                .position(|&n| n > 0)
-                .expect("intrinsic adds mana");
+            let color_ix = act.terms()[0].kinds.trailing_zeros() as usize;
             let color = ManaColor::ALL[color_ix];
             let intrinsic = &INTRINSIC_MANA[color_ix];
             let activation = || PendingTrigger {
@@ -680,7 +697,11 @@ pub(super) fn activate_extra_step<L: Layout>(
                 },
                 ..PendingTrigger::default()
             };
-            crate::interpret::mana_ability(s, t, sink, activation, intrinsic, color)
+            crate::interpret::mana_ability(s, t, sink, activation, intrinsic, color)?;
+            if s.has_mana_changes() {
+                super::changes::add_extra(s, sink, permanent, player, extra);
+            }
+            Ok(())
         }
         Some(obj_ability) => {
             let ability = s

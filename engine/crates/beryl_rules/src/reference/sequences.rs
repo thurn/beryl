@@ -11,10 +11,12 @@ use std::collections::BTreeSet;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::card::{AbilityKind, Amount, CostAction, CostPart, Keywords, ManaCost, Timing, Types};
+use crate::filter::Evaluate;
 use crate::ids::Seat;
 use crate::layout::Layout;
-use crate::state::State;
+use crate::state::{Payload, State};
 use crate::table::GameTable;
+use beryl_card::{Added, Behavior, ManaChange, Tapped, Words};
 
 use super::{UNITS, controls, reference_pays};
 
@@ -117,11 +119,17 @@ fn activations<L: Layout>(
         {
             continue;
         }
+        let extra_terms = live_mana_changes(s, t, slot);
         let intrinsic = s.intrinsic_mana(t, slot);
         let mut options: Vec<Activation> = (0..6)
             .map(|k| 1u8 << k)
             .filter(|k| intrinsic & k != 0)
-            .map(|k| Activation::of(ManaCost::NONE, &[(k, 1, false)]))
+            .map(|k| {
+                let mut terms = Vec::with_capacity(1 + extra_terms.len());
+                terms.push((k, 1, false));
+                terms.extend_from_slice(&extra_terms);
+                Activation::of(ManaCost::NONE, &terms)
+            })
             .collect();
         let words = s.words_of(slot);
         for (_, a) in s.abilities(t, slot) {
@@ -132,13 +140,49 @@ fn activations<L: Layout>(
             {
                 continue;
             }
-            options.push(activation_on(s, t, slot, a)?);
+            options.push(activation_on(s, t, slot, a, &extra_terms)?);
         }
         if !options.is_empty() {
             permanents.push(options);
         }
     }
     Some(permanents)
+}
+
+/// Reads live mana-changing continuous effects directly from the Effects store and the cards
+/// (independent of `mana::changes` and `mana::rich`), returning each matching additional mana term
+/// when `slot` is tapped for mana.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads the source card's printed face to look up the ChangeMana instruction data"
+)]
+fn live_mana_changes<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> Vec<(u8, u8, bool)> {
+    let mut terms = Vec::new();
+    for entry in s.effects() {
+        let Payload::Mana(effect) = entry.payload else {
+            continue;
+        };
+        let face = t.def(entry.source).face(effect.face);
+        let ability = &face.abilities[effect.ability.index()];
+        let Behavior::Data(root) = ability.body() else {
+            continue;
+        };
+        let Some(change) = root.mana_change_at(effect.part) else {
+            continue;
+        };
+        let ManaChange::Adds {
+            tapped: Tapped::A(filter),
+            added: Added::Of(mana),
+        } = *change
+        else {
+            continue;
+        };
+        let words = Words::of_changes(effect.colors, effect.lands);
+        if filter.matches(s, t, slot, effect.controller, &words) {
+            terms.push((mana.colors, mana.amount, false));
+        }
+    }
+    terms
 }
 
 /// The activation of a mana ability on `slot`, read from its cost and product: `None` for a cost
@@ -148,6 +192,7 @@ fn activation_on<L: Layout>(
     t: &GameTable,
     slot: L::Slot,
     a: &crate::card::Ability,
+    extra_terms: &[(u8, u8, bool)],
 ) -> Option<Activation> {
     let tap_only = a.cost().does(CostAction::Tap)
         && a.cost().parts().iter().all(|part| {
@@ -170,6 +215,7 @@ fn activation_on<L: Layout>(
             terms.push((term.kinds, n, term.uniform));
         }
     }
+    terms.extend_from_slice(extra_terms);
     Some(Activation::of(a.cost().mana, &terms))
 }
 

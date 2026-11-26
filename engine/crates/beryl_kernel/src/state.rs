@@ -10,8 +10,8 @@ pub use crate::counters::{
 };
 pub use crate::effects::{
     Affects, Characteristics, ChosenSource, Continuous, ContinuousEffect, CostChange, EFFECTS,
-    Effects, EffectsOn, LayerChange, LockedIn, MoveReplacement, Payload, Permanents, Permission,
-    Permitted, SETS, Shield, ShieldAt, Subject, read_layer,
+    Effects, EffectsOn, LayerChange, LockedIn, ManaEffect, MoveReplacement, Payload, Permanents,
+    Permission, Permitted, SETS, Shield, ShieldAt, Subject, read_layer,
 };
 pub use crate::last_known::{DEPARTED_SPELLS, DepartedSpell, LAST_KNOWN, LastKnown};
 pub use crate::memos::{Link, LinkKind, MEMOS, Memo, Memos, MemosOf};

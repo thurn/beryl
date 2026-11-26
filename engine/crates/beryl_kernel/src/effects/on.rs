@@ -35,7 +35,7 @@ impl<L: Layout> EffectsOn<'_, L> {
                 .filter(move |e| match e.affected {
                     Affects::Object { slot: affected, .. } => affected == slot,
                     Affects::Set(set) => store.sets.members(set).contains(slot),
-                    Affects::Player(_) => false,
+                    Affects::Player(_) | Affects::Game => false,
                 })
                 .map(|e| (e.source, e.payload, e.duration))
         })

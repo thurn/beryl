@@ -1262,3 +1262,318 @@ fn counted_mana_ability_reads_the_board() {
     }
     let _ = b3;
 }
+
+static TEST_HIGH_TIDE_CHANGE: beryl_card::ManaChange = beryl_card::ManaChange::Adds {
+    tapped: beryl_card::Tapped::A(beryl_card::Filter::Subtype(beryl_card::Subtype::Island)),
+    added: beryl_card::Added::Of(beryl_card::ManaSet::one(ManaColor::Blue)),
+};
+
+static TEST_HIGH_TIDE_EFFECT: beryl_card::Effect =
+    beryl_card::effect::build::change_mana(&TEST_HIGH_TIDE_CHANGE, beryl_card::Duration::EndOfTurn);
+
+static TEST_HIGH_TIDE: CardDef = CardDef {
+    name: "Test High Tide",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::INSTANT,
+        cost: beryl_card::mana("{U}"),
+        abilities: &[Ability::spell().effect(&TEST_HIGH_TIDE_EFFECT)],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+static TEST_TUNDRA: CardDef = CardDef {
+    name: "Test Tundra",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::LAND,
+        subtypes: beryl_card::SubtypeWords::new(beryl_card::Subtypes::of(&[
+            beryl_card::Subtype::Plains,
+            beryl_card::Subtype::Island,
+        ])),
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+/// On 200 seeded boards with one or two live mana-changing effects, the solver's payability,
+/// plans (both `KeepMostPayable` and `Greedy`), and `Payment::Manual` agree with `reference_sequences`.
+#[test]
+#[allow(clippy::too_many_lines)]
+fn reference_agrees_with_mana_changes_on_200_seeded_boards() {
+    static CARDS: CardTable = CardTable::new(&[
+        &LAND,
+        &ISLAND,
+        &TEST_TUNDRA,
+        &TEST_SWAMP,
+        &TEST_SIGNET,
+        &TEST_HIGH_TIDE,
+    ]);
+    let deck: &[(u8, &str)] = &[
+        (10, "Test Land"),
+        (10, "Test Island"),
+        (10, "Test Tundra"),
+        (10, "Test Swamp"),
+        (4, "Test Signet"),
+        (4, "Test High Tide"),
+    ];
+    let t = crate::GameTable::new(
+        beryl_kernel::format::Format::CONSTRUCTED,
+        &CARDS,
+        [deck, deck],
+    )
+    .unwrap();
+    let lands = [
+        "Test Land",
+        "Test Island",
+        "Test Tundra",
+        "Test Swamp",
+        "Test Signet",
+    ];
+    let mut rng = SplitMix64::new(0x4168_71DE);
+    let mut payable_count = 0usize;
+    let mut manual_steps = 0usize;
+    for board_ix in 0..200 {
+        let mut s = crate::State::new(&t, board_ix as u64 + 1, Profile::EXACT).unwrap();
+        super::begin(&t, &mut s);
+        let p = s.turn().starting_player();
+        let n_lands = rng.below(6) as usize + 1;
+        let mut placed = Vec::new();
+        for _ in 0..n_lands {
+            let name = lands[rng.below(lands.len() as u64) as usize];
+            if let Some(&slot) = s
+                .library(p)
+                .iter()
+                .find(|&&sl| s.definition_name(&t, sl) == name)
+            {
+                s.board().place(slot, Zone::Battlefield).unwrap();
+                placed.push(name);
+            }
+        }
+        // Start 1 or 2 live High Tide effects (with occasional captured Island -> Swamp text change).
+        let n_tides = rng.below(2) as usize + 1;
+        let tide_card = s
+            .library(p)
+            .iter()
+            .find(|&&sl| s.definition_name(&t, sl) == "Test High Tide")
+            .map(|&sl| s.definition(sl).record(&t).0)
+            .unwrap();
+        let hacked = rng.below(5) == 0;
+        let words = if hacked {
+            beryl_card::Words::NONE.changing(beryl_card::TextChange::LandType {
+                from: beryl_card::words::BasicLandWord::of_subtype(beryl_card::Subtype::Island)
+                    .unwrap(),
+                to: beryl_card::words::BasicLandWord::of_subtype(beryl_card::Subtype::Swamp)
+                    .unwrap(),
+            })
+        } else {
+            beryl_card::Words::NONE
+        };
+        for _ in 0..n_tides {
+            s.start_effect(
+                tide_card,
+                crate::state::Continuous::Mana(crate::state::ManaEffect {
+                    face: beryl_card::FaceIx::FRONT,
+                    ability: beryl_card::AbilityIx::new(0),
+                    part: 0,
+                    controller: p,
+                    colors: words.color_changes(),
+                    lands: words.land_changes(),
+                }),
+                crate::state::Duration::EndOfTurn,
+            )
+            .unwrap();
+        }
+        let mut pool = ManaPool::default();
+        for color in [ManaColor::White, ManaColor::Blue, ManaColor::Black] {
+            pool[color] = rng.below(2) as u8;
+        }
+        s.board().set_mana(p, pool);
+        crate::continuous::layers::refresh(&mut s, &t, &mut Sink::off()).unwrap();
+        let cost = ManaCost::new(
+            rng.below(5) as u8,
+            [
+                rng.below(3) as u8,
+                rng.below(4) as u8,
+                rng.below(2) as u8,
+                0,
+                0,
+                0,
+            ],
+        );
+        let Some(expected) = crate::reference::reference_sequences(&s, &t, p, cost) else {
+            continue;
+        };
+        let ctx = format!(
+            "board {board_ix}: tides={n_tides} hacked={hacked} cost={cost:?} pool={:?} placed={placed:?}",
+            pool.amounts()
+        );
+        let funds = mana::Funds::of(&s, &t, p).unwrap();
+        assert_eq!(
+            funds.pays_for(&s, &t, cost, Bitboard::EMPTY, mana::Paying::NOTHING),
+            expected,
+            "Funds::pays_for disagreed: {ctx}"
+        );
+        assert_eq!(
+            mana::payable(&s, &t, p, cost, Bitboard::EMPTY, mana::Paying::NOTHING).unwrap(),
+            expected,
+            "mana::payable disagreed: {ctx}"
+        );
+        for greedy in [false, true] {
+            let plans = mana::plans(
+                &s,
+                &t,
+                &mut Sink::off(),
+                p,
+                cost,
+                Bitboard::EMPTY,
+                greedy,
+                mana::Paying::NOTHING,
+            )
+            .unwrap();
+            assert_eq!(
+                !plans.is_empty(),
+                expected,
+                "mana::plans(greedy={greedy}) disagreed: {ctx}"
+            );
+            if greedy {
+                assert!(plans.len() <= 1, "greedy returned >1 plan: {ctx}");
+            }
+            for plan in &plans {
+                let mut paid = s;
+                mana::pay(
+                    &mut paid,
+                    &t,
+                    &mut Sink::off(),
+                    p,
+                    cost,
+                    Bitboard::EMPTY,
+                    plan,
+                    mana::Paying::NOTHING,
+                )
+                .unwrap();
+                assert_eq!(
+                    paid.player(p).mana().amounts(),
+                    plan.left,
+                    "plan.left mismatch: {ctx}"
+                );
+            }
+        }
+        if expected && !cost.is_zero() {
+            payable_count += 1;
+            for trial in 0..3 {
+                let mut ms = s;
+                let mut rem = cost;
+                let mut guard = 0;
+                while !rem.is_zero() {
+                    let opts = mana::manual_options(
+                        &ms,
+                        &t,
+                        p,
+                        rem,
+                        Bitboard::EMPTY,
+                        mana::Paying::NOTHING,
+                    )
+                    .unwrap();
+                    assert!(
+                        !opts.is_empty(),
+                        "manual_options empty with remaining {rem:?} (trial {trial}): {ctx}"
+                    );
+                    let pick_ix = match trial {
+                        0 => 0,
+                        1 => opts.len() - 1,
+                        _ => rng.below(opts.len() as u64) as usize,
+                    };
+                    rem = mana::manual_pay(
+                        &mut ms,
+                        &t,
+                        &mut Sink::off(),
+                        p,
+                        rem,
+                        opts.as_slice()[pick_ix],
+                        mana::Paying::NOTHING,
+                    )
+                    .unwrap()
+                    .0;
+                    manual_steps += 1;
+                    guard += 1;
+                    assert!(guard < 40, "manual payment did not terminate: {ctx}");
+                }
+            }
+        }
+    }
+    assert!(payable_count > 80, "only {payable_count} payable boards");
+    assert!(manual_steps > 150, "only {manual_steps} manual steps");
+}
+
+/// Unimplemented `ManaChange` variants (`Tapped::AttachedTo`, `Added::TypeProduced`,
+/// `ManaChange::Multiplies`) are refused by the game table.
+#[test]
+fn table_refuses_unimplemented_mana_changes() {
+    static ATTACHED: beryl_card::ManaChange = beryl_card::ManaChange::Adds {
+        tapped: beryl_card::Tapped::AttachedTo,
+        added: beryl_card::Added::Of(beryl_card::ManaSet::one(ManaColor::Green)),
+    };
+    static TYPE_PRODUCED: beryl_card::ManaChange = beryl_card::ManaChange::Adds {
+        tapped: beryl_card::Tapped::A(beryl_card::Filter::Types(Types::LAND)),
+        added: beryl_card::Added::TypeProduced,
+    };
+    static MULTIPLIES: beryl_card::ManaChange = beryl_card::ManaChange::Multiplies {
+        tapped: beryl_card::Filter::Types(Types::LAND),
+        by: 2,
+    };
+    static ATTACHED_EFFECT: beryl_card::Effect =
+        beryl_card::effect::build::change_mana(&ATTACHED, beryl_card::Duration::EndOfTurn);
+    static TYPE_PRODUCED_EFFECT: beryl_card::Effect =
+        beryl_card::effect::build::change_mana(&TYPE_PRODUCED, beryl_card::Duration::EndOfTurn);
+    static MULTIPLIES_EFFECT: beryl_card::Effect =
+        beryl_card::effect::build::change_mana(&MULTIPLIES, beryl_card::Duration::EndOfTurn);
+    static C1: CardDef = CardDef {
+        name: "Test Attached",
+        shape: beryl_card::definition::Shape::Single,
+        faces: &[Face {
+            types: Types::INSTANT,
+            cost: beryl_card::mana("{G}"),
+            abilities: &[Ability::spell().effect(&ATTACHED_EFFECT)],
+            ..Face::EMPTY
+        }],
+        tokens: &[],
+    };
+    static C2: CardDef = CardDef {
+        name: "Test Flare",
+        shape: beryl_card::definition::Shape::Single,
+        faces: &[Face {
+            types: Types::INSTANT,
+            cost: beryl_card::mana("{R}"),
+            abilities: &[Ability::spell().effect(&TYPE_PRODUCED_EFFECT)],
+            ..Face::EMPTY
+        }],
+        tokens: &[],
+    };
+    static C3: CardDef = CardDef {
+        name: "Test Reflection",
+        shape: beryl_card::definition::Shape::Single,
+        faces: &[Face {
+            types: Types::INSTANT,
+            cost: beryl_card::mana("{G}"),
+            abilities: &[Ability::spell().effect(&MULTIPLIES_EFFECT)],
+            ..Face::EMPTY
+        }],
+        tokens: &[],
+    };
+    static CARDS: CardTable = CardTable::new(&[&ISLAND, &C1, &C2, &C3]);
+    for name in ["Test Attached", "Test Flare", "Test Reflection"] {
+        let deck: &[(u8, &str)] = &[(36, "Test Island"), (4, name)];
+        let res = crate::GameTable::new(
+            beryl_kernel::format::Format::CONSTRUCTED,
+            &CARDS,
+            [deck, deck],
+        );
+        assert_eq!(
+            res.err(),
+            Some(crate::table::TableError::ManaChange { card: name }),
+            "{name} should be refused"
+        );
+    }
+}

@@ -42,7 +42,7 @@ pub fn start<L: Layout>(
     effect: Continuous<L>,
     duration: Duration,
 ) -> Result<(), Full> {
-    if let Subject::Object(object) = effect.subject()
+    if let Some(object) = effect.affected().as_object()
         && !game.state.is_current(object)
     {
         return Ok(());
@@ -353,6 +353,57 @@ pub(crate) fn change_rule_instruction<L: Layout>(
     let duration = lasting(duration, run.resolution().entry.controller());
     let (game, resolution) = run.resolving();
     change_rule(game, resolution, rule, duration)?;
+    Ok(Outcome::of(Bitboard::EMPTY, 1))
+}
+
+/// [`Effect::ChangeMana`](beryl_card::Effect::ChangeMana): starts a mana-changing continuous
+/// effect (see [CR 605.1b](https://yawgatog.com/resources/magic-rules/#R6051b)) that applies
+/// to every player for `duration`, capturing the resolving spell or ability's text changes.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads the resolving spell or ability's printed face to locate its ChangeMana instruction"
+)]
+pub(crate) fn change_mana_instruction<L: Layout>(
+    run: &mut Run<'_, '_, L>,
+    change: &'static beryl_card::ManaChange,
+    duration: beryl_card::Duration,
+) -> Result<Outcome<L>, Full> {
+    let controller = run.resolution().entry.controller();
+    let duration = lasting(duration, controller);
+    let (game, resolution) = run.resolving();
+    let words = game.state.entry_words(&resolution.entry);
+    let card = resolution.entry.card();
+    let face = resolution.entry.face();
+    let printed = game.table.def(card).face(face);
+    let ability = match resolution.entry.ability() {
+        Some(beryl_card::FaceAbility::Own(ix)) => ix,
+        Some(beryl_card::FaceAbility::Grant(_)) => {
+            unreachable!("granted ChangeMana is not supported")
+        }
+        None => {
+            let ix = printed
+                .abilities
+                .iter()
+                .position(|a| a.kind() == beryl_card::AbilityKind::Spell)
+                .expect("resolving spell has a spell ability");
+            beryl_card::AbilityIx::new(u8::try_from(ix).expect("ability index fits u8"))
+        }
+    };
+    let beryl_card::Behavior::Data(root) = printed.abilities[ability.index()].body() else {
+        unreachable!("ChangeMana comes from a data body");
+    };
+    let part = root
+        .mana_change_part(change)
+        .expect("resolving ChangeMana is in its ability's body");
+    let effect = Continuous::Mana(crate::state::ManaEffect {
+        face,
+        ability,
+        part,
+        controller,
+        colors: words.color_changes(),
+        lands: words.land_changes(),
+    });
+    start(game, resolution, effect, duration)?;
     Ok(Outcome::of(Bitboard::EMPTY, 1))
 }
 

@@ -552,6 +552,7 @@ pub(crate) fn may_instruction<L: Layout>(
         | Effect::ExchangeControl(..)
         | Effect::Attach { .. }
         | Effect::ChangeRule { .. }
+        | Effect::ChangeMana { .. }
         | Effect::GainFlashback(_)
         | Effect::PermitCast { .. }
         | Effect::MayCast { .. }

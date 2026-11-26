@@ -502,6 +502,9 @@ fn body_capabilities(body: Behavior) -> u64 {
             {
                 found |= Capability::SpentOnX.bit();
             }
+            if effect.any(&|instruction| matches!(instruction, Effect::ChangeMana { .. })) {
+                found |= Capability::ManaChanges.bit();
+            }
             if effect.any(&|instruction| {
                 matches!(
                     instruction,

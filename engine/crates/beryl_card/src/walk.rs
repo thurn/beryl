@@ -440,6 +440,7 @@ impl Condition {
 
 impl Effect {
     /// The subtypes named in its modifications and text changes.
+    #[allow(clippy::too_many_lines)]
     fn subtypes(&self) -> Subtypes {
         let found = std::cell::RefCell::new(Subtypes::NONE);
         self.any(&|instruction| {
@@ -524,6 +525,7 @@ impl Effect {
                 | Effect::ExchangeControl(..)
                 | Effect::Attach { .. }
                 | Effect::ChangeRule { .. }
+                | Effect::ChangeMana { .. }
                 | Effect::GainFlashback(_)
                 | Effect::PermitCast { .. }
                 | Effect::MayCast { .. }

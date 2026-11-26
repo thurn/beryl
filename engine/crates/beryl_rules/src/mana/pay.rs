@@ -438,8 +438,18 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
         && let Some((_, ability)) = remembered::makes(s, t, permanent, color)
     {
         // Its only cost is {T} (see CR 602.2b, see CR 601.2h).
+        let extra = if s.has_mana_changes() {
+            super::changes::matching_added(s, t, slot)?
+        } else {
+            [0; KINDS]
+        };
+        let controller = s.controller(slot);
         event::set_tapped(s, t, sink, permanent, true)?;
-        return remembered::add(s, t, sink, permanent, ability, color);
+        remembered::add(s, t, sink, permanent, ability, color)?;
+        if s.has_mana_changes() {
+            super::changes::add_extra(s, sink, permanent, controller, extra);
+        }
+        return Ok(());
     }
     // See [CR 305.6](https://yawgatog.com/resources/magic-rules/#R3056): a land of a basic land
     // type "has the intrinsic ability “{T}: Add [mana symbol],” even if the text box doesn't
@@ -460,7 +470,13 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
     // see [CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h): "The player pays the
     // total cost." The hand is discarded before the source is sacrificed: the player pays a
     // cost's parts in any order, and the order changes nothing here.
-    if ability.cost().does(CostAction::Tap) {
+    let tapped = ability.cost().does(CostAction::Tap);
+    let extra = if tapped && s.has_mana_changes() {
+        super::changes::matching_added(s, t, slot)?
+    } else {
+        [0; KINDS]
+    };
+    if tapped {
         event::set_tapped(s, t, sink, permanent, true)?;
     }
     if ability.cost().discards_hand() {
@@ -484,7 +500,11 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
         },
         ..PendingTrigger::default()
     };
-    crate::interpret::mana_ability(s, t, sink, activation, ability, color)
+    crate::interpret::mana_ability(s, t, sink, activation, ability, color)?;
+    if tapped && s.has_mana_changes() {
+        super::changes::add_extra(s, sink, permanent, controller, extra);
+    }
+    Ok(())
 }
 
 /// The card, face, index and ability of `ability`, an ability of a card under the merged

@@ -304,6 +304,9 @@ impl ReplayFile {
             TableError::Subtypes { count } => SessionError::Deck {
                 reason: format!("the decks name {count} subtypes, more than a game can number"),
             },
+            TableError::ManaChange { card } => SessionError::Deck {
+                reason: format!("{card} has a mana change the engine does not support yet"),
+            },
         })?;
         let profile = with_stops(
             beryl_engine::Profile::SMART,

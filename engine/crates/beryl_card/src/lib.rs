@@ -55,8 +55,9 @@ pub use ability::{
 pub use characteristics::{BasicLandTypes, Colors, Keywords, Subtype, Subtypes, Supertypes, Types};
 pub use check::Malformed;
 pub use continuous::{
-    ChosenKind, Draws, Duration, Governed, Layer, LayerSpec, MODIFY_PARTS, Modification, Named,
-    PlayerRules, Protection, Replaced, Replacement, Rewrite, RuleChange, SpellCost, When,
+    Added, ChosenKind, Draws, Duration, Governed, Layer, LayerSpec, MODIFY_PARTS, ManaChange,
+    Modification, Named, PlayerRules, Protection, Replaced, Replacement, Rewrite, RuleChange,
+    SpellCost, Tapped, When,
 };
 pub use cost::{
     CastingKind, CastingKinds, CastingOption, Castings, Chosen, Cost, CostAction, CostPart,
@@ -82,8 +83,8 @@ pub use target::{Abilities, Takes, TargetKind, TargetSpec};
 pub use trigger::{CastNumber, Subject, Trigger, TriggerEvent};
 pub use walk::{FilterIx, Node};
 pub use words::{
-    ColorChanges, ColorWords, LandTypeWords, SubtypeWord, SubtypeWords, TextChange, TextWord,
-    TextWords, Words,
+    ColorChanges, ColorWords, LandChanges, LandTypeWords, SubtypeWord, SubtypeWords, TextChange,
+    TextWord, TextWords, Words,
 };
 
 /// Everything a card file uses: the vocabulary's types and its builders,
@@ -95,14 +96,15 @@ pub mod prelude {
         when_enters, whenever_attacks,
     };
     pub use crate::{
-        Ability, Amount, BasicLandTypes, CardDef, CastFace, CastNumber, CastTerms, CastingKind,
-        CastingOption, Castings, ChosenKind, Colors, Comparison, Condition, CopyChange,
-        CopyException, Cost, CostAction, CostPart, CounterKind, DeckCondition, Duration, Effect,
-        ExceptIx, ExileMatch, Face, FaceIx, Filter, Found, Governed, GrantIx, Keywords, LayerSpec,
-        LibraryOrder, LibraryPosition, LibraryRest, ManaColor, ManaCost, ManaRestriction, ManaSet,
-        Modification, Named, Objects, Place, PlayerRules, Players, Prevention, Prompt, Protection,
-        Purpose, PutOnto, Recipients, Replacement, RuleChange, SpellCost, Subtype, Subtypes,
-        Supertypes, Taken, TargetKind, TargetSpec, Term, TextWord, TextWords, Trigger,
-        TriggerEvent, TurnPhase, TurnStep, Types, When, Zone, ZoneSet, card, card_with_shape, mana,
+        Ability, Added, Amount, BasicLandTypes, CardDef, CastFace, CastNumber, CastTerms,
+        CastingKind, CastingOption, Castings, ChosenKind, Colors, Comparison, Condition,
+        CopyChange, CopyException, Cost, CostAction, CostPart, CounterKind, DeckCondition,
+        Duration, Effect, ExceptIx, ExileMatch, Face, FaceIx, Filter, Found, Governed, GrantIx,
+        Keywords, LayerSpec, LibraryOrder, LibraryPosition, LibraryRest, ManaChange, ManaColor,
+        ManaCost, ManaRestriction, ManaSet, Modification, Named, Objects, Place, PlayerRules,
+        Players, Prevention, Prompt, Protection, Purpose, PutOnto, Recipients, Replacement,
+        RuleChange, SpellCost, Subtype, Subtypes, Supertypes, Taken, Tapped, TargetKind,
+        TargetSpec, Term, TextWord, TextWords, Trigger, TriggerEvent, TurnPhase, TurnStep, Types,
+        When, Zone, ZoneSet, card, card_with_shape, mana,
     };
 }

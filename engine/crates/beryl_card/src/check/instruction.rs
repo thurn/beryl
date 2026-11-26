@@ -250,6 +250,7 @@ impl Scope<'_> {
             | Effect::ExchangeControl(..)
             | Effect::Attach { .. }
             | Effect::ChangeRule { .. }
+            | Effect::ChangeMana { .. }
             | Effect::GainFlashback(_)
             | Effect::PermitCast { .. }
             | Effect::MayCast { .. }
