@@ -13,8 +13,8 @@ fixed in the same session. Newest first.
   disagrees with the reference". `spent_by_class` in `mana/solver.rs` gives each
   tapped source of several mana at least one of its mana and then hands the rest
   of the cost's total to those sources in class order, so the Crypt spent both
-  its {C} and the Temple only one {U}. Before the Temple, every source of several
-  mana made colorless mana, and the order never mattered. Fixed:
+  its {C} and the Temple only one {U}. Before the Temple, every source of
+  several mana made colorless mana, and the order never mattered. Fixed:
   `spent_by_class` takes the cost, and where the sources of several mana make
   different kinds and the first split does not pay, it tries the other splits
   until one does; the payment in `mana/pay.rs` spends the same split. Guard: the
