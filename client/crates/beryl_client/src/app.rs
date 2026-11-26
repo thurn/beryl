@@ -594,6 +594,7 @@ pub fn run(options: &Options) -> Result<Finished, String> {
                 pause_at,
                 end_after: options.run_for,
                 slow_gpu,
+                fixed_hz: options.fixed_hz.map(f32::from),
             })?;
             #[cfg(feature = "tools")]
             let host = host.driven(drive);

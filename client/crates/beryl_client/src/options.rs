@@ -71,6 +71,9 @@ pub struct Options {
     pub load: Option<(usize, Class)>,
     /// How long each finished frame is held back before it is shown (`--slow-gpu`).
     pub slow_gpu: Option<Duration>,
+    /// The rate the macOS display link is asked for from the start, which the host then never
+    /// steps (`--fixed-hz`), for measuring late frames at one rate.
+    pub fixed_hz: Option<u16>,
     /// With `fixture`, write that recording to this file as JSON and exit, for a phone's app to
     /// replay.
     pub write_fixture: Option<String>,
@@ -103,7 +106,7 @@ pub const SEED: u64 = 20_261_114;
 pub const WINDOWLESS_SCALE: u8 = if cfg!(target_os = "macos") { 2 } else { 1 };
 
 /// Whether this build has the options only a debug build has (`--fixture`, `--replay`,
-/// `--pause-at`, `--drive`, `--watch`, `--load`, `--slow-gpu`, `--agent`, `--opponent`, `--seed`,
+/// `--pause-at`, `--drive`, `--watch`, `--load`, `--slow-gpu`, `--fixed-hz`, `--agent`, `--opponent`, `--seed`,
 /// `--search-class`, `--offer`, `--tier` and `--probe`).
 pub const TOOLS: bool = cfg!(feature = "tools");
 
@@ -126,6 +129,7 @@ impl Options {
             watch: false,
             load: None,
             slow_gpu: None,
+            fixed_hz: None,
             write_fixture: None,
             agent: None,
             opponent: OPPONENT.to_owned(),
@@ -156,15 +160,11 @@ impl Options {
                 "--watch" if tools => options.watch = true,
                 "--load" if tools => options.load = Some(crate::load::parse(&value()?)?),
                 "--slow-gpu" if tools => options.slow_gpu = Some(duration(&value()?)?),
+                "--fixed-hz" if tools => options.fixed_hz = Some(rate(&value()?)?),
                 "--write-fixture" if tools => options.write_fixture = Some(value()?),
                 "--agent" if tools => options.agent = Some(value()?),
                 "--opponent" if tools => options.opponent = value()?,
-                "--seed" if tools => {
-                    let text = value()?;
-                    options.seed = text
-                        .parse()
-                        .map_err(|_| format!("--seed {text}: a seed is a whole number"))?;
-                }
+                "--seed" if tools => options.seed = seed(&value()?)?,
                 "--search-class" if tools => {
                     let word = value()?;
                     options.search_class = Class::from_word(&word).ok_or_else(|| {
@@ -244,6 +244,9 @@ pub fn usage(tools: bool) -> String {
             "  --slow-gpu <duration>                            hold each frame back this long",
         );
         lines.push(
+            "  --fixed-hz <rate>                                ask the display for this rate only",
+        );
+        lines.push(
             "  --write-fixture <path>                           write --fixture's recording, exit",
         );
         lines.push(
@@ -306,6 +309,20 @@ fn scale(text: &str) -> Result<u8, String> {
         .ok()
         .filter(|scale| (1..=4).contains(scale))
         .ok_or_else(|| format!("--scale {text}: a scale is a whole number from 1 to 4"))
+}
+
+/// A game's seed (`--seed`).
+fn seed(text: &str) -> Result<u64, String> {
+    text.parse()
+        .map_err(|_| format!("--seed {text}: a seed is a whole number"))
+}
+
+/// A rate in whole frames a second (`--fixed-hz`).
+fn rate(text: &str) -> Result<u16, String> {
+    text.parse()
+        .ok()
+        .filter(|hz| *hz > 0)
+        .ok_or_else(|| format!("--fixed-hz {text}: a rate is whole frames a second"))
 }
 
 /// A duration written as `just client` writes one: a number and `ms` or `s` (`850ms`, `1.25s`).

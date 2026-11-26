@@ -58,6 +58,9 @@ pub struct Options {
     /// How long each finished frame is held back before it is shown, to imitate a slow GPU
     /// (`--slow-gpu`). Zero shows it at once.
     pub slow_gpu: Duration,
+    /// The rate the display link is asked for from the start, which the host then never steps
+    /// (`--fixed-hz`), to measure late frames at one rate. `None` paces by `crate::rate`.
+    pub fixed_hz: Option<f32>,
 }
 
 /// What other threads and the display link send the event loop.
@@ -288,6 +291,9 @@ impl<S: FnOnce(&mut Renderer, Opening) -> Chosen> App<S> {
             .paused_at(self.options.pause_at);
         let frames = if fixed {
             frames.fixed_at(display_hz, chosen.tier_can_drop())
+        } else if let Some(hz) = self.options.fixed_hz {
+            // `fixed_at` asks the link for `hz` and never steps away from it.
+            frames.fixed_at(hz, chosen.tier_can_drop())
         } else {
             frames.paced(display_hz, chosen.tier_can_drop())
         }

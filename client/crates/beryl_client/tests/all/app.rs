@@ -261,6 +261,10 @@ fn a_release_build_has_no_fixture_option() {
     assert_eq!(offered.offer, ["expert", "random"]);
     assert!(agent(&["--offer", "expert"], false).is_err());
     assert!(agent(&["--offer", "nobody"], true).is_err_and(|error| error.contains("nobody")));
+    let fixed = agent(&["--fixed-hz", "60"], true).expect("a debug build fixes the rate");
+    assert_eq!(fixed.fixed_hz, Some(60));
+    assert!(agent(&["--fixed-hz", "60"], false).is_err());
+    assert!(agent(&["--fixed-hz", "0"], true).is_err());
 }
 
 #[test]

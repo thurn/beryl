@@ -569,11 +569,13 @@ the zero-allocation and native rank assertions.
   The settled composed fullscreen runs held 120 Hz, with one and three late
   frames respectively. This is why macOS fullscreen uses a composed window
   (C15).
+
 - **Opaque depth order, 2026-11-15.** On the llvmpipe Vulkan driver, two
   overlapping opaque quads shaded 20,480 fragments far first and 16,384 near
   first. The same result held under downlevel limits. This is why the opaque
   pass draws nearer geometry first and why the fragment gate uses the driver's
   count.
+
 - **Rate rule on the development Mac, 2026-11-25.** The frame logs of 24 play
   sessions on a 120 Hz ProMotion display held 1,110 late frames. On late frames
   the client's work and encoding took 0.33 ms at the median. The old rule
@@ -585,6 +587,44 @@ the zero-allocation and native rank assertions.
   drawable. That is why a step down needs 60 explained misses in 240 frames, and
   why a step up allows 30 late frames in 600 (5%, above the 1.9% seen with
   nothing wrong in the client).
+
+- **Late ticks on the development Mac, 2026-11-25.** Each run played
+  `just client app --agent expert --tier baseline --window fullscreen` to the
+  end of its game (25 to 33 s) at a load average of 16 to 28. Every run drew on
+  every tick, because the saved FPS monitor setting was on. Five runs at 120 Hz
+  drew 15,410 frames. After the first three seconds of each run, 36 were late.
+  The causes that `just client frames` names were `handler` 26 (72%),
+  `link skipped` 8, `callback late` 1 and `handling only` 1. In each `handler`
+  frame the frame before it had stalled in one stage: 15 times in the present
+  call, for 12.2 to 30.1 ms (median 0.02 ms), and 11 times in encoding and
+  submission, for 9.7 to 16.1 ms (median 0.25 ms). A 1 ms `sample` profile of a
+  sixth run showed what the stalls are. Of the 568 samples in the present call,
+  465 were waiting for wgpu's lock to be released by its readers, inside
+  wgpu-core's `Queue::present`. A further 62 samples waited for the same lock in
+  wgpu-hal's Metal `Queue::submit`. The only other thread that uses the device
+  is `scene GPU timing` (`client/crates/beryl_render/src/gpu_timing.rs`). It
+  calls `device.poll` every millisecond and runs in the utility class, below the
+  AI's search threads, so the AI can preempt it while it holds the lock. In two
+  runs with that thread in the interactive class, `handler` late frames after
+  startup fell from 1.7 to 0.9 per 1,000 frames. A ticket under the "Hold 120
+  Hz" epic moves the thread to the interactive class and makes it poll less
+  often.
+
+- **A fixed 60 Hz on the development Mac, 2026-11-25.** Three pairs of runs, as
+  above, asked the display link for a fixed 120 Hz and then a fixed 60 Hz
+  (`--fixed-hz`). Late frames for each 1,000 frames:
+
+  | Pair | Load at 120 Hz | 120 Hz             | Load at 60 Hz | 60 Hz             |
+  | ---- | -------------- | ------------------ | ------------- | ----------------- |
+  | 1    | 19.1           | 7.46 (26 of 3,484) | 24.5          | 1.06 (2 of 1,882) |
+  | 2    | 28.2           | 6.18 (22 of 3,560) | 23.5          | 0.00 (0 of 1,432) |
+  | 3    | 22.3           | 9.23 (33 of 3,575) | 27.9          | 1.54 (3 of 1,945) |
+
+  After the first three seconds, the 120 Hz runs had 54 `handler`, 8
+  `link skipped`, 3 `handling only` and 1 `callback late`, and the 60 Hz runs
+  had 5 `handler`. A link asked for a lower rate does not add late frames by
+  itself, so the macOS host keeps asking the link for the rate it chose. The
+  1.9% of late frames at 30 Hz in the earlier sessions did not recur.
 
 ## Checks and isolation
 

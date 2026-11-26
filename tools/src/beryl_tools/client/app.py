@@ -4,7 +4,7 @@ window, and `just client frames` prints a frame log's summary and its worst fram
 
 The app is built with cargo's `test` profile, as the workspace's tests are: optimized enough to
 measure frames, it shares the dependencies `just client cargo-test` built, and the `tools` feature
-gives it `--fixture`, `--pause-at`, `--drive`, `--watch`, `--load`, `--slow-gpu`, `--offer`, `--tier`,
+gives it `--fixture`, `--pause-at`, `--drive`, `--watch`, `--load`, `--slow-gpu`, `--fixed-hz`, `--offer`, `--tier`,
 `--probe` and `--agent` with its `--opponent`, `--seed` and `--search-class`, which a release
 build leaves off.
 """
@@ -225,6 +225,10 @@ def app_arguments(parser: argparse.ArgumentParser) -> None:
         "--slow-gpu", help="hold each finished frame back this long (5ms)"
     )
     parser.add_argument(
+        "--fixed-hz",
+        help="ask the macOS display link for this rate from the start and never step (60)",
+    )
+    parser.add_argument(
         "--agent",
         help="start a new game this agent plays for the viewer; the run ends when it is over",
     )
@@ -280,6 +284,7 @@ def run_app(args: argparse.Namespace) -> int:
         ("--drive", args.drive),
         ("--load", args.load),
         ("--slow-gpu", args.slow_gpu),
+        ("--fixed-hz", args.fixed_hz),
         ("--agent", args.agent),
         ("--opponent", args.opponent),
         ("--seed", args.seed),
