@@ -334,6 +334,19 @@ pub fn hold_back_activation_being_paid<L: Layout>(view: &mut PlayerView, s: &Sta
     }
 }
 
+/// Sets [`ObjectView::printing`] of each object in `view` whose card the viewer knows, to
+/// `printing` of its object ID: which of its name's printings the slot shows, the same in both
+/// seats' views (`crate::printings`). An object the viewer does not know shows none, so a
+/// card's art says nothing about which card it is.
+pub fn show_printings(
+    view: &mut PlayerView,
+    printing: impl Fn(ObjectId) -> Option<beryl_card_records::PrintingIx>,
+) {
+    for o in &mut view.objects {
+        o.printing = o.name.as_ref().and_then(|_| printing(o.slot));
+    }
+}
+
 /// Player `p` as the viewer of `obs` sees them.
 pub(crate) fn side<L: Layout>(obs: Observation<'_, L>, p: Seat) -> Side {
     if p == obs.viewer() {
@@ -418,7 +431,8 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
         zone_side: None,
         controller,
         name: name(t, obs, slot).map(str::to_owned),
-        // The session assigns printings once it deals a deck that has several.
+        // Which copy of its name a card is, the engine cannot say: the game sets it
+        // ([`show_printings`]).
         printing: None,
         other_face: obs.other_face_name(t, slot).map(str::to_owned),
         facing: if o.face() == FaceIx::DOWN {

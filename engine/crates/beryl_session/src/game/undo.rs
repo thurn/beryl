@@ -5,6 +5,7 @@ use beryl_engine::{Large, Relayout, paused_events};
 use beryl_search::AgentDecision;
 
 use crate::SessionError;
+use crate::printings::Printings;
 use crate::protocol::{PlayerView, StopsSetting};
 use crate::replay::Entry;
 
@@ -23,6 +24,8 @@ pub(super) struct BeforeCast {
     /// How many undo points had been kept by then, counting those dropped since
     /// ([`Game::undo_depth`]).
     pub(super) undo: usize,
+    /// The printings the visible cards showed then.
+    pub(super) printings: Printings,
 }
 
 /// The most undo points a game keeps ([`Game::undo`]), the oldest dropped first: at most
@@ -46,6 +49,9 @@ pub(super) struct UndoPoint {
     /// to: the agent is asked that decision again.
     pub(super) agent: AgentDecision,
     pub(super) hurt_by: [Option<ObjectRef<Large>>; 2],
+    /// The printings the visible cards showed then, which go back with the state: a card
+    /// drawn again after an undo shows the art it showed before.
+    pub(super) printings: Printings,
 }
 
 impl Game {
@@ -86,6 +92,7 @@ impl Game {
             .take()
             .expect("a cancellable cast began somewhere");
         self.board.restore(&before.state);
+        self.printings = before.printings;
         self.run = None;
         self.answered = before.answered;
         self.replay.log.truncate(before.log);
@@ -139,6 +146,7 @@ impl Game {
             point = previous;
         }
         self.board.restore(&point.state);
+        self.printings = point.printings;
         // A run of picks waiting to go on belongs to the game taken back.
         self.run = None;
         self.answered = point.answered;
@@ -189,6 +197,7 @@ impl Game {
             before_cast: self.before_cast.clone(),
             agent: self.agent_next,
             hurt_by: self.hurt_by,
+            printings: self.printings.clone(),
         });
         if self.undo.len() > UNDO_POINTS {
             self.undo.pop_front();

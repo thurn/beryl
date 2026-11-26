@@ -1,7 +1,11 @@
 //! The human's pass on to their next stop, while the session passes their priority for them.
 
-use beryl_engine::{DecisionKind, NextStop, Observation, StepPosition, StepTarget, view};
+use beryl_engine::{
+    DecisionKind, Limits, NextStop, Observation, Profile, Seat, StepPosition, StepStops,
+    StepTarget, view,
+};
 
+use crate::protocol::StopsSetting;
 use crate::replay::Entry;
 
 use super::{At, Boards, Game, Open, on_board};
@@ -59,5 +63,36 @@ impl Game {
     /// each opponent spell would do no more than "Resolve" beside it.
     pub(super) fn passes_for(&self, passing: PassingOn) -> bool {
         on_board!(&self.board, b => b.state.before_step(passing.until))
+    }
+}
+
+/// `profile` under the human's `stops`. Full control asks the human every priority they get,
+/// as Arena does, even where the engine would pass for them, and offers every activation;
+/// their opponent's passes stay silent. Under the smart stops, the human stops in the steps
+/// they chose, and the agent in the smart stops' own, as its search plays. The agent is not
+/// offered an activation that would do nothing ([`Profile::hides_pointless`]); the human is,
+/// but it makes no stop of its own ([`Profile::quiet_pointless`]). Whatever the stops, the
+/// human picks each target of their own spells and abilities, even a lone one, so a click never
+/// aims a spell for them ([`Profile::asks_targets`]), and may tap their mana sources at
+/// priority, floating the mana, as an Arena player clicks a land ([`Profile::taps_mana`]). The
+/// game's budgets are a player's ([`Limits::PLAYER`]): a human repeating a loop by hand never
+/// runs into a rollout's.
+pub fn with_stops(profile: Profile, stops: StopsSetting, human: Seat) -> Profile {
+    let mut step_stops = [StepStops::SMART; 2];
+    step_stops[human.index()] = stops.step_stops();
+    // The human is offered every activation; under the smart stops, those that would do
+    // nothing make no stop of their own (Profile::quiet_pointless).
+    let mut hides_pointless = profile.hides_pointless;
+    hides_pointless[human.index()] = false;
+    Profile {
+        stops: stops.stops(),
+        step_stops,
+        full_control: stops.full_control.then_some(human),
+        asks_targets: Some(human),
+        taps_mana: Some(human),
+        hides_pointless,
+        quiet_pointless: (!stops.full_control).then_some(human),
+        limits: Limits::PLAYER,
+        ..profile
     }
 }

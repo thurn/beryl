@@ -17,14 +17,15 @@ use beryl_engine::event::{Event, LossCause, Tagged};
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::{ObjectRef, Pending, StackEntry};
 use beryl_engine::{
-    CardTable, Choice, Decision, DecisionKind, GameTable, Large, Limits, Outcome, Profile,
-    Relayout, Seat, Small, State, StepStops, observe, two_player::TwoPlayerSeat as _, view,
+    CardTable, Choice, Decision, DecisionKind, GameTable, Large, Outcome, Profile, Relayout, Seat,
+    Small, State, observe, two_player::TwoPlayerSeat as _, view,
 };
 use beryl_search::{Agent, AgentDecision, Budget, GameAgent};
 use serde_json::json;
 
 use crate::ai::{self, AgentMove, AgentMoves, SearchView};
 use crate::journal;
+use crate::printings::Printings;
 use crate::protocol::{CandidateIndex, DecisionId, PlayerView, SessionId, StopsSetting};
 use crate::replay::{Entry, FORMAT_VERSION, ReplayFile};
 use crate::save::Chosen;
@@ -40,6 +41,7 @@ mod views;
 
 use boards::{Boards, Snapshot, on_board};
 use passing::PassingOn;
+pub use passing::with_stops;
 use playing::without_floating;
 pub use undo::UNDO_POINTS;
 use undo::{BeforeCast, UndoPoint};
@@ -282,6 +284,9 @@ pub struct Game {
     prompt: Option<(DecisionId, crate::prompt::Held)>,
     /// The picks still to make of the prompt the human's latest click answered.
     run: Option<crate::prompt::Run>,
+    /// Which printing each visible card shows, in a game whose deck has several
+    /// ([`crate::printings`]).
+    printings: Printings,
 }
 
 impl Game {
@@ -312,6 +317,7 @@ impl Game {
         )?;
         let mut game = Game::assemble(table, &state, replay, start.human, session, agent);
         game.replay.chooser = game.flip_winner.map(Seat::get);
+        game.printings = Printings::dealt(start.seed, &start.decks);
         Ok(game)
     }
 
@@ -453,6 +459,7 @@ impl Game {
             chance: Chance::default(),
             prompt: None,
             run: None,
+            printings: Printings::default(),
         }
     }
 
@@ -575,6 +582,7 @@ impl Game {
                     log: self.replay.log.len(),
                     stops: self.stops,
                     undo: self.undo_depth() - 1,
+                    printings: self.printings.clone(),
                 });
                 let origin = if continuation {
                     ChoiceOrigin::Continuation
@@ -761,36 +769,5 @@ impl Game {
         for outcome in self.chance.take() {
             self.replay.log.push(Entry::of(&self.table, outcome));
         }
-    }
-}
-
-/// `profile` under the human's `stops`. Full control asks the human every priority they get,
-/// as Arena does, even where the engine would pass for them, and offers every activation;
-/// their opponent's passes stay silent. Under the smart stops, the human stops in the steps
-/// they chose, and the agent in the smart stops' own, as its search plays. The agent is not
-/// offered an activation that would do nothing ([`Profile::hides_pointless`]); the human is,
-/// but it makes no stop of its own ([`Profile::quiet_pointless`]). Whatever the stops, the
-/// human picks each target of their own spells and abilities, even a lone one, so a click never
-/// aims a spell for them ([`Profile::asks_targets`]), and may tap their mana sources at
-/// priority, floating the mana, as an Arena player clicks a land ([`Profile::taps_mana`]). The
-/// game's budgets are a player's ([`Limits::PLAYER`]): a human repeating a loop by hand never
-/// runs into a rollout's.
-pub fn with_stops(profile: Profile, stops: StopsSetting, human: Seat) -> Profile {
-    let mut step_stops = [StepStops::SMART; 2];
-    step_stops[human.index()] = stops.step_stops();
-    // The human is offered every activation; under the smart stops, those that would do
-    // nothing make no stop of their own (Profile::quiet_pointless).
-    let mut hides_pointless = profile.hides_pointless;
-    hides_pointless[human.index()] = false;
-    Profile {
-        stops: stops.stops(),
-        step_stops,
-        full_control: stops.full_control.then_some(human),
-        asks_targets: Some(human),
-        taps_mana: Some(human),
-        hides_pointless,
-        quiet_pointless: (!stops.full_control).then_some(human),
-        limits: Limits::PLAYER,
-        ..profile
     }
 }

@@ -203,6 +203,7 @@ impl Game {
             };
             decision.undo_depth = u32::try_from(self.undo_depth()).unwrap_or(u32::MAX);
         }
+        self.printings.show(&mut view);
         view.script = Some(self.screens[viewer.index()].script(&view, &heard));
         view
     }

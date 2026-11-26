@@ -6,7 +6,7 @@ use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::StackEntry;
 use beryl_engine::{
     Candidates, Choice, Decision, DecisionKind, GameTable, Large, Layout, Opt, Relayout, Replay,
-    Scratch, State, Step, TurnStep, apply,
+    Scratch, State, Step, TurnStep, apply, view,
 };
 use beryl_search::{AgentDecision, Budget};
 
@@ -51,6 +51,7 @@ impl Game {
                 .board
                 .next_in_step(&self.table, self.seen, &mut self.chance);
             self.log_chance();
+            self.note_printings();
             // Once a cast is complete, or another player decides, it can no longer be taken back.
             if !matches!(&step, Some(Step::Decide(d)) if d.decider == self.human && self.casting())
             {
@@ -118,6 +119,15 @@ impl Game {
             }
             return;
         }
+    }
+
+    /// Notes which printing each card some player knows shows, in the position the players
+    /// see ([`crate::printings`]): after each step the engine plays, which a replay plays too,
+    /// whether or not a view is drawn there.
+    fn note_printings(&mut self) {
+        on_board!(&mut self.board, b => {
+            self.printings.note(&self.table, view(&b.state, &self.table, &mut b.peek));
+        });
     }
 
     /// The session's own answer to the human's decision `d`, if it gives one: under the

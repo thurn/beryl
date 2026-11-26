@@ -50,6 +50,7 @@ mod paid_costs;
 mod payments;
 mod picks;
 mod preview;
+mod printings;
 mod promotion;
 mod prompt;
 mod refused;
