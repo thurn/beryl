@@ -56,6 +56,7 @@
     "tools/src/beryl_tools/cards.py": [
       "data/card-pool-exclusions.json",
       "data/card-printings.csv",
+      "data/deck-printings.csv",
       "docs/sample-decks/2025-11-18-17lands-cb8d5d5f-wu-control.txt",
       "docs/sample-decks/2026-10-17-PrinceJools-wu-control.txt"
     ],
