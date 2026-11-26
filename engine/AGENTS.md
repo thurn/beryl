@@ -113,8 +113,10 @@ Each of these checks explains itself when it fails.
   need a human decision. `just citations shorten <paths>` rewrites the inline
   links in doc comments as references, `[CR 118.12a]`, with the links defined at
   the end of each comment.
-- `just fuzz` plays long random games, and `just exhaust` tries every sequence
-  of decisions near the end positions of the scenarios.
+- `just fuzz` plays long random games (run it with
+  `ignite run --class batch -- just fuzz` so multi-hour fuzzing does not starve
+  interactive builds), and `just exhaust` tries every sequence of decisions near
+  the end positions of the scenarios.
 - Follow the [card-writing skill](../.agents/skills/card-writing/SKILL.md) to
   add a card. `just card brief <name>` shows its Oracle text, a Rust draft,
   rulings and references for unresolved clauses. `just card new <name>` writes

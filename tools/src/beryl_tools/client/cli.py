@@ -211,7 +211,10 @@ def pack_selection(arguments: list[str]) -> tuple[str, ...]:
     ):
         return ("--all",)
     if command == "corpus":
-        return () if "--snapshot" in args or "--against" in args else ("--all",)
+        if "--snapshot" in args or "--against" in args:
+            return ()
+        prefixes = [arg for arg in args if not arg.startswith("--")]
+        return ("--prefix", prefixes[0]) if len(prefixes) == 1 else ("--all",)
     positionals: list[str] = []
     only = ""
     remaining = iter(args)

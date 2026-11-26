@@ -589,3 +589,9 @@ def test_a_named_spec_uses_a_cached_local_pack(
         "--prefix",
         "client:counterspell/",
     )
+    assert cli.pack_selection(["corpus", "--update", "island/"]) == (
+        "--prefix",
+        "island/",
+    )
+    assert cli.pack_selection(["corpus", "--update", "island/", "dandn/"]) == ("--all",)
+    assert cli.pack_selection(["corpus", "--update"]) == ("--all",)

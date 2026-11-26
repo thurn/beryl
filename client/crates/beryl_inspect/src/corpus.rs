@@ -44,8 +44,12 @@ pub(crate) fn read() -> Result<BTreeSet<String>, String> {
             .binary_search_by(|entry| entry.name.cmp(name.as_str()))
             .is_err()
         {
+            let hint = match name.split_once('/') {
+                Some((card, _)) => format!("just client corpus --update {card}/"),
+                None => "just client corpus --update".to_owned(),
+            };
             return Err(format!(
-                "{} names unknown recording {name:?}",
+                "{} names unknown recording {name:?}; run `{hint}`",
                 path.display()
             ));
         }
@@ -78,11 +82,32 @@ pub(crate) type Shape = Vec<(u8, Vec<u8>)>;
 /// report other missing signatures even when one recording cannot be decoded.
 type Measured = (&'static str, Result<Shape, String>);
 
+/// Whether `name` belongs to the scope named by `prefix`. A prefix with `/` matches by string
+/// prefix (`island/`, `dandn/is-cast`); a bare prefix matches the exact name or `<prefix>/...`,
+/// so `island` does not match `island-sanctuary/...`.
+pub(crate) fn matches_prefix(name: &str, prefix: &str) -> bool {
+    if prefix.contains('/') {
+        name.starts_with(prefix)
+    } else {
+        name == prefix || name.starts_with(&format!("{prefix}/"))
+    }
+}
+
 pub(crate) fn shapes() -> Result<Vec<Measured>, String> {
+    shapes_for(&[])
+}
+
+fn shapes_for(prefixes: &[String]) -> Result<Vec<Measured>, String> {
     let windows = Windows::All.windows();
     let mut measure = Measure::new(crate::data::checkout_ref()?, &windows);
     Ok(recordings::entries()?
         .chunk_by(|a, b| a.name == b.name)
+        .filter(|entries| {
+            prefixes.is_empty()
+                || prefixes
+                    .iter()
+                    .any(|prefix| matches_prefix(entries[0].name, prefix))
+        })
         .map(|entries| {
             let shape = entries.iter().map(|entry| {
                 pack::messages(entry)
@@ -95,11 +120,14 @@ pub(crate) fn shapes() -> Result<Vec<Measured>, String> {
         .collect())
 }
 
-/// Groups the selected pack by signature. The pack is sorted by name and seat, so insertion
-/// chooses the first name in each group.
-pub(crate) fn representatives() -> Result<Vec<Representative<'static>>, String> {
+/// Groups matching recordings in the selected pack by signature. When `prefixes` is empty, every
+/// recording is included. The pack is sorted by name and seat, so insertion chooses the first
+/// name in each group.
+pub(crate) fn representatives_for(
+    prefixes: &[String],
+) -> Result<Vec<Representative<'static>>, String> {
     let mut groups = HashMap::<Shape, Representative<'_>>::new();
-    for (name, shape) in shapes()? {
+    for (name, shape) in shapes_for(prefixes)? {
         let representative = groups
             .entry(shape?)
             .or_insert(Representative { name, count: 0 });
@@ -110,16 +138,91 @@ pub(crate) fn representatives() -> Result<Vec<Representative<'static>>, String> 
     Ok(selected)
 }
 
-/// Writes the representatives and every fixture in name order.
-pub(crate) fn update(groups: &[Representative<'_>]) -> Result<usize, String> {
-    let mut names = fixtures()?;
-    names.extend(groups.iter().map(|group| group.name.to_owned()));
-    let mut contents = names.iter().cloned().collect::<Vec<_>>().join("\n");
+/// Merges `groups` and matching `fixtures` into `existing` for `prefixes`, leaving all unrelated
+/// entries untouched. When `prefixes` is empty, replaces the whole set with `fixtures` and
+/// `groups`.
+pub(crate) fn merge_for(
+    existing: &BTreeSet<String>,
+    fixtures: &BTreeSet<String>,
+    prefixes: &[String],
+    groups: &[&str],
+) -> BTreeSet<String> {
+    if prefixes.is_empty() {
+        let mut out = fixtures.clone();
+        out.extend(groups.iter().map(|name| (*name).to_owned()));
+        return out;
+    }
+    let in_scope = |name: &str| prefixes.iter().any(|prefix| matches_prefix(name, prefix));
+    let mut out: BTreeSet<String> = existing
+        .iter()
+        .filter(|name| !in_scope(name))
+        .cloned()
+        .collect();
+    out.extend(fixtures.iter().filter(|name| in_scope(name)).cloned());
+    out.extend(groups.iter().map(|name| (*name).to_owned()));
+    out
+}
+
+/// Writes the representatives and fixtures in name order, scoped to `prefixes` when non-empty so
+/// unrelated cards in `data/client/corpus.txt` stay untouched.
+pub(crate) fn update_for(
+    prefixes: &[String],
+    groups: &[Representative<'_>],
+) -> Result<usize, String> {
+    let existing = if prefixes.is_empty() {
+        BTreeSet::new()
+    } else {
+        names(&recordings::root())?
+    };
+    let fixture_names = fixtures()?;
+    let group_names: Vec<&str> = groups.iter().map(|group| group.name).collect();
+    let updated = merge_for(&existing, &fixture_names, prefixes, &group_names);
+    let mut contents = updated.iter().cloned().collect::<Vec<_>>().join("\n");
     contents.push('\n');
     let path = path();
     let temporary = path.with_extension(format!("{}.tmp", std::process::id()));
     fs::write(&temporary, contents)
         .and_then(|()| fs::rename(&temporary, &path))
         .map_err(|error| format!("{}: {error}", path.display()))?;
-    Ok(names.len())
+    Ok(updated.len())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn set(items: &[&str]) -> BTreeSet<String> {
+        items.iter().map(|s| (*s).to_owned()).collect()
+    }
+
+    #[test]
+    fn bare_prefix_matches_card_directory_without_sibling_prefix_collision() {
+        assert!(matches_prefix("island/play", "island"));
+        assert!(matches_prefix("island/play", "island/"));
+        assert!(matches_prefix("verbs-zones", "verbs-zones"));
+        assert!(!matches_prefix("island-sanctuary/upkeep", "island"));
+    }
+
+    #[test]
+    fn scoped_merge_replaces_only_requested_prefixes() {
+        let existing = set(&[
+            "island/old-name",
+            "island-sanctuary/upkeep",
+            "shahrazad/subgame",
+        ]);
+        let fixtures = set(&["island/fixture-one", "other/fixture"]);
+        let prefixes = vec!["island/".to_owned()];
+
+        let merged = merge_for(&existing, &fixtures, &prefixes, &["island/new-name"]);
+
+        assert_eq!(
+            merged,
+            set(&[
+                "island/fixture-one",
+                "island/new-name",
+                "island-sanctuary/upkeep",
+                "shahrazad/subgame",
+            ])
+        );
+    }
 }

@@ -1075,5 +1075,10 @@
     "label": "`ignite check` and `ignite land` now run zero-build always-set families (`commit`, `repository`, `markdown`, `source`, `client-source`, `rust-format`, `client-format`, `black`, `pyre`) in a fast pre-pass before launching compiled builds, refuse duplicate `ignite run` commands in the same tree or session with the active handle ID, and print all failing checks in `rerun` with guidance to pass `ignite test` before re-running `ignite check`",
     "metric": "bead.minutes",
     "expect": "down"
+  },
+  {
+    "label": "`just client corpus --update <prefix>...` now updates only the requested card prefixes in `data/client/corpus.txt` (recording only that prefix when one is given) and unknown-corpus errors print the exact scoped command, preventing unrelated cards from entering `corpus.txt` and causing spurious `client-interface` check loops",
+    "metric": "bead.minutes",
+    "expect": "down"
   }
 ]

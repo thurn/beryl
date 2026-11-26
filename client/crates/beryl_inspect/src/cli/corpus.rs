@@ -16,16 +16,19 @@ pub(super) const SNAPSHOT: &str = "--snapshot";
 pub(super) const AGAINST: &str = "--against";
 
 pub(super) fn corpus(options: &Options) -> Result<Printed, Usage> {
-    if !options.rest.is_empty() {
-        return Err(Usage("corpus takes no recording name".to_owned()));
-    }
     if let Some(path) = options.value(SNAPSHOT) {
+        if !options.rest.is_empty() {
+            return Err(Usage("corpus --snapshot takes no prefix".to_owned()));
+        }
         return snapshot(Path::new(path)).map_err(Usage);
     }
     if let Some(path) = options.value(AGAINST) {
+        if !options.rest.is_empty() {
+            return Err(Usage("corpus --against takes no prefix".to_owned()));
+        }
         return sweep(Path::new(path)).map_err(Usage);
     }
-    let groups = corpus::representatives().map_err(Usage)?;
+    let groups = corpus::representatives_for(&options.rest).map_err(Usage)?;
     let recordings: usize = groups.iter().map(|group| group.count).sum();
     let mut out = String::new();
     for group in &groups {
@@ -37,7 +40,7 @@ pub(super) fn corpus(options: &Options) -> Result<Printed, Usage> {
         groups.len()
     );
     if options.switch(test::UPDATE) {
-        let names = corpus::update(&groups).map_err(Usage)?;
+        let names = corpus::update_for(&options.rest, &groups).map_err(Usage)?;
         let _ = writeln!(out, "Wrote {names} names to data/client/corpus.txt");
     }
     Ok(Printed::text(out))

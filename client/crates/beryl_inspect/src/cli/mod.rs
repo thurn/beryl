@@ -260,12 +260,12 @@ const COMMANDS: &[Command] = &[
     Command {
         name: "corpus",
         summary: "one name and count for each distinct recording signature",
-        argument: "",
+        argument: " [prefix...]",
         examples: [
             ("just client corpus", "list the representatives and counts"),
             (
-                "just client corpus --update",
-                "write the representatives and fixtures to the corpus",
+                "just client corpus --update island/",
+                "update one card's entries in data/client/corpus.txt",
             ),
         ],
         spec: Spec {
@@ -274,7 +274,10 @@ const COMMANDS: &[Command] = &[
             switches: &[test::UPDATE],
         },
         own: &[
-            ("--update", "write data/client/corpus.txt"),
+            (
+                "--update",
+                "write data/client/corpus.txt (scoped to given prefixes, or whole file)",
+            ),
             (
                 "--sweep [--crate <crate>]",
                 "check all card spec moments, one crate at a time",
