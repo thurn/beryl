@@ -53,5 +53,23 @@ pub mod scenarios {
                 ME.has_cards(Zone::Hand, 3),
                 ME.has_cards(Zone::Graveyard, 2),
             ]),
+        Scenario::new(
+            "Chart a Course does not discard after attacking with Dandân in a shared game",
+        )
+        .shared_library(&[Card::Island, Card::Island])
+        .interaction(&[Card::Dandan])
+        .hand(P0, &[CHART])
+        .battlefield(P0, &[Card::Dandan, Card::Island, Card::Island])
+        .battlefield(P1, &[Card::Island])
+        .actions(&[
+            ME.passes(),
+            ME.attacks_with(Card::Dandan),
+            advance_to(1, TurnStep::PostcombatMain),
+            ME.casts(CHART),
+            Resolve,
+            ME.has_cards(Zone::Hand, 2),
+            ME.has(Zone::Graveyard, CHART, 1),
+            ME.has_cards(Zone::Graveyard, 1),
+        ]),
     ];
 }

@@ -498,3 +498,58 @@ fn a_discard_by_seat_one_triggers_whenever_an_opponent_discards() {
     live.act(THEM.life(18)).unwrap();
     live.act(ME.life(20)).unwrap();
 }
+
+#[test]
+fn a_sacrificed_dandan_has_no_owner_in_the_shared_graveyard() {
+    let mut p = Position::new(Seat::P0);
+    let dandan = p.put(Seat::P0, names::DANDAN, Zone::Battlefield);
+    let mut live = p.live();
+    live.act(Resolve).unwrap();
+    let s = live.state();
+    assert_eq!(s.object(dandan).zone(), Zone::Graveyard);
+    assert!(!s.has_owner(dandan));
+}
+
+#[test]
+fn a_seeded_forgetful_fish_game_between_random_agents_reaches_an_outcome() {
+    let t = GameTable::new(
+        Format::SHARED_DECK,
+        &CARDS,
+        [beryl_cards::decks::FORGETFUL_FISH, &[]],
+    )
+    .unwrap();
+    let mut s = State::new(&t, 0, Profile::EXACT).unwrap();
+    let mut x = Scratch::new();
+    let mut rng: u64 = 0x5EED_F154_D4AD_A401;
+    let mut next_u64 = || {
+        rng = rng.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = rng;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^ (z >> 31)
+    };
+    let mut reached = false;
+    for _ in 0..50_000 {
+        match next(&mut s, &t, &mut x, &mut Replay) {
+            Step::Over(_) => {
+                reached = true;
+                break;
+            }
+            Step::Decide(d) => {
+                let count = d.candidates.len();
+                let pick = usize::try_from(next_u64() % u64::try_from(count).unwrap()).unwrap();
+                apply(
+                    &mut s,
+                    &t,
+                    &mut x,
+                    &mut Replay,
+                    Choice(u16::try_from(pick).unwrap()),
+                );
+            }
+        }
+    }
+    assert!(
+        reached,
+        "seeded Forgetful Fish game did not reach an outcome"
+    );
+}

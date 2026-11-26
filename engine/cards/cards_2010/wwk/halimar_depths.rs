@@ -17,3 +17,23 @@ pub static CARD: CardDef = Printed::HalimarDepths
         Ability::tap_for_mana(ManaSet::one(ManaColor::Blue)),
     ])
     .card();
+
+#[cfg(feature = "scenarios")]
+pub mod scenarios {
+    use crate::prelude::*;
+
+    pub const SCENARIOS: &[Scenario] = &[Scenario::new(
+        "Halimar Depths in a shared game reorders the top of the shared library for the opponent",
+    )
+    .shared_library(&[Card::Plains, Card::Swamp, Card::Island])
+    .hand(P0, &[Card::HalimarDepths])
+    .actions(&[
+        ME.plays(Card::HalimarDepths),
+        Resolve,
+        ME.picks(Card::Island),
+        ME.picks(Card::Swamp),
+        advance_to(2, TurnStep::PrecombatMain),
+        THEM.has(Zone::Hand, Card::Island, 1),
+        ME.library_top(&[Card::Swamp, Card::Plains]),
+    ])];
+}

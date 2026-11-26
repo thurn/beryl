@@ -100,5 +100,33 @@ pub mod scenarios {
                 ME.passes(),
                 ME.deciding(DecisionKind::Attacker, 2),
             ]),
+        Scenario::new("Dandân attacks in a shared game when the defender controls an Island")
+            .shared_library(&[Card::Island, Card::Island])
+            .battlefield(P0, &[DANDAN, Card::Island])
+            .battlefield(P1, &[Card::Island])
+            .actions(&[
+                advance_to(1, TurnStep::BeginningOfCombat),
+                ME.passes(),
+                ME.attacks_with(DANDAN),
+                advance_to(1, TurnStep::EndOfCombat),
+                THEM.life(16),
+            ]),
+        Scenario::new(
+            "Dandân is sacrificed to the shared graveyard when its controller controls no Island",
+        )
+        .shared_library(&[Card::Island, Card::Island])
+        .interaction(&[MIND_BEND])
+        .battlefield(P0, &[DANDAN, Card::Island])
+        .hand(P0, &[MIND_BEND])
+        .actions(&[
+            ME.casts(MIND_BEND),
+            ME.targets(Card::Island),
+            Resolve,
+            ME.chooses_word(ISLAND),
+            ME.chooses_word(SWAMP),
+            Resolve,
+            ME.has(Zone::Graveyard, DANDAN, 1),
+            THEM.has(Zone::Graveyard, DANDAN, 1),
+        ]),
     ];
 }

@@ -182,3 +182,19 @@ pub const FLASHBACK: &[Scenario] = &[Scenario::new(
     THEM.has(Zone::Exile, names::LIGHTNING_BOLT, 1),
     THEM.has(Zone::Graveyard, names::LIGHTNING_BOLT, 0),
 ])];
+
+/// 9. Playing an Island in a shared game and tapping it for blue mana.
+pub const ISLAND: &[Scenario] =
+    &[
+        Scenario::new("Island played in a shared game taps for blue mana")
+            .shared_library(&[names::ISLAND; 3])
+            .interaction(&[names::MENTAL_NOTE])
+            .hand(P0, &[names::ISLAND, names::MENTAL_NOTE])
+            .actions(&[
+                ME.plays(names::ISLAND),
+                ME.controls(names::ISLAND, 1),
+                ME.casts(names::MENTAL_NOTE),
+                Resolve,
+                ME.tapped(names::ISLAND, 1),
+            ]),
+    ];

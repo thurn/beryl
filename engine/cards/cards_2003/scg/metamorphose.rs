@@ -90,5 +90,20 @@ pub mod scenarios {
                 THEM.controls(Prop::Vanilla, 0),
                 THEM.has(Zone::Hand, Prop::Instant, 1),
             ]),
+        Scenario::new("Metamorphose puts an opponent's permanent on top of the shared library")
+            .shared_library(&[Card::Island])
+            .interaction(&[Card::Dandan])
+            .hand(P0, &[META, Card::Island])
+            .battlefield(P0, &[Card::Island, Card::Island])
+            .battlefield(P1, &[Card::Dandan, Card::Island])
+            .hand(P1, &[Card::Island])
+            .actions(&[
+                ME.casts(META),
+                ME.targets(Card::Dandan),
+                Resolve,
+                THEM.picks_up_to(Card::Island),
+                THEM.controls(Card::Island, 2),
+                ME.library_top(&[Card::Dandan]),
+            ]),
     ];
 }

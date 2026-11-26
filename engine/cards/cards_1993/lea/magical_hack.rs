@@ -115,5 +115,22 @@ pub mod scenarios {
                 Resolve,
                 ME.has(Zone::Graveyard, DANDAN, 1),
             ]),
+        Scenario::new(
+            "Magical Hack on Dandân in a shared game causes it to be sacrificed to the shared graveyard",
+        )
+        .shared_library(&[Card::Island])
+        .interaction(&[DANDAN])
+        .battlefield(P0, &[DANDAN, Card::Island])
+        .hand(P0, &[HACK])
+        .actions(&[
+            ME.casts(HACK),
+            ME.targets(DANDAN),
+            Resolve,
+            ME.chooses_word(ISLAND),
+            ME.chooses_word(SWAMP),
+            Resolve,
+            ME.has(Zone::Graveyard, DANDAN, 1),
+            THEM.has(Zone::Graveyard, DANDAN, 1),
+        ]),
     ];
 }

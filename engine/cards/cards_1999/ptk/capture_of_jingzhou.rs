@@ -42,5 +42,18 @@ pub mod scenarios {
                 ME.has_cards(Zone::Hand, 1),
                 THEM.has_cards(Zone::Hand, 1),
             ]),
+        Scenario::new("Capture of Jingzhou's extra turn draws from the shared library")
+            .at(1, P0, TurnStep::PrecombatMain)
+            .shared_library(&[Card::Plains, Card::Island])
+            .hand(P0, &[Card::CaptureOfJingzhou])
+            .battlefield(P0, &[Card::Island; 5])
+            .actions(&[
+                ME.casts(Card::CaptureOfJingzhou),
+                Resolve,
+                advance_to(2, TurnStep::PrecombatMain),
+                ME.has(Zone::Hand, Card::Plains, 1),
+                THEM.has_cards(Zone::Hand, 0),
+                ME.has_cards(Zone::Library, 1),
+            ]),
     ];
 }

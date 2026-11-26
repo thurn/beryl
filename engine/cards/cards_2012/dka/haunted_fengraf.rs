@@ -77,5 +77,19 @@ pub mod scenarios {
             ME.has(Zone::Hand, Prop::FlashCreature, 1),
             ME.has(Zone::Graveyard, Prop::FlashCreature, 0),
         ]),
+        Scenario::new(
+            "Haunted Fengraf returns a creature card from the shared graveyard whoever cast it",
+        )
+        .shared_library(&[Card::Island, Card::Island])
+        .interaction(&[Card::Dandan])
+        .battlefield(P0, &[FENGRAF, Card::Island, Card::Island, Card::Island])
+        .shared_graveyard(&[Card::Dandan])
+        .actions(&[
+            ME.activates(FENGRAF, 1),
+            Resolve,
+            ME.has(Zone::Hand, Card::Dandan, 1),
+            ME.has(Zone::Graveyard, FENGRAF, 1),
+            THEM.has(Zone::Graveyard, FENGRAF, 1),
+        ]),
     ];
 }

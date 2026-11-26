@@ -56,5 +56,25 @@ pub mod scenarios {
                 stack(0),
                 ME.has(Zone::Graveyard, Card::Counterspell, 1),
             ]),
+        Scenario::new(
+            "Mystic Sanctuary in a shared game puts an instant the opponent cast onto the shared library",
+        )
+        .shared_library(&[Card::Island; 3])
+        .interaction(&[Card::MentalNote])
+        .battlefield(P0, &[Card::Island; 4])
+        .hand(P0, &[Card::MysticSanctuary, Card::MentalNote])
+        .battlefield(P1, &[Card::Island])
+        .hand(P1, &[Card::MentalNote])
+        .actions(&[
+            ME.passes(),
+            THEM.casts(Card::MentalNote),
+            Resolve,
+            THEM.has(Zone::Graveyard, Card::MentalNote, 1),
+            ME.plays(Card::MysticSanctuary),
+            ME.tapped(Card::MysticSanctuary, 0),
+            Resolve,
+            ME.yes(),
+            ME.library_top(&[Card::MentalNote]),
+        ]),
     ];
 }

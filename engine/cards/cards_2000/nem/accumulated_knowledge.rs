@@ -50,5 +50,17 @@ pub mod scenarios {
                 THEM.has_cards(Zone::Hand, 0),
                 ME.has(Zone::Graveyard, KNOWLEDGE, 2),
             ]),
+        Scenario::new("Accumulated Knowledge counts copies in the shared graveyard once")
+            .shared_library(&[Card::Island; 4])
+            .shared_graveyard(&[KNOWLEDGE, KNOWLEDGE])
+            .hand(P0, &[KNOWLEDGE])
+            .battlefield(P0, &[Card::Island, Card::Island])
+            .actions(&[
+                ME.casts(KNOWLEDGE),
+                Resolve,
+                ME.has_cards(Zone::Hand, 3),
+                ME.has(Zone::Graveyard, KNOWLEDGE, 3),
+                THEM.has(Zone::Graveyard, KNOWLEDGE, 3),
+            ]),
     ];
 }

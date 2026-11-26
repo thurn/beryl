@@ -71,5 +71,25 @@ pub mod scenarios {
                 ME.controls(Prop::Vanilla, 1),
                 ME.has(Zone::Library, Prop::Vanilla, 0),
             ]),
+        Scenario::new(
+            "Memory Lapse puts a countered spell on top of the shared library for the opponent to draw",
+        )
+        .shared_library(&[Card::Island])
+        .interaction(&[Card::Dandan])
+        .battlefield(P0, &[Card::Island; 2])
+        .hand(P0, &[Card::Dandan, Card::Island])
+        .battlefield(P1, &[Card::Island; 2])
+        .hand(P1, &[Card::MemoryLapse])
+        .actions(&[
+            ME.casts(Card::Dandan),
+            THEM.casts(Card::MemoryLapse),
+            ME.library_top(&[Card::Dandan]),
+            ME.has(Zone::Graveyard, Card::MemoryLapse, 1),
+            THEM.has(Zone::Graveyard, Card::MemoryLapse, 1),
+            advance_to(2, TurnStep::PrecombatMain),
+            THEM.has(Zone::Hand, Card::Dandan, 1),
+            THEM.casts(Card::Dandan),
+            THEM.controls(Card::Dandan, 1),
+        ]),
     ];
 }

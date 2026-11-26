@@ -32,6 +32,7 @@ pub mod scenarios {
     const NACATL: &str = Card::WildNacatl;
     const MOUNTAIN: TextWord = TextWord::LandType(Subtype::Mountain);
     const ISLAND: TextWord = TextWord::LandType(Subtype::Island);
+    const SWAMP: TextWord = TextWord::LandType(Subtype::Swamp);
 
     pub const SCENARIOS: &[Scenario] = &[
         // P1's Wild Nacatl's "Mountain" reads "Island", so P1's Island gives it +1/+1, until
@@ -130,5 +131,23 @@ pub mod scenarios {
                 advance_to(1, TurnStep::EndOfCombat),
                 THEM.life(18),
             ]),
+        Scenario::new(
+            "Crystal Spray on Dandân in a shared game causes it to be sacrificed and draws from the shared library",
+        )
+        .shared_library(&[Card::Island])
+        .interaction(&[Card::Dandan])
+        .battlefield(P0, &[Card::Dandan, Card::Island, Card::Island, Card::Island])
+        .hand(P0, &[SPRAY])
+        .actions(&[
+            ME.casts(SPRAY),
+            ME.targets(Card::Dandan),
+            Resolve,
+            ME.chooses_word(ISLAND),
+            ME.chooses_word(SWAMP),
+            Resolve,
+            ME.has(Zone::Hand, Card::Island, 1),
+            ME.has(Zone::Graveyard, Card::Dandan, 1),
+            THEM.has(Zone::Graveyard, Card::Dandan, 1),
+        ]),
     ];
 }

@@ -44,5 +44,20 @@ pub mod scenarios {
                 ME.has(Zone::Hand, Card::Plains, 1),
                 ME.has_cards(Zone::Library, 0),
             ]),
+        Scenario::new("Telling Time in a shared game leaves a card on top that the opponent draws")
+            .shared_library(&[Card::Plains, Card::Swamp, Card::Island])
+            .battlefield(P0, &[Card::Island; 2])
+            .hand(P0, &[Card::TellingTime])
+            .actions(&[
+                ME.casts(Card::TellingTime),
+                Resolve,
+                ME.picks(Card::Plains),
+                ME.picks(Card::Swamp),
+                ME.has(Zone::Hand, Card::Plains, 1),
+                ME.library_top(&[Card::Swamp]),
+                advance_to(2, TurnStep::PrecombatMain),
+                THEM.has(Zone::Hand, Card::Swamp, 1),
+                ME.has_cards(Zone::Library, 1),
+            ]),
     ];
 }

@@ -94,5 +94,43 @@ pub mod scenarios {
                 THEM.has(Zone::Exile, BOLT, 1),
                 ME.has_cards(Zone::Hand, 2),
             ]),
+        Scenario::new(
+            "Predict targeting the opponent mills the shared library into the shared graveyard",
+        )
+        .shared_library(&[Card::Plains, Card::Island, Card::Island])
+        .battlefield(P0, &[Card::Island; 2])
+        .hand(P0, &[PREDICT])
+        .actions(&[
+            ME.casts(PREDICT),
+            ME.targets_player(THEM),
+            Resolve,
+            ME.names(Card::Plains),
+            ME.has(Zone::Graveyard, Card::Plains, 1),
+            THEM.has(Zone::Graveyard, Card::Plains, 1),
+            ME.has_cards(Zone::Hand, 2),
+            ME.has_cards(Zone::Library, 0),
+        ]),
+        Scenario::new(
+            "Predict targeting its caster after Memory Lapse mills the known card and draws two",
+        )
+        .shared_library(&[Card::Island; 3])
+        .interaction(&[Card::MemoryLapse, Card::Dandan])
+        .battlefield(P0, &[Card::Island; 4])
+        .hand(P0, &[Card::MemoryLapse, PREDICT])
+        .battlefield(P1, &[Card::Island; 2])
+        .hand(P1, &[Card::Dandan])
+        .actions(&[
+            advance_to(2, TurnStep::PrecombatMain),
+            THEM.casts(Card::Dandan),
+            ME.casts(Card::MemoryLapse),
+            Resolve,
+            THEM.passes(),
+            ME.casts(PREDICT),
+            ME.targets_player(ME),
+            Resolve,
+            ME.names(Card::Dandan),
+            ME.has(Zone::Graveyard, Card::Dandan, 1),
+            ME.has_cards(Zone::Hand, 2),
+        ]),
     ];
 }

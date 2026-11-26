@@ -49,5 +49,41 @@ pub mod scenarios {
                 ME.has(Zone::Hand, Prop::UntargetedSpell, 1),
                 ME.has(Zone::Graveyard, Prop::UntargetedSpell, 0),
             ]),
+        Scenario::new(
+            "Unsubstantiate returns a stolen creature to the hand of the player who cast it",
+        )
+        .shared_library(&[Card::Island, Card::Island])
+        .interaction(&[Card::Dandan, Card::ControlMagic])
+        .battlefield(P0, &[Card::Island; 4])
+        .hand(P0, &[Card::Dandan, Card::Unsubstantiate])
+        .battlefield(P1, &[Card::Island; 4])
+        .hand(P1, &[Card::ControlMagic])
+        .actions(&[
+            ME.casts(Card::Dandan),
+            Resolve,
+            ME.controls(Card::Dandan, 1),
+            advance_to(2, TurnStep::PrecombatMain),
+            THEM.casts(Card::ControlMagic),
+            Resolve,
+            THEM.controls(Card::Dandan, 1),
+            THEM.passes(),
+            ME.casts(Card::Unsubstantiate),
+            ME.has(Zone::Hand, Card::Dandan, 1),
+            THEM.controls(Card::Dandan, 0),
+            ME.has(Zone::Graveyard, Card::ControlMagic, 1),
+        ]),
+        Scenario::new("Unsubstantiate returns a spell on the stack to its caster's hand")
+            .shared_library(&[Card::Island, Card::Island])
+            .interaction(&[Card::Dandan])
+            .battlefield(P0, &[Card::Island; 2])
+            .hand(P0, &[Card::Dandan])
+            .battlefield(P1, &[Card::Island; 2])
+            .hand(P1, &[Card::Unsubstantiate])
+            .actions(&[
+                ME.casts(Card::Dandan),
+                THEM.casts(Card::Unsubstantiate),
+                ME.has(Zone::Hand, Card::Dandan, 1),
+                ME.has(Zone::Graveyard, Card::Dandan, 0),
+            ]),
     ];
 }

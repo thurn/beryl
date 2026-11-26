@@ -38,5 +38,17 @@ pub mod scenarios {
                 )
                 .hand(P0, &[Card::Island])
                 .actions(&[ME.deciding(DecisionKind::Priority, 2)]),
+            Scenario::new(
+                "The Surgical Bay is sacrificed to the shared graveyard and draws from the shared library",
+            )
+            .shared_library(&[Card::Plains])
+            .battlefield(P0, &[Card::TheSurgicalBay, Card::Island, Card::Island])
+            .actions(&[
+                ME.activates(Card::TheSurgicalBay, 2),
+                Resolve,
+                ME.has(Zone::Graveyard, Card::TheSurgicalBay, 1),
+                THEM.has(Zone::Graveyard, Card::TheSurgicalBay, 1),
+                ME.has(Zone::Hand, Card::Plains, 1),
+            ]),
         ];
 }

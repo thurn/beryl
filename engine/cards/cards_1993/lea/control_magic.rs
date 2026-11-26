@@ -101,5 +101,48 @@ pub mod scenarios {
                 THEM.controls(Card::HolyStrength, 1),
                 ME.pt(Prop::Vanilla, 3, 3),
             ]),
+        Scenario::new(
+            "Control Magic's stolen Dandân is sacrificed when its new controller has no Island",
+        )
+        .shared_library(&[Card::Island, Card::Island])
+        .interaction(&[Card::Dandan, Card::SvyeluniteTemple])
+        .hand(P0, &[MAGIC])
+        .battlefield(P0, &[Card::SvyeluniteTemple, Card::SvyeluniteTemple])
+        .battlefield(P1, &[Card::Dandan, Card::Island])
+        .actions(&[
+            ME.casts(MAGIC),
+            Resolve,
+            Resolve,
+            ME.has(Zone::Graveyard, Card::Dandan, 1),
+            THEM.has(Zone::Graveyard, Card::Dandan, 1),
+            ME.has(Zone::Graveyard, MAGIC, 1),
+        ]),
+        Scenario::new(
+            "when Control Magic leaves in a shared game, Dandân returns to the player who cast it",
+        )
+        .shared_library(&[Card::Island, Card::Island])
+        .interaction(&[Card::Dandan, Card::Metamorphose])
+        .hand(P0, &[MAGIC])
+        .battlefield(P0, &[Card::Island; 4])
+        .hand(P1, &[Card::Dandan, Card::Metamorphose])
+        .battlefield(P1, &[Card::Island; 4])
+        .actions(&[
+            advance_to(2, TurnStep::PrecombatMain),
+            THEM.casts(Card::Dandan),
+            Resolve,
+            THEM.controls(Card::Dandan, 1),
+            advance_to(3, TurnStep::PrecombatMain),
+            ME.casts(MAGIC),
+            Resolve,
+            ME.controls(Card::Dandan, 1),
+            ME.passes(),
+            THEM.casts(Card::Metamorphose),
+            THEM.targets(MAGIC),
+            Resolve,
+            ME.done_picking(),
+            THEM.controls(Card::Dandan, 1),
+            ME.controls(Card::Dandan, 0),
+            ME.library_top(&[MAGIC]),
+        ]),
     ];
 }

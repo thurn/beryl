@@ -312,6 +312,7 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
     ("shared", names::ISLAND, shared::FREE_MULLIGAN),
     ("shared", names::ISLAND, shared::DECKING),
     ("shared", names::SNAPCASTER_MAGE, shared::FLASHBACK),
+    ("shared", names::ISLAND, shared::ISLAND),
 ];
 
 /// The scenarios by the card that has the effect, as a card's own are listed

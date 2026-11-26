@@ -101,5 +101,25 @@ pub mod scenarios {
                 THEM.has_cards(Zone::Hand, 8),
                 ME.counters(Prop::Vanilla, CounterKind::PlusOne, 0),
             ]),
+        Scenario::new(
+            "Day's Undoing shuffles both hands and the shared graveyard, draws alternately, and exiles itself",
+        )
+        .seed(0)
+        .shared_library(&[Card::Island; 12])
+        .shared_graveyard(&[Card::MemoryLapse])
+        .interaction(&[Card::Dandan, Card::Predict, Card::MemoryLapse])
+        .hand(P0, &[UNDOING, Card::Dandan])
+        .battlefield(P0, &[Card::Island; 3])
+        .hand(P1, &[Card::Predict])
+        .actions(&[
+            ME.casts(UNDOING),
+            Resolve,
+            advance_to(2, TurnStep::PrecombatMain),
+            ME.has(Zone::Exile, UNDOING, 1),
+            THEM.has(Zone::Exile, UNDOING, 0),
+            ME.has_cards(Zone::Hand, 7),
+            THEM.has_cards(Zone::Hand, 8),
+            ME.has_cards(Zone::Graveyard, 0),
+        ]),
     ];
 }

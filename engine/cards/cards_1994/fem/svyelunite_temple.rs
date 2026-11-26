@@ -51,5 +51,22 @@ pub mod scenarios {
                 THEM.has(Zone::Graveyard, Card::MotherOfRunes, 1),
                 ME.has(Zone::Graveyard, Card::SvyeluniteTemple, 1),
             ]),
+        Scenario::new(
+            "Svyelunite Temple is sacrificed to the shared graveyard when tapped for two blue mana",
+        )
+        .shared_library(&[Card::Island])
+        .interaction(&[Card::Dandan, Card::MemoryLapse])
+        .battlefield(P0, &[Card::SvyeluniteTemple])
+        .hand(P0, &[Card::MemoryLapse])
+        .battlefield(P1, &[Card::Island, Card::Island])
+        .hand(P1, &[Card::Dandan])
+        .actions(&[
+            advance_to(2, TurnStep::PrecombatMain),
+            THEM.casts(Card::Dandan),
+            ME.casts(Card::MemoryLapse),
+            ME.has(Zone::Graveyard, Card::SvyeluniteTemple, 1),
+            THEM.has(Zone::Graveyard, Card::SvyeluniteTemple, 1),
+            ME.library_top(&[Card::Dandan]),
+        ]),
     ];
 }
