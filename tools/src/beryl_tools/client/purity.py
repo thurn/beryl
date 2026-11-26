@@ -61,6 +61,7 @@ SCENE_DEPENDENCIES: set[str] = SCENE_CRATES | {
     "self_cell",
     "smallbox",  # Inline storage for action messages.
     "beryl_protocol",
+    "beryl_card_records",  # Reads the embedded card store; no clock, thread or file.
     "bytemuck",
     "glam",
     "taffy",

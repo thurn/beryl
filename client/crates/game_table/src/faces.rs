@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 
-use beryl_protocol::card_records::{CardEntry, CardRecords, PrintingIx};
+use beryl_protocol::card_records::{CardEntry, CardFace, CardRecords, PrintingIx};
 use beryl_protocol::protocol::{ObjectView, PlayerView, StackItem, ZoneName};
 
 use kit_ui::input::{AssetReady, FaceId, FaceSize};
@@ -139,32 +139,15 @@ impl FaceList {
         list
     }
 
-    /// Lists the first face of `entry` as the picture of printing `ix`.
+    /// Lists the first face of `entry` as the picture of printing `ix`. Its name only labels
+    /// the placeholder, so it is not registered for lookup by name.
     fn add_printing(&mut self, ix: PrintingIx, entry: &CardEntry) {
         let Some(face) = entry.faces.first() else {
             return;
         };
-        let printed = face
-            .power
-            .as_deref()
-            .zip(face.toughness.as_deref())
-            .and_then(|(power, toughness)| Some([power.parse().ok()?, toughness.parse().ok()?]));
-        let text = PrintedText {
-            mana_cost: face.mana_cost.clone(),
-            type_line: face.type_line.clone(),
-            rules: face.oracle_text.clone(),
-            power: face.power.clone(),
-            toughness: face.toughness.clone(),
-            loyalty: face.loyalty.clone(),
-            token: false,
-        };
-        // The name only labels the placeholder drawn until the art arrives, so it is not
-        // registered for lookup by name.
+        let (printed, text) = printed_text(face, false);
         let id = self.add(&face.images.large, Vec::new(), &face.colors, printed, text);
-        let listed = &mut self.faces[usize::from(id.0)];
-        if listed.names.is_empty() {
-            listed.names.push(entry.name.clone());
-        }
+        self.faces[usize::from(id.0)].names.push(entry.name.clone());
         self.printings.insert(ix, id);
     }
 
@@ -419,22 +402,7 @@ impl FaceList {
             if i == 0 {
                 names.extend([entry.name.clone(), asked.to_owned()]);
             }
-            let printed = face
-                .power
-                .as_deref()
-                .zip(face.toughness.as_deref())
-                .and_then(|(power, toughness)| {
-                    Some([power.parse().ok()?, toughness.parse().ok()?])
-                });
-            let text = PrintedText {
-                mana_cost: face.mana_cost.clone(),
-                type_line: face.type_line.clone(),
-                rules: face.oracle_text.clone(),
-                power: face.power.clone(),
-                toughness: face.toughness.clone(),
-                loyalty: face.loyalty.clone(),
-                token,
-            };
+            let (printed, text) = printed_text(face, token);
             ids.push(self.add(&face.images.large, names, &face.colors, printed, text));
         }
         if !token {
@@ -498,6 +466,24 @@ impl FaceList {
         }
         id
     }
+}
+
+/// The printed power and toughness of `face`, when both are numbers, and the words its drawn
+/// frame prints.
+fn printed_text(face: &CardFace, token: bool) -> (Option<[i32; 2]>, PrintedText) {
+    let printed = (face.power.as_deref())
+        .zip(face.toughness.as_deref())
+        .and_then(|(power, toughness)| Some([power.parse().ok()?, toughness.parse().ok()?]));
+    let text = PrintedText {
+        mana_cost: face.mana_cost.clone(),
+        type_line: face.type_line.clone(),
+        rules: face.oracle_text.clone(),
+        power: face.power.clone(),
+        toughness: face.toughness.clone(),
+        loyalty: face.loyalty.clone(),
+        token,
+    };
+    (printed, text)
 }
 
 /// A hash of a name in the manner of `FxHash`, which the Rust compiler uses for its own tables: it
@@ -712,14 +698,16 @@ impl Faces {
         &self,
         ix: PrintingIx,
     ) -> (Option<&ListedFace>, Option<u16>) {
-        self.list.printing(ix).map_or((None, None), |id| {
-            (self.list.get(id), self.board_layer_of(id))
-        })
+        self.listed_board_at(self.list.printing(ix))
     }
 
     /// The listed face and its board-size layer, if resident, from one name lookup.
     pub(crate) fn listed_board(&self, name: &str) -> (Option<&ListedFace>, Option<u16>) {
-        self.list.find(name).map_or((None, None), |id| {
+        self.listed_board_at(self.list.find(name))
+    }
+
+    fn listed_board_at(&self, id: Option<FaceId>) -> (Option<&ListedFace>, Option<u16>) {
+        id.map_or((None, None), |id| {
             (self.list.get(id), self.board_layer_of(id))
         })
     }
