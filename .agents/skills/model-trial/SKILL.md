@@ -32,10 +32,12 @@ time:
    `ignite.toml`), the `provider:` and the `effort:`. Pin both to one provider: workers of
    other providers take tickets of every tier.
 2. **The cap**, in dollars at list price, summed over the copies' sessions and the reviewer
-   runs. The source's sessions are work the pool would do anyway and do not count. As a
-   starting point, the first trial estimated a Sonnet copy at high effort at about $1.50 and
-   two Opus reviewer runs at high effort at about $5 per pair. `block_reserve_usd` is what one
-   more block may cost; a block files nothing when the spend plus this would pass the cap.
+   runs. The source's sessions are work the pool would do anyway and do not count. What the
+   first trial's pairs really cost: a Sonnet copy at high effort had a median of $1.90 and
+   an average of $4, because copies of engine card tickets cost $15 to $23. A Gemini 4
+   Hydrogen copy averaged $5, and a Gemini 4 Neon copy averaged $11. One Opus reviewer run at
+   high effort cost about $0.90. `block_reserve_usd` is what one more block may cost; a
+   block files nothing when the spend plus this would pass the cap.
 3. **The reviewer**: `model` (a key of `[pool.models.claude]`), `effort` and `runs_per_pair`
    (two, with A and B swapped, so that a rubric line counts only when both runs agree).
 4. **The ticket pool**: which epics or labels to draw from, the block size, the most pairs,
@@ -51,9 +53,16 @@ list. He picks the tickets and their order; the tool never picks. Leave out, eve
 - a ticket whose main output is other tickets, such as a review, because the copy would file
   them twice;
 - a lead whose worker closes its followers, because the copy would close real tickets;
-- a ticket that waits on another ticket's results, or that needs a machine with no worker.
+- a ticket that waits on another ticket's results, or that needs a machine with no worker;
+- a hub ticket about a failing check, because the hub often closes it before its block comes
+  up (two of the first trial's three were closed that way);
+- a ticket that already has a saved branch of earlier work, or is likely to get one before
+  its block: `pair file` skips it, because the source would resume work the copy cannot see.
 
-Order the list so that each block mixes kinds. Then finish the spec. Its fields are
+Order the list so that each block mixes kinds. Give each arm a tier named after its model
+(`tier:hydrogen`, not `tier:opus` on another provider): a tier named after another model can
+be remapped in `ignite.toml` while the trial runs. In the first trial, five Gemini copies ran
+on Neon instead of Hydrogen that way. Then finish the spec. Its fields are
 `arms.source` and one or more copy arms, each under its own name such as `arms.copy` (each
 `tier`, `provider`, `effort`; the first copy arm is the default one), `block_size`, `max_pairs`
 (zero for the whole list), `cap_usd`, `block_reserve_usd`, `planted_per_block`, `reviewer`
@@ -117,7 +126,13 @@ closes a stuck copy as step 2 would.
    source's title came from. And a copy that starts after its source ran `just bugs done`
    finds the report marked fixed, with the source's fix commit in its front matter (`fix:`),
    so `grade` reports that commit as seen: clear the pair only if the copy never used it in a
-   command.
+   command. A decision records only your reading. Clearing a pair never lifts a void that
+   `grade`'s rules set, such as a copy whose last command listed every `trial/` branch while
+   it created its own. Only a change to `grade` and a regrade can lift such a void. A shared
+   line in both diffs is usually innocent when it re-wraps a comment the code already had,
+   or copies a validation that sits next to it. Check the time each arm wrote the file
+   against the time the other arm committed. For an `agy` arm, the full transcript is under
+   `~/.gemini/antigravity-cli/brain/<transcript>/`.
 4. **Audits.** For each planted pair whose source has landed and that has no audit, read what
    the source landed against the planted sentence (`pairs.jsonl` holds the original, the
    planted one and the expected response). If the false sentence led the session to build
@@ -171,8 +186,8 @@ the list ended the trial.
    `review` through `ignite run --`. Close any
    copy released or stopped unfinished, decide any suspect pair, and audit any planted pair
    whose source landed since the last block, as in "Running a block".
-2. Check that `ignite ticket list --label trial:copy --json` shows every copy of this trial
-   closed.
+2. Check that `ignite ticket list --label trial:copy --all --json` shows every copy of this
+   trial closed (without `--all` it lists only open tickets).
 3. Run `just model-trial report --trial <epic> --comment <epic>` for the final table.
 4. Add a second comment on the epic, written for the user and following "Writing for readers"
    in the root `AGENTS.md`:
@@ -184,6 +199,10 @@ the list ended the trial.
    - the differences between the arms the design could not remove: the copy is told its work
      will not land, and only the source passes the landing gate and tip verification and may
      retry after a rejection, so the source is graded on its first landed commit;
+   - each source whose first session was released, with the reason from its release comment.
+     A source released for a cause outside the model (a command that hung, a staging tip that
+     did not build) is graded as unfinished, and the copy wins that pair by default. Say how
+     many of the copy's wins are of this kind;
    - a proposed wording for the tier rule (the model tier bullet in the root `AGENTS.md` and
      in `.agents/skills/ignite/SKILL.md`), or a statement that the trial gives no reason to
      change it. Do not edit either file, or any setting in `ignite.toml`: routing is the
