@@ -193,9 +193,15 @@ fn the_repository_configuration_parses() {
                 "source",
                 "oracle",
                 "oracle-generated",
+                "client-clippy",
+                "ignite-lint",
+                "rust-format",
+                "client-format",
+                "black",
             ]
             .map(str::to_owned)
             .into(),
+            budgets: ["counts", "client-frame-counts"].map(str::to_owned).into(),
             ..Rules::default()
         },
     );
@@ -242,11 +248,14 @@ fn a_check_is_protected_by_its_own_name_or_its_family() {
     let rules = Rules {
         report_only: Vec::new(),
         protected: vec!["lint".to_owned(), "tests:boots".to_owned()],
+        budgets: vec!["counts".to_owned()],
     };
     assert!(rules.is_protected("lint:workspace"));
     assert!(rules.is_protected("tests:boots"));
     assert!(!rules.is_protected("tests:other"));
     assert!(!rules.is_protected("linter:workspace"));
+    assert!(rules.is_budget("counts:rollouts"));
+    assert!(!rules.is_budget("client-counts:boards"));
 }
 
 #[test]

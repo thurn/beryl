@@ -3090,6 +3090,20 @@ its failures qualify like any other. So does a failed check that has a pass at
 `master` on its platform, however old the gap: the gap did not leave that check
 unverified. The stall setting is optional and independent of `broken_build`.
 
+Before that revert, upkeep switches off a check that has held `master` back for
+an hour without a record of catching a real defect. A check holds `master` back
+when a tip seen after the newest verified tip failed it, and its hour starts
+when the first such tip finished verification. Its record is the hub's
+`check_fix_outcomes`: a check with any `product` outcome is kept, except in the
+`[rules] budgets` families, such as instruction counts, where a fix that brings
+the cost back under its limit is performance work, not a defect caught.
+Protected checks, lints and formatters among them, are never switched off this
+way, and neither is a check on a platform no machine can verify. The switch is
+recorded against the check's open regression ticket, which gets a comment
+telling its worker to switch the check back on with the fix. Deferring such a
+check costs nothing while its fix is written, where a stall revert would take a
+product landing out of `master`.
+
 An eligible failure reverts its culprit when all of these hold, and otherwise
 gets a regression ticket:
 

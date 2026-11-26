@@ -182,11 +182,29 @@ seconds = 60        # of running checks per landing
 
 # Improvement rules (docs/ignite.md, "Improvement tickets"). A report-only rule files nothing.
 # Set the Efficiency improvements allocation on the dashboard's Pool page to manage dispatch.
-# Upkeep leaves protected checks on when it files a remedy. The never-caught rule skips them.
-# The oracle families play product scenarios against independent rules engines.
+# Upkeep leaves protected checks on when it files a remedy, and never switches one off for holding
+# master back. The never-caught rule skips them. The oracle families play product scenarios
+# against independent rules engines. Lints and formatters are protected because a failure is
+# always a real fault in the source.
+# `budgets` names the families that hold a measured cost under a limit. Upkeep switches off a
+# check that has held master back for an hour unless one of its fixes changed product behavior,
+# and for a budget family a fix that brought the cost back under the limit does not count.
 [rules]
 report_only = ["tier-gap"]
-protected = ["native-app", "clippy", "pyre", "source", "oracle", "oracle-generated"]
+protected = [
+  "native-app",
+  "clippy",
+  "pyre",
+  "source",
+  "oracle",
+  "oracle-generated",
+  "client-clippy",
+  "ignite-lint",
+  "rust-format",
+  "client-format",
+  "black",
+]
+budgets = ["counts", "client-frame-counts"]
 
 # A ticket's `effort:` label overrides this default. Apps without an entry use medium.
 [pool.default_effort]

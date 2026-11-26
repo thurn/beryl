@@ -1,0 +1,153 @@
+//! Upkeep switches off a check that holds `master` back without a record of catching a defect.
+
+use ignite_core::config::Rules;
+use ignite_core::fakes::FakeClock;
+use ignite_core::ids::{CheckName, Commit, InputHash, MachineId};
+use ignite_core::protocol::hub::{ResultKey, TipFailure, TipState, TipVerified};
+use ignite_core::protocol::tickets::TicketType;
+use ignite_core::traits::Clock;
+use ignite_store::hub::{self, tickets, tips};
+use rusqlite::{Connection, params};
+
+use super::tests::{apply, check_state, create, list_check, start};
+use super::unproven_holds::{self, HOLD_SECONDS};
+
+fn rules() -> Rules {
+    Rules {
+        protected: vec!["clippy".to_owned()],
+        budgets: vec!["counts".to_owned()],
+        ..Rules::default()
+    }
+}
+
+fn verified(conn: &Connection, commit: &str, clock: &FakeClock) {
+    conn.execute(
+        "INSERT INTO tips (commit_sha, seen, verified, state) VALUES (?1, ?2, ?2, 'verified')",
+        params![commit, clock.now().to_string()],
+    )
+    .unwrap();
+}
+
+fn failed(conn: &Connection, commit: &str, checks: &[&str], clock: &FakeClock) {
+    tips::verified(
+        conn,
+        &TipVerified {
+            commit: Commit::new(commit).unwrap(),
+            machine: MachineId::new("m-1").unwrap(),
+            state: TipState::Failed,
+            regression_passes: None,
+            failed_descendant: None,
+            failure: Some(TipFailure {
+                checks: checks
+                    .iter()
+                    .map(|check| ResultKey {
+                        check: CheckName::new(*check).unwrap(),
+                        hash: InputHash::new("a".repeat(64)).unwrap(),
+                        platform: None,
+                    })
+                    .collect(),
+                unverified_commits: vec![Commit::new(commit).unwrap()],
+            }),
+        },
+        clock.now(),
+    )
+    .unwrap();
+}
+
+fn fixed_before(conn: &Connection, check: &str, outcome: &str) {
+    conn.execute(
+        "INSERT INTO check_fix_outcomes (close_seq, check_name, ticket, at, outcome, source)
+         VALUES (1, ?1, 'old', '2026-11-01T00:00:00Z', ?2, 'regression')",
+        params![check, outcome],
+    )
+    .unwrap();
+}
+
+fn regression_ticket(conn: &mut Connection, check: &str, clock: &FakeClock) -> String {
+    let id = apply(
+        conn,
+        vec![create("Regression", TicketType::Bug, None, &[])],
+        clock.now(),
+    )
+    .remove(0);
+    conn.execute(
+        "INSERT INTO regressions (check_name, ticket, first_bad, last_good, state)
+         VALUES (?1, ?2, 'bbbb', 'aaaa', 'open')",
+        params![check, id],
+    )
+    .unwrap();
+    id
+}
+
+fn pass(conn: &mut Connection, clock: &FakeClock) -> Vec<String> {
+    unproven_holds::switch_off(conn, &rules(), clock.now()).unwrap()
+}
+
+#[test]
+fn an_unproven_check_holding_master_for_an_hour_is_switched_off_and_its_ticket_told() {
+    let mut conn = hub::open_in_memory().unwrap();
+    let clock = start();
+    for check in [
+        "rust:frames",
+        "rust:caught",
+        "clippy:lint",
+        "counts:rollouts",
+    ] {
+        list_check(&mut conn, check);
+    }
+    fixed_before(&conn, "rust:frames", "test-only");
+    fixed_before(&conn, "rust:caught", "product");
+    // A count fix that got back under the limit changed product files, but caught no defect.
+    fixed_before(&conn, "counts:rollouts", "product");
+    let ticket = regression_ticket(&mut conn, "rust:frames", &clock);
+    verified(&conn, "aaaa", &clock);
+    clock.advance(60.0);
+    let checks = [
+        "rust:frames",
+        "rust:caught",
+        "clippy:lint",
+        "counts:rollouts",
+    ];
+    failed(&conn, "bbbb", &checks, &clock);
+
+    clock.advance(HOLD_SECONDS - 60.0);
+    assert!(
+        pass(&mut conn, &clock).is_empty(),
+        "the hold is not an hour old yet"
+    );
+
+    clock.advance(120.0);
+    assert_eq!(pass(&mut conn, &clock), ["counts:rollouts", "rust:frames"]);
+    assert_eq!(check_state(&conn, "rust:frames"), "off");
+    assert_eq!(check_state(&conn, "rust:caught"), "on");
+    assert_eq!(check_state(&conn, "clippy:lint"), "on");
+    let comments = tickets::comments(&conn, &ticket).unwrap();
+    assert_eq!(comments.len(), 1);
+    assert!(comments[0].text.contains("ignite flaky on rust:frames"));
+    let recorded: (String, Option<String>) = conn
+        .query_row(
+            "SELECT actor, ticket FROM check_state_changes WHERE check_name = 'rust:frames'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(recorded, ("ignite-upkeep".to_owned(), Some(ticket)));
+
+    assert!(
+        pass(&mut conn, &clock).is_empty(),
+        "a check is switched off once"
+    );
+}
+
+#[test]
+fn a_failure_before_the_newest_verified_tip_holds_nothing() {
+    let mut conn = hub::open_in_memory().unwrap();
+    let clock = start();
+    list_check(&mut conn, "rust:frames");
+    failed(&conn, "aaaa", &["rust:frames"], &clock);
+    clock.advance(60.0);
+    verified(&conn, "bbbb", &clock);
+    clock.advance(2.0 * HOLD_SECONDS);
+    assert!(pass(&mut conn, &clock).is_empty());
+    assert_eq!(check_state(&conn, "rust:frames"), "on");
+}

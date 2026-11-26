@@ -2,6 +2,11 @@ REGRESSION: a check that passed fails at the tip
 
 This is the most urgent work there is: the main branch waits on it.
 
+If upkeep switched the check off because it held the main branch back for
+an hour with no record of catching a real defect, a comment on the ticket
+says so. Fix or delete it as below, and switch it back on with
+`ignite flaky on <check> -m "<what you changed>"` once your fix passes.
+
 Before you change anything:
 - See whether the check still fails at the tip. If someone already fixed
   it, close the ticket with the commit. If it passes and you cannot find

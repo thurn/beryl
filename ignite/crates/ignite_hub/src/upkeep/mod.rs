@@ -63,6 +63,7 @@ pub mod signature;
 pub mod silent;
 pub mod source_release;
 pub mod stuck;
+mod unproven_holds;
 
 #[cfg(test)]
 mod attachments_tests;
@@ -90,6 +91,8 @@ mod source_release_tests;
 mod stuck_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod unproven_holds_tests;
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -209,6 +212,10 @@ impl Upkeep {
                 note(&mut report, remedy.filed);
             }));
         }
+        keep(
+            unproven_holds::switch_off(conn, &self.rules, now)
+                .map(|off| report.checks_switched_off.extend(off)),
+        );
         keep(stuck::tips_waiting(conn, now).map(|filed| note(&mut report, filed)));
         keep(silent::machines_silent(conn, now).map(|filed| note(&mut report, filed)));
         keep(stuck::stuck_epics(conn, now).map(|filed| note(&mut report, filed)));

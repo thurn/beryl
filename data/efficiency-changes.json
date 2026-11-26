@@ -1005,5 +1005,10 @@
     "label": "A tip check that fails on a platform still catching up on deferred checks is blamed from `master`, and may be reverted after a stall, when it has a pass at `master` on that platform. On 2026-11-25 the macOS and Windows gaps opened at f686d75 the evening before had not closed, so every native failure was blamed from a commit 265 landings back and no stall could revert it: a Windows-only lint held `master` from 14:21 to about 20:50, and `counts:rollouts` held it again from 23:44 with a culprit search naming the day before's landings",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Upkeep switches off a check that has held `master` back for an hour when no fix of it ever changed product behavior (for count families, a fix that got back under the limit does not count), leaving its regression ticket open and telling it how to switch the check back on. On 2026-11-25 kernel unit tests that a test-only fix later repaired held `master` from 09:09; with this rule they would have been off at 10:10, and tip cbe121e4b, which failed only those tests, would have verified at 13:28 instead of `master` waiting until 22:38 with 61 product commits behind it",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]

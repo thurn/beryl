@@ -377,6 +377,11 @@ pub struct Rules {
     /// Checks that stay on when upkeep files a remedy, each a family (`clippy`) or a whole
     /// check name (`family:name`). The `never-caught` rule also skips these checks.
     pub protected: Vec<String>,
+    /// Families whose checks hold a measured cost under a limit, such as instruction counts.
+    /// A fix that brings one back under its limit is a performance fix, not a defect caught,
+    /// so the rule that switches off unproven checks holding `master` back does not count it.
+    #[serde(default)]
+    pub budgets: Vec<String>,
 }
 
 impl Default for Rules {
@@ -385,6 +390,7 @@ impl Default for Rules {
         Self {
             report_only: names(&["tier-gap"]),
             protected: names(&["app", "ui-smoke", "clippy", "pyre", "ui-types", "source"]),
+            budgets: Vec::new(),
         }
     }
 }
@@ -396,6 +402,12 @@ impl Rules {
         self.protected
             .iter()
             .any(|entry| entry == check || entry == family)
+    }
+
+    /// Whether `check` belongs to one of the [`Rules::budgets`] families.
+    pub fn is_budget(&self, check: &str) -> bool {
+        let family = check.split_once(':').map_or(check, |(family, _)| family);
+        self.budgets.iter().any(|entry| entry == family)
     }
 }
 
