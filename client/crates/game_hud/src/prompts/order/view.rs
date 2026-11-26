@@ -27,7 +27,7 @@ use game_table::profiles::Profile;
 use game_table::table::{TraySpace, tray_area};
 use kit_base::tokens::{color, size, space, type_style};
 use kit_text::text::TypeStyle;
-use kit_ui::element::{Anchor, Element, Justify, Shown as Showing, row, text};
+use kit_ui::element::{Anchor, Element, Shown as Showing, row};
 use kit_ui::input::{FaceSize, Rect, Size};
 
 /// The space between the row and the words under it, their type's size and weight, and the
@@ -154,7 +154,6 @@ fn candidate(on: Subject, view: Option<&PlayerView>) -> Option<&CandidateView> {
 /// the first at the right.
 fn ends(prompt: &PromptView, count: usize, tray: (TraySpace, Size)) -> Element {
     let (space, size) = tray;
-    let [last, first] = &prompt.words.piles;
     let (per_point, area) = (per_point(tray), tray_area(space, size));
     let style = TypeStyle {
         weight: ENDS_WEIGHT,
@@ -163,21 +162,13 @@ fn ends(prompt: &PromptView, count: usize, tray: (TraySpace, Size)) -> Element {
         ..type_style::BODY
     };
     let width = area.width.min(ENDS_MOST / per_point);
-    let word = |words: &str| text(words).style(style).color(color::GOLD);
-    let mut ends = row()
-        .name("ends")
-        .width(width)
-        .justify_content(Justify::SpaceBetween)
-        .child(word(last))
-        .child(word(first));
     let row_bottom =
         row_top(count, tray) + item_width(count, tray) * tray.0.card.height / tray.0.card.width;
-    let top = row_bottom + ENDS_GAP / per_point;
-    ends.anchor = Some(Anchor::Point(
-        Vec2::new(area.x + (area.width - width) / 2.0, top),
-        Vec2::ZERO,
-    ));
-    ends
+    let at = Vec2::new(
+        area.x + (area.width - width) / 2.0,
+        row_bottom + ENDS_GAP / per_point,
+    );
+    crate::prompts::tray::ends(&prompt.words.piles, at, width, style)
 }
 
 /// Logical points to stage pixels on a window `size`.

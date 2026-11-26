@@ -20,16 +20,15 @@
 //! The flat layer is drawn over the table, so a box is its rim and its name alone, and lets the
 //! pointer through to the cards in it: the web's translucent fill would cover them.
 
-use crate::prompts::Piles;
-use beryl_protocol::prompt::{PromptView, ShapeBody};
+use crate::prompts::{Piles, tray};
+use beryl_protocol::prompt::{PlaceName, PromptView, ShapeBody};
 use glam::Vec2;
-use kit_ui::input::Rect;
 
 use crate::hud::HudIn;
 use game_table::table::tray_boxes;
 use kit_base::tokens::{color, size, type_style};
 use kit_text::text::TypeStyle;
-use kit_ui::element::{Anchor, Element, Justify, TextAlign, row, text};
+use kit_ui::element::{Anchor, Element, TextAlign, row, text};
 
 /// The share of a box's heading its name's type takes, and the least size it is drawn at, in
 /// stage pixels: `.stage-tray-label`'s `max(12px, calc(var(--heading) * 0.5))`.
@@ -56,10 +55,14 @@ pub(super) fn view(prompt: &PromptView, input: &HudIn, bar: Element) -> Element 
         ..type_style::BODY
     };
     let edged = !held.put_back();
-    let ordered = held.ordered();
+    // The one pile left to order on the library (`Pile::cards`).
+    let ordered = matches!(&piles[..], [first, second] if first.closed && first.cards.is_empty()
+        && matches!(second.place, Some(PlaceName::Top | PlaceName::OnTop | PlaceName::Bottom)));
     let boxes = tray_boxes(&held.held(None), space, size);
-    let ends = (ordered.then(|| boxes.first().copied()).flatten())
-        .map(|area| ends(&prompt.words.piles, area, label, space.gap / per_point));
+    let ends = (boxes.first().filter(|_| ordered)).map(|area| {
+        let at = Vec2::new(area.x, area.y + area.height + space.gap / per_point);
+        tray::ends(&prompt.words.piles, at, area.width, label)
+    });
     bar.children(
         held.pile_indices()
             .iter()
@@ -90,22 +93,4 @@ pub(super) fn view(prompt: &PromptView, input: &HudIn, bar: Element) -> Element 
             }),
     )
     .children(ends)
-}
-
-/// The words `[left, right]` for the ends of a row of cards in the box `area`, written under
-/// the box's two ends, `gap` below it, in `style`.
-fn ends(words: &[String; 2], area: Rect, style: TypeStyle, gap: f32) -> Element {
-    let [left, right] = words;
-    let word = |words: &str| text(words).style(style).color(color::GOLD);
-    let mut ends = row()
-        .name("ends")
-        .width(area.width)
-        .justify_content(Justify::SpaceBetween)
-        .child(word(left))
-        .child(word(right));
-    ends.anchor = Some(Anchor::Point(
-        Vec2::new(area.x, area.y + area.height + gap),
-        Vec2::ZERO,
-    ));
-    ends
 }

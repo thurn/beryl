@@ -14,6 +14,10 @@ use beryl_protocol::script::OwnStep;
 use super::{Shown, Steps, begin_spans, end_spans, mark_spans, on_table, ways};
 use game_play::light::Span;
 use game_table::table::{Held, TrayKind};
+use glam::Vec2;
+use kit_base::tokens::color;
+use kit_text::text::TypeStyle;
+use kit_ui::element::{Anchor, Element, Justify, row, text};
 
 /// The cards a prompt holds up, pile by pile, borrowed from its state, so that comparing two
 /// states allocates nothing: one pile or two, how many cards each of two must come to hold,
@@ -27,9 +31,6 @@ pub struct Piles<'a> {
     indices: [usize; 2],
     count: usize,
     kind: Kind,
-    /// The one pile held is an order on the library: the session lists it the bottom card
-    /// first and names the ends of its row, not the pile (`Words::piles`).
-    ordered: bool,
 }
 
 /// How a tray of piles is laid out (`TrayKind`), without a fan's order.
@@ -83,7 +84,6 @@ impl<'a> Piles<'a> {
             indices: [0, 1],
             count: 1,
             kind: Kind::Boxes,
-            ordered: false,
         };
         match &prompt.body {
             ShapeBody::Pick { tray, .. } if !tray.is_empty() => Some(one(tray)),
@@ -98,7 +98,6 @@ impl<'a> Piles<'a> {
                     indices: [1, 0],
                     count: 1,
                     kind: Kind::SingleBox,
-                    ordered: on_library(second),
                 }),
                 [first, second] if second.closed && second.cards.is_empty() => Some(Self {
                     cards: [&first.cards, &[]],
@@ -106,7 +105,6 @@ impl<'a> Piles<'a> {
                     indices: [0, 1],
                     count: 1,
                     kind: Kind::SingleBox,
-                    ordered: on_library(first),
                 }),
                 [first, second] => Some(Self {
                     cards: [&first.cards, &second.cards],
@@ -114,7 +112,6 @@ impl<'a> Piles<'a> {
                     indices: [0, 1],
                     count: 2,
                     kind: Kind::of(first, second),
-                    ordered: false,
                 }),
                 _ => None,
             },
@@ -162,28 +159,12 @@ impl<'a> Piles<'a> {
         }
     }
 
-    /// Whether the one pile held is an order on the library, Arena's "Order Cards": its row has
-    /// the bottom card at the left and the top card at the right, with the session's words for
-    /// those ends under it in place of the pile's name.
-    #[must_use]
-    pub fn ordered(&self) -> bool {
-        self.ordered
-    }
-
     /// Whether the piles are held up as the library and the hand a put-back takes cards from
     /// and puts them on, rather than in boxes.
     #[must_use]
     pub fn put_back(&self) -> bool {
         self.kind == Kind::PutBack
     }
-}
-
-/// Whether `pile`'s cards go to the library, where it keeps their order.
-fn on_library(pile: &Pile) -> bool {
-    matches!(
-        pile.place,
-        Some(PlaceName::Top | PlaceName::OnTop | PlaceName::Bottom)
-    )
 }
 
 /// Makes what the table shows for the prompt `shown` replace what it showed for `was`, as one
@@ -222,4 +203,15 @@ pub(super) fn lift<'s>(shown: Option<Shown<'s>>, was: Option<Shown<'s>>, steps: 
 /// Each mark `prompt` sends, as the table draws it.
 pub(super) fn marks(prompt: Option<Shown<'_>>) -> impl Iterator<Item = Span> + '_ {
     (prompt.into_iter()).flat_map(|shown| mark_spans(shown.prompt))
+}
+
+/// The session's words for the left and right ends of a row the tray holds up (`words.piles`),
+/// written in `style` at the two ends of a strip `width` wide whose top left corner is `at`.
+pub(super) fn ends(words: &[String; 2], at: Vec2, width: f32, style: TypeStyle) -> Element {
+    let word = |words: &str| text(words).style(style).color(color::GOLD);
+    let mut ends = row().name("ends").width(width);
+    ends = ends.justify_content(Justify::SpaceBetween);
+    ends = ends.child(word(&words[0])).child(word(&words[1]));
+    ends.anchor = Some(Anchor::Point(at, Vec2::ZERO));
+    ends
 }
