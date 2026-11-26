@@ -86,7 +86,11 @@ impl State {
     #[must_use]
     pub fn wake(&self) -> Wake {
         match self.stage {
-            BugStage::Capturing { .. } | BugStage::Saved { close_at: None, .. } => Wake::Now,
+            // A save in flight is work that has not finished: a script's `still` must wait for
+            // it, because the report cannot be opened again until "Saved" has closed.
+            BugStage::Capturing { .. }
+            | BugStage::Describe { saving: true, .. }
+            | BugStage::Saved { close_at: None, .. } => Wake::Now,
             BugStage::Saved {
                 close_at: Some(at), ..
             } => Wake::At(at),

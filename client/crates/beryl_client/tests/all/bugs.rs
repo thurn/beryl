@@ -21,17 +21,25 @@ impl Drop for App {
     }
 }
 
-/// Submits two reports after the replay starts. The last line keeps the run going while
-/// they are saved and filed. It bounds a missing save or filing outcome by closing stdout.
+/// Submits two reports after the replay starts. Only the first Cmd+B has a time, because the
+/// frozen moment is checked. Each `still` waits for the report to finish capturing, or for the
+/// save and the "Saved" notice to end, so that a slow machine cannot press Cmd+B while the first
+/// report is still open, which does nothing. The last line keeps the run going while they are
+/// saved and filed. It bounds a missing save or filing outcome by closing stdout.
 const SCRIPT: &str = "\
 at 1000ms key Cmd+B
-at 1500ms key space
-at 2000ms type field \"description\" \"the pay bar never filled\"
-at 2500ms press button \"Submit\"
-at 5000ms key Cmd+B
-at 5500ms key space
-at 6000ms type field \"description\" \"another report in this run\"
-at 6500ms press button \"Submit\"
+still
+key space
+still
+type field \"description\" \"the pay bar never filled\"
+press button \"Submit\"
+still
+key Cmd+B
+still
+key space
+still
+type field \"description\" \"another report in this run\"
+press button \"Submit\"
 at 60000ms move 10,10
 ";
 

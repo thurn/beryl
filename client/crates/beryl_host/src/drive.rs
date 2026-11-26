@@ -170,7 +170,9 @@ impl Drive {
                 return;
             }
             if self.waiting_still {
-                if client.wake() != Wake::Never {
+                // The inputs given so far in this call reach the client only after it returns, so
+                // its wake does not yet show what they start. Look again on the next tick.
+                if !inputs.is_empty() || client.wake() != Wake::Never {
                     return;
                 }
                 self.waiting_still = false;
