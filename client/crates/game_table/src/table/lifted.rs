@@ -171,27 +171,7 @@ pub(crate) fn lay(
         Group::Pile { side, .. } => {
             let library = lift.pile;
             let scale = super::pile::nominal_scale(layout, side);
-            let (direction, band, toward_looker) = match side {
-                Some(Side::You) => (1.0, -1.0..0.0, 0.0),
-                Some(Side::Opponent) => (-1.0, 0.0..1.0, 0.0),
-                // The shared library stands at one edge of the table, between the two players.
-                // Its cards lie beside it toward the middle of the table, and on the side of it
-                // of the player who looks: above it for the opponent, below it for the viewer.
-                None => {
-                    let toward_middle = if layout.shared_piles[0].x <= 0.0 {
-                        1.0
-                    } else {
-                        -1.0
-                    };
-                    let (CardHandling::Library { side: looker, .. }
-                    | CardHandling::Hand { side: looker }
-                    | CardHandling::Pile { side: looker, .. }) = handled.handling;
-                    match looker {
-                        Side::You => (toward_middle, -1.0..0.0, -1.0),
-                        Side::Opponent => (toward_middle, 0.0..1.0, 1.0),
-                    }
-                }
-            };
+            let (direction, band, toward_looker) = beside_library(side, handled.handling, layout);
             // A short look follows Arena: cards lie at library size beside the pile,
             // toward the middle of the table (UI Conventions, "Cards the opponent looks at").
             let pile = placement.piles[super::PileShown::index(side, ZoneName::Library)];
@@ -272,6 +252,36 @@ pub(crate) fn lay(
                         ..rest
                     },
                 );
+            }
+        }
+    }
+}
+
+/// Which way the cards a look takes from `side`'s library lie beside it: along the table
+/// (`1.0` to the right), within which band of the screen, and how far toward the player who
+/// looks, in half cards. The shared library (`side` none) stands at one edge of the table,
+/// between the two players, so its cards lie beside it toward the middle of the table, and on
+/// the side of it of the player who looks: above it for the opponent, below it for the viewer.
+fn beside_library(
+    side: Option<Side>,
+    handling: CardHandling,
+    layout: &Layout,
+) -> (f32, Range<f32>, f32) {
+    match side {
+        Some(Side::You) => (1.0, -1.0..0.0, 0.0),
+        Some(Side::Opponent) => (-1.0, 0.0..1.0, 0.0),
+        None => {
+            let toward_middle = if layout.shared_piles[0].x <= 0.0 {
+                1.0
+            } else {
+                -1.0
+            };
+            let (CardHandling::Library { side: looker, .. }
+            | CardHandling::Hand { side: looker }
+            | CardHandling::Pile { side: looker, .. }) = handling;
+            match looker {
+                Side::You => (toward_middle, -1.0..0.0, -1.0),
+                Side::Opponent => (toward_middle, 0.0..1.0, 1.0),
             }
         }
     }
