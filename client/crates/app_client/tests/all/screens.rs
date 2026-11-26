@@ -113,6 +113,41 @@ fn pressing_start_with_the_second_agent_chosen_starts_against_it() {
 }
 
 #[test]
+fn choosing_the_shared_deck_sends_its_key_and_hides_the_fair_deal() {
+    let dandan = StartRequest {
+        deck: "forgetful-fish".to_owned(),
+        ..request("random")
+    };
+    let mut page = page(vec![
+        FixtureMessage::response(LIST_AGENTS, &agents()),
+        FixtureMessage::asked(START_GAME, &dandan, &()),
+    ]);
+    assert!(
+        page.find("toggle \"WU Control\"")
+            .states()
+            .has(StateBits::SELECTED)
+    );
+    page.find("toggle \"Fair deal\"");
+    page.press("toggle \"Fair deal\"");
+    page.press("toggle \"Dandân\"");
+    page.still();
+    assert!(
+        page.find("toggle \"Dandân\"")
+            .states()
+            .has(StateBits::SELECTED)
+    );
+    assert!(
+        page.try_find("toggle \"Fair deal\"").is_err(),
+        "{}",
+        page.tree()
+    );
+    page.press(START);
+    page.still();
+    // A request that still asked for a fair deal or the other deck would not match the recording.
+    assert_eq!(replies(&page), 1, "the start was sent and answered");
+}
+
+#[test]
 fn the_host_form_defaults_to_internet_and_can_send_a_local_request() {
     for link in [TableLink::Iroh, TableLink::Local] {
         let mut page = page(vec![

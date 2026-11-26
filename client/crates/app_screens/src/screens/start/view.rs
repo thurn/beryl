@@ -4,8 +4,8 @@
 //! manual tables' entries (`table_entries`) and the export of bug reports, and the sound button in
 //! the corner.
 
-use beryl_protocol::AgentView;
 use beryl_protocol::SessionId;
+use beryl_protocol::{AgentView, DECKS};
 
 use super::super::bug_report;
 use super::super::settings::Message as SettingsMessage;
@@ -73,14 +73,14 @@ pub(super) fn start(state: &State, input: &Inputs) -> Element {
 
     let heading = [
         text("New Game").style(TITLE).color(color::GOLD),
-        text("WU Control mirror")
+        text(&format!("{} mirror", state.deck().title))
             .style(SUBTITLE)
             .color(color::TEXT_DIM)
             .margin([-size::START_SUBTITLE_PULL, 0.0, 0.0, 0.0]),
     ];
     let rows = state.agents.iter().enumerate().map(|(at, agent)| {
         let at = u16::try_from(at).unwrap_or(u16::MAX);
-        agent_row(agent, at, state.agent == Some(at), None)
+        agent_row(agent, Message::Agent(at), state.agent == Some(at), None)
     });
     // The host offers a dozen agents, more than a short window has room for, so the rows
     // scroll inside what the rest of the panel leaves.
@@ -95,6 +95,7 @@ pub(super) fn start(state: &State, input: &Inputs) -> Element {
                 .margin([0.0, 0.0, size::START_LEGEND_GAP, 0.0]),
         )
         .child(list("Opponent", rows).gap(space::S).max_height(room));
+    let decks = decks_list(state, None);
     let seed_row = seed_row(&seed_state, seed_ok);
     let buttons = buttons(going_on, state, startable, input.session);
     let export = small(button("Export Bug Reports")).on_press(bug_report::Message::Export);
@@ -111,9 +112,10 @@ pub(super) fn start(state: &State, input: &Inputs) -> Element {
         .gap(PANEL_GAP);
     let panel = panel_look(panel)
         .children(heading)
+        .child(decks)
         .child(agents)
         .child(seed_row)
-        .child(fair_box(state.fair))
+        .children(deck_shown(state).then(|| fair_box(state.fair)))
         .child(buttons)
         .children(game_manual::screens::table_entries::entries(
             input.entries,
@@ -192,6 +194,8 @@ fn start_column(state: &State, input: &Inputs, layout: ScreenColumn) -> Element 
         .shrink(0.0)
         .align_items(Align::Center)
         .justify_content(Justify::End)
+        .gap(metrics.agent_gap)
+        .child(decks_list(state, Some(metrics)).grow(1.0))
         .child(sound);
     let legend = text("OPPONENT")
         .style(TypeStyle {
@@ -202,7 +206,12 @@ fn start_column(state: &State, input: &Inputs, layout: ScreenColumn) -> Element 
         .shrink(0.0);
     let rows = state.agents.iter().enumerate().map(|(at, agent)| {
         let at = u16::try_from(at).unwrap_or(u16::MAX);
-        agent_row(agent, at, state.agent == Some(at), Some(metrics))
+        agent_row(
+            agent,
+            Message::Agent(at),
+            state.agent == Some(at),
+            Some(metrics),
+        )
     });
     let agents = list("Opponent", rows)
         .gap(metrics.agent_gap)
@@ -216,7 +225,8 @@ fn start_column(state: &State, input: &Inputs, layout: ScreenColumn) -> Element 
         field.style.grow = 1.0;
         field.style.align_self = Some(Align::Stretch);
     }
-    let fair = fair_box(state.fair).min_height(metrics.field).shrink(0.0);
+    let fair =
+        deck_shown(state).then(|| fair_box(state.fair).min_height(metrics.field).shrink(0.0));
     let (start, back) = start_buttons(going_on, state, startable, input.session);
     let export = button("Export Bug Reports").on_press(bug_report::Message::Export);
     let content = column()
@@ -228,7 +238,7 @@ fn start_column(state: &State, input: &Inputs, layout: ScreenColumn) -> Element 
         // The rest stands at the foot of the column, as the web's `margin-top: auto` puts it.
         .child(row().name("space").grow(1.0))
         .child(seed_row)
-        .child(fair)
+        .children(fair)
         .child(layout.action(start))
         .children(back.map(|back| layout.action(back)))
         .children(game_manual::screens::table_entries::entries(
@@ -317,12 +327,12 @@ fn corner() -> Element {
         .child(sound)
 }
 
-/// The row that offers `agent`, the `at`th the host listed, as one of a group of radio
+/// The row that offers `agent`, which a press answers with `press`, as one of a group of radio
 /// buttons (`.start-agent`): a dot, the agent's title, a note if it cheats, and what it does
 /// under the title. The chosen row is tinted gold.
 fn agent_row(
     agent: &AgentView,
-    at: u16,
+    press: Message,
     chosen: bool,
     compact: Option<kit_base::data::profiles::StartScreen>,
 ) -> Element {
@@ -388,14 +398,17 @@ fn agent_row(
         .grow(1.0)
         .shrink(1.0)
         .child(title)
-        .child(text(&agent.description).style(about).color(color::TEXT_DIM));
+        .children(
+            (!agent.description.is_empty())
+                .then(|| text(&agent.description).style(about).color(color::TEXT_DIM)),
+        );
     let mut element = Element::new(Role::Toggle)
         .name(&agent.title)
         .selected(chosen)
         .gap(size::START_AGENT_GAP)
         .radius(size::START_AGENT_RADIUS)
         .align_items(Align::Start)
-        .on_press(Message::Agent(at))
+        .on_press(press)
         .child(dot)
         .child(words);
     element.style.padding = if let Some(metrics) = compact {
@@ -430,4 +443,51 @@ fn agent_row(
 /// The "Fair deal" box (`.start-fair`): a checkbox and its label, which a press turns on or off.
 fn fair_box(on: bool) -> Element {
     checkbox("Fair deal", on).on_press(Message::FairDeal)
+}
+
+/// Whether the chosen deck has a library for each player, so that the screen offers a fair deal.
+fn deck_shown(state: &State) -> bool {
+    !state.deck().shared
+}
+
+/// The legend and rows that offer `DECKS`, as radio rows like the opponents'. A phone passes its
+/// `compact` metrics.
+fn decks_list(state: &State, compact: Option<kit_base::data::profiles::StartScreen>) -> Element {
+    let rows = DECKS.iter().enumerate().map(|(at, deck)| {
+        let offered = AgentView {
+            name: deck.key.to_owned(),
+            title: deck.title.to_owned(),
+            description: String::new(),
+        };
+        agent_row(&offered, Message::Deck(at), state.deck == at, compact)
+    });
+    // A phone has no room for a legend or a row each, so its two decks stand side by side
+    // under no label of their own, in the row of the sound button.
+    let choices = if let Some(metrics) = compact {
+        row()
+            .name("Deck")
+            .gap(metrics.agent_gap)
+            .children(rows.map(|row| row.grow(1.0).shrink(1.0)))
+    } else {
+        list("Deck", rows).gap(space::S)
+    };
+    if compact.is_some() {
+        return choices.shrink(0.0);
+    }
+    let style = TypeStyle {
+        size: LABEL.size,
+        ..LABEL
+    };
+    let legend = text("DECK").style(style).color(color::TEXT_DIM).margin([
+        0.0,
+        0.0,
+        size::START_LEGEND_GAP,
+        0.0,
+    ]);
+    column()
+        .name("decks")
+        .align_self(Align::Stretch)
+        .shrink(0.0)
+        .child(legend)
+        .child(choices)
 }

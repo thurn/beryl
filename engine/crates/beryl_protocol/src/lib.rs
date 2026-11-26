@@ -177,3 +177,30 @@ pub struct StartRequest {
 pub fn default_deck() -> String {
     "wu-control".to_owned()
 }
+
+/// A deck a player can start a game with.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DeckChoice {
+    /// The key a [`StartRequest::deck`] names it by.
+    pub key: &'static str,
+    /// What the start screen calls it.
+    pub title: &'static str,
+    /// Whether both players draw from one shared library, as in the shared-deck format. A
+    /// fair deal, which compares two players' opening hands, has no meaning there.
+    pub shared: bool,
+}
+
+/// The decks the start screen offers, in the order it lists them. The first is
+/// [`default_deck`].
+pub const DECKS: [DeckChoice; 2] = [
+    DeckChoice {
+        key: "wu-control",
+        title: "WU Control",
+        shared: false,
+    },
+    DeckChoice {
+        key: "forgetful-fish",
+        title: "Dandân",
+        shared: true,
+    },
+];

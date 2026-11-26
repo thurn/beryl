@@ -419,6 +419,12 @@ recordings do not show them.
   up while the session judges candidate deals, which takes a few seconds. The
   start button is disabled and reads "Dealing…" until the new game's first view
   arrives, and then the game screen opens. Arena has no fair deal.
+- **Choosing the deck.** The New Game screen lists the decks a game can be
+  played with, "WU Control" and "Dandân", as radio rows above the opponents, and
+  its subtitle names the chosen one. On a phone the two stand side by side in
+  the row of the sound button. The Dandân deck is one library both players draw
+  from, so Fair deal, which compares two players' opening hands, is hidden while
+  it is chosen. Arena's play screen has no equivalent.
 - **Banding.** When an attacker can start or join a band, the choice uses the
   existing option buttons. Attacking bands carry no extra mark on the table.
   Assign Damage uses the number control to assign a share to each creature in

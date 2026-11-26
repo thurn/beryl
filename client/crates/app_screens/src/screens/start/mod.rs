@@ -6,7 +6,7 @@ mod view;
 pub use keys::{KeyInputs, SHORTCUTS, press as shortcut_press};
 
 use beryl_protocol::protocol::Status;
-use beryl_protocol::{AgentView, SessionId, StartRequest};
+use beryl_protocol::{AgentView, DECKS, SessionId, StartRequest};
 use game_manual::screens::table_entries::{INVITE, NAME, TableEntries};
 use game_table::table::Window;
 use kit_scene::{Context, Feature};
@@ -28,6 +28,8 @@ pub struct StartScreen;
 pub struct State {
     agents: Vec<AgentView>,
     agent: Option<u16>,
+    /// The index into `DECKS` of the chosen deck.
+    deck: usize,
     fair: bool,
     confirming: bool,
     seed: String,
@@ -59,6 +61,8 @@ pub enum Message {
     Open(Screen),
     Start(Option<SessionId>),
     Agent(u16),
+    /// Choose the deck at this index of `DECKS`.
+    Deck(usize),
     FairDeal,
     Seed(String),
 }
@@ -164,14 +168,15 @@ impl Feature for StartScreen {
                     }
                     context.command(Command::Concede(*session));
                 }
+                let fair = state.fair();
                 context.command(Command::Start(StartRequest {
                     agent: agent.name.clone(),
                     seed,
-                    fair: state.fair,
-                    deck: beryl_protocol::default_deck(),
+                    fair,
+                    deck: state.deck().key.to_owned(),
                 }));
                 state.confirming = false;
-                if state.fair {
+                if fair {
                     // The game screen would show the previous game until the deal is judged.
                     state.waiting = Waiting::Deal;
                 } else {
@@ -180,6 +185,11 @@ impl Feature for StartScreen {
                 }
             }
             Message::Agent(agent) => state.agent = Some(*agent),
+            Message::Deck(at) => {
+                if *at < DECKS.len() {
+                    state.deck = *at;
+                }
+            }
             Message::FairDeal => state.fair = !state.fair,
             Message::Seed(text) => state.seed.clone_from(text),
         }
@@ -207,6 +217,16 @@ impl Feature for StartScreen {
 }
 
 impl State {
+    /// The chosen deck.
+    fn deck(&self) -> beryl_protocol::DeckChoice {
+        DECKS[self.deck.min(DECKS.len() - 1)]
+    }
+
+    /// Whether the game is dealt fairly: the box is ticked and the deck has two libraries.
+    fn fair(&self) -> bool {
+        self.fair && !self.deck().shared
+    }
+
     /// Whether a fair deal was asked for and its game has sent no view yet.
     fn dealing(&self) -> bool {
         self.waiting == Waiting::Deal
