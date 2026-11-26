@@ -565,6 +565,109 @@ fn decision(
     }
 }
 
+/// Reads a match directory's `header.json` and `games.jsonl` without modifying any files, and
+/// tallies its [`Report`] up to `cap` games. Returns `Ok(None)` if the match has not started or
+/// has no finished games yet.
+pub fn summarize(dir: &Path, cap: u32) -> Result<Option<Report>, String> {
+    let header_path = dir.join("header.json");
+    let header_text = match fs::read_to_string(&header_path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(format!("{}: {e}", header_path.display())),
+    };
+    let h: Header = serde_json::from_str(&header_text)
+        .map_err(|e| format!("{}: {e}", header_path.display()))?;
+    let records = files::read::<GameRecord>(&dir.join("games.jsonl"))?;
+    if records.is_empty() {
+        return Ok(None);
+    }
+    let bar = Bar::named(&h.bar)
+        .ok_or_else(|| format!("{}: no bar {:?}", header_path.display(), h.bar))?;
+    let sprt = bar.sprt();
+    let max_games = cap - cap % 2;
+    let mut halves_map: BTreeMap<u32, Option<u32>> = BTreeMap::new();
+    let mut crashed: BTreeMap<String, GameDecision> = BTreeMap::new();
+    for r in &records {
+        let g = 2 * r.pair + u32::from(r.seat);
+        halves_map.insert(g, halves(r.outcome));
+        if let Some(at) = r.crashed_at {
+            crashed.insert(r.game.clone(), at);
+        }
+    }
+    let mut next = 0u32;
+    let mut pairs = Pairs::default();
+    let mut from_positions = Pairs::default();
+    let mut from_shuffle = Pairs::default();
+    let mut counted = 0u32;
+    let mut wins = 0u32;
+    let mut losses = 0u32;
+    let mut draws = 0u32;
+    let mut verdict = None;
+    while verdict.is_none() && next + 1 < max_games {
+        let (Some(&a), Some(&b)) = (halves_map.get(&next), halves_map.get(&(next + 1))) else {
+            break;
+        };
+        let pair = next / 2;
+        next += 2;
+        let (Some(a), Some(b)) = (a, b) else {
+            continue;
+        };
+        for h in [a, b] {
+            match h {
+                2 => wins += 1,
+                0 => losses += 1,
+                _ => draws += 1,
+            }
+        }
+        pairs.add(a + b);
+        if !h.positions.is_empty() && pair % 5 != 4 {
+            from_positions.add(a + b);
+        } else {
+            from_shuffle.add(a + b);
+        }
+        counted += 2;
+        verdict = sprt.and_then(|test| test.decide(pairs));
+    }
+    let date = fs::read_to_string(dir.join("match.json"))
+        .ok()
+        .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+        .and_then(|v| v.get("date").and_then(|d| d.as_str()).map(str::to_owned))
+        .unwrap_or_else(beryl_session::corpus::today);
+    let mut report = Report {
+        date,
+        challenger: h.challenger,
+        champion: h.champion,
+        budget: rung_name(h.work),
+        bar: bar.name(),
+        sprt,
+        seed: h.seed,
+        cap,
+        games: counted,
+        pairs,
+        from_positions,
+        from_shuffle,
+        spread_positions: 0.0,
+        spread_shuffle: 0.0,
+        wins,
+        losses,
+        draws,
+        score: 0.0,
+        score_interval: [0.0, 1.0],
+        elo: 0.0,
+        elo_interval: [0.0, 0.0],
+        llr: None,
+        bounds: None,
+        verdict: verdict.unwrap_or(match bar {
+            Bar::Audit => Verdict::Audit,
+            Bar::Stronger | Bar::Plausible => Verdict::Undecided,
+        }),
+        crashed,
+        out: dir.display().to_string(),
+    };
+    report.tally();
+    Ok(Some(report))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

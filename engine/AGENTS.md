@@ -209,3 +209,8 @@ robin for over 2 hours.
 - Each game of a `just ladder` match is its own process, so a game that crashes
   twice at the same decision is recorded as crashed and its pair is skipped, and
   the rest of the match goes on.
+- `just campaign <plan.json>` plays a plan's stages (`positions`, `gate`,
+  `match`, `value-test`) in order as child processes under
+  `$BERYL_CACHE/campaign/<name>/` and writes `report.txt`. Running the same
+  command again continues from the last unfinished stage and skips stages that
+  already finished.

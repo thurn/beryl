@@ -14,6 +14,9 @@
 //!   champion up to the cap, with a sequential test for stronger and plausible, and prints a
 //!   `docs/ladder.md` row ([`ladder`], `just ladder`). Each game is a child process,
 //!   `beryl_cli ladder-game --match DIR --game N` ([`ladder::game`]).
+//! - `beryl_cli campaign <plan.json> [--hours N] [--smoke] [--commit HASH] [--accept-commit]`
+//!   plays a plan's stages in order as child processes and writes one report ([`campaign`],
+//!   `just campaign`).
 //! - `beryl_cli positions build [--games N] [--seed N] [--work 3M] [--out DIR]` cuts the
 //!   ladder's balanced start positions from champion games; `beryl_cli positions sample
 //!   [--count N] DIR` prints some as transcripts ([`positions`], `just positions`).
@@ -54,8 +57,9 @@ use std::process::ExitCode;
 
 use beryl_cli::transcript::Transcript;
 use beryl_cli::{
-    Catalog, agreement, anchor_replay, blunders, evalfit, fit, fixture, freeze, game, gate, hunt,
-    ladder, number, positions, review, screen, script_check, specs, tournament, value, why,
+    Catalog, agreement, anchor_replay, blunders, campaign, evalfit, fit, fixture, freeze, game,
+    gate, hunt, ladder, number, positions, review, screen, script_check, specs, tournament, value,
+    why,
 };
 use beryl_search::Budget;
 
@@ -67,6 +71,7 @@ const USAGE: &str = "usage:
   beryl_cli ladder <challenger> [--vs NAME] [--work 3M] [--bar stronger|plausible|audit]
       [--cap N] [--seed N] [--positions DIR] [--out DIR]
   beryl_cli ladder-game --match DIR --game N
+  beryl_cli campaign <plan.json> [--hours N] [--smoke] [--commit HASH] [--accept-commit]
   beryl_cli positions build [--games N] [--seed N] [--work 3M] [--out DIR]
   beryl_cli positions sample [--count N] DIR
   beryl_cli screen <challenger> <match-dir> [--vs NAME] [--recheck N] [--work 3M] [--games N]
@@ -100,6 +105,14 @@ static CATALOG: Catalog = Catalog {
 };
 
 fn main() -> ExitCode {
+    if let (Ok(crash), Ok(stage)) = (
+        std::env::var("BERYL_CRASH_AT"),
+        std::env::var("BERYL_CAMPAIGN_STAGE"),
+    ) && (crash == stage || crash.strip_prefix("stage:") == Some(stage.as_str()))
+    {
+        eprintln!("beryl_cli: simulated crash in stage {stage}");
+        std::process::abort();
+    }
     let c = &CATALOG;
     let args: Vec<String> = std::env::args().skip(1).collect();
     if let [command, rest @ ..] = args.as_slice()
@@ -131,6 +144,7 @@ fn main() -> ExitCode {
         [command, rest @ ..] if command == "anchor-replay" => anchor_replay::main(c, rest),
         [command, rest @ ..] if command == "agreement" => agreement::main(c, rest),
         [command, rest @ ..] if command == "ladder" => ladder::main(c, rest),
+        [command, rest @ ..] if command == "campaign" => campaign::main(rest),
         [command, rest @ ..] if command == "blunder-hunt" => hunt::main(c, rest),
         [command, rest @ ..] if command == "blunders" => blunders::main(c, rest),
         [command, rest @ ..] if command == "why" => why::main(c, rest),

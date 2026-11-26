@@ -89,6 +89,9 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
   made a play no strong player would. Each entry names the incident, the board
   in `blunders/`, the play that was made and the plays that are forbidden there.
   `just blunders` runs the suite against an agent.
+- `campaigns/`: JSON campaign plans (`<name>.json`) for `just campaign`, each
+  listing its `positions`, `gate`, `match` (optionally extending an earlier
+  match) and `value-test` stages in priority order.
 - `save-breaks.json`: saved games in the corpus that can't be migrated past a
   particular change.
 - `arena-motion.json`: MTG Arena's animation timings for each animation "verb"

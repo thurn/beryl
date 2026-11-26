@@ -38,7 +38,7 @@ use beryl_engine::{
 use beryl_search::{Agent, AgentDecision, Budget, DEEP_SEARCHER};
 use beryl_session::replay::Entry as LogEntry;
 use beryl_session::{ReplayFile, StopsSetting};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::Catalog;
 use crate::game::{self, mirror, parse_work};
@@ -195,7 +195,7 @@ pub fn passes(e: &Entry, chosen: &[String]) -> bool {
 }
 
 /// One run: an agent's choices at an entry, from one seed at one budget.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Run {
     pub budget: String,
     pub seed: u32,
@@ -204,7 +204,7 @@ pub struct Run {
 }
 
 /// An entry's state for the agent run.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Standing {
     Fixed,
@@ -212,7 +212,7 @@ pub enum Standing {
     Drifted,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EntryReport {
     pub name: String,
     pub incident: String,
@@ -222,7 +222,7 @@ pub struct EntryReport {
     pub drift: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Report {
     pub agent: String,
     pub budgets: Vec<String>,

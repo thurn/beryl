@@ -16,6 +16,7 @@ by := "uv run --quiet --project tools by"
 # Off Apple silicon, this machine's own.
 
 search_cpu := if arch() == "aarch64" { "-C target-cpu=apple-m4" } else { "-C target-cpu=native" }
+campaign_cpu := "-C target-cpu=" + env_var_or_default("BERYL_SEARCH_CPU", "native")
 
 # Low priority for long compute: utility QoS, under which macOS gives interactive work and
 # checks the CPU first. `nice` does not: beside nice'd work a check ran as slowly as beside
@@ -28,6 +29,7 @@ low := if os() == "windows" { by_anywhere + " low --" } else { "env BERYL_LOW_PR
 # Low priority, kept awake, for a blunder hunt that runs for hours.
 
 awake := if os() == "windows" { by_anywhere + " low --awake --" } else { "caffeinate -i env BERYL_LOW_PRIORITY=1 taskpolicy -c utility nice -n 10" }
+campaign_awake := if os() == "windows" { awake } else if os() == "macos" { "caffeinate -i" } else { "" }
 
 default:
     @just --list --unsorted
@@ -263,6 +265,13 @@ tournament *args:
 [no-cd]
 ladder *args:
     RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "engine" / "Cargo.toml") }} -p beryl_cli_main -- ladder "$@"
+
+# Play a campaign plan's stages unattended and write one report (<plan.json> [--hours N] [--smoke] [--accept-commit])
+[group('agents')]
+[no-cd]
+campaign *args:
+    commit=$(git -C {{ quote(justfile_directory()) }} rev-parse HEAD); \
+    RUSTFLAGS="{{ campaign_cpu }}" {{ campaign_awake }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "engine" / "Cargo.toml") }} -p beryl_cli_main -- campaign --commit "$commit" "$@"
 
 # Fit rollout values to accepted paired overrides from ladder match directories
 [group('agents')]

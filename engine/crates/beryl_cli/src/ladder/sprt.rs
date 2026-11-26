@@ -1,6 +1,6 @@
 //! The sequential test: the bars' hypotheses, the pairs it counts and the verdict it reaches.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// The bars a ladder match or audit is played to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -50,7 +50,7 @@ impl Bar {
 
 /// A match's seed pairs by the challenger's score over the two games: both won, split (a
 /// game each, or any draw or stall), both lost.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Pairs {
     pub swept: u32,
     pub split: u32,
@@ -73,7 +73,7 @@ impl Pairs {
 }
 
 /// The result recorded for a ladder match.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Verdict {
     /// The test accepted `elo1`.
@@ -99,7 +99,7 @@ pub enum Verdict {
 /// swept against lost: the split share's estimate is the same under both hypotheses and
 /// cancels. A split adds nothing to it, which is right for a seed on which the two agents
 /// played alike (§4.4), so a run of splits never decides a match.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Sprt {
     pub elo0: f64,
     pub elo1: f64,

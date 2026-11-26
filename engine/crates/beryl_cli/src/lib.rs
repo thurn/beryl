@@ -9,6 +9,7 @@ pub mod agreement;
 pub mod anchor_replay;
 pub mod blunders;
 pub mod boards;
+pub mod campaign;
 pub mod catalog;
 pub mod evalfit;
 pub mod fit;

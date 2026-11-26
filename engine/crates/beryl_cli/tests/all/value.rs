@@ -39,7 +39,7 @@ fn a_network_learns_what_a_regression_cannot() {
     let loss: BTreeMap<&str, f64> = report
         .predictors
         .iter()
-        .map(|p| (p.name, p.overall.log_loss))
+        .map(|p| (p.name.as_str(), p.overall.log_loss))
         .collect();
     assert!(loss["mlp"] < loss["linear"] - 0.02, "{loss:?}");
     assert!(loss["linear"] < loss["search"] - 0.02, "{loss:?}");

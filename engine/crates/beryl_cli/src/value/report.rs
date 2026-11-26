@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 
 use beryl_engine::rng::SplitMix64;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::model::log_loss;
 use super::{PREDICTORS, Sample};
@@ -19,7 +19,7 @@ const RESAMPLES: usize = 2_000;
 const BUDGET_LINES: usize = 10;
 
 /// How well one predictor did on some samples.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Score {
     pub samples: usize,
     pub log_loss: f64,
@@ -52,16 +52,16 @@ impl Score {
     }
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Predictor {
-    pub name: &'static str,
+    pub name: String,
     pub overall: Score,
     /// By the deciding entrant's budget, short (`3k`).
     pub by_budget: BTreeMap<String, Score>,
 }
 
 /// One predictor's log loss less `search`'s, with its 95% interval.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Difference {
     pub name: String,
     pub log_loss: f64,
@@ -69,7 +69,7 @@ pub struct Difference {
     pub high: f64,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Report {
     pub seed: u64,
     pub samples: usize,
@@ -106,7 +106,7 @@ impl Report {
                     })
                     .collect();
                 Predictor {
-                    name,
+                    name: name.to_owned(),
                     overall: Score::of(p, &won),
                     by_budget,
                 }
