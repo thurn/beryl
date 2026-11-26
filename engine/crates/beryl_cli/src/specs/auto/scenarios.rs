@@ -26,14 +26,15 @@ pub(super) fn decides(action: &Action) -> bool {
     )
 }
 
-/// A scenario's actions as a spec's scripts play them: its decisions and its turns to advance
-/// to. Passing is what the scripts do anyway short of their next action, its assertions are
-/// its own, and the session orders simultaneous triggers itself.
+/// A scenario's actions as a spec's scripts play them: its decisions, its turns to advance
+/// to and its resolutions, which hold a scripted response until what the scenario resolved
+/// first has resolved. Passing is what the scripts do anyway short of their next action, its
+/// assertions are its own, and the session orders simultaneous triggers itself.
 pub(in crate::specs) fn playable(scenario: &Scenario) -> Vec<Action> {
     scenario
         .actions
         .iter()
-        .filter(|a| playground_action(a))
+        .filter(|a| playground_action(a) || matches!(a, Action::Resolve))
         .copied()
         .collect()
 }
@@ -258,8 +259,9 @@ pub(super) fn from_scenario(
         actions.clone(),
         Kind::Whole,
     ));
-    for (i, action) in actions.iter().enumerate() {
-        let setup = &actions[..i];
+    for (place, action) in actions.iter().enumerate() {
+        let setup = &actions[..place];
+        let i = number(setup);
         let mine = label_of(def, action);
         if matches!(*action,
             Action::Cast { player: P0, card, .. }
@@ -292,7 +294,7 @@ pub(super) fn from_scenario(
             && card == def.name
             && !def.front().types.intersects(Types::LAND)
         {
-            let play = bounce(def, &actions, i);
+            let play = bounce(def, &actions, place);
             out.push(Candidate {
                 board: with_a_bounce(&board).actions(leak(setup.to_vec())),
                 ..at(
@@ -328,6 +330,15 @@ pub(super) fn from_scenario(
             }
         }
     }
+}
+
+/// The number in the names of the moments cut after `setup`: its decisions and turns, not its
+/// resolutions, so that the names other files use for moments stay as they were.
+fn number(setup: &[Action]) -> usize {
+    setup
+        .iter()
+        .filter(|a| !matches!(a, Action::Resolve))
+        .count()
 }
 
 /// Whether a card in hand offers more than one way to play it: an alternative or additional

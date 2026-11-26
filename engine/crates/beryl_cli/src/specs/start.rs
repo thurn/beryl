@@ -50,12 +50,12 @@ pub fn start_guarded(
     emit: impl Fn(GameUpdate, Phase) + Send + Sync + 'static,
 ) -> Result<(Sessions, Shared), String> {
     let progress = Shared::default();
-    // An `AdvanceTo` holds the scripts rather than being taken.
+    // An `AdvanceTo` or a `Resolve` holds the scripts rather than being taken.
     let setup = moment
         .board
         .actions
         .iter()
-        .filter(|a| !matches!(a, Action::AdvanceTo { .. }))
+        .filter(|a| !matches!(a, Action::AdvanceTo { .. } | Action::Resolve))
         .count();
     // A trailing `AdvanceTo` holds the hand-over until the game reaches its turn.
     if let Some(Action::AdvanceTo { turn, .. }) =

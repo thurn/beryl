@@ -4,6 +4,7 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use beryl_engine::card::Purpose;
+use beryl_engine::state::{StackEntry, StackItem};
 use beryl_engine::{
     Choice, Decision, DecisionKind, GameTable, Layout, Observation, Seat, TurnStep,
 };
@@ -29,6 +30,27 @@ pub struct Progress {
     /// [`Action::AdvanceTo`]), and the turn the game has reached, as its views show.
     pub until: Option<u16>,
     pub turn: u16,
+    /// How many [`Action::Resolve`]s come just before each action, by its place among both
+    /// seats' actions.
+    pub resolves: Vec<usize>,
+    /// The resolutions the next action still waits for, as a scenario's `Resolve`s run them:
+    /// the place of the action they are for, how many are left, and what the next one waits
+    /// to see leave the stack.
+    pub resolving: Option<(usize, usize, Option<Top>)>,
+    /// The slot of the spell the last action taken cast, as text, if it cast one.
+    pub last_cast: Option<String>,
+}
+
+/// What a scenario's `Resolve` waits to see leave the stack. Slots and entries are kept as
+/// text, so that this record does not depend on the layout.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Top {
+    /// The spell the action before the `Resolve`s cast, by its slot. The session passes for a
+    /// player who could only pass, so no script may see that spell on the stack before it
+    /// resolves: it is waited for by name, not by sight.
+    Spell(String),
+    /// The entry on top of the stack, at its height, as the scripts first saw it.
+    Entry(usize, String),
 }
 
 impl Progress {
@@ -55,8 +77,17 @@ impl Progress {
 
 pub type Shared = Arc<Mutex<Progress>>;
 
-/// The turn and step a script's action waits for, if any.
-pub(super) type Gate = Option<(u16, TurnStep)>;
+/// What a script's action waits for besides the actions listed before it.
+#[derive(Clone, Copy, Debug, Default)]
+pub(super) struct Gate {
+    /// The turn and step it waits for, if any.
+    step: Option<(u16, TurnStep)>,
+    /// How many [`Action::Resolve`]s come just before it. At priority it waits until that
+    /// many objects have resolved, each the one on top of the stack once the one before has
+    /// gone ([`Progress::resolving`]), as a scenario's `Resolve` passes until its top object
+    /// leaves. A question a resolving spell asks is due at once, as a `Resolve` stops at it.
+    resolves: usize,
+}
 
 /// The progress of a board's scripts so far.
 pub fn lock(progress: &Shared) -> std::sync::MutexGuard<'_, Progress> {
@@ -97,17 +128,20 @@ impl Scripted {
 
     /// `seat`'s part of `actions`, played on `table`, as [`Scripted::new`] takes a board's. An
     /// [`Action::AdvanceTo`] holds the actions after it, both seats', until the game reaches its
-    /// turn and step; it is not itself taken.
+    /// turn and step; it is not itself taken. An [`Action::Resolve`] holds the next action
+    /// until the top of the stack has resolved, so a scripted response waits for the stack to
+    /// empty where its scenario let the spell before it resolve first.
     pub fn with_actions<'a>(
         actions: impl IntoIterator<Item = &'a Action>,
         seat: Seat,
         table: &GameTable,
         progress: Shared,
     ) -> Result<Scripted, String> {
+        let actions_copy: Vec<Action> = actions.into_iter().copied().collect();
         let mut script = VecDeque::new();
-        let mut gate = None;
+        let mut gate = Gate::default();
         let mut at = 0;
-        for action in actions {
+        for action in &actions_copy {
             match *action {
                 Action::PlayLand { player, .. }
                 | Action::Cast { player, .. }
@@ -118,13 +152,24 @@ impl Scripted {
                     if player == seat {
                         script.push_back((at, *action, gate));
                     }
+                    gate.resolves = 0;
                     at += 1;
                 }
-                Action::AdvanceTo { turn, step } => gate = Some((turn, step)),
+                Action::AdvanceTo { turn, step } => {
+                    gate = Gate {
+                        step: Some((turn, step)),
+                        resolves: 0,
+                    };
+                }
+                Action::Resolve => gate.resolves += 1,
                 _ => return Err(format!("{action:?}: a board's action answers one decision")),
             }
         }
-        lock(&progress).next[seat.index()] = script.front().map(|&(_, a, _)| a);
+        let resolves = all_resolves(actions_copy.iter());
+        let mut p = lock(&progress);
+        p.next[seat.index()] = script.front().map(|&(_, a, _)| a);
+        p.resolves = resolves;
+        drop(p);
         Ok(Scripted {
             table: table.clone(),
             seat,
@@ -198,11 +243,21 @@ impl Scripted {
     fn answer<L: Layout>(&mut self, obs: Observation<'_, L>, d: &Decision<L>) -> Choice {
         let s = obs.unmasked_root();
         let next = self.script.front().map(|&(_, a, _)| a);
+        if d.kind == DecisionKind::Priority {
+            watch_resolutions(&mut lock(&self.progress), s.stack());
+        }
         // An action waits for the other seat's actions before it: a response is cast once
-        // what it answers is on the stack. It waits for its turn and step too.
+        // what it answers is on the stack. It waits for its turn and step, and for what the
+        // scenario resolved before it.
         let due = self.script.front().is_some_and(|&(at, _, gate)| {
-            lock(&self.progress).taken >= at
-                && gate.is_none_or(|(turn, step)| !s.compare_named_step(turn, step).is_lt())
+            let progress = lock(&self.progress);
+            progress.taken >= at
+                && gate
+                    .step
+                    .is_none_or(|(turn, step)| !s.compare_named_step(turn, step).is_lt())
+                && (gate.resolves == 0
+                    || d.kind != DecisionKind::Priority
+                    || matches!(progress.resolving, Some((place, 0, _)) if place == at))
         });
         // A "may" its script answers that the session folds into the question it leads to (a
         // search's choice, with Done to find nothing): a yes is the choice itself, a no is Done.
@@ -247,6 +302,12 @@ impl Scripted {
             };
             if kind == d.kind {
                 if let Some(c) = beryl_scenario::answer(&self.table, s, d, &action) {
+                    if !matches!(action, Action::Answer { .. }) {
+                        lock(&self.progress).last_cast = match d.candidates.option(c) {
+                            Some(beryl_engine::Opt::Cast { slot, .. }) => Some(format!("{slot:?}")),
+                            _ => None,
+                        };
+                    }
                     self.take();
                     return c;
                 }
@@ -279,5 +340,66 @@ impl Scripted {
             });
         }
         Choice(0)
+    }
+}
+
+/// How many [`Action::Resolve`]s come just before each deciding action of `actions`, by its
+/// place among them.
+fn all_resolves<'a>(actions: impl Iterator<Item = &'a Action>) -> Vec<usize> {
+    let mut out = Vec::new();
+    let mut pending = 0;
+    for action in actions {
+        match action {
+            Action::Resolve => pending += 1,
+            Action::AdvanceTo { .. } => pending = 0,
+            _ => {
+                out.push(pending);
+                pending = 0;
+            }
+        }
+    }
+    out
+}
+
+/// Notes, at a priority with `stack` on the stack, what has resolved toward the next
+/// action's `Resolve`s. The first waits for the spell the action before cast, if it cast one,
+/// and otherwise for the entry on top when the scripts first look; each later one waits for
+/// the entry on top once the one before has gone. One that finds the stack empty has nothing
+/// to wait for.
+fn watch_resolutions<L: Layout>(progress: &mut Progress, stack: &[StackEntry<L>]) {
+    let at = progress.taken;
+    if progress
+        .resolving
+        .as_ref()
+        .is_none_or(|&(place, ..)| place != at)
+    {
+        let left = progress.resolves.get(at).copied().unwrap_or(0);
+        let first = progress.last_cast.clone().map(Top::Spell);
+        progress.resolving = Some((at, left, first));
+    }
+    let Some((_, left, top)) = progress.resolving.as_mut() else {
+        return;
+    };
+    while *left > 0 {
+        let gone = match top {
+            None => match stack.last() {
+                None => true,
+                Some(entry) => {
+                    *top = Some(Top::Entry(stack.len(), format!("{entry:?}")));
+                    false
+                }
+            },
+            Some(Top::Spell(slot)) => !stack.iter().any(|e| {
+                matches!(&e.item, StackItem::Spell { object, .. } if format!("{:?}", object.slot) == *slot)
+            }),
+            Some(Top::Entry(height, entry)) => stack
+                .get(*height - 1)
+                .is_none_or(|e| format!("{e:?}") != *entry),
+        };
+        if !gone {
+            break;
+        }
+        *left -= 1;
+        *top = None;
     }
 }

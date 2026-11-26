@@ -293,7 +293,6 @@ currency-converter/declines-to-exile-another-loots-discard-ask-2
 currency-converter/declines-to-exile-another-loots-discard-yes-2
 currency-converter/exiles-its-own-loots-discard-for-a-rogue
 currency-converter/exiles-its-own-loots-discard-for-a-rogue-0
-currency-converter/exiles-its-own-loots-discard-for-a-rogue-bounced-0
 currency-converter/exiles-its-own-loots-discard-for-a-rogue-bounced-4
 currency-converter/exiles-its-own-loots-discard-for-a-rogue-next-turn
 currency-converter/exiles-its-own-loots-discard-for-a-rogue-no-2
@@ -344,8 +343,6 @@ dress-down/is-sacrificed-at-the-start-of-the-opposing-end-step
 dress-down/it-is-sacrificed-at-the-beginning-of-the-end-step
 dress-down/made-a-creature-it-loses-its-own-sacrifice-trigger
 drudge-skeletons/a-shield-from-last-turn-is-gone
-drudge-skeletons/a-shield-from-last-turn-is-gone-next-turn
-drudge-skeletons/a-shield-from-last-turn-is-gone-pass
 drudge-skeletons/a-shield-removes-an-attacker-from-combat
 drudge-skeletons/a-shield-removes-an-attacker-from-combat-0
 drudge-skeletons/a-shield-removes-an-attacker-from-combat-next-turn
@@ -583,7 +580,6 @@ jace-vryns-prodigy/ability-0
 jace-vryns-prodigy/bounced
 jace-vryns-prodigy/looting-to-five-cards-in-the-graveyard-transforms-him
 jace-vryns-prodigy/looting-to-five-cards-in-the-graveyard-transforms-him-0
-jace-vryns-prodigy/looting-to-five-cards-in-the-graveyard-transforms-him-bounced-0
 jace-vryns-prodigy/looting-to-five-cards-in-the-graveyard-transforms-him-pass
 jace-vryns-prodigy/stops-main
 jace-vryns-prodigy/stops-their-end
@@ -997,7 +993,6 @@ staff-of-the-storyteller/ability-2
 staff-of-the-storyteller/bounced
 staff-of-the-storyteller/its-own-spirit-and-a-samurai-each-add-a-story-counter-spent-to-draw
 staff-of-the-storyteller/its-own-spirit-and-a-samurai-each-add-a-story-counter-spent-to-draw-0
-staff-of-the-storyteller/its-own-spirit-and-a-samurai-each-add-a-story-counter-spent-to-draw-next-turn
 staff-of-the-storyteller/its-own-spirit-and-a-samurai-each-add-a-story-counter-spent-to-draw-pass
 staff-of-the-storyteller/lands-tapped
 staff-of-the-storyteller/staff-resolves-after-an-opposing-flash-creature
