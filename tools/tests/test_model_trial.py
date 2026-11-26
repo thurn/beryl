@@ -8,7 +8,15 @@ from typing import Any
 
 import pytest
 
-from beryl_tools.model_trial import candidates, copytext, grade, manifest, pair, scan
+from beryl_tools.model_trial import (
+    candidates,
+    checks,
+    copytext,
+    grade,
+    manifest,
+    pair,
+    scan,
+)
 from beryl_tools.model_trial.manifest import FILED, LISTED, MARKED, Pair
 from beryl_tools.model_trial.scan import Trace
 from beryl_tools.model_trial.spec import Spec, SpecError, from_notes, parse
@@ -959,7 +967,7 @@ def test_seeing_another_arms_copy_marks_a_pair_suspect() -> None:
 
 
 def test_a_landed_source_passed_the_gate() -> None:
-    assert grade.check_verdict(None, landed=True) == "pass"
+    assert checks.check_verdict(None, landed=True).verdict == "pass"
 
 
 @pytest.mark.parametrize(
@@ -974,10 +982,164 @@ def test_a_copy_passed_when_the_daemon_stored_a_pass_for_its_tree(
         asked.append(tree)
         return stored
 
-    monkeypatch.setattr(grade.io, "git", lambda *a: "abc1234abc1234")
-    monkeypatch.setattr(grade.io, "gate_passed", gate_passed)
-    assert grade.check_verdict("7e595bfaed53c", landed=False) == verdict
+    monkeypatch.setattr(checks.io, "git", lambda *a: "abc1234abc1234")
+    monkeypatch.setattr(checks.io, "gate_passed", gate_passed)
+    assert checks.check_verdict("7e595bfaed53c", landed=False).verdict == verdict
     assert asked == ["abc1234abc1234"]
+
+
+FROZEN = "5" * 40
+
+
+def base(check: str, outcome: str = "fail", message: str = "") -> manifest.Baseline:
+    return manifest.Baseline("EVSJF", FROZEN, check, outcome, message)
+
+
+@pytest.mark.parametrize(
+    ("baselines", "verdict"),
+    [
+        # Failed the same way at the start commit: not the copy's doing.
+        ([base("source:file-length", message="x.py: 801 lines")], "pass"),
+        # Failed at the start too, but differently, such as a count that grew.
+        ([base("source:file-length", message="y.rs: 900 lines")], "fail"),
+        ([base("source:file-length", outcome="pass")], "fail"),
+        ([], "unknown"),
+    ],
+)
+def test_a_copy_is_judged_by_failures_its_start_commit_did_not_have(
+    monkeypatch: Any, baselines: list[manifest.Baseline], verdict: str
+) -> None:
+    monkeypatch.setattr(
+        checks.io,
+        "git",
+        lambda *a: "2026-11-25T11:22:02-08:00" if "log" in a else "ab" * 20,
+    )
+    monkeypatch.setattr(checks.io, "gate_passed", lambda tree: False)
+    asked: list[tuple[str, str]] = []
+
+    def check_failures(session: str, since: str) -> dict[str, str]:
+        asked.append((session, since))
+        return {"source:file-length": "x.py: 801 lines"}
+
+    monkeypatch.setattr(checks.io, "check_failures", check_failures)
+    found = checks.check_verdict(
+        "7e595bfaed53c",
+        landed=False,
+        session="cli-claude-1",
+        start_commit=FROZEN,
+        baselines={(b.start_commit, b.check): b for b in baselines},
+    )
+    assert found.verdict == verdict
+    assert asked == [("cli-claude-1", "2026-11-25T19:22:02.000Z")]
+
+
+def test_a_copy_that_ran_no_check_after_its_last_commit_failed(
+    monkeypatch: Any,
+) -> None:
+    monkeypatch.setattr(
+        checks.io,
+        "git",
+        lambda *a: "2026-11-25T11:22:02-08:00" if "log" in a else "ab" * 20,
+    )
+    monkeypatch.setattr(checks.io, "gate_passed", lambda tree: False)
+    monkeypatch.setattr(checks.io, "check_failures", lambda session, since: None)
+    found = checks.check_verdict("7e595bfaed53c", False, "cli-claude-1", FROZEN, {})
+    assert found.verdict == "fail"
+
+
+def daemon(
+    tmp_path: Any, monkeypatch: Any, replies: list[tuple[str, dict[str, Any]]]
+) -> None:
+    import sqlite3
+
+    db = sqlite3.connect(tmp_path / "daemon.db")
+    db.execute(
+        "CREATE TABLE handles (id TEXT, verb TEXT, session TEXT, started_at TEXT, reply TEXT)"
+    )
+    db.execute("CREATE TABLE verdicts (tree TEXT)")
+    for n, (at, found) in enumerate(replies):
+        db.execute(
+            "INSERT INTO handles VALUES (?, 'check', 's1', ?, ?)",
+            (f"C-{n}", at, json.dumps({"exit": 2, "json": found})),
+        )
+    db.commit()
+    db.close()
+    monkeypatch.setenv("IGNITE_HOME", str(tmp_path))
+
+
+def test_a_failure_seen_before_keeps_the_message_it_first_had(
+    tmp_path: Any, monkeypatch: Any
+) -> None:
+    def failed(*pairs: tuple[str, str]) -> dict[str, Any]:
+        return {
+            "failures": [{"check": c, "message": m} for c, m in pairs],
+            "build_failures": [],
+        }
+
+    daemon(
+        tmp_path,
+        monkeypatch,
+        [
+            (
+                "2026-11-25T19:00:00.000Z",
+                failed(("pytest:a", "AssertionError: 1 != 2")),
+            ),
+            ("2026-11-25T19:10:00.000Z", {"run": 3}),  # a `--plan` reply
+            (
+                "2026-11-25T19:20:00.000Z",
+                failed(("pytest:a", checks.io.FAILED_BEFORE), ("clippy:x", "warning")),
+            ),
+        ],
+    )
+    assert checks.io.check_failures("s1", "2026-11-25T19:05:00.000Z") == {
+        "pytest:a": "AssertionError: 1 != 2",
+        "clippy:x": "warning",
+    }
+    assert checks.io.check_failures("s1", "2026-11-25T19:30:00.000Z") is None
+
+
+@pytest.mark.parametrize(
+    ("at_start", "message", "same"),
+    [
+        ("x.py: 801 lines", "x.py: 801 lines", True),
+        # Later lines say how many other tests failed in the run.
+        ('1 fault\n{"more_tests": 0}', '1 fault\n{"more_tests": 3}', True),
+        ("384,132,500 instructions", "384,422,222 instructions", False),
+        ("AssertionError: 1 != 2", checks.io.FAILED_BEFORE, True),
+    ],
+)
+def test_a_failure_is_the_start_commits_when_its_first_line_matches(
+    at_start: str, message: str, same: bool
+) -> None:
+    assert checks.same_failure(at_start, message) is same
+
+
+def test_a_baseline_records_every_check_the_test_run_ran() -> None:
+    reply = {
+        "outcomes": [
+            {"check": "source:file-length", "outcome": "fail"},
+            {"check": "source:rule-ownership", "outcome": "pass"},
+        ],
+        "failures": [{"check": "source:file-length", "message": "x.py: 801 lines"}],
+    }
+    rows = checks.baselines_from("EVSJF", FROZEN, reply)
+    assert [(r.check, r.outcome, r.message) for r in rows] == [
+        ("source:file-length", "fail", "x.py: 801 lines"),
+        ("source:rule-ownership", "pass", ""),
+    ]
+
+
+def test_retired_reviews_are_no_longer_read(tmp_path: Any, monkeypatch: Any) -> None:
+    monkeypatch.setattr(manifest, "trial_dir", lambda trial: tmp_path)
+
+    def run(pair: str, n: int) -> manifest.Review:
+        return manifest.Review(pair, "EVSJF", n, 1, "source", "m", "v", True)
+
+    for row in (run("p1", 0), run("p2", 0), run("p1", 1)):
+        manifest.append_review(row)
+    assert manifest.retire_reviews("EVSJF", "p1") == 2
+    assert [r.pair for r in manifest.read_reviews("EVSJF")] == ["p2"]
+    assert (tmp_path / "reviews.retired.jsonl").read_text().count("\n") == 2
 
 
 def requests_store(

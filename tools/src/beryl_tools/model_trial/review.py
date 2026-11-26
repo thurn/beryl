@@ -24,6 +24,7 @@ import re
 import secrets
 import shutil
 import string
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -393,6 +394,14 @@ def cmd_review(
 ) -> int:
     trial: str = args.trial
     pairs = {p.pair: p for p in manifest.read_pairs(trial)}
+    for ticket in getattr(args, "redo", None) or []:
+        # A pair is named by its copy's ID, which is unique; a source has a copy per arm.
+        token = next((p.pair for p in pairs.values() if p.copy == ticket), None)
+        if token is None:
+            print(f"{ticket} is no copy of this trial.", file=sys.stderr)
+            return 2
+        moved = manifest.retire_reviews(trial, token)
+        print(f"{ticket}: retired {moved} review runs, to run again.")
     grades = manifest.read_grades(trial)
     reviews = manifest.read_reviews(trial)
     model = io.model_ids("claude").get(spec.reviewer.model, spec.reviewer.model)

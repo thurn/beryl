@@ -53,11 +53,13 @@ and the report leaves it out of the minute medians. Dollars and tokens come from
 the store's `requests` rows tagged with the ticket during the arm's claim, from
 every machine. An arm whose machine has a gap of over 30 minutes in those rows,
 or no row at all, gets `cost_partial` and is left out of the dollar medians. A
-landed source passed the landing gate; a copy's check verdict is whether the
-Ignite daemon's `verdicts` table (in `daemon.db`, passes only, kept 30 days)
-holds the tree hash of its branch head, so grade a trial within 30 days of its
-copies closing. `lane_runs` keeps no commit or tree hash for a run, so it cannot
-give a verdict.
+landed source passed the landing gate; a copy passed when the Ignite daemon's
+`verdicts` table (in `daemon.db`, passes only, kept 30 days) holds the tree hash
+of its branch head, or when every failure of its last `ignite check` (the
+daemon's `handles` replies) failed the same way at its start commit, as recorded
+in `baselines.jsonl` by `model-trial baseline`. Grade a trial within 30 days of
+its copies closing. `lane_runs` keeps no commit or tree hash for a run, so it
+cannot give a verdict.
 
 `review` runs a headless `claude -p` reviewer on each graded pair that is not
 void, twice with A and B swapped, and appends its answers to `reviews.jsonl`.

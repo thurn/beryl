@@ -201,6 +201,10 @@ class Grade:
     void: list[str] = field(default_factory=list)
     suspect: list[dict[str, str]] = field(default_factory=list)
     graded_at: str = ""
+    # For a copy with no stored pass: the checks that failed in its last `ignite check`, split
+    # into those that failed the same way at its start commit and the rest.
+    check_preexisting: list[str] = field(default_factory=list)
+    check_failures: list[str] = field(default_factory=list)
 
 
 def grades_path(trial: str) -> Path:
@@ -249,6 +253,55 @@ def read_reviews(trial: str) -> list[Review]:
 def append_review(review: Review) -> None:
     review.reviewed_at = now()
     _append(reviews_path(review.trial), review)
+
+
+def retire_reviews(trial: str, pair: str) -> int:
+    """Moves the pair's review runs from `reviews.jsonl` to `reviews.retired.jsonl`, so that
+    `review` runs them again and the report no longer reads them. Returns how many moved.
+    """
+    rows = _read(reviews_path(trial))
+    kept = [r for r in rows if r.get("pair") != pair]
+    moved = [r for r in rows if r.get("pair") == pair]
+    if moved:
+        for path, mode, part in (
+            (trial_dir(trial) / "reviews.retired.jsonl", "a", moved),
+            (reviews_path(trial), "w", kept),
+        ):
+            with path.open(mode, encoding="utf-8", newline="\n") as out:
+                out.writelines(json.dumps(r, sort_keys=True) + "\n" for r in part)
+    return len(moved)
+
+
+@dataclass
+class Baseline:
+    """How one check ended at a pair's start commit, run by `model-trial baseline` from an
+    `ignite test --json` reply. A copy's failure that failed the same way here is not its
+    own."""
+
+    trial: str
+    start_commit: str
+    check: str
+    outcome: str  # pass or fail
+    message: str = ""
+    recorded_at: str = ""
+
+
+def baselines_path(trial: str) -> Path:
+    return trial_dir(trial) / "baselines.jsonl"
+
+
+def read_baselines(trial: str) -> dict[tuple[str, str], Baseline]:
+    """The latest baseline of each (start commit, check)."""
+    found: dict[tuple[str, str], Baseline] = {}
+    for row in _read(baselines_path(trial)):
+        b = _build(Baseline, row)
+        found[(b.start_commit, b.check)] = b
+    return found
+
+
+def append_baseline(baseline: Baseline) -> None:
+    baseline.recorded_at = now()
+    _append(baselines_path(baseline.trial), baseline)
 
 
 @dataclass

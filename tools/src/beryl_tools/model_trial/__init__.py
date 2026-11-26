@@ -12,7 +12,7 @@ from collections.abc import Callable
 
 from pathlib import Path
 
-from . import candidates, grade, io, judge, new, pair, report, review
+from . import candidates, checks, grade, io, judge, new, pair, report, review
 from .spec import Spec, SpecError, from_file, from_notes
 
 Command = Callable[[argparse.Namespace, Spec], int]
@@ -73,12 +73,33 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     )
     found.add_argument("--epic", action="append", help="only tickets under this epic")
     found.add_argument("--label", action="append", help="only tickets with this label")
-    _command(verbs, "grade", "measure every finished pair", grade.cmd_grade)
-    _command(
+    graded = _command(verbs, "grade", "measure every finished pair", grade.cmd_grade)
+    graded.add_argument(
+        "--regrade", action="store_true", help="grade every filed pair again"
+    )
+    based = _command(
+        verbs,
+        "baseline",
+        "record how checks ended at a start commit, for the check verdicts",
+        checks.cmd_baseline,
+    )
+    based.add_argument("--start", required=True, help="the start commit")
+    based.add_argument(
+        "--results",
+        required=True,
+        help="the output of `ignite test --json` run with the tree at --start",
+    )
+    reviewed = _command(
         verbs,
         "review",
         "run the blind reviewer on every graded pair",
         review.cmd_review,
+    )
+    reviewed.add_argument(
+        "--redo",
+        action="append",
+        metavar="COPY",
+        help="retire the pair of this copy ticket's reviews and review it again",
     )
     shown = verbs.add_parser("report", help="print the trial's table")
     shown.add_argument(

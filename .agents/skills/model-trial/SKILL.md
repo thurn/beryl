@@ -226,10 +226,21 @@ side by side and flags any difference in rubric or model IDs.
 ## Regrading
 
 `grade` writes each pair's two rows once, and skips a pair that has rows. After a fix to how
-`grade` measures (a check verdict, a cost), regrade by moving
-`$BERYL_CACHE`'s trial `grades.jsonl` aside (rename it, keep it) and running `grade` again
-through `ignite run --`. Contamination decisions live in `pairs.jsonl`, so they survive. Then run
-`report` again.
+`grade` measures (a check verdict, a cost), run `grade --regrade` through `ignite run --`: it
+appends new rows for every pair, and every later command reads a pair's latest rows.
+Contamination decisions live in `pairs.jsonl`, so they survive. Then run `report` again.
+
+A copy starts from a frozen `staging` commit that may already fail checks, and then can never
+store a passing gate verdict. `grade` judges such a copy by the failures of its last
+`ignite check`, set against how each check ended at its start commit, and prints the checks
+whose start-commit outcome it lacks with the commands to record it: detach a build tree at the
+start commit, run `ignite test --json --rerun <checks>`, record the reply with
+`just model-trial baseline --trial <epic> --start <commit> --results <file>`, switch back and
+regrade. A copy that never ran a check after its last commit stays `fail`.
+
+The reviewer is shown each side's check verdict. When a regrade changes one that a review saw,
+`review --redo <copy>` retires that pair's reviews to `reviews.retired.jsonl` and reviews it
+again.
 
 ## What a trial cannot show
 

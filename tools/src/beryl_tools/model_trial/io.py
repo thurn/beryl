@@ -252,18 +252,64 @@ def gate_passed(tree: str) -> bool | None:
     keyed by the git tree ID of the ticket tree's files, and keeps no row for a run that failed.
     It is in `$IGNITE_HOME/daemon.db`, by default `~/.config/ignite/daemon.db`, and it deletes
     rows older than 30 days."""
+    try:
+        rows = _daemon_rows("SELECT 1 FROM verdicts WHERE tree = ? LIMIT 1", (tree,))
+    except sqlite3.Error:
+        return None
+    return None if rows is None else bool(rows)
+
+
+def _daemon_rows(query: str, params: tuple[str, ...]) -> list[tuple[Any, ...]] | None:
+    """The rows of a read-only query of the Ignite daemon's database, or `None` when it is
+    missing."""
     home = os.environ.get("IGNITE_HOME") or str(Path.home() / ".config" / "ignite")
     path = Path(home) / "daemon.db"
     if not path.is_file():
         return None
+    with sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=30) as db:
+        return db.execute(query, params).fetchall()
+
+
+def check_failures(session: str, since: str) -> dict[str, str] | None:
+    """The checks that failed in the last `ignite check` that `session` started at or after
+    `since` (an ISO time), each with its failure message, or `None` when the session ran no
+    check then or the daemon's database cannot be read.
+
+    The daemon keeps each command's reply in `handles`. A check that failed before on the
+    same inputs is reported only as "failed before on these inputs", so its message is taken
+    from the session's latest earlier reply that gave one. A build failure is listed under
+    `build:<product>`."""
     try:
-        with sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=30) as db:
-            row = db.execute(
-                "SELECT 1 FROM verdicts WHERE tree = ? LIMIT 1", (tree,)
-            ).fetchone()
+        rows = _daemon_rows(
+            "SELECT started_at, reply FROM handles WHERE verb = 'check' AND session = ? "
+            "ORDER BY started_at",
+            (session,),
+        )
     except sqlite3.Error:
         return None
-    return row is not None
+    said: dict[str, str] = {}
+    last: dict[str, str] | None = None
+    for started_at, reply in rows or []:
+        try:
+            found = (json.loads(reply or "{}").get("json")) or {}
+        except json.JSONDecodeError:
+            continue
+        if "failures" not in found:
+            continue  # a `--plan` reply, which runs nothing
+        failed: dict[str, str] = {}
+        for f in found.get("failures") or []:
+            name, message = str(f.get("check")), str(f.get("message") or "")
+            if message != FAILED_BEFORE:
+                said[name] = message
+            failed[name] = said.get(name, message)
+        for product in found.get("build_failures") or []:
+            failed[f"build:{product}"] = ""
+        if str(started_at) >= since:
+            last = failed
+    return last
+
+
+FAILED_BEFORE = "failed before on these inputs"
 
 
 def main_checkout() -> Path:

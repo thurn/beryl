@@ -15,7 +15,9 @@ Where each measure comes from:
   efficiency ticket <id> --json` inside the claim, which come only from the transcripts on
   this machine. Model minutes: the same command, for the whole ticket.
 - Check verdicts: a landed source passed the landing gate. A copy passed when the Ignite
-  daemon on this machine stored a passing verdict for the tree of its branch head.
+  daemon on this machine stored a passing verdict for the tree of its branch head, or when
+  every check that failed in its last `ignite check` failed the same way at its start commit
+  (`check_verdict`, with the start commit's results recorded by `model-trial baseline`).
 - Commands: the store's `tool_calls` table (each command's first 300 characters). Output and
   messages: the session's Claude transcript, whose path the store's `sources` table keeps,
   read for the ticket's windows when the transcript is on this machine.
@@ -26,6 +28,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shlex
 from dataclasses import dataclass
 from collections.abc import Callable, Sequence
 from datetime import datetime, timedelta
@@ -33,12 +36,12 @@ from pathlib import Path
 from typing import Any
 
 from . import candidates, io, manifest, scan
+from .checks import check_verdict
 from .manifest import FILED, Grade, Pair
 from .scan import Trace
 from .spec import Arm, Spec
 
 BEAD: re.Pattern[str] = re.compile(r"[A-Za-z0-9.\-]+")
-SHA: re.Pattern[str] = re.compile(r"[0-9a-f]{7,64}")
 TEST_PATH: re.Pattern[str] = re.compile(
     r"(^|/)(tests?/|test_[^/]*$|[^/]*_tests?\.(rs|py)$|[^/]*_test\.py$)"
 )
@@ -112,28 +115,6 @@ def diff(start: str, end: str) -> Diff:
         if l.startswith("+") and not l.startswith("+++")
     ]
     return Diff(files, added, removed, test_added, [l for l in lines if l])
-
-
-def check_verdict(commit: str | None, landed: bool) -> str:
-    """`pass`, `fail` or `unknown` for an arm's final `commit`.
-
-    `ignite land` refuses a change without a passing gate verdict, so a landed source is `pass`.
-    For a copy, which closes without landing, the verdict is read from the Ignite daemon's
-    stored gate verdicts by the tree hash of `commit`. The daemon stores passes only, so a copy
-    whose final tree has no stored pass is `fail`: it either never got `ignite check` to pass
-    or changed its files afterwards. Copies are pinned to the machine that grades them, so the
-    daemon there saw their checks. `unknown` means no commit, or a database that cannot be
-    read."""
-    if landed:
-        return "pass"
-    if not commit or not SHA.fullmatch(commit):
-        return "unknown"
-    try:
-        tree = io.git("rev-parse", f"{commit}^{{tree}}")
-    except io.IgniteError:
-        return "unknown"
-    passed = io.gate_passed(tree) if SHA.fullmatch(tree) else None
-    return "unknown" if passed is None else "pass" if passed else "fail"
 
 
 # A machine whose `requests` rows have a gap longer than this inside an arm's claim has not
@@ -431,6 +412,7 @@ def grade_pair(
     writers: set[str],
     main: Pair | None = None,
     siblings: Sequence[tuple[str, str]] = (),
+    baselines: dict[tuple[str, str], manifest.Baseline] | None = None,
 ) -> list[Grade] | None:
     """Grades both arms of `pair` once both have ended. `main` is the pair that filed the source
     (`pair` itself unless it is another arm's copy), and `siblings` are the (ID, title) of the
@@ -520,6 +502,13 @@ def grade_pair(
     ):
         row = costs[name]
         spent = claim_cost(str(row.get("bead") or ""), claim)
+        checked = check_verdict(
+            end,
+            name == "source" and bool(claim.landed),
+            claim.session,
+            start_commit,
+            baselines,
+        )
         finished = (
             claim.ended == "landed"
             if name == "source"
@@ -535,7 +524,9 @@ def grade_pair(
                 finished=finished,
                 start_commit=start,
                 end_commit=end,
-                check=check_verdict(end, name == "source" and bool(claim.landed)),
+                check=checked.verdict,
+                check_preexisting=checked.preexisting,
+                check_failures=checked.failures + checked.unbaselined,
                 cost_partial=spent.partial,
                 minutes_partial=minutes_partial(row, claim),
                 dollars=spent.dollars,
@@ -636,13 +627,17 @@ def arm_routing(
 
 
 def cmd_grade(args: argparse.Namespace, spec: Spec) -> int:
+    """Grades every filed pair not yet graded, or with `--regrade` every filed pair again: a
+    pair's latest rows are the ones every later command reads."""
     trial: str = args.trial
-    graded = {g.pair for g in manifest.read_grades(trial)}
+    graded = set() if args.regrade else {g.pair for g in manifest.read_grades(trial)}
     todo = [
         p
         for p in manifest.read_pairs(trial)
         if p.state == FILED and p.pair not in graded
     ]
+    baselines = manifest.read_baselines(trial)
+    unbaselined: dict[str, set[str]] = {}
     if not todo:
         print("No filed pair waits to be graded.")
         return 0
@@ -657,7 +652,7 @@ def cmd_grade(args: argparse.Namespace, spec: Spec) -> int:
             if p.source == pair.source and p.pair != pair.pair and p.copy
         ]
         main = by_token.get(pair.main or pair.pair, pair)
-        grades = grade_pair(pair, spec, everything, writers, main, siblings)
+        grades = grade_pair(pair, spec, everything, writers, main, siblings, baselines)
         if grades is None:
             print(f"{pair.source} / {pair.copy}: not both ended yet")
             continue
@@ -671,4 +666,28 @@ def cmd_grade(args: argparse.Namespace, spec: Spec) -> int:
             print(f"  void: {reason}")
         for found in grades[0].suspect:
             print(f"  suspect: {found['what']} ({found['where']})")
+        copy = grades[1]
+        if copy.check_preexisting:
+            print(
+                f"  failed at the start commit too: {', '.join(copy.check_preexisting)}"
+            )
+        if copy.check != "pass" and copy.check_failures:
+            print(f"  failed checks: {', '.join(copy.check_failures)}")
+        missing = [
+            c
+            for c in copy.check_failures
+            if (str(copy.start_commit), c) not in baselines
+        ]
+        if missing and copy.start_commit:
+            unbaselined.setdefault(copy.start_commit, set()).update(missing)
+    for start, checks in unbaselined.items():
+        print(
+            f"\nNo baseline at {start[:12]} for {len(checks)} failed checks. In an Ignite build "
+            f"tree, `git switch --detach {start}`, run `ignite test --json --rerun` with:"
+        )
+        print("  " + " ".join(shlex.quote(c) for c in sorted(checks)))
+        print(
+            f"then `just model-trial baseline --trial {trial} --start {start} --results "
+            "<that output>`, switch back, and `grade --regrade`."
+        )
     return 0
