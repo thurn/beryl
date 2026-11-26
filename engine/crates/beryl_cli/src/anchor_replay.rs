@@ -173,6 +173,10 @@ struct LogLine {
 pub struct Searched {
     pub visits: Vec<u32>,
     pub rewards: Vec<f64>,
+    /// Each candidate's mean reward for the decider averaged over the trees, none if never
+    /// visited; empty in a log written before it was kept (`match_log::game::Searched`).
+    #[serde(default)]
+    pub means: Vec<Option<f64>>,
     pub anchor: Option<AnchorRecord>,
 }
 
@@ -308,32 +312,60 @@ fn replay(
 /// Replays each of the run's games `entrant` played from its seed through its log, calling
 /// `visit` at each of the entrant's searched decisions with the game, the state, the decision,
 /// the logged answer, the search's root visits and rewards, and the seats' names for a
-/// transcript. Returns the games walked; crashed ones are skipped.
+/// transcript. Returns the games walked; crashed ones are skipped. In a game the entrant
+/// played against itself, only the seat of the game's first side is visited.
 pub fn walk(
     catalog: &'static Catalog,
     dir: &Path,
     entrant: &str,
     mut visit: impl FnMut(&str, &State, &Decision, u16, &Searched, [&str; 2]),
 ) -> Result<u32, String> {
-    let t = mirror(catalog);
-    let mut played = 0;
-    for g in games(dir)? {
-        let Some(seat) = g.seat_of(entrant) else {
-            continue;
-        };
-        played += 1;
-        let lines: Vec<LogLine> = log(dir, &g)?;
+    walk_games(catalog, dir, entrant, |g, s, d, choice, search| {
+        let seat = g
+            .seat_of(entrant)
+            .expect("the entrant played the game it walks");
+        if d.player.index() != usize::from(seat) {
+            return;
+        }
         let names = if seat == 0 {
             [entrant, "opponent"]
         } else {
             ["opponent", entrant]
         };
+        visit(&g.game, s, d, choice, search, names);
+    })
+}
+
+/// Like [`walk`], but `visit` gets the game's whole line and is called in every seat the
+/// entrant played: both seats of a game it played against itself.
+pub fn walk_games(
+    catalog: &'static Catalog,
+    dir: &Path,
+    entrant: &str,
+    mut visit: impl FnMut(&GameLine, &State, &Decision, u16, &Searched),
+) -> Result<u32, String> {
+    let t = mirror(catalog);
+    let mut played = 0;
+    for g in games(dir)? {
+        let seats = [
+            (g.a == entrant).then_some(g.seat),
+            (g.b == entrant).then_some(1 - g.seat),
+        ];
+        if seats == [None, None] {
+            continue;
+        }
+        played += 1;
+        let lines: Vec<LogLine> = log(dir, &g)?;
         let mut s = start(dir, &t, &g)?;
         let mut x = Scratch::new();
         for line in lines {
             let d = logged_decision(&mut s, &t, &mut x, &g, line.seat, line.choice)?;
-            if let Some(search) = line.search.as_ref().filter(|_| line.seat == seat) {
-                visit(&g.game, &s, &d, line.choice, search, names);
+            if let Some(search) = line
+                .search
+                .as_ref()
+                .filter(|_| seats.contains(&Some(line.seat)))
+            {
+                visit(&g, &s, &d, line.choice, search);
             }
             apply(&mut s, &t, &mut x, &mut Replay, Choice(line.choice));
         }

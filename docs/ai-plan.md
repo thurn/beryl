@@ -641,6 +641,25 @@ Not a rung yet. It is recorded so that the rungs above are built toward it.
   search's default and rollout policy together.
 - **What it keeps.** The general rules stay as hard limits on the model, so that
   a model's mistake cannot become a blunder of a known class.
+- **Testing a value model first.** A learned value model would replace or steer
+  rollouts, so it can only help if it judges positions better than the search
+  already does. `just value-test <match-dir>...` measures this from ladder
+  matches. At each searching entrant's first searched decision of each turn, it
+  asks who wins. Four predictors answer: the search's own mean reward for the
+  move it played, rescaled by a fitted `sigmoid(a * logit(x) + b)` so that the
+  turn discount's pull toward 0.5 is not held against it; a logistic regression
+  and a network with one hidden layer of 32 units, both reading counts the
+  decider can see (life, cards, lands, creatures and each deck card's copies by
+  zone); and the network with the search's estimate as one more input. Every
+  number is scored on games the model was not trained on, in five folds by start
+  position. Read the two differences in log loss against the search. If the
+  network's 95% interval lies below zero, a model trained on that many games
+  already sees something the search misses. If the interval for the network
+  given the search's estimate lies below zero while the plain network's does
+  not, the model adds to the search rather than replacing it. If both lie above
+  zero, more games or better features come before any value network. `eval.rs`'s
+  eight-feature evaluation is not this comparison: it was fitted on greedy games
+  and lost 180 to 260 Elo as a leaf.
 
 ## 10. Open questions
 

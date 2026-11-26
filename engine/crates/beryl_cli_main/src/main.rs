@@ -33,6 +33,9 @@
 //!   It writes a stream of recorded session messages to `<out-dir>/<name>.json`.
 //! - `beryl_cli eval-fit [--games N] [--seed N]` fits the board evaluation's weights on
 //!   seeded games and prints them ([`evalfit`]).
+//! - `beryl_cli value-test <match-dir>... [--seed N] [--out DIR]` asks whether a small model
+//!   trained on who won calls the winners of searched positions better than the search's
+//!   own estimate, and writes `value.json` ([`value`]).
 //! - `beryl_cli review <replay.json> [--agent NAME] [--turn N] [--out FILE]` replays an app game's replay
 //!   file and writes its transcript; `--agent recorded` or another agent adds its search at
 //!   each of the opponent's decisions ([`review`]).
@@ -51,7 +54,7 @@ use std::process::ExitCode;
 use beryl_cli::transcript::Transcript;
 use beryl_cli::{
     Catalog, agreement, anchor_replay, blunders, evalfit, fit, fixture, freeze, game, gate, hunt,
-    ladder, number, positions, review, screen, script_check, specs, tournament, why,
+    ladder, number, positions, review, screen, script_check, specs, tournament, value, why,
 };
 use beryl_search::Budget;
 
@@ -71,6 +74,7 @@ const USAGE: &str = "usage:
   beryl_cli record-fixture <definitions.json> <out-dir> [name...]
   beryl_cli eval-fit [--games N] [--seed N]
   beryl_cli fit <match-dir>... [--seed N] [--out FILE]
+  beryl_cli value-test <match-dir>... [--seed N] [--out DIR]
   beryl_cli specs-check [card...]
   beryl_cli script-check <definitions.json> [--dump DIR] [check...]
   beryl_cli specs-describe [--views] <card> [moment]
@@ -113,6 +117,7 @@ fn main() -> ExitCode {
         }
         [command, rest @ ..] if command == "eval-fit" => evalfit::main(c, rest),
         [command, rest @ ..] if command == "fit" => fit::main(c, rest),
+        [command, rest @ ..] if command == "value-test" => value::main(c, rest),
         [command, rest @ ..] if command == "review" => review::main(c, rest),
         [command, rest @ ..] if command == "freeze-saves" => freeze::main(c, rest),
         [command, rest @ ..] if command == "anchor-replay" => anchor_replay::main(c, rest),

@@ -27,6 +27,7 @@ pub mod script_check;
 pub mod specs;
 pub mod tournament;
 pub mod transcript;
+pub mod value;
 mod walk;
 pub mod why;
 

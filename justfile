@@ -270,6 +270,12 @@ ladder *args:
 fit *args:
     RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "engine" / "Cargo.toml") }} -p beryl_cli_main -- fit "$@"
 
+# Score a small value model against the search's own estimate on ladder match directories
+[group('agents')]
+[no-cd]
+value-test *args:
+    RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "engine" / "Cargo.toml") }} -p beryl_cli_main -- value-test "$@"
+
 # The ladder's start positions, cut from champion games at low priority: build [--games N] [--seed N] [--work 3M] [--out DIR], or sample [--count N] DIR
 [group('agents')]
 [no-cd]

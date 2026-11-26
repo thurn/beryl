@@ -14,4 +14,5 @@ mod script_check;
 mod specs_mod;
 mod specs_script;
 mod tournament;
+mod value;
 mod why;
