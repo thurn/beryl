@@ -304,6 +304,16 @@ fn replacements(replacement: &Replacement) -> Vec<(&'static str, Kind, String, R
         Rewrite::Multiply(n) => numbers(n, Rewrite::Multiply),
         _ => {}
     }
+    if let Rewrite::EntersTappedUnlessYouControl(n, filter) = replacement.rewrite {
+        out.extend(you_control(n, filter).map(|(name, r)| {
+            (
+                "replacement rewrite",
+                Kind::ReplacementRewrite,
+                name,
+                rewrite(r),
+            )
+        }));
+    }
     if let Rewrite::EntersWithCounters(kind, n) = replacement.rewrite {
         out.extend(costs::unsigned(n).map(|n| {
             (
@@ -325,6 +335,21 @@ fn replacements(replacement: &Replacement) -> Vec<(&'static str, Kind, String, R
         }));
     }
     out
+}
+
+/// The neighbours of "enters tapped unless you control `n` or more [`filter`]": another count,
+/// and the filter's neighbours.
+fn you_control(n: u8, filter: &'static Filter) -> impl Iterator<Item = (String, Rewrite)> {
+    let counts = costs::unsigned(n).map(move |n| {
+        (
+            n.to_string(),
+            Rewrite::EntersTappedUnlessYouControl(n, filter),
+        )
+    });
+    let filters = filters(*filter)
+        .into_iter()
+        .map(move |(name, f)| (name, Rewrite::EntersTappedUnlessYouControl(n, leak(f))));
+    counts.chain(filters)
 }
 
 pub(super) fn rules(rule: &RuleChange) -> Vec<(Kind, String, RuleChange)> {

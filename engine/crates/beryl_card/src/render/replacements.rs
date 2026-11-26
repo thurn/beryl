@@ -11,6 +11,18 @@ use crate::filter::Filter;
 use crate::ids::Zone;
 
 impl Ctx {
+    /// What "enters tapped unless you control" asks for. Oracle text says "other" of a count
+    /// of two or more and "a" of one: "three or more other Islands", "an Island".
+    fn controlled(&mut self, n: u8, filter: Filter) -> String {
+        let kind = Kind::Permanent;
+        let noun = self.noun(filter, kind);
+        if n == 1 {
+            with_article(&noun.singular(kind))
+        } else {
+            format!("{} or more other {}", number(n), noun.plural(kind))
+        }
+    }
+
     /// A replacement effect's clauses, such as "this land enters tapped" or "if you would
     /// draw a card while your library has no cards in it, you win the game instead"
     /// ([CR 614.1](https://yawgatog.com/resources/magic-rules/#R6141)).
@@ -25,6 +37,12 @@ impl Ctx {
                 "{this} enters tapped unless you control {} or fewer other lands",
                 number(n)
             )],
+            (_, Rewrite::EntersTappedUnlessYouControl(n, filter)) => {
+                vec![format!(
+                    "{this} enters tapped unless you control {}",
+                    self.controlled(n, *filter)
+                )]
+            }
             (_, Rewrite::EntersWithCounters(kind, n)) => vec![format!(
                 "{this} enters with {} {} counter{} on it",
                 number(n),

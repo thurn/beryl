@@ -24,6 +24,7 @@ pub(in crate::stack) fn begins(
             matches!(step, TurnStep::PrecombatMain | TurnStep::PostcombatMain)
         }
         TriggerEvent::Enters
+        | TriggerEvent::EntersUntapped
         | TriggerEvent::Dies
         | TriggerEvent::Leaves
         | TriggerEvent::Attacks

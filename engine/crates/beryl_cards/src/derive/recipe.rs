@@ -70,18 +70,24 @@ fn trigger(event: Trigger) -> Vec<Recipe> {
         Subject::A(filter) => filter,
     };
     match event.event {
-        TriggerEvent::Enters | TriggerEvent::Casts | TriggerEvent::CastsFrom(Zone::Hand)
+        TriggerEvent::Enters
+        | TriggerEvent::EntersUntapped
+        | TriggerEvent::Casts
+        | TriggerEvent::CastsFrom(Zone::Hand)
             if matches!(event.subject, Subject::This) =>
         {
             // A trigger on "this" must ignore another permanent entering, so a land
             // played beside the source is an opening too.
             let mut recipes = vec![Recipe::PlaySource];
-            if matches!(event.event, TriggerEvent::Enters) {
+            if matches!(
+                event.event,
+                TriggerEvent::Enters | TriggerEvent::EntersUntapped
+            ) {
                 recipes.push(Recipe::PlayLand(P0, Filter::Any));
             }
             recipes
         }
-        TriggerEvent::Enters => {
+        TriggerEvent::Enters | TriggerEvent::EntersUntapped => {
             let mut recipes = on(event, |player| Recipe::PlayLand(player, filter));
             recipes.extend(on(event, |player| {
                 Recipe::Cast(player, filter, Zone::Battlefield, 1)

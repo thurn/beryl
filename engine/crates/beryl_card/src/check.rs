@@ -252,6 +252,7 @@ impl Scope<'_> {
                 | Rewrite::EntersTapped
                 | Rewrite::EntersPrepared
                 | Rewrite::EntersTappedUnlessFewLands(_)
+                | Rewrite::EntersTappedUnlessYouControl(..)
                 | Rewrite::EntersTappedUnlessPayLife(_)
                 | Rewrite::EntersWithCounters(..)
                 | Rewrite::Instead

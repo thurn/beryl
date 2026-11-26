@@ -197,7 +197,13 @@ impl Ctx {
         position: LibraryPosition,
     ) -> Vec<String> {
         let plural = self.is_plural(objects);
-        let library = owners(plural, "library");
+        // "Put target instant or sorcery card from your graveyard on top of your library": a
+        // card in a graveyard is in its owner's (CR 404.1), so its owner is "you".
+        let library = if self.own_graveyard_target(objects) {
+            "your library".to_owned()
+        } else {
+            owners(plural, "library")
+        };
         match position {
             LibraryPosition::Top => {
                 vec![self.acts(("put", "puts"), objects, &format!(" on top of {library}"))]

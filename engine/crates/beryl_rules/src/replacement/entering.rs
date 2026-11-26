@@ -140,6 +140,11 @@ pub(super) fn entering<L: Layout>(
                     entry.tapped = true;
                 }
             }
+            Rewrite::EntersTappedUnlessYouControl(n, filter) => {
+                if !controls_at_least(s, t, controller, n, filter) {
+                    entry.tapped = true;
+                }
+            }
             Rewrite::EntersTappedUnlessPayLife(_) => {
                 pays_life = entry.pay_life;
                 if !entry.pay_life {
@@ -241,6 +246,7 @@ fn copy_to_enter<L: Layout>(
                 | Rewrite::EntersTapped
                 | Rewrite::EntersPrepared
                 | Rewrite::EntersTappedUnlessFewLands(_)
+                | Rewrite::EntersTappedUnlessYouControl(..)
                 | Rewrite::EntersTappedUnlessPayLife(_)
                 | Rewrite::EntersWithCounters(..)
                 | Rewrite::Instead
@@ -346,6 +352,7 @@ fn life_asked(face: &crate::card::Face) -> Option<(AbilityIx, u8)> {
             | Rewrite::EntersTapped
             | Rewrite::EntersPrepared
             | Rewrite::EntersTappedUnlessFewLands(_)
+            | Rewrite::EntersTappedUnlessYouControl(..)
             | Rewrite::EntersWithCounters(..)
             | Rewrite::Instead
             | Rewrite::Dredge(_)
@@ -429,6 +436,7 @@ fn chooses(face: &crate::card::Face) -> Option<(AbilityIx, ChosenKind)> {
             | Rewrite::EntersTapped
             | Rewrite::EntersPrepared
             | Rewrite::EntersTappedUnlessFewLands(_)
+            | Rewrite::EntersTappedUnlessYouControl(..)
             | Rewrite::EntersTappedUnlessPayLife(_)
             | Rewrite::EntersWithCounters(..)
             | Rewrite::Instead
@@ -459,4 +467,27 @@ pub(crate) fn few_other_lands<L: Layout>(s: &State<L>, controller: Seat, n: u8) 
         d.controller == controller && d.types.contains(Types::LAND)
     });
     lands.count() <= usize::from(n)
+}
+
+/// Whether `controller` controls `n` or more permanents that `filter` accepts, read for them,
+/// for "enters tapped unless you control three or more other Islands". A land checks this as
+/// it enters, so it counts only the permanents already on the battlefield. The rulings of
+/// such lands say so: "As these lands are entering the battlefield, they check for lands that
+/// are already on the battlefield. They won't see lands that are entering the battlefield at
+/// the same time". The entering permanent is not yet there, so every permanent counted is
+/// "other". Its own text changes do not apply to the filter until it is on the battlefield.
+#[cold]
+#[inline(never)]
+pub(crate) fn controls_at_least<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    controller: Seat,
+    n: u8,
+    filter: &crate::filter::Filter,
+) -> bool {
+    let words = crate::card::Words::NONE;
+    let matching = s.battlefield().iter().filter(|&&p| {
+        s.derived(p).controller == controller && filter.matches(s, t, p, controller, &words)
+    });
+    matching.take(usize::from(n)).count() == usize::from(n)
 }

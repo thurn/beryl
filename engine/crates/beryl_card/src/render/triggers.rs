@@ -27,6 +27,7 @@ impl Ctx {
                 (first..=last).map(roman).collect::<Vec<_>>().join(", ")
             }
             TriggerEvent::Enters
+            | TriggerEvent::EntersUntapped
             | TriggerEvent::Dies
             | TriggerEvent::Leaves
             | TriggerEvent::Attacks
@@ -115,6 +116,7 @@ impl Ctx {
     pub(super) fn event_verb(&mut self, trigger: &Trigger) -> String {
         match trigger.event {
             TriggerEvent::Enters => "enters".to_owned(),
+            TriggerEvent::EntersUntapped => "enters untapped".to_owned(),
             TriggerEvent::Dies => "dies".to_owned(),
             TriggerEvent::Leaves => "leaves the battlefield".to_owned(),
             TriggerEvent::Attacks => "attacks".to_owned(),

@@ -396,6 +396,7 @@ impl Ctx {
             | TriggerEvent::ClassLevel(_)
             | TriggerEvent::Chapter { .. } => "that permanent",
             TriggerEvent::Enters
+            | TriggerEvent::EntersUntapped
             | TriggerEvent::Dies
             | TriggerEvent::Attacks
             | TriggerEvent::Mutates

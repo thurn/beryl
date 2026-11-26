@@ -86,6 +86,7 @@ pub(crate) fn check(def: &CardDef) -> Result<Replaces, Unreplaced> {
                 Rewrite::EntersTapped
                 | Rewrite::EntersPrepared
                 | Rewrite::EntersTappedUnlessFewLands(_)
+                | Rewrite::EntersTappedUnlessYouControl(..)
                 | Rewrite::EntersTappedUnlessPayLife(_)
                 | Rewrite::EntersWithCounters(..)
                 | Rewrite::Choose(_)
@@ -130,6 +131,7 @@ pub(crate) fn check(def: &CardDef) -> Result<Replaces, Unreplaced> {
                 | Rewrite::EntersTapped
                 | Rewrite::EntersPrepared
                 | Rewrite::EntersTappedUnlessFewLands(_)
+                | Rewrite::EntersTappedUnlessYouControl(..)
                 | Rewrite::EntersTappedUnlessPayLife(_)
                 | Rewrite::EntersWithCounters(..)
                 | Rewrite::MaySkipTurnToUntap

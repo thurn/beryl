@@ -214,6 +214,8 @@ fn triggers(trigger: &Trigger) -> Vec<(&'static str, Kind, String, Trigger)> {
     // step triggers. The engine matcher rejects combinations it would never read.
     let event = match trigger.event {
         Event::Enters | Event::Dies => Event::Leaves,
+        // Without "untapped", a permanent that enters tapped triggers it too.
+        Event::EntersUntapped => Event::Enters,
         Event::Leaves | Event::BecomesTarget | Event::Attacks => Event::Dies,
         Event::PlayerAttacks | Event::CreatesTokens | Event::Discards | Event::CastsFrom(_) => {
             Event::Casts

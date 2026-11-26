@@ -280,7 +280,9 @@ fn fires<L: Layout>(
         // enters-the-battlefield triggered ability ... refers to X, and the spell that became
         // that object as it resolved had a value of X chosen for any of its costs, the value
         // of X for that ability is the same as the value of X for that spell".
-        (TriggerEvent::Enters, &Event::ZoneChange { object, .. }) if about(object) => {
+        (event, &Event::ZoneChange { object, .. })
+            if entered(s, event, object) && about(object) =>
+        {
             Some(info(Some(object), you, s.x_of(object.slot)))
         }
         (TriggerEvent::Attacks, Event::Attack { attackers, .. })
@@ -365,6 +367,15 @@ fn fires<L: Layout>(
         }
         _ => None,
     }
+}
+
+/// Whether an entering event, the move of `object` onto the battlefield, is what `event`
+/// triggers on: "enters", or "enters untapped" if the permanent is untapped. Triggers are
+/// matched as the move finishes, before anything else can tap or untap the permanent, so
+/// whether it is tapped now is whether it entered tapped (CR 603.2).
+fn entered<L: Layout>(s: &State<L>, event: TriggerEvent, object: ObjectRef<L>) -> bool {
+    matches!(event, TriggerEvent::Enters)
+        || matches!(event, TriggerEvent::EntersUntapped) && !s.object(object.slot).is_tapped()
 }
 
 /// Whether `object`, which an event is about, is a trigger's subject: the object its

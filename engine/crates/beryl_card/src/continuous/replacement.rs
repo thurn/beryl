@@ -56,6 +56,14 @@ impl Replacement {
         Replacement::this_enters(Rewrite::EntersTappedUnlessFewLands(n))
     }
 
+    /// "This enters tapped unless you control N or more other [permanents the filter
+    /// accepts]" (Mystic Sanctuary), or with N of one, "unless you control a [permanent the
+    /// filter accepts]" (Castle Vantress). The filter is read for the entering permanent's
+    /// controller and need not say "you control".
+    pub const fn enters_tapped_unless_you_control(n: u8, filter: &'static Filter) -> Replacement {
+        Replacement::this_enters(Rewrite::EntersTappedUnlessYouControl(n, filter))
+    }
+
     /// "As this enters, you may pay N life. If you don't, it enters tapped." (Soporific
     /// Springs)
     pub const fn enters_tapped_unless_pay_life(n: u8) -> Replacement {
@@ -244,6 +252,11 @@ pub enum Rewrite {
     EntersTapped,
     /// It enters tapped unless its controller controls N or fewer other lands.
     EntersTappedUnlessFewLands(u8),
+    /// It enters tapped unless its controller controls N or more permanents that the filter
+    /// accepts, read for that controller. It checks as the permanent enters, before it is on
+    /// the battlefield, so every permanent it counts is another one, and a permanent entering
+    /// at the same time is not counted.
+    EntersTappedUnlessYouControl(u8, &'static Filter),
     /// Its controller may pay N life as it enters; if they don't, it enters tapped. Whoever
     /// puts it onto the battlefield asks its controller first.
     EntersTappedUnlessPayLife(u8),

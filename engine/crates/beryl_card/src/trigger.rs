@@ -61,6 +61,13 @@ pub enum TriggerEvent {
     /// "When [subject] enters"
     /// ([CR 603.6a](https://yawgatog.com/resources/magic-rules/#R6036a)).
     Enters,
+    /// "When [subject] enters untapped": it enters, and is untapped as it does. A permanent
+    /// that enters tapped never triggers it, even if it untaps before the ability would
+    /// trigger: an ability triggers as its event happens
+    /// ([CR 603.2](https://yawgatog.com/resources/magic-rules/#R6032)): "Whenever a game
+    /// event or game state matches a triggered ability's trigger event, that ability
+    /// automatically triggers."
+    EntersUntapped,
     /// "When [subject] dies": a leaves-the-battlefield ability, which looks back in time
     /// ([CR 603.10a](https://yawgatog.com/resources/magic-rules/#R60310a)).
     Dies,
@@ -180,6 +187,7 @@ impl PartialEq for TriggerEvent {
                 matches!(other, TriggerEvent::State(b) if std::ptr::eq(*a, *b))
             }
             TriggerEvent::Enters
+            | TriggerEvent::EntersUntapped
             | TriggerEvent::Dies
             | TriggerEvent::Leaves
             | TriggerEvent::Attacks
@@ -214,6 +222,7 @@ impl std::hash::Hash for TriggerEvent {
             TriggerEvent::CastsFrom(zone) => zone.hash(h),
             TriggerEvent::Chapter { first, last } => (first, last).hash(h),
             TriggerEvent::Enters
+            | TriggerEvent::EntersUntapped
             | TriggerEvent::Dies
             | TriggerEvent::Leaves
             | TriggerEvent::Attacks
@@ -250,6 +259,8 @@ pub enum Subject {
 impl Trigger {
     /// "When this enters."
     pub const ENTERS: Trigger = Trigger::of(TriggerEvent::Enters, Subject::This);
+    /// "When this enters untapped."
+    pub const ENTERS_UNTAPPED: Trigger = Trigger::of(TriggerEvent::EntersUntapped, Subject::This);
     /// "When you cast this spell", which works on the stack ([`crate::Ability::on_the_stack`]).
     pub const CAST: Trigger = Trigger::of(TriggerEvent::Casts, Subject::This);
     /// "When this dies."

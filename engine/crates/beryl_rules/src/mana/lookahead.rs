@@ -10,7 +10,7 @@ use crate::continuous::rule_change;
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small, Table};
-use crate::replacement::few_other_lands;
+use crate::replacement::{controls_at_least, few_other_lands};
 use crate::state::{State, TurnStep};
 use crate::table::{GameTable, ManaFace};
 
@@ -188,13 +188,16 @@ fn instant_speed<L: Layout>(s: &State<L>, t: &GameTable, face: &Face, player: Se
 /// '[This permanent] enters with . . . ,' 'As [this permanent] enters . . . ,' or '[This
 /// permanent] enters as . . . ' are replacement effects." One that asks for life enters
 /// untapped if the player pays, which is theirs to choose.
-fn enters_untapped<L: Layout>(s: &State<L>, player: Seat, face: &Face) -> bool {
+fn enters_untapped<L: Layout>(s: &State<L>, t: &GameTable, player: Seat, face: &Face) -> bool {
     face.abilities
         .iter()
         .filter_map(Ability::replacement)
         .all(|r| match r.rewrite {
             Rewrite::EntersTapped => false,
             Rewrite::EntersTappedUnlessFewLands(n) => few_other_lands(s, player, n),
+            Rewrite::EntersTappedUnlessYouControl(n, filter) => {
+                controls_at_least(s, t, player, n, filter)
+            }
             Rewrite::None
             | Rewrite::ToZone(_)
             | Rewrite::EntersPrepared
@@ -251,7 +254,7 @@ fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
             if land_drop
                 && face.playable()
                 && face.types.intersects(Types::LAND)
-                && enters_untapped(s, player, face)
+                && enters_untapped(s, t, player, face)
                 && let ManaFace::Plain { kinds, amount, .. } = t.facts(card, f).mana
                 && !ahead.lands.iter().any(|&l| l == (kinds, amount))
             {

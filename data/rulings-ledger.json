@@ -1987,6 +1987,18 @@
   ],
   "Mister Immortal": [],
   "Mother of Runes": [],
+  "Mystic Sanctuary": [
+    {
+      "published_at": "2019-10-04",
+      "hash": "d0ff03404c45",
+      "untestable": "It needs an effect that puts a nonbasic Island card onto the battlefield tapped, as Farseek does, and no implemented card has one."
+    },
+    {
+      "published_at": "2019-10-04",
+      "hash": "c57dcf11bc4a",
+      "untestable": "It needs an effect that puts several lands onto the battlefield at once, as Scapeshift does, and no implemented card has one."
+    }
+  ],
   "Notion Thief": [
     {
       "published_at": "2018-03-16",

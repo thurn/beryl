@@ -44,7 +44,9 @@ pub(crate) mod turns;
 
 pub(crate) use draws::{DrawReplacement, draw, dredge, dredges};
 pub(crate) use enchant::{Enchants, enchants};
-pub(crate) use entering::{chosen_to_enter, few_other_lands, life_to_enter, pay_life_to_enter};
+pub(crate) use entering::{
+    chosen_to_enter, controls_at_least, few_other_lands, life_to_enter, pay_life_to_enter,
+};
 use entering::{entering, entering_copy, entering_destinations, entering_values, selected_copy};
 
 /// A move proposed for one object of a batch, before the state changes: the proposal the

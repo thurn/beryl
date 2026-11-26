@@ -152,8 +152,9 @@ pub(crate) fn put_on_stack<L: Layout>(
 ) -> Result<(), Full> {
     let tr = s.take_trigger(index.into());
     // An enters ability's X is its spell's (see CR 107.3m), captured as it triggered.
-    let entering =
-        (ability(t, &tr.of).trigger()).is_some_and(|trigger| trigger.is_this(TriggerEvent::Enters));
+    let entering = (ability(t, &tr.of).trigger()).is_some_and(|trigger| {
+        trigger.is_this(TriggerEvent::Enters) || trigger.is_this(TriggerEvent::EntersUntapped)
+    });
     s.put_on_stack(
         sink,
         StackEntry {

@@ -99,7 +99,9 @@ pub fn listens_to(trigger: &Trigger, zones: ZoneSet) -> Result<Option<EventKind>
         return Err(Unmatched::CastNumber);
     }
     let (kind, about, has_player) = match trigger.event {
-        TriggerEvent::Enters => (EventKind::Enters, About::Either, false),
+        TriggerEvent::Enters | TriggerEvent::EntersUntapped => {
+            (EventKind::Enters, About::Either, false)
+        }
         TriggerEvent::Dies => (EventKind::Dies, About::Either, false),
         TriggerEvent::Leaves => (EventKind::Leaves, About::Either, false),
         TriggerEvent::Attacks => (EventKind::Attack, About::This, false),
