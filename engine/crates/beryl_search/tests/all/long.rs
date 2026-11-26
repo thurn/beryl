@@ -9,8 +9,8 @@ use beryl_engine::{
     Zone, ZoneKey, apply, next, observe,
 };
 use beryl_search::{
-    Agent, AgentDecision, Budget, DEEP_SEARCHER, Family, GreedyAgent, LongSearch, Mcts, Options,
-    Search, Settings, Sight,
+    Agent, AgentDecision, Budget, DEEP_SEARCHER, Family, GreedyAgent, Knowledge, LongSearch, Mcts,
+    Options, RolloutPolicy, Search, Settings, Sight,
 };
 
 /// Positions from a greedy mirror game with more than two candidates, `from_end` such
@@ -217,6 +217,77 @@ fn families_name_themselves() {
         },
         DEEP_SEARCHER
     );
+}
+
+/// `fitroll` and `fitroot` each print back as given, and each requires `tuned` knowledge
+/// and the other's absence, with an error that names the reason.
+#[test]
+fn fitroll_and_fitroot_name_themselves_and_require_tuned_alone() {
+    for name in [
+        "pimc2/hidden/rollout/tuned/anchor+fitroll",
+        "pimc2/hidden/rollout/tuned/fitroot",
+    ] {
+        let f: Family = name.parse().unwrap();
+        assert_eq!(f.to_string(), name);
+    }
+    for (name, reason) in [
+        (
+            "pimc2/hidden/rollout/tuned/fitroll+fitroot",
+            "fitted knowledge",
+        ),
+        ("pimc2/hidden/rollout/fitted/fitroll", "require tuned"),
+        ("pimc2/hidden/rollout/estimate/fitroot", "require tuned"),
+    ] {
+        let error = name.parse::<Family>().unwrap_err();
+        assert!(error.contains(reason), "{name}: {error}");
+    }
+}
+
+/// At decisions where tuned greedy and fitted greedy answer differently, the default the
+/// anchor checks the search against is tuned's under `fitroll`, which fits only the
+/// simulations, and fitted's under `fitroot`, which fits only the root.
+#[test]
+fn fitroll_and_fitroot_take_the_default_from_their_root_values() {
+    let t = mirror();
+    let tuned = RolloutPolicy::with(&t, Knowledge::Tuned);
+    let fitted = RolloutPolicy::with(&t, Knowledge::Fitted);
+    let mut x = Scratch::new();
+    let mut differ = Vec::new();
+    for seed in 0..4 {
+        let mut s = State::new(&t, seed, Profile::SMART).unwrap();
+        let mut agents = [GreedyAgent::new(&t), GreedyAgent::new(&t)];
+        play(&t, &mut s, &mut Scratch::new(), &mut agents, |s, d| {
+            let obs = observe(s, &t, &mut x, d.decider);
+            let own_on_top = obs
+                .stack()
+                .last()
+                .is_some_and(|e| e.controller() == d.player);
+            if differ.len() < 12 && d.len() > 1 && !own_on_top {
+                let answers = [tuned.choose(&t, obs, d), fitted.choose(&t, obs, d)];
+                if answers[0] != answers[1] {
+                    differ.push((*s, *d, answers));
+                }
+            }
+        });
+    }
+    assert!(
+        !differ.is_empty(),
+        "no decision where tuned and fitted differ"
+    );
+    // `first` holds the default against any other choice of the search's, so every
+    // decision where the trees prefer something else records its check.
+    for (option, side) in [("fitroll", 0), ("fitroot", 1)] {
+        let family = format!("pimc2/hidden/rollout/tuned/anchor+paired+first+{option}");
+        let mut checked = 0;
+        for (i, (s, d, answers)) in differ.iter().enumerate() {
+            let found = search(&t, settings(&family, 20_000, 1), i as u64, s, d);
+            if let Some(anchor) = found.anchor {
+                assert_eq!(anchor.greedy, answers[side], "{option} at decision {i}");
+                checked += 1;
+            }
+        }
+        assert!(checked > 0, "{option}: no decision recorded its default");
+    }
 }
 
 /// The opponent's Stock Up took five seconds of thinking, half of it ordering the three cards

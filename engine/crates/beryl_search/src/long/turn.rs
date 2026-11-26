@@ -51,13 +51,14 @@ impl<L: Layout> LongSearch<L> {
         decision: AgentDecision,
         capture: Option<&mut Capture<L>>,
     ) -> Choice {
+        let root = self.root_policy.as_ref().unwrap_or(&self.policy);
         let default = self.expert.as_mut().map_or_else(
-            || self.policy.choose(&self.table, obs, d),
+            || root.choose(&self.table, obs, d),
             |expert| expert.choose(obs, d, decision),
         );
         let options = self.settings.family.options;
         let (choice, report) = search(self, obs, d, decision, default, |choice| {
-            options.anchor && guarded(&self.table, &self.policy, obs, d, default, choice, options)
+            options.anchor && guarded(&self.table, self.root(), obs, d, default, choice, options)
         });
         if let Some(capture) = capture {
             capture.finish_turn(&report);

@@ -373,6 +373,8 @@ pub const DEEP_SEER: Family = Family {
         walker: false,
         prior: false,
         bonus: false,
+        fitroll: false,
+        fitroot: false,
     },
 };
 
@@ -419,6 +421,8 @@ pub const DEEP_SEARCHER: Family = Family {
         walker: true,
         prior: false,
         bonus: false,
+        fitroll: false,
+        fitroot: false,
     },
 };
 

@@ -109,9 +109,30 @@ pub struct Family {
 }
 
 impl Family {
-    /// The policy this family uses to play out its leaves.
+    /// The policy that plays and scores everything inside this family's simulated games:
+    /// tree expansion and its ordering, rollouts, the paired test's playouts and the turn
+    /// search's proposals, continuations and rewards. Fitted values with
+    /// [`Options::fitroll`].
     pub fn rollout_policy(self, t: &GameTable) -> RolloutPolicy {
-        RolloutPolicy::with_rules(t, self.knowledge, self.options.rules())
+        let knowledge = if self.options.fitroll {
+            Knowledge::Fitted
+        } else {
+            self.knowledge
+        };
+        RolloutPolicy::with_rules(t, knowledge, self.options.rules())
+    }
+
+    /// The policy that answers at the real decision only: the default move, the [`guarded`]
+    /// test, the [`Options::sure`] answers and the combat planner's values at the root.
+    /// Fitted values with [`Options::fitroot`]. The same as [`Family::rollout_policy`]
+    /// unless one of those two options is set.
+    pub fn root_policy(self, t: &GameTable) -> RolloutPolicy {
+        let knowledge = if self.options.fitroot {
+            Knowledge::Fitted
+        } else {
+            self.knowledge
+        };
+        RolloutPolicy::with_rules(t, knowledge, self.options.rules())
     }
 }
 
@@ -169,6 +190,14 @@ pub struct Options {
     /// most 0.01 of a win. Without it the whole score is discounted, and a search drags out a
     /// lost game rather than play to a small chance of winning.
     pub bonus: bool,
+    /// The root keeps the tuned values, and everything simulated plays and scores with the
+    /// fitted ones ([`Knowledge::Fitted`], [`Family::rollout_policy`]). Requires `tuned`
+    /// knowledge. With [`Options::fitroot`], it splits the `fitted` knowledge in two, to
+    /// measure how much of that knowledge's match result came from each half.
+    pub fitroll: bool,
+    /// The root uses the fitted values ([`Family::root_policy`]), and everything simulated
+    /// keeps the tuned ones. Requires `tuned` knowledge; see [`Options::fitroll`].
+    pub fitroot: bool,
 }
 
 /// A searcher's settings.
@@ -303,11 +332,11 @@ impl FromStr for Family {
                 "{s:?} is no family: method/sight/leaf/knowledge[/options], as \
                  ismcts18/hidden/rollout/tuned (pimcN, ismctsN, turn72 or turnbudget72; \
                  hidden, hands or omniscient; \
-                 rollout, cutN or eval; estimate or tuned; options anchor, expert, guard, mid, \
-                 means, hold, waste, combat, order, sure, paired, first, walker, prior and bonus \
-                 joined by + in \
+                 rollout, cutN or eval; estimate, tuned or fitted; options anchor, expert, \
+                 guard, mid, means, hold, waste, combat, order, sure, paired, first, walker, prior, bonus, \
+                 fitroll and fitroot joined by + in \
                  that order; expert, guard, sure and paired require anchor; first requires paired; \
-                 walker requires combat)"
+                 walker requires combat; fitroll and fitroot require tuned, one at a time)"
             )
         };
         let parts: Vec<&str> = s.split('/').collect();
@@ -336,6 +365,8 @@ impl FromStr for Family {
                         "walker" => &mut o.walker,
                         "prior" => &mut o.prior,
                         "bonus" => &mut o.bonus,
+                        "fitroll" => &mut o.fitroll,
+                        "fitroot" => &mut o.fitroot,
                         _ => return Err(bad()),
                     };
                     if *flag {
@@ -387,6 +418,7 @@ impl FromStr for Family {
             "fitted" => Knowledge::Fitted,
             _ => return Err(bad()),
         };
+        fit_halves(s, options, knowledge)?;
         Ok(Family {
             method,
             sight,
@@ -397,10 +429,29 @@ impl FromStr for Family {
     }
 }
 
+/// Checks that [`Options::fitroll`] and [`Options::fitroot`] in the family named `s` are
+/// set on `tuned` knowledge, and not both, with an error that says why.
+fn fit_halves(s: &str, options: Options, knowledge: Knowledge) -> Result<(), String> {
+    if options.fitroll && options.fitroot {
+        return Err(format!(
+            "{s:?}: fitroll and fitroot together put fitted values both at the root and in \
+             the simulations, which is the fitted knowledge: name it \
+             .../fitted/... without either option"
+        ));
+    }
+    if (options.fitroll || options.fitroot) && knowledge != Knowledge::Tuned {
+        return Err(format!(
+            "{s:?}: fitroll and fitroot replace the tuned values in one half of the search \
+             with the fitted ones, so they require tuned knowledge"
+        ));
+    }
+    Ok(())
+}
+
 impl Options {
     /// The options as a family's name spells them, joined by `+` in this order:
-    /// `anchor+expert+guard+mid+means+hold+waste+combat+order+sure+paired+first+walker+prior+bonus`;
-    /// empty for none.
+    /// `anchor+expert+guard+mid+means+hold+waste+combat+order+sure+paired+first+walker+prior`
+    /// `+bonus+fitroll+fitroot`; empty for none.
     fn to_name(self) -> String {
         [
             (self.anchor, "anchor"),
@@ -418,6 +469,8 @@ impl Options {
             (self.walker, "walker"),
             (self.prior, "prior"),
             (self.bonus, "bonus"),
+            (self.fitroll, "fitroll"),
+            (self.fitroot, "fitroot"),
         ]
         .into_iter()
         .filter_map(|(on, name)| on.then_some(name))
@@ -438,7 +491,11 @@ impl Options {
 #[derive(Debug)]
 pub struct LongSearch<L: Layout = Small> {
     table: GameTable,
+    /// The policy of the simulated games ([`Family::rollout_policy`]).
     policy: RolloutPolicy,
+    /// The policy of the real decision ([`Family::root_policy`]), only where it differs
+    /// from `policy`: read it through [`LongSearch::root`].
+    root_policy: Option<RolloutPolicy>,
     expert: Option<ExpertAgent<L>>,
     combat_plan: combat::Plan<L>,
     settings: Settings,
@@ -462,6 +519,11 @@ struct Kept<L: Layout> {
 }
 
 impl<L: Layout> LongSearch<L> {
+    /// The policy that answers the real decision ([`Family::root_policy`]).
+    fn root(&self) -> &RolloutPolicy {
+        self.root_policy.as_ref().unwrap_or(&self.policy)
+    }
+
     pub fn new(t: &GameTable, settings: Settings, seed: u64) -> Self {
         Self::resumed(t, settings, seed, AgentDecision(0))
     }
@@ -473,6 +535,8 @@ impl<L: Layout> LongSearch<L> {
         Self {
             table: t.clone(),
             policy: family.rollout_policy(t),
+            root_policy: (family.options.fitroll || family.options.fitroot)
+                .then(|| family.root_policy(t)),
             expert: family.options.expert.then(|| ExpertAgent::new(t, seed)),
             combat_plan: combat::Plan::default(),
             settings,
@@ -955,6 +1019,7 @@ impl Widen for LongSearch<Small> {
         LongSearch {
             table: self.table.clone(),
             policy: self.policy.clone(),
+            root_policy: self.root_policy.clone(),
             expert: self.expert.as_ref().map(Widen::widen),
             combat_plan: self.combat_plan.widen(),
             settings: self.settings,
@@ -967,6 +1032,25 @@ impl Widen for LongSearch<Small> {
 }
 
 impl<L: Layout> LongSearch<L> {
+    /// The default answer at the real decision: with `combat`, the combat planner's, else
+    /// the live expert's or the root policy's ([`Family::root_policy`]).
+    fn default_answer(
+        &mut self,
+        obs: Observation<'_, L>,
+        d: &Decision<L>,
+        decision: AgentDecision,
+        combat: bool,
+    ) -> Choice {
+        let root = self.root_policy.as_ref().unwrap_or(&self.policy);
+        match &mut self.expert {
+            _ if combat => self
+                .combat_plan
+                .choose(&self.table, root, obs, d, self.seed, decision),
+            Some(expert) => expert.choose(obs, d, decision),
+            None => root.choose(&self.table, obs, d),
+        }
+    }
+
     fn choose_traced(
         &mut self,
         obs: Observation<'_, L>,
@@ -994,7 +1078,7 @@ impl<L: Layout> LongSearch<L> {
             && (d.kind == DecisionKind::ChooseUpTo
                 || (d.kind == DecisionKind::YesNo && d.prompt.purpose == Purpose::MaySearch))
         {
-            return self.policy.choose(&self.table, obs, d);
+            return self.root().choose(&self.table, obs, d);
         }
         if d.kind == DecisionKind::Priority
             && obs
@@ -1021,16 +1105,11 @@ impl<L: Layout> LongSearch<L> {
         // The default answers from the player's observation, independently of the search trees.
         let options = self.settings.family.options;
         let combat_default = options.anchor && options.combat && combat::handles(d.kind);
-        let default = options.anchor.then(|| match &mut self.expert {
-            _ if combat_default => {
-                self.combat_plan
-                    .choose(&self.table, &self.policy, obs, d, self.seed, decision)
-            }
-            Some(expert) => expert.choose(obs, d, decision),
-            None => self.policy.choose(&self.table, obs, d),
-        });
+        let default = options
+            .anchor
+            .then(|| self.default_answer(obs, d, decision, combat_default));
         let guards = |b: Choice| {
-            default.is_some_and(|g| guarded(&self.table, &self.policy, obs, d, g, b, options))
+            default.is_some_and(|g| guarded(&self.table, self.root(), obs, d, g, b, options))
         };
         if let Some(capture) = capture.as_ref() {
             capture.start(&mut trees);

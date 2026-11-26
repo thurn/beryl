@@ -658,7 +658,8 @@ Not a rung yet. It is recorded so that the rungs above are built toward it.
   20,000 games against tuned greedy. In search, the blunder suite rose from 356
   to 381 of 400, but fitted scored 46.3% in 322 paired games at 3M steps (−30
   Elo, 95% interval −71 to +11) and failed the stronger bar. The fit changed the
-  search's default and rollout policy together.
+  search's default and rollout policy together. The options `fitroll` and
+  `fitroot` change one at a time (§10).
 - **What it keeps.** The general rules stay as hard limits on the model, so that
   a model's mistake cannot become a blunder of a known class.
 - **Testing a value model first.** A learned value model would replace or steer
@@ -688,7 +689,12 @@ Not a rung yet. It is recorded so that the rungs above are built toward it.
 - How often does the paired test overrule the policy, and how much of the
   search's strength lives in those overrides? Rung 3's match and screen say.
 - How much of rung 6's match result (§9) came from changing the default move,
-  and how much came from changing the rollout policy?
+  and how much came from changing the rollout policy? Two options on `tuned`
+  knowledge answer it. With `fitroll`, the root keeps the tuned values and
+  everything simulated (tree expansion, rollouts, the paired test's playouts and
+  the turn search's lines) uses the fitted ones. With `fitroot`, the root's
+  default move, its `guarded` test, its `sure` answers and its combat planner
+  use the fitted values, and everything simulated stays tuned.
 - Why does `snapcaster-sorcery-speed` fall under both `waste` and `turn72`?
 - Is the planner's small set of plans enough? `spare-jace-wielder` is the case
   it gets wrong.
