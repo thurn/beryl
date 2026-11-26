@@ -356,11 +356,16 @@ impl Client {
     }
 
     /// Whether the rows' counts are shown, given whether the hud is `visible` and the table
-    /// `covered` by a prompt: not under a prompt's shade (`prompt_covers_table`), nor while a
-    /// manual table is frozen, whose banner and Lobby stand over the opponent's rows, which
-    /// take no scroll until it thaws.
+    /// `covered` by a prompt: not under a prompt's shade (`prompt_covers_table`), nor while the
+    /// open prompt holds cards up in its tray over a shaded table (`game_hud::prompts::holds_up`),
+    /// nor while a manual table is frozen, whose banner and Lobby stand over the opponent's rows,
+    /// which take no scroll until it thaws.
     pub(super) fn rows_counted(&self, visible: bool, covered: bool) -> bool {
-        visible && !covered && !self.table_frozen() && self.features.viewer().open().is_none()
+        visible
+            && !covered
+            && !(self.features.prompts.current()).is_some_and(game_hud::prompts::holds_up)
+            && !self.table_frozen()
+            && self.features.viewer().open().is_none()
     }
 }
 

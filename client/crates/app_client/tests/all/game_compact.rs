@@ -11,7 +11,7 @@ use app_client::driver::{Duration, Page, Recording};
 use beryl_card_records::{TokenMakers, fixture_message};
 use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::prompt::{ButtonId, Click, ClickRequest};
-use beryl_protocol::protocol::{ManaPool, Side, ZoneName};
+use beryl_protocol::protocol::{CardType, ManaPool, Side, ZoneName};
 use beryl_protocol::script::{Act, Table as Played, Tally, time_script};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use game_table::profiles::Profile;
@@ -465,4 +465,74 @@ fn unspent_mana_stands_clear_of_the_life_totals() {
             assert_eq!(faults, Vec::<String>::new(), "{width}x{height} {mana:?}");
         }
     }
+}
+
+/// A yes-or-no question about the first card of `view`, which holds that card up over a shaded
+/// table.
+fn asked_about_a_card(view: &mut ViewBuilder) -> Input {
+    let card = view.card(ZoneName::Graveyard, Side::You, "Brainstorm").slot;
+    let question = beryl_protocol::testing::prompt(
+        beryl_protocol::prompt::Purpose::Move,
+        "Return Brainstorm to your hand?",
+        vec![
+            super::flat_layer::prompt_button(ButtonId::Option { index: 0 }, "Yes", true),
+            super::flat_layer::prompt_button(ButtonId::Option { index: 1 }, "No", false),
+        ],
+        beryl_protocol::prompt::ShapeBody::YesNo {
+            about: vec![card],
+            places: None,
+        },
+    );
+    let Input::Update(mut update) = deciding(question) else {
+        unreachable!("`deciding` gives an update")
+    };
+    let built = view.build();
+    update.view.objects = built.objects;
+    update.view.battlefield = built.battlefield;
+    update.view.players = built.players;
+    Input::Update(update)
+}
+
+/// Whether the frame has a count of how many cards of the viewer's lands row are off its end.
+fn has_lands_count(frame: &Frame) -> bool {
+    (frame.resolved.iter()).any(|element| frame.name(element.name).starts_with("Your lands right"))
+}
+
+#[test]
+fn a_prompt_that_holds_cards_up_hides_the_rows_counts() {
+    let phone = window(375.0, 647.0);
+    let mut client = compact(375.0, 647.0);
+    let mut view = ViewBuilder::new();
+    // Lands of one name stack, so each has a name of its own for the row to run past the screen.
+    for number in 0..20 {
+        let name = format!("Land {number}");
+        view.card(ZoneName::Battlefield, Side::You, &name).types = vec![CardType::Land];
+    }
+    client.handle(Input::Update(Box::new(beryl_protocol::GameUpdate {
+        session: beryl_protocol::protocol::SessionId(1),
+        view: view.build(),
+    })));
+    client.frame(0);
+    assert!(has_lands_count(client.frame(5_000 * MS)), "the row scrolls");
+
+    client.handle(asked_about_a_card(&mut view));
+    client.frame(2 * MS);
+    let frame = client.frame(5_000 * MS);
+    assert!(
+        has(frame, Role::Region, "shade"),
+        "the prompt holds a card up"
+    );
+    assert!(!has_lands_count(frame));
+    let context = Context {
+        size_class: crate::COMPACT,
+        audit: crate::test_data::data().audit,
+        checks: crate::test_data::data()
+            .profiles
+            .for_size_class(crate::COMPACT)
+            .checks,
+        size: phone.size,
+        safe_area: phone.safe_area,
+        at: 0,
+    };
+    assert!(kit_probe::agent::text_overlap::text_overlap(frame, &context).is_empty());
 }

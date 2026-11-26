@@ -125,6 +125,12 @@ pub fn covers_table(prompt: &PromptView) -> bool {
     )
 }
 
+/// Whether `prompt` holds cards up in its tray, over a shaded table.
+#[must_use]
+pub fn holds_up(prompt: &PromptView) -> bool {
+    Piles::of(prompt).is_some()
+}
+
 /// Whether the pointer on `button` of `prompt`, or a touch held on it, shows what the prompt
 /// would tap: a payment's Auto Pay, or the yes of a question whose yes pays a cost. The web
 /// interface's `shows` in `ui/src/stage/PromptBar.tsx` says the same.

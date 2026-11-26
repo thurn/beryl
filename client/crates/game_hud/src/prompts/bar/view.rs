@@ -13,7 +13,7 @@ use super::question::{fit_question_dock, question_title};
 use crate::hud::HudIn;
 use crate::hud::phase::phase_box;
 use crate::hud::placement_scene::{Group, PlacementScene, inset, rect};
-use crate::prompts::{Piles, covers_table, ways};
+use crate::prompts::{covers_table, holds_up, ways};
 use game_table::profiles::Profile;
 use kit_base::data::profiles::{FloatingPrompt, Piece};
 use kit_base::geometry::Rect;
@@ -70,7 +70,7 @@ pub fn title(prompt: &PromptView, acting_for: bool) -> Cow<'_, str> {
 pub(super) fn bar(prompt: &PromptView, input: &HudIn, controls: Option<Controls>) -> Element {
     let acting_for = input.view.is_some_and(acting_for);
     let asks = title(prompt, acting_for);
-    let held_up = Piles::of(prompt).is_some();
+    let held_up = holds_up(prompt);
     let question = matches!(prompt.body, ShapeBody::YesNo { .. });
     if let Some(slots) = PromptSlots::new(input, held_up || covers_table(prompt)) {
         let mut bar = floating_bar(prompt, &asks, controls, &slots, held_up);
