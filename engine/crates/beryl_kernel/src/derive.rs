@@ -100,7 +100,8 @@ impl<L: Layout> Rederive<'_, L> {
     /// abilities read that no layer writes ([`Inputs`]), `removed`, whether an effect that
     /// removes abilities applied, for [`State::has_ability`], and `land_types`, whether an
     /// effect that changes a land's land types applied, for [`State::makes_card_mana`].
-    /// It notes whether any permanent is face down, for [`State::any_face_down`].
+    /// It notes whether any permanent is face down, for [`State::any_face_down`], and that the
+    /// state triggers are due to be matched ([`State::states_due`]).
     /// Control is settled now, so each face-down
     /// permanent's controller sees it from here on (see [CR 708.5]): "At any time, you may look at ...
     /// a face-down permanent you control".
@@ -137,5 +138,7 @@ impl<L: Layout> Rederive<'_, L> {
         s.flags.mana_changed = removed || land_types;
         s.flags.face_down = face_down;
         s.flags.derived_dirty = false;
+        // A stored result may change a state trigger's condition ([`State::states_due`]).
+        s.states_due = true;
     }
 }

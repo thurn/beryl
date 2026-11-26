@@ -195,10 +195,16 @@ pub enum Capability {
     /// The mana solver then plans with what each source makes on the same path as for
     /// [`Capability::PricedMana`].
     ManaChanges,
+    /// A card has a state trigger (see CR 603.8) that may begin to hold with nothing that
+    /// marks the layer results stale: its condition is not [`crate::static_ability::watched`],
+    /// it has an intervening "if" or a designation its condition does not say, or a card
+    /// grants it. `beryl_rules`' `match_states` then reads every state trigger at every
+    /// state-based check, rather than only after the layer results were stored.
+    UnwatchedStateTrigger,
 }
 
 // The game keeps its capabilities in a `u64`.
-const _: () = assert!((Capability::ManaChanges as u32) < u64::BITS);
+const _: () = assert!((Capability::UnwatchedStateTrigger as u32) < u64::BITS);
 
 impl Capability {
     /// The capabilities of every face and subtype the game can contain.
@@ -237,6 +243,7 @@ impl Capability {
         if Inputs::of(face) != Inputs::NONE {
             found |= Capability::LayerInputs.bit();
         }
+        found |= u64::from(unwatched_state_trigger(face)) * Capability::UnwatchedStateTrigger.bit();
         if !face.grants.is_empty() {
             found |= Capability::Grants.bit();
         }
@@ -377,6 +384,21 @@ fn mana_capabilities(a: &Ability) -> u64 {
         found |= Capability::ManaChanges.bit();
     }
     found
+}
+
+/// Whether `face` has a state trigger that [`Capability::UnwatchedStateTrigger`] describes. A
+/// granted ability's inputs are those of no face on the battlefield ([`Inputs::of`]), so a
+/// granted state trigger is never watched.
+fn unwatched_state_trigger(face: &Face) -> bool {
+    let unwatched = |a: &Ability| {
+        crate::static_ability::state_condition(a).is_some_and(|condition| {
+            !crate::static_ability::watched(condition)
+                || a.condition().is_some()
+                || a.designation() != Designation::None
+        })
+    };
+    face.abilities.iter().any(unwatched)
+        || (face.grants.iter()).any(|a| crate::static_ability::state_condition(a).is_some())
 }
 
 /// The capabilities a replacement effect gives a game. Each test reads a different field of the

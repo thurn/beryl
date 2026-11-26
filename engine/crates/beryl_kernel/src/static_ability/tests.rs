@@ -216,3 +216,48 @@ fn a_granted_ability_cannot_define_power_and_toughness() {
     };
     assert_eq!(check(&card), Err(Unapplied::GrantedAmount));
 }
+
+const NO_ICE: Condition = Condition::Compare(
+    Amount::Counters(Objects::This, CounterKind::Ice),
+    Comparison::Equal,
+    Amount::Fixed(0),
+);
+
+/// "When you control no Islands" (Dandân) and "When this has no ice counters on it" (Dark
+/// Depths) compare amounts whose changes mark the layer results stale; "during your turn"
+/// changes with no recompute.
+#[test]
+fn a_state_trigger_comparing_what_the_layers_watch_is_watched() {
+    static NO_ISLANDS: Condition = Condition::Compare(
+        Amount::Count(&Objects::All {
+            zone: Zone::Battlefield,
+            filter: Filter::All(&[
+                Filter::Subtype(beryl_card::Subtype::Island),
+                Filter::Whose(&Players::You),
+            ]),
+        }),
+        Comparison::Equal,
+        Amount::Fixed(0),
+    );
+    static NOT_NO_ICE: Condition = Condition::Not(&NO_ICE);
+    static NO_ICE_ON_YOUR_TURN: Condition =
+        Condition::All(&[NO_ICE, Condition::TurnOf(Players::You)]);
+    assert!(watched(&NO_ISLANDS));
+    assert!(watched(&NO_ICE));
+    assert!(watched(&NOT_NO_ICE));
+    assert!(!watched(&Condition::TurnOf(Players::You)));
+    assert!(!watched(&NO_ICE_ON_YOUR_TURN));
+}
+
+/// A state trigger that compares counters makes a change in them mark the layer results stale.
+#[test]
+fn a_state_trigger_that_compares_counters_reads_them() {
+    static TRIGGER: beryl_card::Trigger = beryl_card::Trigger::state(&NO_ICE);
+    static ABILITIES: &[beryl_card::Ability] = &[beryl_card::Ability::triggered(&TRIGGER)];
+    let face = Face {
+        abilities: ABILITIES,
+        ..Face::EMPTY
+    };
+    assert_eq!(Inputs::of(&face), Inputs::COUNTERS);
+    assert!(state_condition(&ABILITIES[0]).is_some_and(watched));
+}

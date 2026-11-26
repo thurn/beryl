@@ -21,7 +21,7 @@
 
 use beryl_card::{
     Amount, Behavior, CardDef, Condition, CounterKind, Effect, Face, Filter, LayerSpec,
-    Modification, Objects, Players, Zone,
+    Modification, Objects, Players, TriggerEvent, Zone,
 };
 
 use crate::player_set::PlayerSet;
@@ -70,21 +70,15 @@ impl Inputs {
         self.0 & other.0 == other.0
     }
 
-    /// What the static abilities of `face` read that no layer writes.
+    /// What the static abilities of `face` read that no layer writes, with what the
+    /// conditions of its state triggers read ([`state_condition`]): a state trigger whose
+    /// condition is [`watched`] is matched only after the layer results were stored, so a
+    /// change in what it reads must mark them stale as a change in an "as long as" does.
     pub fn of(face: &Face) -> Inputs {
         let mut inputs = Inputs::NONE;
         for spec in face.abilities.iter().filter_map(beryl_card::Ability::layer) {
-            let compared = |read: &dyn Fn(&Counted) -> bool| {
-                (spec.condition.as_ref()).is_some_and(|condition| compares(condition, read))
-            };
-            if compared(&|n| matches!(n, Counted::Counters(_))) {
-                inputs = inputs.union(Inputs::COUNTERS);
-            }
-            if compared(&|n| matches!(n, Counted::Life(_))) {
-                inputs = inputs.union(Inputs::LIFE);
-            }
-            if compared(&|n| matches!(n, Counted::Hand)) {
-                inputs = inputs.union(Inputs::HAND);
+            if let Some(condition) = &spec.condition {
+                inputs = inputs.union(Inputs::read_by(condition));
             }
             let graveyards = spec.modifications.iter().any(|m| {
                 m.pt_amounts().is_some_and(|(power, toughness)| {
@@ -102,12 +96,66 @@ impl Inputs {
                 spec.affected,
                 Objects::Other(&Objects::All { filter, .. }) if mentions_tapped(filter)
             );
-            if affected_reads_tapped || spec.condition.as_ref().is_some_and(condition_reads_tapped)
-            {
+            if affected_reads_tapped {
                 inputs = inputs.union(Inputs::TAPPED);
             }
         }
+        for condition in face.abilities.iter().filter_map(state_condition) {
+            inputs = inputs.union(Inputs::read_by(condition));
+        }
         inputs
+    }
+
+    /// What `condition`, an "as long as" or a state trigger's condition, reads that no layer
+    /// writes.
+    fn read_by(condition: &Condition) -> Inputs {
+        let compared = |read: fn(&Counted) -> bool| compares(condition, &read);
+        [
+            (
+                compared(|n| matches!(n, Counted::Counters(_))),
+                Inputs::COUNTERS,
+            ),
+            (compared(|n| matches!(n, Counted::Life(_))), Inputs::LIFE),
+            (compared(|n| matches!(n, Counted::Hand)), Inputs::HAND),
+            (condition_reads_tapped(condition), Inputs::TAPPED),
+        ]
+        .into_iter()
+        .filter(|&(reads, _)| reads)
+        .fold(Inputs::NONE, |inputs, (_, input)| inputs.union(input))
+    }
+}
+
+/// The condition of `ability`'s trigger, if it is a state trigger (see CR 603.8).
+pub fn state_condition(ability: &beryl_card::Ability) -> Option<&'static Condition> {
+    let TriggerEvent::State(condition) = ability.trigger()?.event else {
+        return None;
+    };
+    Some(condition)
+}
+
+/// Whether a change in whether `condition` holds always marks the layer results stale, so
+/// that a state trigger with it needs to be matched only after they were stored
+/// (`beryl_rules`' `match_states`): a comparison of amounts as a static ability's "as long
+/// as" reads them (`counted`), whose inputs the layers watch ([`Inputs::of`]), or a
+/// combination of such comparisons. Each variant is placed here, so a new one must be.
+pub fn watched(condition: &Condition) -> bool {
+    match condition {
+        Condition::Compare(left, _, right) => counted(left).is_some() && counted(right).is_some(),
+        Condition::Not(condition) => watched(condition),
+        Condition::All(conditions) | Condition::Any(conditions) => conditions.iter().all(watched),
+        Condition::Paid(_)
+        | Condition::Did
+        | Condition::WonFlip
+        | Condition::Is(..)
+        | Condition::EnteredThisTurn(_)
+        | Condition::OnBattlefield(_)
+        | Condition::Cast(_)
+        | Condition::HasChosenName(_)
+        | Condition::DrewInDrawStep(_)
+        | Condition::TurnOf(_)
+        | Condition::AttackedThisTurn(_)
+        | Condition::MeldPair(_)
+        | Condition::Token(_) => false,
     }
 }
 
@@ -230,6 +278,9 @@ impl<L: Layout> State<L> {
     /// ([`Inputs::COUNTERS`]): loyalty, which planeswalkers gain and lose every turn, never
     /// does.
     ///
+    /// A state trigger's condition that compares the kind counts as such an "as long as"
+    /// ([`watched`]).
+    ///
     /// [CR 613.4c]: https://yawgatog.com/resources/magic-rules/#R6134c
     #[inline]
     pub fn layers_read_counters(&self, t: &GameTable, slot: L::Slot, kind: CounterKind) -> bool {
@@ -239,6 +290,7 @@ impl<L: Layout> State<L> {
                 && self.definition(slot).face(t).abilities.iter().any(|a| {
                     a.layer()
                         .and_then(|spec| spec.condition.as_ref())
+                        .or_else(|| state_condition(a))
                         .is_some_and(|condition| reads_counters(condition, kind))
                 }))
     }

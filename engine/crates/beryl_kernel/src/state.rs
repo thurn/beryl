@@ -210,6 +210,12 @@ pub struct State<L: Layout = Small> {
     /// writes ([`Inputs`]), found with the layer results: a mutator that changes one of
     /// these marks the results stale.
     pub(crate) layer_inputs: Inputs,
+    /// Whether the state triggers on the battlefield must be matched at the next state-based
+    /// check: the layer results were stored, or a state trigger was waiting or on the stack,
+    /// since they were last matched (`beryl_rules`' `match_states`). Bookkeeping about the
+    /// past, left out of the hash as `repeats` is: two states equal in all else
+    /// trigger the same abilities.
+    pub(crate) states_due: bool,
     /// The rules the permanents' static abilities change for each player
     /// ([`GameTable::player_rules`]), found with the layer results and current while they
     /// are: half of what [`State::rule_applies`] reads, the Effects store's own index
@@ -357,6 +363,8 @@ impl<L: Layout> State<L> {
             elsewhere: _,
             // Bookkeeping about the past that only the loop check reads ([`crate::repeats`]).
             repeats: _,
+            // Bookkeeping about the past, which changes no state trigger's condition.
+            states_due: _,
             // Admitted cards stay in the game. The objects and their original identities
             // determine which cards are left in the sideboard. A revealed companion is
             // hashed below.
@@ -589,6 +597,23 @@ impl<L: Layout> State<L> {
     #[inline]
     pub fn is_derived_stale(&self) -> bool {
         self.flags.derived_dirty
+    }
+
+    /// Whether the state triggers on the battlefield must be matched at this state-based
+    /// check: the layer results were stored, or a state trigger was waiting or on the stack,
+    /// since they were last matched. A state trigger whose condition is
+    /// [`crate::static_ability::watched`] can begin to hold only across a recompute.
+    #[inline]
+    pub fn states_due(&self) -> bool {
+        self.states_due
+    }
+
+    /// Notes that the state triggers on the battlefield were matched, and whether one of them
+    /// is waiting or on the stack, so that they are due again at the next check
+    /// ([`State::states_due`]). Bookkeeping that no player sees, so it needs no event.
+    #[inline]
+    pub fn set_states_due(&mut self, due: bool) {
+        self.states_due = due;
     }
 
     /// Every permanent with its characteristics after continuous effects, in the order they

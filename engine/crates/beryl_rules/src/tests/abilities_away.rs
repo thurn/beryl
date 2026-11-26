@@ -15,7 +15,7 @@ use crate::ids::{Seat, Slot};
 use crate::layout::{Small, index};
 use crate::replacement::event::{self, Entry, Event, Reason, Sink};
 use crate::state::{StackItem, Zone, ZoneKey};
-use crate::table::TableError;
+use crate::table::{Capability, TableError};
 use crate::zone::Place;
 use crate::{CardTable, Decklist, GameTable, Profile, Scratch, State};
 use beryl_card::Comparison;
@@ -214,6 +214,62 @@ fn a_state_trigger_does_not_trigger_again_while_waiting_or_on_the_stack() {
         1,
         "it triggers again once it has left the stack"
     );
+}
+
+/// "When you control no creatures, you gain 1 life." Its condition counts permanents, as
+/// Dandân's does, so the kernel watches it and the state triggers are matched only after the
+/// layer results were stored or while one waits or is on the stack.
+static WATCHER: CardDef = CardDef {
+    name: "Test Watcher",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::ARTIFACT,
+        abilities: &[Ability::triggered(&Trigger::state(&Condition::Compare(
+            Amount::Count(&Objects::All {
+                zone: Zone::Battlefield,
+                filter: Filter::All(&[
+                    Filter::Types(Types::CREATURE),
+                    Filter::Whose(&Players::You),
+                ]),
+            }),
+            Comparison::Equal,
+            Amount::Fixed(0),
+        )))
+        .effect(&gain_life(you(), 1))],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+static WATCHED: CardTable = CardTable::new(&[&LAND, &BEAR, &WATCHER]);
+const WATCHED_DECK: &Decklist = &[(4, "Test Bear"), (1, "Test Watcher"), (30, "Test Land")];
+
+/// A state trigger whose condition the kernel watches is not matched again while nothing
+/// changes, but one taken off the stack with nothing else changing (as a counterspell for
+/// abilities does) triggers again at the next check (CR 603.8).
+#[test]
+fn a_watched_state_trigger_taken_off_the_stack_triggers_again() {
+    let t = GameTable::new(Format::CONSTRUCTED, &WATCHED, [WATCHED_DECK, WATCHED_DECK]).unwrap();
+    assert!(!t.can(Capability::UnwatchedStateTrigger));
+    let mut s = State::new(&t, 7, Profile::EXACT).unwrap();
+    begin(&t, &mut s);
+    let p = s.turn().starting_player();
+    let mut x = Scratch::new();
+    let bear = put(&t, &mut s, &mut x, p, "Test Bear");
+    put(&t, &mut s, &mut x, p, "Test Watcher");
+    crate::sba::check(&mut s, &t, &mut x.events).unwrap();
+    assert!(s.triggers().is_empty(), "a creature on the battlefield");
+    assert!(!s.states_due(), "matched, and none waits");
+    crate::sba::check(&mut s, &t, &mut x.events).unwrap();
+    assert!(s.triggers().is_empty(), "nothing changed");
+    place(&mut s, bear, Zone::Graveyard);
+    crate::sba::check(&mut s, &t, &mut x.events).unwrap();
+    assert_eq!(s.triggers().len(), 1, "no creature");
+    crate::stack::trigger::put_on_stack(&mut s, &t, &mut x.events, index::<Small>(0)).unwrap();
+    crate::sba::check(&mut s, &t, &mut x.events).unwrap();
+    assert!(s.triggers().is_empty(), "not while it is on the stack");
+    assert!(s.take_ability_off_stack(&mut Sink::off(), 0).is_some());
+    crate::sba::check(&mut s, &t, &mut x.events).unwrap();
+    assert_eq!(s.triggers().len(), 1, "again once it has left the stack");
 }
 
 /// Abilities that say they work where the engine looks for none of their kind.

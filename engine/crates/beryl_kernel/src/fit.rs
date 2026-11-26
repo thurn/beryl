@@ -182,6 +182,7 @@ impl<L: Layout> State<L> {
             knowledge: _,
             rng: _,
             repeats: _,
+            states_due: _,
             profile: _,
             budgets: _,
             flags: _,

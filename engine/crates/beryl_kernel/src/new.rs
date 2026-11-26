@@ -307,6 +307,8 @@ impl<L: Layout> State<L> {
             knowledge: Table::filled(Bitboard::EMPTY),
             rng: Rng::new(0),
             repeats: crate::repeats::Repeats::default(),
+            // A new game has matched no state trigger yet.
+            states_due: true,
             profile,
             budgets: Budgets::default(),
             flags: Flags::default(),
