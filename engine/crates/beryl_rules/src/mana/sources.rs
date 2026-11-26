@@ -175,7 +175,9 @@ pub(super) fn source<L: Layout>(
     // merged permanent, which has the abilities of the cards under it too (see CR 702.140e).
     let card_mana = || s.makes_card_mana(slot);
     debug_assert!(
-        mana != ManaFace::Not || !card_mana() || read_source(s, t, player, slot, face()).is_none(),
+        mana != ManaFace::Not
+            || !card_mana()
+            || read_source(s, t, player, slot, face(), mana).is_none(),
         "a face the table calls no source makes mana"
     );
     if (mana == ManaFace::Not && card_mana()) || !can_tap(s, player, slot, d) {
@@ -191,12 +193,12 @@ pub(super) fn source<L: Layout>(
         let plain = Some((kinds, amount, other, false));
         debug_assert_eq!(
             plain,
-            read_source(s, t, player, slot, face()),
+            read_source(s, t, player, slot, face(), mana),
             "a plain source's mana, as the table has it"
         );
         return plain;
     }
-    read_source(s, t, player, slot, face())
+    read_source(s, t, player, slot, face(), mana)
 }
 
 /// Whether the permanent in `slot` is a merged permanent with the abilities of the cards
@@ -228,6 +230,7 @@ fn read_source<L: Layout>(
     player: Seat,
     slot: L::Slot,
     face: &Face,
+    facts: ManaFace,
 ) -> Option<(u8, u8, bool, bool)> {
     let mut kinds = s.intrinsic_mana(t, slot);
     let mut amount = u8::from(kinds != 0);
@@ -262,7 +265,10 @@ fn read_source<L: Layout>(
     // A merged permanent's other cards may have other abilities: it is a class of its own.
     // It makes no card's mana (`State::makes_card_mana`), which most sources do, so that is
     // asked first.
-    let other = has_other_ability(face) || (!s.makes_card_mana(slot) && merged(s, t, slot));
+    // Whether the face has another ability is found once per game, with `facts`, the table's
+    // facts of `face`, but for a face the table calls no source.
+    let face_other = facts.other().unwrap_or_else(|| has_other_ability(face));
+    let other = face_other || (!s.makes_card_mana(slot) && merged(s, t, slot));
     Some((kinds, amount, conditional || other, false))
 }
 

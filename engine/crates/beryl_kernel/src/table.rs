@@ -614,7 +614,7 @@ pub struct FaceFacts {
 impl FaceFacts {
     /// No face: never read, as no object has it up.
     const NONE: FaceFacts = FaceFacts {
-        mana: ManaFace::Read,
+        mana: ManaFace::Read { other: false },
         land_mana: 0,
         inputs: Inputs::NONE,
         activated: 0,
@@ -673,8 +673,21 @@ pub enum ManaFace {
     /// Mana abilities the solver taps for, none limited to a kind of permanent you control:
     /// the kinds they make, how much, and whether the face has another ability.
     Plain { kinds: u8, amount: u8, other: bool },
-    /// Anything else, which the solver reads from the face.
-    Read,
+    /// Anything else, which the solver reads from the face, and whether the face has another
+    /// ability ([`has_other_ability`]), which reading it would find each time.
+    Read { other: bool },
+}
+
+impl ManaFace {
+    /// Whether the face has an ability other than those the solver taps for
+    /// ([`has_other_ability`]), when this says: `None` for a face that is no source.
+    #[inline]
+    pub fn other(self) -> Option<bool> {
+        match self {
+            ManaFace::Plain { other, .. } | ManaFace::Read { other } => Some(other),
+            ManaFace::Not => None,
+        }
+    }
 }
 
 impl ManaFace {
@@ -690,22 +703,23 @@ impl ManaFace {
         {
             return ManaFace::Not;
         }
+        let other = has_other_ability(face);
         if (intrinsic == 0 && simple().next().is_none())
             || simple().any(|a| a.only_if_you_control().is_some())
         {
-            return ManaFace::Read;
+            return ManaFace::Read { other };
         }
         let kinds = simple().fold(intrinsic, |k, a| k | a.produces().colors);
         let amount = simple()
             .next_back()
             .map_or(u8::from(intrinsic != 0), |a| a.produces().amount);
         if kinds == 0 || (intrinsic != 0 && amount != 1) {
-            return ManaFace::Read;
+            return ManaFace::Read { other };
         }
         ManaFace::Plain {
             kinds,
             amount,
-            other: has_other_ability(face),
+            other,
         }
     }
 }
