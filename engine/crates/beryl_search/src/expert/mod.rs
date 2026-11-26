@@ -370,6 +370,16 @@ impl<L: Layout> Expert<'_, L> {
         self.p.me.opponent()
     }
 
+    /// Whose zone the card in `slot` is in: ours when it is in one of our zones, as a card in a
+    /// shared library or graveyard is in both players', else the opponent's.
+    fn whose(&self, slot: L::Slot) -> Seat {
+        if self.obs().holds(self.me(), slot) {
+            self.me()
+        } else {
+            self.opp()
+        }
+    }
+
     /// What an object is worth, as the expert values permanents ([`appraise`]).
     fn value(&self, slot: L::Slot) -> i32 {
         self.p.value(slot)
@@ -471,11 +481,18 @@ impl<L: Layout> Expert<'_, L> {
                 && !self.seen(names::MANA_TITHE))
     }
 
-    /// Whether the opponent's deck holds a card named `name`.
+    /// Whether the deck the opponent draws from holds a card named `name`: their own, or in
+    /// the shared-deck format the shared one, which the table lists as the first player's
+    /// deck, the second player's being empty.
     fn in_their_deck(&self, name: &str) -> bool {
+        let seat = if self.obs().shares_zones() {
+            Seat::P0
+        } else {
+            self.opp()
+        };
         self.p
             .t
-            .deck::<L::Card>(self.opp())
+            .deck::<L::Card>(seat)
             .any(|c| self.p.t.def(c).name == name)
     }
 
@@ -606,10 +623,11 @@ impl<L: Layout> Expert<'_, L> {
     )]
     fn take_from_hand(&self, d: &Decision<L>) -> Option<Choice> {
         let (player, zone) = match d.prompt.purpose {
-            // The cards looked at lie in their owner's library or hand.
+            // The cards looked at lie in a library or a hand: ours when they are in one of
+            // our zones, as a card in a shared library is, else theirs.
             Purpose::Look => {
-                let card = self.obs().object(d.about.min(|slot| slot)?);
-                (card.owner(), card.zone())
+                let slot = d.about.min(|slot| slot)?;
+                (self.whose(slot), self.obs().object(slot).zone())
             }
             Purpose::Scry => (self.me(), Zone::Library),
             _ => return None,
@@ -2849,8 +2867,8 @@ impl<L: Layout> Expert<'_, L> {
     /// revealed card into the graveyard only if it is not worth drawing.
     fn yes_no(&self, d: &Decision<L>) -> Option<Choice> {
         let player = match d.prompt.purpose {
-            // The card looked at is the top of its owner's library.
-            Purpose::Fateseal => self.obs().object(d.about.min(|slot| slot)?).owner(),
+            // The card looked at is the top of a library: ours, as a shared one is, or theirs.
+            Purpose::Fateseal => self.whose(d.about.min(|slot| slot)?),
             Purpose::Explore => self.me(),
             _ => return None,
         };

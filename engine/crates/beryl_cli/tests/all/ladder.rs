@@ -88,6 +88,7 @@ fn positions_start_four_pairs_in_five() {
         &beryl_cli::positions::Build {
             games: 1,
             seed: 2,
+            deck: "wu-control".to_owned(),
             settings: Settings {
                 family: "pimc2/hidden/rollout/tuned".parse().unwrap(),
                 work: 2_000,

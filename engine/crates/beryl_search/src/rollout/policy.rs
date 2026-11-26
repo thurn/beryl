@@ -388,8 +388,9 @@ impl<L: Layout> Policy<'_, L> {
             .count()
     }
 
-    /// Whether drawing by choice is safe: our library holds more than [`LIBRARY_LOW`] cards,
-    /// we hold a wheel to refill it, or a permanent of ours wins us the game instead of the
+    /// Whether drawing by choice is safe: our library holds more than [`LIBRARY_LOW`] cards
+    /// (twice that in the shared-deck format, where the opponent's draws take from it too and
+    /// it runs out twice as fast), we hold a wheel to refill it, or a permanent of ours wins us the game instead of the
     /// draw from an empty library that would lose it
     /// ([CR 704.5b](https://yawgatog.com/resources/magic-rules/#R7045b)): "If a player
     /// attempted to draw a card from a library with no cards in it since the last time
@@ -404,7 +405,12 @@ impl<L: Layout> Policy<'_, L> {
     }
 
     fn find_may_draw(&self) -> bool {
-        self.obs.library(self.me).len() > LIBRARY_LOW
+        let low = if self.obs.shares_zones() {
+            2 * LIBRARY_LOW
+        } else {
+            LIBRARY_LOW
+        };
+        self.obs.library(self.me).len() > low
             || self
                 .obs
                 .zone(ZoneKey::Of(self.me, Zone::Hand))
@@ -580,8 +586,12 @@ impl<L: Layout> Policy<'_, L> {
             _ => match c.object() {
                 Some(slot) => {
                     let o = self.obs.object(slot);
+                    // A card in a shared library or graveyard has no owner: it is in both
+                    // players' zones, so it counts as on the wanted side.
                     let controller = if matches!(o.zone(), Zone::Battlefield | Zone::Stack) {
                         self.obs.controller(slot)
+                    } else if self.obs.holds(side, slot) {
+                        side
                     } else {
                         o.owner()
                     };

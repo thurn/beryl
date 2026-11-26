@@ -157,6 +157,17 @@ impl<'a, L: Layout> Observation<'a, L> {
         self.state.zone_owners(zone)
     }
 
+    /// Whether the players share a library and a graveyard ([`State::shares_zones`]).
+    pub fn shares_zones(&self) -> bool {
+        self.state.shares_zones()
+    }
+
+    /// Whether the object in `slot` is in one of `player`'s zones, a card in a shared library
+    /// or graveyard being in both players' ([`State::holds`]).
+    pub fn holds(&self, player: Seat, slot: L::Slot) -> bool {
+        self.state.holds(player, slot)
+    }
+
     pub fn battlefield(&self) -> &'a [L::Slot] {
         self.state.battlefield()
     }

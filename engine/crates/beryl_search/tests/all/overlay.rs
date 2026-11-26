@@ -39,3 +39,22 @@ fn tuned_values_are_the_hand_tuned_ones() {
         tuned.get(card(names::JACE_THE_MIND_SCULPTOR)).value
     );
 }
+
+/// No card of the shared-deck format's Dandân deck is tuned but the basic Island, so every tier
+/// values its game as the derived tier does, with nothing read from the overlay.
+#[test]
+fn an_untuned_deck_gets_the_derived_values() {
+    let t = GameTable::new(Format::SHARED_DECK, &CARDS, [decks::FORGETFUL_FISH, &[]]).unwrap();
+    let estimated = CardValues::with(&t, Knowledge::Estimate);
+    for knowledge in [Knowledge::Tuned, Knowledge::Fitted] {
+        let values = CardValues::with(&t, knowledge);
+        for card in t.indices::<LargeCardIx>() {
+            assert_eq!(
+                format!("{:?}", values.get(card)),
+                format!("{:?}", estimated.get(card)),
+                "{knowledge:?}: {}",
+                t.def(card).name
+            );
+        }
+    }
+}

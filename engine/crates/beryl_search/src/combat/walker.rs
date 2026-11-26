@@ -8,6 +8,8 @@ use beryl_engine::filter::Filter;
 use beryl_engine::state::Tracker;
 use beryl_engine::{GameTable, Layout, State, Zone, wins_instead_of_drawing};
 
+use crate::decking::next_drawer;
+
 // A five-turn clock is worth at least 40 points, about a small creature.
 const FORECAST_TURNS: i32 = 5;
 const WIN_PREMIUM: i32 = 200;
@@ -26,9 +28,14 @@ pub(super) fn value<L: Layout>(t: &GameTable, s: &State<L>, slot: L::Slot) -> i3
         .map(|(_, a)| a);
     let controller = s.controller(slot);
     let on_turn = s.turn().active() == controller;
+    let library = Library {
+        cards: s.library(controller).len(),
+        shared: s.shares_zones(),
+        opponent_first: !on_turn && next_drawer(s) != controller,
+    };
     clock(
         abilities,
-        s.library(controller).len(),
+        library,
         i16::from(s.object(slot).counters().loyalty),
         on_turn,
         on_turn && s.tracked(Tracker::LoyaltyActivated, slot),
@@ -36,13 +43,31 @@ pub(super) fn value<L: Layout>(t: &GameTable, s: &State<L>, slot: L::Slot) -> i3
     .map_or(0, |turns| WIN_PREMIUM / turns)
 }
 
+/// The library a planeswalker's clock runs down.
+#[derive(Clone, Copy)]
+struct Library {
+    /// The cards in the controller's library.
+    cards: usize,
+    /// Whether the opponent draws from it too, as in the shared-deck format.
+    shared: bool,
+    /// Whether the opponent's draw step comes before the controller's next one this turn: on
+    /// the opponent's turn before their draw.
+    opponent_first: bool,
+}
+
+/// How many of the controller's turns, counting this one when it is theirs, the planeswalker
+/// takes to win, if it does within [`FORECAST_TURNS`]. The draws are counted in turn order:
+/// the controller's one each turn, and in a shared library the opponent's one each turn
+/// between theirs as well, so that the opponent drawing from the empty library is a win
+/// ([`crate::decking`]).
 fn clock<'a>(
     abilities: impl Iterator<Item = &'a Ability> + Clone,
-    mut cards: usize,
+    library: Library,
     mut loyalty: i16,
     on_turn: bool,
     used_loyalty: bool,
 ) -> Option<i32> {
+    let mut cards = library.cards;
     let wins_on_empty_draw = abilities.clone().any(|a| {
         a.replacement() == Some(&Replacement::draws(Players::You))
             && a.condition().is_some_and(|c| empty_library(*c))
@@ -75,8 +100,15 @@ fn clock<'a>(
         return None;
     }
     // Assume the planeswalker survives and its controller gets one normal draw and at
-    // most one activation per turn. Ignore other permanents and spells in the forecast.
+    // most one activation per turn, and the opponent one draw per turn from a shared library.
+    // Ignore other permanents and spells in the forecast.
     for turn in 1..=FORECAST_TURNS {
+        if library.shared && (turn > 1 || library.opponent_first) {
+            if cards == 0 {
+                return Some(turn);
+            }
+            cards -= 1;
+        }
         if turn > 1 || !on_turn {
             if cards == 0 {
                 return wins_on_empty_draw.then_some(turn);
@@ -178,5 +210,81 @@ fn apply(effect: &Effect, cards: usize, self_target: bool, draw_win: bool) -> Pr
         }
         Effect::WinGame(Players::You) => Progress::Win,
         _ => Progress::Unknown,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use beryl_engine::Zone;
+    use beryl_engine::card::{
+        Ability, Amount, Comparison, Condition, Effect, Objects, Players, Replacement, SpecIx,
+        TargetSpec,
+    };
+    use beryl_engine::filter::Filter;
+
+    use super::{Library, clock};
+
+    const LIBRARY_IS_EMPTY: Condition = Condition::Compare(
+        Amount::Count(&Objects::All {
+            zone: Zone::Library,
+            filter: Filter::Whose(&Players::You),
+        }),
+        Comparison::Equal,
+        Amount::Fixed(0),
+    );
+
+    static YOU_WIN: Effect = Effect::WinGame(Players::You);
+
+    const fn draw(count: u8) -> Effect {
+        Effect::Draw {
+            player: Players::You,
+            count: Amount::Fixed(count),
+        }
+    }
+
+    /// The abilities of Jace, Wielder of Mysteries: "If you would draw a card while your
+    /// library has no cards in it, you win the game instead. +1: Target player mills two
+    /// cards. Draw a card. −8: Draw seven cards. Then if your library has no cards in it, you
+    /// win the game."
+    static ABILITIES: [Ability; 3] = [
+        Ability::replacing(&Replacement::draws(Players::You))
+            .only_if(&LIBRARY_IS_EMPTY)
+            .effect(&YOU_WIN),
+        Ability::loyalty(1)
+            .target(&TargetSpec::player())
+            .effect(&Effect::Sequence(&[
+                Effect::Mill {
+                    player: Players::Target(SpecIx::new(0)),
+                    count: Amount::Fixed(2),
+                },
+                draw(1),
+            ])),
+        Ability::loyalty(-8).effect(&Effect::Sequence(&[
+            draw(7),
+            Effect::If {
+                condition: LIBRARY_IS_EMPTY,
+                then: &YOU_WIN,
+                otherwise: None,
+            },
+        ])),
+    ];
+
+    /// Jace, Wielder of Mysteries with twelve cards in his controller's library, on the
+    /// opponent's turn after their draw: each of his turns takes a draw and his +1's two milled
+    /// cards and one drawn. From a library of his controller's own, the third +1 leaves it empty
+    /// and the fourth turn's draw wins. From a shared one, the opponent's draws take a card a turn
+    /// too, so the third +1 already draws from the empty library and wins.
+    #[test]
+    fn a_shared_library_runs_down_with_both_players_draws() {
+        let turns = |shared| {
+            let library = Library {
+                cards: 12,
+                shared,
+                opponent_first: false,
+            };
+            clock(ABILITIES.iter(), library, 4, false, false)
+        };
+        assert_eq!(turns(false), Some(4));
+        assert_eq!(turns(true), Some(3));
     }
 }

@@ -4,8 +4,8 @@
 //!
 //! It was tuned for the WU Control mirror (`decks::WU_CONTROL`) and the Vintage WU Control
 //! deck before it (`decks::VINTAGE_WU_CONTROL`). A card with no entry keeps what
-//! [`crate::CardValues`] derives, and a game of cards none of which have an entry plays
-//! exactly as well as derivation allows. The tuned and fitted policies both read it.
+//! [`crate::CardValues`] derives, and a game of cards none of which have an entry, basic lands
+//! aside, is valued as `Knowledge::Estimate` values it ([`tunes`]). The tuned and fitted policies both read it.
 //!
 //! This is the one place outside the expert system where `beryl_search` names cards (the
 //! card-names check exempts this directory). It holds judgement, not facts a definition
@@ -13,7 +13,8 @@
 //! and the abilities the decks were tuned as though they did not draw.
 
 use beryl_card_names::names;
-use beryl_engine::card::{Ability, AbilityKind, Behavior, CardDef, CostAction, Effect};
+use beryl_engine::card::{Ability, AbilityKind, Behavior, CardDef, CostAction, Effect, Supertypes};
+use beryl_engine::{GameTable, LargeCardIx};
 
 use crate::values::CardInfo;
 
@@ -203,6 +204,21 @@ const TUNINGS: &[Tuning] = &[
 
 /// Applies the tuning for the card `def`, if it has one, to what was derived for it. An
 /// ability that no longer has the shape its tuning expects is left as derived.
+/// Whether the overlay tunes a card of `t` other than a basic land, which every deck plays:
+/// whether `t` is a game of decks it was tuned for.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "a basic land is known by the printed supertypes of its front face"
+)]
+pub(crate) fn tunes(t: &GameTable) -> bool {
+    t.indices::<LargeCardIx>()
+        .map(|card| t.def(card))
+        .any(|def| {
+            !def.front().supertypes.contains(Supertypes::BASIC)
+                && TUNINGS.iter().any(|tuning| tuning.name == def.name)
+        })
+}
+
 #[allow(
     clippy::disallowed_methods,
     reason = "a tuning names abilities by their place on the front face"

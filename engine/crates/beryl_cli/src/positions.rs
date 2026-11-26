@@ -53,7 +53,7 @@ const BAND: [f64; 2] = [0.45, 0.55];
 const SCORE_TURNS: u16 = 2;
 
 const USAGE: &str = "usage: beryl_cli positions build [--games N] [--seed N] [--work 3M] \
-                     [--out DIR]\n       beryl_cli positions sample [--count N] DIR";
+                     [--deck KEY] [--out DIR]\n       beryl_cli positions sample [--count N] DIR";
 
 /// A start position, as its file keeps it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -68,10 +68,12 @@ pub struct Position {
 }
 
 /// How a set is built.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct Build {
     pub games: u32,
     pub seed: u64,
+    /// The deck both seats play, by a fixture's deck name ([`crate::game::table`]).
+    pub deck: String,
     /// The champion's settings, on one thread: games run one to a core.
     pub settings: Settings,
     pub band: [f64; 2],
@@ -101,6 +103,7 @@ fn build_main(catalog: &'static Catalog, args: &[String]) -> Result<(), String> 
     let mut b = Build {
         games: 250,
         seed: 0,
+        deck: crate::game::DEFAULT_DECK.to_owned(),
         settings: Settings {
             family: DEEP_SEARCHER,
             work: 3_000_000,
@@ -117,6 +120,7 @@ fn build_main(catalog: &'static Catalog, args: &[String]) -> Result<(), String> 
         match arg.as_str() {
             "--games" => b.games = crate::number(arg, value)?,
             "--seed" => b.seed = crate::number(arg, value)?,
+            "--deck" => b.deck.clone_from(value),
             "--work" => {
                 b.settings.work =
                     parse_work(value).ok_or_else(|| format!("--work: no budget {value:?}"))?;
@@ -199,7 +203,7 @@ pub fn build(
     b: &Build,
     progress: impl Fn(u32) + Sync,
 ) -> Result<Built, String> {
-    let t = mirror(catalog);
+    let t = crate::game::table(catalog, &b.deck)?;
     let next_game = AtomicU32::new(0);
     let done = AtomicU32::new(0);
     let found: Mutex<Vec<(u32, Result<GameCuts, String>)>> = Mutex::new(Vec::new());

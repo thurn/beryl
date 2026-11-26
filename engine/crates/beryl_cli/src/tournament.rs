@@ -1,4 +1,5 @@
-//! A round robin between named agents in the WU Control mirror: N games per pairing, seats
+//! A round robin between named agents in the WU Control mirror, or another deck both seats
+//! play: N games per pairing, seats
 //! alternated, games in parallel across the cores, each from a seed derived from the
 //! tournament's, so a seed reproduces every game. Results come with Wilson 95% intervals, as
 //! a table and as JSON.
@@ -17,7 +18,7 @@ use beryl_search::Budget;
 use serde::Serialize;
 
 use crate::Catalog;
-use crate::game::{Played, mirror, play};
+use crate::game::{self, Played, play};
 
 /// One pairing's results, from its first agent's side.
 #[derive(Debug, Default, Serialize)]
@@ -96,7 +97,8 @@ fn pairings(agents: &[String]) -> Vec<(usize, usize)> {
 /// Plays the tournament, searching agents with `budget`'s iterations and trees. With `paired`,
 /// games come in pairs on one seed, seats swapped. With `family`, each game deals two fuzz
 /// decks from that keystone family's cards ([`family_table`]) in place of the WU Control
-/// mirror. The first invariant violation fails it.
+/// mirror; otherwise both seats play `deck`, a fixture's deck name
+/// ([`crate::game::table`]). The first invariant violation fails it.
 #[allow(clippy::too_many_arguments)] // each is a separate flag of `beryl_cli tournament`
 pub fn run(
     catalog: &'static Catalog,
@@ -107,6 +109,7 @@ pub fn run(
     check: bool,
     paired: bool,
     family: Option<&str>,
+    deck: &str,
 ) -> Result<Results, String> {
     let cards = family.map(|name| family_cards(catalog, name)).transpose()?;
     // Games run in parallel, one thread each, so a search grows its trees one after another.
@@ -114,7 +117,7 @@ pub fn run(
         parallel: false,
         ..budget
     };
-    let mirror = mirror(catalog);
+    let mirror = game::table(catalog, deck)?;
     let pairs = pairings(agents);
     let jobs: Vec<(usize, u32)> = (0..pairs.len())
         .flat_map(|p| (0..games).map(move |g| (p, g)))

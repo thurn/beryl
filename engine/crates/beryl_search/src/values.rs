@@ -25,9 +25,13 @@ pub struct CardInfo {
     pub friendly: u8,
     /// Bit `i`: never activate ability `i` of the front face.
     pub never: u8,
-    /// Bit `i`: ability `i` of the front face draws its controller cards.
+    /// Bit `i`: ability `i` of the front face draws its controller cards. In the shared-deck
+    /// format they come from the library both players draw from, which the policy's
+    /// `may_draw` allows for.
     pub draws: u8,
-    /// Bit `i`: ability `i` of the front face wins by drawing the library empty.
+    /// Bit `i`: ability `i` of the front face wins by drawing the library empty: its
+    /// controller's, which in the shared-deck format is the shared one, so the flag means the
+    /// same there.
     pub empties: u8,
     /// Whether a face of it wins instead of losing by drawing from an empty library, as
     /// Jace, Wielder of Mysteries does.
@@ -72,8 +76,9 @@ pub enum Knowledge {
     /// The derived flags with the per-deck overlay applied on top ([`crate::overlay`]): the
     /// values, the cards never cast and the abilities never activated that were hand-tuned
     /// for the WU Control mirror. A card with no overlay entry, such as a token, is valued by
-    /// what its face shows ([`shown`]), as it was when the overlay was tuned. Its family name
-    /// is `tuned`.
+    /// what its face shows ([`shown`]), as it was when the overlay was tuned. A game whose
+    /// cards the overlay does not tune, basic lands aside, is valued as [`Knowledge::Estimate`]
+    /// values it. Its family name is `tuned`.
     #[default]
     Tuned,
     /// The tuned overlay's flags with card values and score thresholds fitted to
@@ -97,11 +102,21 @@ impl CardValues {
         Self::with_overrides(t, knowledge, overrides)
     }
 
+    /// The values of the tier `knowledge`, with `overrides` replacing the values of the cards
+    /// they name. A table the overlay tunes no card of, other than a basic land, is a game of
+    /// decks nobody has tuned for, such as the shared-deck format's Dandân deck: every tier
+    /// values it as [`Knowledge::Estimate`] does, with no override, since the overrides were
+    /// fitted to the tuned decks too.
     pub(crate) fn with_overrides(
         t: &GameTable,
         knowledge: Knowledge,
         overrides: &[(&str, i16)],
     ) -> Self {
+        let (knowledge, overrides) = if overlay::tunes(t) {
+            (knowledge, overrides)
+        } else {
+            (Knowledge::Estimate, &[][..])
+        };
         let mut cards = [CardInfo::default(); CardIx::COUNT];
         let mut more = Vec::new();
         for card in t.indices::<LargeCardIx>() {

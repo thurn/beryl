@@ -9,6 +9,7 @@
 #![deny(clippy::disallowed_methods)]
 
 mod combat;
+pub mod decking;
 mod estimate;
 mod eval;
 mod expert;

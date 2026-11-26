@@ -1,14 +1,16 @@
 //! Beryl's headless command line (architecture §16).
 //!
-//! - `beryl_cli play <agent> <agent> [--seed N] [--out FILE] [budget]` plays one seeded game
-//!   of the WU Control mirror, the first agent in the first seat, and writes its transcript
-//!   to `FILE`, or to standard output.
+//! - `beryl_cli play <agent> <agent> [--seed N] [--out FILE] [--deck KEY] [budget]` plays one
+//!   seeded game of the WU Control mirror, or with `--deck` of the deck a fixture names that
+//!   way (`forgetful-fish` for the shared-deck format), the first agent in the first seat, and
+//!   writes its transcript to `FILE`, or to standard output.
 //! - `beryl_cli tournament <agent>... [--games N] [--seed N] [--json FILE] [--check]
-//!   [--family NAME] [budget]` plays a round robin, N games per pairing (an agent alone plays
-//!   itself), and prints the table; `--json` also writes the results, `--check` checks the
-//!   invariants at every decision, and `--family` deals each game two fuzz decks of one
+//!   [--family NAME] [--deck KEY] [budget]` plays a round robin, N games per pairing (an agent
+//!   alone plays itself), and prints the table; `--json` also writes the results, `--check`
+//!   checks the invariants at every decision, `--family` deals each game two fuzz decks of one
 //!   keystone family's cards (`beryl_cards::decks::KEYSTONE_FAMILIES`) in place of the WU
-//!   Control mirror. Games run in parallel, one thread each.
+//!   Control mirror, and `--deck` plays the deck it names in both seats, as `play` does. Games
+//!   run in parallel, one thread each.
 //! - `beryl_cli ladder <challenger> [--vs NAME] [--work 3M] [--bar stronger|plausible|audit]
 //!   [--cap N] [--seed N] [--positions DIR] [--out DIR]` plays a paired match against the
 //!   champion up to the cap, with a sequential test for stronger and plausible, and prints a
@@ -64,15 +66,17 @@ use beryl_cli::{
 use beryl_search::Budget;
 
 const USAGE: &str = "usage:
-  beryl_cli play <agent> <agent> [--seed N] [--out FILE] [--iterations N] [--trees K]
+  beryl_cli play <agent> <agent> [--seed N] [--out FILE] [--deck KEY] [--iterations N]
+      [--trees K]
   beryl_cli tournament <agent>... [--games N] [--seed N] [--json FILE] [--check]
-      [--paired] [--family NAME] [--iterations N] [--trees K]
+      [--paired] [--family NAME] [--deck KEY] [--iterations N] [--trees K]
+      (a deck is wu-control, the default, fuzz:<seed>, forgetful-fish or shared-fuzz:<seed>)
       (an agent is a registered one or a long-think entrant, family@budget)
   beryl_cli ladder <challenger> [--vs NAME] [--work 3M] [--bar stronger|plausible|audit]
       [--cap N] [--seed N] [--positions DIR] [--out DIR]
   beryl_cli ladder-game --match DIR --game N
   beryl_cli campaign <plan.json> [--hours N] [--smoke] [--commit HASH] [--accept-commit]
-  beryl_cli positions build [--games N] [--seed N] [--work 3M] [--out DIR]
+  beryl_cli positions build [--games N] [--seed N] [--work 3M] [--deck KEY] [--out DIR]
   beryl_cli positions sample [--count N] DIR
   beryl_cli screen <challenger> <match-dir> [--vs NAME] [--recheck N] [--work 3M] [--games N]
   beryl_cli blunders [agent] [--work 3M,30M] [--seeds 5] [--only NAME,...] [--json FILE]
@@ -198,10 +202,17 @@ struct Flags {
     check: bool,
     paired: bool,
     family: Option<String>,
+    /// The deck both seats play, by a fixture's deck name.
+    deck: Option<String>,
     budget: Budget,
 }
 
 impl Flags {
+    /// The deck both seats play: `--deck`'s, or the WU Control mirror's.
+    fn deck(&self) -> &str {
+        self.deck.as_deref().unwrap_or(game::DEFAULT_DECK)
+    }
+
     fn parse(args: &[String]) -> Result<Flags, String> {
         let mut f = Flags::default();
         let mut args = args.iter();
@@ -219,6 +230,7 @@ impl Flags {
                 "--check" => f.check = true,
                 "--paired" => f.paired = true,
                 "--family" => f.family = Some(value()?),
+                "--deck" => f.deck = Some(value()?),
                 "--iterations" => f.budget.iterations = number(arg, &value()?)?,
                 "--trees" => f.budget.trees = number(arg, &value()?)?,
                 flag if flag.starts_with("--") => {
@@ -236,7 +248,7 @@ fn play(f: &Flags) -> Result<(), String> {
         return Err(format!("play takes two agents\n{USAGE}"));
     };
     let names = [a.as_str(), b.as_str()];
-    let t = game::mirror(&CATALOG);
+    let t = game::table(&CATALOG, f.deck())?;
     let mut transcript = Transcript::new(names);
     let played = game::play(&t, f.seed, names, f.budget, true, Some(&mut transcript))?;
     match &f.out {
@@ -265,6 +277,7 @@ fn tournament(f: &Flags) -> Result<(), String> {
         f.check,
         f.paired,
         f.family.as_deref(),
+        f.deck(),
     )?;
     print!("{}", tournament::table(&results));
     if let Some(path) = &f.json {
@@ -272,4 +285,24 @@ fn tournament(f: &Flags) -> Result<(), String> {
         std::fs::write(path, json + "\n").map_err(|e| format!("{path}: {e}"))?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Flags;
+
+    /// `play` and `tournament` take the deck both seats play, the WU Control mirror's unless
+    /// `--deck` names another.
+    #[test]
+    fn the_deck_flag_names_the_deck() {
+        let args = |list: &[&str]| list.iter().map(|&a| a.to_owned()).collect::<Vec<_>>();
+        let f = Flags::parse(&args(&["random", "random", "--deck", "forgetful-fish"])).unwrap();
+        assert_eq!(f.deck(), "forgetful-fish");
+        assert_eq!(f.agents, ["random", "random"]);
+        assert_eq!(
+            Flags::parse(&args(&["random"])).unwrap().deck(),
+            "wu-control"
+        );
+        assert!(Flags::parse(&args(&["random", "--deck"])).is_err());
+    }
 }

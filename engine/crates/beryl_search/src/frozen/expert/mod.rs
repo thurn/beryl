@@ -368,6 +368,16 @@ impl Expert<'_> {
         self.p.me.opponent()
     }
 
+    /// Whose zone the card in `slot` is in: ours when it is in one of our zones, as a card in a
+    /// shared library or graveyard is in both players', else the opponent's.
+    fn whose(&self, slot: Slot) -> Seat {
+        if self.obs().holds(self.me(), slot) {
+            self.me()
+        } else {
+            self.opp()
+        }
+    }
+
     /// What an object is worth, as the expert values permanents ([`appraise`]).
     fn value(&self, slot: Slot) -> i32 {
         self.p.value(slot)
@@ -590,10 +600,11 @@ impl Expert<'_> {
     /// Trainer's, or for the top of a scry, dying: the removal we can cast now.
     fn take_from_hand(&self, d: &Decision) -> Option<Choice> {
         let (player, zone) = match d.prompt.purpose {
-            // The cards looked at lie in their owner's library or hand.
+            // The cards looked at lie in a library or a hand: ours when they are in one of
+            // our zones, as a card in a shared library is, else theirs.
             Purpose::Look => {
-                let card = self.obs().object(d.about.min(|slot| slot)?);
-                (card.owner(), card.zone())
+                let slot = d.about.min(|slot| slot)?;
+                (self.whose(slot), self.obs().object(slot).zone())
             }
             Purpose::Scry => (self.me(), Zone::Library),
             _ => return None,
@@ -2717,8 +2728,8 @@ impl Expert<'_> {
     /// revealed card into the graveyard only if it is not worth drawing.
     fn yes_no(&self, d: &Decision) -> Option<Choice> {
         let player = match d.prompt.purpose {
-            // The card looked at is the top of its owner's library.
-            Purpose::Fateseal => self.obs().object(d.about.min(|slot| slot)?).owner(),
+            // The card looked at is the top of a library: ours, as a shared one is, or theirs.
+            Purpose::Fateseal => self.whose(d.about.min(|slot| slot)?),
             Purpose::Explore => self.me(),
             _ => return None,
         };

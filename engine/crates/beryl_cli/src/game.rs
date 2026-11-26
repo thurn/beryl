@@ -1,5 +1,6 @@
-//! A headless game between two named agents in the WU Control mirror, seeded, optionally
-//! checking the invariants at every decision and writing a transcript.
+//! A headless game between two named agents, both playing one deck (the WU Control mirror
+//! unless told otherwise), seeded, optionally checking the invariants at every decision and
+//! writing a transcript.
 
 use beryl_card_names::decks::WU_CONTROL;
 use beryl_engine::event::Event;
@@ -11,12 +12,38 @@ use beryl_search::{
 };
 
 use crate::Catalog;
+use crate::fixture::start_decks;
 use crate::transcript::Transcript;
 
-/// The table every CLI game is played on: the Milestone 1 mirror.
+/// The table a CLI game is played on unless told otherwise: the Milestone 1 mirror.
 pub fn mirror(catalog: &Catalog) -> GameTable {
     GameTable::new(Format::CONSTRUCTED, catalog.cards, [WU_CONTROL, WU_CONTROL])
         .expect("the WU Control mirror's table")
+}
+
+/// The deck a CLI game is played with unless `--deck` names another.
+pub const DEFAULT_DECK: &str = "wu-control";
+
+/// The table of a game with the deck named `deck` in both seats, by the deck names of a
+/// fixture ([`crate::fixture::start_decks`]): `wu-control` or `fuzz:<seed>` for a game of two
+/// libraries, `forgetful-fish` or `shared-fuzz:<seed>` for the shared-deck format.
+pub fn table(catalog: &'static Catalog, deck: &str) -> Result<GameTable, String> {
+    if deck == DEFAULT_DECK {
+        return Ok(mirror(catalog));
+    }
+    let (format, decks) = start_decks(catalog, &[deck.to_owned(), deck.to_owned()])?;
+    let list = |deck: &[(u8, String)]| {
+        deck.iter()
+            .map(|(n, name)| {
+                let def = catalog.cards.get(name);
+                def.map(|def| (*n, def.name))
+                    .ok_or_else(|| format!("no card is named {name:?}"))
+            })
+            .collect::<Result<Vec<_>, String>>()
+    };
+    let [first, second] = [list(&decks[0])?, list(&decks[1])?];
+    GameTable::new(format, catalog.cards, [first.as_slice(), second.as_slice()])
+        .map_err(|e| format!("deck {deck:?}: {e:?}"))
 }
 
 /// How a game went.

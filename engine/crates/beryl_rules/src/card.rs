@@ -12,12 +12,13 @@ pub use beryl_card::definition::Shape as CardShape;
 pub use beryl_card::{
     Abilities, Ability, AbilityIx, AbilityKind, Amount, BasicLandTypes, Behavior, CardDef,
     CastingIx, CastingKind, CastingKinds, CastingOption, Castings, Chosen, ChosenKind, Colors,
-    Condition, Cost, CostAction, CostPart, Custom, Designation, Effect, ExceptIx, FACE_DOWN,
-    FACE_DOWN_COPY, Face, FaceAbility, FaceIx, GrantIx, Hybrid, INTRINSIC_MANA, Keywords, Layer,
-    LayerSpec, ManaColor, ManaCost, ManaSet, Measure, Modification, ObjectAbility, Objects, Part,
-    Place, Players, Prompt, Purpose, Recipients, Replaced, Replacement, Rewrite, RuleChange, Says,
-    Shape, SpecIx, Subject, Subtype, SubtypeWords, Subtypes, Supertypes, Taken, Takes, TargetKind,
-    TargetSpec, Timing, Trigger, TriggerEvent, Types, Words, counter_kinds, mana,
+    Comparison, Condition, Cost, CostAction, CostPart, Custom, Designation, Effect, ExceptIx,
+    FACE_DOWN, FACE_DOWN_COPY, Face, FaceAbility, FaceIx, GrantIx, Hybrid, INTRINSIC_MANA,
+    Keywords, Layer, LayerSpec, ManaColor, ManaCost, ManaSet, Measure, Modification, ObjectAbility,
+    Objects, Part, Place, Players, Prompt, Purpose, Recipients, Replaced, Replacement, Rewrite,
+    RuleChange, Says, Shape, SpecIx, Subject, Subtype, SubtypeWords, Subtypes, Supertypes, Taken,
+    Takes, TargetKind, TargetSpec, Timing, Trigger, TriggerEvent, Types, Words, counter_kinds,
+    mana,
 };
 
 /// The result of a body, and of any step of a resolution that can stop it early. The engine

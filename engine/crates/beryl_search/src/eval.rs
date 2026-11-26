@@ -70,6 +70,9 @@ pub fn features<L: Layout>(s: &State<L>, values: &CardValues, p: Seat) -> Featur
             f[6] += f64::from(s.object(slot).counters().loyalty);
         }
     }
+    // In the shared-deck format both players read the one library, so the feature is the same
+    // for both and its difference, which is all `logit` weighs, is zero: who decks there is
+    // decided by the turn order of the draws (`crate::decking`), not by the library's length.
     f[7] = LIBRARY_SHORT.saturating_sub(s.library(p).len()) as f64;
     Features(f)
 }

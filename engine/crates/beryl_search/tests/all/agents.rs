@@ -3,6 +3,7 @@
 //! nothing in building or playing an agent requires a tuned card.
 
 use beryl_cards::CARDS;
+use beryl_cards::decks::FORGETFUL_FISH;
 use beryl_engine::{
     Decision, Decklist, Format, GameTable, Outcome, Profile, Replay, Scratch, Small, State, Step,
     apply, next, observe,
@@ -111,9 +112,51 @@ fn the_derived_only_champion_plays_to_the_end() {
     );
 }
 
+/// Every agent, the champion included at a small budget, plays seeded games of the shared-deck
+/// format (`Format::SHARED_DECK`, one library and graveyard for both players) with the Dandân
+/// deck to their end, against the random agent and against itself, answering every decision
+/// legally while the invariants hold. A retired agent plays the random agent only.
+#[test]
+fn every_agent_plays_a_shared_deck_game_to_the_end() {
+    let t = GameTable::new(Format::SHARED_DECK, &CARDS, [FORGETFUL_FISH, &[]]).unwrap();
+    let random = RETIRED.iter().find(|a| a.name == "random").unwrap();
+    for (i, agent) in AGENTS.iter().chain(RETIRED).enumerate() {
+        let opponents: &[_] = if i < AGENTS.len() {
+            &[random, agent]
+        } else {
+            &[random]
+        };
+        for (j, &opponent) in opponents.iter().enumerate() {
+            let seed = 10 * i as u64 + j as u64;
+            let agents = [
+                cheap(&t, agent.name, agent.new, seed),
+                cheap(&t, opponent.name, opponent.new, seed + 1),
+            ];
+            let outcome = play_seeded(&t, agents, seed, true);
+            assert!(
+                matches!(outcome, Outcome::Win(_) | Outcome::Draw),
+                "{} against {}, seed {seed}: {outcome:?}",
+                agent.name,
+                opponent.name,
+            );
+        }
+    }
+}
+
 /// Plays a game of `t` between `agents` to its end.
-fn play(t: &GameTable, mut agents: [Box<dyn GameAgent + Send>; 2]) -> Outcome {
-    let mut s: State<Small> = State::new(t, 7, Profile::SMART).unwrap();
+fn play(t: &GameTable, agents: [Box<dyn GameAgent + Send>; 2]) -> Outcome {
+    play_seeded(t, agents, 7, false)
+}
+
+/// Plays game `seed` of `t` between `agents` to its end, checking that each answer is one of
+/// the decision's options and, when `check` is set, the invariants at every decision.
+fn play_seeded(
+    t: &GameTable,
+    mut agents: [Box<dyn GameAgent + Send>; 2],
+    seed: u64,
+    check: bool,
+) -> Outcome {
+    let mut s: State<Small> = State::new(t, seed, Profile::SMART).unwrap();
     let mut x = Scratch::new();
     let mut asked = [AgentDecision(0); 2];
     loop {
@@ -121,8 +164,13 @@ fn play(t: &GameTable, mut agents: [Box<dyn GameAgent + Send>; 2]) -> Outcome {
             Step::Over(outcome) => return outcome,
             Step::Decide(d) => {
                 let d: Decision<Small> = d;
+                if check {
+                    s.check_invariants(t)
+                        .unwrap_or_else(|v| panic!("seed {seed}: {v:?}"));
+                }
                 let i = d.decider.index();
                 let c = agents[i].choose(observe(&s, t, &mut x, d.decider), &d, asked[i].take());
+                assert!(usize::from(c.0) < d.len(), "seed {seed}: {c:?} for {d:?}");
                 apply(&mut s, t, &mut x, &mut Replay, c);
             }
         }
