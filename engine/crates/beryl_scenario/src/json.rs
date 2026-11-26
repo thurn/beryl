@@ -235,6 +235,7 @@ enum PickDef {
     No,
     Keep,
     Mulligan,
+    FreeMulligan,
     Done,
     Player {
         #[serde(serialize_with = "seat")]

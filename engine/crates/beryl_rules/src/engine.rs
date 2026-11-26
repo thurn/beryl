@@ -513,6 +513,7 @@ fn perform_priority<L: Layout>(
         | Opt::Draw
         | Opt::Keep
         | Opt::Mulligan
+        | Opt::FreeMulligan
         | Opt::Trigger(_)
         | Opt::Yes
         | Opt::No
@@ -575,6 +576,7 @@ fn take_action<L: Layout>(
         | Opt::Draw
         | Opt::Keep
         | Opt::Mulligan
+        | Opt::FreeMulligan
         | Opt::Trigger(_)
         | Opt::Yes
         | Opt::No
@@ -630,6 +632,7 @@ fn perform<L: Layout>(
             | Opt::Draw
             | Opt::Keep
             | Opt::Mulligan
+            | Opt::FreeMulligan
             | Opt::Yes
             | Opt::No
             | Opt::Done
@@ -672,9 +675,7 @@ fn perform<L: Layout>(
             };
             start::set_starting_player(s, t, sink, starting)
         }
-        DecisionKind::KeepOrMulligan => {
-            start::declare(s, t, x, a, d.player, option() == Opt::Mulligan)
-        }
+        DecisionKind::KeepOrMulligan => start::declare(s, t, x, a, d.player, option()),
     }
 }
 

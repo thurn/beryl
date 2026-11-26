@@ -456,3 +456,81 @@ fn an_answer_no_candidate_does_stops_the_replay_naming_the_step() {
     assert!(reason.starts_with("turn "), "{reason}");
     assert!(reason.contains("No Such Card"), "{reason}");
 }
+
+#[test]
+fn a_shared_deck_save_replays_a_free_mulligan() {
+    let start = StartGame {
+        format: beryl_session::Format::SHARED_DECK,
+        seed: 5,
+        decks: [vec![(80, "Island".to_owned())], Vec::new()],
+        human: Seat::P0,
+        opponent: "random".to_owned(),
+        stops: StopsSetting::EXACT,
+        sideboards: Default::default(),
+    };
+    let mut game = Game::new(&CARDS, &start, SESSION).unwrap();
+    let mut view = to_human(&mut game);
+
+    // Answer PlayOrDraw if human goes first on the flip, then take a free mulligan, then keep.
+    let mut took_free = false;
+    for _ in 0..8 {
+        let Status::Deciding { decision } = &view.status else {
+            break;
+        };
+        let pick = if took_free {
+            None
+        } else {
+            decision
+                .candidates
+                .iter()
+                .position(|c| matches!(c.option, beryl_protocol::protocol::Candidate::FreeMulligan))
+        };
+        let index = match pick {
+            Some(i) => {
+                took_free = true;
+                CandidateIndex(i as u16)
+            }
+            None => CandidateIndex(0),
+        };
+        game.choose(game.answer(decision.id, index).unwrap());
+        view = to_human(&mut game);
+        if took_free
+            && !matches!(
+                &view.status,
+                Status::Deciding { decision }
+                    if matches!(
+                        decision.kind,
+                        beryl_protocol::protocol::Kind::PlayOrDraw
+                            | beryl_protocol::protocol::Kind::KeepOrMulligan
+                    )
+            )
+        {
+            break;
+        }
+    }
+    assert!(
+        took_free,
+        "expected a free mulligan with an 80-land shared deck"
+    );
+
+    let file = game.replay();
+    assert!(file.log.iter().any(|e| matches!(
+        e,
+        Entry::Choice(Chosen {
+            what: Some(Described {
+                act: Act::FreeMulligan,
+                ..
+            }),
+            ..
+        })
+    )));
+    let json = serde_json::to_string(file).unwrap();
+    let parsed: ReplayFile = serde_json::from_str(&json).unwrap();
+    let reversed = Perturbation {
+        order: Order::Reversed,
+        ..Perturbation::default()
+    };
+    let (_, replayed_view) =
+        perturb::with(reversed, || Game::from_replay(&CARDS, &parsed, SESSION)).unwrap();
+    assert_eq!(replayed_view.players, view.players);
+}

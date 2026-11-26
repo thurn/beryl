@@ -407,6 +407,7 @@ pub enum Act {
     Draw,
     Keep,
     Mulligan,
+    FreeMulligan,
     /// A waiting triggered ability, by its source and, since version 6, its place among the
     /// triggered abilities of the source's face: one permanent's two abilities may trigger
     /// on one event, as an evoked creature's own and its sacrifice
@@ -594,6 +595,7 @@ impl Act {
             Opt::Draw => Act::Draw,
             Opt::Keep => Act::Keep,
             Opt::Mulligan => Act::Mulligan,
+            Opt::FreeMulligan => Act::FreeMulligan,
             Opt::Trigger(i) => Act::Trigger {
                 source: o.object_named(s).map(obj),
                 // An own ability by its place among the face's triggered ones; one a copy

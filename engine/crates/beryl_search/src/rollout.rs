@@ -290,9 +290,7 @@ impl RolloutPolicy {
             }
             DecisionKind::KeepOrMulligan => {
                 let keep = p.keep();
-                pick.choose_fixed(d, |c| {
-                    Some(i32::from((c.option() == Some(Opt::Keep)) == keep))
-                })
+                pick.choose_fixed(d, |c| Some(mulligan_score(keep, c.option())))
             }
             // A "may" is taken; life for an untapped land is paid only from above 10.
             DecisionKind::YesNo => {
@@ -411,6 +409,17 @@ enum Pick<'s, 'r> {
     Soft(&'s mut Softmax<'r>),
     /// Collects the greedy scores in candidate order.
     Scores(&'s mut ScoreList),
+}
+
+/// Score for a keep-or-mulligan option: keep when the policy keeps, otherwise prefer a free
+/// mulligan over a regular one whenever it is offered.
+fn mulligan_score<L: Layout>(keep: bool, option: Option<Opt<L>>) -> i32 {
+    match option {
+        Some(Opt::Keep) if keep => 2,
+        Some(Opt::FreeMulligan) if !keep => 2,
+        Some(Opt::Mulligan) if !keep => 1,
+        _ => 0,
+    }
 }
 
 /// Finding the first card ends the casting window during a search, so cast a worthwhile spell

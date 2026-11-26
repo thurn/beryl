@@ -91,6 +91,7 @@ pub(super) fn candidate<L: Layout>(
             (format!("Keep {kept}"), Candidate::Keep)
         }
         Opt::Mulligan => ("Mulligan".to_owned(), Candidate::Mulligan),
+        Opt::FreeMulligan => ("Free Mulligan".to_owned(), Candidate::FreeMulligan),
         Opt::Trigger(index) => trigger(t, obs, index),
         Opt::Yes => ("Yes".to_owned(), Candidate::Yes),
         Opt::No => ("No".to_owned(), Candidate::No),

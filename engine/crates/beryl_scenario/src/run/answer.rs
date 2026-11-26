@@ -139,6 +139,7 @@ pub(super) fn pick_in<L: Layout>(
         Pick::No => Opt::No,
         Pick::Keep => Opt::Keep,
         Pick::Mulligan => Opt::Mulligan,
+        Pick::FreeMulligan => Opt::FreeMulligan,
         Pick::Done => Opt::Done,
         Pick::Player { player } => Opt::Player(player),
         Pick::DefendingPlayer => Opt::Defender(None),

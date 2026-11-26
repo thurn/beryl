@@ -478,6 +478,7 @@ impl<L: Layout> Relayout for Opt<L> {
             Opt::Draw => Opt::Draw,
             Opt::Keep => Opt::Keep,
             Opt::Mulligan => Opt::Mulligan,
+            Opt::FreeMulligan => Opt::FreeMulligan,
             Opt::Trigger(i) => Opt::Trigger(index::<M>(i.into())),
             Opt::Yes => Opt::Yes,
             Opt::No => Opt::No,

@@ -206,6 +206,7 @@ pub(crate) fn attack<L: Layout>(
         | Opt::Draw
         | Opt::Keep
         | Opt::Mulligan
+        | Opt::FreeMulligan
         | Opt::Trigger(_)
         | Opt::Yes
         | Opt::No
@@ -496,6 +497,7 @@ pub(crate) fn choose_blocker<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, op
         | Opt::Draw
         | Opt::Keep
         | Opt::Mulligan
+        | Opt::FreeMulligan
         | Opt::Trigger(_)
         | Opt::Yes
         | Opt::No

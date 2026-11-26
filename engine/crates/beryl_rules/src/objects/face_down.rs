@@ -418,6 +418,7 @@ pub(crate) fn pay_mana<L: Layout>(
         | Opt::Draw
         | Opt::Keep
         | Opt::Mulligan
+        | Opt::FreeMulligan
         | Opt::Trigger(_)
         | Opt::Yes
         | Opt::No

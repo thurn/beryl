@@ -93,6 +93,7 @@ pub(crate) fn pick<L: Layout>(
         Opt::No => Pick::No,
         Opt::Keep => Pick::Keep,
         Opt::Mulligan => Pick::Mulligan,
+        Opt::FreeMulligan => Pick::FreeMulligan,
         Opt::Done => Pick::Done,
         Opt::Number(n) if d.prompt.purpose == Purpose::Wish => Pick::Card {
             card: t.def(t.sideboard_card::<L::Card>(d.player, n)?).name,

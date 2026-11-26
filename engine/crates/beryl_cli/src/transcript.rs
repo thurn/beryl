@@ -352,6 +352,7 @@ fn option(t: &GameTable, s: &State, o: Opt) -> String {
         Opt::Draw => "draw first".to_owned(),
         Opt::Keep => "keep".to_owned(),
         Opt::Mulligan => "mulligan".to_owned(),
+        Opt::FreeMulligan => "free mulligan".to_owned(),
         Opt::Trigger(i) => {
             let trigger = s.triggers()[usize::from(i)];
             format!(

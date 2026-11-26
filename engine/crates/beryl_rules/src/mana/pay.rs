@@ -623,6 +623,7 @@ pub(crate) fn manual_pay<L: Layout>(
         | Opt::Draw
         | Opt::Keep
         | Opt::Mulligan
+        | Opt::FreeMulligan
         | Opt::Trigger(_)
         | Opt::Yes
         | Opt::No

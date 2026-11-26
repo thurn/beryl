@@ -467,15 +467,11 @@ impl<L: Layout> State<L> {
         Ok(())
     }
 
-    /// Shuffles a player's opening hand back into their library as one mulligan operation.
-    /// The moves are reported in card definition order. After a restart, the shuffle
-    /// keeps that order so renumbering slots gives the same hand. For ordinary openings,
-    /// slot order preserves the seeded permutation used by recorded games. See [CR 103.5]:
-    /// "To take a mulligan, a player shuffles the cards in their hand back into their library,
-    /// draws a new hand of cards equal to their starting hand size".
-    ///
-    /// [CR 103.5]: https://yawgatog.com/resources/magic-rules/#R1035
-    pub fn shuffle_opening_hand(&mut self, sink: &mut Sink<L>, player: Seat) -> Result<(), Full> {
+    /// Moves a player's opening hand back onto their library before a mulligan shuffle.
+    /// The moves are reported in card definition order. After a restart, the library keeps that
+    /// order so renumbering slots gives the same hand. For ordinary openings, sorting the returned
+    /// cards by slot preserves the seeded permutation used by recorded games.
+    pub fn return_opening_hand(&mut self, sink: &mut Sink<L>, player: Seat) -> Result<(), Full> {
         let previous_top = self.library(player).len();
         for &slot in self.hand_by_definition(player).iter() {
             self.move_object(sink, slot, Zone::Library, Place::Top)?;
@@ -484,6 +480,16 @@ impl<L: Layout> State<L> {
             let list = self.pile_of(player);
             self.zones.library.list_mut(list)[previous_top..].sort_unstable();
         }
+        Ok(())
+    }
+
+    /// Shuffles a player's opening hand back into their library as one mulligan operation.
+    /// See [CR 103.5]: "To take a mulligan, a player shuffles the cards in their hand back into
+    /// their library, draws a new hand of cards equal to their starting hand size".
+    ///
+    /// [CR 103.5]: https://yawgatog.com/resources/magic-rules/#R1035
+    pub fn shuffle_opening_hand(&mut self, sink: &mut Sink<L>, player: Seat) -> Result<(), Full> {
+        self.return_opening_hand(sink, player)?;
         self.shuffle_library(player)
     }
 

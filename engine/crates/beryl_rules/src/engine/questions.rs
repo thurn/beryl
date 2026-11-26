@@ -61,13 +61,20 @@ pub(crate) fn decision<L: Layout>(
                 Prompt::new(Purpose::PutOnBottom).most(s.player(p).to_bottom()),
             )),
             // The question is about the hand to keep.
-            (p, false) => Ok(options(
-                p,
-                DecisionKind::KeepOrMulligan,
-                &[Opt::Keep, Opt::Mulligan],
-                Prompt::new(Purpose::Mulligan),
-            )?
-            .about(turn::hand(s, p))),
+            (p, false) => {
+                let choices: &[Opt<L>] = if start::may_free_mulligan(s, t, p) {
+                    &[Opt::Keep, Opt::Mulligan, Opt::FreeMulligan]
+                } else {
+                    &[Opt::Keep, Opt::Mulligan]
+                };
+                Ok(options(
+                    p,
+                    DecisionKind::KeepOrMulligan,
+                    choices,
+                    Prompt::new(Purpose::Mulligan),
+                )?
+                .about(turn::hand(s, p)))
+            }
         },
         Pending::Discard => {
             let p = s.turn().active();
@@ -206,6 +213,7 @@ pub(super) fn only_idle<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>)
             | Opt::Draw
             | Opt::Keep
             | Opt::Mulligan
+            | Opt::FreeMulligan
             | Opt::Trigger(_)
             | Opt::Yes
             | Opt::No

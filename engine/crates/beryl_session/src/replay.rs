@@ -140,20 +140,30 @@ impl Entry {
                 reason: format!("no seat {player}"),
             })
         };
+        let find_card =
+            |owner: Seat, card: &str, verb: &str| -> Result<LargeCardIx, SessionError> {
+                // In a shared-deck game, both players draw from the single deck stored at seat 0.
+                let deck_owner = if t.format() == Format::SHARED_DECK {
+                    Seat::P0
+                } else {
+                    owner
+                };
+                t.deck(deck_owner)
+                    .chain(t.sideboard(owner))
+                    .find(|&c: &LargeCardIx| t.def(c).name == card)
+                    .ok_or_else(|| SessionError::BadReplay {
+                        reason: format!(
+                            "player {}'s deck and sideboard have no {card} to {verb}",
+                            owner.get()
+                        ),
+                    })
+            };
         Ok(Some(match self {
             Entry::Reveal { player, card } => {
                 let owner = seat(*player)?;
                 // A card brought in from outside the game (a wish's pick, a companion) is
                 // revealed from the owner's sideboard.
-                let card = t
-                    .deck(owner)
-                    .chain(t.sideboard(owner))
-                    .find(|&c: &LargeCardIx| t.def(c).name == card)
-                    .ok_or_else(|| SessionError::BadReplay {
-                        reason: format!(
-                            "player {player}'s deck and sideboard have no {card} to reveal"
-                        ),
-                    })?;
+                let card = find_card(owner, card, "reveal")?;
                 Random::Reveal { owner, card }
             }
             &Entry::SubgameStarter(player) => Random::SubgameStarter(seat(player)?),
@@ -163,15 +173,7 @@ impl Entry {
             },
             Entry::Pick { player, card } => {
                 let owner = seat(*player)?;
-                let card = t
-                    .deck(owner)
-                    .chain(t.sideboard(owner))
-                    .find(|&c: &LargeCardIx| t.def(c).name == card)
-                    .ok_or_else(|| SessionError::BadReplay {
-                        reason: format!(
-                            "player {player}'s deck and sideboard have no {card} to pick"
-                        ),
-                    })?;
+                let card = find_card(owner, card, "pick")?;
                 Random::Pick { owner, card }
             }
             _ => return Ok(None),
@@ -240,8 +242,13 @@ impl ReplayFile {
         };
         let decks = lists(&self.decks)?;
         let sideboards = lists(&self.sideboards)?;
+        let format = if self.shared_deck {
+            Format::SHARED_DECK
+        } else {
+            Format::CONSTRUCTED
+        };
         let table = GameTable::with_sideboards(
-            Format::CONSTRUCTED,
+            format,
             cards,
             decks.each_ref().map(Vec::as_slice),
             sideboards.each_ref().map(Vec::as_slice),

@@ -310,6 +310,9 @@ pub enum Opt<L: Layout = Small> {
     /// Pay {3} and put the player's revealed companion from outside the game into their hand,
     /// a special action (see CR 116.2g).
     Companion,
+    /// Reveal the opening hand and redraw without counting a mulligan
+    /// (`Mulligan::LondonWithFreeRedraw`).
+    FreeMulligan,
 }
 
 const _: () = assert!(size_of::<Opt<Small>>() == 4);
@@ -351,6 +354,7 @@ impl<L: Layout> Opt<L> {
             | Opt::Draw
             | Opt::Keep
             | Opt::Mulligan
+            | Opt::FreeMulligan
             | Opt::Yes
             | Opt::No
             | Opt::Done

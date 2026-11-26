@@ -66,3 +66,29 @@ fn greedy_holds_a_portable_hole_with_nothing_to_exile() {
     }
     assert!(cast > 0 && held > 0, "cast {cast}, held {held}");
 }
+
+/// In a shared-deck game, the rollout policy takes a free mulligan whenever it is offered and
+/// the hand is not one it would keep, and takes a regular mulligan when no free one is offered.
+#[test]
+fn rollout_policy_takes_free_mulligan_when_offered_for_a_mulligan_hand() {
+    let t = GameTable::new(Format::SHARED_DECK, &CARDS, [&[(80, names::ISLAND)], &[]]).unwrap();
+    let policy = RolloutPolicy::new(&t);
+    let mut s = State::new(&t, 3, Profile::SMART).unwrap();
+    let mut x = Scratch::new();
+
+    // Answer PlayOrDraw.
+    let Step::Decide(d) = next(&mut s, &t, &mut x, &mut Replay) else {
+        panic!("expected PlayOrDraw");
+    };
+    let obs = observe(&s, &t, &mut x, d.decider);
+    let c = policy.choose(&t, obs, &d);
+    apply(&mut s, &t, &mut x, &mut Replay, c);
+
+    // 7-land hand: policy does not keep and FreeMulligan is offered, so it chooses FreeMulligan.
+    let Step::Decide(d) = next(&mut s, &t, &mut x, &mut Replay) else {
+        panic!("expected KeepOrMulligan");
+    };
+    let obs = observe(&s, &t, &mut x, d.decider);
+    let c = policy.choose(&t, obs, &d);
+    assert_eq!(d.candidates.option(c), Some(Opt::FreeMulligan));
+}

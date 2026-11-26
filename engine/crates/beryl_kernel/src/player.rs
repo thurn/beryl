@@ -25,6 +25,8 @@ pub enum MulliganStatus {
     WillMulligan,
     /// Kept: the hand is the opening hand.
     Kept,
+    /// Declared a free mulligan this round, not yet taken.
+    WillFreeMulligan,
 }
 
 /// Unspent mana, an amount of each [`ManaColor`]
@@ -323,6 +325,13 @@ impl<L: Layout> State<L> {
         self.player_mut(player).mulligan = MulliganStatus::WillMulligan;
     }
 
+    /// A player declares that they will take a free mulligan this round, which redraws without
+    /// counting against their opening hand size (`Format::SHARED_DECK`).
+    #[inline]
+    pub fn declare_free_mulligan(&mut self, player: Seat) {
+        self.player_mut(player).mulligan = MulliganStatus::WillFreeMulligan;
+    }
+
     /// A player keeps their hand, with `to_bottom` of its cards still to put on the bottom of
     /// their library (see [CR 103.5](https://yawgatog.com/resources/magic-rules/#R1035)): "Once a
     /// player chooses not to take a mulligan, the remaining cards become that player's
@@ -348,6 +357,13 @@ impl<L: Layout> State<L> {
         let p = self.player_mut(player);
         p.mulligans += 1;
         p.mulligan = MulliganStatus::Undeclared;
+    }
+
+    /// A player has taken the free mulligan they declared, and is to declare again without
+    /// incrementing their mulligan count (`Format::SHARED_DECK`).
+    #[inline]
+    pub fn finish_free_mulligan(&mut self, player: Seat) {
+        self.player_mut(player).mulligan = MulliganStatus::Undeclared;
     }
 
     /// Gives a player an emblem

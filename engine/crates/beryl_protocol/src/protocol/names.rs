@@ -56,7 +56,7 @@ mirror! {
 
 mirror! {
     /// A player's mulligan declaration this round ([`MulliganStatus`]).
-    Declaration from MulliganStatus { Undeclared, WillMulligan, Kept }
+    Declaration from MulliganStatus { Undeclared, WillMulligan, Kept, WillFreeMulligan }
 }
 
 /// A zone on the wire. Only manual tables show the sideboard during play.

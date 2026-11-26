@@ -2,15 +2,16 @@
 //!
 //! Implements: CR 103.1, CR 103.5
 
-use beryl_kernel::format::Mulligan;
+use beryl_card::Types;
+use beryl_kernel::format::{Mulligan, SimultaneousDraws};
 
-use crate::decision::Answers;
+use crate::decision::{Answers, Opt};
 use crate::fixed::Full;
 use crate::ids::Seat;
-use crate::layout::Layout;
+use crate::layout::{Layout, Queue};
 use crate::replacement::event::Sink;
 use crate::scratch::Scratch;
-use crate::state::{MulliganStatus, Pending, State, Zone};
+use crate::state::{MulliganStatus, Pending, State, Zone, ZoneKey};
 use crate::table::GameTable;
 use crate::turn;
 use crate::zone::Place;
@@ -37,17 +38,45 @@ pub(crate) fn set_starting_player<L: Layout>(
     deal(s, t, sink)
 }
 
-/// Deals each player's opening hand in turn order and opens the mulligans.
+/// Deals each player's opening hand in turn order and opens the mulligans. When the format
+/// deals simultaneous draws one at a time, cards alternate from the starting player.
 pub(crate) fn deal<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
 ) -> Result<(), Full> {
-    for player in turn_order(s) {
-        s.draw_n(sink, player, t.format().opening_hand())?;
+    let opening_hand = t.format().opening_hand();
+    match t.format().simultaneous_draws() {
+        SimultaneousDraws::Together => {
+            for player in turn_order(s) {
+                s.draw_n(sink, player, opening_hand)?;
+            }
+        }
+        SimultaneousDraws::OneAtATimeFromActivePlayer => {
+            for _ in 0..opening_hand {
+                for player in turn_order(s) {
+                    s.draw(sink, player)?;
+                }
+            }
+        }
     }
     s.ask(Pending::Mulligans);
     Ok(())
+}
+
+/// Whether `player`'s current opening hand qualifies for a free mulligan under `t.format()`:
+/// the format allows free redraws (`Mulligan::LondonWithFreeRedraw`), the player has taken no
+/// regular mulligan, and the hand has fewer than two land cards or fewer than two nonland cards.
+pub(crate) fn may_free_mulligan<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> bool {
+    if t.format().mulligan() != Mulligan::LondonWithFreeRedraw || s.player(player).mulligans() > 0 {
+        return false;
+    }
+    let hand = s.zone(ZoneKey::Of(player, Zone::Hand));
+    let lands = hand
+        .filter(|slot| s.copiable(slot).types(t).contains(Types::LAND))
+        .count();
+    let nonlands = hand.count() - lands;
+    lands < 2 || nonlands < 2
 }
 
 /// The players in turn order from the starting player
@@ -57,20 +86,51 @@ pub(crate) fn turn_order<L: Layout>(s: &State<L>) -> impl Iterator<Item = Seat> 
     s.players_in_turn_order_from(s.turn().starting_player(), s.players())
 }
 
-/// Records a keep or mulligan declaration. A player who keeps after taking mulligans then
-/// puts that many cards on the bottom ([`keep`]).
+/// Records a keep, mulligan, or free mulligan declaration. A player who keeps after taking
+/// regular mulligans then puts that many cards on the bottom ([`keep`]). Taking a free mulligan
+/// reveals the hand to every player so the opponent can see it qualifies before declaring.
 pub(crate) fn declare<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     x: &mut Scratch<L>,
     a: &mut dyn Answers<L>,
     player: Seat,
-    mulligan: bool,
+    choice: Opt<L>,
 ) -> Result<(), Full> {
-    if mulligan {
-        s.declare_mulligan(player);
-    } else {
-        keep(s, player);
+    match choice {
+        Opt::Keep => keep(s, player),
+        Opt::Mulligan => s.declare_mulligan(player),
+        Opt::FreeMulligan => {
+            for &slot in s.hand_by_definition(player).iter() {
+                s.reveal(&mut x.events, player, slot);
+            }
+            s.declare_free_mulligan(player);
+        }
+        Opt::Pass
+        | Opt::PlayLand(_)
+        | Opt::Play
+        | Opt::Draw
+        | Opt::Trigger(_)
+        | Opt::Yes
+        | Opt::No
+        | Opt::Done
+        | Opt::Attack { .. }
+        | Opt::Defender(_)
+        | Opt::Block(_)
+        | Opt::Lethal(_)
+        | Opt::Cast { .. }
+        | Opt::Activate { .. }
+        | Opt::Mana { .. }
+        | Opt::Pool(_)
+        | Opt::Number(_)
+        | Opt::Plan(_)
+        | Opt::Player(_)
+        | Opt::Ability(_)
+        | Opt::Object(_)
+        | Opt::TurnFaceUp(_)
+        | Opt::Companion => {
+            unreachable!("KeepOrMulligan offers only Keep, Mulligan or FreeMulligan")
+        }
     }
     finish_if_kept(s, t, x, a)
 }
@@ -133,15 +193,19 @@ fn finish_if_kept<L: Layout>(
 /// the bottom of their library in any order. ... This process is then repeated until no
 /// player takes a mulligan. A player can take mulligans until their opening hand would be zero
 /// cards, after which they may not take further mulligans."
+fn is_mulliganing<L: Layout>(s: &State<L>, player: Seat) -> bool {
+    matches!(
+        s.player(player).mulligan(),
+        MulliganStatus::WillMulligan | MulliganStatus::WillFreeMulligan
+    )
+}
+
 fn advance_mulligans<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
 ) -> Result<bool, Full> {
     let format = t.format();
-    // The free mulligan of the shared-deck format is not offered yet: no shared-deck table
-    // can be dealt until the kernel stores a shared library.
-    let (Mulligan::London | Mulligan::LondonWithFreeRedraw) = format.mulligan();
     let opening_hand = format.opening_hand();
     let order = turn_order(s);
     loop {
@@ -155,19 +219,58 @@ fn advance_mulligans<L: Layout>(
         if next_to_answer(s).is_some() {
             return Ok(false);
         }
-        let mut any = false;
-        for p in order.clone() {
-            if s.player(p).mulligan() != MulliganStatus::WillMulligan {
-                continue;
-            }
-            any = true;
-            s.shuffle_opening_hand(sink, p)?;
-            s.draw_n(sink, p, opening_hand)?;
-            s.count_mulligan(p);
-        }
-        if !any {
+        if !order.clone().any(|p| is_mulliganing(s, p)) {
             s.settle_question();
             return Ok(true);
+        }
+        if s.shares_zones() {
+            for p in order.clone() {
+                if is_mulliganing(s, p) {
+                    s.return_opening_hand(sink, p)?;
+                }
+            }
+            s.shuffle_library(s.turn().starting_player())?;
+            match format.simultaneous_draws() {
+                SimultaneousDraws::Together => {
+                    for p in order.clone() {
+                        if is_mulliganing(s, p) {
+                            s.draw_n(sink, p, opening_hand)?;
+                        }
+                    }
+                }
+                SimultaneousDraws::OneAtATimeFromActivePlayer => {
+                    for _ in 0..opening_hand {
+                        for p in order.clone() {
+                            if is_mulliganing(s, p) {
+                                s.draw(sink, p)?;
+                            }
+                        }
+                    }
+                }
+            }
+            for p in order.clone() {
+                match s.player(p).mulligan() {
+                    MulliganStatus::WillMulligan => s.count_mulligan(p),
+                    MulliganStatus::WillFreeMulligan => s.finish_free_mulligan(p),
+                    MulliganStatus::Undeclared | MulliganStatus::Kept => {}
+                }
+            }
+        } else {
+            for p in order.clone() {
+                match s.player(p).mulligan() {
+                    MulliganStatus::WillMulligan => {
+                        s.shuffle_opening_hand(sink, p)?;
+                        s.draw_n(sink, p, opening_hand)?;
+                        s.count_mulligan(p);
+                    }
+                    MulliganStatus::WillFreeMulligan => {
+                        s.shuffle_opening_hand(sink, p)?;
+                        s.draw_n(sink, p, opening_hand)?;
+                        s.finish_free_mulligan(p);
+                    }
+                    MulliganStatus::Undeclared | MulliganStatus::Kept => {}
+                }
+            }
         }
     }
 }
