@@ -518,4 +518,82 @@ pub(super) const TABLE: &[Scenario] = &[
             choose(P1, DecisionKind::Target, THE_WANDERING_EMPEROR),
         ],
     ),
+    // A shared-deck opening where the first seat's hand qualifies for a free mulligan (six
+    // Islands and one Counterspell) and takes it, revealing the hand to the opponent before
+    // returning it to the shared library and drawing seven again.
+    Scenario::new("opening-free-mulligan")
+        .pregame(P0)
+        .shared_library(&[
+            // Alternating deal: P0 gets 0, 2, 4, 6, 8, 10, 12 (6 Islands, 1 Counterspell -> free
+            // mulligan); P1 gets 1, 3, 5, 7, 9, 11, 13 (3 Islands, 4 spells -> no free mulligan).
+            ISLAND,
+            ISLAND,
+            ISLAND,
+            COUNTERSPELL,
+            ISLAND,
+            ISLAND,
+            ISLAND,
+            STOCK_UP,
+            ISLAND,
+            ISLAND,
+            ISLAND,
+            REPRIEVE,
+            COUNTERSPELL,
+            THIRST_FOR_DISCOVERY,
+            // Remaining cards in the shared library for P0's redraw.
+            ISLAND,
+            ISLAND,
+            ISLAND,
+            COUNTERSPELL,
+            STOCK_UP,
+            REPRIEVE,
+            THIRST_FOR_DISCOVERY,
+            ISLAND,
+            COUNTERSPELL,
+            STOCK_UP,
+        ])
+        .actions(&[
+            Action::answer(P0, DecisionKind::KeepOrMulligan, Pick::FreeMulligan),
+            Action::answer(P1, DecisionKind::KeepOrMulligan, Pick::Keep),
+            Action::answer(P0, DecisionKind::KeepOrMulligan, Pick::Keep),
+        ]),
+    // A shared-deck opening where the first seat keeps a normal hand (no free mulligan button)
+    // and the opponent takes a free mulligan, revealing their hand before it returns to the
+    // shared library and redraws.
+    Scenario::new("opening-opponent-free-mulligan")
+        .pregame(P0)
+        .shared_library(&[
+            // Alternating deal: P0 gets 0, 2, 4, 6, 8, 10, 12 (3 Islands, 4 spells -> keeps);
+            // P1 gets 1, 3, 5, 7, 9, 11, 13 (6 Islands, 1 Counterspell -> free mulligan).
+            ISLAND,
+            ISLAND,
+            COUNTERSPELL,
+            ISLAND,
+            ISLAND,
+            ISLAND,
+            STOCK_UP,
+            ISLAND,
+            ISLAND,
+            ISLAND,
+            REPRIEVE,
+            ISLAND,
+            THIRST_FOR_DISCOVERY,
+            COUNTERSPELL,
+            // Remaining cards in the shared library for P1's redraw.
+            ISLAND,
+            ISLAND,
+            ISLAND,
+            COUNTERSPELL,
+            STOCK_UP,
+            REPRIEVE,
+            THIRST_FOR_DISCOVERY,
+            ISLAND,
+            COUNTERSPELL,
+            STOCK_UP,
+        ])
+        .actions(&[
+            Action::answer(P0, DecisionKind::KeepOrMulligan, Pick::Keep),
+            Action::answer(P1, DecisionKind::KeepOrMulligan, Pick::FreeMulligan),
+            Action::answer(P1, DecisionKind::KeepOrMulligan, Pick::Keep),
+        ]),
 ];

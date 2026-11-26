@@ -3,17 +3,29 @@
 use beryl_protocol::protocol::{ObjectId, PlayerView, RowName, Side};
 
 use super::Table;
-use crate::table::HandFits;
 use crate::table::place::{
     Group, PileRules, Placement, Rules, Zones, Zooms, place_group, place_reusing, place_zones,
     rezoom, solve_zones, zooms,
 };
 use crate::table::rows::NameIds;
+use crate::table::{HandFits, Layout, TableShape};
 
 impl Table {
-    fn placement_rules<'a>(&'a self, ids: Option<&'a NameIds<'a>>) -> Rules<'a> {
+    fn layout_for(&self, shared: bool) -> Layout {
+        let shape = if shared {
+            TableShape::SharedPiles
+        } else {
+            TableShape::PerPlayerPiles
+        };
+        Layout {
+            shape,
+            ..self.layout
+        }
+    }
+
+    fn rules<'a>(&'a self, layout: &'a Layout, ids: Option<&'a NameIds<'a>>) -> Rules<'a> {
         (
-            &self.layout,
+            layout,
             &self.camera,
             &self.scroll,
             &self.row_fits,
@@ -26,44 +38,26 @@ impl Table {
     /// bottom first, for this window.
     #[must_use]
     pub fn placement(&self, view: &PlayerView, abilities: &[u32]) -> Placement {
-        let mut layout = self.layout;
-        layout.shape = crate::table::TableShape::of_view(view);
-        let placement = place_zones(
-            &Zones::of_view(view, abilities),
-            (
-                &layout,
-                &self.camera,
-                &self.scroll,
-                &self.row_fits,
-                None,
-                &self.data.verbs.lift,
-            ),
-        );
+        let layout = self.layout_for(view.shared.is_some());
+        let placement = place_zones(&Zones::of_view(view, abilities), self.rules(&layout, None));
         self.placed.add(placement.count());
         placement
     }
 
     /// Runs the placement solver with its optional decision side table enabled.
     pub fn placement_for_probe(&self, view: &PlayerView, abilities: &[u32]) -> Placement {
-        let mut layout = self.layout;
-        layout.shape = crate::table::TableShape::of_view(view);
+        let layout = self.layout_for(view.shared.is_some());
         solve_zones(
             &Zones::of_view(view, abilities),
-            (
-                &layout,
-                &self.camera,
-                &self.scroll,
-                &self.row_fits,
-                None,
-                &self.data.verbs.lift,
-            ),
+            self.rules(&layout, None),
             Some(Box::default()),
         )
     }
 
     /// Every object's resting place in `zones`, for this window.
     pub fn placement_of(&self, zones: &Zones) -> Placement {
-        let placement = place_zones(zones, self.placement_rules(None));
+        let layout = self.layout_for(zones.shared);
+        let placement = place_zones(zones, self.rules(&layout, None));
         self.placed.add(placement.count());
         placement
     }
@@ -72,7 +66,8 @@ impl Table {
     /// `known`, this window's placement of `known_zones`, where that group holds the same objects
     /// in both.
     pub fn placement_reusing(&self, zones: &Zones, known: (&Zones, &Placement)) -> Placement {
-        let (placement, laid) = place_reusing(zones, known, self.placement_rules(None));
+        let layout = self.layout_for(zones.shared);
+        let (placement, laid) = place_reusing(zones, known, self.rules(&layout, None));
         self.placed.add(laid);
         placement
     }
@@ -80,7 +75,8 @@ impl Table {
     /// How far each battlefield row of `zones` is zoomed out for this window (`place::zooms`).
     /// `ids` numbers the names of `zones`' objects, if the caller keeps them.
     pub fn zooms(&self, zones: &Zones, piles: &PileRules, ids: Option<&NameIds<'_>>) -> Zooms {
-        zooms(zones, piles, self.placement_rules(ids))
+        let layout = self.layout_for(zones.shared);
+        zooms(zones, piles, self.rules(&layout, ids))
     }
 
     /// How far each battlefield row of `zones` is zoomed out for this window, measuring again
@@ -91,13 +87,8 @@ impl Table {
         (zones, piles, ids): (&Zones, &PileRules, &NameIds<'_>),
         changed: impl Fn(Side, RowName) -> bool,
     ) -> Zooms {
-        rezoom(
-            known,
-            zones,
-            piles,
-            self.placement_rules(Some(ids)),
-            changed,
-        )
+        let layout = self.layout_for(zones.shared);
+        rezoom(known, zones, piles, self.rules(&layout, Some(ids)), changed)
     }
 
     /// Places the objects of `group` in `zones` into `placement` for this window, and leaves the
@@ -109,8 +100,14 @@ impl Table {
         output: (&mut Placement, &mut HandFits),
         placed: &mut Vec<ObjectId>,
     ) {
-        let rules = self.placement_rules(Some(ids));
-        place_group((zones, piles), group, rules, output, placed);
+        let layout = self.layout_for(zones.shared);
+        place_group(
+            (zones, piles),
+            group,
+            self.rules(&layout, Some(ids)),
+            output,
+            placed,
+        );
         self.placed.add(placed.len());
     }
 }

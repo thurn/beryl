@@ -71,9 +71,9 @@ fn staged(previous: &GameEvent, was: Cause, event: &GameEvent, by: Cause) -> boo
         // picks them: "Mana leaves as its source begins to turn, several into one spell
         // together" (UI Conventions, "streak").
         (Tap { .. }, Tap { .. }) => one && matches!(by, Cause::Player { .. }),
-        // One effect's revealed cards lie in the pile together (UI Conventions, "Cards
-        // revealed"; Arena, `I3Te0m1bBFw 22:08.8`).
-        (Reveal { .. }, Reveal { .. }) => one && was == by,
+        // One effect's or free mulligan's revealed cards lie in the pile together (UI Conventions,
+        // "Cards revealed"; Arena, `I3Te0m1bBFw 22:08.8`).
+        (Reveal { player: p1, .. }, Reveal { player: p2, .. }) => was == by && (one || p1 == p2),
         // A countered spell leaves before the spell that countered it, which goes in the
         // same beat (UI Conventions, "A countered spell", by-kxyq; Arena,
         // `I3Te0m1bBFw 39:50.0`): the countered spell's move is the counterspell's effect,

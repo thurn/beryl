@@ -64,7 +64,7 @@
   "cap_lines": 12000,
   "cap_allowances": {
     "game_table": {
-      "lines": 12276,
+      "lines": 12273,
       "reason": "At 12,283 lines after adding the shared-piles table shape, nine pile slots and Place::SharedPile. Considered splitting profiles/ or faces/ into a sibling game crate, but both share Layout, TableShape and Placement internals tightly and splitting them is a separate crate refactor."
     }
   },

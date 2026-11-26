@@ -526,6 +526,12 @@ recordings do not show them.
 - **A mulligan's hand.** It goes from sight where it lies, every card of it, as
   a permanent that leaves does; then the next hand is dealt as an opening hand
   is. No mulligan is filmed.
+- **A free mulligan.** In a shared-deck game, when a player's opening hand
+  qualifies before a regular mulligan, the mode mulligan prompt adds a third
+  button, "Free Mulligan", stacked with "Mulligan" above the primary "Keep 7"
+  button. Taking it reveals the hand to the opponent in the Revealed Cards pile
+  (showcase) before the hand goes back into the shared library with the
+  mulligan's motion and a new seven-card hand is dealt.
 - **Milled cards.** They fly from the library to the graveyard face up, one
   after another as draws do. None is held up large first. No mill is seen.
 - **The Revealed Cards between reveals.** The pile holds what one spell or

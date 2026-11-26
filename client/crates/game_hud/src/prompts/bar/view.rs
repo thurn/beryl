@@ -301,7 +301,9 @@ fn floating_bar(
         .align_items(Align::Stretch)
         .children(controls.map(|controls| controls.element))
         .children(others.clone().map(|button| slots.button(button)));
-    let strip_over = if beside_right > 0.0 {
+    let strip_over = if slots.opening {
+        dock_bottom - height - gap
+    } else if beside_right > 0.0 {
         slots.strip_top() - gap
     } else {
         (dock_bottom - height).min(slots.strip_top()) - gap
@@ -366,6 +368,7 @@ struct PromptSlots<'a> {
     metrics: FloatingPrompt,
     scene: Option<&'a PlacementScene>,
     held: bool,
+    opening: bool,
     phase: (f32, f32),
 }
 
@@ -390,15 +393,26 @@ impl<'a> PromptSlots<'a> {
                 Some((bounds.x, bounds.x + bounds.width))
             })
             .unwrap_or((bar.x, bar.x));
+        let opening = input.view.is_some_and(crate::screens::opening::in_opening);
+        let mut dock = dock?.rect;
+        if opening
+            && let (Some(wrapped), Some(room)) = (
+                profile.data().hud.opening.wrapped_hand,
+                profile.slot("opening"),
+            )
+        {
+            dock.y = room.rect.y + room.rect.height - wrapped.dock_bottom - dock.height;
+        }
         Some(Self {
             bar,
-            dock: dock?.rect,
+            dock,
             middle: middle?.rect,
             clearance: clearance?.rect,
             asked: asked?.rect,
             metrics,
             scene: input.placement_scene,
             held,
+            opening,
             phase,
         })
     }
@@ -409,6 +423,9 @@ impl<'a> PromptSlots<'a> {
 
     fn dock_bottom(&self) -> f32 {
         let bottom = self.dock.y + self.dock.height;
+        if self.opening {
+            return bottom;
+        }
         self.scene
             .into_iter()
             .flat_map(|scene| scene.group(Group::Hand))

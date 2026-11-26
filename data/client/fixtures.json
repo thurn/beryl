@@ -479,6 +479,16 @@
       "until": "first keepOrMulligan decision for seat 0"
     },
     {
+      "name": "opening-free-mulligan",
+      "board": "opening-free-mulligan",
+      "until": "first priority decision for seat 0"
+    },
+    {
+      "name": "opening-opponent-free-mulligan",
+      "board": "opening-opponent-free-mulligan",
+      "until": "first priority decision for seat 0"
+    },
+    {
       "name": "first-target",
       "seed": 1,
       "decks": ["wu-control", "wu-control"],

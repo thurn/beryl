@@ -760,7 +760,9 @@ opalescence/two-opalescences-make-each-other-creatures
 opalescence/with-humility-earlier-each-is-as-big-as-its-mana-value
 opalescence/with-humility-later-each-is-11
 opening-bottom
+opening-free-mulligan
 opening-keep
+opening-opponent-free-mulligan
 opening-opponent-play
 opening-play
 opponent-turn

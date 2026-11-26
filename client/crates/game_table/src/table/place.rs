@@ -331,7 +331,7 @@ pub struct Zones<'a> {
     /// The stack items that may name a battlefield permanent.
     stack_items: policy::StackItems<'a>,
     /// Whether this view or played table uses the shared library, graveyard and exile piles.
-    pub(super) shared: bool,
+    pub(crate) shared: bool,
     /// Each side's library and graveyard, bottom first: the viewer's and then the opponent's.
     piles: [[&'a [ObjectId]; 2]; 2],
     /// The shared library and graveyard, bottom first, when `shared` is true.

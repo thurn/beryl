@@ -186,12 +186,22 @@ impl Builder<'_> {
             return;
         }
         let end = self.after.objects.get(&slot).filter(|_| kept);
-        let Some(known) = was.name.is_some().then_some(was).or(end) else {
+        let (name, other_face) = if let Some(known) = was.name.is_some().then_some(was).or(end)
+            && known.name.is_some()
+        {
+            (known.name.clone(), known.other_face.clone())
+        } else if let Some((_, name, other_face)) = self
+            .revealed
+            .iter()
+            .find(|(revealed, _, _)| *revealed == slot)
+        {
+            (Some(name.clone()), other_face.clone())
+        } else {
             return;
         };
         let object = ObjectView {
-            name: known.name.clone(),
-            other_face: known.other_face.clone(),
+            name,
+            other_face,
             ..was.clone()
         };
         self.showcase(object, cause);

@@ -55,6 +55,7 @@ impl Game {
         }
         self.said = self.names.follow(&fresh);
         self.events = fresh;
+        self.revealed = std::mem::take(&mut self.pending_revealed);
         self.paused = paused;
         self.draw()
     }
@@ -80,6 +81,7 @@ impl Game {
     /// end names the culprit of its loss as live play did.
     pub(super) fn skip_events(&mut self) {
         let events = self.fresh_events();
+        self.pending_revealed.clear();
         self.note_hurt(&events);
     }
 
@@ -93,6 +95,8 @@ impl Game {
             events.drain(..=restart);
             self.names.forget_stack();
             self.paused.clear();
+            self.pending_revealed.clear();
+            self.revealed.clear();
             self.hurt_by = Default::default();
             self.before_cast = None;
             self.passing = None;
@@ -172,7 +176,8 @@ impl Game {
             if view.stack.len() < held {
                 names.remove(view.stack.len());
             }
-            let heard = heard(&self.table, obs, &events, &self.said, names);
+            let mut heard = heard(&self.table, obs, &events, &self.said, names);
+            heard.revealed.clone_from(&self.revealed);
             if let Some(d) = &decision
                 && d.decider == viewer
             {

@@ -284,6 +284,51 @@ impl Game {
             None => true,
         }
     }
+
+    /// Records candidate `c` of `d` by what it does in the
+    /// position it is asked in (in a paused resolution, its body done up to the question: a
+    /// card it drew is in the hand), and applies it.
+    pub(super) fn apply(&mut self, d: &Decision<Large>, c: Choice, origin: ChoiceOrigin) {
+        use beryl_engine::SlotId as _;
+        if d.candidates.option(c) == Some(Opt::FreeMulligan) {
+            on_board!(&self.board, b => {
+                for &slot in &b.state.hand_by_definition(d.player) {
+                    let obj = b.state.object(slot);
+                    let (card, _) = b.state.definition(slot).record(&self.table);
+                    let def = self.table.def(card);
+                    self.pending_revealed.push((
+                        crate::protocol::ObjectId(slot.num()),
+                        def.face_name(obj.face()).to_owned(),
+                        def.other_face_name(obj.face()).map(str::to_owned),
+                    ));
+                }
+            });
+        }
+        let mut chosen = on_board!(&mut self.board, b => crate::save::Chosen::new(
+            &self.table,
+            beryl_engine::view(&b.state, &self.table, &mut b.peek),
+            &d.relayout(),
+            c,
+        ));
+        chosen.continuation = matches!(origin, ChoiceOrigin::Continuation);
+        self.replay
+            .log
+            .push(if matches!(origin, ChoiceOrigin::Auto) {
+                Entry::Auto(chosen)
+            } else {
+                Entry::Choice(chosen)
+            });
+        self.board.apply(&self.table, c, &mut self.chance);
+        self.log_chance();
+    }
+
+    /// Logs what the game's random events produced since the last log, after the entry that
+    /// led to them.
+    pub(super) fn log_chance(&mut self) {
+        for outcome in self.chance.take() {
+            self.replay.log.push(Entry::of(&self.table, outcome));
+        }
+    }
 }
 
 /// A payment that v8 completed without a prompt: it needs no benders and none of its

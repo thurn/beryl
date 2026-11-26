@@ -182,6 +182,8 @@ pub(super) struct Builder<'a> {
     step_turns: &'a [(usize, u16)],
     /// The copies of spells put on the stack ([`Heard::copies`]).
     pub(super) copies: &'a [(usize, Copied)],
+    /// Card faces revealed before a shuffle in the same step ([`Heard::revealed`]).
+    pub(super) revealed: &'a [(ObjectId, String, Option<String>)],
     pub(super) beats: Vec<Vec<Step>>,
     /// For each beat, the spans that end in a beat of their own before it.
     pub(super) ends: Vec<Vec<Step>>,
@@ -238,6 +240,7 @@ impl<'a> Builder<'a> {
             causes,
             moves: &heard.moves,
             copies: &heard.copies,
+            revealed: &heard.revealed,
             step_turns: &heard.step_turns,
             beats: Vec::new(),
             ends: Vec::new(),

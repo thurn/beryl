@@ -456,6 +456,7 @@ fn title(view: &PlayerView, starting: Option<Side>, picking: bool) -> String {
         None if view.turn.flip_winner == Some(Side::You) => "You won the flip".to_owned(),
         None => "Opponent won the flip".to_owned(),
         Some(_) if picking => "Put on the bottom".to_owned(),
+        Some(_) if you.mulligan == Declaration::WillFreeMulligan => "Free Mulligan".to_owned(),
         Some(_) if you.mulligan == Declaration::WillMulligan => "Mulligan".to_owned(),
         Some(_) if you.mulligans == 0 => "Opening hand".to_owned(),
         Some(_) => format!(

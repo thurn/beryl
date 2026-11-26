@@ -109,6 +109,9 @@ pub struct Heard {
     pub copies: Vec<(usize, Copied)>,
     /// The actual turn number for each step beginning, by its index in the view's events.
     pub step_turns: Vec<(usize, u16)>,
+    /// Card faces revealed before a shuffle in the same step could rebind their slots (for
+    /// example, a hand revealed for a free mulligan that immediately returns to the library).
+    pub revealed: Vec<(ObjectId, String, Option<String>)>,
 }
 
 /// A copy of a spell as it arrived on the stack

@@ -201,3 +201,191 @@ fn a_requested_shared_game_plays_to_its_end_and_replays() {
         );
     }
 }
+
+struct PickCandidates(std::collections::VecDeque<beryl_session::protocol::Candidate>);
+
+impl<L: beryl_engine::Layout> beryl_search::Agent<L> for PickCandidates {
+    fn choose(
+        &mut self,
+        _: beryl_engine::Observation<'_, L>,
+        d: &beryl_engine::Decision<L>,
+        _: beryl_search::AgentDecision,
+    ) -> beryl_engine::Choice {
+        let want = self
+            .0
+            .pop_front()
+            .unwrap_or(beryl_session::protocol::Candidate::Keep);
+        let opt = match want {
+            beryl_session::protocol::Candidate::FreeMulligan => beryl_engine::Opt::FreeMulligan,
+            _ => beryl_engine::Opt::Keep,
+        };
+        (0..d.len() as u16)
+            .map(beryl_engine::Choice)
+            .find(|&c| d.candidates.option(c) == Some(opt))
+            .unwrap_or(beryl_engine::Choice(0))
+    }
+}
+
+fn play_free_mulligan_board(
+    library: &'static [&'static str],
+    p0_free: bool,
+) -> (Vec<PlayerView>, Vec<PlayerView>) {
+    use beryl_scenario::{P0, Scenario};
+    use beryl_session::protocol::Candidate;
+    use beryl_session::{Prepared, Seat, StopsSetting};
+
+    let scenario = Scenario::new("free-mulligan-test")
+        .pregame(P0)
+        .shared_library(library);
+    let (table, state) = beryl_scenario::position(&CARDS, &scenario).unwrap();
+    let (sent_p0, p0_updates) = channel();
+    let (sent_p1, p1_updates) = channel();
+    let sessions = Sessions::new(&CARDS, None, move |u| sent_p0.send(u).unwrap())
+        .with_across(move |u| sent_p1.send(u).unwrap());
+    let p1_choices: std::collections::VecDeque<Candidate> = if p0_free {
+        [Candidate::Keep].into()
+    } else {
+        [Candidate::FreeMulligan, Candidate::Keep].into()
+    };
+    let random = beryl_search::agent("random").unwrap();
+    let session = sessions
+        .start_prepared(Prepared {
+            opponent: Box::new(PickCandidates(p1_choices)),
+            stand_in: (random.new)(&table, 2, beryl_search::Budget::DEFAULT),
+            scripted: false,
+            hand_over: Some(Box::new(|| true)),
+            table,
+            state,
+            human: Seat::P0,
+            stops: StopsSetting::SMART,
+        })
+        .unwrap();
+
+    let first = next(&p0_updates);
+    assert_eq!(first.session, session);
+    let Status::Deciding { decision } = &first.view.status else {
+        panic!("expected P0 mulligan decision");
+    };
+    let labels: Vec<&str> = decision
+        .prompt
+        .buttons
+        .iter()
+        .map(|b| b.label.as_str())
+        .collect();
+    let wanted = if p0_free {
+        assert_eq!(labels, ["Keep 7", "Mulligan", "Free Mulligan"]);
+        Candidate::FreeMulligan
+    } else {
+        assert_eq!(labels, ["Keep 7", "Mulligan"]);
+        Candidate::Keep
+    };
+    let idx = decision
+        .candidates
+        .iter()
+        .position(|c| c.option == wanted)
+        .unwrap();
+    sessions
+        .choose(decision.id, CandidateIndex(u16::try_from(idx).unwrap()))
+        .unwrap();
+
+    let mut p0_all = vec![first.view];
+    let mut p1_all = Vec::new();
+    for _ in 0..8 {
+        if let Ok(u) = p0_updates.recv_timeout(Duration::from_millis(500)) {
+            p0_all.push(u.view);
+        } else {
+            break;
+        }
+    }
+    while let Ok(u) = p1_updates.try_recv() {
+        p1_all.push(u.view);
+    }
+    (p0_all, p1_all)
+}
+
+fn has_seven_showcase_beat(views: &[PlayerView]) -> bool {
+    views
+        .iter()
+        .filter_map(|v| v.script.as_ref())
+        .flat_map(|s| s.beats.iter())
+        .any(|beat| {
+            beat.iter()
+                .filter(|step| matches!(step.act, Act::Showcase { .. }))
+                .count()
+                == 7
+        })
+}
+
+/// In a shared-deck game, a qualifying hand before a regular mulligan offers "Free Mulligan" on
+/// the mode mulligan prompt, while a non-qualifying hand does not. Taking a free mulligan reveals
+/// all seven cards in one showcase beat to the opponent both when the opponent declares first and
+/// when the opponent declares second (where the hand is immediately returned and shuffled).
+#[test]
+fn free_mulligan_button_and_revealed_hand_showcase() {
+    use beryl_card_names::names::{COUNTERSPELL, ISLAND, REPRIEVE, STOCK_UP, THIRST_FOR_DISCOVERY};
+
+    // Case 1: P0 takes a free mulligan first; P1's script showcases all 7 cards in one beat.
+    let (_, p1_views) = play_free_mulligan_board(
+        &[
+            ISLAND,
+            ISLAND,
+            ISLAND,
+            COUNTERSPELL,
+            ISLAND,
+            ISLAND,
+            ISLAND,
+            STOCK_UP,
+            ISLAND,
+            ISLAND,
+            ISLAND,
+            REPRIEVE,
+            COUNTERSPELL,
+            THIRST_FOR_DISCOVERY,
+            ISLAND,
+            ISLAND,
+            ISLAND,
+            COUNTERSPELL,
+            STOCK_UP,
+            REPRIEVE,
+            THIRST_FOR_DISCOVERY,
+        ],
+        true,
+    );
+    assert!(
+        has_seven_showcase_beat(&p1_views),
+        "P1 should see all 7 of P0's free-mulligan cards in one showcase beat"
+    );
+
+    // Case 2: P0 keeps, then P1 takes a free mulligan second (immediately shuffled); P0's script
+    // still showcases all 7 of P1's revealed cards in one beat.
+    let (p0_views, _) = play_free_mulligan_board(
+        &[
+            ISLAND,
+            ISLAND,
+            COUNTERSPELL,
+            ISLAND,
+            ISLAND,
+            ISLAND,
+            STOCK_UP,
+            ISLAND,
+            ISLAND,
+            ISLAND,
+            REPRIEVE,
+            ISLAND,
+            THIRST_FOR_DISCOVERY,
+            COUNTERSPELL,
+            ISLAND,
+            ISLAND,
+            ISLAND,
+            COUNTERSPELL,
+            STOCK_UP,
+            REPRIEVE,
+            THIRST_FOR_DISCOVERY,
+        ],
+        false,
+    );
+    assert!(
+        has_seven_showcase_beat(&p0_views),
+        "P0 should see all 7 of P1's free-mulligan cards in one showcase beat even when P1 declares second"
+    );
+}

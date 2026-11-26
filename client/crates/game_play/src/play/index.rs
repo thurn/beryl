@@ -75,8 +75,9 @@ impl<'a> Index<'a> {
         let mut groups = vec![NO_GROUP; end];
         let mut tucked = Vec::new();
         let mut object_order = [const { Vec::new() }; Group::ALL.len()];
+        let shared = played.shared.is_some();
         for object in played.objects.values() {
-            if let Some(group) = Group::of(object) {
+            if let Some(group) = Group::of_in(object, shared) {
                 groups[usize::from(object.slot.0)] = group.number();
                 if group.in_object_order() {
                     object_order[group.index()].push(object.slot);
@@ -128,7 +129,9 @@ impl<'a> Index<'a> {
             if self.groups.len() <= index {
                 self.groups.resize(index + 1, NO_GROUP);
             }
-            let group = group_number(now);
+            let group = now
+                .and_then(|o| Group::of_in(o, played.shared.is_some()))
+                .map_or(NO_GROUP, Group::number);
             let previous = self.groups[index];
             if previous != group {
                 if let Some(group) = Group::ALL
@@ -224,11 +227,6 @@ pub(super) fn step_zones<'z, 'a: 'z>(
         }
         None => Zones::of_table(played),
     }
-}
-
-/// The `Group::number` of the group `object` belongs in, or `NO_GROUP`.
-fn group_number(object: Option<&ObjectView>) -> u8 {
-    object.and_then(Group::of).map_or(NO_GROUP, Group::number)
 }
 
 /// The replacement record for a card in a shuffled library.

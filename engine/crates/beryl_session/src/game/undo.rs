@@ -112,6 +112,8 @@ impl Game {
         // The view says nothing happened: the cast never was.
         self.events.clear();
         self.said.clear();
+        self.pending_revealed.clear();
+        self.revealed.clear();
         Ok(self.draw())
     }
 
@@ -176,6 +178,8 @@ impl Game {
         self.board.drain_events();
         self.events.clear();
         self.said.clear();
+        self.pending_revealed.clear();
+        self.revealed.clear();
         // The table goes back with the game: each seat's next script starts over.
         self.screens
             .iter_mut()

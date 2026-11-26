@@ -18,7 +18,7 @@ use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::{ObjectRef, Pending, StackEntry};
 use beryl_engine::{
     CardTable, Choice, Decision, DecisionKind, GameTable, Large, Outcome, Profile, Relayout, Seat,
-    Small, State, observe, two_player::TwoPlayerSeat as _, view,
+    Small, State, observe, two_player::TwoPlayerSeat as _,
 };
 use beryl_search::{Agent, AgentDecision, Budget, GameAgent};
 use serde_json::json;
@@ -28,7 +28,6 @@ use crate::journal;
 use crate::printings::Printings;
 use crate::protocol::{CandidateIndex, DecisionId, PlayerView, SessionId, StopsSetting};
 use crate::replay::{Entry, FORMAT_VERSION, ReplayFile};
-use crate::save::Chosen;
 use crate::{HandOver, Prepared, SessionError, StartGame};
 
 mod boards;
@@ -255,6 +254,11 @@ pub struct Game {
     events: Vec<Tagged<Large>>,
     /// What each of `events` came from, in step with them.
     said: Vec<crate::script::Said>,
+    /// Faces of cards revealed for a free mulligan since the last view, captured before the
+    /// shuffle rebinds library slots.
+    pending_revealed: Vec<(crate::protocol::ObjectId, String, Option<String>)>,
+    /// The revealed faces belonging to `events`, kept so both seats' views read the same faces.
+    revealed: Vec<(crate::protocol::ObjectId, String, Option<String>)>,
     /// The events of the paused resolution the latest view was in, which it reported: the
     /// body executes them again as it goes on (architecture §7.3).
     paused: Vec<Tagged<Large>>,
@@ -448,6 +452,8 @@ impl Game {
             names: crate::script::Names::default(),
             events: Vec::new(),
             said: Vec::new(),
+            pending_revealed: Vec::new(),
+            revealed: Vec::new(),
             paused: Vec::new(),
             hurt_by: [None; 2],
             before_cast: None,
@@ -738,36 +744,6 @@ impl Game {
         DecisionId {
             session: self.session,
             seq: self.seq,
-        }
-    }
-
-    /// Records candidate `c` of `d` by what it does in the
-    /// position it is asked in (in a paused resolution, its body done up to the question: a
-    /// card it drew is in the hand), and applies it.
-    fn apply(&mut self, d: &Decision<Large>, c: Choice, origin: ChoiceOrigin) {
-        let mut chosen = on_board!(&mut self.board, b => Chosen::new(
-            &self.table,
-            view(&b.state, &self.table, &mut b.peek),
-            &d.relayout(),
-            c,
-        ));
-        chosen.continuation = matches!(origin, ChoiceOrigin::Continuation);
-        self.replay
-            .log
-            .push(if matches!(origin, ChoiceOrigin::Auto) {
-                Entry::Auto(chosen)
-            } else {
-                Entry::Choice(chosen)
-            });
-        self.board.apply(&self.table, c, &mut self.chance);
-        self.log_chance();
-    }
-
-    /// Logs what the game's random events produced since the last log, after the entry that
-    /// led to them.
-    fn log_chance(&mut self) {
-        for outcome in self.chance.take() {
-            self.replay.log.push(Entry::of(&self.table, outcome));
         }
     }
 }
