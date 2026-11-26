@@ -579,6 +579,16 @@ definition each real card's scenario covers.
   2.4 s over 182 cards, which is 13 ms a card and about 670 s for 50,000 cards
   at one thread. Treat it as a lower bound until the test passes.
 
+  Measured again on 2026-11-25 with `just scale` at `96105c07d`, cloning 189
+  card files (41 of them with no `scenarios` module), load average 8 to 10 on 10
+  cores: cold check 88.9 s (276 CPU-s), release build 59.2 s (168 CPU-s),
+  one-edit rebuild 1.7 s, largest compiler process 1.11 GiB, and script checks
+  0.084 s a card, about 5,300 CPU-seconds for 50,000 clones. The rehearsal's
+  one-edit rebuild checks only the set crates. Ignite's `one-card` rebuild count
+  for the real workspace, which also rebuilds every crate and test binary that
+  depends on the card list, was 240 billion instructions over 73 crates at
+  `d72ba5ca3`.
+
 ### E. The card workflow
 
 A card writer today reads the brief, reads vocabulary source to compose a
@@ -620,11 +630,13 @@ pool emptied, which hidden card a search found) would let a definition with that
 neighbour's value pass every oracle check too. A Leonin Scimitar written with
 "Equip {0}" did exactly that on 2026-11-25; only its render diff failed. The
 mutants that generated scenarios kill only out of the oracles' sight are listed
-in `ORACLE_BLIND` (`beryl_cards/src/mutation.rs`), 29 of them on 16 cards on
-2026-11-25: activation costs, mana products, library searches and Time Spiral's
-untap of six lands. The list may only shrink, and `just card check` names a
-card's entries as "unconfirmed by oracles". The full mutation test still counts
-every difference Beryl can see.
+in `ORACLE_BLIND` (`beryl_cards/src/mutation.rs`), 29 of them on 16 cards when
+the list was made on 2026-11-25: activation costs, mana products, library
+searches and Time Spiral's untap of six lands. Once the oracles' snapshot could
+see costs, mana and searches, 6 were left on 3 cards (Jace, the Mind Sculptor's
+loyalty cost, Strip Mine's tap, and Time Spiral's untap). The list may only
+shrink, and `just card check` names a card's entries as "unconfirmed by
+oracles". The full mutation test still counts every difference Beryl can see.
 
 A card with a surviving mutant gets a hand-written scenario for that mutant
 only, or a witness when the mutant is of a vocabulary entry many cards share.
@@ -834,6 +846,14 @@ leaves only one side in the game.
 
 The format value takes no space. Rules on a rollout's path compile to constants
 so the WU mirror's instruction count stays the same.
+
+As built, `Format` (`beryl_kernel/src/format.rs`) is a zero-sized type whose
+getters return constants and ignore `self`. A second value therefore needs
+`Format` to carry data first, and every getter then becomes a load from the
+`GameTable`. The rules read `starting_life`, `opening_hand`, `mulligan`,
+`first_draw`, `maximum_hand`, `lands_each_turn`, `losses` and `seats`. Nothing
+reads `turn` or `zones`: the turn plan fills from `TurnStep::ALL`, and the
+poison threshold in `losses` is recorded but not checked.
 
 The table of what each other mode would still need is at the end of this
 document, and the documentation ticket moves it to the architecture document.
@@ -1380,13 +1400,16 @@ first new card.
 
 ## What each other mode would still need
 
-For the architecture document, once `Format` exists. "Value" means a `Format`
-constant with no new code.
+For the architecture document, once `Format` exists. "Value" means a value of
+`Format` read by an existing getter. Every mode first needs `Format` to stop
+being a zero-sized type (section F), and every mode with more than two players
+needs `Seat`, `PerSeat` and `SlotId::PLAYERS` to grow past two. Checked against
+the code on 2026-11-25.
 
-| Mode             | Values of `Format`                                     | Still to build                                                                                                                                         |
-| ---------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Commander        | 40 life, 100-card decks, a command zone                | A third and fourth seat; a player leaving the game; attacking several players; the command zone and the commander tax, damage and color identity rules |
-| Two-Headed Giant | Teams of two, 30 life a team                           | Four seats; a shared turn and shared life; team blocks                                                                                                 |
-| Planechase       | A planar deck role, the planar die as a special action | Plane and phenomenon cards as objects in the command zone                                                                                              |
-| Archenemy        | Teams of one against many, a scheme deck role          | More seats; scheme cards                                                                                                                               |
-| DanDân           | One shared library and graveyard, 20 life              | The shared `ZoneKey` variant; "your library" as a question separate from ownership                                                                     |
+| Mode             | Values of `Format` (existing getters only) | Still to build                                                                                                                                                                                                    |
+| ---------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Commander        | 40 life                                    | 100-card decks (`DECK_SLOTS` is 60 in both layouts); a `Zone::Command` variant; a third and fourth seat; a player leaving the game; attacking several players; the commander tax, damage and color identity rules |
+| Two-Headed Giant | Teams of two (`Teams` needs a variant)     | Life shared by a team (life is per player); four seats; a shared turn; team blocks                                                                                                                                |
+| Planechase       | None                                       | A planar `DeckRole` variant; the planar die as a special action; plane and phenomenon cards as objects in the command zone                                                                                        |
+| Archenemy        | None                                       | `Teams` and `DeckRole` variants for one against many and a scheme deck; more seats; scheme cards                                                                                                                  |
+| DanDân           | 20 life                                    | The shared library and graveyard: a shared `ZoneKey` variant, storage for it in `Zones`, a reader of `Format::zones`, and "your library" as a question separate from ownership                                    |
