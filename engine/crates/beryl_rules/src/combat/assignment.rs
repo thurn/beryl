@@ -270,6 +270,7 @@ pub(crate) fn division_decision<L: Layout>(
         candidates: Candidates::Options(list),
         prompt: Prompt::new(Purpose::CombatDamage),
         about: Bitboard::single(source),
+        filter: None,
     })
 }
 

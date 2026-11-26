@@ -159,6 +159,7 @@ fn priority_decision<L: Layout>(s: &State<L>, t: &GameTable) -> Result<Decision<
         candidates: Candidates::Options(Default::default()),
         prompt: Prompt::new(Purpose::Priority),
         about: Bitboard::EMPTY,
+        filter: None,
     };
     let Candidates::Options(list) = &mut d.candidates else {
         unreachable!("built with options");

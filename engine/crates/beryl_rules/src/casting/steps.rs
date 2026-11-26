@@ -541,6 +541,7 @@ pub(crate) fn decision<L: Layout>(
         candidates,
         prompt,
         about: Bitboard::EMPTY,
+        filter: None,
     };
     let options = |kind, list, prompt| ask(kind, Candidates::Options(list), prompt);
     Ok(match c.step {
