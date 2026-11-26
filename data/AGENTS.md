@@ -61,14 +61,14 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
   report in the same directory and using it to identify cards with parse gaps.
 - `card-printings.csv`: the specific printing chosen for each card.
 - `deck-printings.csv`: the printings a deck's cards show, one row per printing
-  (`deck,name,set,collector_number,copies`). A deck list is only `(count, name)`, so
-  a card with several arts (the Secret Lair Dandân deck has two Dandâns and four
-  Islands) is listed here with how many of the deck's copies show each; a deck's
-  copies for one name sum to its count. `just cards` writes a
-  `printing:<set>/<collector_number>` record into `card-store.tsv` for each row
-  and fails, naming the row, when Scryfall has no such printing or its name differs.
-  `beryl_card_records` embeds the file, and its rows in order are the `PrintingIx`
-  values. Names containing a comma are not supported.
+  (`deck,name,set,collector_number,copies`). A deck list is only
+  `(count, name)`, so a card with several arts (the Secret Lair Dandân deck has
+  two Dandâns and four Islands) is listed here with how many of the deck's
+  copies show each; a deck's copies for one name sum to its count. `just cards`
+  writes a `printing:<set>/<collector_number>` record into `card-store.tsv` for
+  each row and fails, naming the row, when Scryfall has no such printing or its
+  name differs. `beryl_card_records` embeds the file, and its rows in order are
+  the `PrintingIx` values. Names containing a comma are not supported.
 - `rules-version.json`: the Comprehensive Rules release that every citation in
   the code is checked against.
 - `rule-ownership-allowlist.json`: kernel and rules source files exempt from the

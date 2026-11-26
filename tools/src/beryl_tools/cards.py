@@ -472,7 +472,9 @@ def read_pool(
                 f"deck printing {tuple(row)} matches no printing in the bulk data"
             )
         if row.name not in {display_name(c) for c in pool.shown.values()}:
-            raise LookupError(f"deck printing {tuple(row)} is of a card not in the pool")
+            raise LookupError(
+                f"deck printing {tuple(row)} is of a card not in the pool"
+            )
     missing = set(pinned) - {
         (str(c["set"]), str(c["collector_number"])) for c in chosen.values()
     }
