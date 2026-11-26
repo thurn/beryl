@@ -468,7 +468,7 @@ fn a_viewer_frame_allocates_nothing() {
     client.handle(Input::Update(Box::new(update)));
     client.frame(0);
     client.dispatch(&Action::new(Message::Open(Viewed::Pile(
-        Side::You,
+        Some(Side::You),
         ZoneName::Graveyard,
     ))));
     let now = 1_000_000_000;

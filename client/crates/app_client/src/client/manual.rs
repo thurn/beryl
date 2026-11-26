@@ -174,7 +174,7 @@ impl Client {
             return Target::Table;
         };
         match (source.node, source.container.and_then(Place::in_frame)) {
-            (Node::Pile(Viewed::Pile(side, zone)), _) => Target::Pile(side, zone),
+            (Node::Pile(Viewed::Pile(Some(side), zone)), _) => Target::Pile(side, zone),
             (
                 Node::Card(_),
                 Some(Place::Card {
@@ -440,7 +440,7 @@ impl Client {
     /// open, as the web's `TableViewers.look` opens it once the table answers.
     fn open_look(&mut self, look: Look) {
         let side = look.side;
-        self.view(Some(Viewed::Pile(side, ZoneName::Library)));
+        self.view(Some(Viewed::Pile(Some(side), ZoneName::Library)));
         self.features.update_table(Change::Look(Some(look)));
         self.show_screen();
     }

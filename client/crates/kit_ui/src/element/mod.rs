@@ -359,10 +359,11 @@ pub mod floats {
     pub const LIFE_CHANGE: [FloatId; 2] = [FloatId(6), FloatId(7)];
     /// A resource counter.
     pub const POOL: [FloatId; 2] = [FloatId(8), FloatId(9)];
-    /// The pile counts, grouped by side.
-    pub const PILE_COUNT: [[FloatId; 3]; 2] = [
+    /// The pile counts, grouped by side (yours, opponent's, and shared).
+    pub const PILE_COUNT: [[FloatId; 3]; 3] = [
         [FloatId(10), FloatId(11), FloatId(12)],
         [FloatId(13), FloatId(14), FloatId(15)],
+        [FloatId(41), FloatId(42), FloatId(43)],
     ];
     /// The count of objects scrolled off the left or right end of a row, grouped by side and row.
     pub const ROW_COUNT: [[[FloatId; 2]; 3]; 2] = [

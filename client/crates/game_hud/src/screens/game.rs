@@ -42,16 +42,17 @@ pub fn game(
     let prompt = views.prompt.filter(|_| !opening::choosing_start(input));
     let shade = prompt.as_ref().and_then(|_| prompts::question_shade(input));
     let covers = input.prompt.is_some_and(prompts::covers_table);
+    let viewing = views.viewer.is_some();
     let overlays = overlays(input, log, result, views.viewer);
     let mut menu = Some(menu);
     let mut game = holder().name("game");
 
-    let under_prompt = (!is_opening && covers && layout.table.contains(&Piece::Phase))
+    let under_prompt = (!is_opening && !viewing && covers && layout.table.contains(&Piece::Phase))
         .then(|| middle(input, views.band_full_control.take()))
         .flatten();
     let mut furniture = Vec::with_capacity(layout.table.len());
 
-    if !is_opening || layout.table_under_opening {
+    if !viewing && (!is_opening || layout.table_under_opening) {
         for &piece in &layout.table {
             let element = match piece {
                 Piece::Players => views.players.take(),
@@ -102,6 +103,7 @@ fn overlays(
     mut result: Option<Element>,
     mut viewer: Option<Element>,
 ) -> Vec<Element> {
+    let viewing = viewer.is_some();
     input
         .profile
         .data()
@@ -109,7 +111,7 @@ fn overlays(
         .overlays
         .iter()
         .filter_map(|piece| match piece {
-            Piece::LogColumn | Piece::LogSheet => log.take(),
+            Piece::LogColumn | Piece::LogSheet if !viewing => log.take(),
             Piece::Viewer => viewer.take(),
             // The result blurs everything drawn before it, including floats.
             Piece::Result => result.take().map(Element::waits),

@@ -388,3 +388,145 @@ fn a_card_let_go_in_a_box_lands_before_the_first_card_whose_middle_is_past_it() 
         "nor any order to give"
     );
 }
+
+/// Builds a shared-deck view with one library, one graveyard and one exile pile.
+fn shared_view(
+    known_top: bool,
+    top_owner: Side,
+    castable_owner: Side,
+) -> beryl_protocol::PlayerView {
+    use beryl_protocol::protocol::{Facing, SharedPiles};
+
+    let mut builder = ViewBuilder::new();
+    let hidden = builder.card(ZoneName::Library, Side::You, "Island").slot;
+    let top = builder.card(ZoneName::Library, top_owner, "Dandan").slot;
+    let gy_plain = builder
+        .card(ZoneName::Graveyard, Side::You, "Brainstorm")
+        .slot;
+    let gy_cast = builder
+        .card(ZoneName::Graveyard, castable_owner, "Memory Lapse")
+        .slot;
+    let host = builder
+        .card(ZoneName::Battlefield, Side::You, "Dandan")
+        .slot;
+    let exiled_plain = builder.card(ZoneName::Exile, Side::You, "Predict").slot;
+    let exiled_tucked = builder
+        .card(ZoneName::Exile, Side::Opponent, "Telling Time")
+        .slot;
+    builder.script(ScriptBuilder::reset().build());
+    let mut view = builder.build();
+    for object in &mut view.objects {
+        if object.slot == hidden {
+            object.facing = Facing::Down;
+            object.name = None;
+            object.zone_side = None;
+        } else if object.slot == top {
+            object.zone_side = None;
+            if known_top {
+                object.facing = Facing::Up;
+                object.name = Some("Dandan".to_owned());
+            } else {
+                object.facing = Facing::Down;
+                object.name = None;
+            }
+        } else if object.slot == gy_plain {
+            object.zone_side = None;
+        } else if object.slot == gy_cast {
+            object.zone_side = None;
+            object.castable_from_graveyard = true;
+        } else if object.slot == exiled_plain {
+            object.zone_side = None;
+        } else if object.slot == exiled_tucked {
+            object.zone_side = None;
+            object.exiled_by = Some(host);
+        }
+    }
+    view.players.you.library.clear();
+    view.players.opponent.library.clear();
+    view.players.you.graveyard.clear();
+    view.players.opponent.graveyard.clear();
+    view.shared = Some(SharedPiles {
+        library: vec![hidden, top],
+        graveyard: vec![gy_plain, gy_cast],
+    });
+    view
+}
+
+// Generic story checks verify layout and reachability, but cannot assert that a castable card
+// owned by the opponent in the shared graveyard is placed in the viewer's hand fan, that shared
+// exile omits cards tucked under hosts, or that a known shared-library top card is face up only
+// for the viewer who knows it.
+#[test]
+fn shared_piles_counts_browsers_castable_graveyard_and_known_top() {
+    use game_hud::hud::piles::pile_cards;
+    use game_table::table::Place;
+    use kit_frame::frame::StateBits;
+
+    let known = shared_view(true, Side::Opponent, Side::Opponent);
+    let unknown = shared_view(false, Side::Opponent, Side::Opponent);
+
+    // Shared exile browser omits the card tucked under the battlefield host.
+    let exile_slots = pile_cards(&known, None, ZoneName::Exile);
+    assert_eq!(exile_slots.len(), 1, "only untucked exile card is listed");
+    assert_eq!(pile_cards(&known, None, ZoneName::Library).len(), 2);
+    assert_eq!(pile_cards(&known, None, ZoneName::Graveyard).len(), 2);
+
+    let render = |view: &beryl_protocol::PlayerView| -> Frame {
+        let mut client = client();
+        client.handle(Input::Device(DeviceInput::Surface {
+            size: Size {
+                width: 1600.0,
+                height: 900.0,
+            },
+            scale: 2.0,
+            safe_area: Insets::default(),
+        }));
+        client.handle(Input::Update(Box::new(GameUpdate {
+            session: beryl_protocol::SessionId(1),
+            view: view.clone(),
+        })));
+        client.frame(0).clone()
+    };
+
+    // Known top card (even owned by Opponent) is face up; unknown top card is face down.
+    let known_frame = render(&known);
+    let top_slot = known.shared.as_ref().unwrap().library[1];
+    let top_known = known_frame
+        .resolved
+        .iter()
+        .find(|el| el.role == Role::Card && el.id.0 == u32::from(top_slot.0))
+        .expect("top card drawn");
+    assert!(
+        !top_known.state.has(StateBits::FACE_DOWN),
+        "known shared library top card should be face up"
+    );
+
+    let unknown_frame = render(&unknown);
+    let top_unknown = unknown_frame
+        .resolved
+        .iter()
+        .find(|el| el.role == Role::Card && el.id.0 == u32::from(top_slot.0))
+        .expect("unknown top card drawn");
+    assert!(
+        top_unknown.state.has(StateBits::FACE_DOWN),
+        "unknown shared library top card should be face down"
+    );
+
+    // A card castable from the shared graveyard (even owned by Opponent) is offered in the
+    // viewer's hand fan rather than on the shared graveyard pile.
+    let castable_slot = known.shared.as_ref().unwrap().graveyard[1];
+    let castable_el = known_frame
+        .resolved
+        .iter()
+        .find(|el| el.role == Role::Card && el.id.0 == u32::from(castable_slot.0))
+        .expect("castable graveyard card drawn");
+    assert_eq!(
+        Place::in_frame(castable_el.place),
+        Some(Place::Card {
+            zone: ZoneName::Hand,
+            side: Side::You,
+            row: None,
+        }),
+        "castable shared graveyard card belongs in the viewer's hand fan"
+    );
+}

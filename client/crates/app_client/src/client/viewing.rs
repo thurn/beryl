@@ -360,7 +360,7 @@ impl Client {
     /// manual table is frozen, whose banner and Lobby stand over the opponent's rows, which
     /// take no scroll until it thaws.
     pub(super) fn rows_counted(&self, visible: bool, covered: bool) -> bool {
-        visible && !covered && !self.table_frozen()
+        visible && !covered && !self.table_frozen() && self.features.viewer().open().is_none()
     }
 }
 
@@ -371,13 +371,14 @@ pub(super) fn pointer_pile(
     no_sheet: bool,
     manual_library: bool,
 ) -> Option<Viewed> {
-    let Some(Place::Card {
-        zone,
-        side,
-        row: None,
-    }) = Place::in_frame(place)
-    else {
-        return None;
+    let (side, zone) = match Place::in_frame(place) {
+        Some(Place::Card {
+            zone,
+            side,
+            row: None,
+        }) => (Some(side), zone),
+        Some(Place::SharedPile(zone)) => (None, zone),
+        _ => return None,
     };
     let opens = match screen {
         Screen::Game => matches!(

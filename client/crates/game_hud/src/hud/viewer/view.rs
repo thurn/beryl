@@ -112,12 +112,13 @@ pub fn viewer_dialog(
     shell
 }
 
-/// What the viewer of `side`'s pile of `zone` is called, as the web's `pileTitle` calls it.
-pub fn pile_title(side: Side, zone: ZoneName) -> &'static str {
+/// What the viewer of `side`'s pile of `zone` (or the shared pile when `side` is `None`) is
+/// called. Shared piles use MTG Arena's titles ("Library", "Graveyard", "Exile").
+pub fn pile_title(side: Option<Side>, zone: ZoneName) -> &'static str {
     match (side, zone) {
-        (Side::You, ZoneName::Library) => "Library",
-        (Side::Opponent, ZoneName::Library) => "Opponent's Library",
-        _ => pile_name(Some(side), zone),
+        (Some(Side::You), ZoneName::Library) => "Library",
+        (Some(Side::Opponent), ZoneName::Library) => "Opponent's Library",
+        _ => pile_name(side, zone),
     }
 }
 

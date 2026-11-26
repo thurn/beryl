@@ -6,7 +6,8 @@ shared
 life yours 16
 life theirs 12
 
-card library face-down x40
+card library face-down x39
+card "Dandan" library
 card "Island" graveyard
 card "Brainstorm" graveyard
 card "Memory Lapse" graveyard

@@ -103,7 +103,7 @@ impl Look {
         } else {
             Side::Opponent
         };
-        let library = pile_cards(view, side, ZoneName::Library);
+        let library = pile_cards(view, Some(side), ZoneName::Library);
         let slots = (portion != Portion::All).then(|| portion_slots(&library, portion).to_vec());
         Some(Self {
             side,
@@ -136,7 +136,7 @@ impl Look {
     /// The cards the look shows at `view`, the bottom one first as a library lists them.
     #[must_use]
     pub fn cards(&self, view: &PlayerView) -> Vec<ObjectId> {
-        let library = pile_cards(view, self.side, ZoneName::Library);
+        let library = pile_cards(view, Some(self.side), ZoneName::Library);
         (portion_slots(&library, self.portion).iter().copied())
             .filter(|slot| (self.slots.as_ref()).is_none_or(|slots| slots.contains(slot)))
             .collect()
@@ -339,7 +339,7 @@ pub fn opens(client: &str, target: Target) -> Option<Viewed> {
         _ => return None,
     };
     match target {
-        Target::Pile(side, pile) if pile == zone => Some(Viewed::Pile(side, zone)),
+        Target::Pile(side, pile) if pile == zone => Some(Viewed::Pile(Some(side), zone)),
         _ => None,
     }
 }

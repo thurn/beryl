@@ -179,7 +179,7 @@ impl Group {
     pub fn of_in(object: &ObjectView, shared: bool) -> Option<Group> {
         let side = side_of(object);
         if in_hand_fan(object) {
-            return Some(Group::Hand(side));
+            return Some(Group::Hand(Side::You));
         }
         Some(match object.zone {
             ZoneName::Library | ZoneName::Graveyard | ZoneName::Exile => Group::Pile {

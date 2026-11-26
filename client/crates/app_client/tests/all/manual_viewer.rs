@@ -268,7 +268,7 @@ fn scroll_pile_and_check_clipping(size: Size, scale: f32) {
     client.handle(Input::Update(Box::new(update)));
     client.frame(0);
     client.dispatch(&Action::new(game_hud::hud::viewer::Message::Open(
-        Viewed::Pile(Side::You, ZoneName::Graveyard),
+        Viewed::Pile(Some(Side::You), ZoneName::Graveyard),
     )));
     client.frame(0);
     let frame = client.frame(1_000_000_000);
@@ -382,7 +382,7 @@ fn a_shown_card_draws_and_hits_inside_its_scaled_hosts_mask() {
     client.handle(Input::Update(Box::new(update)));
     client.frame(0);
     client.dispatch(&kit_ui::element::Action::new(
-        game_hud::hud::viewer::Message::Open(Viewed::Pile(Side::You, ZoneName::Graveyard)),
+        game_hud::hud::viewer::Message::Open(Viewed::Pile(Some(Side::You), ZoneName::Graveyard)),
     ));
     client.frame(1);
 

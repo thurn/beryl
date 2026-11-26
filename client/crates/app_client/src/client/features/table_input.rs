@@ -107,7 +107,7 @@ impl Client {
     /// A click on `pile` let go over it: on the manual table, a library draws a card for its
     /// player. Returns whether it did.
     pub(in crate::client) fn table_library_clicked(&mut self, pile: Viewed) -> bool {
-        let Viewed::Pile(side, ZoneName::Library) = pile else {
+        let Viewed::Pile(Some(side), ZoneName::Library) = pile else {
             return false;
         };
         if !self.at_table() {

@@ -367,8 +367,9 @@ impl Client {
         self.layer
             .visit_shows(|placement| self.show.update_show(placement));
         let visible = self.hud_shown();
-        // The guided start's opening covers the table's life totals and pile counts, not notices.
-        let counted = visible && !self.guided_start();
+        // The guided start's opening and an open pile viewer cover the table's life totals and
+        // pile counts, not notices.
+        let counted = visible && !self.guided_start() && self.features.viewer().open().is_none();
         let rows_counted = self.rows_counted(visible, covers);
         let manual = self.features.screen == Screen::Table;
         let card = self.data().card.size();

@@ -394,22 +394,24 @@ impl Table {
         let (count, mut corners) = self.pile(side, zone)?;
         let low = corners.into_iter().reduce(Vec2::min)?;
         let high = corners.into_iter().reduce(Vec2::max)?;
+        let centre = corners[0]
+            .midpoint(corners[2])
+            .midpoint(corners[1].midpoint(corners[3]));
         let (point, align, offset) = match side {
-            Some(Side::You) | None => (
-                corners[0]
-                    .midpoint(corners[2])
-                    .midpoint(corners[1].midpoint(corners[3])),
-                Vec2::splat(0.5),
-                Vec2::ZERO,
-            ),
             Some(Side::Opponent) => {
                 corners.sort_unstable_by(|a, b| a.y.total_cmp(&b.y));
-                (
-                    Vec2::new(f32::midpoint(corners[2].x, corners[3].x), corners[3].y),
-                    Vec2::new(0.5, 0.0),
-                    Vec2::new(0.0, gap),
-                )
+                let bottom = Vec2::new(f32::midpoint(corners[2].x, corners[3].x), corners[3].y);
+                (bottom, Vec2::new(0.5, 0.0), Vec2::new(0.0, gap))
             }
+            None if self.layout().fitted_piles.is_none() => {
+                // Banded layouts put shared piles on the left/right edges; align inward.
+                let (x, ax) = match zone {
+                    ZoneName::Library => (low.x, 0.0),
+                    _ => (high.x, 1.0),
+                };
+                (Vec2::new(x, centre.y), Vec2::new(ax, 0.5), Vec2::ZERO)
+            }
+            _ => (centre, Vec2::splat(0.5), Vec2::ZERO),
         };
         let at = (point - low) / (high - low).max(Vec2::splat(f32::EPSILON));
         let id = ElementId(PILE_IDS + u32::try_from(index).ok()?);

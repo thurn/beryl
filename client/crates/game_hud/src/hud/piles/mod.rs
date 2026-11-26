@@ -12,7 +12,7 @@
 
 use beryl_protocol::protocol::{ObjectId, ObjectView, PlayerState, PlayerView, Side, ZoneName};
 
-use game_table::table::{PileShown, Table, host_slot};
+use game_table::table::{PILE_SLOTS, PileShown, Table, host_slot};
 use kit_scene::{Context, Feature, StateUpdate};
 use kit_ui::element::{Element, FloatId, floats};
 use kit_ui::layout::{FloatLook, Layer};
@@ -23,7 +23,7 @@ use view::count_text;
 /// The floats that show each pile's count, and the count each shows now.
 #[derive(Debug, Default)]
 pub struct PileCounts {
-    shown: [Option<usize>; 6],
+    shown: [Option<usize>; PILE_SLOTS],
     /// The pile under the pointer as of the last `write`, whether or not its count shows.
     hovered: Option<usize>,
     /// Each pile's index and a count the scripts to come give it, kept between updates so that
@@ -123,21 +123,21 @@ impl PileCounts {
     ) {
         let coming = &mut self.coming;
         coming.clear();
-        for index in 0..6 {
+        for index in 0..PILE_SLOTS {
             let count = table.pile_count(index);
             if count > 0 {
                 coming.push((index, count));
             }
         }
         for view in views {
-            for index in 0..6 {
+            for index in 0..PILE_SLOTS {
                 let count = count_in(view, index);
                 if count > 0 && !coming.contains(&(index, count)) {
                     coming.push((index, count));
                 }
             }
         }
-        for index in 0..6 {
+        for index in 0..PILE_SLOTS {
             let id = float(index);
             layer.forget_prepared(id, |key| self.coming.contains(&(index, count_of(key))));
             for &(_, count) in self.coming.iter().filter(|(pile, _)| *pile == index) {
@@ -160,7 +160,7 @@ impl PileCounts {
     /// `visible`. Lays nothing out and allocates nothing for what `prepare` laid out.
     fn write(&mut self, layer: &mut Layer, table: &Table, hovered: Option<usize>, visible: bool) {
         self.hovered = hovered;
-        for index in 0..6 {
+        for index in 0..PILE_SLOTS {
             let pile = (visible && hovered == Some(index))
                 .then(|| table.pile_count_anchor(index, table.data().flat.tooltip.gap))
                 .flatten();
@@ -201,25 +201,40 @@ fn count_of(key: u64) -> usize {
 /// How many cards `view` has in the pile at `index`.
 fn count_in(view: &PlayerView, index: usize) -> usize {
     let (side, zone) = PileShown::of_index(index);
-    let Some(side) = side else {
+    if side.is_none() != view.shared.is_some() {
         return 0;
-    };
-    let player = player(view, side);
-    match zone {
-        ZoneName::Library => player.library.len(),
-        ZoneName::Graveyard => player.graveyard.len(),
-        _ => exiled(view, side).count(),
+    }
+    match (side, zone) {
+        (Some(side), ZoneName::Library) => player(view, side).library.len(),
+        (Some(side), ZoneName::Graveyard) => player(view, side).graveyard.len(),
+        (None, ZoneName::Library) => view
+            .shared
+            .as_ref()
+            .map_or(0, |shared| shared.library.len()),
+        (None, ZoneName::Graveyard) => view
+            .shared
+            .as_ref()
+            .map_or(0, |shared| shared.graveyard.len()),
+        (side, _) => exiled(view, side).count(),
     }
 }
 
-/// The slots of the cards in `side`'s pile of `zone` in `view`, the bottom one first.
+/// The slots of the cards in `side`'s pile of `zone` in `view` (or the shared pile when `side`
+/// is `None`), the bottom one first.
 #[must_use]
-pub fn pile_cards(view: &PlayerView, side: Side, zone: ZoneName) -> Vec<ObjectId> {
-    let player = player(view, side);
-    match zone {
-        ZoneName::Library => player.library.clone(),
-        ZoneName::Graveyard => player.graveyard.clone(),
-        _ => exiled(view, side).map(|object| object.slot).collect(),
+pub fn pile_cards(view: &PlayerView, side: Option<Side>, zone: ZoneName) -> Vec<ObjectId> {
+    match (side, zone) {
+        (Some(side), ZoneName::Library) => player(view, side).library.clone(),
+        (Some(side), ZoneName::Graveyard) => player(view, side).graveyard.clone(),
+        (None, ZoneName::Library) => view
+            .shared
+            .as_ref()
+            .map_or_else(Vec::new, |shared| shared.library.clone()),
+        (None, ZoneName::Graveyard) => view
+            .shared
+            .as_ref()
+            .map_or_else(Vec::new, |shared| shared.graveyard.clone()),
+        (side, _) => exiled(view, side).map(|object| object.slot).collect(),
     }
 }
 
@@ -230,13 +245,13 @@ fn player(view: &PlayerView, side: Side) -> &PlayerState {
     }
 }
 
-/// The cards in `side`'s exile pile in `view`. A card that lies under the permanent holding it
-/// in exile is not in the pile.
-fn exiled(view: &PlayerView, side: Side) -> impl Iterator<Item = &ObjectView> {
+/// The cards in `side`'s exile pile (or the shared exile pile when `side` is `None`) in `view`.
+/// A card that lies under the permanent holding it in exile is not in the pile.
+fn exiled(view: &PlayerView, side: Option<Side>) -> impl Iterator<Item = &ObjectView> {
     let find = |slot: ObjectId| view.objects.iter().find(|host| host.slot == slot);
     view.objects.iter().filter(move |object| {
         object.zone == ZoneName::Exile
-            && object.zone_side.unwrap_or(object.owner) == side
+            && side.is_none_or(|side| object.zone_side.unwrap_or(object.owner) == side)
             && host_slot(object, find).is_none()
     })
 }

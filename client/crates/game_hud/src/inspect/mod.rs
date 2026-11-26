@@ -7,9 +7,9 @@ pub use viewer::revealed;
 /// What the viewer shows the cards of (`inspect::viewer`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Viewed {
-    /// `side`'s library, graveyard or exile.
+    /// `side`'s library, graveyard or exile, or the shared pile when `side` is `None`.
     Pile(
-        beryl_protocol::protocol::Side,
+        Option<beryl_protocol::protocol::Side>,
         beryl_protocol::protocol::ZoneName,
     ),
     /// The faces of the Revealed Cards pile.
