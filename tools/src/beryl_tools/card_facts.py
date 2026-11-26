@@ -350,6 +350,7 @@ class Cards:
         cost is `{T}`, that makes one color, as `{T}: Add {C}`, or one mana of any color.
         None where no such ability says it."""
         color = cast(str, made["color"])
+        made_amount = cast(int, made.get("amount", 1))
         for a in self.abilities(source):
             if a["kind"] != "Mana" or bool(a.get("restricted")) != made["restricted"]:
                 continue
@@ -358,6 +359,8 @@ class Cards:
             produces = cast(Json, a["produces"])
             colors = cast(list[str], produces["colors"])
             amount = cast(int, produces["amount"])
+            if amount != made_amount:
+                continue
             if colors == [color]:
                 return "{T}: Add " + SYMBOLS[color] * amount
             if len(colors) == len(SYMBOLS) - 1 and color in colors and amount == 1:

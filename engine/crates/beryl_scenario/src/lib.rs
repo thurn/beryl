@@ -166,6 +166,7 @@ pub struct ManaMade {
     pub source: &'static str,
     #[serde(serialize_with = "json::variant")]
     pub color: ManaColor,
+    pub amount: u8,
     /// Whether the mana remembers a restriction on what it may be spent on ([CR 106.6]):
     /// "Some spells or abilities that produce mana restrict how that mana can be spent".
     ///

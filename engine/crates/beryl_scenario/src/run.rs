@@ -553,9 +553,10 @@ impl<L: Layout> Runner<L> {
                 Event::Mana {
                     source: Some(object),
                     color,
+                    amount,
                     restricted,
                     ..
-                } => made.push((object, color, restricted)),
+                } => made.push((object, color, amount, restricted)),
                 _ => {}
             }
         }
@@ -571,9 +572,10 @@ impl<L: Layout> Runner<L> {
         let taps = taps.into_iter().map(named).collect();
         let mana = made
             .into_iter()
-            .map(|(object, color, restricted)| ManaMade {
+            .map(|(object, color, amount, restricted)| ManaMade {
                 source: named(object),
                 color,
+                amount,
                 restricted,
             })
             .collect();

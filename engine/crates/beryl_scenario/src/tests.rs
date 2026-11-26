@@ -518,7 +518,8 @@ fn the_dump_traces_where_each_action_began() {
     // Its cost tapped both lands.
     assert_eq!(trace[1]["taps"], serde_json::json!([L, L]));
     // Each land made one unrestricted {W}, which an oracle taps it for.
-    let white = serde_json::json!({"source": L, "color": "White", "restricted": false});
+    let white =
+        serde_json::json!({"source": L, "color": "White", "amount": 1, "restricted": false});
     assert_eq!(trace[1]["mana"], serde_json::json!([white, white]));
     assert!(json[0].get("failure").is_none());
 }

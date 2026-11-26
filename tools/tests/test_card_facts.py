@@ -153,6 +153,29 @@ def test_a_source_of_restricted_mana_taps_by_the_ability_that_made_it() -> None:
     assert cavern.made_text("Gadget", made) is None
 
 
+def test_made_text_distinguishes_mana_amount() -> None:
+    # A depletion land like Svyelunite Temple makes {U} on {T} or {U}{U} on {T}, Sacrifice:
+    # made_text matches only the {T} ability when amount is 1, and None when amount is 2.
+    temple = gadget(
+        mana(0, "Blue"),
+        mana(1, "Blue", amount=2, parts=[TAP, SACRIFICE]),
+    )
+    assert (
+        temple.made_text(
+            "Gadget",
+            {"source": "Gadget", "color": "Blue", "amount": 1, "restricted": False},
+        )
+        == "{T}: Add {U}"
+    )
+    assert (
+        temple.made_text(
+            "Gadget",
+            {"source": "Gadget", "color": "Blue", "amount": 2, "restricted": False},
+        )
+        is None
+    )
+
+
 def test_a_payment_comes_after_the_choices_made_while_casting() -> None:
     cast: Json = {"action": "Cast", "card": "Elk"}
     asked: Json = {"action": "Assert", "assertion": {"assert": "Decision"}}

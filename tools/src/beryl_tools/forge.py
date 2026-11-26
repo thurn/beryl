@@ -403,6 +403,17 @@ def taps(
             tapped.append(
                 {"card": name, "color": color, "restricted": made["restricted"]}
             )
+        elif (
+            cards.mana_choice(name)
+            and (made := recorded_tap(cards, name, mana)) is not None
+        ):
+            # A source with several mana abilities, as Svyelunite Temple, which can also be
+            # sacrificed for mana: left to Forge's AI it taps other lands than Beryl did, so
+            # the harness replays the tap ability the trace recorded.
+            color = SYMBOLS[cast(str, made["color"])].strip("{}")
+            tapped.append(
+                {"card": name, "color": color, "restricted": made["restricted"]}
+            )
         elif cards.taps_for_one_mana(name) or (
             land_types_change
             and name in lands
@@ -410,6 +421,15 @@ def taps(
         ):
             tapped.append(name)
     return tapped
+
+
+def recorded_tap(cards: Cards, name: str, mana: list[JsonObject]) -> JsonObject | None:
+    """The trace's `mana` entry for `name` if it names a mana ability whose only cost is
+    `{T}`, removing it from `mana` so the harness can activate that ability."""
+    for i, m in enumerate(mana):
+        if m["source"] == name and cards.made_text(name, m) is not None:
+            return mana.pop(i)
+    return None
 
 
 def payment(

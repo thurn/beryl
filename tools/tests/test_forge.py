@@ -486,6 +486,63 @@ def test_a_source_of_restricted_mana_is_tapped_for_the_mana_beryl_made() -> None
         forge.taps(cast, actions, trace, 0, cards, set())
 
 
+def test_a_source_sacrificed_for_two_mana_is_left_to_forge() -> None:
+    # A land like Svyelunite Temple has {T}: Add {U} and {T}, Sacrifice: Add {U}{U}.
+    # When the trace records amount=1, the harness replays the {T} ability; when amount=2,
+    # it leaves the sacrifice ability to Forge's AI instead of tapping for one mana.
+    tap: Json = {"parts": [{"action": "Tap", "of": "This"}]}
+    sac: Json = {
+        "parts": [
+            {"action": "Tap", "of": "This"},
+            {"action": "Sacrifice", "of": "This"},
+        ]
+    }
+    temple: Json = {
+        "faces": [
+            {
+                "name": "Temple",
+                "abilities": [
+                    {
+                        "kind": "Mana",
+                        "cost": tap,
+                        "produces": {"colors": ["Blue"], "amount": 1},
+                    },
+                    {
+                        "kind": "Mana",
+                        "cost": sac,
+                        "produces": {"colors": ["Blue"], "amount": 2},
+                    },
+                ],
+            }
+        ]
+    }
+    cards = Cards({"Temple": temple})
+    cast: Json = {"action": "Cast", "player": 0, "card": "Elk", "costs": 0}
+    actions: list[Json] = [cast, {"action": "Resolve"}]
+    trace_one: list[Json] = [
+        {"taps": []},
+        {
+            "taps": ["Temple"],
+            "mana": [
+                {"source": "Temple", "color": "Blue", "amount": 1, "restricted": False}
+            ],
+        },
+    ]
+    assert forge.taps(cast, actions, trace_one, 0, cards, set()) == [
+        {"card": "Temple", "color": "U", "restricted": False}
+    ]
+    trace_two: list[Json] = [
+        {"taps": []},
+        {
+            "taps": ["Temple"],
+            "mana": [
+                {"source": "Temple", "color": "Blue", "amount": 2, "restricted": False}
+            ],
+        },
+    ]
+    assert forge.taps(cast, actions, trace_two, 0, cards, set()) == []
+
+
 def test_exact_mana_values_reach_the_harness_with_both_snapshot_references() -> None:
     entry = next(e for e in dumped() if e["card"] == "Jace, Vryn's Prodigy")
     facts = [
