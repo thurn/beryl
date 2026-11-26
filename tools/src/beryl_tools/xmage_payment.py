@@ -85,6 +85,15 @@ class Payments:
             return []
         if restricted:
             return self.as_made_taps(who, at, taps, mana)
+        if (
+            not self.cards.change_land_types()
+            and who not in self.left_to_xmage
+            and any(map(self.cards.mana_choice, taps))
+        ):
+            try:
+                return self.as_made_taps(who, at, taps, list(mana))
+            except Unsupported:
+                pass
         if self.cards.change_land_types() or any(map(self.cards.mana_choice, taps)):
             if who in self.left_to_xmage:
                 raise Unsupported("a payment after one XMage chose the sources of")

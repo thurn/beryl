@@ -876,3 +876,38 @@ def test_a_may_search_with_no_matches_queues_no_target_skip() -> None:
     )
     writer.answer({"player": 0, "kind": "YesNo", "pick": {"pick": "Yes"}}, position)
     assert export.body == ["setChoice(playerA, true);"]
+
+
+def test_payments_with_mana_choice_replay_recorded_taps_when_made_text_matches() -> (
+    None
+):
+    # A land with a tap ability and a tap-and-sacrifice ability (such as Svyelunite Temple)
+    # has mana_choice, but tapping it for {U} has an exact made_text and should not be left
+    # to XMage's non-deterministic auto-tapper.
+    name = "Get Lost on a creature gives two Maps; one explores a land into hand"
+    dump = json.loads(FIXTURE.read_text())
+    entry = next(e for e in dump if e["name"] == name)
+    entry["cards"]["Plains"]["faces"][0]["abilities"].append(
+        {
+            "index": "Own 1",
+            "kind": "Mana",
+            "cost": {
+                "parts": [
+                    {"action": "Tap", "of": "This"},
+                    {"action": "Sacrifice", "of": "This"},
+                ]
+            },
+            "produces": {"colors": ["White"], "amount": 2},
+        }
+    )
+    for pos in entry["trace"]:
+        if pos.get("taps"):
+            pos["mana"] = [
+                {"source": name, "color": "White", "restricted": False}
+                for name in pos["taps"]
+            ]
+    faces = xmage_java.Faces.load(card_store.STORE)
+    export = xmage_export.export_one(entry, 1, faces, XMAGE_CARDS)
+    assert export.unsupported is None, export.unsupported
+    tap = 'tapSource(1, PhaseStep.PRECOMBAT_MAIN, playerB, "Plains", "{T}: Add {W}");'
+    assert export.body.count(tap) == 2
