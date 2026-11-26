@@ -1050,5 +1050,10 @@
     "label": "When a tip round sees a required check fail and a newer `staging` tip has touched what the check reads, `TipVerifier::blame` now checks whether the check passes at the newer tip instead of deferring the report blindly until a later round. On 2026-11-26, `d46088c23` failed `family_corpora_never_change` at 09:31 UTC, but an unrelated landing five minutes earlier caused `blame` to defer reporting; subsequent tips stopped on `oracle` and `pytest` failures, leaving the regression unreported for 2 h 24 min until 11:55 UTC and adding ~56 min of `master` stall across 27 waiting product commits",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
+  },
+  {
+    "label": "`repository.test_paths` in `ignite.toml` now includes `tools/**`, `engine/crates/beryl_bench/**` and `engine/crates/beryl_scenario/**` so benchmark corpus repins and test-harness fixes are classified `test-only` instead of `product` (which blinded `unproven_holds` from switching off `family_corpora_never_change` at 10:10 UTC on 2026-11-26, adding ~57 min of `master` stall across 27 waiting product commits), and `unproven_holds` now ignores failing tips older than a check's latest switch to `on` and clears holds when a newer failed tip records the check passing in `regression_passes`",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]

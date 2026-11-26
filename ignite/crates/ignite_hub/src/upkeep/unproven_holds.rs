@@ -111,10 +111,15 @@ pub(super) fn switch_off(
 /// tip was seen. A check observed only on superseded or still-verifying tips qualifies once it
 /// has failed on at least [`tip_streaks::STREAK`] tips, so a one-off flake on a single
 /// superseded tip is ignored.
+///
+/// A failing tip seen at or before the check's latest switch back to `on` is ignored, so a
+/// repaired check is not immediately switched back off for the older failure it just fixed. A
+/// pass recorded in `regression_passes` on a newer tip clears any earlier hold for that check.
 fn holds(conn: &Connection) -> Result<BTreeMap<String, Hold>> {
+    let re_enabled = latest_re_enables(conn)?;
     let mut select = conn.prepare(
-        "SELECT commit_sha, seen, failure, observed_failures FROM tips
-         WHERE (failure IS NOT NULL OR observed_failures IS NOT NULL)
+        "SELECT commit_sha, seen, failure, observed_failures, regression_passes FROM tips
+         WHERE (failure IS NOT NULL OR observed_failures IS NOT NULL OR regression_passes IS NOT NULL)
            AND seen > coalesce((SELECT max(seen) FROM tips WHERE state = 'verified'), '')
          ORDER BY seen, commit_sha",
     )?;
@@ -125,25 +130,56 @@ fn holds(conn: &Connection) -> Result<BTreeMap<String, Hold>> {
                 row.get::<_, String>(1)?,
                 row.get::<_, Option<String>>(2)?,
                 row.get::<_, Option<String>>(3)?,
+                row.get::<_, Option<String>>(4)?,
             ))
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     let mut holds: BTreeMap<String, Hold> = BTreeMap::new();
-    for (tip, seen, failure, observed) in rows {
+    for (tip, seen, failure, observed, passes) in rows {
         let since = parse_time(&seen)?;
+        if let Some(passes) = passes {
+            let passes: Vec<ResultKey> = serde_json::from_str(&passes)
+                .map_err(|error| StoreError::Invalid(format!("a tip's passing checks: {error}")))?;
+            for key in &passes {
+                let clear = holds.get(key.check.as_str()).is_some_and(|hold| {
+                    hold.platform.is_none()
+                        || key.platform.is_none()
+                        || hold.platform == key.platform
+                });
+                if clear {
+                    holds.remove(key.check.as_str());
+                }
+            }
+        }
         let mut seen_on_tip = BTreeSet::new();
         if let Some(failure) = failure {
             let failure: TipFailure = serde_json::from_str(&failure)
                 .map_err(|error| StoreError::Invalid(format!("a tip's failed checks: {error}")))?;
             for key in &failure.checks {
-                record_hold(&mut holds, &mut seen_on_tip, &tip, since, key, true);
+                record_hold(
+                    &mut holds,
+                    &mut seen_on_tip,
+                    &re_enabled,
+                    &tip,
+                    since,
+                    key,
+                    true,
+                );
             }
         }
         if let Some(observed) = observed {
             let observed: Vec<ResultKey> = serde_json::from_str(&observed)
                 .map_err(|error| StoreError::Invalid(format!("observed tip failures: {error}")))?;
             for key in &observed {
-                record_hold(&mut holds, &mut seen_on_tip, &tip, since, key, false);
+                record_hold(
+                    &mut holds,
+                    &mut seen_on_tip,
+                    &re_enabled,
+                    &tip,
+                    since,
+                    key,
+                    false,
+                );
             }
         }
     }
@@ -151,14 +187,37 @@ fn holds(conn: &Connection) -> Result<BTreeMap<String, Hold>> {
     Ok(holds)
 }
 
+fn latest_re_enables(conn: &Connection) -> Result<BTreeMap<String, Timestamp>> {
+    let mut select = conn.prepare(
+        "SELECT check_name, max(at) FROM check_state_changes WHERE state = 'on' GROUP BY check_name",
+    )?;
+    let rows = select
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    let mut map = BTreeMap::new();
+    for (check, at) in rows {
+        map.insert(check, parse_time(&at)?);
+    }
+    Ok(map)
+}
+
 fn record_hold(
     holds: &mut BTreeMap<String, Hold>,
     seen_on_tip: &mut BTreeSet<String>,
+    re_enabled: &BTreeMap<String, Timestamp>,
     tip: &str,
     since: Timestamp,
     key: &ResultKey,
     confirmed: bool,
 ) {
+    if re_enabled
+        .get(key.check.as_str())
+        .is_some_and(|at| since <= *at)
+    {
+        return;
+    }
     let name = key.check.to_string();
     let first_on_tip = seen_on_tip.insert(name.clone());
     let entry = holds.entry(name).or_insert_with(|| Hold {

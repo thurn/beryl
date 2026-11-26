@@ -265,7 +265,7 @@ pub fn verified(conn: &Connection, verified: &TipVerified, now: Timestamp) -> Re
     let updated = conn.execute(
         "UPDATE tips SET state = ?2, verified = CASE WHEN ?3 THEN ?4 ELSE NULL END,
          regression_passes = CASE
-           WHEN ?2 != 'verified' THEN NULL
+           WHEN ?2 NOT IN ('verified', 'failed') THEN NULL
            WHEN ?5 IS NULL THEN regression_passes
            WHEN ?5 = '[]' AND state = 'verified' AND regression_passes IS NULL THEN NULL
            ELSE (SELECT json_group_array(json(value)) FROM (

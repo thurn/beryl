@@ -29,21 +29,24 @@ green = "refs/ignite/green"
 saved = "refs/ignite/tickets/"
 
 # Paths that count as test files when Ignite classifies a landed check fix.
-# Card and rules definitions and the oracle scenario sources and data count as product code.
+# Card, rules, search, client and shipped data files count as product code;
+# test suites, benchmarks, scenario runners and tooling do not.
 test_paths = [
-  "**/tests/**",                # Integration tests and their fixtures and expected outputs.
-  "**/*_tests.rs",              # Rust unit tests in sibling modules.
-  "**/tests.rs",                # Rust unit tests in a standalone tests module.
-  "tools/tests/**",             # Python tests and fixtures.
-  "data/client/fixtures.json",  # Game setups for native recordings and script checks.
-  "data/client/budgets.json",   # Limits for native frame checks.
-  "data/client/gates.json",     # Limits for shader and interface audit checks.
-  "data/client/conventions/**", # Recordings and moments that demonstrate UI conventions.
-  "data/client/screens.json",   # Expected screens and prompts in recorded examples.
+  "**/tests/**",                  # Integration tests and their fixtures and expected outputs.
+  "**/*_tests.rs",                # Rust unit tests in sibling modules.
+  "**/tests.rs",                  # Rust unit tests in a standalone tests module.
+  "tools/**",                     # Python CLI, oracle replay harness, build scripts and tests.
+  "engine/crates/beryl_bench/**", # Benchmark harness, count-gate binaries and corpus hash pins.
+  "engine/crates/beryl_scenario/**", # Scenario test runner and trace replay harness.
+  "data/client/fixtures.json",    # Game setups for native recordings and script checks.
+  "data/client/budgets.json",     # Limits for native frame checks.
+  "data/client/gates.json",       # Limits for shader and interface audit checks.
+  "data/client/conventions/**",   # Recordings and moments that demonstrate UI conventions.
+  "data/client/screens.json",     # Expected screens and prompts in recorded examples.
   "data/oracle-divergences.json", # Expected oracle divergences, not rules or card behavior.
   "data/efficiency-changes.json", # Efficiency change log, not product code.
-  "docs/**",                    # Documentation changes are not product fixes.
-  "ignite/checks/**",           # Check family declarations and commands.
+  "docs/**",                      # Documentation changes are not product fixes.
+  "ignite/checks/**",             # Check family declarations and commands.
 ]
 
 # Express landings (docs/ignite.md, "Express landings"). On 2026-11-18 every fix to Ignite's own

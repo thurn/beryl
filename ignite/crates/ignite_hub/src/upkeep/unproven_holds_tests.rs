@@ -251,3 +251,98 @@ fn repeated_observed_failures_on_superseded_tips_switch_off_but_a_single_flake_d
     assert_eq!(check_state(&conn, "counts:rollouts"), "off");
     assert_eq!(check_state(&conn, "rust:flake"), "on");
 }
+
+#[test]
+fn a_check_re_enabled_after_a_failing_tip_is_not_switched_off_for_that_older_tip() {
+    use ignite_core::protocol::hub::CheckState;
+    use ignite_store::hub::check_state::{self, Switch};
+
+    let mut conn = hub::open_in_memory().unwrap();
+    let clock = start();
+    list_check(&mut conn, "counts:family/attachments");
+    verified(&conn, "aaaa", &clock);
+    clock.advance(60.0);
+    failed(&conn, "bbbb", &["counts:family/attachments"], &clock);
+
+    // After an hour the check is switched off, then a worker fixes it and switches it back on.
+    clock.advance(HOLD_SECONDS + 60.0);
+    assert_eq!(pass(&mut conn, &clock), ["counts:family/attachments"]);
+    assert_eq!(check_state(&conn, "counts:family/attachments"), "off");
+
+    clock.advance(60.0);
+    check_state::switch(
+        &conn,
+        &Switch {
+            check: "counts:family/attachments",
+            state: CheckState::On,
+            actor: "worker",
+            machine: "m-1",
+            note: "fixed",
+            ticket: None,
+            at: clock.now(),
+        },
+    )
+    .unwrap();
+
+    // The older failing tip predates the re-enable, so upkeep leaves the check on.
+    clock.advance(30.0);
+    assert!(pass(&mut conn, &clock).is_empty());
+    assert_eq!(check_state(&conn, "counts:family/attachments"), "on");
+
+    // A new failing tip seen after the re-enable starts a fresh hour-long hold.
+    failed(&conn, "cccc", &["counts:family/attachments"], &clock);
+    clock.advance(HOLD_SECONDS - 60.0);
+    assert!(pass(&mut conn, &clock).is_empty());
+    clock.advance(120.0);
+    assert_eq!(pass(&mut conn, &clock), ["counts:family/attachments"]);
+    assert_eq!(check_state(&conn, "counts:family/attachments"), "off");
+}
+
+#[test]
+fn a_check_that_passes_on_a_newer_failed_tip_clears_its_hold() {
+    let mut conn = hub::open_in_memory().unwrap();
+    let clock = start();
+    list_check(&mut conn, "pytest:inputs");
+    list_check(&mut conn, "rust:other");
+    verified(&conn, "aaaa", &clock);
+    clock.advance(60.0);
+    failed(&conn, "bbbb", &["pytest:inputs"], &clock);
+
+    // A newer tip fixes pytest:inputs (recording it in regression_passes) while failing rust:other.
+    clock.advance(600.0);
+    tips::verified(
+        &conn,
+        &TipVerified {
+            commit: Commit::new("cccc").unwrap(),
+            machine: MachineId::new("m-1").unwrap(),
+            state: TipState::Failed,
+            regression_passes: Some(vec![ResultKey {
+                check: CheckName::new("pytest:inputs").unwrap(),
+                hash: InputHash::new("b".repeat(64)).unwrap(),
+                platform: None,
+            }]),
+            failed_descendant: None,
+            failure: Some(TipFailure {
+                checks: vec![ResultKey {
+                    check: CheckName::new("rust:other").unwrap(),
+                    hash: InputHash::new("c".repeat(64)).unwrap(),
+                    platform: None,
+                }],
+                unverified_commits: vec![Commit::new("cccc").unwrap()],
+            }),
+        },
+        clock.now(),
+    )
+    .unwrap();
+
+    // Past an hour from bbbb (and before an hour from cccc), neither check is switched off.
+    clock.advance(HOLD_SECONDS - 500.0);
+    assert!(pass(&mut conn, &clock).is_empty());
+    assert_eq!(check_state(&conn, "pytest:inputs"), "on");
+
+    // Past an hour from cccc, only rust:other is switched off; pytest:inputs stays on.
+    clock.advance(600.0);
+    assert_eq!(pass(&mut conn, &clock), ["rust:other"]);
+    assert_eq!(check_state(&conn, "pytest:inputs"), "on");
+    assert_eq!(check_state(&conn, "rust:other"), "off");
+}

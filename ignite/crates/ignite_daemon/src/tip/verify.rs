@@ -409,14 +409,36 @@ impl TipVerifier {
             } else {
                 // A culprit probe may wait for a build slot. The tip already has a verdict,
                 // so record the exact keys and let a newer candidate run before the search.
+                // Also report any previously failing check or open regression that passed on
+                // this tip so upkeep does not switch off a check that was already repaired
+                // while another check still holds `master` back.
                 let unverified_commits =
                     ignite_git::refs::commits_between(&ctx.repo, last, tip).unwrap_or_default();
+                let previously_failed: HashSet<&CheckName> = self
+                    .failed
+                    .as_ref()
+                    .into_iter()
+                    .flat_map(|failed| failed.checks.iter().map(|key| &key.check))
+                    .collect();
+                let passed: Vec<ResultKey> = checks
+                    .iter()
+                    .filter(|check| {
+                        regressions.contains(&check.check)
+                            || previously_failed.contains(&check.check)
+                    })
+                    .filter(|check| {
+                        verdicts.get(&check.key).is_some_and(|run| {
+                            matches!(run.outcome, Outcome::Pass | Outcome::Flaky)
+                        })
+                    })
+                    .map(|check| check.key.clone())
+                    .collect();
                 ctx.hub
                     .tip_verified(&TipVerified {
                         commit: tip.clone(),
                         machine: ctx.machine.clone(),
                         state: TipState::Failed,
-                        regression_passes: None,
+                        regression_passes: (!passed.is_empty()).then_some(passed),
                         failed_descendant: None,
                         failure: Some(TipFailure {
                             checks: keys.clone(),
