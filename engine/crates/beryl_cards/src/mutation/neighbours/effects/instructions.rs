@@ -1,6 +1,6 @@
 //! The neighbouring values of a single effect instruction, with its children left alone.
 
-use beryl_card::{Condition, Duration, Effect, Filter, Players, PutOnto, Regeneration};
+use beryl_card::{Condition, Effect, Filter, Players, PutOnto, Regeneration};
 
 use super::super::continuous::rules;
 use super::super::operands::{
@@ -11,6 +11,7 @@ use super::super::{Kind, LINKED, Neighbours, leak, leak_slice};
 mod casting;
 mod damage;
 mod faces;
+mod modify;
 mod phases;
 mod turn;
 
@@ -571,69 +572,8 @@ pub(super) fn local(effect: &'static Effect) -> Vec<(Kind, String, Effect)> {
                 );
             }
         }
-        Effect::Modify {
-            objects: which,
-            modifications,
-            duration,
-        } => {
-            for (name, which) in objects(which) {
-                add(
-                    Kind::EffectObjects,
-                    name,
-                    Effect::Modify {
-                        objects: which,
-                        modifications,
-                        duration,
-                    },
-                );
-            }
-            for (kind, name, modifications, duration) in
-                super::super::continuous::modify_neighbours(modifications, duration)
-            {
-                add(
-                    kind,
-                    name,
-                    Effect::Modify {
-                        objects: which,
-                        modifications,
-                        duration,
-                    },
-                );
-            }
-        }
-        Effect::ChangeText {
-            objects: which,
-            words,
-            duration,
-        } => {
-            for (name, which) in objects(which) {
-                let objects = which;
-                add(
-                    Kind::EffectObjects,
-                    name,
-                    Effect::ChangeText {
-                        objects,
-                        words,
-                        duration,
-                    },
-                );
-            }
-            for other in [Duration::EndOfTurn, Duration::Indefinite] {
-                if other != duration {
-                    let (objects, duration) = (which, other);
-                    let mutant = Effect::ChangeText {
-                        objects,
-                        words,
-                        duration,
-                    };
-                    add(
-                        Kind::TextChangeDuration,
-                        format!("lasting {other:?}"),
-                        mutant,
-                    );
-                }
-            }
-        }
+        Effect::Modify { .. } => modify::modify(effect, &mut add),
+        Effect::ChangeText { .. } => modify::change_text(effect, &mut add),
         Effect::ExchangeControl(first, second) => {
             for (name, first) in objects(first) {
                 add(
