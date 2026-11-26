@@ -11,18 +11,25 @@
 //! and the hand, and their piles' boxes are drawn with their names and no edges, as the web's
 //! `TrayPiles` draws them; the table draws the library's card backs under the cards on it.
 //!
+//! Cards ordered on the library in one pile, Arena's "Order Cards" ("Drag cards to order them on
+//! top of your library.", `Qrd11-wXZrk 8:04.0`), lie in one box with no name over it, the
+//! bottom card at the left and the top card at the right, as the session lists them. The
+//! session's words for the row's ends, "Bottom" and "Top" (`words.piles`), are written under
+//! the box's left and right ends, as Arena writes them.
+//!
 //! The flat layer is drawn over the table, so a box is its rim and its name alone, and lets the
 //! pointer through to the cards in it: the web's translucent fill would cover them.
 
 use crate::prompts::Piles;
 use beryl_protocol::prompt::{PromptView, ShapeBody};
 use glam::Vec2;
+use kit_ui::input::Rect;
 
 use crate::hud::HudIn;
 use game_table::table::tray_boxes;
 use kit_base::tokens::{color, size, type_style};
 use kit_text::text::TypeStyle;
-use kit_ui::element::{Anchor, Element, TextAlign, row, text};
+use kit_ui::element::{Anchor, Element, Justify, TextAlign, row, text};
 
 /// The share of a box's heading its name's type takes, and the least size it is drawn at, in
 /// stage pixels: `.stage-tray-label`'s `max(12px, calc(var(--heading) * 0.5))`.
@@ -31,7 +38,8 @@ const LABEL_LEAST: f32 = size::SPLIT_LABEL_LEAST;
 
 /// What the flat layer shows for `prompt`: the prompt bar, and a box round each pile's place in
 /// the tray, its name in the strip over its cards; none for a fan, and none of their edges for
-/// a put-back.
+/// a put-back. A pile ordered on the library has no name over it, and the words for its row's
+/// ends under it.
 pub(super) fn view(prompt: &PromptView, input: &HudIn, bar: Element) -> Element {
     let (ShapeBody::Split { piles }, Some(held)) = (&prompt.body, Piles::of(prompt)) else {
         return bar;
@@ -48,7 +56,10 @@ pub(super) fn view(prompt: &PromptView, input: &HudIn, bar: Element) -> Element 
         ..type_style::BODY
     };
     let edged = !held.put_back();
+    let ordered = held.ordered();
     let boxes = tray_boxes(&held.held(None), space, size);
+    let ends = (ordered.then(|| boxes.first().copied()).flatten())
+        .map(|area| ends(&prompt.words.piles, area, label, space.gap / per_point));
     bar.children(
         held.pile_indices()
             .iter()
@@ -64,16 +75,37 @@ pub(super) fn view(prompt: &PromptView, input: &HudIn, bar: Element) -> Element 
                     pile_box = (pile_box.border((color::TRAY_PILE_RIM, size::TRAY_PILE_BORDER)))
                         .radius(size::TRAY_PILE_RADIUS);
                 }
-                pile_box = pile_box.child(
-                    text(&pile.label)
-                        .style(label)
-                        .color(color::GOLD)
-                        .text_align(TextAlign::Center)
-                        .grow(1.0)
-                        .height(heading),
-                );
+                if !ordered {
+                    pile_box = pile_box.child(
+                        text(&pile.label)
+                            .style(label)
+                            .color(color::GOLD)
+                            .text_align(TextAlign::Center)
+                            .grow(1.0)
+                            .height(heading),
+                    );
+                }
                 pile_box.anchor = Some(Anchor::Point(Vec2::new(area.x, area.y), Vec2::ZERO));
                 pile_box
             }),
     )
+    .children(ends)
+}
+
+/// The words `[left, right]` for the ends of a row of cards in the box `area`, written under
+/// the box's two ends, `gap` below it, in `style`.
+fn ends(words: &[String; 2], area: Rect, style: TypeStyle, gap: f32) -> Element {
+    let [left, right] = words;
+    let word = |words: &str| text(words).style(style).color(color::GOLD);
+    let mut ends = row()
+        .name("ends")
+        .width(area.width)
+        .justify_content(Justify::SpaceBetween)
+        .child(word(left))
+        .child(word(right));
+    ends.anchor = Some(Anchor::Point(
+        Vec2::new(area.x, area.y + area.height + gap),
+        Vec2::ZERO,
+    ));
+    ends
 }

@@ -109,7 +109,7 @@ fn worded(prompt: &Prompt, zone: Option<Zone>, holes: &Holes) -> PromptView {
             no: holes.label(words.no),
             auto: holes.label(words.auto),
             cancel: cancel_word(prompt.purpose).to_owned(),
-            piles: end_words(prompt.purpose)
+            piles: end_words(prompt)
                 .unwrap_or_else(|| prompt.places.map(|place| pile_word(prompt.purpose, place)))
                 .map(str::to_owned),
         },

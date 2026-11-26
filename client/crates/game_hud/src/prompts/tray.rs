@@ -27,6 +27,9 @@ pub struct Piles<'a> {
     indices: [usize; 2],
     count: usize,
     kind: Kind,
+    /// The one pile held is an order on the library: the session lists it the bottom card
+    /// first and names the ends of its row, not the pile (`Words::piles`).
+    ordered: bool,
 }
 
 /// How a tray of piles is laid out (`TrayKind`), without a fan's order.
@@ -80,6 +83,7 @@ impl<'a> Piles<'a> {
             indices: [0, 1],
             count: 1,
             kind: Kind::Boxes,
+            ordered: false,
         };
         match &prompt.body {
             ShapeBody::Pick { tray, .. } if !tray.is_empty() => Some(one(tray)),
@@ -94,6 +98,7 @@ impl<'a> Piles<'a> {
                     indices: [1, 0],
                     count: 1,
                     kind: Kind::SingleBox,
+                    ordered: on_library(second),
                 }),
                 [first, second] if second.closed && second.cards.is_empty() => Some(Self {
                     cards: [&first.cards, &[]],
@@ -101,6 +106,7 @@ impl<'a> Piles<'a> {
                     indices: [0, 1],
                     count: 1,
                     kind: Kind::SingleBox,
+                    ordered: on_library(first),
                 }),
                 [first, second] => Some(Self {
                     cards: [&first.cards, &second.cards],
@@ -108,6 +114,7 @@ impl<'a> Piles<'a> {
                     indices: [0, 1],
                     count: 2,
                     kind: Kind::of(first, second),
+                    ordered: false,
                 }),
                 _ => None,
             },
@@ -155,12 +162,28 @@ impl<'a> Piles<'a> {
         }
     }
 
+    /// Whether the one pile held is an order on the library, Arena's "Order Cards": its row has
+    /// the bottom card at the left and the top card at the right, with the session's words for
+    /// those ends under it in place of the pile's name.
+    #[must_use]
+    pub fn ordered(&self) -> bool {
+        self.ordered
+    }
+
     /// Whether the piles are held up as the library and the hand a put-back takes cards from
     /// and puts them on, rather than in boxes.
     #[must_use]
     pub fn put_back(&self) -> bool {
         self.kind == Kind::PutBack
     }
+}
+
+/// Whether `pile`'s cards go to the library, where it keeps their order.
+fn on_library(pile: &Pile) -> bool {
+    matches!(
+        pile.place,
+        Some(PlaceName::Top | PlaceName::OnTop | PlaceName::Bottom)
+    )
 }
 
 /// Makes what the table shows for the prompt `shown` replace what it showed for `was`, as one

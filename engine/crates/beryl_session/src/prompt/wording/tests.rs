@@ -135,12 +135,22 @@ fn every_purpose_and_button_has_words() {
                 assert!(!words.is_empty(), "{purpose:?} has no words for {button}");
             }
         }
-        // An order's two ends are named, and nothing else has ends.
-        assert_eq!(
-            end_words(purpose).is_some_and(|ends| ends.iter().all(|end| !end.is_empty())),
-            purpose.shape() == Shape::Order,
-            "{purpose:?}"
-        );
+        // An order's two ends are named, and so are a split's at its second part, the one
+        // pile left to order on the library; nothing else has ends.
+        for (part, place) in PARTS.into_iter().flat_map(|part| PLACES.map(|p| (part, p))) {
+            let prompt = Prompt::new(purpose).part(part).places(place, place);
+            let library = matches!(place, Place::Top | Place::OnTop | Place::Bottom);
+            let ordered = purpose.shape() == Shape::Order
+                || (purpose.shape() == Shape::Split
+                    && purpose != Purpose::Scry
+                    && part == Part::Second
+                    && library);
+            assert_eq!(
+                end_words(&prompt).is_some_and(|ends| ends.iter().all(|end| !end.is_empty())),
+                ordered,
+                "{purpose:?} {part:?} {place:?}"
+            );
+        }
         if purpose.shape() == Shape::Split {
             for place in PLACES {
                 // No place has no word, but for the cards that stay where a split found them:
@@ -263,7 +273,12 @@ fn table() -> BTreeSet<&'static str> {
     for &purpose in Purpose::ALL {
         words.extend(entries(purpose).flat_map(|entry| templates(&entry)));
         words.extend(PLACES.map(|place| pile_word(purpose, place)));
-        words.extend(end_words(purpose).into_iter().flatten());
+        for part in PARTS {
+            let prompt = Prompt::new(purpose)
+                .part(part)
+                .places(Place::Top, Place::Top);
+            words.extend(end_words(&prompt).into_iter().flatten());
+        }
         words.insert(cancel_word(purpose));
     }
     words
@@ -296,4 +311,32 @@ fn ui_conventions_quotes_the_tables_composed_words() {
         }
     }
     assert!(listed > 0, "no entry lists the composed words");
+}
+
+/// Cards put back on top of a library in an order of their own ("Order Cards", as Halimar
+/// Depths asks it) lie between "Bottom" at the row's left and "Top" at its right; a scry's
+/// piles keep their names, and the cards a look takes are no order.
+#[test]
+fn cards_ordered_on_the_library_lie_between_bottom_and_top() {
+    let order = |first, second| {
+        Prompt::new(Purpose::Arrange)
+            .part(Part::Second)
+            .places(first, second)
+    };
+    assert_eq!(
+        end_words(&order(Place::Top, Place::Top)),
+        Some(["Bottom", "Top"])
+    );
+    assert_eq!(
+        end_words(&order(Place::Hand, Place::Bottom)),
+        Some(["Bottom", "Top"])
+    );
+    let scry = Prompt::new(Purpose::Scry).places(Place::Bottom, Place::Top);
+    assert_eq!(end_words(&scry.part(Part::Second)), None);
+    assert_eq!(
+        end_words(&order(Place::Hand, Place::Top).part(Part::First)),
+        None
+    );
+    let triggers = Prompt::new(Purpose::TriggerOrder);
+    assert_eq!(end_words(&triggers), Some(["Last", "First"]));
 }

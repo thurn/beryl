@@ -144,6 +144,16 @@ restore the old behavior.
   steps alone. Mind Twist's X stands under the spell between -5, - and +, +5, on
   a button that reads Pay over X = 0, with Cancel (0VsYGs88NXA 55:32.0,
   3sEoP_s4DQE 25:01.0).
+- **Ordering cards on a library.** Cards a player puts back on their library in
+  an order of their choice (Halimar Depths, and the cards a look leaves on top
+  or on the bottom) lie in one row under "Order Cards", the library's top card
+  at the right: "Bottom" is written under the row's left end and "Top" under its
+  right. A card dragged along the row goes where it is let go. A scry keeps its
+  two piles, and cards put back from the hand keep their own screen (exception
+  8). Ponder's "Order Cards", over "Drag cards to order them on top of your
+  library.", has the three cards in a row with Bottom under its left end and Top
+  under its right; Brainstorm's has the same ends (Qrd11-wXZrk 8:04.0,
+  AhTcvQ-lQQQ 4:59.0).
 - **Dividing among targets.** Each target wears its share on its card, between a
   step that raises it and a step that lowers it, under the arrow to it; "Submit"
   answers once everything is given out. The prompt says after what it asks how

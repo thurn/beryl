@@ -15,11 +15,19 @@
 //! The engine asks for the first pile's cards one at a time, then for the order of the
 //! second's ([`Part::First`], [`Part::Second`]): the run makes those picks from the piles as
 //! they stand.
+//!
+//! A prompt that opens at its second part with the cards bound for the library is an order of
+//! one pile, Arena's "Order Cards" ("Drag cards to order them on top of your library.",
+//! `Qrd11-wXZrk 8:04.0`): Arena lays the cards in a row with "Bottom" under its left end and
+//! "Top" under its right ([`end_words`]), so the library's top card is the rightmost. The pile
+//! is listed as the row shows it, the bottom card first ([`Split::rising`]), so that a drop's
+//! place in it is the place the player sees.
 
 use beryl_engine::Layout;
 use beryl_engine::card::{Part, Purpose};
 
 use super::held::{Clicked, Run, Step, Table, Want, offered};
+use super::wording::{end_words, pile_word};
 use super::{ButtonId, Click, Marked, PartName, Pile, PlaceName, PromptButton, PromptView};
 use super::{ObjectId, ShapeBody};
 use crate::protocol::{Candidate, DecisionView};
@@ -38,6 +46,9 @@ pub(crate) struct Split {
     chooses: bool,
     /// The first pile's picks offer an end: it takes any number of the cards.
     ends: bool,
+    /// The second pile is the one pile of an order on the library, and is listed the bottom
+    /// card first, as the screen shows it from left to right.
+    rising: bool,
     confirm: String,
 }
 
@@ -81,19 +92,30 @@ impl Split {
         // The cards still to deal out lie together: on top of the library, where the first
         // not among the picks ends them, or in the hand.
         let lies = prompt.from?;
-        let cards: Vec<ObjectId> = (table.laid_out(lies, table.record.count).into_iter())
+        let mut cards: Vec<ObjectId> = (table.laid_out(lies, table.record.count).into_iter())
             .take_while(|&slot| !table.takes(&[slot], &offered).is_empty())
             .collect();
         let ends = (decision.candidates.iter()).any(|c| c.option == Candidate::Done);
         let all = u8::try_from(cards.len()).unwrap_or(u8::MAX);
+        let record = &table.d?.prompt;
+        let purpose = record.purpose;
         let [to, rest] = table.record.places.map(PlaceName::of);
-        let [to_label, rest_label] = prompt.words.piles.clone();
+        // An order of one pile has the words of its ends where a split has its piles' names.
+        let rising = end_words(record).is_some();
+        let [to_label, rest_label] = if rising {
+            (record.places).map(|place| pile_word(purpose, place).to_owned())
+        } else {
+            prompt.words.piles.clone()
+        };
+        if rising {
+            cards.reverse();
+        }
         let stays = matches!(rest, Some(PlaceName::Top | PlaceName::Bottom));
         let chooses = first && stays && matches!(picks(to), Picks::Any);
         Some(Split {
             dealt: cards.clone(),
             chooses,
-            purpose: table.d?.prompt.purpose,
+            purpose,
             piles: [
                 Pile {
                     place: to,
@@ -111,6 +133,7 @@ impl Split {
                 },
             ],
             ends,
+            rising,
             confirm: prompt.words.confirm.clone(),
         })
     }
@@ -181,7 +204,8 @@ impl Split {
 
     /// The picks that deal the cards out as the piles stand: the first pile's cards, and the
     /// end of them where the engine offers one and cards are left; then the second's, the
-    /// last going unasked as the one left. A pile that keeps an order is picked in it.
+    /// last going unasked as the one left. A pile that keeps an order is picked in it, from
+    /// its cards listed the top first.
     fn run(&self) -> Run {
         let [first, second] = &self.piles;
         let mut steps = Vec::new();
@@ -191,8 +215,12 @@ impl Split {
                 steps.push(Step::One(Part::First, Want::Done));
             }
         }
-        let asked = second.cards.len().saturating_sub(1);
-        steps.extend(picked(Part::Second, second.place, &second.cards[..asked]));
+        let mut rest = second.cards.clone();
+        if self.rising {
+            rest.reverse();
+        }
+        let asked = rest.len().saturating_sub(1);
+        steps.extend(picked(Part::Second, second.place, &rest[..asked]));
         Run::new(self.purpose, steps)
     }
 

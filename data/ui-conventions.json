@@ -470,6 +470,24 @@
     },
     {
       "kind": "settled",
+      "name": "Ordering cards on a library",
+      "rule": "Cards a player puts back on their library in an order of their choice (Halimar Depths, and the cards a look leaves on top or on the bottom) lie in one row under \"Order Cards\", the library's top card at the right: \"Bottom\" is written under the row's left end and \"Top\" under its right. A card dragged along the row goes where it is let go. A scry keeps its two piles, and cards put back from the hand keep their own screen (exception 8).",
+      "arena": {
+        "does": "Ponder's \"Order Cards\", over \"Drag cards to order them on top of your library.\", has the three cards in a row with Bottom under its left end and Top under its right; Brainstorm's has the same ends.",
+        "evidence": [
+          {
+            "recording": "Qrd11-wXZrk",
+            "time": "8:04.0"
+          },
+          {
+            "recording": "AhTcvQ-lQQQ",
+            "time": "4:59.0"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "settled",
       "name": "Dividing among targets",
       "rule": "Each target wears its share on its card, between a step that raises it and a step that lowers it, under the arrow to it; \"Submit\" answers once everything is given out. The prompt says after what it asks how much is still to give, as a cost paid with permanents says what is left.",
       "arena": {

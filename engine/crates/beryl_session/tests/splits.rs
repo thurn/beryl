@@ -7,9 +7,9 @@
 use crate::play;
 
 use beryl_cards::names::{
-    AANGS_ICEBERG, COUNTERSPELL, CURRENCY_CONVERTER, ISLAND, JACE_THE_MIND_SCULPTOR, MANA_CRYPT,
-    MANA_TITHE, OUST, PLAINS, REPRIEVE, STOCK_UP, TEFERI_HERO_OF_DOMINARIA, THIRST_FOR_DISCOVERY,
-    TUNDRA,
+    AANGS_ICEBERG, COUNTERSPELL, CURRENCY_CONVERTER, HALIMAR_DEPTHS, ISLAND,
+    JACE_THE_MIND_SCULPTOR, MANA_CRYPT, MANA_TITHE, OUST, PLAINS, REPRIEVE, STOCK_UP,
+    TEFERI_HERO_OF_DOMINARIA, THIRST_FOR_DISCOVERY, TUNDRA,
 };
 use beryl_engine::TurnStep;
 use beryl_engine::card::Purpose;
@@ -431,6 +431,77 @@ fn cards_are_put_back_from_the_hand_onto_the_library_in_an_order() {
             (SavedKind::ChooseObject, true)
         ]
     );
+}
+
+/// The human's main phase with Halimar Depths to play over a Counterspell, a Reprieve and an
+/// Oust, the Counterspell on top.
+const REORDER: Scenario = Scenario::new("reorder")
+    .at(3, P0, TurnStep::PrecombatMain)
+    .hand(P0, &[HALIMAR_DEPTHS])
+    .library(P0, &[COUNTERSPELL, REPRIEVE, OUST, PLAINS, PLAINS, PLAINS])
+    .library(P1, &[PLAINS; 6]);
+
+/// Plays Halimar Depths and passes until its trigger resolves to the order of the three cards.
+fn to_the_reorder(play: &mut Play) {
+    play.choose(|c| matches!(c, Candidate::PlayLand { .. }));
+    pass(play);
+    assert!(play.decision().prompt.is(Purpose::Arrange));
+}
+
+/// Cards put back on top of the library in an order lie in one row as Arena's "Order Cards"
+/// lays them, the top card at the right: the pile lists them the bottom first. A drop at the
+/// row's right end makes the card the top card, and the button puts them back from the top
+/// down.
+#[test]
+fn cards_ordered_on_top_of_the_library_list_the_top_card_last() {
+    let mut play = Play::scenario(&REORDER);
+    to_the_reorder(&mut play);
+    let [counterspell, reprieve, oust] =
+        [COUNTERSPELL, REPRIEVE, OUST].map(|name| in_library(&play, name));
+    let all = cards(&[counterspell, reprieve, oust]);
+    assert_eq!(
+        play.prompt(),
+        format!(
+            "split arrange: Order Cards\n\
+             pile top \"Top\" closed:\n\
+             pile top \"Top\": #{oust} #{reprieve} #{counterspell}\n\
+             eligible {all}\n\
+             confirm[Done]*\n"
+        )
+    );
+    assert_eq!(
+        play.decision().prompt.words.piles,
+        ["Bottom".to_owned(), "Top".to_owned()]
+    );
+    // Dropped after the Counterspell, at the row's right end, the Oust is the top card.
+    assert_eq!(
+        play.click(drop(oust, 1, 3)).unwrap(),
+        format!(
+            "split arrange: Order Cards\n\
+             pile top \"Top\" closed:\n\
+             pile top \"Top\": #{reprieve} #{counterspell} #{oust}\n\
+             eligible {all}\n\
+             confirm[Done]*\n"
+        )
+    );
+
+    // The button picks the Oust for the top, then the Counterspell under it; the Reprieve
+    // goes under them unasked.
+    let mut picked = Play::scenario(&REORDER);
+    to_the_reorder(&mut picked);
+    for slot in [oust, counterspell] {
+        picked.choose(|c| *c == Candidate::Object { slot });
+    }
+    assert_eq!(play.press(ButtonId::Confirm), None);
+    assert_eq!(play.game.state(), picked.game.state());
+    // The game goes on to the human's next turn, whose draw takes the Oust off the top.
+    let library = &play.view.players.you.library;
+    assert_eq!(
+        library[library.len() - 2..],
+        [reprieve, counterspell],
+        "bottom first"
+    );
+    assert_eq!(play.named(OUST, ZoneName::Hand, Side::You), [oust], "drawn");
 }
 
 /// The human has Teferi, Hero of Dominaria's emblem to get, a Currency Converter, and a Thirst

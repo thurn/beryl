@@ -161,8 +161,9 @@ pub struct Words {
     pub auto: String,
     /// The button that takes the prompt back, where it can be.
     pub cancel: String,
-    /// What each of `places` is called over its pile; or of an order, what its two ends are
-    /// called, the last and then the first.
+    /// What each of `places` is called over its pile; or of an order, what its row's two ends
+    /// are called, the left and then the right: the last trigger to resolve and the first, or
+    /// the bottom and the top of a split's one pile left to order on the library.
     pub piles: [String; 2],
 }
 
@@ -340,7 +341,10 @@ pub struct Pile {
     /// leaves in the hand do.
     pub place: Option<PlaceName>,
     pub label: String,
-    /// The cards in it: where the place keeps an order, as they will lie, the top first.
+    /// The cards in it: where the place keeps an order, as they will lie, the top first; but
+    /// the one pile of an order on the library (a split whose first pile is closed and empty
+    /// and whose [`Words::piles`] name the ends of a row) the bottom first, as its row shows
+    /// them from left to right.
     pub cards: Vec<ObjectId>,
     /// How many it must hold for the prompt to confirm, if a number.
     pub exactly: Option<u8>,

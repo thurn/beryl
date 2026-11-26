@@ -43,7 +43,7 @@
 //!   holds it.
 
 use beryl_engine::Zone;
-use beryl_engine::card::{Part, Place, Prompt, Purpose};
+use beryl_engine::card::{Part, Place, Prompt, Purpose, Shape};
 
 use crate::protocol::Step;
 
@@ -615,12 +615,25 @@ pub(crate) const fn pile_word(purpose: Purpose, place: Place) -> &'static str {
     }
 }
 
-/// What the two ends of an order for `purpose` are called, the last and then the first:
-/// Arena writes "Last" under the left of its browser of triggers and "First" under the right
-/// (`UrGalw_f35w 56:30.5`, `iRr-GeSF0lI 1:01:01.0`). None for a purpose that orders nothing.
-pub(crate) const fn end_words(purpose: Purpose) -> Option<[&'static str; 2]> {
-    match purpose {
+/// What the two ends of the order `prompt` asks are called, the left and then the right. Arena
+/// writes "Last" under the left of its browser of triggers and "First" under the right
+/// (`UrGalw_f35w 56:30.5`, `iRr-GeSF0lI 1:01:01.0`), and "Bottom" under the left of its
+/// "Order Cards" browser and "Top" under the right, for cards ordered on top of a library
+/// (Ponder, `Qrd11-wXZrk 8:04.0`; Brainstorm, `AhTcvQ-lQQQ 4:59.0`). A split's prompt is such an
+/// order where it opens at its second part, the first pile's cards dealt out, with the rest
+/// bound for the library: the one pile left to order. None for a prompt that orders nothing,
+/// and for a scry, whose two piles are named over them (`pile_word`).
+pub(crate) const fn end_words(prompt: &Prompt) -> Option<[&'static str; 2]> {
+    match prompt.purpose {
         Purpose::TriggerOrder => Some(["Last", "First"]),
+        Purpose::Scry => None,
+        purpose
+            if matches!(purpose.shape(), Shape::Split)
+                && matches!(prompt.part, Part::Second)
+                && matches!(prompt.places[1], Place::Top | Place::OnTop | Place::Bottom) =>
+        {
+            Some(["Bottom", "Top"])
+        }
         _ => None,
     }
 }
