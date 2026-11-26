@@ -9,8 +9,11 @@
 //! stays open. The stall revert (`[revert] stall_minutes`) comes later and would revert a product
 //! commit instead, so for these checks deferring is the cheaper remedy.
 //!
-//! - A check holds `master` back when a tip that failed it was seen after the newest verified
-//!   tip. Its hold starts when the first such tip finished verification.
+//! - A check holds `master` back when it fails at a tip seen after the newest verified tip,
+//!   either in a failed tip's verdict (`failure`) or in `observed_failures` on at least
+//!   [`tip_streaks::STREAK`] tips (covering tips that were superseded before finishing or are
+//!   still verifying). Its hold starts when the first such tip was `seen`, so slow tip rounds
+//!   do not extend the hour.
 //! - Its record is `check_fix_outcomes`. Any `product` outcome is evidence of a real defect,
 //!   except for a check in one of the `[rules] budgets` families, whose product fixes are
 //!   performance work to get back under a limit.
@@ -19,17 +22,18 @@
 //! - The switch is recorded with the regression ticket, which gets a comment saying how to
 //!   switch the check back on with its fix.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior};
 
 use ignite_core::config::{Os, Rules};
-use ignite_core::protocol::hub::{CheckState, TipFailure};
+use ignite_core::protocol::hub::{CheckState, ResultKey, TipFailure};
 use ignite_core::protocol::tickets::{BatchRequest, Operation};
 use ignite_core::time::Timestamp;
 use ignite_store::hub::batch::{self, BatchOutcome};
 use ignite_store::hub::check_state::{self, Switch};
 use ignite_store::hub::fleet_settings;
+use ignite_store::hub::tip_streaks;
 use ignite_store::{Result, StoreError};
 
 use super::filing::UPKEEP;
@@ -45,6 +49,8 @@ struct Hold {
     since: Timestamp,
     tip: String,
     platform: Option<Os>,
+    confirmed: bool,
+    tips: usize,
 }
 
 /// Switches off each qualifying check and returns their names.
@@ -101,37 +107,73 @@ pub(super) fn switch_off(
     Ok(switched)
 }
 
-/// Every check that failed at a tip seen after the newest verified tip, with when it first did.
+/// Every check that failed at tips seen after the newest verified tip, with when the first such
+/// tip was seen. A check observed only on superseded or still-verifying tips qualifies once it
+/// has failed on at least [`tip_streaks::STREAK`] tips, so a one-off flake on a single
+/// superseded tip is ignored.
 fn holds(conn: &Connection) -> Result<BTreeMap<String, Hold>> {
     let mut select = conn.prepare(
-        "SELECT commit_sha, verified, failure FROM tips
-         WHERE state = 'failed' AND failure IS NOT NULL AND verified IS NOT NULL
+        "SELECT commit_sha, seen, failure, observed_failures FROM tips
+         WHERE (failure IS NOT NULL OR observed_failures IS NOT NULL)
            AND seen > coalesce((SELECT max(seen) FROM tips WHERE state = 'verified'), '')
-         ORDER BY verified, commit_sha",
+         ORDER BY seen, commit_sha",
     )?;
     let rows = select
         .query_map([], |row| {
             Ok((
                 row.get::<_, String>(0)?,
                 row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
+                row.get::<_, Option<String>>(2)?,
+                row.get::<_, Option<String>>(3)?,
             ))
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
-    let mut holds = BTreeMap::new();
-    for (tip, verified, failure) in rows {
-        let failure: TipFailure = serde_json::from_str(&failure)
-            .map_err(|error| StoreError::Invalid(format!("a tip's failed checks: {error}")))?;
-        let since = parse_time(&verified)?;
-        for key in failure.checks {
-            holds.entry(key.check.to_string()).or_insert_with(|| Hold {
-                since,
-                tip: tip.clone(),
-                platform: key.platform,
-            });
+    let mut holds: BTreeMap<String, Hold> = BTreeMap::new();
+    for (tip, seen, failure, observed) in rows {
+        let since = parse_time(&seen)?;
+        let mut seen_on_tip = BTreeSet::new();
+        if let Some(failure) = failure {
+            let failure: TipFailure = serde_json::from_str(&failure)
+                .map_err(|error| StoreError::Invalid(format!("a tip's failed checks: {error}")))?;
+            for key in &failure.checks {
+                record_hold(&mut holds, &mut seen_on_tip, &tip, since, key, true);
+            }
+        }
+        if let Some(observed) = observed {
+            let observed: Vec<ResultKey> = serde_json::from_str(&observed)
+                .map_err(|error| StoreError::Invalid(format!("observed tip failures: {error}")))?;
+            for key in &observed {
+                record_hold(&mut holds, &mut seen_on_tip, &tip, since, key, false);
+            }
         }
     }
+    holds.retain(|_, hold| hold.confirmed || hold.tips >= tip_streaks::STREAK);
     Ok(holds)
+}
+
+fn record_hold(
+    holds: &mut BTreeMap<String, Hold>,
+    seen_on_tip: &mut BTreeSet<String>,
+    tip: &str,
+    since: Timestamp,
+    key: &ResultKey,
+    confirmed: bool,
+) {
+    let name = key.check.to_string();
+    let first_on_tip = seen_on_tip.insert(name.clone());
+    let entry = holds.entry(name).or_insert_with(|| Hold {
+        since,
+        tip: tip.to_owned(),
+        platform: key.platform,
+        confirmed: false,
+        tips: 0,
+    });
+    if confirmed {
+        entry.confirmed = true;
+    }
+    if first_on_tip {
+        entry.tips += 1;
+    }
 }
 
 /// Whether a fix of `check` ever changed product behavior, counting only a fix outside the

@@ -151,3 +151,68 @@ fn a_failure_before_the_newest_verified_tip_holds_nothing() {
     assert!(pass(&mut conn, &clock).is_empty());
     assert_eq!(check_state(&conn, "rust:frames"), "on");
 }
+
+fn observed_superseded(conn: &Connection, commit: &str, checks: &[&str], clock: &FakeClock) {
+    let keys: Vec<ResultKey> = checks
+        .iter()
+        .map(|check| ResultKey {
+            check: CheckName::new(*check).unwrap(),
+            hash: InputHash::new("a".repeat(64)).unwrap(),
+            platform: None,
+        })
+        .collect();
+    let observed = serde_json::to_string(&keys).unwrap();
+    conn.execute(
+        "INSERT INTO tips (commit_sha, seen, state, observed_failures)
+         VALUES (?1, ?2, 'superseded', ?3)",
+        params![commit, clock.now().to_string(), observed],
+    )
+    .unwrap();
+}
+
+#[test]
+fn hold_duration_starts_when_the_first_failing_tip_was_seen() {
+    let mut conn = hub::open_in_memory().unwrap();
+    let clock = start();
+    list_check(&mut conn, "counts:family/attachments");
+    verified(&conn, "aaaa", &clock);
+    clock.advance(60.0);
+    // The tip lands at t0, but its slow round finishes failing 40 minutes later.
+    let seen = clock.now();
+    conn.execute(
+        "INSERT INTO tips (commit_sha, seen, state) VALUES ('bbbb', ?1, 'verifying')",
+        params![seen.to_string()],
+    )
+    .unwrap();
+    clock.advance(2400.0);
+    failed(&conn, "bbbb", &["counts:family/attachments"], &clock);
+
+    // 20 minutes after failure (60 minutes after the tip landed), the hold has reached an hour.
+    clock.advance(HOLD_SECONDS - 2400.0);
+    assert_eq!(pass(&mut conn, &clock), ["counts:family/attachments"]);
+    assert_eq!(check_state(&conn, "counts:family/attachments"), "off");
+}
+
+#[test]
+fn repeated_observed_failures_on_superseded_tips_switch_off_but_a_single_flake_does_not() {
+    let mut conn = hub::open_in_memory().unwrap();
+    let clock = start();
+    list_check(&mut conn, "counts:rollouts");
+    list_check(&mut conn, "rust:flake");
+    verified(&conn, "aaaa", &clock);
+    clock.advance(60.0);
+    observed_superseded(&conn, "bbbb", &["counts:rollouts", "rust:flake"], &clock);
+    clock.advance(600.0);
+    observed_superseded(&conn, "cccc", &["counts:rollouts"], &clock);
+
+    clock.advance(HOLD_SECONDS - 660.0);
+    assert!(
+        pass(&mut conn, &clock).is_empty(),
+        "an hour has not elapsed since the first superseded tip was seen"
+    );
+
+    clock.advance(60.0);
+    assert_eq!(pass(&mut conn, &clock), ["counts:rollouts"]);
+    assert_eq!(check_state(&conn, "counts:rollouts"), "off");
+    assert_eq!(check_state(&conn, "rust:flake"), "on");
+}

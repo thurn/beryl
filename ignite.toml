@@ -196,6 +196,8 @@ seconds = 60        # of running checks per landing
 report_only = ["tier-gap"]
 protected = [
   "native-app",
+  "native-ios",
+  "native-android",
   "clippy",
   "pyre",
   "source",

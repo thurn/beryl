@@ -188,6 +188,8 @@ fn the_repository_configuration_parses() {
         Rules {
             protected: [
                 "native-app",
+                "native-ios",
+                "native-android",
                 "clippy",
                 "pyre",
                 "source",

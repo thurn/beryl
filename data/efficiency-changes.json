@@ -1020,5 +1020,10 @@
     "label": "Added always-on Antigravity rules in `.agents/rules/agy-efficiency.md` instructing `agy` sessions to search with `rg -n` and read narrow line ranges instead of whole files, limit screenshot reads, offload broad multi-file surveys to the `research` subagent on `flash`, and refresh the 5-minute prompt cache every 240 s during long waits (2026-11-25)",
     "metric": "bead.dollars",
     "expect": "down"
+  },
+  {
+    "label": "Upkeep measures an unproven check's hold on `master` from when the first failing tip was seen rather than when its round finished, and counts repeated `observed_failures` on superseded or still-verifying tips while keeping `native-ios` and `native-android` protected. On 2026-11-25 `counts:rollouts` failed on ten consecutive superseded tips for 2.5 hours without triggering a switch-off, and on 2026-11-26 six Windows `counts:family` checks held `master` for 90 minutes because a 38-minute Windows tip round delayed the hold clock",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]
