@@ -133,8 +133,9 @@ pub(crate) struct Motion<'a> {
     closing: Vec<Option<Closing>>,
     stack_closing: Vec<Closing>,
     /// The cards a step moved to a place a row has scrolled out of view, each with when it
-    /// arrived and the step's number, until a later step moves it again (`hide_on_arrival`).
-    hidden: Vec<(usize, u64, usize)>,
+    /// arrived, the step's number and which step time its arriving segment follows, until a
+    /// later step moves it again (`hide_on_arrival`).
+    hidden: Vec<hidden::Hidden>,
     /// The groups the step being played placed again and its number, while one is played.
     playing: Option<([bool; Group::ALL.len()], usize)>,
     /// The cards the opponent is handling as the steps so far leave the table, which the table

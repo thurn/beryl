@@ -19,8 +19,19 @@ use super::Motion;
 use crate::verbs::{self, Interval};
 use beryl_protocol::protocol::ZoneName;
 use game_table::table::{Place, Placement, Rest};
-use kit_base::pose::{Pose, Segment};
+use kit_base::pose::{Pose, Segment, StepTime};
 use kit_space::motion::Track;
+
+/// A card a step left outside a scrolled container's window, kept until a later step moves it
+/// (`Motion::reveal`). `step` is the `StepTime` of the segment that arrived there, so the
+/// instant segment that hides it shifts with its arrival if the script is laid out again.
+#[derive(Clone, Copy)]
+pub(super) struct Hidden {
+    slot: usize,
+    arrived: u64,
+    number: usize,
+    step: Option<StepTime>,
+}
 
 /// Whether `rest` is a place a container that scrolls has scrolled out of view: a row (of the
 /// battlefield, or of the cards exiled until a permanent leaves), the stack or a hand. A card
@@ -143,16 +154,19 @@ impl Motion<'_> {
         let Some((_, number)) = self.playing else {
             return;
         };
-        let Some(end) = (self.tracks.get(slot))
-            .and_then(|track| track.segments().last())
-            .map(Segment::end)
-        else {
+        let Some(&last) = (self.tracks.get(slot)).and_then(|track| track.segments().last()) else {
             return;
         };
-        if let Some(entry) = self.hidden.iter_mut().find(|(hidden, ..)| *hidden == slot) {
-            *entry = (slot, end, number);
+        let hidden = Hidden {
+            slot,
+            arrived: last.end(),
+            number,
+            step: last.step,
+        };
+        if let Some(entry) = self.hidden.iter_mut().find(|entry| entry.slot == slot) {
+            *entry = hidden;
         } else {
-            self.hidden.push((slot, end, number));
+            self.hidden.push(hidden);
         }
     }
 
@@ -161,22 +175,25 @@ impl Motion<'_> {
     /// segment of the same step, such as the second part of a flight that pauses, is part of
     /// the same move and hides nothing.
     pub(super) fn reveal(&mut self, slot: usize, start: u64) {
-        let Some(index) = self.hidden.iter().position(|&(hidden, ..)| hidden == slot) else {
+        let Some(index) = self.hidden.iter().position(|entry| entry.slot == slot) else {
             return;
         };
-        let (_, arrived, number) = self.hidden[index];
-        if self.playing.is_some_and(|(_, playing)| playing == number) {
+        let hidden = self.hidden[index];
+        if self
+            .playing
+            .is_some_and(|(_, playing)| playing == hidden.number)
+        {
             return;
         }
         self.hidden.swap_remove(index);
-        if arrived < start {
-            let at = self.pose(slot, arrived);
+        if hidden.arrived < start {
+            let at = self.pose(slot, hidden.arrived);
             let gone = Pose { opacity: 0.0, ..at };
-            self.append(
-                slot,
-                verbs::instant(at, gone, arrived),
-                Cause::Change(number),
-            );
+            let hide = Segment {
+                step: hidden.step,
+                ..verbs::instant(at, gone, hidden.arrived)
+            };
+            self.append(slot, hide, Cause::Change(hidden.number));
         }
     }
 }

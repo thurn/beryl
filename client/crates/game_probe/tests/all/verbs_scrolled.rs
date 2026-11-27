@@ -4,9 +4,10 @@
 
 use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::{CardType, ObjectId, PlayerView, Side, StackItem, Why, ZoneName};
-use beryl_protocol::script::{Act, Subject, Table as Played, time_script};
+use beryl_protocol::script::{Act, Arrow, Span as Edge, Subject, Table as Played, time_script};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, object};
 use game_play::play::Show;
+use game_probe::agent::steps::{no_jumps, rest_equals_placement};
 use game_table::table::{Place, Table};
 use kit_frame::frame::{Frame, Resolved, Role, StateBits};
 use kit_probe::agent::checks::reachable;
@@ -199,6 +200,108 @@ fn lands_beyond_a_scrolled_row_stay_undrawn_while_the_lands_before_them_leave() 
     let (before, after) = lands_case();
     let window = compact_window(375.0, 647.0);
     for frame in still_frames(375.0, 647.0, &before, &after) {
+        assert_eq!(card_faults(&frame, window, reachable), Vec::<String>::new());
+    }
+}
+
+#[test]
+fn a_relayed_script_hiding_and_revealing_a_scrolled_card_does_not_jump() {
+    let mut view = ViewBuilder::new();
+    let creatures: Vec<ObjectId> = (0..5)
+        .map(|index| {
+            let creature = view.card(
+                ZoneName::Battlefield,
+                Side::Opponent,
+                &format!("Creature {index}"),
+            );
+            creature.types = vec![CardType::Creature];
+            creature.slot
+        })
+        .collect();
+    let arriving = view.card(ZoneName::Stack, Side::Opponent, "Sixth Creature");
+    arriving.types = vec![CardType::Creature];
+    let arriving = arriving.slot;
+    view.script(ScriptBuilder::reset().build());
+    let before = view.update();
+
+    let mut landed = (before.view.objects.iter())
+        .find(|object| object.slot == arriving)
+        .expect("the spell is on the stack")
+        .clone();
+    landed.zone = ZoneName::Battlefield;
+
+    let leaving = creatures[0];
+    let mut exiled = (before.view.objects.iter())
+        .find(|object| object.slot == leaving)
+        .expect("the creature is on the battlefield")
+        .clone();
+    exiled.zone = ZoneName::Exile;
+
+    let point = |span| Act::Point {
+        span,
+        arrow: Arrow::FriendlyTarget,
+        from: Subject::Object { slot: arriving },
+        to: Subject::Object { slot: leaving },
+    };
+    let acts = vec![
+        point(Edge::Begin),
+        point(Edge::End),
+        Act::Fly {
+            from: ZoneName::Stack,
+            why: Why::Resolve,
+            object: landed.clone(),
+            at: None,
+            item: None,
+            origin: None,
+        },
+        Act::Vanish {
+            subject: Subject::Object { slot: leaving },
+            from: ZoneName::Battlefield,
+            why: Why::Exile,
+            object: Some(exiled.clone()),
+            at: None,
+        },
+    ];
+    let after = scripted(&before, acts, |view| {
+        view.stack.clear();
+        view.battlefield.retain(|&slot| slot != leaving);
+        view.battlefield.push(arriving);
+        for object in &mut view.objects {
+            if object.slot == arriving {
+                *object = landed.clone();
+            } else if object.slot == leaving {
+                *object = exiled.clone();
+            }
+        }
+    });
+
+    let window = compact_window(375.0, 647.0);
+    let mut show = Show::new(Table::new(crate::test_data::data(), window));
+    show.record();
+    let mut scratch = empty_frame();
+    show.push(Box::new(before.clone()), Vec::new());
+    frame(&mut show, &mut scratch, 0);
+    let script = after.view.script.as_ref().expect("a script");
+    let timings = time_script(script, &Played::of(&before.view));
+    show.push(Box::new(after), timings);
+
+    let mut frames = Vec::new();
+    let mut now = 10 * MS;
+    while now < 10_000 * MS {
+        let drawn = frame(&mut show, &mut scratch, now);
+        let still = !(drawn.resolved.iter()).any(|element| element.state.has(StateBits::MOVING));
+        if still && !show.settled() {
+            frames.push(drawn);
+        }
+        now += 10 * MS;
+    }
+    assert_eq!(show.relays(), 1, "the span hold relays the script");
+    assert!(!frames.is_empty(), "a frame between steps was drawn");
+    for record in show.history() {
+        assert_eq!(no_jumps(record), Vec::new());
+        assert_eq!(rest_equals_placement(record), Vec::new());
+    }
+    for frame in frames {
         assert_eq!(card_faults(&frame, window, reachable), Vec::<String>::new());
     }
 }
