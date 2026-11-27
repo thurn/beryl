@@ -185,6 +185,12 @@ impl Motion<'_> {
 /// the script leads to puts out of view (`placement`), at the pose it rests in there. The
 /// scene does not draw a card resting out of view once its track has settled, and the checks
 /// ask that every track end where its card rests (`rest_equals_placement`).
+///
+/// The segment that restores the card keeps to the time of the step whose segment it follows.
+/// A script laid out again as it starts moves every segment a step made with that step's time,
+/// and one made by no step stays where it is. On the phone layout, a card hidden by a step that
+/// later moved was restored at the step's old time, before it was hidden, so it ended the script
+/// unseen in a place the view shows it.
 pub(crate) fn restore_hidden(
     tracks: &mut [Track],
     records: &mut Vec<SegmentRecord>,
@@ -200,7 +206,10 @@ pub(crate) fn restore_hidden(
         if last.to.opacity > 0.0 || rest.visible {
             continue;
         }
-        let restore = verbs::instant(last.to, rest.pose, last.end());
+        let restore = Segment {
+            step: last.step,
+            ..verbs::instant(last.to, rest.pose, last.end())
+        };
         track.append(restore);
         if let Some(cause) = (records.iter().rev())
             .find(|record| record.slot == slot)
