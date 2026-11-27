@@ -14,6 +14,7 @@ use beryl_kernel::memos::LinkKind;
 use beryl_kernel::reference::Current;
 use beryl_kernel::{Number as _, SignedNumber as _, UnsignedNumber as _};
 
+use crate::PlayerSet;
 use crate::bitboard::Bitboard;
 use crate::card::Castings;
 use crate::casting;
@@ -24,11 +25,10 @@ use crate::objects::linked;
 use crate::query::Copiable;
 use crate::stack::trigger::entered_with;
 use crate::state::{
-    placed, AbilityRef, AbilityTarget, Count, CountersHeld, ObjectRef, PendingTrigger, State,
-    Target, TargetPlace, TargetPlaces, Tracker, Zone, ZoneKey, TARGETS,
+    AbilityRef, AbilityTarget, Count, CountersHeld, ObjectRef, PendingTrigger, State, TARGETS,
+    Target, TargetPlace, TargetPlaces, Tracker, Zone, ZoneKey, placed,
 };
 use crate::table::GameTable;
-use crate::PlayerSet;
 
 /// What the instruction before did (`beryl_card`'s `effect` module, "What the instruction
 /// before did"): the objects it acted on, as they are now, how many or how much it did, and
