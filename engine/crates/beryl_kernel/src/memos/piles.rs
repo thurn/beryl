@@ -51,7 +51,8 @@ impl<L: Layout> State<L> {
                 | Memo::Solved
                 | Memo::CombatBand(_)
                 | Memo::Prepared(_)
-                | Memo::Cast => None,
+                | Memo::Cast
+                | Memo::Convoked(_) => None,
             })
             .unwrap_or_else(|| super::Link::to(self.object_ref(slot)));
         let mut together = Bitboard::single(slot);

@@ -376,7 +376,8 @@ impl Objects {
             | Objects::TriggeredOnIn(_)
             | Objects::Carried
             | Objects::ExiledWithThis
-            | Objects::PutOntoBattlefieldWithThis => {}
+            | Objects::PutOntoBattlefieldWithThis
+            | Objects::Convoked => {}
             Objects::All { filter, .. } | Objects::Everywhere(filter) => filter.walk(visit),
             Objects::InZoneOf {
                 players, filter, ..

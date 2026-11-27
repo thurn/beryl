@@ -354,6 +354,7 @@ impl Scope<'_> {
             | Objects::LibraryTop { .. }
             | Objects::ExceptThose(_)
             | Objects::PutOntoBattlefieldWithThis
+            | Objects::Convoked
             | Objects::Carried
             | Objects::All { .. }
             | Objects::InZoneOf { .. }
@@ -488,6 +489,7 @@ impl Scope<'_> {
             | Objects::LibraryTop { .. }
             | Objects::ExceptThose(_)
             | Objects::PutOntoBattlefieldWithThis
+            | Objects::Convoked
             | Objects::Carried
             | Objects::All { .. }
             | Objects::InZoneOf { .. }
@@ -505,7 +507,8 @@ impl Scope<'_> {
             | Objects::Those
             | Objects::Paid(_)
             | Objects::ExiledWithThis
-            | Objects::PutOntoBattlefieldWithThis => Ok(()),
+            | Objects::PutOntoBattlefieldWithThis
+            | Objects::Convoked => Ok(()),
             Objects::TriggeredOn | Objects::TriggeredOnIn(_) => match self.ability.trigger() {
                 Some(_) => Ok(()),
                 None => Err(Malformed::TriggeredOn),

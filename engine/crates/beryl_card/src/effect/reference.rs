@@ -65,6 +65,15 @@ pub enum Objects {
     /// Animate Dead's delayed ability sacrifices. Known whether or not this is still where it
     /// was, as long as no new object has arrived in its place.
     PutOntoBattlefieldWithThis,
+    /// "Each creature that convoked it": the creatures on the battlefield that were tapped to
+    /// pay for this spell's convoke cost ([CR 702.51a]): "For each colored mana in this spell's
+    /// total cost, you may tap an untapped creature of that color you control rather than pay
+    /// that mana. For each generic mana in this spell's total cost, you may tap an untapped
+    /// creature you control rather than pay that mana." Known whether or not this permanent is
+    /// still on the battlefield; a creature that left the battlefield is no longer among them.
+    ///
+    /// [CR 702.51a]: https://yawgatog.com/resources/magic-rules/#R70251a
+    Convoked,
     /// The object a delayed triggered ability carries from the effect that created it
     /// ([`crate::Effect::Delay`]): "that card" in "return that card to the battlefield at the
     /// beginning of the next end step". It is the object as it was when the delayed ability
@@ -147,6 +156,7 @@ impl Objects {
             | Objects::TriggeredOnIn(_)
             | Objects::ExiledWithThis
             | Objects::PutOntoBattlefieldWithThis
+            | Objects::Convoked
             | Objects::Carried
             | Objects::All { .. }
             | Objects::InZoneOf { .. }
@@ -258,7 +268,8 @@ impl Objects {
             Objects::This
             | Objects::AttachedTo
             | Objects::ExiledWithThis
-            | Objects::PutOntoBattlefieldWithThis => false,
+            | Objects::PutOntoBattlefieldWithThis
+            | Objects::Convoked => false,
             Objects::Target(_)
             | Objects::Those
             | Objects::Paid(_)

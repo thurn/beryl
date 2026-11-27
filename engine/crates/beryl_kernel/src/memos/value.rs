@@ -28,6 +28,7 @@ impl<L: Layout> Memo<L> {
             Memo::Prepared(_) => Kinds::PREPARED,
             Memo::CastFromGraveyard => Kinds::CAST_FROM_GRAVEYARD,
             Memo::ControlledBy(_) => Kinds::CONTROLLED_BY,
+            Memo::Convoked(_) => Kinds::CONVOKED,
         }
     }
 
@@ -51,7 +52,8 @@ impl<L: Layout> Memo<L> {
             | Memo::ClassLevel(_)
             | Memo::CombatBand(_)
             | Memo::Solved
-            | Memo::Prepared(_) => Zone::Battlefield,
+            | Memo::Prepared(_)
+            | Memo::Convoked(_) => Zone::Battlefield,
             Memo::ExiledWith(_) | Memo::ExiledUntil(_) | Memo::ExiledFromPileOf(_) => Zone::Exile,
             Memo::PartOf(_) => Zone::Merged,
         }
@@ -96,7 +98,8 @@ impl<L: Layout> Memo<L> {
             Memo::ExiledWith(link)
             | Memo::PutOntoBattlefieldWith(link)
             | Memo::ExiledUntil(link)
-            | Memo::ExiledFromPileOf(link) => Some(link.slot),
+            | Memo::ExiledFromPileOf(link)
+            | Memo::Convoked(link) => Some(link.slot),
             Memo::PartOf(of) => Some(of),
         }
     }
@@ -116,6 +119,7 @@ impl<L: Layout> Memo<L> {
             // (see CR 113.7a).
             Memo::ExiledWith(_)
             | Memo::PutOntoBattlefieldWith(_)
+            | Memo::Convoked(_)
             | Memo::Really(_)
             | Memo::PhasedOutUnder(_)
             | Memo::ControlledBy(_)
@@ -162,12 +166,18 @@ impl<L: Layout> Memo<L> {
             Memo::CombatBand(band) => Memo::CombatBand(slot(band)),
             Memo::Prepared(copy) => Memo::Prepared(copy.map(slot)),
             Memo::CastFromGraveyard => Memo::CastFromGraveyard,
+            Memo::Convoked(link) => Memo::Convoked(link.relayout()),
         }
     }
 
-    /// Whether `other` is of the same variant: an object has one memo of each.
+    /// Whether `other` duplicates this memo on the same object: every variant but
+    /// [`Memo::Convoked`] appears at most once per object, while a creature that untaps may
+    /// convoke more than one spell in a turn, never the same spell twice.
     #[inline]
     pub(super) fn same_variant(self, other: Memo<L>) -> bool {
-        std::mem::discriminant(&self) == std::mem::discriminant(&other)
+        match (self, other) {
+            (Memo::Convoked(a), Memo::Convoked(b)) => a == b,
+            _ => std::mem::discriminant(&self) == std::mem::discriminant(&other),
+        }
     }
 }

@@ -14,20 +14,21 @@ use beryl_kernel::memos::LinkKind;
 use beryl_kernel::reference::Current;
 use beryl_kernel::{Number as _, SignedNumber as _, UnsignedNumber as _};
 
-use crate::PlayerSet;
 use crate::bitboard::Bitboard;
 use crate::card::Castings;
 use crate::casting;
 use crate::filter::{Evaluate, Filter};
 use crate::ids::Seat;
 use crate::layout::{Layout, PerPlayer, Table};
+use crate::objects::linked;
 use crate::query::Copiable;
 use crate::stack::trigger::entered_with;
 use crate::state::{
-    AbilityRef, AbilityTarget, Count, CountersHeld, ObjectRef, PendingTrigger, State, TARGETS,
-    Target, TargetPlace, TargetPlaces, Tracker, Zone, ZoneKey, placed,
+    placed, AbilityRef, AbilityTarget, Count, CountersHeld, ObjectRef, PendingTrigger, State,
+    Target, TargetPlace, TargetPlaces, Tracker, Zone, ZoneKey, TARGETS,
 };
 use crate::table::GameTable;
+use crate::PlayerSet;
 
 /// What the instruction before did (`beryl_card`'s `effect` module, "What the instruction
 /// before did"): the objects it acted on, as they are now, how many or how much it did, and
@@ -218,6 +219,7 @@ impl<L: Layout> Scene<'_, L> {
             | Objects::LibraryTop { .. }
             | Objects::ExceptThose(_)
             | Objects::PutOntoBattlefieldWithThis
+            | Objects::Convoked
             | Objects::All { .. }
             | Objects::InZoneOf { .. }
             | Objects::CardsIn { .. }
@@ -300,21 +302,17 @@ impl<L: Layout> Scene<'_, L> {
                 .triggered_on()
                 .filter(|&object| s.object(object.slot).zone() == zone)
                 .map_or(Bitboard::EMPTY, |object| Bitboard::single(object.slot)),
-            // See CR 607.2a: "The second ability refers only to cards in the exile zone that
-            // were put there as a result of an instruction to exile them in the first
-            // ability." An ability of an object that has left still refers to the cards
-            // that object exiled, whether or not it is current, and never to those of a new
-            // object in its slot (see CR 400.7).
-            Objects::ExiledWithThis => {
-                let link = LinkKind::ExiledWith;
-                (self.subject.of.source).map_or(Bitboard::EMPTY, |source| s.linked(link, source))
-            }
-            // "That creature": the permanents an ability of the source put onto the
-            // battlefield and that are still there, whether or not the source is.
-            Objects::PutOntoBattlefieldWithThis => {
-                let link = LinkKind::PutOntoBattlefieldWith;
-                (self.subject.of.source).map_or(Bitboard::EMPTY, |source| s.linked(link, source))
-            }
+            // See CR 607.2a: cards exiled with or put onto the battlefield with this object,
+            // whether or not this object is still current (see CR 400.7).
+            Objects::ExiledWithThis => (self.subject.of.source)
+                .map_or(Bitboard::EMPTY, |s0| s.linked(LinkKind::ExiledWith, s0)),
+            Objects::PutOntoBattlefieldWithThis => (self.subject.of.source)
+                .map_or(Bitboard::EMPTY, |s0| {
+                    s.linked(LinkKind::PutOntoBattlefieldWith, s0)
+                }),
+            Objects::Convoked => (self.subject.of.source).map_or(Bitboard::EMPTY, |s0| {
+                linked::convoked(s, self.t, s0, self.you())
+            }),
             Objects::Paid(_) => {
                 unreachable!("the card table refuses an effect that names what a cost took")
             }

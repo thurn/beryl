@@ -128,6 +128,7 @@ impl Moved {
             | Objects::LibraryTop { .. }
             | Objects::ExceptThose(_)
             | Objects::PutOntoBattlefieldWithThis
+            | Objects::Convoked
             | Objects::All { .. }
             | Objects::InZoneOf { .. }
             | Objects::CardsIn { .. }
@@ -151,6 +152,7 @@ impl Moved {
             | Objects::LibraryTop { .. }
             | Objects::ExceptThose(_)
             | Objects::PutOntoBattlefieldWithThis
+            | Objects::Convoked
             | Objects::Carried
             | Objects::All { .. }
             | Objects::InZoneOf { .. }

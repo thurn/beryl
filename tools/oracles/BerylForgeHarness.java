@@ -1075,7 +1075,7 @@ public final class BerylForgeHarness {
         static final Set<Keyword> SNAPSHOT_KEYWORDS = Set.of(
                 Keyword.BANDING, Keyword.MENACE, Keyword.FIRST_STRIKE, Keyword.DOUBLE_STRIKE, Keyword.FLYING, Keyword.REACH,
                 Keyword.VIGILANCE,
-                Keyword.FLASH, Keyword.HASTE, Keyword.DELVE, Keyword.TRAMPLE, Keyword.LIFELINK,
+                Keyword.FLASH, Keyword.HASTE, Keyword.DELVE, Keyword.CONVOKE, Keyword.TRAMPLE, Keyword.LIFELINK,
                 Keyword.INDESTRUCTIBLE, Keyword.CHANGELING);
 
         static List<String> strings(JsonArray values) {

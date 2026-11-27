@@ -24,6 +24,7 @@ import mage.abilities.common.SagaAbility;
 import mage.abilities.common.SimpleStaticAbility;
 import mage.abilities.effects.ContinuousRuleModifyingEffectImpl;
 import mage.abilities.keyword.ChangelingAbility;
+import mage.abilities.keyword.ConvokeAbility;
 import mage.abilities.keyword.BandingAbility;
 import mage.abilities.keyword.DoubleStrikeAbility;
 import mage.abilities.keyword.DelveAbility;
@@ -712,6 +713,7 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
         SNAPSHOT_KEYWORDS.put("FLASH", FlashAbility.class);
         SNAPSHOT_KEYWORDS.put("HASTE", HasteAbility.class);
         SNAPSHOT_KEYWORDS.put("DELVE", DelveAbility.class);
+        SNAPSHOT_KEYWORDS.put("CONVOKE", ConvokeAbility.class);
         SNAPSHOT_KEYWORDS.put("TRAMPLE", TrampleAbility.class);
         SNAPSHOT_KEYWORDS.put("LIFELINK", LifelinkAbility.class);
         SNAPSHOT_KEYWORDS.put("INDESTRUCTIBLE", IndestructibleAbility.class);

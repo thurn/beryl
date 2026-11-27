@@ -3,16 +3,18 @@
 //!
 //! Implements: CR 607.2a
 
-use beryl_card::Objects;
+use beryl_card::{Objects, Types};
 
 use crate::actions::exile;
 use crate::bitboard::Bitboard;
+use crate::filter::{Evaluate, Filter};
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::interpret::{Outcome, Run};
 use crate::layout::{Layout, Queue};
-use crate::state::{Memo, ObjectRef, Zone};
+use crate::state::{Memo, ObjectRef, State, Zone};
+use crate::table::GameTable;
 use beryl_kernel::memos::LinkKind;
 
 /// Exiles a card, linked to `source`, the object whose ability exiles it, so that the
@@ -88,4 +90,20 @@ pub(crate) fn exile_instruction<L: Layout>(
     let taker = run.taker();
     exile_and_link(run.game(), taker, cards, source)?;
     Ok(run.now_in(cards, Zone::Exile))
+}
+
+/// The creatures on the battlefield that convoked `source` (see
+/// [CR 702.51a](https://yawgatog.com/resources/magic-rules/#R70251a)).
+pub(crate) fn convoked<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    source: ObjectRef<L>,
+    you: Seat,
+) -> Bitboard<L::Slot> {
+    let convokers = s.linked(LinkKind::Convoked, source);
+    if convokers.is_empty() {
+        return Bitboard::EMPTY;
+    }
+    let on_board: Bitboard<_> = s.battlefield().iter().copied().collect();
+    Filter::Types(Types::CREATURE).select(s, t, convokers & on_board, you, &beryl_card::Words::NONE)
 }

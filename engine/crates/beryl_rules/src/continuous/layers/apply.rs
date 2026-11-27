@@ -321,6 +321,7 @@ pub(super) fn static_members<L: Layout>(
         | Objects::LibraryTop { .. }
         | Objects::ExceptThose(_)
         | Objects::PutOntoBattlefieldWithThis
+        | Objects::Convoked
         | Objects::InZoneOf { .. }
         | Objects::CardsIn { .. }
         | Objects::Paid(_) => {

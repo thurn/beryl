@@ -133,6 +133,7 @@ fn reference_grants<L: Layout>(
                 | Objects::LibraryTop { .. }
                 | Objects::ExceptThose(_)
                 | Objects::PutOntoBattlefieldWithThis
+                | Objects::Convoked
                 | Objects::Carried
                 | Objects::InZoneOf { .. }
                 | Objects::CardsIn { .. }

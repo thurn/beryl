@@ -142,6 +142,7 @@ impl Ctx {
                 format!("{} other than those", self.objects(*objects))
             }
             Objects::PutOntoBattlefieldWithThis => "that creature".to_owned(),
+            Objects::Convoked => "each creature that convoked it".to_owned(),
             Objects::Carried => "that card".to_owned(),
             Objects::All { zone, filter } => {
                 let kind = Kind::of_zone(zone);
@@ -204,6 +205,7 @@ impl Ctx {
         match objects {
             Objects::ExiledWithThis => format!("a card exiled with {}", self.this),
             Objects::PutOntoBattlefieldWithThis => "that creature".to_owned(),
+            Objects::Convoked => "a creature that convoked it".to_owned(),
             Objects::All { zone, filter } => {
                 let kind = Kind::of_zone(zone);
                 self.noun(filter, kind).indefinite(kind)
@@ -294,6 +296,7 @@ impl Ctx {
             | Objects::LibraryTop { .. }
             | Objects::ExceptThose(_)
             | Objects::PutOntoBattlefieldWithThis
+            | Objects::Convoked
             | Objects::Carried
             | Objects::CardsIn { .. }
             | Objects::Everywhere(_)
@@ -326,6 +329,7 @@ impl Ctx {
             | Objects::LibraryTop { .. }
             | Objects::ExceptThose(_)
             | Objects::PutOntoBattlefieldWithThis
+            | Objects::Convoked
             | Objects::Carried
             | Objects::All { .. }
             | Objects::InZoneOf { .. }
@@ -350,6 +354,7 @@ impl Ctx {
             Objects::Everywhere(filter) => zone_of(filter).is_none(),
             // "Each other creature is": one at a time.
             Objects::PutOntoBattlefieldWithThis
+            | Objects::Convoked
             | Objects::This
             | Objects::AttachedTo
             | Objects::TriggeredOn
@@ -621,6 +626,7 @@ impl Ctx {
             | Objects::LibraryTop { .. }
             | Objects::ExceptThose(_)
             | Objects::PutOntoBattlefieldWithThis
+            | Objects::Convoked
             | Objects::Carried
             | Objects::CardsIn { .. }
             | Objects::Everywhere(_)

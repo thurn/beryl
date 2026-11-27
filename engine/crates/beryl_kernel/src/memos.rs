@@ -208,6 +208,14 @@ pub enum Memo<L: Layout = Small> {
     /// game with a card whose static ability changes control
     /// ([`crate::Capability::StaticControl`]).
     ControlledBy(Seat),
+    /// This creature was tapped to convoke the spell named by the link, or the permanent that
+    /// spell became as it resolved (see [CR 702.51a]). Written only in a game with a card
+    /// that reads [`beryl_card::Objects::Convoked`] ([`crate::Capability::ReadsConvokers`]),
+    /// re-pointed when the spell enters the battlefield, and removed when the spell leaves the
+    /// stack any other way or at cleanup.
+    ///
+    /// [CR 702.51a]: https://yawgatog.com/resources/magic-rules/#R70251a
+    Convoked(Link<L>),
 }
 
 /// The kinds of memo among a store's entries: its index by kind, so that a reader of a kind
@@ -237,17 +245,22 @@ impl Kinds {
     const TURNS_UP: u32 = 1 << 24;
     const CAST_FROM_GRAVEYARD: u32 = 1 << 25;
     const CONTROLLED_BY: u32 = 1 << 26;
+    const CONVOKED: u32 = 1 << 27;
     /// The kinds whose memo names a slot ([`Memo::names`]).
     const NAMING: u32 = Kinds::EXILED_WITH
         | Kinds::EXILED_UNTIL
         | Kinds::PUT_WITH
         | Kinds::PART_OF
         | Kinds::PREPARED
-        | Kinds::EXILED_FROM_PILE;
+        | Kinds::EXILED_FROM_PILE
+        | Kinds::CONVOKED;
     /// The kinds whose memo may end as a new object arrives in the slot it names
     /// ([`State::forget_links_to`]).
-    const LINKS: u32 =
-        Kinds::EXILED_WITH | Kinds::PUT_WITH | Kinds::EXILED_UNTIL | Kinds::EXILED_FROM_PILE;
+    const LINKS: u32 = Kinds::EXILED_WITH
+        | Kinds::PUT_WITH
+        | Kinds::EXILED_UNTIL
+        | Kinds::EXILED_FROM_PILE
+        | Kinds::CONVOKED;
 
     /// The bits of the kinds of cost in `paid`.
     #[inline]
@@ -375,10 +388,15 @@ impl<L: Layout> Store<L> for Memos<L> {
         self.end(|e| e.slot != slot)
     }
 
-    /// Nothing: a memo lasts as long as its object and no longer.
+    /// Convoke memos last until cleanup ([`Duration::EndOfTurn`]); every other memo lasts as
+    /// long as its object and no longer.
     #[inline]
-    fn expire(&mut self, _: Duration) -> Ended {
-        Ended::default()
+    fn expire(&mut self, ended: Duration) -> Ended {
+        if ended == Duration::EndOfTurn && self.kinds.0 & Kinds::CONVOKED != 0 {
+            self.end(|e| !matches!(e.memo, Memo::Convoked(_)))
+        } else {
+            Ended::default()
+        }
     }
 
     fn fits<M: Layout>(&self) -> Result<(), Misfit> {

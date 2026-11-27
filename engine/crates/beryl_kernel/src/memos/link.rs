@@ -9,7 +9,7 @@
 
 use crate::bitboard::Bitboard;
 use crate::ids::SlotId;
-use crate::layout::Layout;
+use crate::layout::{Layout, Queue};
 use crate::object::ObjectRef;
 use crate::relayout::slot;
 
@@ -97,6 +97,8 @@ pub enum LinkKind {
     /// A permanent was put onto the battlefield with the source
     /// ([`Memo::PutOntoBattlefieldWith`]).
     PutOntoBattlefieldWith,
+    /// A creature tapped to convoke the spell, or the permanent it became ([`Memo::Convoked`]).
+    Convoked,
 }
 
 impl LinkKind {
@@ -106,6 +108,7 @@ impl LinkKind {
         match self {
             LinkKind::ExiledWith => Kinds::EXILED_WITH,
             LinkKind::PutOntoBattlefieldWith => Kinds::PUT_WITH,
+            LinkKind::Convoked => Kinds::CONVOKED,
         }
     }
 }
@@ -118,6 +121,7 @@ impl<L: Layout> Memo<L> {
         match kind {
             LinkKind::ExiledWith => Memo::ExiledWith(link),
             LinkKind::PutOntoBattlefieldWith => Memo::PutOntoBattlefieldWith(link),
+            LinkKind::Convoked => Memo::Convoked(link),
         }
     }
 }
@@ -163,9 +167,8 @@ impl<L: Layout> crate::state::State<L> {
             Memo::ExiledWith(link)
             | Memo::PutOntoBattlefieldWith(link)
             | Memo::ExiledUntil(link)
-            | Memo::ExiledFromPileOf(link) => {
-                !(link.slot == slot && link.shares_generation(incarnation))
-            }
+            | Memo::ExiledFromPileOf(link)
+            | Memo::Convoked(link) => !(link.slot == slot && link.shares_generation(incarnation)),
             Memo::Paid(_)
             | Memo::X(_)
             | Memo::Chosen(_)
@@ -183,6 +186,46 @@ impl<L: Layout> crate::state::State<L> {
             | Memo::Prepared(_)
             | Memo::Cast => true,
         });
+        self.settle_ended(done);
+    }
+
+    /// Re-points every [`Memo::Convoked`] naming `spell` at the `permanent` it resolved into.
+    /// With no convoke memo in the game, one AND.
+    #[inline]
+    pub fn repoint_convoked(&mut self, spell: ObjectRef<L>, permanent: ObjectRef<L>) {
+        if self.memos.kinds.0 & Kinds::CONVOKED != 0 {
+            self.repoint_convoked_of(spell, permanent);
+        }
+    }
+
+    /// The rare path of [`State::repoint_convoked`], out of line.
+    #[cold]
+    #[inline(never)]
+    fn repoint_convoked_of(&mut self, spell: ObjectRef<L>, permanent: ObjectRef<L>) {
+        let from = Memo::Convoked(Link::to(spell));
+        let to = Memo::Convoked(Link::to(permanent));
+        for e in self.memos.entries.as_mut_slice() {
+            if e.memo == from {
+                e.memo = to;
+            }
+        }
+    }
+
+    /// Ends every [`Memo::Convoked`] naming `spell` when it leaves the stack without becoming
+    /// a permanent. With no convoke memo in the game, one AND.
+    #[inline]
+    pub(crate) fn forget_convoked(&mut self, spell: ObjectRef<L>) {
+        if self.memos.kinds.0 & Kinds::CONVOKED != 0 {
+            self.forget_convoked_of(spell);
+        }
+    }
+
+    /// The rare path of [`State::forget_convoked`], out of line.
+    #[cold]
+    #[inline(never)]
+    fn forget_convoked_of(&mut self, spell: ObjectRef<L>) {
+        let target = Memo::Convoked(Link::to(spell));
+        let done = self.memos.end(|e| e.memo != target);
         self.settle_ended(done);
     }
 }

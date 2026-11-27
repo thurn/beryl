@@ -215,10 +215,16 @@ pub enum Capability {
     /// A card grants another permanent a plain mana ability ([`crate::table::is_simple`]), so
     /// the layers note when any such grant is in effect for [`crate::State::makes_card_mana`].
     GrantsMana,
+    /// A card reads [`beryl_card::Objects::Convoked`], the creatures that convoked a spell
+    /// (see [CR 702.51a]). Without it, tapping a creature for convoke writes no memo and
+    /// resolving a spell re-points none.
+    ///
+    /// [CR 702.51a]: https://yawgatog.com/resources/magic-rules/#R70251a
+    ReadsConvokers,
 }
 
 // The game keeps its capabilities in a `u64`.
-const _: () = assert!((Capability::GrantsMana as u32) < u64::BITS);
+const _: () = assert!((Capability::ReadsConvokers as u32) < u64::BITS);
 
 impl Capability {
     /// The capabilities of every face and subtype the game can contain.
@@ -600,6 +606,7 @@ fn facts_read_by(ability: &Ability) -> u64 {
             Node::Filter(Filter::AttackedThisTurn) => Capability::AttackedThisTurn.bit(),
             Node::Condition(Condition::Cast(_)) => Capability::RemembersCast.bit(),
             Node::Filter(Filter::ManaValueAtMostPower) => Capability::ReadsSourcePower.bit(),
+            Node::Objects(Objects::Convoked) => Capability::ReadsConvokers.bit(),
             Node::Filter(_) | Node::Amount(_) | Node::Condition(_) | Node::Objects(_) => 0,
         };
     });

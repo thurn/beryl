@@ -32,7 +32,7 @@ use crate::state::{
     CounterKind, Pending, PendingTrigger, StackEntry, StackItem, State, TargetPlaces, Zone,
     hidden_pick_answer, placed,
 };
-use crate::table::GameTable;
+use crate::table::{Capability, GameTable};
 use crate::{interpret, replacement};
 
 /// Resolves the top of the stack, or continues a paused resolution with its record.
@@ -619,6 +619,9 @@ fn enter_battlefield<L: Layout>(
         && let Some(permanent) = s.permanent_at(spell.slot)
     {
         s.carry_spell_shields(spell, permanent);
+    }
+    if t.can(Capability::ReadsConvokers) && s.permanent_at(spell.slot).is_some() {
+        s.repoint_convoked(spell, s.object_ref(spell.slot));
     }
     Ok(())
 }

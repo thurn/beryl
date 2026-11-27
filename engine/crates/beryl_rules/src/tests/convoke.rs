@@ -6,17 +6,22 @@ use super::LAND;
 use super::cast::{Game, cast};
 use crate::Choice;
 use crate::card::{
-    Ability, CardDef, Colors, Face, Keywords, ManaColor, ManaCost, ManaSet, Subtype, SubtypeWords,
-    Subtypes, Supertypes, Types,
+    Ability, CardDef, Colors, Face, Keywords, ManaColor, ManaCost, ManaSet, Objects, Subtype,
+    SubtypeWords, Subtypes, Supertypes, Types,
 };
 use crate::decision::Opt;
 use crate::ids::Slot;
 use crate::replacement::event::Sink;
 use crate::rng::SplitMix64;
-use crate::state::Zone;
+use crate::state::{CounterKind, Memo, Zone};
+use crate::table::Capability;
 use crate::{CardTable, DecisionKind, Decklist, Profile};
-use beryl_card::effect::build::{draw, you};
+use beryl_card::effect::build::{add_counters, draw, you};
+use beryl_card::phrases::when_enters;
 use beryl_kernel::format::Format;
+use beryl_kernel::memos::Link;
+use beryl_kernel::store::Duration;
+use beryl_kernel::zone::Place;
 
 const fn cost(generic: u8, w: u8, g: u8) -> ManaCost {
     ManaCost::new(generic, [w, 0, 0, 0, g, 0])
@@ -368,4 +373,116 @@ fn every_sequence_of_offered_picks_ends_with_the_cost_paid() {
         cast_count += 1;
     }
     assert!(cast_count > 50, "only {cast_count} cast");
+}
+
+static CONVOKE_READER: CardDef = CardDef {
+    name: "Test Loxodon",
+    shape: beryl_card::definition::Shape::Single,
+    tokens: &[],
+    faces: &[Face {
+        cost: cost(1, 1, 0),
+        colors: Colors::WHITE,
+        types: Types::CREATURE,
+        power: Some(4),
+        toughness: Some(4),
+        keywords: Keywords::CONVOKE,
+        abilities: &[when_enters(&add_counters(
+            Objects::Convoked,
+            CounterKind::PlusOne,
+            1,
+        ))],
+        ..Face::EMPTY
+    }],
+};
+
+static READER_CARDS: CardTable = CardTable::new(&[&LAND, &WHITE, &CONVOKE_READER]);
+
+const READER_DECK: &Decklist = &[(4, "Test Land"), (4, "Test White"), (4, "Test Loxodon")];
+
+/// A game whose cards never read `Objects::Convoked` has no `Capability::ReadsConvokers` and
+/// writes no `Memo::Convoked` when a creature convokes a spell.
+#[test]
+fn without_reads_convokers_convoke_writes_no_memo() {
+    let mut g = game();
+    assert!(!g.t.can(Capability::ReadsConvokers));
+    let spell = g.give(g.me, "Test Chorus", Zone::Hand);
+    let white = g.give(g.me, "Test White", Zone::Battlefield);
+    g.give(g.me, "Test Forest", Zone::Battlefield);
+    g.give(g.me, "Test Land", Zone::Battlefield);
+    refresh(&mut g);
+    g.pick(cast(spell));
+    assert!(g.s.object(white).is_tapped());
+    assert_eq!(g.s.memos(white).iter().count(), 0);
+}
+
+/// Convoke memos point at the spell on the stack, re-point at the permanent on resolution,
+/// allow the same creature to convoke a second spell after untapping, and are removed when a
+/// spell leaves the stack without entering the battlefield or at cleanup.
+#[test]
+fn convoke_memos_repoint_on_resolution_and_clear_on_cleanup_or_leaving_stack() {
+    let mut g = Game::with(&READER_CARDS, READER_DECK, Profile::EXACT);
+    assert!(g.t.can(Capability::ReadsConvokers));
+    let first = g.give(g.me, "Test Loxodon", Zone::Hand);
+    let creature = g.give(g.me, "Test White", Zone::Battlefield);
+    let land = g.give(g.me, "Test Land", Zone::Battlefield);
+    refresh(&mut g);
+
+    // Cast first spell with creature convoking {W} and land paying {1}.
+    g.pick(cast(first));
+    assert_eq!(g.s.object(first).zone(), Zone::Stack);
+    let first_spell_ref = g.s.object_ref(first);
+    assert!(
+        g.s.memos(creature)
+            .iter()
+            .any(|m| m == Memo::Convoked(Link::to(first_spell_ref)))
+    );
+
+    // Resolve spell -> enters battlefield, memo re-points at permanent; resolve ETB trigger.
+    g.pass_both();
+    assert_eq!(g.s.object(first).zone(), Zone::Battlefield);
+    let first_perm_ref = g.s.object_ref(first);
+    assert!(
+        g.s.memos(creature)
+            .iter()
+            .any(|m| m == Memo::Convoked(Link::to(first_perm_ref)))
+    );
+    g.pass_both();
+    assert_eq!(g.s.object(creature).counters().plus_one, 1);
+
+    // Untap creature and land, convoke a second spell in the same turn: no duplicate panic,
+    // both memos coexist, and the creature gets a second +1/+1 counter.
+    let second = g.give(g.me, "Test Loxodon", Zone::Hand);
+    {
+        let mut board = g.s.board();
+        board.set_tapped(creature, false);
+        board.set_tapped(land, false);
+        board.set_tapped(first, true);
+    }
+    refresh(&mut g);
+    g.pick(cast(second));
+    g.pass_both();
+    g.pass_both();
+    assert_eq!(g.s.object(creature).counters().plus_one, 2);
+    assert_eq!(g.s.check_invariants(&g.t), Ok(()));
+
+    // Cleanup removes all convoke memos.
+    g.s.expire(Duration::EndOfTurn);
+    assert_eq!(g.s.memos(creature).iter().count(), 0);
+
+    // A spell leaving the stack without becoming a permanent removes its convoke memos.
+    let third = g.give(g.me, "Test Loxodon", Zone::Hand);
+    {
+        let mut board = g.s.board();
+        board.set_tapped(creature, false);
+        board.set_tapped(land, false);
+        board.set_tapped(second, true);
+    }
+    refresh(&mut g);
+    g.pick(cast(third));
+    assert_eq!(g.s.memos(creature).iter().count(), 1);
+    g.s.take_top_of_stack();
+    g.s.move_object(&mut Sink::off(), third, Zone::Graveyard, Place::Top)
+        .unwrap();
+    assert_eq!(g.s.memos(creature).iter().count(), 0);
+    assert_eq!(g.s.check_invariants(&g.t), Ok(()));
 }

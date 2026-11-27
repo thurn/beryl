@@ -177,6 +177,7 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
     ("costs", names::VILLAGE_RITES, costs::SACRIFICE_TO_CAST),
     ("costs", names::SPARAS_HEADQUARTERS, costs::CYCLING),
     ("costs", names::CHORD_OF_CALLING, costs::CONVOKE),
+    ("costs", names::VENERATED_LOXODON, costs::CONVOKED),
     ("damage", names::MANA_CRYPT, damage::SCENARIOS),
     ("damage", names::LIGHTNING_BOLT, damage::ANY_TARGET),
     (

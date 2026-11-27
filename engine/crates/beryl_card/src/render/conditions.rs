@@ -97,6 +97,7 @@ impl Ctx {
             | Objects::LibraryTop { .. }
             | Objects::ExceptThose(_)
             | Objects::PutOntoBattlefieldWithThis
+            | Objects::Convoked
             | Objects::Carried
             | Objects::All { .. }
             | Objects::InZoneOf { .. }
@@ -137,6 +138,7 @@ impl Ctx {
             | Objects::LibraryTop { .. }
             | Objects::ExceptThose(_)
             | Objects::PutOntoBattlefieldWithThis
+            | Objects::Convoked
             | Objects::Carried
             | Objects::All { .. }
             | Objects::InZoneOf { .. }
@@ -440,6 +442,7 @@ fn whole_zone(objects: Objects) -> Option<(Players, Zone)> {
         | Objects::LibraryTop { .. }
         | Objects::ExceptThose(_)
         | Objects::PutOntoBattlefieldWithThis
+        | Objects::Convoked
         | Objects::Carried
         | Objects::All { .. }
         | Objects::InZoneOf { .. }

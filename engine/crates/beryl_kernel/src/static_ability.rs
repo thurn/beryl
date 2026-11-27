@@ -326,6 +326,7 @@ fn found_by_the_layers(affected: Objects) -> bool {
         | Objects::LibraryTop { .. }
         | Objects::ExceptThose(_)
         | Objects::PutOntoBattlefieldWithThis
+        | Objects::Convoked
         | Objects::InZoneOf { .. }
         | Objects::CardsIn { .. }
         | Objects::All { .. }

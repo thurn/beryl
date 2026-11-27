@@ -16,7 +16,8 @@ use crate::layout::{Layout, PileCards, Piles, Queue, Table};
 use crate::reference::{CardIn, Library};
 use crate::rng::SplitMix64;
 use crate::state::{
-    CombatRole, Counters, Derived, Flag, Object, State, Tracked, Zone, ZoneKey, is_shared,
+    CombatRole, Counters, Derived, Flag, Object, ObjectRef, State, Tracked, Zone, ZoneKey,
+    is_shared,
 };
 use crate::store::{Store, Stored};
 use beryl_card::FaceIx;
@@ -121,6 +122,7 @@ impl<L: Layout> State<L> {
             self.reveal(sink, o.owner, slot);
         }
         let from = o.zone;
+        let old_incarnation = o.incarnation;
         // A token copy stays one ([`State::carried_copy`]); a card under a copy effect is the
         // card it really is again, with the effect ended with the rest of what the stores hold
         // ([`crate::Memo::Really`]).
@@ -192,6 +194,12 @@ impl<L: Layout> State<L> {
         }
         if matches!(to, Zone::Battlefield | Zone::Nowhere) {
             self.forget_links_to(slot);
+        }
+        if from == Zone::Stack && to != Zone::Battlefield {
+            self.forget_convoked(ObjectRef {
+                slot,
+                incarnation: old_incarnation,
+            });
         }
         // See CR 400.2: cards in public zones are seen by every player.
         if to.is_public() && !stays_down {

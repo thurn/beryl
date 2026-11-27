@@ -26,8 +26,9 @@ use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
 use crate::mana::{self, Funds};
 use crate::replacement::event::{self, Sink};
-use crate::state::{Casting, StackEntry, StackItem, State, Zone};
-use crate::table::GameTable;
+use crate::state::{Casting, Memo, StackEntry, StackItem, State, Zone};
+use crate::table::{Capability, GameTable};
+use beryl_kernel::memos::Link;
 
 use super::parts::candidates;
 
@@ -279,7 +280,9 @@ pub(super) fn pay_with<L: Layout>(
     slot: L::Slot,
     color: Option<ManaColor>,
 ) -> Result<(), Full> {
-    let cost = super::costs::total_cost(s, t, super::steps::top(s), c);
+    let entry = super::steps::top(s);
+    let spell = entry.spell();
+    let cost = super::costs::total_cost(s, t, entry, c);
     let colors = kinds(s, CONVOKE_PART, slot) & colors_left(cost);
     let paid = color.map(ManaColor::index).or_else(|| {
         (colors != 0).then(|| usize::try_from(colors.trailing_zeros()).expect("a color"))
@@ -288,10 +291,16 @@ pub(super) fn pay_with<L: Layout>(
         Some(color) => c.pay_color(color)?,
         None => c.substituted += 1,
     }
-    match s.permanent_at(slot) {
-        Some(permanent) => event::set_tapped(s, t, sink, permanent, true),
-        None => Ok(()),
+    if let Some(permanent) = s.permanent_at(slot) {
+        event::set_tapped(s, t, sink, permanent, true)?;
+        if t.can(Capability::ReadsConvokers)
+            && s.permanent_at(slot).is_some()
+            && let Some(spell) = spell
+        {
+            s.remember(slot, Memo::Convoked(Link::to(spell)))?;
+        }
     }
+    Ok(())
 }
 
 /// Whether `player` can pay `cost` for casting the card in `slot`, in their hand, as its face

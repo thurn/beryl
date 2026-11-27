@@ -632,6 +632,7 @@ pub(crate) fn choose_instruction<L: Layout>(
         | Objects::LibraryTop { .. }
         | Objects::ExceptThose(_)
         | Objects::PutOntoBattlefieldWithThis
+        | Objects::Convoked
         | Objects::Carried
         | Objects::All { .. }
         | Objects::CardsIn { .. }

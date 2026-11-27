@@ -82,6 +82,7 @@ pub(crate) fn instruction<L: Layout>(
         | Objects::LibraryTop { .. }
         | Objects::ExceptThose(_)
         | Objects::PutOntoBattlefieldWithThis
+        | Objects::Convoked
         | Objects::Carried
         | Objects::All { .. }
         | Objects::InZoneOf { .. }

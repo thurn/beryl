@@ -1,9 +1,10 @@
 //! Costs ([CR 118](https://yawgatog.com/resources/magic-rules/#R118)) paid to cast a spell,
 //! activate an ability, or carry out an instruction during resolution.
 
+use beryl_engine::state::CounterKind;
 use beryl_engine::{DecisionKind, TurnStep, Zone};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
-use beryl_scenario_types::{ME, Resolve, stack};
+use beryl_scenario_types::{ME, Resolve, THEM, stack};
 
 use crate::{names, props};
 
@@ -202,4 +203,104 @@ pub const CONVOKE: &[Scenario] = &[
         ME.picks_up_to(props::FLASH_CREATURE.card),
         ME.controls(props::FLASH_CREATURE.card, 1),
     ]),
+];
+
+const LOXODON: &str = names::VENERATED_LOXODON;
+
+/// Creatures that convoked a spell ([CR 702.51a]): Venerated Loxodon remembers the creatures
+/// tapped to pay for its convoke cost across entering the battlefield, puts a +1/+1 counter on
+/// each still on the battlefield when its enters trigger resolves, and ignores creatures that
+/// were tapped for mana rather than for convoke.
+///
+/// [CR 702.51a]: https://yawgatog.com/resources/magic-rules/#R70251a
+pub const CONVOKED: &[Scenario] = &[
+    // Two Plains and three creatures pay {4}{W}: all three creatures convoke, and each gets a
+    // +1/+1 counter when Venerated Loxodon's enters trigger resolves.
+    Scenario::new("each creature that convoked a spell gets a counter")
+        .battlefield(P0, &[names::PLAINS, names::PLAINS, BEARS, WOLF, THOPTER])
+        .hand(P0, &[LOXODON])
+        .actions(&[
+            ME.casts(LOXODON),
+            ME.chooses(DecisionKind::ManaPayment, WOLF),
+            ME.chooses(DecisionKind::ManaPayment, BEARS),
+            ME.tapped(WOLF, 1),
+            ME.tapped(BEARS, 1),
+            ME.tapped(THOPTER, 1),
+            ME.tapped(names::PLAINS, 2),
+            Resolve,
+            Resolve,
+            ME.counters(WOLF, CounterKind::PlusOne, 1),
+            ME.counters(BEARS, CounterKind::PlusOne, 1),
+            ME.counters(THOPTER, CounterKind::PlusOne, 1),
+            ME.counters(LOXODON, CounterKind::PlusOne, 0),
+        ]),
+    // One of the three convoking creatures leaves the battlefield before the enters trigger
+    // resolves; only the two still on the battlefield get counters.
+    Scenario::new("a convoking creature that left before the trigger resolves gets no counter")
+        .battlefield(P0, &[names::PLAINS, names::PLAINS, BEARS, WOLF, THOPTER])
+        .battlefield(P1, &[names::ISLAND; 3])
+        .hand(P0, &[LOXODON])
+        .hand(P1, &[props::REMOVAL.card])
+        .actions(&[
+            ME.casts(LOXODON),
+            ME.chooses(DecisionKind::ManaPayment, WOLF),
+            ME.chooses(DecisionKind::ManaPayment, BEARS),
+            Resolve,
+            ME.passes(),
+            THEM.casts(props::REMOVAL.card),
+            THEM.targets(THOPTER),
+            ME.controls(THOPTER, 0),
+            ME.has(Zone::Hand, THOPTER, 1),
+            Resolve,
+            ME.counters(WOLF, CounterKind::PlusOne, 1),
+            ME.counters(BEARS, CounterKind::PlusOne, 1),
+            ME.counters(LOXODON, CounterKind::PlusOne, 0),
+        ]),
+    // Cast with mana alone: no creature convoked it, so none gets a counter.
+    Scenario::new("casting with mana alone puts no counters on creatures")
+        .battlefield(
+            P0,
+            &[
+                names::PLAINS,
+                names::PLAINS,
+                names::PLAINS,
+                names::PLAINS,
+                names::PLAINS,
+                BEARS,
+            ],
+        )
+        .hand(P0, &[LOXODON])
+        .actions(&[
+            ME.casts(LOXODON),
+            ME.answers(DecisionKind::ManaPayment, Pick::Done),
+            ME.tapped(BEARS, 0),
+            ME.tapped(names::PLAINS, 5),
+            Resolve,
+            Resolve,
+            ME.counters(BEARS, CounterKind::PlusOne, 0),
+            ME.counters(LOXODON, CounterKind::PlusOne, 0),
+        ]),
+    // Gold Myr is colorless, so it must tap for {W} mana rather than convoke {4}{W}: it gets
+    // no counter even though it was tapped while casting Venerated Loxodon.
+    Scenario::new("a creature tapped for mana rather than convoke gets no counter")
+        .battlefield(
+            P0,
+            &[
+                names::ISLAND,
+                names::ISLAND,
+                names::ISLAND,
+                names::ISLAND,
+                names::GOLD_MYR,
+            ],
+        )
+        .hand(P0, &[LOXODON])
+        .actions(&[
+            ME.casts(LOXODON),
+            ME.tapped(names::GOLD_MYR, 1),
+            ME.tapped(names::ISLAND, 4),
+            Resolve,
+            Resolve,
+            ME.counters(names::GOLD_MYR, CounterKind::PlusOne, 0),
+            ME.counters(LOXODON, CounterKind::PlusOne, 0),
+        ]),
 ];
