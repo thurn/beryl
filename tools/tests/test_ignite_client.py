@@ -92,14 +92,14 @@ def test_windows_replay_and_stress_checks_defer_until_after_promotion() -> None:
         "client-test",
         "client-corpus",
         "client-gate",
+        "client-validation",
         adapter.FRAME_LIMITS_FAMILY,
         "client-frame-counts",
         "client-frame-trend",
     ):
         assert families[name]["defer_platforms"] == ["windows"], name
-    for name in ("client-clippy", "client-validation"):
-        assert families[name]["platforms"] == ["macos", "windows"], name
-        assert "defer_platforms" not in families[name], name
+    assert families["client-clippy"]["platforms"] == ["macos", "windows"]
+    assert "defer_platforms" not in families["client-clippy"]
 
 
 def test_frame_budgets_are_advisory_and_client_expectations_are_test_paths() -> None:
