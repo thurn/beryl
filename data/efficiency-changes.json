@@ -1110,5 +1110,10 @@
     "label": "`ignite-platform` builds and lists only the three test targets its filter selects (`ignite_os`, `ignite_daemon`, and `ignite_cli`'s `ignite` binary) via `ignite-platform-tests` instead of building all 28+ test binaries of `ignite-tests` in Windows tip rounds",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
+  },
+  {
+    "label": "The non-resumable verb stall watch (`server/stalled.rs`) no longer treats raw process-group CPU usage as progress and persists its last progress state in `verbs/<handle>/stall.json` across daemon restarts, so CPU-bound hangs and frequent daemon upgrades can no longer keep a stuck `tip-round` alive past `STALL_LIMIT` (20 min). On 2026-11-27, `T-16028` spun in `git grep` on jarvis for 78+ min across four daemon restarts while 30 product commits waited on `staging`",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]

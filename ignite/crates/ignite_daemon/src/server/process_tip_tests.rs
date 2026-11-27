@@ -865,3 +865,66 @@ fn an_adopted_tip_round_with_a_long_step_is_not_ended_and_no_second_round_starts
     assert_eq!(cut_turn.unwrap(), Some((tip, TipOutcome::Verified)));
     assert_eq!(machine.threads.started.load(Ordering::SeqCst), 1);
 }
+
+/// On 2026-11-27 four daemon restarts reset the in-memory stall clock of a hung `tip-round`
+/// (`T-16028`), and re-reporting its unchanged step after each restart reset it again. Persisting
+/// the last progress timestamp in `verbs/<handle>/stall.json` keeps the stall clock running
+/// across daemon restarts and unchanged step re-reports.
+#[test]
+fn a_stalled_tip_round_keeps_its_stall_clock_across_daemon_restarts() {
+    let machine = TipMachine::new("stalled-across-restart");
+    machine.threads.hang_first.store(true, Ordering::SeqCst);
+    let (ctx, tip) = (
+        machine.threads.ctx.clone(),
+        machine.git.tip("staging").unwrap(),
+    );
+    let (first, first_loop) = machine.daemon();
+    machine.switch.set(Some(first.clone()));
+    let cut = turn_on_a_thread(first_loop, ctx.clone());
+    assert!(until(|| lock(&machine.hung.lock).is_some()));
+    let (hung, _) = first.running_internal(ROUND_VERB).unwrap();
+    // Simulate a step reported before the hang, then wait past half of STALL_LIMIT.
+    first
+        .steps()
+        .by_handle(&hung)
+        .unwrap()
+        .set_step("running 15 checks of counts");
+    let state = crate::verbproc::folder(&machine.scratch.home, &hung).join("stall.json");
+    assert!(until(|| {
+        std::fs::read_to_string(&state)
+            .is_ok_and(|body| body.contains("running 15 checks of counts"))
+    }));
+    let half = crate::server::process::STALL_LIMIT.as_secs_f64() * 0.6;
+    machine.clock.advance(half);
+
+    // Restart the daemon before STALL_LIMIT elapses, and re-report the exact same stale step.
+    machine.switch.set(None);
+    drop(first);
+    let (second, second_loop) = machine.daemon();
+    machine.switch.set(Some(second.clone()));
+    second
+        .steps()
+        .by_handle(&hung)
+        .unwrap()
+        .set_step("running 15 checks of counts");
+    let waiting = turn_on_a_thread(second_loop, ctx.clone());
+
+    // Advancing only the remaining half of STALL_LIMIT is enough to end the hung round.
+    machine.clock.advance(half);
+    let (mut tips, turn) = waiting.join().unwrap();
+    let error = turn.unwrap_err().to_string();
+    assert!(error.contains("cannot be run again safely"), "{error}");
+    assert_eq!(machine.hung.ends.load(Ordering::SeqCst), 1);
+    let checking = std::thread::spawn(move || tips.turn(&ctx, 0));
+    assert!(until(|| machine.commands.begun() == 1));
+    machine.commands.finish_all();
+    assert_eq!(
+        checking.join().unwrap().unwrap(),
+        Some((tip, TipOutcome::Verified))
+    );
+    let _ = cut.join();
+    let row = handle_store::get(&lock(&machine.db), hung.as_str())
+        .unwrap()
+        .unwrap();
+    assert_eq!(row.state, "incomplete");
+}
