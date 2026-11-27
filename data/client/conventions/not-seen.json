@@ -171,7 +171,7 @@
     "Words: what a card's text would say": {
       "recording": "choice-search",
       "at": "end",
-      "shows": "text \"Search for a card.\""
+      "shows": "text \"Search for an artifact card with mana value 1 or less.\""
     },
     "Words: prompts Beryl folds": {
       "recording": "choice-thirst-crowded",
