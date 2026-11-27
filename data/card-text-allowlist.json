@@ -6,6 +6,13 @@
       "Accumulated Knowledge: draw a card [-, then-] {+.+} draw [-cards equal to the number of cards-] {+a card for each card+} named ~ [-in all graveyards-] ."
     ]
   },
+  "Acidic Sliver": {
+    "reason": "wording",
+    "note": "In the granted ability, Oracle says \"this permanent deals 2 damage to any target\" (normalized to \"~ deals 2 damage to any target\") while the renderer says \"it deals 2 damage to any target\". Both refer to the permanent whose ability is activated.",
+    "diff": [
+      "Acidic Sliver: all Slivers have \" {2} , Sacrifice ~ : [-~-] {+it+} deals 2 damage to any target . \""
+    ]
+  },
   "Animate Dead": {
     "reason": "wording",
     "note": "The renderer names the Aura where Oracle says \"it\" for the same object, ends the quoted granted ability without its period and puts it before the next sentence, and splits \"return ... and attach this Aura to it\" into two sentences. Same instructions in the same order.",
