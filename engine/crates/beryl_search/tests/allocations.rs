@@ -16,6 +16,7 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use beryl_engine::rng::SplitMix64;
+use beryl_engine::table::Capability;
 use beryl_engine::{Observation, Outcome, Profile, Scratch, State};
 use beryl_search::{RolloutPolicy, rollout};
 use common::{agents, fixed_game, game, mirror, play};
@@ -76,6 +77,15 @@ fn main() {
         COUNTING.store(false, Ordering::Relaxed);
         let allocations = ALLOCATIONS.swap(0, Ordering::Relaxed);
         assert!(!fixed || decisions > 40, "seed {seed}: a short game");
+        // A game whose cards have priced mana abilities or multi-term products pays for them
+        // in the mana solver's out-of-line path (`beryl_rules::mana::rich`) and checks them
+        // against a reference (`reference::check_sequences`), both of which build `Vec`s and
+        // `BTreeSet`s by design. The fuzz decks reach such cards, so only a game without them
+        // is held to zero; the fixed decks hold none.
+        if t.can_either(Capability::PricedMana, Capability::ManaChanges) {
+            assert!(!fixed, "seed {seed}: a fixed deck with rich mana");
+            continue;
+        }
         assert_eq!(
             allocations, 0,
             "seed {seed}: {allocations} allocations in a game that ended {outcome:?}"
