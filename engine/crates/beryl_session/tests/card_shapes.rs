@@ -13,7 +13,7 @@
 //! for one more decision.
 //!
 //! The game also holds the session to sending the words of what a card's printed text has no
-//! paragraph for: a Saga's chapter, level up and turning a morph face up.
+//! paragraph for: a Saga's chapter and turning a morph face up.
 //!
 //! The wish and the companion games start with a sideboard. Their views must name the
 //! sideboard card on the wish's pick, on the companion question before the game and on the
@@ -235,7 +235,9 @@ const KEYSTONES: &[Keystone] = &[
         face: None,
         mulligans: 0,
         expect: &[Moment::Resolved, Moment::Activated],
-        words: &["Level up {W}"],
+        // "Level up {W} ({W}: Put a level counter on this. ...)" is a printed paragraph that
+        // says an activated ability, as cycling's is, so the session sends no words for it.
+        words: &[],
     },
     Keystone {
         card: names::EXALTED_ANGEL,
