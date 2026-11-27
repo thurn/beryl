@@ -885,6 +885,7 @@ fn a_stalled_tip_round_keeps_its_stall_clock_across_daemon_restarts() {
     assert!(until(|| lock(&machine.hung.lock).is_some()));
     let (hung, _) = first.running_internal(ROUND_VERB).unwrap();
     // Simulate a step reported before the hang, then wait past half of STALL_LIMIT.
+    assert!(until(|| first.steps().by_handle(&hung).is_some()));
     first
         .steps()
         .by_handle(&hung)
