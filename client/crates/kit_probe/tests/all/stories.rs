@@ -279,3 +279,65 @@ fn hover_requires_an_uncovered_part_of_the_element() {
     let error = player.hover("button #1").expect_err("covered control");
     assert!(error.contains("covered"));
 }
+
+#[test]
+fn edge_on_card_inside_safe_area_passes_on_screen() {
+    use glam::Vec2;
+    use kit_base::{atlas::Tier, geometry::Size, pose::Pose};
+    use kit_frame::frame::{
+        ElementId, Frame, FrameBuilder, NameRef, Place, Resolved, Role, StateBits,
+    };
+    use kit_probe::agent::checks::on_screen;
+
+    let data = crate::test_data::data();
+    let size = Size {
+        width: 393.0,
+        height: 759.0,
+    };
+    let profile = data.profiles.for_size(size);
+    let context = Context {
+        size_class: profile.size_class,
+        checks: profile.checks,
+        audit: data.audit,
+        size,
+        safe_area: Insets {
+            top: 44.0,
+            bottom: 34.0,
+            left: 0.0,
+            right: 0.0,
+        },
+        at: 0,
+    };
+    let edge_on = |id: u32, x: f32| Resolved {
+        id: ElementId(id),
+        parent: u32::MAX,
+        role: Role::Card,
+        name: NameRef::default(),
+        place: Place::Layer,
+        pose: Some(Pose::default()),
+        corners: [
+            Vec2::new(x, 349.0),
+            Vec2::new(x, 349.0),
+            Vec2::new(x, 462.0),
+            Vec2::new(x, 462.0),
+        ],
+        depth: 0.5,
+        opacity: 1.0,
+        clip: None,
+        interactive: true,
+        state: StateBits(0),
+        face: Some(0),
+        count: 1,
+        annotations: Default::default(),
+    };
+
+    let mut inside = Frame::with_capacity(1, 0, 32);
+    let mut builder = FrameBuilder::new(&mut inside, Tier::Baseline, data.card.size());
+    builder.resolved("Exalted Angel", edge_on(17, 197.0));
+    assert!(on_screen(builder.finish(), &context).is_empty());
+
+    let mut outside = Frame::with_capacity(1, 0, 32);
+    let mut builder = FrameBuilder::new(&mut outside, Tier::Baseline, data.card.size());
+    builder.resolved("Exalted Angel", edge_on(18, -5.0));
+    assert_eq!(on_screen(builder.finish(), &context).len(), 1);
+}

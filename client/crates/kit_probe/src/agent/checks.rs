@@ -136,9 +136,13 @@ pub fn on_screen(frame: &Frame, context: &Context) -> Vec<Fault> {
                     || rect.x < safe.x - 0.5
                     || rect.x + rect.width > safe.x + safe.width + 0.5
             } else if element.role == Role::Card {
-                !intersection(safe, rect).is_some_and(|in_safe| {
-                    in_safe.width >= side.min(rect.width) && in_safe.height >= side.min(rect.height)
-                })
+                // Use raw axis overlap rather than `intersection` because an edge-on card
+                // during a flip can project to zero width or height, which `intersection` treats
+                // as empty (`None`) even when the card is inside the safe area.
+                let overlap_x = (safe.x + safe.width).min(rect.x + rect.width) - safe.x.max(rect.x);
+                let overlap_y =
+                    (safe.y + safe.height).min(rect.y + rect.height) - safe.y.max(rect.y);
+                overlap_x < side.min(rect.width) || overlap_y < side.min(rect.height)
             } else {
                 !contains(safe, rect)
             }
