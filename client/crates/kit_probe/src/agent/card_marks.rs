@@ -82,6 +82,15 @@ pub fn card_marks(frame: &Frame, context: &Context) -> Vec<Fault> {
             {
                 continue;
             }
+            // Cards flying simultaneously in `PaintBand::Moving` can also cross in Z closer than
+            // `2 * raise` when staggered paths pass each other; keep checking marks placed in a
+            // later non-depth-buffered band (`draw_band >= Band::Layer`).
+            if front_pb == PaintBand::Moving
+                && back_pb == PaintBand::Moving
+                && draw_band == Band::Moving
+            {
+                continue;
+            }
             let z_front = plane_ndc_depth(frame, front, screen);
             let front_covers_back =
                 front_pb > back_pb || (front_pb == back_pb && z_front < z_back - DEPTH_EPS);
