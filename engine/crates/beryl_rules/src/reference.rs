@@ -12,6 +12,8 @@
 //!   paid, against every set of the creatures or artifacts it could tap ([`objects`]).
 //! - In a game whose cards have priced mana abilities or products of several terms, the cached
 //!   funds and the solver's plans against every sequence of mana abilities ([`sequences`]).
+//! - Agreement between priority and attacker options and the refusal queries the client uses
+//!   to reject clicks ([`refusal`]).
 //!
 //! Implements: none. Checks optimized implementations against reference calculations.
 
@@ -33,6 +35,7 @@ use beryl_kernel::mana_memory::RememberedMana;
 mod combat;
 mod grants;
 mod objects;
+mod refusal;
 mod sequences;
 
 #[cfg(test)]
@@ -80,6 +83,7 @@ pub fn check_references<L: Layout>(s: &State<L>, t: &GameTable) -> Result<(), Vi
     check_layers(s, t)?;
     grants::check_grants(s, t)?;
     combat::check_combat(s, t)?;
+    refusal::check_refusals(s, t)?;
     // A check of each player alone: the order decides only which violation is reported.
     for p in s.players().in_seat_order() {
         check_payments(s, t, p)?;

@@ -100,8 +100,8 @@ fixed in the same session. Newest first.
   every division of such sources between mana that may pay a price and mana that
   pays only the cost, and `refused` passes the spell's payment. Guard: the
   scenario "Azorius Signet and Cavern of Souls together pay for an Elemental",
-  and the reference checks, which now compare spells against the sequence
-  reference in these games (entry below).
+  the sequence payment reference check (entry below), and `reference::refusal`,
+  which checks at every priority decision that no offered card is refused.
 
 - **The fuzz reported a false payment disagreement for spells beside Azorius
   Signet or Mana Flare.** In a game that also held a card making restricted mana
@@ -133,10 +133,10 @@ fixed in the same session. Newest first.
   refusal when the card has an ability its owner may activate now, checked with
   the same `activatable` test that builds the priority options. Guard:
   `beryl_session`'s
-  `refused::a_cycling_land_may_still_be_cycled_once_a_land_is_played`. No type
-  ties the refusal to the options, because the refusal also explains why a card
-  is not offered; a check that every refused card has no option in the priority
-  decision would cover the class.
+  `refused::a_cycling_land_may_still_be_cycled_once_a_land_is_played`, and
+  `reference::refusal`, which checks at every priority and declare-attackers
+  decision (in fuzzing, scenarios, and checked runs) that no offered card or
+  creature is also reported as refused.
 
 - **A fifth granted ability was silently dropped.** A permanent held its granted
   abilities in four slots of its layer result. When a fifth effect granted it

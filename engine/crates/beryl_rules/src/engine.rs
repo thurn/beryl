@@ -33,7 +33,7 @@ mod questions;
 pub use crate::decision::interchangeable;
 pub(crate) use crate::decision::{collapse, collapse_in_order};
 pub use questions::refusal;
-pub(crate) use questions::{controlled, decision, land_face};
+pub(crate) use questions::{controlled, decision, land_face, priority_decision};
 use questions::{only_idle, perform_machine};
 
 /// The position a player sees the open decision in. That is the state itself, except while

@@ -187,7 +187,10 @@ fn options<L: Layout>(
 ///
 /// [CR 117.1](https://yawgatog.com/resources/magic-rules/#R1171): "The player with priority
 /// may cast spells, activate abilities, and take special actions."
-fn priority_decision<L: Layout>(s: &State<L>, t: &GameTable) -> Result<Decision<L>, Full> {
+pub(crate) fn priority_decision<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+) -> Result<Decision<L>, Full> {
     let player = s.turn().priority();
     // Built in place: the list is most of a decision's size.
     let mut d: Decision<L> = Decision {
