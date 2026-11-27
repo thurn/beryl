@@ -240,7 +240,8 @@ impl Checks {
                 },
                 reads: kept.reads,
             };
-            let (keyed, broken, sources) = self.key_listing(ctx, tree, (name, family), &listing);
+            let (keyed, broken, sources) =
+                self.key_listing(ctx, tree, (name, family), &listing, None);
             (sources.as_ref() == Some(&kept.sources)).then_some(Prepared {
                 family: name.to_owned(),
                 keyed,

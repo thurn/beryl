@@ -4,7 +4,7 @@
 //! ([`on_threads`]); the landing gate lists in two rounds, so a fault found without building
 //! anything stops it before the families that need a product are listed.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::panic::resume_unwind;
 use std::sync::Arc;
 use std::thread;
@@ -55,7 +55,33 @@ impl Checks {
         options: &RunOptions,
         run: &mut CheckRun,
     ) -> Vec<Prepared> {
-        self.prepare_scoped(ctx, tree, families, &BTreeMap::new(), options, run)
+        self.prepare_only(ctx, tree, families, options, run, None)
+    }
+
+    /// [`Checks::prepare`], resolving and keying only the checks in `only` when `Some`.
+    pub(crate) fn prepare_only(
+        &self,
+        ctx: &Context,
+        tree: &OpenTree,
+        families: &[&str],
+        options: &RunOptions,
+        run: &mut CheckRun,
+        only: Option<&HashSet<CheckName>>,
+    ) -> Vec<Prepared> {
+        let among: Vec<(&str, &Family)> = self
+            .families()
+            .filter(|(n, _)| families.contains(n))
+            .collect();
+        self.prepare_families(
+            ctx,
+            tree,
+            &among,
+            options,
+            run,
+            None,
+            &BTreeMap::new(),
+            only,
+        )
     }
 
     /// [`Checks::prepare`], listing each family in `scopes` for the packages it names only
@@ -73,7 +99,7 @@ impl Checks {
             .families()
             .filter(|(n, _)| families.contains(n))
             .collect();
-        self.prepare_families(ctx, tree, &among, options, run, None, scopes)
+        self.prepare_families(ctx, tree, &among, options, run, None, scopes, None)
     }
 
     /// [`Checks::prepare`] for exactly the families given, whether or not this machine runs
@@ -86,7 +112,7 @@ impl Checks {
         options: &RunOptions,
         run: &mut CheckRun,
     ) -> Vec<Prepared> {
-        self.prepare_families(ctx, tree, among, options, run, None, &BTreeMap::new())
+        self.prepare_families(ctx, tree, among, options, run, None, &BTreeMap::new(), None)
     }
 
     /// [`Checks::prepare_among`] for the landing gate, which stops at the first fault it knows
@@ -107,7 +133,16 @@ impl Checks {
         run: &mut CheckRun,
         cold: Cold<'_>,
     ) -> Vec<Prepared> {
-        self.prepare_families(ctx, tree, among, options, run, Some(cold), &BTreeMap::new())
+        self.prepare_families(
+            ctx,
+            tree,
+            among,
+            options,
+            run,
+            Some(cold),
+            &BTreeMap::new(),
+            None,
+        )
     }
 
     /// `gate` is the landing gate's test for a family it leaves unlisted; `None` for every
@@ -136,6 +171,7 @@ impl Checks {
         run: &mut CheckRun,
         gate: Option<Cold<'_>>,
         scopes: &BTreeMap<String, Vec<String>>,
+        only: Option<&HashSet<CheckName>>,
     ) -> Vec<Prepared> {
         let fail_fast = gate.is_some();
         // Every family's listing hash from one reading of the tree, and one request for every
@@ -193,7 +229,7 @@ impl Checks {
             })
             .collect();
         if !fail_fast {
-            let prepared = self.prepare_at_once(ctx, tree, work, options, run);
+            let prepared = self.prepare_at_once(ctx, tree, work, options, run, only);
             if options.class == Class::Tip {
                 self.share_platform_listings(&prepared, &hashes);
             }
@@ -222,7 +258,7 @@ impl Checks {
                 .extend(building.iter().map(|w| w.name.to_owned()));
             return prepared;
         }
-        prepared.extend(self.prepare_at_once(ctx, tree, building, options, run));
+        prepared.extend(self.prepare_at_once(ctx, tree, building, options, run, only));
         prepared
     }
 
@@ -235,9 +271,10 @@ impl Checks {
         work: Vec<FamilyWork>,
         options: &RunOptions,
         run: &mut CheckRun,
+        only: Option<&HashSet<CheckName>>,
     ) -> Vec<Prepared> {
         let found = on_threads(work, |one, own| {
-            self.prepare_family(ctx, tree, one, options, own)
+            self.prepare_family(ctx, tree, one, options, own, only)
         });
         let mut prepared = Vec::new();
         for (one, own) in found {
@@ -274,7 +311,7 @@ impl Checks {
                     self.build_products(ctx, tree, std::slice::from_ref(product), &[], &who, own);
                 None
             }
-            Job::List(one) => self.prepare_family(ctx, tree, *one, options, own),
+            Job::List(one) => self.prepare_family(ctx, tree, *one, options, own, None),
         });
         let (built, listed): (Vec<_>, Vec<_>) = found
             .into_iter()
@@ -297,13 +334,14 @@ impl Checks {
         work: FamilyWork,
         options: &RunOptions,
         run: &mut CheckRun,
+        only: Option<&HashSet<CheckName>>,
     ) -> Option<Prepared> {
         let (name, family, key) = (work.name, work.family, work.key.clone());
         let listed = self.list_family(ctx, tree, work, options, run);
         let mut listing = Self::listed_or_noted(name, listed, run)?;
         let keying = Stopwatch::start(ctx);
         let (mut keyed, mut broken, mut sources) =
-            self.key_listing(ctx, tree, (name, family), &listing);
+            self.key_listing(ctx, tree, (name, family), &listing, only);
         run.slow(ctx, format!("keying {name}"), keying);
         if let Origin::Kept {
             key: old,
@@ -317,7 +355,7 @@ impl Checks {
             let listed = self.list(ctx, tree, name, family, options, run, key, None, None);
             listing = Self::listed_or_noted(name, listed, run)?;
             let keying = Stopwatch::start(ctx);
-            (keyed, broken, sources) = self.key_listing(ctx, tree, (name, family), &listing);
+            (keyed, broken, sources) = self.key_listing(ctx, tree, (name, family), &listing, only);
             run.slow(ctx, format!("keying {name}"), keying);
         }
         match (&listing.origin, sources) {

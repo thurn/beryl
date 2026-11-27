@@ -459,7 +459,7 @@ fn segment_matches(pattern: &str, segment: &str) -> bool {
 }
 
 /// Whether `path` is `dir` or lies below it.
-fn is_within(path: &str, dir: &str) -> bool {
+pub fn is_within(path: &str, dir: &str) -> bool {
     dir.is_empty()
         || path == dir
         || path
@@ -496,7 +496,7 @@ fn toolchain_file(workspace: &str, tracked: &[String]) -> Option<String> {
 }
 
 /// The paths with every path inside another of them removed.
-fn outermost(paths: BTreeSet<String>) -> Vec<String> {
+pub fn outermost(paths: BTreeSet<String>) -> Vec<String> {
     let mut kept: Vec<String> = Vec::new();
     // Sorting puts `a` before `a/b`, but `a-b` sorts between them, so test against every kept
     // path rather than only the last.

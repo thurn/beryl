@@ -477,7 +477,9 @@ impl Checks {
             families.dedup();
             families
         };
-        let mut prepared = checks.prepare(ctx, &tree, &families, options, &mut run);
+        let only: std::collections::HashSet<CheckName> = names.iter().cloned().collect();
+        let mut prepared =
+            checks.prepare_only(ctx, &tree, &families, options, &mut run, Some(&only));
         for name in names {
             let listed = prepared.iter().any(|p| {
                 p.keyed.iter().any(|k| k.listed.check == *name)

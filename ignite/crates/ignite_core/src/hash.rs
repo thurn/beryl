@@ -38,15 +38,23 @@ pub struct HashParts<'a> {
 /// The input hash of one check. The order of `inputs` does not matter; the order of `commands`
 /// does, because [`commands`] gives them in a fixed order.
 pub fn input_hash(parts: &HashParts<'_>) -> InputHash {
-    let mut inputs: Vec<&(String, Oid)> = parts.inputs.iter().collect();
-    inputs.sort();
-    inputs.dedup();
     let mut hasher = Sha256::new();
     field(&mut hasher, LAYOUT);
-    count(&mut hasher, inputs.len());
-    for (path, oid) in inputs {
-        field(&mut hasher, path);
-        field(&mut hasher, oid.as_str());
+    if parts.inputs.windows(2).all(|w| w[0] < w[1]) {
+        count(&mut hasher, parts.inputs.len());
+        for (path, oid) in parts.inputs {
+            field(&mut hasher, path);
+            field(&mut hasher, oid.as_str());
+        }
+    } else {
+        let mut inputs: Vec<&(String, Oid)> = parts.inputs.iter().collect();
+        inputs.sort();
+        inputs.dedup();
+        count(&mut hasher, inputs.len());
+        for (path, oid) in inputs {
+            field(&mut hasher, path);
+            field(&mut hasher, oid.as_str());
+        }
     }
     match parts.digest {
         Some(digest) => {

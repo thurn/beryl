@@ -670,3 +670,63 @@ fn run_batches_skips_remaining_batches_once_stop_is_raised() {
     assert_eq!(run.skipped, 1);
     assert!(world.launcher.commands("runner").is_empty());
 }
+
+#[test]
+fn run_with_per_check_inputs_keeps_full_listing_and_matches_full_keying() {
+    let world = world(MANIFEST, &[], FakeHistory::default());
+    world
+        .git
+        .set_object("data", Oid::new("1".repeat(40)).unwrap());
+    world
+        .git
+        .set_object("data/core.json", Oid::new("3".repeat(40)).unwrap());
+    world
+        .git
+        .set_object("game_rules", Oid::new("2".repeat(40)).unwrap());
+    world
+        .git
+        .set_object("game_rules/tests", Oid::new("5".repeat(40)).unwrap());
+    world.git.set_object(
+        "game_rules/tests/entering.rs",
+        Oid::new("4".repeat(40)).unwrap(),
+    );
+    *world.launcher.listing.lock().unwrap() = concat!(
+        "{\"check\":\"unit:a\",\"inputs\":[\"data/core.json\"]}\n",
+        "{\"check\":\"unit:b\",\"inputs\":[\"game_rules/tests/entering.rs\"]}\n",
+    )
+    .to_owned();
+    let tree = TreeId::new("tree-01").unwrap();
+
+    // First run keys only `unit:a`, yet keeps the whole listing so `unit:b` lists nothing.
+    let first = run(&world, &["unit:a"]);
+    assert!(first.passed(), "{first:?}");
+    assert_eq!(world.launcher.commands("lister").len(), 1);
+
+    let second = run(&world, &["unit:b"]);
+    assert!(second.passed(), "{second:?}");
+    assert_eq!(world.launcher.commands("lister").len(), 1);
+
+    // Both hashes match a full `prepare` that keys every check at once.
+    let (_, open) = world.checks.open(&world.ctx, &tree).unwrap();
+    let mut full_run = CheckRun::default();
+    let full = world
+        .checks
+        .prepare(&world.ctx, &open, &["unit"], &options(false), &mut full_run);
+    let expected_a = full[0]
+        .keyed
+        .iter()
+        .find(|k| k.listed.check == name("unit:a"))
+        .unwrap()
+        .key
+        .clone();
+    let expected_b = full[0]
+        .keyed
+        .iter()
+        .find(|k| k.listed.check == name("unit:b"))
+        .unwrap()
+        .key
+        .clone();
+    let stored = world.hub.lookup(&[expected_a, expected_b]).unwrap();
+    assert_eq!(stored[0].as_ref().unwrap().outcome, Outcome::Pass);
+    assert_eq!(stored[1].as_ref().unwrap().outcome, Outcome::Pass);
+}

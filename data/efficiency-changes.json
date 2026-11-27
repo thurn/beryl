@@ -1100,5 +1100,10 @@
     "label": "Extract shared card faces and HUD coverage artwork into `game_art`, bringing `game_table` and `game_hud` under the 12,000-line cap so `data/client/levels.json` no longer requires per-PR cap-allowance bumps, and canonically sort `data/ui-conventions.json` and `docs/ui-conventions.md` entries alphabetically by name so concurrent UI tickets stop conflicting on tail appends",
     "metric": "bead.minutes",
     "expect": "down"
+  },
+  {
+    "label": "Check keying memoizes each package's base paths separately from per-check `listed.inputs` and skips re-sorting already-sorted inputs in `input_hash`, while `Checks::run` and `Checks::run_batches` only key the checks they will run and index prepared checks by name instead of cloning the full family per batch (cutting 10.9-21.1 min of `other` overhead in `client-interface` rounds and culprit bisections)",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]

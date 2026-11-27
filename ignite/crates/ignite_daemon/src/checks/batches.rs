@@ -6,7 +6,7 @@
 //! time. Here the tree is opened and the family listed and keyed once, and each batch runs from
 //! that listing.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use ignite_core::ids::{CheckName, TreeId};
@@ -14,7 +14,7 @@ use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::ResultKey;
 use ignite_core::traits::Error;
 
-use super::{CheckRun, Checks, RunOptions, incomplete};
+use super::{CheckRun, Checks, Prepared, RunOptions, incomplete};
 use crate::server::Context;
 
 pub struct BatchCallbacks<'a> {
@@ -75,8 +75,32 @@ impl Checks {
         {
             return (run, 0);
         }
-        let prepared = checks.prepare(ctx, &tree, &[family], options, &mut run);
+        let only: HashSet<CheckName> = batches
+            .iter()
+            .flat_map(|(_, names)| names.iter().cloned())
+            .collect();
+        let prepared = checks.prepare_only(ctx, &tree, &[family], options, &mut run, Some(&only));
         let family_failed = run.incomplete_families.iter().any(|(f, _)| f == family);
+        let keyed_by_name: HashMap<&CheckName, usize> = prepared
+            .first()
+            .map(|p| {
+                p.keyed
+                    .iter()
+                    .enumerate()
+                    .map(|(i, k)| (&k.listed.check, i))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let broken_by_name: HashMap<&CheckName, usize> = prepared
+            .first()
+            .map(|p| {
+                p.broken
+                    .iter()
+                    .enumerate()
+                    .map(|(i, f)| (&f.check, i))
+                    .collect()
+            })
+            .unwrap_or_default();
         let mut ran = 0;
         for (batch, names) in batches {
             if callbacks
@@ -93,20 +117,29 @@ impl Checks {
                 // The listing failed every try; the family's failure stands for its checks.
                 continue;
             }
-            let mut wanted = prepared.clone();
+            let mut keyed = Vec::new();
+            let mut broken = Vec::new();
             for name in names {
-                let listed = wanted.iter().any(|p| {
-                    p.keyed.iter().any(|k| k.listed.check == *name)
-                        || p.broken.iter().any(|f| f.check == *name)
-                });
-                if !listed {
+                if let Some(&i) = keyed_by_name.get(name) {
+                    keyed.push(prepared[0].keyed[i].clone());
+                } else if let Some(&i) = broken_by_name.get(name) {
+                    let failure = prepared[0].broken[i].clone();
+                    run.finish(&failure.check, Outcome::Incomplete, Some(failure.clone()));
+                    broken.push(failure);
+                } else {
                     let error = Error::NotFound(format!("{name} is not listed by its family"));
                     run.finish(name, Outcome::Incomplete, Some(incomplete(name, &error)));
                 }
             }
-            for part in &mut wanted {
-                part.keep(|check| names.contains(check), &mut run);
-            }
+            let wanted = if prepared.is_empty() {
+                Vec::new()
+            } else {
+                vec![Prepared {
+                    family: family.to_owned(),
+                    keyed,
+                    broken,
+                }]
+            };
             let previous_failures = run.failed_keys.len();
             checks.run_prepared_with_stop(ctx, &tree, wanted, options, &mut run, callbacks.stop);
             (callbacks.failed)(&run.failed_keys[previous_failures..]);
