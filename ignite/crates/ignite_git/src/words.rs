@@ -2,8 +2,8 @@
 //! round can tell which later commits use what a reverted landing added (see the daemon's
 //! `tip::dependents`).
 
-use std::collections::BTreeSet;
-use std::io::Write;
+use std::collections::{BTreeSet, HashSet};
+use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 use std::process::Stdio;
 
@@ -12,10 +12,6 @@ use ignite_core::traits::{Error, LineChanges, Result};
 
 use crate::cmd;
 use crate::objects;
-
-/// The most searches [`before`] runs. Each search finds at least one more word on each file's
-/// first matching line, so a handful settles what a landing's few hundred words need.
-const MAX_SEARCHES: usize = 16;
 
 /// The lines `commits` (oldest first, consecutive on the first-parent line) added and removed
 /// together, from the first commit's parent to the last commit. Binary files show no lines.
@@ -68,51 +64,26 @@ fn parse_diff(diff: &str) -> LineChanges {
 
 /// Which of `words` occur as whole words in some text file of `commit`'s first parent.
 ///
-/// `git grep -o` prints every match, and a common word matches in nearly every file, so each
-/// search stops at the first matching line of each file (`--max-count=1`), and `-h` leaves out
-/// the file names. A word found is not searched for again; the search repeats until one finds
-/// no new word. A word still unfound after [`MAX_SEARCHES`] searches is counted as absent.
+/// A whole word is a run of ASCII letters, digits and underscores, as `git grep -w` reads one.
+/// A text file is one with no NUL byte in its first [`BINARY_PROBE`] bytes, as `git grep -I`
+/// decides. The parent's tree is listed once and every blob read once through
+/// `git cat-file --batch`, and each blob is split into words here. That costs one pass over the
+/// tree whatever the number of words. `git grep -F -w -f` tests each pattern against each line
+/// separately instead, and with a landing's 834 words over an 81 MB tree one search ran for
+/// more than 24 minutes while a tip round waited on it.
 pub fn before(repo: &Path, commit: &Commit, words: &[String]) -> Result<BTreeSet<String>> {
     let parent = objects::parent_of(repo, commit)?;
+    let mut left: HashSet<&[u8]> = words
+        .iter()
+        .filter(|w| !w.is_empty())
+        .map(String::as_bytes)
+        .collect();
     let mut found = BTreeSet::new();
-    let mut left: Vec<&String> = words.iter().filter(|w| !w.is_empty()).collect();
-    for _ in 0..MAX_SEARCHES {
-        if left.is_empty() {
-            break;
-        }
-        let matched = search(repo, &parent, &left)?;
-        let new: BTreeSet<String> = matched
-            .into_iter()
-            .filter(|word| left.contains(&word))
-            .collect();
-        if new.is_empty() {
-            break;
-        }
-        left.retain(|word| !new.contains(*word));
-        found.extend(new);
+    if left.is_empty() {
+        return Ok(found);
     }
-    Ok(found)
-}
-
-/// One `git grep` for `words` as fixed whole words in `at`, printing the words matched on the
-/// first matching line of each text file.
-fn search(repo: &Path, at: &Commit, words: &[&String]) -> Result<BTreeSet<String>> {
-    let mut command = cmd::git(
-        repo,
-        [
-            "grep",
-            "-I",
-            "--no-color",
-            "-h",
-            "--only-matching",
-            "--word-regexp",
-            "--fixed-strings",
-            "--max-count=1",
-            "-f",
-            "-",
-            at.as_str(),
-        ],
-    );
+    let blobs = blobs_of(repo, &parent)?;
+    let mut command = cmd::git(repo, ["cat-file", "--batch"]);
     command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -120,28 +91,106 @@ fn search(repo: &Path, at: &Commit, words: &[&String]) -> Result<BTreeSet<String
     let mut child = command
         .spawn()
         .map_err(|error| Error::Io(format!("cannot run git: {error}")))?;
-    let mut patterns = String::new();
-    for word in words {
-        patterns.push_str(word);
-        patterns.push('\n');
-    }
-    if let Some(mut stdin) = child.stdin.take() {
-        stdin
-            .write_all(patterns.as_bytes())
-            .map_err(|error| Error::Io(format!("git grep: {error}")))?;
+    // `cat-file` writes each blob as it reads its name, so the names are written from another
+    // thread: written from this one, both pipes could fill and each side wait on the other.
+    let mut stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| Error::Io("git cat-file: no standard input".to_owned()))?;
+    let writer = std::thread::spawn(move || {
+        let mut names = String::new();
+        for blob in blobs {
+            names.push_str(&blob);
+            names.push('\n');
+        }
+        // A write error means `cat-file` exited, which the reader reports.
+        let _ = stdin.write_all(names.as_bytes());
+    });
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| Error::Io("git cat-file: no standard output".to_owned()))?;
+    let read = read_batch(BufReader::new(stdout), &mut left, &mut found);
+    // Stopping early leaves `cat-file` blocked on a full pipe, so it is ended rather than
+    // awaited.
+    if left.is_empty() {
+        let _ = child.kill();
     }
     let out = child
         .wait_with_output()
-        .map_err(|error| Error::Io(format!("git grep: {error}")))?;
-    // `git grep` exits with 1 when nothing matched.
-    match out.status.code() {
-        Some(0) => Ok(String::from_utf8_lossy(&out.stdout)
-            .lines()
-            .map(str::to_owned)
-            .collect()),
-        Some(1) => Ok(BTreeSet::new()),
-        _ => Err(Error::Io(cmd::failure(&command, &out))),
+        .map_err(|error| Error::Io(format!("git cat-file: {error}")))?;
+    let _ = writer.join();
+    read?;
+    if !left.is_empty() && !out.status.success() {
+        return Err(Error::Io(cmd::failure(&command, &out)));
     }
+    Ok(found)
+}
+
+/// How many leading bytes of a blob are looked at for a NUL to call it binary, as git does.
+const BINARY_PROBE: usize = 8000;
+
+/// The distinct blob names in `commit`'s tree, at any depth. Submodules are commits, not blobs,
+/// and are left out.
+fn blobs_of(repo: &Path, commit: &Commit) -> Result<Vec<String>> {
+    let listing = cmd::run(repo, ["ls-tree", "-r", "-z", commit.as_str()])?;
+    let mut blobs = BTreeSet::new();
+    for entry in listing.split('\0') {
+        // Each entry is `<mode> SP <type> SP <object> TAB <path>`.
+        let Some((meta, _path)) = entry.split_once('\t') else {
+            continue;
+        };
+        let mut fields = meta.split(' ');
+        if let (Some(_mode), Some("blob"), Some(object)) =
+            (fields.next(), fields.next(), fields.next())
+        {
+            blobs.insert(object.to_owned());
+        }
+    }
+    Ok(blobs.into_iter().collect())
+}
+
+/// Reads `git cat-file --batch` output, moving each word of `left` that some text blob holds
+/// into `found`, and stops once `left` is empty.
+fn read_batch(
+    mut reader: impl BufRead,
+    left: &mut HashSet<&[u8]>,
+    found: &mut BTreeSet<String>,
+) -> Result<()> {
+    let mut header = String::new();
+    let mut content = Vec::new();
+    while !left.is_empty() {
+        header.clear();
+        let read = reader
+            .read_line(&mut header)
+            .map_err(|error| Error::Io(format!("git cat-file: {error}")))?;
+        if read == 0 {
+            return Ok(());
+        }
+        // Each object is `<object> SP <type> SP <size> LF <content> LF`.
+        let size = header
+            .trim_end()
+            .rsplit(' ')
+            .next()
+            .and_then(|size| size.parse::<usize>().ok())
+            .ok_or_else(|| Error::Io(format!("git cat-file: unexpected header {header:?}")))?;
+        content.clear();
+        content.resize(size + 1, 0);
+        reader
+            .read_exact(&mut content)
+            .map_err(|error| Error::Io(format!("git cat-file: {error}")))?;
+        content.pop();
+        let probe = &content[..content.len().min(BINARY_PROBE)];
+        if probe.contains(&0) {
+            continue;
+        }
+        for word in content.split(|b| !(b.is_ascii_alphanumeric() || *b == b'_')) {
+            if left.remove(word) {
+                found.insert(String::from_utf8_lossy(word).into_owned());
+            }
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

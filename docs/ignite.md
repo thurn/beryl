@@ -3143,13 +3143,14 @@ later landings up to the tip that depend on the culprit, undoes them in the same
 commit and builds again, once. A later landing depends on the culprit when a
 line it added uses a word the culprit introduced (a word of three or more
 letters, digits and underscores in the culprit's added lines that no text file
-held before the culprit, which `Git::words_before` finds with `git grep`), or
-when it removed a line of 12 or more characters that the culprit added
-(`Git::line_changes` reads both). A later landing that changed Ignite's own
-source, or is a round's own revert, is never undone. If the revert still does
-not build, nothing is pushed, and the round reports the failing check as a
-regression, even one reported before, with a note before its output that names
-the culprit, the later landings undone with it and the build checks that failed.
+held before the culprit, which `Git::words_before` finds by reading every blob
+of that tree once), or when it removed a line of 12 or more characters that the
+culprit added (`Git::line_changes` reads both). A later landing that changed
+Ignite's own source, or is a round's own revert, is never undone. If the revert
+still does not build, nothing is pushed, and the round reports the failing check
+as a regression, even one reported before, with a note before its output that
+names the culprit, the later landings undone with it and the build checks that
+failed.
 
 The revert commit's subject is `revert: <the landing's first subject>`, cut to
 60 characters, and its body names the check and the commits it undoes, with the

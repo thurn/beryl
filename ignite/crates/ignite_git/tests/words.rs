@@ -67,8 +67,8 @@ fn a_function_one_commit_added_is_found_in_the_commit_that_calls_it() {
         }
     );
     // Before A, every word of its added lines but `nonland` and `Not` was in a text file; the
-    // binary file that holds `nonland` does not count.
-    let asked = owned(&["Filter", "Not", "fn", "land", "nonland", "pub"]);
+    // binary file that holds `nonland` does not count, and `and` inside `land` is no word.
+    let asked = owned(&["Filter", "Not", "and", "fn", "land", "nonland", "pub"]);
     assert_eq!(
         git.words_before(&repo, &a, &asked).unwrap(),
         ["Filter", "fn", "land", "pub"]
