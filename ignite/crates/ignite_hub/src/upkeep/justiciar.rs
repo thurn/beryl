@@ -474,7 +474,9 @@ pub fn master_lag(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>> {
         let mut progressing = Vec::new();
         for (regression, stall) in regressions {
             if let Some(stall) = stall {
-                filed.push(file_regression_stall(conn, &regression, &stall, now)?);
+                if let Some(entry) = file_regression_stall(conn, &regression, &stall, now)? {
+                    filed.push(entry);
+                }
             } else {
                 progressing.push(regression);
             }
@@ -518,26 +520,71 @@ pub fn master_lag(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>> {
     Ok(vec![filing::file(conn, UPKEEP, &filing, now)?])
 }
 
+/// Whether a regression-stall ticket for the same regression and stall reason was closed by a
+/// worker less than [`MASTER_LAG_SECONDS`] before `now`. A justiciar that confirms the holder
+/// is making progress (for example on an `Old` regression delayed by an unrelated outage) closes
+/// the escalation without closing the regression. Skipping the same stall reason during the
+/// grace window avoids an immediate re-filing loop, while a different stall reason (such as
+/// `Inactive`, `Unclaimed` or `HolderUnavailable`) still escalates at once.
+fn recently_closed_regression_stall(
+    conn: &Connection,
+    signature: &Signature,
+    reason: &str,
+    now: Timestamp,
+) -> Result<bool> {
+    let newest: Option<(String, Option<String>, Option<String>)> = conn
+        .query_row(
+            "SELECT status, closed_at, metadata FROM tickets
+             WHERE json_extract(metadata, '$.ignite_signature') = ?1
+             ORDER BY created_at DESC, id DESC LIMIT 1",
+            [signature.key()],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .optional()?;
+    let Some((status, Some(closed_at), metadata)) = newest else {
+        return Ok(false);
+    };
+    if status != "closed" || now.seconds_since(parse_time(&closed_at)?) >= MASTER_LAG_SECONDS {
+        return Ok(false);
+    }
+    let metadata: BTreeMap<String, Value> = match metadata {
+        Some(json) => serde_json::from_str(&json)
+            .map_err(|error| StoreError::Invalid(format!("regression-stall metadata: {error}")))?,
+        None => BTreeMap::new(),
+    };
+    if metadata.contains_key(filing::AUTO_CLOSED_KEY) {
+        return Ok(false);
+    }
+    Ok(filing::strings(&metadata, filing::SIGHTINGS_KEY)
+        .iter()
+        .any(|seen| seen == reason))
+}
+
 fn file_regression_stall(
     conn: &mut Connection,
     regression: &str,
     stall: &Stall,
     now: Timestamp,
-) -> Result<Filed> {
+) -> Result<Option<Filed>> {
     let reason = stall.reason();
+    let signature =
+        Signature::of_subject(&format!("{REGRESSION_STALL_SUBJECT}{regression}"), LABEL);
+    if recently_closed_regression_stall(conn, &signature, &reason, now)? {
+        return Ok(None);
+    }
     let body = format!(
         "Regression ticket {regression} is holding back `master`. {reason}\n\n\
          Read `ignite guide justiciar`, then check the regression's history, the worker if one \
          holds it, and the tip verification results."
     );
     let filing = Filing {
-        signature: Signature::of_subject(&format!("{REGRESSION_STALL_SUBJECT}{regression}"), LABEL),
+        signature,
         evidence: reason,
         fields: fields(format!("Handling of regression {regression} stalled"), body),
         deps: Vec::new(),
         released: true,
     };
-    filing::file(conn, UPKEEP, &filing, now)
+    Ok(Some(filing::file(conn, UPKEEP, &filing, now)?))
 }
 
 /// Whether a regression-stall escalation should yield a machine's only repair slot.

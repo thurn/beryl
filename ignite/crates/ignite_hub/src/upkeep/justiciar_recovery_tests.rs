@@ -4,10 +4,12 @@ use ignite_core::protocol::tickets::{Operation, Status, TicketType};
 use ignite_core::time::Timestamp;
 use ignite_core::traits::Clock;
 use ignite_store::hub;
+use rusqlite::{Connection, params};
 
 use super::clearing::{HOLD_SECONDS, RETURNED_HOLD_SECONDS, close_cleared};
 use super::filing::{Change, UPKEEP};
 use super::justiciar::{self, MASTER_LAG_SECONDS};
+use super::regression_stalls::{FALLBACK_AGE_SECONDS, INACTIVE_SECONDS};
 use super::tests::{apply, comment_count, create, start, ticket};
 
 fn report(subject: &str, evidence: String) -> JusticiarReport {
@@ -198,5 +200,138 @@ fn a_failed_tip_after_a_regression_fix_ends_the_verification_wait() {
         ticket(&conn, &filed[0].ticket)
             .title
             .starts_with("master has not moved")
+    );
+}
+
+fn setup_old_regression_stall(
+    conn: &mut Connection,
+    clock: &FakeClock,
+) -> (String, String, String) {
+    let landed = apply(
+        conn,
+        vec![create("landed work", TicketType::Task, None, &[])],
+        clock.now(),
+    );
+    conn.execute(
+        "UPDATE tickets SET landed_at = ?2 WHERE id = ?1",
+        params![landed[0], clock.now().to_string()],
+    )
+    .unwrap();
+    let regression = apply(
+        conn,
+        vec![create("pytest fails", TicketType::Bug, None, &[])],
+        clock.now(),
+    )[0]
+    .clone();
+    conn.execute(
+        "INSERT INTO regressions (check_name, ticket, first_bad, last_good, state)
+         VALUES ('quality:unit', ?1, 'bbbbbbb', 'aaaaaaa', 'open')",
+        [&regression],
+    )
+    .unwrap();
+    clock.advance(FALLBACK_AGE_SECONDS);
+    apply(
+        conn,
+        vec![Operation::Claim {
+            id: regression.clone(),
+        }],
+        clock.now(),
+    );
+    let holder: String = conn
+        .query_row(
+            "SELECT assignee FROM tickets WHERE id = ?1",
+            [&regression],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let filed = justiciar::master_lag(conn, clock.now()).unwrap();
+    assert_eq!(filed.len(), 1);
+    assert_eq!(filed[0].change, Change::Created);
+    let escalation = filed[0].ticket.clone();
+    assert!(
+        ticket(conn, &escalation)
+            .body
+            .contains("historical 90th-percentile")
+    );
+    (regression, holder, escalation)
+}
+
+#[test]
+fn a_closed_regression_stall_waits_for_the_same_reason_and_escalates_on_a_new_one() {
+    let clock = FakeClock::new(Timestamp::parse("2026-06-01T00:00:00Z").unwrap());
+    let mut conn = hub::open_in_memory().unwrap();
+    let (_regression, _holder, escalation) = setup_old_regression_stall(&mut conn, &clock);
+
+    apply(
+        &mut conn,
+        vec![Operation::Close {
+            id: escalation.clone(),
+            reason: "Holder is actively working".to_owned(),
+            include_ready: false,
+        }],
+        clock.now(),
+    );
+
+    // Same Stall::Old reason is suppressed immediately after the worker closes the escalation.
+    clock.advance(10.0);
+    assert!(
+        justiciar::master_lag(&mut conn, clock.now())
+            .unwrap()
+            .is_empty()
+    );
+
+    // A different stall reason (Inactive) escalates right away without waiting for the grace window.
+    clock.advance(INACTIVE_SECONDS);
+    let filed = justiciar::master_lag(&mut conn, clock.now()).unwrap();
+    assert_eq!(filed.len(), 1);
+    assert_eq!(filed[0].change, Change::Created);
+    assert_ne!(filed[0].ticket, escalation);
+    assert!(
+        ticket(&conn, &filed[0].ticket)
+            .body
+            .contains("last recorded activity")
+    );
+}
+
+#[test]
+fn a_closed_regression_stall_refiles_after_the_grace_window() {
+    let clock = FakeClock::new(Timestamp::parse("2026-06-01T00:00:00Z").unwrap());
+    let mut conn = hub::open_in_memory().unwrap();
+    let (regression, holder, escalation) = setup_old_regression_stall(&mut conn, &clock);
+
+    apply(
+        &mut conn,
+        vec![Operation::Close {
+            id: escalation.clone(),
+            reason: "Holder is actively working".to_owned(),
+            include_ready: false,
+        }],
+        clock.now(),
+    );
+
+    // Keep the holder active past the grace window so the stall remains Stall::Old.
+    clock.advance(MASTER_LAG_SECONDS - 10.0);
+    conn.execute(
+        "INSERT INTO records (ticket, session, at, verb, machine, class, queued_s, wall_s, cpu_s,
+                              peak_mb, outcome, ignite)
+         VALUES (?1, ?2, ?3, 'test', 'machine', 'agent', 0, 0, 0, 0, 'pass', 'test')",
+        params![regression, holder, clock.now().to_string()],
+    )
+    .unwrap();
+    assert!(
+        justiciar::master_lag(&mut conn, clock.now())
+            .unwrap()
+            .is_empty()
+    );
+
+    clock.advance(10.0);
+    let filed = justiciar::master_lag(&mut conn, clock.now()).unwrap();
+    assert_eq!(filed.len(), 1);
+    assert_eq!(filed[0].change, Change::Created);
+    assert_ne!(filed[0].ticket, escalation);
+    assert!(
+        ticket(&conn, &filed[0].ticket)
+            .body
+            .contains("historical 90th-percentile")
     );
 }
