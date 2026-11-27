@@ -1,6 +1,6 @@
 //! Manual payment helpers for priced and multi-term mana abilities.
 //!
-//! Implements: none. Supports `mana::pay::manual_options` and `manual_pay` in rich mana games.
+//! Implements: none. Supports `mana::manual::manual_options` and `manual_pay` in rich mana games.
 
 use crate::bitboard::Bitboard;
 use crate::card::{ManaColor, ManaCost, ObjectAbility};

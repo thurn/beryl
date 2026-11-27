@@ -19,6 +19,7 @@
 mod add;
 mod changes;
 mod lookahead;
+mod manual;
 mod pay;
 mod pool;
 mod priority;
@@ -36,7 +37,8 @@ use crate::layout::Small;
 
 pub use add::add;
 pub(crate) use add::{add_instruction, add_of_kind_instruction, add_product_instruction};
-pub(crate) use pay::{activate, manual_options, manual_pay, pay};
+pub(crate) use manual::{manual_options, manual_pay};
+pub(crate) use pay::{activate, pay};
 pub(crate) use pool::{Funds, payable};
 pub(crate) use priority::{
     activate_chosen, begin_instant, choose_mana_type, instant_options, is_instant,
