@@ -519,7 +519,7 @@ fn reference_units<L: Layout>(
     exclude: Bitboard<L::Slot>,
 ) -> Option<Units> {
     let mut units = Units::new();
-    for (k, &n) in s.player(player).mana().amounts().iter().enumerate() {
+    for (k, &n) in s.player(player).mana().amounts_u8().iter().enumerate() {
         for _ in 0..n {
             units.push(1u8 << k).ok()?;
         }

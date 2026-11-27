@@ -136,12 +136,12 @@ pub(super) fn granted_so_far<L: Layout>(
 
 /// The unresolved layer change for a static ability part whose value is read as the layers
 /// apply (`LayerChange::Read` for an amount, `LayerChange::Lend` for `Modification::Lend`).
-pub(super) fn unresolved_static_change(
+pub(super) fn unresolved_static_change<L: Layout>(
     modification: crate::card::Modification,
     face: crate::card::FaceIx,
     ability: crate::card::AbilityIx,
     part: u8,
-) -> crate::state::LayerChange {
+) -> crate::state::LayerChange<L> {
     if matches!(modification, crate::card::Modification::Lend(_)) {
         crate::state::LayerChange::Lend {
             face,

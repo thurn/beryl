@@ -33,11 +33,15 @@ pub(super) fn append_plans<L: Layout>(
             Opt::Attack {
                 slot,
                 band: Some(first),
-            } if slot != first && start.derived(slot).power > 0 => Some((slot, first)),
+            } if slot != first && { start.derived(slot).power }
+                > <L::Pt as beryl_engine::Number>::ZERO =>
+            {
+                Some((slot, first))
+            }
             _ => None,
         })
         .collect();
-    joins.sort_by_key(|&(slot, _)| -i32::from(start.derived(slot).power));
+    joins.sort_by_key(|&(slot, _)| -beryl_engine::SignedNumber::to_i32(start.derived(slot).power));
     for (slot, first) in joins.into_iter().take(MAX_BAND_PLANS) {
         plans.push(vec![Declare::Band {
             slot,
@@ -56,19 +60,27 @@ pub(super) fn append_plans<L: Layout>(
             Opt::Attack {
                 slot,
                 band: Some(first),
-            } if slot == first && start.derived(slot).power > 0 => Some(slot),
+            } if slot == first && { start.derived(slot).power }
+                > <L::Pt as beryl_engine::Number>::ZERO =>
+            {
+                Some(slot)
+            }
             _ => None,
         })
         .collect();
-    starters.sort_by_key(|&slot| -i32::from(start.derived(slot).power));
+    starters.sort_by_key(|&slot| -beryl_engine::SignedNumber::to_i32(start.derived(slot).power));
     let mut partners: Vec<L::Slot> = options
         .iter()
         .filter_map(|&o| match o {
-            Opt::Attack { slot, band: None } if start.derived(slot).power > 0 => Some(slot),
+            Opt::Attack { slot, band: None }
+                if { start.derived(slot).power } > <L::Pt as beryl_engine::Number>::ZERO =>
+            {
+                Some(slot)
+            }
             _ => None,
         })
         .collect();
-    partners.sort_by_key(|&slot| -i32::from(start.derived(slot).power));
+    partners.sort_by_key(|&slot| -beryl_engine::SignedNumber::to_i32(start.derived(slot).power));
     for starter in starters.into_iter().take(2) {
         for &partner in partners.iter().filter(|&&p| p != starter).take(3) {
             if added >= MAX_BAND_PLANS {

@@ -95,7 +95,7 @@ fn owed<L: Layout>(s: &State<L>, d: &Decision<L>) -> ManaCost {
     let mut rest = d.prompt.cost;
     if rest.symbols.iter().all(|&n| n == 0) && rest.hybrid.is_empty() {
         let pool: u16 = (s.player(d.player).mana().amounts().into_iter())
-            .map(u16::from)
+            .map(|n| u16::try_from(beryl_engine::UnsignedNumber::to_u32(n)).unwrap_or(u16::MAX))
             .sum();
         rest.generic = u8::try_from(u16::from(rest.generic).saturating_sub(pool)).unwrap_or(0);
     }
@@ -284,7 +284,8 @@ fn cover<L: Layout>(
         let attacks = before.derived(slot).types.contains(Types::CREATURE)
             && !before.object(slot).is_summoning_sick();
         if attacks {
-            u16::try_from(before.derived(slot).power.max(0)).unwrap_or(u16::MAX)
+            u16::try_from(beryl_engine::SignedNumber::to_i32(before.derived(slot).power).max(0))
+                .unwrap_or(u16::MAX)
         } else {
             0
         }

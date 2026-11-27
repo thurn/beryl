@@ -64,7 +64,7 @@ pub fn start_on_set<L: Layout>(
     game: &mut Game<'_, L>,
     resolution: &Resolution<'_, L>,
     permanents: Permanents<L>,
-    changes: &[LayerChange],
+    changes: &[LayerChange<L>],
     duration: Duration,
 ) -> Result<(), Full> {
     let card = resolution.entry.card();
@@ -162,9 +162,9 @@ pub(crate) fn instruction<L: Layout>(
             // the battlefield), the answer is determined only once, when the effect is
             // applied."
             Modification::SetBasePt(power, toughness) => {
+                use beryl_kernel::SignedNumber as _;
                 let scene = run.scene();
-                let number =
-                    |amount: &Amount| i8::try_from(scene.amount(*amount)).unwrap_or(i8::MAX);
+                let number = |amount: &Amount| L::Pt::from_u8_saturating(scene.amount(*amount));
                 LayerChange::SetBasePt(number(power), number(toughness))
             }
             // "The color of your choice" is chosen as the effect begins, by the controller

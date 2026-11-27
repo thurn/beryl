@@ -71,7 +71,8 @@ pub(super) fn assigns_now<L: Layout>(s: &State<L>, slot: L::Slot) -> bool {
 ///
 /// [CR 510.1a]: https://yawgatog.com/resources/magic-rules/#R5101a
 pub(super) fn power<L: Layout>(s: &State<L>, slot: L::Slot) -> u8 {
-    u8::try_from(s.derived(slot).power.max(0)).unwrap_or(0)
+    use beryl_kernel::Number as _;
+    u8::try_from(s.derived(slot).power.to_i64().max(0)).unwrap_or(u8::MAX)
 }
 
 /// The damage that would be lethal to a creature: its toughness less the damage already marked on
@@ -80,7 +81,8 @@ pub(super) fn power<L: Layout>(s: &State<L>, slot: L::Slot) -> u8 {
 ///
 /// [CR 120.6]: https://yawgatog.com/resources/magic-rules/#R1206
 pub(super) fn lethal_damage<L: Layout>(s: &State<L>, slot: L::Slot) -> u8 {
-    let left = i16::from(s.derived(slot).toughness) - i16::from(s.object(slot).damage());
+    use beryl_kernel::Number as _;
+    let left = s.derived(slot).toughness.to_i64() - s.object(slot).damage().to_i64();
     u8::try_from(left.clamp(1, 255)).unwrap_or(1)
 }
 

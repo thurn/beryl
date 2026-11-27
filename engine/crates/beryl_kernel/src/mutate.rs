@@ -19,7 +19,7 @@ use crate::effects::Continuous;
 use crate::event::{Event, Recipient};
 use crate::fixed::Full;
 use crate::ids::{Seat, SlotId};
-use crate::layout::{Layout, Queue, Table};
+use crate::layout::{Layout, Number, Queue, Table};
 use crate::object::{Attachment, AttackTarget, CombatRole, Flag, ObjectFlags, ObjectRef, SlotSet};
 use crate::query::Copiable;
 use crate::reference::{Permanent, Spell};
@@ -124,15 +124,16 @@ impl<L: Layout> State<L> {
     ) -> Event<L> {
         let types = self.derived(to.slot()).types;
         let o = self.object_mut(to.slot());
+        let amount_count = L::Count::from(amount);
         let lost_loyalty = if types.contains(Types::PLANESWALKER) {
             let before = o.counters.loyalty;
-            o.counters.loyalty = before.saturating_sub(amount);
+            o.counters.loyalty = before.saturating_sub(amount_count);
             o.counters.loyalty != before
         } else {
             false
         };
         if types.contains(Types::CREATURE) {
-            o.damage = o.damage.saturating_add(amount);
+            o.damage = o.damage.saturating_add(amount_count);
         }
         if lost_loyalty && self.layer_inputs.contains(Inputs::ANY_COUNTERS) {
             self.flags.derived_dirty = true;
@@ -153,7 +154,7 @@ impl<L: Layout> State<L> {
     pub fn clear_damage(&mut self) {
         for i in 0..self.battlefield.len() {
             let slot = self.battlefield.as_slice()[i];
-            self.object_mut(slot).damage = 0;
+            self.object_mut(slot).damage = L::Count::ZERO;
         }
         if !self.phased_out.is_empty() {
             self.clear_phased_out_damage();
@@ -165,7 +166,7 @@ impl<L: Layout> State<L> {
     #[inline(never)]
     fn clear_phased_out_damage(&mut self) {
         for slot in self.phased_out.iter() {
-            self.object_mut(slot).damage = 0;
+            self.object_mut(slot).damage = L::Count::ZERO;
         }
     }
 
@@ -175,7 +176,7 @@ impl<L: Layout> State<L> {
     /// [CR 120.6]: https://yawgatog.com/resources/magic-rules/#R1206
     #[inline]
     pub fn remove_damage(&mut self, permanent: Permanent<L>) {
-        self.object_mut(permanent.slot()).damage = 0;
+        self.object_mut(permanent.slot()).damage = L::Count::ZERO;
     }
 
     /// Turns the face-down permanent in `slot` face up. It stays the same object, with its
@@ -435,7 +436,7 @@ impl<L: Layout> State<L> {
             o.set_attachment(Some(host));
         }
         match how.counters {
-            Some((kind, n)) => self.set_counters(slot, kind, n),
+            Some((kind, n)) => self.set_counters(slot, kind, L::Count::from(n)),
             None => Ok(()),
         }
     }

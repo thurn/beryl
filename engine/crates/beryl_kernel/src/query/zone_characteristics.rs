@@ -240,7 +240,7 @@ fn apply(t: &GameTable, so_far: &mut SoFar, change: LayerChange) {
 /// Whether the effects that reach other zones could hold `change`: a change of card types,
 /// subtypes or colors, which [`State::elsewhere`] applies, or escape, which
 /// [`State::escape_from`] reads. A land type's mana abilities (see CR 305.7) are none of these.
-pub fn reaches(change: LayerChange) -> bool {
+pub fn reaches<L: Layout>(change: LayerChange<L>) -> bool {
     matches!(
         change,
         LayerChange::AddTypes(_)

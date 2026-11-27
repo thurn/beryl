@@ -28,7 +28,7 @@ impl<L: Layout> Runner<L> {
         for player in Seat::BOTH {
             out.push(Assertion::Life {
                 player,
-                life: s.player(player).life(),
+                life: beryl_engine::SignedNumber::to_i16_saturating(s.player(player).life()),
             });
         }
         for player in Seat::BOTH {
@@ -71,7 +71,7 @@ impl<L: Layout> Runner<L> {
             }
             out.push(Assertion::ManaPool {
                 player,
-                amounts: s.player(player).mana().amounts(),
+                amounts: s.player(player).mana().amounts_u8(),
             });
         }
         if !s.stack().is_empty() {
@@ -150,7 +150,7 @@ impl<L: Layout> Runner<L> {
                         player,
                         card,
                         kind,
-                        count,
+                        count: beryl_engine::UnsignedNumber::to_u8_saturating(count),
                     });
                 }
             }
@@ -325,13 +325,13 @@ impl<L: Layout> Runner<L> {
             subtypes,
             all_creature_types,
             keywords: derived.keywords,
-            damage: object.damage(),
+            damage: beryl_engine::UnsignedNumber::to_u8_saturating(object.damage()),
             attached_to: object.attached_to().map(|host| self.snapshot_ref(host)),
             enchanted_player: object.enchanted_player(),
-            pt: derived
-                .types
-                .contains(Types::CREATURE)
-                .then_some((derived.power, derived.toughness)),
+            pt: derived.types.contains(Types::CREATURE).then_some((
+                beryl_engine::SignedNumber::to_i8_saturating(derived.power),
+                beryl_engine::SignedNumber::to_i8_saturating(derived.toughness),
+            )),
         }
     }
 

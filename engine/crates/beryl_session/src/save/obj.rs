@@ -197,7 +197,11 @@ impl Obj {
             } else {
                 Vec::new()
             },
-            damage: if permanent { o.damage() } else { 0 },
+            damage: if permanent {
+                beryl_engine::UnsignedNumber::to_u8_saturating(o.damage())
+            } else {
+                0
+            },
             attacking: permanent && o.is_attacking(),
             blocking: permanent && o.is_blocking(),
             blocked: permanent && o.is_blocked(),

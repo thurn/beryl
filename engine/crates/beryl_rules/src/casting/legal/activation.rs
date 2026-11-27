@@ -94,13 +94,14 @@ pub(super) fn activatable<L: Layout, const TARGETS: bool>(
     if a.cost().pays_life_or_chooses() && !life_payable(s, t, player, a.cost().parts()) {
         return false;
     }
-    if matches!(a.cost().removes(), Some(kind) if s.counters_of(slot, kind) == 0) {
+    if matches!(a.cost().removes(), Some(kind) if beryl_kernel::Number::is_zero(s.counters_of(slot, kind)))
+    {
         return false;
     }
     let timely = if let Some(loyalty) = a.cost().loyalty_change() {
         // CR 606.6: "A loyalty ability with a negative loyalty cost ... can't be activated
         // unless the permanent has at least that many loyalty counters on it."
-        let payable = i16::from(o.counters().loyalty) + i16::from(loyalty) >= 0;
+        let payable = beryl_kernel::Number::to_i64(o.counters().loyalty) + i64::from(loyalty) >= 0;
         // CR 606.3: "A player may activate a loyalty ability of a permanent they control any
         // time they have priority and the stack is empty during a main phase of their turn,
         // but only if no player has previously activated a loyalty ability of that permanent

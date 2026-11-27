@@ -232,7 +232,7 @@ fn pay_units<L: Layout, const MEMORY: bool>(
             From::Pool => s.spend_mana(player, color, unit.n),
         }
     }
-    debug_assert_eq!(s.player(player).mana().amounts(), plan.left);
+    debug_assert_eq!(s.player(player).mana().amounts_u8(), plan.left);
     Ok(spent)
 }
 
@@ -554,7 +554,7 @@ pub(crate) fn manual_options<L: Layout>(
     paying: Paying<L>,
 ) -> Result<L::Queue<Opt<L>, OPTIONS>, Full> {
     let sources = Sources::of(s, t, player, exclude, paying)?;
-    let pool = s.player(player).mana().amounts();
+    let pool = s.player(player).mana().amounts_u8();
     let rich =
         t.can_either(Capability::PricedMana, Capability::ManaChanges) && !sources.extras.is_empty();
     let mut out: L::Queue<Opt<L>, OPTIONS> = Default::default();
@@ -729,7 +729,7 @@ pub(crate) fn manual_pay<L: Layout>(
     if pool > made {
         // A restricted ability made it: the mana that remembers, last in the pool.
         remembered::spend(s, t, player, pool - 1, paying)?;
-    } else if s.player(player).mana()[color] > 0 {
+    } else if !beryl_kernel::Number::is_zero(s.player(player).mana()[color]) {
         s.spend_mana(player, color, 1);
     } else {
         let accepted = remembered::accepted_entries(s, t, player, paying);

@@ -730,7 +730,7 @@ pub(crate) fn available<L: Layout>(
     paying: Paying<L>,
 ) -> Result<Units, Full> {
     let sources = Sources::of(s, t, player, exclude, paying)?;
-    Ok(sources.units(s.player(player).mana().amounts(), &Table::filled(0)))
+    Ok(sources.units(s.player(player).mana().amounts_u8(), &Table::filled(0)))
 }
 
 /// Adds to `classes` a class of its own for each source `player` controls, but those in

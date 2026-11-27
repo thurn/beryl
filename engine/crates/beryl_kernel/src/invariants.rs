@@ -430,7 +430,8 @@ impl<L: Layout> State<L> {
             for p in Seat::BOTH {
                 let player = self.player(p);
                 check(
-                    player.life > losses.life && !(losses.empty_library && player.drew_from_empty),
+                    player.life > L::Life::from(losses.life)
+                        && !(losses.empty_library && player.drew_from_empty),
                     "a player who has lost has priority",
                     Some(At::Player(p)),
                 )?;

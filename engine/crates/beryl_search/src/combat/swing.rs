@@ -15,14 +15,15 @@ pub(super) fn life(l: i16) -> i32 {
 /// with `untap`, all of them. With `fragile`, the opponent removes one of our blockers first,
 /// as they will when one more blocker is all that keeps us alive.
 pub(super) fn swing_back<L: Layout>(s: &State<L>, me: Seat, untap: bool, fragile: bool) -> i32 {
+    use beryl_engine::{Number as _, SignedNumber as _};
     let creature = |slot: L::Slot| s.derived(slot).types.intersects(Types::CREATURE);
     let flies = |slot: L::Slot, k: Keywords| s.derived(slot).keywords.intersects(k);
     let mut attackers: Vec<(i32, bool)> = s
         .battlefield()
         .iter()
         .copied()
-        .filter(|&a| s.controller(a) != me && creature(a) && s.derived(a).power > 0)
-        .map(|a| (i32::from(s.derived(a).power), flies(a, Keywords::FLYING)))
+        .filter(|&a| s.controller(a) != me && creature(a) && { s.derived(a).power } > L::Pt::ZERO)
+        .map(|a| (s.derived(a).power.to_i32(), flies(a, Keywords::FLYING)))
         .collect();
     attackers.sort_unstable_by(|a, b| b.cmp(a));
     let mut blockers: Vec<bool> = s

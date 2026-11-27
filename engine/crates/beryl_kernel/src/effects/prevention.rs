@@ -68,7 +68,7 @@ impl<L: Layout> Relayout for Payload<L> {
 
     fn relayout<M: Layout>(&self) -> Payload<M> {
         match *self {
-            Payload::Layer(change) => Payload::Layer(change),
+            Payload::Layer(change) => Payload::Layer(change.relayout()),
             Payload::Move(replacement) => Payload::Move(replacement),
             Payload::Rule(rule) => Payload::Rule(rule),
             Payload::Cast(terms) => Payload::Cast(terms),

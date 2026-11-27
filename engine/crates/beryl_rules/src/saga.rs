@@ -76,8 +76,9 @@ pub(crate) fn match_lore<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     slot: L::Slot,
-    before: u8,
+    before: L::Count,
 ) -> Result<(), Full> {
+    use beryl_kernel::UnsignedNumber as _;
     let after = s.counters_of(slot, CounterKind::Lore);
     if before >= after {
         return Ok(());
@@ -86,12 +87,14 @@ pub(crate) fn match_lore<L: Layout>(
     let controller = s.controller(slot);
     let mut matching: L::Queue<Chapter<L>, 64> = Default::default();
     for chapter @ (_, _, _, (first, last)) in chapters(s, t, slot) {
-        if before < last && after >= first {
+        if before < L::Count::from(last) && after >= L::Count::from(first) {
             matching.push(chapter)?;
         }
     }
+    let before_u32 = before.to_u32();
+    let after_u32 = after.to_u32();
     for &(card, face, ability, (first, last)) in matching.as_slice() {
-        for _ in first.max(before + 1)..=last.min(after) {
+        for _ in u32::from(first).max(before_u32 + 1)..=u32::from(last).min(after_u32) {
             let info = TriggerInfo {
                 object: source,
                 player: controller,
@@ -130,7 +133,8 @@ pub(crate) fn match_arrivals<L: Layout>(
     arrived: &[L::Slot],
 ) -> Result<(), Full> {
     for &slot in arrived {
-        match_lore(s, t, slot, 0)?;
+        use beryl_kernel::Number as _;
+        match_lore(s, t, slot, L::Count::ZERO)?;
     }
     Ok(())
 }
@@ -158,7 +162,7 @@ pub(crate) fn advance<L: Layout>(
             && derived.types.contains(Types::ENCHANTMENT)
             && saga.of(derived.subtypes)
             && chapters(s, t, slot).next().is_some()
-            && s.counters_of(slot, CounterKind::Lore) < u8::MAX
+            && s.counters_of(slot, CounterKind::Lore) < <L::Count as beryl_kernel::Number>::MAX
         {
             adding.insert(slot);
         }
@@ -168,7 +172,7 @@ pub(crate) fn advance<L: Layout>(
     }
     let ordered = s.in_game_order(t, adding)?;
     // The lore each Saga had before, which the chapters it crosses are matched from.
-    let mut befores = L::Queue::<Option<u8>, 128>::default();
+    let mut befores = L::Queue::<Option<L::Count>, 128>::default();
     sink.together();
     for &slot in ordered.as_slice() {
         let object = s
@@ -193,7 +197,8 @@ pub(crate) fn advance<L: Layout>(
     }
     layers::refresh(s, t, sink)?;
     for (&slot, &before) in ordered.as_slice().iter().zip(befores.as_slice()) {
-        match_lore(s, t, slot, before.unwrap_or(0))?;
+        use beryl_kernel::Number as _;
+        match_lore(s, t, slot, before.unwrap_or(L::Count::ZERO))?;
     }
     sink.apart();
     Ok(())
@@ -225,7 +230,7 @@ pub(crate) fn completed<L: Layout>(s: &State<L>, t: &GameTable) -> Bitboard<L::S
             let final_chapter = chapters(s, t, slot)
                 .map(|(_, _, _, (_, last))| last)
                 .max()?;
-            if s.counters_of(slot, CounterKind::Lore) < final_chapter {
+            if s.counters_of(slot, CounterKind::Lore) < L::Count::from(final_chapter) {
                 return None;
             }
             let source = Some(s.object_ref(slot));

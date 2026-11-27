@@ -49,7 +49,7 @@ pub(super) trait Judgments<L: Layout> {
     }
 
     fn life(_t: &GameTable, s: &State<L>, player: Seat) -> i16 {
-        s.player(player).life()
+        beryl_engine::SignedNumber::to_i16_saturating(s.player(player).life())
     }
 
     fn tapped_risk(_t: &GameTable, _s: &State<L>, _me: Seat, _policy: &Policy<'_, L>) -> i32 {
@@ -281,7 +281,11 @@ impl<'a, L: Layout, J: Judgments<L>> Sim<'a, L, J> {
     fn attack_plans(&self, start: &State<L>, d: &Decision<L>) -> Vec<Vec<Declare<L>>> {
         // A creature without power deals nothing.
         let attackers = offered(start, d, |o| match o {
-            Opt::Attack { slot, band: None } if start.derived(slot).power > 0 => Some(slot),
+            Opt::Attack { slot, band: None }
+                if { start.derived(slot).power } > <L::Pt as beryl_engine::Number>::ZERO =>
+            {
+                Some(slot)
+            }
             _ => None,
         });
         // A creature an untapped blocker would kill for nothing attacks only all in,
@@ -337,33 +341,35 @@ impl<'a, L: Layout, J: Judgments<L>> Sim<'a, L, J> {
     /// Whether an untapped creature of the opponent's could block `attacker`, kill it and
     /// survive.
     fn dies_for_nothing(&self, s: &State<L>, attacker: L::Slot) -> bool {
-        let left = |slot: L::Slot| {
-            i16::from(s.derived(slot).toughness) - i16::from(s.object(slot).damage())
-        };
+        use beryl_engine::Number as _;
+        let left =
+            |slot: L::Slot| s.derived(slot).toughness.to_i64() - s.object(slot).damage().to_i64();
         s.battlefield().iter().any(|&b| {
             s.controller(b) != self.me
                 && s.derived(b).types.intersects(Types::CREATURE)
                 && !s.object(b).is_tapped()
                 && can_block(s, b, attacker)
-                && i16::from(s.derived(b).power) >= left(attacker)
-                && i16::from(s.derived(attacker).power) < left(b)
+                && s.derived(b).power.to_i64() >= left(attacker)
+                && s.derived(attacker).power.to_i64() < left(b)
         })
     }
 
     /// Just enough power at each of the opponent's planeswalkers to kill it, the most
     /// valuable first: the weakest attacker that kills it alone, or the strongest together.
     fn walker_kills(&self, s: &State<L>, attackers: &[L::Slot]) -> Vec<Declare<L>> {
+        use beryl_engine::{Number as _, SignedNumber as _};
         let p = self
             .policy
             .view(self.t, Observation::new(s, self.me), self.me, true);
         let mut walkers: Vec<L::Slot> = self.defenders(s).into_iter().flatten().collect();
         walkers.sort_by_key(|&w| -p.value(w));
-        let power = |a: L::Slot| i32::from(s.derived(a).power.max(0));
+        let power = |a: L::Slot| s.derived(a).power.to_i32().max(0);
         let mut free = attackers.to_vec();
         free.sort_by_key(|&a| power(a));
         let mut plan = Vec::new();
         for w in walkers {
-            let loyalty = i32::from(s.object(w).counters().loyalty);
+            let loyalty =
+                i32::try_from(s.object(w).counters().loyalty.to_i64()).unwrap_or(i32::MAX);
             if let Some(i) = free.iter().position(|&a| power(a) >= loyalty) {
                 plan.push(Declare::Attack(free.remove(i), Some(w)));
                 continue;
@@ -415,16 +421,17 @@ impl<'a, L: Layout, J: Judgments<L>> Sim<'a, L, J> {
     /// Chump blocks, the cheapest blocker in front of the strongest attacker it can block,
     /// until what gets through no longer kills us.
     fn chumps(&self, s: &State<L>, blockers: &[L::Slot], attackers: &[L::Slot]) -> Vec<Declare<L>> {
+        use beryl_engine::SignedNumber as _;
         let p = self
             .policy
             .view(self.t, Observation::new(s, self.me), self.me, true);
-        let power = |a: L::Slot| i32::from(s.derived(a).power.max(0));
+        let power = |a: L::Slot| s.derived(a).power.to_i32().max(0);
         let mut attackers = attackers.to_vec();
         attackers.sort_by_key(|&a| -power(a));
         let mut free = blockers.to_vec();
         free.sort_by_key(|&b| p.value(b));
         let mut through: i32 = attackers.iter().map(|&a| power(a)).sum();
-        let life = i32::from(s.player(self.me).life());
+        let life = s.player(self.me).life().to_i32();
         let mut plan = Vec::new();
         for a in attackers {
             if through < life {
@@ -632,7 +639,7 @@ impl<'a, L: Layout, J: Judgments<L>> Sim<'a, L, J> {
             .battlefield()
             .iter()
             .filter(|&&c| s.controller(c) != me && s.derived(c).types.intersects(Types::CREATURE))
-            .map(|&c| i32::from(s.derived(c).power.max(0)))
+            .map(|&c| beryl_engine::SignedNumber::to_i32(s.derived(c).power).max(0))
             .sum();
         e -= clock * if mine <= 10 { 3 } else { 1 };
         e += life(mine) - life(J::life(self.t, s, me.opponent()));
@@ -652,7 +659,7 @@ impl<'a, L: Layout, J: Judgments<L>> Sim<'a, L, J> {
                 s.controller(w) == me && s.derived(w).types.intersects(Types::PLANESWALKER)
             })
             .map(|&w| {
-                if back >= i32::from(s.object(w).counters().loyalty) {
+                if i64::from(back) >= beryl_engine::Number::to_i64(s.object(w).counters().loyalty) {
                     p.value(w)
                 } else {
                     6 * back
@@ -706,7 +713,10 @@ fn declare<L: Layout>(s: &State<L>, d: &Decision<L>, want: Declare<L>) -> Option
                     slot: b,
                     band: None,
                 },
-            ) => s.derived(b).power > 0,
+            ) => {
+                let power = s.derived(b).power;
+                power > <L::Pt as beryl_engine::Number>::ZERO
+            }
             _ => false,
         })
         .map(|i| Choice(i as u16))
@@ -746,8 +756,8 @@ fn like<L: Layout>(s: &State<L>, a: L::Slot, b: L::Slot) -> bool {
     a == b
         || (s.controller(a) == s.controller(b)
             && s.definition(a).key() == s.definition(b).key()
-            && s.derived(a).power == s.derived(b).power
-            && s.derived(a).toughness == s.derived(b).toughness
+            && { s.derived(a).power } == { s.derived(b).power }
+            && { s.derived(a).toughness } == { s.derived(b).toughness }
             && s.object(a).is_tapped() == s.object(b).is_tapped())
 }
 

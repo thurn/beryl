@@ -261,7 +261,7 @@ impl Counter {
             .iter()
             .map(|(kind, count)| Counter {
                 kind: CounterName(kind),
-                count,
+                count: beryl_engine::UnsignedNumber::to_u8_saturating(count),
             })
             .collect()
     }
@@ -611,7 +611,7 @@ fn side<L: Layout>(
         })
         .collect();
     Side {
-        life: s.player(p).life(),
+        life: beryl_engine::SignedNumber::to_i16_saturating(s.player(p).life()),
         hand,
         shown,
         graveyard: s
@@ -654,7 +654,7 @@ fn permanent<L: Layout>(
         tapped: o.is_tapped(),
         sick: o.is_summoning_sick(),
         counters: Counter::on(s, slot),
-        damage: o.damage(),
+        damage: beryl_engine::UnsignedNumber::to_u8_saturating(o.damage()),
         attached_to: o.attached_to().and_then(place),
         enchanted_player: o.enchanted_player().map(Seat::get),
         impending: s.paid(slot, CastingKind::Impending),

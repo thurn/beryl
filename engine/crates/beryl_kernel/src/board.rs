@@ -279,7 +279,7 @@ impl<L: Layout> Board<'_, L> {
     /// Marks `damage` on the permanent in `slot` (see [CR 120.3e]).
     ///
     /// [CR 120.3e]: https://yawgatog.com/resources/magic-rules/#R1203e
-    pub fn set_damage(&mut self, slot: L::Slot, damage: u8) {
+    pub fn set_damage(&mut self, slot: L::Slot, damage: L::Count) {
         debug_assert_eq!(self.0.object(slot).zone, Zone::Battlefield);
         self.0.object_mut(slot).damage = damage;
     }
@@ -315,7 +315,12 @@ impl<L: Layout> Board<'_, L> {
     /// Sets how many counters of a kind a permanent has, such as a planeswalker's loyalty.
     /// [`Full`] if the kind is new to it and the table of counters has no room for the row
     /// ([`crate::counters`]).
-    pub fn set_counters(&mut self, slot: L::Slot, kind: CounterKind, n: u8) -> Result<(), Full> {
+    pub fn set_counters(
+        &mut self,
+        slot: L::Slot,
+        kind: CounterKind,
+        n: L::Count,
+    ) -> Result<(), Full> {
         debug_assert_eq!(self.0.object(slot).zone, Zone::Battlefield);
         self.0.set_counters(slot, kind, n)
     }
@@ -356,7 +361,7 @@ impl<L: Layout> Board<'_, L> {
     /// Sets `player`'s `count` for this turn ([`crate::trackers`]): the spells they cast, the
     /// cards they drew, or those drawn in their draw step. Arrange it only in a game with a
     /// card that reads the count: no other keeps it.
-    pub fn set_counted(&mut self, player: Seat, count: Count, n: u8) {
+    pub fn set_counted(&mut self, player: Seat, count: Count, n: L::Count) {
         self.0.trackers.set_count(count, player, n);
     }
 
@@ -437,13 +442,13 @@ impl<L: Layout> Board<'_, L> {
         }
     }
 
-    pub fn set_life(&mut self, player: Seat, life: i16) {
+    pub fn set_life(&mut self, player: Seat, life: L::Life) {
         self.0.player_mut(player).life = life;
         self.0.life_changed();
     }
 
     /// Puts `pool` in a player's mana pool as its unspent mana (see CR 106.4).
-    pub fn set_mana(&mut self, player: Seat, pool: ManaPool) {
+    pub fn set_mana(&mut self, player: Seat, pool: ManaPool<L>) {
         self.0.player_mut(player).mana = pool;
     }
 

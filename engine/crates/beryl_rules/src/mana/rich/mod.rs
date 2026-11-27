@@ -277,7 +277,7 @@ pub(super) fn pays_with_sources<L: Layout>(
     if sources.extras.is_empty() {
         return false;
     }
-    let pool = s.player(player).mana().amounts();
+    let pool = s.player(player).mana().amounts_u8();
     pays_from_state(pool, sources, &Table::filled(0), 0, &[0; CLASSES], cost)
 }
 
@@ -577,7 +577,7 @@ pub(super) fn pay<L: Layout>(
             s.spend_mana(player, ManaColor::ALL[k], n);
         }
     }
-    debug_assert_eq!(s.player(player).mana().amounts(), plan.left);
+    debug_assert_eq!(s.player(player).mana().amounts_u8(), plan.left);
     Ok(spent)
 }
 

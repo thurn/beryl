@@ -48,8 +48,9 @@ const LIBRARY_SHORT: usize = 5;
 
 /// Player `p`'s features in `s`.
 pub fn features<L: Layout>(s: &State<L>, values: &CardValues, p: Seat) -> Features {
+    use beryl_engine::{SignedNumber as _, UnsignedNumber as _};
     let mut f = [0.0; FEATURES];
-    f[0] = f64::from(s.player(p).life().clamp(-10, 40));
+    f[0] = f64::from(s.player(p).life().to_i32().clamp(-10, 40));
     let hand = s.zone(ZoneKey::Of(p, Zone::Hand));
     f[1] = f64::from(hand.count());
     f[2] = hand.sum(|slot| f64::from(values.of(s.definition(slot).key()).value));
@@ -64,10 +65,10 @@ pub fn features<L: Layout>(s: &State<L>, values: &CardValues, p: Seat) -> Featur
         }
         f[4] += f64::from(values.of(s.definition(slot).key()).value);
         if d.types.intersects(Types::CREATURE) {
-            f[5] += f64::from(d.power.max(0));
+            f[5] += f64::from(d.power.to_i32().max(0));
         }
         if d.types.intersects(Types::PLANESWALKER) {
-            f[6] += f64::from(s.object(slot).counters().loyalty);
+            f[6] += f64::from(s.object(slot).counters().loyalty.to_u32());
         }
     }
     // In the shared-deck format both players read the one library, so the feature is the same

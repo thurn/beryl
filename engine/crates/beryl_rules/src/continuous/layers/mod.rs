@@ -81,7 +81,7 @@ struct Apply<L: Layout> {
     target: Target<L>,
     /// The game index of the effect's source card, which a granted ability is printed on.
     source: L::Card,
-    change: LayerChange,
+    change: LayerChange<L>,
     /// Of a static ability, the battlefield position of the permanent it is on, and whether
     /// this is the part in the ability's first layer, where the effect begins
     /// ([`Begun`]); none for a resolved spell's or ability's effect, which began as it
@@ -119,7 +119,10 @@ impl<L: Layout> Default for Apply<L> {
             part: 0,
             target: Target::Position(L::Index::default()),
             source: L::Card::FIRST,
-            change: LayerChange::ModifyPt(0, 0),
+            change: LayerChange::ModifyPt(
+                <L::Pt as beryl_kernel::Number>::ZERO,
+                <L::Pt as beryl_kernel::Number>::ZERO,
+            ),
             from: None,
             parts: 1,
         }
@@ -378,8 +381,8 @@ fn apply_layers<L: Layout>(
         // One test of the flag, read before the write; a copy's values are found out of line.
         let copy = s.object(slot).flags().has(Flag::Copy);
         s.results()[i] = Derived {
-            power: f.power.unwrap_or(0),
-            toughness: f.toughness.unwrap_or(0),
+            power: L::Pt::from(f.power.unwrap_or(0)),
+            toughness: L::Pt::from(f.toughness.unwrap_or(0)),
             types: f.types,
             supertypes: f.supertypes,
             colors: f.colors,
@@ -576,7 +579,7 @@ fn list_static<L: Layout>(
     let words = text::words_for(s, slot, on.order);
     let parts = u8::try_from(spec.modifications.len())
         .expect("a layer spec has at most MODIFY_PARTS parts");
-    let mut changes = [LayerChange::SwitchPt; MODIFY_PARTS];
+    let mut changes: [LayerChange<L>; MODIFY_PARTS] = [LayerChange::SwitchPt; MODIFY_PARTS];
     for (&modification, part) in spec.modifications.iter().zip(0..parts) {
         // A static ability that changes control names `you` here, its permanent's base
         // controller, and is read again as layer 2 applies (`apply::settle`).

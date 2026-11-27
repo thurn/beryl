@@ -275,13 +275,16 @@ fn player_state<L: Layout>(t: &GameTable, obs: Observation<'_, L>, p: Seat) -> P
     let player = obs.player(p);
     // Mana that remembers what it may be spent on counts as mana of its kind (CR 106.6: "This
     // doesn't affect the mana's type").
-    let mut amounts = player.mana().amounts().map(u32::from);
+    let mut amounts = player
+        .mana()
+        .amounts()
+        .map(beryl_engine::UnsignedNumber::to_u32);
     for mana in player.remembered_mana() {
         amounts[mana.color.index()] += 1;
     }
     let [white, blue, black, red, green, colorless] = amounts;
     PlayerState {
-        life: player.life().into(),
+        life: beryl_engine::SignedNumber::to_i32(player.life()),
         mana: ManaPool {
             white,
             blue,
@@ -415,7 +418,7 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
         .iter()
         .map(|(kind, count)| CounterView {
             kind: kind.into(),
-            count: count.into(),
+            count: i32::try_from(beryl_engine::UnsignedNumber::to_u32(count)).unwrap_or(i32::MAX),
         })
         .collect();
     let some = |s: Option<L::Slot>| s.map(|s| ObjectId(s.num()));
@@ -443,7 +446,7 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
         token: o.is_token(),
         tapped: o.is_tapped(),
         summoning_sick: creature && o.is_summoning_sick(),
-        damage: o.damage().into(),
+        damage: i32::try_from(beryl_engine::UnsignedNumber::to_u32(o.damage())).unwrap_or(i32::MAX),
         counters,
         types: CardType::ALL
             .iter()
@@ -451,8 +454,8 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
             .map(|&(_, ty)| ty)
             .collect(),
         pt: derived.filter(|_| creature).map(|d| PowerToughness {
-            power: d.power.into(),
-            toughness: d.toughness.into(),
+            power: d.power,
+            toughness: d.toughness,
         }),
         keywords: derived.map_or_else(Vec::new, |d| {
             Keyword::ALL
@@ -586,8 +589,8 @@ fn has_mana_ability<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::
 #[derive(Clone, Copy)]
 struct Shown {
     types: Types,
-    power: i8,
-    toughness: i8,
+    power: i32,
+    toughness: i32,
     keywords: Keywords,
 }
 
@@ -610,8 +613,8 @@ fn characteristics<L: Layout>(
             let d = obs.derived(slot);
             return Some(Shown {
                 types: d.types,
-                power: d.power,
-                toughness: d.toughness,
+                power: beryl_engine::SignedNumber::to_i32(d.power),
+                toughness: beryl_engine::SignedNumber::to_i32(d.toughness),
                 keywords: d.keywords,
             });
         }
@@ -623,8 +626,8 @@ fn characteristics<L: Layout>(
     };
     Some(Shown {
         types: face.types,
-        power: face.power.unwrap_or(0),
-        toughness: face.toughness.unwrap_or(0),
+        power: i32::from(face.power.unwrap_or(0)),
+        toughness: i32::from(face.toughness.unwrap_or(0)),
         keywords: face.keywords,
     })
 }

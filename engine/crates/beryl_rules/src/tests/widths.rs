@@ -48,7 +48,7 @@ fn refresh<L: Layout>(s: &mut State<L>, t: &GameTable) {
     layers::refresh(s, t, &mut Scratch::new().events).unwrap();
 }
 
-fn power_and_toughness<L: Layout>(s: &State<L>, slot: L::Slot) -> (i8, i8) {
+fn power_and_toughness<L: Layout>(s: &State<L>, slot: L::Slot) -> (L::Pt, L::Pt) {
     (s.derived(slot).power, s.derived(slot).toughness)
 }
 
@@ -257,4 +257,65 @@ fn a_game_with_grants_widens_to_the_large_one() {
     large.forget_derived();
     refresh(&mut large, &g.t);
     assert_eq!(large.first_difference(&widened), None);
+}
+
+#[test]
+fn a_small_state_with_quantities_widens_to_the_large_one() {
+    fn build<L: Layout>(t: &GameTable, mut s: State<L>, p: Seat) -> State<L> {
+        let bear = put(&mut s, t, p, "Test Bear");
+        let card = card_of(&s, t, bear);
+        let perm = s.permanent_at(bear).unwrap();
+        let change = Continuous::Layer(perm, LayerChange::ModifyPt(L::Pt::from(3), L::Pt::from(2)));
+        s.start_effect(card, change, Duration::EndOfTurn).unwrap();
+        let object = s.current(s.object_ref(bear)).unwrap();
+        let _ = s
+            .add_counters(object, CounterKind::PlusOne, 2, true)
+            .unwrap();
+        let _ = s.add_counters(object, CounterKind::Lore, 3, false).unwrap();
+        refresh(&mut s, t);
+        let perm = s.permanent_at(bear).unwrap();
+        let _ = s.mark_damage(s.object_ref(bear), perm, 1, false);
+        let _ = s.add_mana(p, None, crate::card::ManaColor::Blue, 4);
+        let _ = s.gain_life(p, 5);
+        let _ = s.lose_life(s.next_player(p), 3);
+        refresh(&mut s, t);
+        s
+    }
+
+    let (t, small, p) = game();
+    let large = small.widen();
+    let small = build(&t, small, p);
+    let large = build(&t, large, p);
+    let widened = small.widen();
+    assert_eq!(widened.first_difference(&large), None);
+    assert_eq!(widened, large);
+}
+
+#[test]
+fn a_large_state_with_200_power_does_not_narrow() {
+    let (t, small, p) = game();
+    let mut large: State<Large> = small.widen();
+    let bear = put(&mut large, &t, p, "Test Bear");
+    let card = card_of(&large, &t, bear);
+    let perm = large.permanent_at(bear).unwrap();
+    for _ in 0..2 {
+        let change = Continuous::Layer(perm, LayerChange::ModifyPt(99, 0));
+        large
+            .start_effect(card, change, Duration::EndOfTurn)
+            .unwrap();
+    }
+    refresh(&mut large, &t);
+    assert_eq!(power_and_toughness(&large, bear), (200, 2));
+    let err = large.try_relayout::<beryl_kernel::Small>(&t).unwrap_err();
+    assert_eq!(
+        err,
+        beryl_kernel::Misfit::ValueOutOfRange {
+            quantity: "power",
+            value: 200,
+            min: i64::from(i8::MIN),
+            max: i64::from(i8::MAX),
+        }
+    );
+    assert!(err.to_string().contains("power"));
+    assert!(err.to_string().contains("200"));
 }

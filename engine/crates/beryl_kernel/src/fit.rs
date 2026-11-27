@@ -9,8 +9,8 @@ use std::fmt;
 
 use crate::decision::{Candidates, Opt};
 use crate::ids::{CardId, Seat, SlotId, SlotPlace};
-use crate::layout::{Item, Layout, Queue, Table};
-use crate::object::Object;
+use crate::layout::{Item, Layout, Number, Queue, Table};
+use crate::object::{Derived, Object};
 use crate::pending::{Pending, Resolving, hidden_pick_of};
 use crate::player::Player;
 use crate::relayout::Relayout;
@@ -49,6 +49,14 @@ pub enum Misfit {
     /// An ability on the stack remembers the mana spent on its X, which only Large holds
     /// ([`crate::state::SpentMana`]).
     SpentOnX,
+    /// A numeric quantity (power, toughness, counters, damage, mana, life or a tracker count)
+    /// is outside what the layout's numeric type can represent.
+    ValueOutOfRange {
+        quantity: &'static str,
+        value: i64,
+        min: i64,
+        max: i64,
+    },
 }
 
 impl fmt::Display for Misfit {
@@ -84,6 +92,15 @@ impl fmt::Display for Misfit {
             Misfit::IndexTooWide { index } => {
                 write!(f, "option {index} is past what this layout can name")
             }
+            Misfit::ValueOutOfRange {
+                quantity,
+                value,
+                min,
+                max,
+            } => write!(
+                f,
+                "{quantity} is {value}, outside the {min}..={max} this layout holds"
+            ),
         }
     }
 }
@@ -106,6 +123,26 @@ pub(crate) fn room(list: &'static str, len: usize, capacity: usize) -> Result<()
             capacity,
         })
     }
+}
+
+/// Whether `value` fits in the numeric type `N`.
+pub(crate) fn fits_number<N: Number>(quantity: &'static str, value: i64) -> Result<(), Misfit> {
+    if N::try_from_i64(value).is_some() {
+        Ok(())
+    } else {
+        Err(Misfit::ValueOutOfRange {
+            quantity,
+            value,
+            min: N::MIN.to_i64(),
+            max: N::MAX.to_i64(),
+        })
+    }
+}
+
+/// Whether `derived`'s power and toughness fit layout `M`.
+fn fits_derived<L: Layout, M: Layout>(derived: &Derived<L>) -> Result<(), Misfit> {
+    fits_number::<M::Pt>("power", derived.power.to_i64())?;
+    fits_number::<M::Pt>("toughness", derived.toughness.to_i64())
 }
 
 /// Whether `M`'s index can name `index`.
@@ -204,12 +241,20 @@ impl<L: Layout> State<L> {
             outer.fits::<M>(t)?;
         }
         self.fits_slots::<M>()?;
-        for &slot in battlefield.iter() {
+        for slot in L::Slot::all() {
+            let object = self.object(slot);
+            if object != &Object::EMPTY {
+                fits_number::<M::Count>("marked damage", object.damage.to_i64())?;
+                object.counters.fits::<M>()?;
+            }
+        }
+        for (i, &slot) in battlefield.iter().enumerate() {
             room(
                 "a blocker's attackers",
                 self.object(slot).blocked_attackers().len(),
                 crate::object::SlotSet::<M>::CAPACITY,
             )?;
+            fits_derived::<L, M>(&self.derived[i])?;
         }
         let lists = [
             (
@@ -269,6 +314,8 @@ impl<L: Layout> State<L> {
         }
         for row in last_known.iter() {
             row.copiable.fits::<M>()?;
+            fits_derived::<L, M>(&row.derived)?;
+            row.counters.fits::<M>()?;
         }
         for row in departed_spells.iter() {
             row.copiable.fits::<M>()?;
@@ -281,6 +328,8 @@ impl<L: Layout> State<L> {
         turn_plan.fits::<M>()?;
         self.stores_fit::<M>()?;
         for player in players.iter() {
+            fits_number::<M::Life>("life total", player.life.to_i64())?;
+            player.mana.fits::<M>()?;
             room(
                 "a player's emblems",
                 player.emblems.len(),

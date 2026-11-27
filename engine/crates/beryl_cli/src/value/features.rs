@@ -86,8 +86,9 @@ impl Columns {
 /// graveyard size, creatures, their total power and toughness, planeswalkers and their total
 /// loyalty.
 fn player<L: Layout>(obs: Observation<'_, L>, p: Seat) -> [f64; PER_PLAYER] {
+    use beryl_engine::{SignedNumber as _, UnsignedNumber as _};
     let mut f = [0.0; PER_PLAYER];
-    f[0] = f64::from(obs.player(p).life());
+    f[0] = f64::from(obs.player(p).life().to_i32());
     f[1] = f64::from(obs.zone(ZoneKey::Of(p, Zone::Hand)).count());
     f[2] = obs.library(p).len() as f64;
     f[5] = obs.graveyard(p).len() as f64;
@@ -103,12 +104,12 @@ fn player<L: Layout>(obs: Observation<'_, L>, p: Seat) -> [f64; PER_PLAYER] {
         }
         if d.types.intersects(Types::CREATURE) {
             f[6] += 1.0;
-            f[7] += f64::from(d.power);
-            f[8] += f64::from(d.toughness);
+            f[7] += f64::from(d.power.to_i32());
+            f[8] += f64::from(d.toughness.to_i32());
         }
         if d.types.intersects(Types::PLANESWALKER) {
             f[9] += 1.0;
-            f[10] += f64::from(o.counters().loyalty);
+            f[10] += f64::from(o.counters().loyalty.to_u32());
         }
     }
     f

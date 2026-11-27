@@ -44,7 +44,7 @@ pub struct LastKnown<L: Layout = Small> {
     /// The object that left, as it was on the battlefield: no longer current.
     pub object: ObjectRef<L>,
     pub derived: Derived<L>,
-    pub counters: Counters,
+    pub counters: Counters<L>,
     pub token: bool,
     pub copiable: Copiable<L>,
     pub attached_to: Option<ObjectRef<L>>,

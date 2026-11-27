@@ -676,7 +676,10 @@ pub fn holds<L: Layout>(
 ) -> bool {
     let amount = |amount: &Amount| match counted(amount) {
         Some(Counted::Number(n)) => i32::from(n),
-        Some(Counted::Counters(kind)) => i32::from(s.counters_of(slot, kind)),
+        Some(Counted::Counters(kind)) => {
+            use crate::layout::Number as _;
+            i32::try_from(s.counters_of(slot, kind).to_i64()).unwrap_or(i32::MAX)
+        }
         Some(Counted::Hand) => i32::try_from(results.own_hand()).unwrap_or(i32::MAX),
         Some(Counted::Permanents(filter)) => {
             i32::try_from(results.count(filter)).unwrap_or(i32::MAX)
@@ -700,7 +703,10 @@ pub fn holds<L: Layout>(
                 | Players::EachOther(_) => s.opponents_of(controller),
             };
             who.in_seat_order()
-                .map(|p| i32::from(s.player(p).life()))
+                .map(|p| {
+                    use crate::layout::SignedNumber as _;
+                    s.player(p).life().to_i32()
+                })
                 .sum()
         }
         None => unreachable!("the card table refuses a static ability that compares this"),

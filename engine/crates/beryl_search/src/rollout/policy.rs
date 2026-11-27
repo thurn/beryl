@@ -54,10 +54,12 @@ impl<L: Layout> Policy<'_, L> {
                 v = v.min(self.weights.land_max);
             }
             if d.types.intersects(Types::CREATURE) {
-                v += self.weights.power * i32::from(d.power.max(0));
+                v += self.weights.power * beryl_engine::SignedNumber::to_i32(d.power).max(0);
             }
             if d.types.intersects(Types::PLANESWALKER) {
-                v += self.weights.loyalty * i32::from(o.counters().loyalty);
+                v += self.weights.loyalty
+                    * i32::try_from(beryl_engine::Number::to_i64(o.counters().loyalty))
+                        .unwrap_or(i32::MAX);
             }
         }
         v
@@ -627,15 +629,17 @@ impl<L: Layout> Policy<'_, L> {
 
     /// Whether `by`'s power is at least the damage left to kill `slot`.
     pub(crate) fn kills(&self, by: L::Slot, slot: L::Slot) -> bool {
+        use beryl_engine::Number as _;
         let left =
-            i16::from(self.obs.derived(slot).toughness) - i16::from(self.obs.object(slot).damage());
-        i16::from(self.obs.derived(by).power) >= left
+            self.obs.derived(slot).toughness.to_i64() - self.obs.object(slot).damage().to_i64();
+        self.obs.derived(by).power.to_i64() >= left
     }
 
     /// No untapped creature of the opponent that could block `attacker` would kill it, and
     /// it deals damage.
     pub(crate) fn safe_attack(&self, attacker: L::Slot) -> bool {
-        self.obs.derived(attacker).power > 0
+        let power = self.obs.derived(attacker).power;
+        power > <L::Pt as beryl_engine::Number>::ZERO
             && !self.obs.battlefield().iter().any(|&b| {
                 self.obs.controller(b) != self.me
                     && self.creature(b)
@@ -658,6 +662,7 @@ impl<L: Layout> Policy<'_, L> {
     /// a planeswalker causes that many loyalty counters to be removed from that
     /// planeswalker."
     pub(crate) fn walker_target(&self, walker: L::Slot) -> i32 {
+        use beryl_engine::{Number as _, SignedNumber as _};
         let sent: i32 = self
             .obs
             .battlefield()
@@ -666,9 +671,9 @@ impl<L: Layout> Policy<'_, L> {
                 let o = self.obs.object(a);
                 self.obs.controller(a) == self.me && o.attacked_planeswalker() == Some(walker)
             })
-            .map(|&a| i32::from(self.obs.derived(a).power.max(0)))
+            .map(|&a| self.obs.derived(a).power.to_i32().max(0))
             .sum();
-        if sent < i32::from(self.obs.object(walker).counters().loyalty) {
+        if i64::from(sent) < self.obs.object(walker).counters().loyalty.to_i64() {
             self.value(walker)
         } else {
             -1
@@ -692,24 +697,25 @@ impl<L: Layout> Policy<'_, L> {
             .battlefield()
             .iter()
             .filter(|&&a| self.attacking(a) && self.attacks_player(a) && !self.blocked(a))
-            .map(|&a| i32::from(self.obs.derived(a).power.max(0)))
+            .map(|&a| beryl_engine::SignedNumber::to_i32(self.obs.derived(a).power).max(0))
             .sum()
     }
 
     /// The score of `blocker` blocking `attacker`, if it is a block worth making: killing it
     /// and surviving, trading up, surviving, or chumping when the damage would be lethal.
     pub(crate) fn block(&self, blocker: L::Slot, attacker: L::Slot) -> Option<i32> {
+        use beryl_engine::SignedNumber as _;
         if !self.attacking(attacker) || self.blocked(attacker) || self.evades(attacker, blocker) {
             return None;
         }
         let (kill, die) = (self.kills(blocker, attacker), self.kills(attacker, blocker));
         let (va, vb) = (self.value(attacker), self.value(blocker));
-        let power = i32::from(self.obs.derived(attacker).power.max(0));
+        let power = self.obs.derived(attacker).power.to_i32().max(0);
         match (kill, die) {
             (true, false) => Some(300 + va),
             (true, true) if va >= vb => Some(200 + va - vb),
             (false, false) => Some(100 + power),
-            _ if self.unblocked_damage() >= i32::from(self.obs.player(self.me).life())
+            _ if self.unblocked_damage() >= self.obs.player(self.me).life().to_i32()
                 && self.attacks_player(attacker) =>
             {
                 // Above declining (0) at any blocker value, the cheapest blocker first.
@@ -732,13 +738,14 @@ impl<L: Layout> Policy<'_, L> {
     /// as much non-lethal damage as possible and avoid killing valuable creatures; when the
     /// opponent controls `recipient`, prefer exact lethal over overkill or partial damage.
     pub(super) fn damage_share(&self, recipient: Option<L::Slot>, amount: u8) -> i32 {
+        use beryl_engine::Number as _;
         let Some(slot) = recipient else {
             return i32::from(amount);
         };
-        let lethal = (i16::from(self.obs.derived(slot).toughness)
-            - i16::from(self.obs.object(slot).damage()))
+        let lethal = (self.obs.derived(slot).toughness.to_i64()
+            - self.obs.object(slot).damage().to_i64())
         .max(0);
-        let dealt = i16::from(amount);
+        let dealt = i64::from(amount);
         if self.obs.controller(slot) == self.me {
             if dealt < lethal {
                 100 + i32::from(amount)
@@ -748,7 +755,7 @@ impl<L: Layout> Policy<'_, L> {
         } else if lethal > 0 && dealt == lethal {
             200 + self.value(slot)
         } else if lethal > 0 && dealt > lethal {
-            100 + self.value(slot) - i32::from(dealt - lethal)
+            100 + self.value(slot) - i32::try_from(dealt - lethal).unwrap_or(i32::MAX)
         } else if amount == 0 {
             50
         } else {

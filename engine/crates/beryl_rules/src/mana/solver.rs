@@ -594,7 +594,7 @@ pub(crate) fn plans_accepting<L: Layout, const CHECK: bool>(
             false
         }
     };
-    let pool = s.player(player).mana().amounts();
+    let pool = s.player(player).mana().amounts_u8();
     let mut out: L::Queue<Plan<L>, 64> = Default::default();
     let rich = t.can_either(Capability::PricedMana, Capability::ManaChanges);
     if greedy {

@@ -23,7 +23,10 @@ const EXILE: Payload = Payload::Move(MoveReplacement::ExileInsteadOfGraveyard);
 
 /// [`PUMP`] on `object`, to start.
 fn pump<L: Layout>(object: ObjectRef<L>) -> Continuous<L> {
-    Continuous::Layer(Permanent::unchecked(object), LayerChange::ModifyPt(2, 2))
+    Continuous::Layer(
+        Permanent::unchecked(object),
+        LayerChange::ModifyPt(L::Pt::from(2), L::Pt::from(2)),
+    )
 }
 
 /// [`EXILE`] on `object`, to start.
@@ -701,7 +704,7 @@ fn a_full_table_of_sets_returns_full_and_a_wide_one_grows() {
             large.start_effect_on_set(
                 LargeCardIx::FIRST,
                 large.permanents_in(pair),
-                &[PUMPED],
+                &[PUMPED.relayout()],
                 Duration::EndOfTurn
             ),
             Ok(())

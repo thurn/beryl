@@ -209,7 +209,7 @@ struct Position {
 fn position_of<L: Layout>(s: &State<L>) -> Position {
     Position {
         turn: s.turn().number(),
-        life: Seat::BOTH.map(|p| s.player(p).life()),
+        life: Seat::BOTH.map(|p| beryl_engine::SignedNumber::to_i16_saturating(s.player(p).life())),
         library: Seat::BOTH.map(|p| s.library(p).len()),
         graveyard: Seat::BOTH.map(|p| s.graveyard(p).len()),
         battlefield: s.battlefield().len(),

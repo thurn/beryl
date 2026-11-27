@@ -239,7 +239,7 @@ fn source_power<L: Layout>(s: &State<L>, t: &GameTable, source: Option<L::Slot>)
             .find(|row| row.object.slot == slot)
             .map(|row| row.derived.power)?
     };
-    u8::try_from(power).ok()
+    u8::try_from(beryl_kernel::Number::to_i64(power)).ok()
 }
 
 /// What [`candidates`] chooses from: the players and abilities a spec can choose, and the

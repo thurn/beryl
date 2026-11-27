@@ -192,7 +192,7 @@ fn replaces_this_draw<L: Layout>(s: &State<L>, player: Seat, draws: Draws) -> bo
             let turn = s.turn();
             let first = turn.step() == TurnStep::Draw
                 && turn.active() == player
-                && s.counted(Count::DrewInDrawStep, player) == 0;
+                && beryl_kernel::Number::is_zero(s.counted(Count::DrewInDrawStep, player));
             !first
         }
     }

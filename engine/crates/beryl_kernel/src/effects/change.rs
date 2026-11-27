@@ -12,14 +12,17 @@ use beryl_card::{
     Protection, Subtype, Types, Words,
 };
 
+use crate::fit::{Misfit, fits_number};
 use crate::ids::Seat;
+use crate::layout::{Layout, Number, SignedNumber, Small};
+use crate::relayout::number;
 
 /// A change to a permanent in a layer, with every word of the card that wrote it settled:
 /// the resolved form of `beryl_card`'s [`Modification`], as [`Duration`] is of its
 /// `Duration`. The layer it applies in follows from the change
 /// (see [CR 613.1](https://yawgatog.com/resources/magic-rules/#R6131)).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum LayerChange {
+pub enum LayerChange<L: Layout = Small> {
     /// Layer 2: this player controls it.
     Control(Seat),
     /// Layer 4: "becomes [types] in addition to its other types".
@@ -52,11 +55,11 @@ pub enum LayerChange {
     LoseAbility(AbilityIx),
     /// Layer 7a: "power is equal to [amount]", the number a characteristic-defining ability
     /// defines, read as the layer applies ([`LayerChange::Read`]).
-    DefinedPower(i8),
+    DefinedPower(L::Pt),
     /// Layer 7b: "has base power and toughness [power]/[toughness]", the numbers settled.
-    SetBasePt(i8, i8),
+    SetBasePt(L::Pt, L::Pt),
     /// Layer 7c: "gets +X/+Y".
-    ModifyPt(i8, i8),
+    ModifyPt(L::Pt, L::Pt),
     /// Layer 7d: "switch its power and toughness".
     SwitchPt,
     /// A part of a static ability of the effect source whose amount the layers read as it
@@ -82,7 +85,7 @@ pub enum LayerChange {
     /// Layer 7a: "power is equal to [amount] and toughness is equal to [amount]", the numbers
     /// a characteristic-defining ability defines, read as the layer applies. Last, for the
     /// same reason as [`LayerChange::SetSubtype`].
-    DefinedPt(i8, i8),
+    DefinedPt(L::Pt, L::Pt),
     /// Layer 6: "gains protection from [colors]", the colors settled. Last, for the same
     /// reason as [`LayerChange::SetSubtype`].
     AddProtection(Colors),
@@ -101,7 +104,7 @@ pub enum LayerChange {
     },
 }
 
-impl LayerChange {
+impl<L: Layout> LayerChange<L> {
     /// What `modification` is for an ability whose controller is `you`, printed on an object
     /// with the text changes `words`: "gain control" names that player, a color word or
     /// subtype is what it reads as ([`beryl_card::words`]), and "the chosen color" is
@@ -117,7 +120,7 @@ impl LayerChange {
         you: Seat,
         words: &Words,
         chosen: impl FnOnce() -> Colors,
-    ) -> Option<LayerChange> {
+    ) -> Option<LayerChange<L>> {
         Some(match modification {
             Modification::Control => LayerChange::Control(you),
             Modification::AddTypes(types) => LayerChange::AddTypes(types),
@@ -137,7 +140,10 @@ impl LayerChange {
             Modification::LoseAllAbilities => LayerChange::LoseAllAbilities,
             Modification::LoseAbility(ability) => LayerChange::LoseAbility(ability),
             Modification::SetBasePt(&Amount::Fixed(power), &Amount::Fixed(toughness)) => {
-                LayerChange::SetBasePt(saturate(power), saturate(toughness))
+                LayerChange::SetBasePt(
+                    L::Pt::from_u8_saturating(power),
+                    L::Pt::from_u8_saturating(toughness),
+                )
             }
             Modification::AddChosenColor => LayerChange::AddColors(chosen()),
             Modification::AddProtection(Protection::ChosenColor) => {
@@ -150,7 +156,9 @@ impl LayerChange {
             | Modification::Lend(_) => {
                 return None;
             }
-            Modification::ModifyPt(power, toughness) => LayerChange::ModifyPt(power, toughness),
+            Modification::ModifyPt(power, toughness) => {
+                LayerChange::ModifyPt(L::Pt::from(power), L::Pt::from(toughness))
+            }
             Modification::SwitchPt => LayerChange::SwitchPt,
             Modification::AddProtection(Protection::ColorWords(colors)) => {
                 LayerChange::AddProtection(colors.read(words))
@@ -189,7 +197,84 @@ impl LayerChange {
     }
 }
 
-impl LayerChange {
+impl<L: Layout> LayerChange<L> {
+    /// Whether this change's numbers fit layout `M`.
+    pub(crate) fn fits<M: Layout>(self) -> Result<(), Misfit> {
+        match self {
+            LayerChange::DefinedPower(p) => fits_number::<M::Pt>("effect power", p.to_i64()),
+            LayerChange::SetBasePt(p, t)
+            | LayerChange::ModifyPt(p, t)
+            | LayerChange::DefinedPt(p, t) => {
+                fits_number::<M::Pt>("effect power", p.to_i64())?;
+                fits_number::<M::Pt>("effect toughness", t.to_i64())
+            }
+            LayerChange::Control(_)
+            | LayerChange::AddTypes(_)
+            | LayerChange::RemoveTypes(_)
+            | LayerChange::SetTypes(_)
+            | LayerChange::AddSubtype(_)
+            | LayerChange::SetSubtype(_)
+            | LayerChange::SetLandTypes(_)
+            | LayerChange::AddKeywords(_)
+            | LayerChange::Grant(_)
+            | LayerChange::SetColors(_)
+            | LayerChange::AddColors(_)
+            | LayerChange::LoseAllAbilities
+            | LayerChange::LoseAbility(_)
+            | LayerChange::SwitchPt
+            | LayerChange::Read { .. }
+            | LayerChange::AddProtection(_)
+            | LayerChange::GrantEscape
+            | LayerChange::Lend { .. } => Ok(()),
+        }
+    }
+
+    /// This change in layout `M`.
+    pub(crate) fn relayout<M: Layout>(self) -> LayerChange<M> {
+        match self {
+            LayerChange::Control(p) => LayerChange::Control(p),
+            LayerChange::AddTypes(t) => LayerChange::AddTypes(t),
+            LayerChange::RemoveTypes(t) => LayerChange::RemoveTypes(t),
+            LayerChange::SetTypes(t) => LayerChange::SetTypes(t),
+            LayerChange::AddSubtype(s) => LayerChange::AddSubtype(s),
+            LayerChange::SetSubtype(s) => LayerChange::SetSubtype(s),
+            LayerChange::SetLandTypes(t) => LayerChange::SetLandTypes(t),
+            LayerChange::AddKeywords(k) => LayerChange::AddKeywords(k),
+            LayerChange::Grant(g) => LayerChange::Grant(g),
+            LayerChange::SetColors(c) => LayerChange::SetColors(c),
+            LayerChange::AddColors(c) => LayerChange::AddColors(c),
+            LayerChange::LoseAllAbilities => LayerChange::LoseAllAbilities,
+            LayerChange::LoseAbility(a) => LayerChange::LoseAbility(a),
+            LayerChange::DefinedPower(p) => LayerChange::DefinedPower(number(p)),
+            LayerChange::SetBasePt(p, t) => LayerChange::SetBasePt(number(p), number(t)),
+            LayerChange::ModifyPt(p, t) => LayerChange::ModifyPt(number(p), number(t)),
+            LayerChange::SwitchPt => LayerChange::SwitchPt,
+            LayerChange::Read {
+                layer,
+                face,
+                ability,
+                part,
+            } => LayerChange::Read {
+                layer,
+                face,
+                ability,
+                part,
+            },
+            LayerChange::DefinedPt(p, t) => LayerChange::DefinedPt(number(p), number(t)),
+            LayerChange::AddProtection(c) => LayerChange::AddProtection(c),
+            LayerChange::GrantEscape => LayerChange::GrantEscape,
+            LayerChange::Lend {
+                face,
+                ability,
+                part,
+            } => LayerChange::Lend {
+                face,
+                ability,
+                part,
+            },
+        }
+    }
+
     /// Whether it removes abilities of the face ([`LayerChange::LoseAllAbilities`],
     /// [`LayerChange::LoseAbility`], and [`LayerChange::SetLandTypes`], which removes those
     /// of the rules text).
@@ -212,8 +297,8 @@ impl LayerChange {
     ///
     /// [CR 613.7m]: https://yawgatog.com/resources/magic-rules/#R6137m
     #[inline]
-    pub fn commutes_with(self, other: LayerChange) -> bool {
-        fn adds(change: LayerChange) -> bool {
+    pub fn commutes_with(self, other: LayerChange<L>) -> bool {
+        fn adds<L: Layout>(change: LayerChange<L>) -> bool {
             matches!(
                 change,
                 LayerChange::AddTypes(_)
@@ -272,12 +357,6 @@ impl LayerChange {
             | LayerChange::Read { .. } => Characteristics::PT,
         }
     }
-}
-
-/// A power or toughness as a permanent's characteristics hold it.
-#[inline]
-fn saturate(n: u8) -> i8 {
-    i8::try_from(n).unwrap_or(i8::MAX)
 }
 
 /// The layer a modification applies in, for a static ability's part whose amount the

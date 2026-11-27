@@ -343,8 +343,12 @@ impl<L: Layout> State<L> {
             plan.played |= TurnPlan::<L>::REPEATED;
         }
         if step == TurnStep::Draw {
-            self.trackers
-                .set_count(crate::trackers::Count::DrewInDrawStep, self.turn.active, 0);
+            use crate::layout::Number as _;
+            self.trackers.set_count(
+                crate::trackers::Count::DrewInDrawStep,
+                self.turn.active,
+                L::Count::ZERO,
+            );
         }
         Some(step)
     }

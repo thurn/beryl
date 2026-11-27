@@ -60,10 +60,10 @@ pub(super) fn allows<L: Layout>(
             .filter(|share| share.target == Some(slot))
             .fold(0_u8, |sum, share| sum.saturating_add(share.amount));
         let written = if slot == recipient { amount } else { 0 };
-        let missing = i16::from(s.derived(slot).toughness)
-            - i16::from(s.object(slot).damage())
-            - i16::from(assigned)
-            - i16::from(written);
+        let missing = beryl_kernel::Number::to_i64(s.derived(slot).toughness)
+            - beryl_kernel::Number::to_i64(s.object(slot).damage())
+            - i64::from(assigned)
+            - i64::from(written);
         u8::try_from(missing)
             .ok()
             .filter(|&n| n > 0)

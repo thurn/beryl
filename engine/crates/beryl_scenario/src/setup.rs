@@ -193,7 +193,7 @@ fn arrange<L: Layout>(
     }
     let full = |_| setup_failure(scenario, "a zone is full".to_string());
     for (p, player) in Seat::BOTH.into_iter().zip(&setup.players) {
-        s.board().set_life(p, player.life);
+        s.board().set_life(p, L::Life::from(player.life));
         for &name in player.hand {
             let slot = library_slot(&s, t, p, name);
             if shared {
@@ -311,7 +311,9 @@ fn place_permanent<L: Layout>(
         .map(|c| (c.kind, c.count))
         .or(printed.map(|n| (CounterKind::Loyalty, n)));
     if let Some((kind, n)) = counters {
-        s.board().set_counters(slot, kind, n).map_err(full)?;
+        s.board()
+            .set_counters(slot, kind, L::Count::from(n))
+            .map_err(full)?;
     }
     for &name in b.exiled_with {
         let card = library_slot(s, t, p, name);

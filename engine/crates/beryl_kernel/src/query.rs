@@ -407,12 +407,12 @@ impl<L: Layout> State<L> {
     ///
     /// [CR 613.4]: https://yawgatog.com/resources/magic-rules/#R6134
     #[inline]
-    pub fn power(&self, t: &GameTable, slot: L::Slot) -> i8 {
+    pub fn power(&self, t: &GameTable, slot: L::Slot) -> L::Pt {
         let o = self.object(slot);
         if o.on_battlefield() {
             self.derived(slot).power
         } else {
-            self.pt_elsewhere(t, slot).0
+            L::Pt::from(self.pt_elsewhere(t, slot).0)
         }
     }
 
@@ -546,12 +546,12 @@ impl<L: Layout> State<L> {
 
     /// [`State::power`] for toughness.
     #[inline]
-    pub fn toughness(&self, t: &GameTable, slot: L::Slot) -> i8 {
+    pub fn toughness(&self, t: &GameTable, slot: L::Slot) -> L::Pt {
         let o = self.object(slot);
         if o.on_battlefield() {
             self.derived(slot).toughness
         } else {
-            self.pt_elsewhere(t, slot).1
+            L::Pt::from(self.pt_elsewhere(t, slot).1)
         }
     }
 

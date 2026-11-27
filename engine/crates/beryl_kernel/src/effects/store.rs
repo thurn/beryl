@@ -84,8 +84,19 @@ impl<L: Layout> Store<L> for Effects<L> {
             <M::Queue<ContinuousEffect<M>, EFFECTS> as Queue<_>>::CAPACITY,
         )?;
         for e in self.entries.iter() {
-            if let Payload::Copy(values) = e.payload {
-                values.fits::<M>()?;
+            match e.payload {
+                Payload::Copy(values) => values.fits::<M>()?,
+                Payload::Layer(change) => change.fits::<M>()?,
+                Payload::Move(_)
+                | Payload::Rule(_)
+                | Payload::Cast(_)
+                | Payload::Cost(_)
+                | Payload::Regeneration
+                | Payload::Prevent(_)
+                | Payload::Text(_)
+                | Payload::Control(_)
+                | Payload::ExtraTurn(_)
+                | Payload::Mana(_) => {}
             }
         }
         self.sets.fits::<M>()

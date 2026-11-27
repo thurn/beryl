@@ -23,7 +23,7 @@ impl<L: Layout> Judgments<L> for ExpertCombat {
             .iter()
             .filter(|&&c| s.controller(c) == player && s.definition_name(t, c) == names::MANA_CRYPT)
             .count() as i16;
-        s.player(player).life() - 2 * crypts
+        beryl_engine::SignedNumber::to_i16_saturating(s.player(player).life()) - 2 * crypts
     }
 
     /// After our attack, what the opponent's The Wandering Emperor takes on their turn: "−2:
@@ -33,7 +33,7 @@ impl<L: Layout> Judgments<L> for ExpertCombat {
         let emperor = s.battlefield().iter().any(|&w| {
             s.controller(w) != me
                 && s.definition_name(t, w) == names::THE_WANDERING_EMPEROR
-                && s.object(w).counters().loyalty >= 3
+                && s.object(w).counters().loyalty >= L::Count::from(3)
         });
         if !emperor {
             return 0;

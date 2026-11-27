@@ -47,7 +47,7 @@ pub(in crate::mana) fn plans<L: Layout>(
     if !pays_with_sources(s, player, cost, sources) {
         return Ok(());
     }
-    let init_pool = s.player(player).mana().amounts();
+    let init_pool = s.player(player).mana().amounts_u8();
     let mut ctx = PlanSearch {
         init_pool,
         cost,

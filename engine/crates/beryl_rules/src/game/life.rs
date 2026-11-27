@@ -104,7 +104,9 @@ fn change<L: Layout>(
         let game = run.game();
         let before = game.state.player(player).life();
         change(game, player)?;
-        total += u32::from(game.state.player(player).life().abs_diff(before));
+        let diff = beryl_kernel::Number::to_i64(game.state.player(player).life())
+            .abs_diff(beryl_kernel::Number::to_i64(before));
+        total += u32::try_from(diff).unwrap_or(u32::MAX);
     }
     Ok(Outcome::of(Bitboard::EMPTY, total))
 }

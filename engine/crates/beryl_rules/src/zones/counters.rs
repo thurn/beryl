@@ -101,7 +101,9 @@ pub(crate) fn remove_from_object<L: Layout>(
         return Ok(());
     };
     let slot = object.reference().slot;
-    let amount = amount.min(game.state.counters_of(slot, kind));
+    let amount = amount.min(beryl_kernel::UnsignedNumber::to_u8_saturating(
+        game.state.counters_of(slot, kind),
+    ));
     if amount == 0 {
         return Ok(());
     }
@@ -142,9 +144,10 @@ pub(crate) fn double<L: Layout>(
     let before = counters_on(run, permanents, Some(kind));
     let mut left = permanents;
     while let Some(object) = run.state().next_permanent(&mut left) {
+        use beryl_kernel::{Number as _, UnsignedNumber as _};
         let has = run.state().counters_of(object.slot(), kind);
         has.checked_add(has).ok_or(Full)?;
-        add(run.game(), object, kind, has, true)?;
+        add(run.game(), object, kind, has.to_u8_saturating(), true)?;
     }
     let after = counters_on(run, permanents, Some(kind));
     Ok(Outcome::of(permanents.slots(), after.abs_diff(before)))
@@ -208,9 +211,10 @@ fn counters_on<L: Layout>(
     permanents: Permanents<L>,
     kind: Option<CounterKind>,
 ) -> u32 {
+    use beryl_kernel::UnsignedNumber as _;
     let s = run.state();
     permanents.slots().sum(|slot| match kind {
-        Some(kind) => u32::from(s.counters_of(slot, kind)),
-        None => s.counters(slot).iter().map(|(_, n)| u32::from(n)).sum(),
+        Some(kind) => s.counters_of(slot, kind).to_u32(),
+        None => s.counters(slot).iter().map(|(_, n)| n.to_u32()).sum(),
     })
 }

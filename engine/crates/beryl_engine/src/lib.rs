@@ -40,7 +40,7 @@ pub use decision::{
     StallReason, Step,
 };
 pub use ids::{CardId, CardIx, LargeCardIx, LargeSlot, Seat, Slot, SlotId, SlotPlace};
-pub use layout::{Large, Layout, Small};
+pub use layout::{Large, Layout, LifeNumber, Number, SignedNumber, Small, UnsignedNumber};
 pub use observation::Observation;
 pub use profile::{
     Breakpoint, Limits, NextStop, Payment, Profile, StepStops, Stops, can_declare_blockers,

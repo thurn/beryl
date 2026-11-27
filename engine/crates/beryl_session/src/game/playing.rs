@@ -380,7 +380,13 @@ pub(super) fn without_floating<L: Layout>(mut d: Decision<L>) -> Decision<L> {
 /// [CR 500.5]: https://yawgatog.com/resources/magic-rules/#R5005
 fn keeps_every_source<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>) -> bool {
     let player = s.player(d.player);
-    if player.mana().amounts().iter().any(|&n| n > 0) || !player.remembered_mana().is_empty() {
+    if player
+        .mana()
+        .amounts()
+        .iter()
+        .any(|&n| !beryl_engine::Number::is_zero(n))
+        || !player.remembered_mana().is_empty()
+    {
         return false;
     }
     let mut scratch = Scratch::new();

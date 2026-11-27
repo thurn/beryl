@@ -16,12 +16,15 @@ pub(super) fn matches<L: Layout>(s: &State<L>, caster: Seat, number: Option<Cast
     match number {
         None => true,
         Some(CastNumber::InTurn(number)) => {
+            use beryl_kernel::UnsignedNumber as _;
             s.players()
                 .in_seat_order()
-                .map(|player| u32::from(s.counted(Count::SpellsCast, player)))
+                .map(|player| s.counted(Count::SpellsCast, player).to_u32())
                 .sum::<u32>()
                 == u32::from(number)
         }
-        Some(CastNumber::ByCaster(number)) => s.counted(Count::SpellsCast, caster) == number,
+        Some(CastNumber::ByCaster(number)) => {
+            s.counted(Count::SpellsCast, caster) == L::Count::from(number)
+        }
     }
 }

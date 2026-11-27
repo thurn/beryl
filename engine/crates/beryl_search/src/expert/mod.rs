@@ -249,10 +249,15 @@ pub(crate) fn appraise<L: Layout>(p: &Policy<'_, L>, slot: L::Slot, base: i32) -
     // Jace, Wielder of Mysteries on a short library is about to win: "If you would draw a
     // card while your library has no cards in it, you win the game instead."
     if name(slot) == Some(names::JACE_WIELDER_OF_MYSTERIES) && wins_by_decking(p, controller) {
-        return Some(JACE_WINS + 6 * i32::from(o.counters().loyalty));
+        return Some(
+            JACE_WINS
+                + 6 * i32::try_from(beryl_engine::Number::to_i64(o.counters().loyalty))
+                    .unwrap_or(i32::MAX),
+        );
     }
     if obs.derived(slot).types.intersects(Types::PLANESWALKER) {
-        let loyalty = i32::from(o.counters().loyalty);
+        let loyalty =
+            i32::try_from(beryl_engine::Number::to_i64(o.counters().loyalty)).unwrap_or(i32::MAX);
         // One within three of its ultimate is about to win the game.
         let ultimate = obs.card(slot).and_then(|c| {
             p.t.def(c)
@@ -289,7 +294,9 @@ pub(crate) fn appraise<L: Layout>(p: &Policy<'_, L>, slot: L::Slot, base: i32) -
         name(slot),
         Some(names::ELITE_SPELLBINDER | names::THUNDERTRAP_TRAINER | names::THIEVING_SKYDIVER)
     ) {
-        return Some(base / 2 + 3 * i32::from(obs.derived(slot).power.max(0)));
+        return Some(
+            base / 2 + 3 * beryl_engine::SignedNumber::to_i32(obs.derived(slot).power).max(0),
+        );
     }
     // Jace, Vryn's Prodigy loots every turn and becomes a planeswalker.
     if name(slot) == Some(names::JACE_VRYNS_PRODIGY) && o.face() == FaceIx::FRONT {
@@ -398,9 +405,11 @@ impl<L: Layout> Expert<'_, L> {
         let f = self.p.t.def(card).front();
         let (power, toughness) = (f.power.unwrap_or(0), f.toughness.unwrap_or(0));
         attackers.iter().any(|&a| {
+            use beryl_engine::Number as _;
             let d = self.obs().derived(a);
-            let left = d.toughness - self.obs().object(a).damage() as i8;
-            self.value(a) >= 20 && (power >= left || d.power < toughness)
+            let left = d.toughness.to_i64() - self.obs().object(a).damage().to_i64();
+            self.value(a) >= 20
+                && (i64::from(power) >= left || d.power.to_i64() < i64::from(toughness))
         })
     }
 
@@ -451,7 +460,7 @@ impl<L: Layout> Expert<'_, L> {
             .mana()
             .amounts()
             .iter()
-            .map(|&m| i32::from(m))
+            .map(|&m| i32::try_from(beryl_engine::Number::to_i64(m)).unwrap_or(i32::MAX))
             .sum();
         pool + self
             .permanents(who)
@@ -513,8 +522,8 @@ impl<L: Layout> Expert<'_, L> {
     fn colors_up(&self, who: Seat) -> (i32, i32) {
         let pool = self.obs().player(who).mana();
         let (mut white, mut blue) = (
-            i32::from(pool[ManaColor::White]),
-            i32::from(pool[ManaColor::Blue]),
+            i32::try_from(beryl_engine::Number::to_i64(pool[ManaColor::White])).unwrap_or(i32::MAX),
+            i32::try_from(beryl_engine::Number::to_i64(pool[ManaColor::Blue])).unwrap_or(i32::MAX),
         );
         for s in self.permanents(who).filter(|&s| !self.tapped(s)) {
             let (w, u) = self.makes(s);
@@ -550,7 +559,7 @@ impl<L: Layout> Expert<'_, L> {
     }
 
     fn life(&self) -> i32 {
-        i32::from(self.obs().player(self.me()).life())
+        beryl_engine::SignedNumber::to_i32(self.obs().player(self.me()).life())
     }
 
     fn hand(&self, who: Seat) -> Bitboard<L::Slot> {
@@ -1019,11 +1028,12 @@ impl<L: Layout> Expert<'_, L> {
     /// makes an attack that gets enough damage past the opponent's untapped creatures to
     /// kill.
     fn crew_lethal(&self, vehicle: L::Slot, extra: i32) -> bool {
+        use beryl_engine::SignedNumber as _;
         // Crewed already, it is a creature until end of turn.
         if self.has_type(vehicle, Types::CREATURE) {
             return false;
         }
-        let power = |s: L::Slot| i32::from(self.obs().derived(s).power.max(0));
+        let power = |s: L::Slot| self.obs().derived(s).power.to_i32().max(0);
         let flies = |s: L::Slot| self.obs().derived(s).keywords.intersects(Keywords::FLYING);
         let sick = |s: L::Slot| self.obs().object(s).is_summoning_sick();
         let mut crew: Vec<L::Slot> = self
@@ -1050,7 +1060,7 @@ impl<L: Layout> Expert<'_, L> {
             .filter(|&s| !self.tapped(s))
             .map(|s| self.reaches(s))
             .collect();
-        through(attackers, blockers) >= i32::from(self.obs().player(self.opp()).life())
+        through(attackers, blockers) >= self.obs().player(self.opp()).life().to_i32()
     }
 
     /// Our uncrewed Vehicle, if any: a creature of ours the opponent's Swift Reconfiguration
@@ -1452,7 +1462,7 @@ impl<L: Layout> Expert<'_, L> {
         let white = |s: L::Slot| self.makes(s).0;
         self.mana(self.me()) - cost <= 0
             && !self.hand(opp).is_empty()
-            && (self.obs().player(opp).mana()[ManaColor::White] > 0
+            && (!beryl_engine::Number::is_zero(self.obs().player(opp).mana()[ManaColor::White])
                 || self.permanents(opp).any(|s| !self.tapped(s) && white(s)))
             && self.in_their_deck(names::MANA_TITHE)
             && !self.seen(names::MANA_TITHE)
@@ -1612,7 +1622,8 @@ impl<L: Layout> Expert<'_, L> {
     fn can_attack(&self) -> bool {
         self.creatures(self.me()).any(|s| {
             let o = self.obs().object(s);
-            !o.is_tapped() && !o.is_summoning_sick() && self.obs().derived(s).power > 0
+            !o.is_tapped() && !o.is_summoning_sick() && { self.obs().derived(s).power }
+                > <L::Pt as beryl_engine::Number>::ZERO
         })
     }
 
@@ -1640,15 +1651,17 @@ impl<L: Layout> Expert<'_, L> {
         // Never refill the opponent's hand when the board is already winning.
         let power: i32 = self
             .creatures(self.me())
-            .map(|s| i32::from(self.obs().derived(s).power.max(0)))
+            .map(|s| beryl_engine::SignedNumber::to_i32(self.obs().derived(s).power).max(0))
             .sum();
-        let winning = power >= i32::from(self.obs().player(self.opp()).life());
+        let winning =
+            power >= beryl_engine::SignedNumber::to_i32(self.obs().player(self.opp()).life());
         // Nor when far behind, facing a swing for half our life or low on it: a wheel refills
         // the hand that wins the game for them.
         let behind = 2 * self.threat_past(None) >= self.life()
             || self.life() <= 7
             || (self.board(self.opp()) - self.board(self.me()) >= 100
-                && self.life() < i32::from(self.obs().player(self.opp()).life()));
+                && self.life()
+                    < beryl_engine::SignedNumber::to_i32(self.obs().player(self.opp()).life()));
         // Out of cards, it refuels us at least as much as them.
         let refill = gain >= 2 || (gain >= 0 && ours <= 1);
         // A wheel shuffles our graveyard back in: the way out of drawing from an empty library.
@@ -1741,7 +1754,7 @@ impl<L: Layout> Expert<'_, L> {
         // Oust's 3 life can be the 3 that keeps a low opponent alive, or that our attack this
         // turn falls short by, with the removal we have; and the card it puts into their
         // library is one to draw from a library that would otherwise run out.
-        let life = i32::from(self.obs().player(self.opp()).life());
+        let life = beryl_engine::SignedNumber::to_i32(self.obs().player(self.opp()).life());
         if name == names::OUST
             && ((!self.dying() && (life <= 6 || self.attack_power(&[], None) + 3 >= life))
                 || self.lethal_blockers().is_some()
@@ -1787,8 +1800,8 @@ impl<L: Layout> Expert<'_, L> {
         // A planeswalker our attack can kill this turn needs no removal.
         if walker
             && ours
-            && self.attack_power(&[], None)
-                >= i32::from(self.obs().object(target).counters().loyalty)
+            && i64::from(self.attack_power(&[], None))
+                >= beryl_engine::Number::to_i64(self.obs().object(target).counters().loyalty)
         {
             return None;
         }
@@ -1838,7 +1851,7 @@ impl<L: Layout> Expert<'_, L> {
     fn lethal_blockers(&self) -> Option<&[L::Slot]> {
         self.lethal
             .get_or_init(|| {
-                let life = i32::from(self.obs().player(self.opp()).life());
+                let life = beryl_engine::SignedNumber::to_i32(self.obs().player(self.opp()).life());
                 if self.obs().turn().step() != TurnStep::PrecombatMain
                     || self.obs().turn().active() != self.me()
                 {
@@ -1889,8 +1902,8 @@ impl<L: Layout> Expert<'_, L> {
             .filter(|&s| {
                 let loyalty = self.obs().object(s).counters().loyalty;
                 match self.name(s) {
-                    Some(names::JACE_THE_MIND_SCULPTOR) => loyalty >= 1,
-                    Some(names::TEFERI_TIME_RAVELER) => loyalty >= 3,
+                    Some(names::JACE_THE_MIND_SCULPTOR) => loyalty >= L::Count::from(1),
+                    Some(names::TEFERI_TIME_RAVELER) => loyalty >= L::Count::from(3),
                     _ => false,
                 }
             })
@@ -1948,8 +1961,8 @@ impl<L: Layout> Expert<'_, L> {
                 !o.is_tapped() && !o.is_summoning_sick()
             })
             .map(|s| {
-                let power =
-                    i32::from(self.obs().derived(s).power.max(0)) + i32::from(pumped == Some(s));
+                let power = beryl_engine::SignedNumber::to_i32(self.obs().derived(s).power).max(0)
+                    + i32::from(pumped == Some(s));
                 (power, flies(s, Keywords::FLYING))
             })
             .collect();
@@ -1973,7 +1986,7 @@ impl<L: Layout> Expert<'_, L> {
     /// counter on up to one target creature. It gains first strike until end of turn.") makes
     /// our attack lethal when it is not without it: one that gets past the blockers.
     fn emperor_lethal(&self) -> Option<L::Slot> {
-        let life = i32::from(self.obs().player(self.opp()).life());
+        let life = beryl_engine::SignedNumber::to_i32(self.obs().player(self.opp()).life());
         if self.attack_power(&[], None) >= life {
             return None;
         }
@@ -2053,7 +2066,8 @@ impl<L: Layout> Expert<'_, L> {
         let o = self.obs().object(slot);
         let card = self.obs().card(slot)?;
         let face = self.p.t.def(card).face(o.face());
-        let loyalty = i32::from(o.counters().loyalty);
+        let loyalty =
+            i32::try_from(beryl_engine::Number::to_i64(o.counters().loyalty)).unwrap_or(i32::MAX);
         // An ability that would leave no loyalty is no option, short of an ultimate or a bounce
         // that opens lethal; the walker then grows instead.
         let lethal = self.opens_lethal()
@@ -2095,7 +2109,8 @@ impl<L: Layout> Expert<'_, L> {
         let card = self.obs().card(slot)?;
         let def = self.p.t.def(card);
         let face = def.face(o.face());
-        let loyalty = i32::from(o.counters().loyalty);
+        let loyalty =
+            i32::try_from(beryl_engine::Number::to_i64(o.counters().loyalty)).unwrap_or(i32::MAX);
         let by_cost = |cost: i8| {
             face.abilities
                 .iter()
@@ -2242,7 +2257,7 @@ impl<L: Layout> Expert<'_, L> {
             .creatures(self.opp())
             .filter(|&s| Some(s) != except)
             .map(|s| {
-                let power = i32::from(self.obs().derived(s).power.max(0));
+                let power = beryl_engine::SignedNumber::to_i32(self.obs().derived(s).power).max(0);
                 (
                     power,
                     self.obs().derived(s).keywords.intersects(Keywords::FLYING),
@@ -2304,10 +2319,11 @@ impl<L: Layout> Expert<'_, L> {
         }
         let damage: i32 = attackers
             .iter()
-            .map(|&s| i32::from(self.obs().derived(s).power.max(0)))
+            .map(|&s| beryl_engine::SignedNumber::to_i32(self.obs().derived(s).power).max(0))
             .sum();
         // An attack that kills us, or leaves us at 3 life or less, is worth a chump blocker.
-        let chump = damage >= i32::from(self.obs().player(self.me()).life()) - 3;
+        let chump =
+            damage >= beryl_engine::SignedNumber::to_i32(self.obs().player(self.me()).life()) - 3;
         // An attack for half our life or more, or one that kills a planeswalker of ours, is
         // worth any removal on it.
         let kills_walker = self.permanents(self.me()).any(|w| {
@@ -2315,9 +2331,13 @@ impl<L: Layout> Expert<'_, L> {
                 let at: i32 = attackers
                     .iter()
                     .filter(|&&a| self.obs().object(a).attacked_planeswalker() == Some(w))
-                    .map(|&a| i32::from(self.obs().derived(a).power.max(0)))
+                    .map(|&a| {
+                        beryl_engine::SignedNumber::to_i32(self.obs().derived(a).power).max(0)
+                    })
                     .sum();
-                at > 0 && at >= i32::from(self.obs().object(w).counters().loyalty)
+                at > 0
+                    && i64::from(at)
+                        >= beryl_engine::Number::to_i64(self.obs().object(w).counters().loyalty)
             }
         });
         let pressing = 2 * damage >= self.life() || kills_walker;
@@ -2441,14 +2461,16 @@ impl<L: Layout> Expert<'_, L> {
     fn castable(&self) -> i32 {
         let me = self.me();
         let pool = self.obs().player(me).mana();
+        let mana_i32 =
+            |m: L::Mana| i32::try_from(beryl_engine::Number::to_i64(m)).unwrap_or(i32::MAX);
         // White only, blue only, either, and colorless sources.
         let (mut w, mut u, mut both, mut c) = (
-            i32::from(pool[ManaColor::White]),
-            i32::from(pool[ManaColor::Blue]),
+            mana_i32(pool[ManaColor::White]),
+            mana_i32(pool[ManaColor::Blue]),
             0,
             0,
         );
-        c += i32::from(pool[ManaColor::Colorless]);
+        c += mana_i32(pool[ManaColor::Colorless]);
         for s in self.permanents(me).filter(|&s| !self.tapped(s)) {
             match (self.makes(s), self.name(s)) {
                 ((true, true), _) => both += 1,
@@ -2507,7 +2529,10 @@ impl<L: Layout> Expert<'_, L> {
             && let Some(card) = self.obs().card(slot)
         {
             let f = self.p.t.def(card).face(self.obs().object(slot).face());
-            let gained = i32::from(self.obs().object(slot).counters().loyalty)
+            let gained = i32::try_from(beryl_engine::Number::to_i64(
+                self.obs().object(slot).counters().loyalty,
+            ))
+            .unwrap_or(i32::MAX)
                 - i32::from(f.loyalty.unwrap_or(0));
             return 6 * gained.max(0) + 4 * i32::from(f.cost.mana_value());
         }
@@ -2546,7 +2571,7 @@ impl<L: Layout> Expert<'_, L> {
             || self.life() <= 6
             || (self.life() <= 10 && 2 * self.threat_past(None) >= self.life());
         if pressed && self.has_type(slot, Types::CREATURE) {
-            20 * i32::from(self.obs().derived(slot).power.max(0))
+            20 * beryl_engine::SignedNumber::to_i32(self.obs().derived(slot).power).max(0)
         } else {
             0
         }
@@ -2774,7 +2799,8 @@ impl<L: Layout> Expert<'_, L> {
         if !self.attacking(slot) {
             return v;
         }
-        let power = |s: L::Slot| i32::from(self.obs().derived(s).power.max(0));
+        let power =
+            |s: L::Slot| beryl_engine::SignedNumber::to_i32(self.obs().derived(s).power).max(0);
         let damage: i32 = self
             .creatures(self.opp())
             .filter(|&s| {
@@ -2794,7 +2820,8 @@ impl<L: Layout> Expert<'_, L> {
             .attacked_planeswalker()
             .filter(|&w| {
                 self.has_type(w, Types::PLANESWALKER)
-                    && power(slot) >= i32::from(self.obs().object(w).counters().loyalty)
+                    && i64::from(power(slot))
+                        >= beryl_engine::Number::to_i64(self.obs().object(w).counters().loyalty)
             });
         v + walker.map_or(0, |w| self.value(w))
     }
@@ -2839,7 +2866,8 @@ impl<L: Layout> Expert<'_, L> {
             Some(if self.obs().controller(slot) != self.opp() {
                 -self.value(slot)
             } else if o.zone() == Zone::Battlefield && self.has_type(slot, Types::CREATURE) {
-                self.value(slot) + 40 * i32::from(self.obs().derived(slot).power.max(0))
+                self.value(slot)
+                    + 40 * beryl_engine::SignedNumber::to_i32(self.obs().derived(slot).power).max(0)
             } else {
                 self.value(slot)
             })

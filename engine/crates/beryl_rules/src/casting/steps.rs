@@ -466,8 +466,9 @@ pub(crate) fn targeted<L: Layout>(s: &mut State<L>, t: &GameTable) -> Result<(),
 ///
 /// [CR 702.40a]: https://yawgatog.com/resources/magic-rules/#R70240a
 pub(crate) fn cast_before<L: Layout>(s: &State<L>) -> u8 {
+    use beryl_kernel::UnsignedNumber as _;
     let players = s.players().in_seat_order();
-    let counted = players.map(|p| s.counted(Count::SpellsCast, p));
+    let counted = players.map(|p| s.counted(Count::SpellsCast, p).to_u8_saturating());
     counted.fold(0u8, u8::saturating_add).saturating_sub(1)
 }
 

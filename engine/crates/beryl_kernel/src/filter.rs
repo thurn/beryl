@@ -142,14 +142,14 @@ impl Evaluate for Filter {
             }
             Filter::Tapped => o.flags.has(Flag::Tapped),
             Filter::AttackedThisTurn => s.tracked(crate::trackers::Tracker::AttackedThisTurn, slot),
-            Filter::WithCounter(kind) => s.counters_of(slot, kind) > 0,
+            Filter::WithCounter(kind) => !crate::layout::Number::is_zero(s.counters_of(slot, kind)),
             Filter::Token => o.is_token(),
             // A face-down permanent's name is the empty string, which no card names.
             Filter::Named(name) => s.definition(slot).name(t) == name,
             Filter::ManaValueAtMost(n) => s.mana_value(t, slot) <= n,
             // The reader passes the power of the filter's source where it would pass X.
             Filter::ManaValueAtMostX | Filter::ManaValueAtMostPower => s.mana_value(t, slot) <= x,
-            Filter::PowerAtMost(n) => s.power(t, slot) <= n,
+            Filter::PowerAtMost(n) => s.power(t, slot) <= L::Pt::from(n),
             Filter::InZone(zone) => o.zone == zone,
             Filter::Not(_) | Filter::All(_) | Filter::AnyOf(_) => {
                 combined(self, s, t, slot, you, words, x)

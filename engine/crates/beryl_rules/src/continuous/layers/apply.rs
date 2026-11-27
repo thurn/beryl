@@ -47,7 +47,7 @@ pub(super) fn apply_to_members<L: Layout>(
     t: &GameTable,
     members: Bitboard<L::Slot>,
     source: L::Card,
-    change: LayerChange,
+    change: LayerChange<L>,
     by: Option<Reader>,
     granter: GrantSource<L>,
 ) -> Result<(), Full> {
@@ -124,7 +124,7 @@ fn grant<L: Layout>(
     clippy::disallowed_methods,
     reason = "reads a static ability by the card, face and place its layer change recorded"
 )]
-fn reads_each<L: Layout>(t: &GameTable, source: L::Card, change: LayerChange) -> bool {
+fn reads_each<L: Layout>(t: &GameTable, source: L::Card, change: LayerChange<L>) -> bool {
     let LayerChange::Read {
         face,
         ability,
@@ -145,9 +145,9 @@ pub(super) fn settle<L: Layout>(
     s: &Rederive<'_, L>,
     t: &GameTable,
     source: L::Card,
-    change: LayerChange,
+    change: LayerChange<L>,
     by: Option<Reader>,
-) -> LayerChange {
+) -> LayerChange<L> {
     match change {
         // One that reads each permanent is read as it changes each: what it does depends on
         // nothing the layers change, a permanent's mana value.
@@ -202,10 +202,10 @@ fn read<L: Layout>(
     s: &Rederive<'_, L>,
     t: &GameTable,
     source: L::Card,
-    change: LayerChange,
+    change: LayerChange<L>,
     by: Option<Reader>,
     member: Option<L::Slot>,
-) -> LayerChange {
+) -> LayerChange<L> {
     let LayerChange::Read {
         face,
         ability,
@@ -219,7 +219,9 @@ fn read<L: Layout>(
     let (Some(spec), Some(by)) = (said_by.layer(), by) else {
         unreachable!("a static ability's part names its ability and its controller");
     };
-    let number = |amount| i8::try_from(defined(s, t, amount, by, member)).unwrap_or(i8::MAX);
+    let number = |amount| {
+        <L::Pt as beryl_kernel::Number>::saturating_from_usize(defined(s, t, amount, by, member))
+    };
     match spec.modifications[usize::from(part)] {
         Modification::SetPower(power) => LayerChange::DefinedPower(number(power)),
         Modification::SetPt(power, toughness) => {
@@ -395,7 +397,7 @@ pub(super) fn apply<L: Layout>(
     s: &mut Rederive<'_, L>,
     t: &GameTable,
     i: usize,
-    change: LayerChange,
+    change: LayerChange<L>,
 ) -> Result<(), Full> {
     match change {
         LayerChange::LoseAllAbilities | LayerChange::SetLandTypes(_)
@@ -441,7 +443,7 @@ pub(super) fn apply<L: Layout>(
 /// nothing, and inlined into the recompute it costs the rollout benchmark 0.07% of its
 /// instructions.
 #[inline(never)]
-fn modify<L: Layout>(t: &GameTable, derived: &mut [Derived<L>], i: usize, change: LayerChange) {
+fn modify<L: Layout>(t: &GameTable, derived: &mut [Derived<L>], i: usize, change: LayerChange<L>) {
     let d = &mut derived[i];
     match change {
         // CR 613.1b: "Layer 2: Control-changing effects are applied."
@@ -533,6 +535,7 @@ fn modify<L: Layout>(t: &GameTable, derived: &mut [Derived<L>], i: usize, change
             d.toughness = toughness;
         }
         LayerChange::ModifyPt(p, t) => {
+            use beryl_kernel::Number as _;
             d.power = d.power.saturating_add(p);
             d.toughness = d.toughness.saturating_add(t);
         }
@@ -629,7 +632,9 @@ fn passes<L: Layout>(
             filter::is_for(players, s.object(s.battlefield()[i]).owner(), by.you)
         }
         Filter::Tapped => s.object(s.battlefield()[i]).is_tapped(),
-        Filter::WithCounter(kind) => s.counters_of(s.battlefield()[i], kind) > 0,
+        Filter::WithCounter(kind) => {
+            !beryl_kernel::Number::is_zero(s.counters_of(s.battlefield()[i], kind))
+        }
         Filter::Token => s.object(s.battlefield()[i]).is_token(),
         // A name is a copiable value, settled before the layers this function serves.
         Filter::Named(name) => s.definition(s.battlefield()[i]).name(t) == name,
@@ -701,7 +706,10 @@ pub(super) fn existence_reads(spec: &beryl_card::LayerSpec) -> Characteristics {
 
 /// The characteristics a static ability's change reads to get its amounts as the layer applies,
 /// or the player it names.
-pub(super) fn amount_reads(spec: &beryl_card::LayerSpec, change: LayerChange) -> Characteristics {
+pub(super) fn amount_reads<L: Layout>(
+    spec: &beryl_card::LayerSpec,
+    change: LayerChange<L>,
+) -> Characteristics {
     fn of(amount: &Amount) -> Characteristics {
         match *amount {
             // A number, a permanent's mana value, which no layer changes, or the cards in
@@ -767,15 +775,12 @@ pub(super) fn amount_reads(spec: &beryl_card::LayerSpec, change: LayerChange) ->
 /// [CR 613.4c]: https://yawgatog.com/resources/magic-rules/#R6134c
 #[inline]
 pub(super) fn counters<L: Layout>(s: &mut Rederive<'_, L>) {
+    use beryl_kernel::Number as _;
     for i in 0..s.battlefield().len() {
         let c = s.object(s.battlefield()[i]).counters();
         let d = &mut s.results()[i];
-        let delta = i16::from(c.plus_one) - i16::from(c.minus_one);
-        let adjust = |value| {
-            let adjusted = i16::from(value) + delta;
-            i8::try_from(adjusted.clamp(i16::from(i8::MIN), i16::from(i8::MAX)))
-                .expect("clamped to i8")
-        };
+        let delta = c.plus_one.to_i64() - c.minus_one.to_i64();
+        let adjust = |value: L::Pt| L::Pt::saturating_from_i64(value.to_i64() + delta);
         d.power = adjust(d.power);
         d.toughness = adjust(d.toughness);
     }

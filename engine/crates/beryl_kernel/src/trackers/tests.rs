@@ -98,8 +98,8 @@ fn derive<L: Layout>(t: &GameTable, s: &mut State<L>) {
     for i in 0..cache.battlefield().len() {
         let what = cache.copiable(cache.battlefield()[i]);
         cache.results()[i] = Derived {
-            power: what.power(t),
-            toughness: what.toughness(t),
+            power: L::Pt::from(what.power(t)),
+            toughness: L::Pt::from(what.toughness(t)),
             types: what.face(t).types,
             ..Derived::default()
         };
@@ -299,7 +299,10 @@ fn a_count_ends_with_the_turn_and_survives_small_to_large_and_back() {
     let large: State<Large> = s.widen();
     for count in Count::ALL {
         for player in s.players().in_seat_order() {
-            assert_eq!(large.counted(count, player), s.counted(count, player));
+            assert_eq!(
+                large.counted(count, player),
+                u32::from(s.counted(count, player))
+            );
         }
     }
     assert_eq!(large.check_stores(&t), Ok(()));

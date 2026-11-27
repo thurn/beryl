@@ -8,7 +8,7 @@
 use crate::bitboard::Bitboard;
 use crate::decision::{Candidates, Decision, Opt, Refusal, Step};
 use crate::ids::{CardId, SlotId};
-use crate::layout::{Item, Layout, Piles, Queue, Table, index};
+use crate::layout::{Item, Layout, Number, Piles, Queue, Table, index};
 use crate::mana_memory::RememberedMana;
 use crate::object::AbilityMask as _;
 use crate::pending::{LethalAssignment, hidden_pick_answer, hidden_pick_of};
@@ -45,6 +45,12 @@ pub(crate) fn slot<S: SlotId, T: SlotId>(s: S) -> T {
 /// `c` as the same game index.
 pub(crate) fn card<C: CardId, D: CardId>(c: C) -> D {
     c.to().expect("a game index past the layout's")
+}
+
+/// `n` as the target layout's numeric type.
+pub(crate) fn number<From: Number, To: Number>(n: From) -> To {
+    n.to_layout()
+        .expect("a numeric value past the layout's width")
 }
 
 /// `b` over the slots at the same places.
@@ -84,14 +90,10 @@ fn table<T, U: Item, Q: Table<U>>(
     let mut q = Q::filled(fill.clone());
     let n = q.as_slice().len();
     for (i, x) in from.iter().enumerate() {
-        let x = f(x);
         if i < n {
-            q[i] = x;
-        } else {
-            assert!(
-                live.is_some_and(|live| i >= live) || x == *fill,
-                "past the layout's slots"
-            );
+            q[i] = f(x);
+        } else if live.is_none_or(|live| i < live) {
+            assert!(f(x) == *fill, "past the layout's slots");
         }
     }
     q
@@ -165,7 +167,7 @@ impl<L: Layout> Relayout for LastKnown<L> {
         LastKnown {
             object: self.object.relayout(),
             derived: self.derived.relayout(),
-            counters: self.counters,
+            counters: self.counters.relayout(),
             token: self.token,
             copiable: self.copiable.relayout(),
             attached_to: self.attached_to.map(|r| r.relayout()),
@@ -189,8 +191,8 @@ impl<L: Layout> Relayout for Derived<L> {
 
     fn relayout<M: Layout>(&self) -> Derived<M> {
         Derived {
-            power: self.power,
-            toughness: self.toughness,
+            power: number(self.power),
+            toughness: number(self.toughness),
             types: self.types,
             supertypes: self.supertypes,
             colors: self.colors,
@@ -297,8 +299,8 @@ impl<L: Layout> Relayout for Object<L> {
             owner: self.owner,
             base_controller: self.base_controller,
             flags: self.flags,
-            damage: self.damage,
-            counters: self.counters,
+            damage: number(self.damage),
+            counters: self.counters.relayout(),
             attached_to: self.attached_to.map(slot),
             timestamp: self.timestamp,
             face: self.face,
@@ -313,8 +315,8 @@ impl<L: Layout> Relayout for Player<L> {
 
     fn relayout<M: Layout>(&self) -> Player<M> {
         Player {
-            life: self.life,
-            mana: self.mana,
+            life: number(self.life),
+            mana: self.mana.relayout(),
             remembered: queue(self.remembered.as_slice(), |m| RememberedMana {
                 color: m.color,
                 restriction: m.restriction,

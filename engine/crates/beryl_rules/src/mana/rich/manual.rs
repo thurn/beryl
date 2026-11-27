@@ -84,7 +84,7 @@ pub(in crate::mana) fn manual_can_spend_after<L: Layout>(
     let sources = Sources::of(s, t, player, Bitboard::EMPTY, paying)?;
     let mut rest = remaining;
     pay_unit(&mut rest, color.index());
-    let mut pool = s.player(player).mana().amounts();
+    let mut pool = s.player(player).mana().amounts_u8();
     if pool[color.index()] == 0 {
         return Ok(true);
     }
@@ -109,7 +109,7 @@ pub(in crate::mana) fn manual_pay_extra<L: Layout>(
     paying: Paying<L>,
 ) -> Result<(ManaCost, Option<ManaColor>), Full> {
     let sources = Sources::of(s, t, player, Bitboard::EMPTY, paying)?;
-    let pool = s.player(player).mana().amounts();
+    let pool = s.player(player).mana().amounts_u8();
     let (ei, act) = sources
         .extras
         .iter()

@@ -17,13 +17,13 @@
 use std::hash::{Hash, Hasher};
 
 use crate::bitboard::Bitboard;
-use crate::fit::Misfit;
+use crate::fit::{Misfit, fits_number};
 use crate::ids::{Seat, SlotId};
 use crate::invariants::{At, Violation, check};
-use crate::layout::{Layout, Small, Table};
+use crate::layout::{Layout, Number, Small, Table};
 use crate::observation::Observation;
 use crate::reference::Permanent;
-use crate::relayout::{Relayout, bits};
+use crate::relayout::{Relayout, bits, number};
 use crate::state::{State, Zone};
 use crate::store::{Duration, Ended, Store};
 use crate::table::{Capability, GameTable};
@@ -135,7 +135,7 @@ kinds! {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Trackers<L: Layout = Small> {
     sets: [Bitboard<L::Slot>; Tracker::ALL.len()],
-    counts: L::PerPlayer<[u8; Count::ALL.len()]>,
+    counts: L::PerPlayer<[L::Count; Count::ALL.len()]>,
 }
 
 /// Hashes the original two sets, and includes the original three counts, later counts and
@@ -144,7 +144,12 @@ pub struct Trackers<L: Layout = Small> {
 impl<L: Layout> Hash for Trackers<L> {
     fn hash<H: Hasher>(&self, h: &mut H) {
         self.sets[..2].hash(h);
-        if self.counts.iter().flat_map(|c| &c[..3]).any(|&n| n > 0) {
+        if self
+            .counts
+            .iter()
+            .flat_map(|c| &c[..3])
+            .any(|&n| n > L::Count::ZERO)
+        {
             Seat::BOTH
                 .map(|p| {
                     let c = &self.counts[p.index()];
@@ -153,7 +158,11 @@ impl<L: Layout> Hash for Trackers<L> {
                 .hash(h);
         }
         for count in &Count::ALL[3..] {
-            if self.counts.iter().any(|c| c[count.index()] > 0) {
+            if self
+                .counts
+                .iter()
+                .any(|c| c[count.index()] > L::Count::ZERO)
+            {
                 count.hash(h);
                 for c in self.counts.iter() {
                     c[count.index()].hash(h);
@@ -185,7 +194,7 @@ impl<L: Layout> Trackers<L> {
 
     /// Sets `player`'s `count` to `n`.
     #[inline]
-    pub(crate) fn set_count(&mut self, count: Count, player: Seat, n: u8) {
+    pub(crate) fn set_count(&mut self, count: Count, player: Seat, n: L::Count) {
         self.counts[player.index()][count.index()] = n;
     }
 
@@ -211,7 +220,7 @@ impl<L: Layout> Trackers<L> {
         for count in Count::ALL {
             if !t.can(count.capability()) {
                 for player in Seat::BOTH {
-                    self.counts[player.index()][count.index()] = 0;
+                    self.counts[player.index()][count.index()] = L::Count::ZERO;
                 }
             }
         }
@@ -223,7 +232,7 @@ impl<L: Layout> Store<L> for Trackers<L> {
     fn empty() -> Self {
         Trackers {
             sets: [Bitboard::EMPTY; Tracker::ALL.len()],
-            counts: Table::filled([0; Count::ALL.len()]),
+            counts: Table::filled([L::Count::ZERO; Count::ALL.len()]),
         }
     }
 
@@ -258,9 +267,13 @@ impl<L: Layout> Store<L> for Trackers<L> {
         Ended::default()
     }
 
-    /// Always: a set of slots has a place for every object of its layout, and the objects'
-    /// own fit says whether a layout has the slots.
+    /// Whether every tracked count fits layout `M`.
     fn fits<M: Layout>(&self) -> Result<(), Misfit> {
+        for counts in self.counts.iter() {
+            for &n in counts {
+                fits_number::<M::Count>("tracker count", n.to_i64())?;
+            }
+        }
         Ok(())
     }
 
@@ -292,7 +305,7 @@ impl<L: Layout> Store<L> for Trackers<L> {
                 .in_seat_order()
                 .map(|p| (p, self.counts[p.index()][count.index()]));
             check(
-                each.all(|(_, n)| n == 0) || t.can(count.capability()),
+                each.all(|(_, n)| n.is_zero()) || t.can(count.capability()),
                 "a count kept that no card of the game reads",
                 None,
             )?;
@@ -300,9 +313,9 @@ impl<L: Layout> Store<L> for Trackers<L> {
         // A player's draw step is in their own turn (see CR 504.1).
         let active = s.turn().active();
         check(
-            s.players()
-                .in_seat_order()
-                .all(|p| p == active || self.counts[p.index()][Count::DrewInDrawStep.index()] == 0),
+            s.players().in_seat_order().all(|p| {
+                p == active || self.counts[p.index()][Count::DrewInDrawStep.index()].is_zero()
+            }),
             "a card drawn in the draw step of a player whose turn it is not",
             None,
         )?;
@@ -322,7 +335,7 @@ impl<L: Layout> Store<L> for Trackers<L> {
             s.players().in_seat_order().find_map(|player| {
                 Count::ALL.into_iter().find_map(|count| {
                     let n = self.counts[player.index()][count.index()];
-                    (n > 0).then(|| format!("{player:?}: {n} {}", count.words()))
+                    (n > L::Count::ZERO).then(|| format!("{player:?}: {n} {}", count.words()))
                 })
             })
         })
@@ -335,7 +348,7 @@ impl<L: Layout> Relayout for Trackers<L> {
     fn relayout<M: Layout>(&self) -> Trackers<M> {
         Trackers {
             sets: self.sets.map(bits),
-            counts: Table::from_fn(|i| self.counts[i]),
+            counts: Table::from_fn(|i| self.counts[i].map(number)),
         }
     }
 }
@@ -396,14 +409,14 @@ impl<L: Layout> State<L> {
     pub fn count(&mut self, t: &GameTable, count: Count, player: Seat) {
         if t.can(count.capability()) {
             let n = &mut self.trackers.counts[player.index()][count.index()];
-            *n = n.saturating_add(1);
+            *n = n.saturating_add(L::Count::ONE);
         }
     }
 
     /// How many times `player`'s `count` happened this turn. Zero, in a game no card of
     /// which reads it.
     #[inline]
-    pub fn counted(&self, count: Count, player: Seat) -> u8 {
+    pub fn counted(&self, count: Count, player: Seat) -> L::Count {
         self.trackers.counts[player.index()][count.index()]
     }
 }
@@ -412,7 +425,7 @@ impl<L: Layout> Observation<'_, L> {
     /// How many times `player`'s `count` happened this turn. Every player knows: each spell
     /// was cast and each card drawn where all could see it happen, even when not which card
     /// was drawn.
-    pub fn counted(&self, count: Count, player: Seat) -> u8 {
+    pub fn counted(&self, count: Count, player: Seat) -> L::Count {
         self.shown().counted(count, player)
     }
 

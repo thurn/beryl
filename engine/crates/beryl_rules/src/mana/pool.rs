@@ -35,7 +35,7 @@ pub(crate) struct Funds<L: Layout = Small> {
 impl<L: Layout> Funds<L> {
     pub(crate) fn of(s: &State<L>, t: &GameTable, player: Seat) -> Result<Funds<L>, Full> {
         let mut units = Units::NONE;
-        for (k, &n) in s.player(player).mana().amounts().iter().enumerate() {
+        for (k, &n) in s.player(player).mana().amounts_u8().iter().enumerate() {
             units.add(1 << k, u16::from(n));
         }
         let mut slots = Bitboard::EMPTY;
@@ -369,7 +369,7 @@ pub(crate) fn payable<L: Layout>(
     }
     let sources = super::sources::Sources::of(s, t, player, exclude, paying)?;
     if sources
-        .units(s.player(player).mana().amounts(), &Table::filled(0))
+        .units(s.player(player).mana().amounts_u8(), &Table::filled(0))
         .pays(cost)
     {
         return Ok(true);

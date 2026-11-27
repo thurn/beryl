@@ -300,7 +300,8 @@ impl RolloutPolicy {
             }
             // A "may" is taken; life for an untapped land is paid only from above 10.
             DecisionKind::YesNo => {
-                let yes = d.prompt.purpose != Purpose::PayLife || obs.player(p.me).life() > 10;
+                let yes = d.prompt.purpose != Purpose::PayLife
+                    || obs.player(p.me).life() > L::Life::from(10u8);
                 pick.choose_fixed(d, |c| {
                     Some(i32::from((c.option() == Some(Opt::Yes)) == yes))
                 })
@@ -343,11 +344,13 @@ impl RolloutPolicy {
                 _ => None,
             }),
             DecisionKind::AttackTarget => pick.choose(d, |c| match c.option() {
-                Some(Opt::Defender(None)) => Some(if obs.player(p.me.opponent()).life() <= 6 {
-                    1000
-                } else {
-                    0
-                }),
+                Some(Opt::Defender(None)) => Some(
+                    if obs.player(p.me.opponent()).life() <= L::Life::from(6u8) {
+                        1000
+                    } else {
+                        0
+                    },
+                ),
                 Some(Opt::Defender(Some(walker))) => Some(p.walker_target(walker)),
                 _ => None,
             }),

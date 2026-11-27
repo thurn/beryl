@@ -20,8 +20,10 @@ use crate::relayout::Relayout;
 use crate::state::State;
 use crate::subgame::{CompletedTurns, LargeOuter, OuterGame};
 
+mod numbers;
 mod piles;
 
+pub use numbers::{LifeNumber, Number, SignedNumber, UnsignedNumber};
 pub use piles::{LargePiles, Piles, SmallPiles};
 
 /// The cards of a library being dealt or shuffled, with room for a shared deck
@@ -171,6 +173,15 @@ pub trait Layout: Copy + Debug + Default + Eq + Hash + Send + Sync + 'static {
     /// An index into a queue or a decision's options, as the state stores it: in a choice
     /// record or an [`Opt::Trigger`](crate::decision::Opt::Trigger).
     type Index: Item + Copy + Default + Ord + Into<usize> + Into<u16> + TryFrom<usize>;
+    /// Power and toughness of a permanent (`i8` in [`Small`], `i32` in [`Large`]).
+    type Pt: SignedNumber;
+    /// Counter counts, marked damage and per-turn tracker counts (`u8` in [`Small`], `u32` in
+    /// [`Large`]).
+    type Count: UnsignedNumber;
+    /// Unspent mana of one kind in a player's mana pool (`u8` in [`Small`], `u32` in [`Large`]).
+    type Mana: UnsignedNumber;
+    /// A player's life total (`i16` in [`Small`], `i32` in [`Large`]).
+    type Life: LifeNumber;
     type Queue<T: Item + Default, const N: usize>: Queue<T>;
     type Table<T: Item, const N: usize>: Table<T>;
     /// A list as long as a deck may be ([`SlotId::DECK_SLOTS`]).
@@ -228,6 +239,10 @@ impl Layout for Small {
     type Slot = Slot;
     type Card = CardIx;
     type Index = u8;
+    type Pt = i8;
+    type Count = u8;
+    type Mana = u8;
+    type Life = i16;
     type Queue<T: Item + Default, const N: usize> = Fixed<T, N>;
     type Table<T: Item, const N: usize> = [T; N];
     type Deck<T: Item + Default> = Fixed<T, { Slot::DECK_SLOTS }>;
@@ -280,6 +295,10 @@ impl Layout for Large {
     type Slot = LargeSlot;
     type Card = LargeCardIx;
     type Index = u16;
+    type Pt = i32;
+    type Count = u32;
+    type Mana = u32;
+    type Life = i32;
     type Queue<T: Item + Default, const N: usize> = Vec<T>;
     type Table<T: Item, const N: usize> = PerSlot<T>;
     type Deck<T: Item + Default> = Vec<T>;

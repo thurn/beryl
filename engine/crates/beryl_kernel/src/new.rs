@@ -31,7 +31,7 @@ use crate::turn::{Turn, plan::TurnPlan};
 /// [CR 103.4]: https://yawgatog.com/resources/magic-rules/#R1034
 fn new_player<L: Layout>(format: Format) -> Player<L> {
     Player {
-        life: format.starting_life(),
+        life: L::Life::from(format.starting_life()),
         mana: ManaPool::default(),
         remembered: Default::default(),
         lands_played: 0,

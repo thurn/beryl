@@ -205,7 +205,7 @@ fn what_it_does<L: Layout>(
     t: &GameTable,
     a: &Apply<L>,
     begun: Read<'_, L>,
-) -> (Option<Bitboard<L::Slot>>, LayerChange) {
+) -> (Option<Bitboard<L::Slot>>, LayerChange<L>) {
     let members = members(s, t, a, begun);
     // An effect that applies to nothing settles no amount.
     let change = if members.is_some() {

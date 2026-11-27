@@ -217,10 +217,13 @@ fn doomed<L: Layout>(s: &State<L>, t: &GameTable) -> Doomed<L> {
             let o = s.object(slot);
             // See CR 702.12b: indestructible permanents "ignore the state-based action
             // that checks for lethal damage".
+            let toughness = d.toughness;
             let lethal = types.contains(Types::CREATURE)
-                && (d.toughness <= 0
+                && (toughness <= <L::Pt as beryl_kernel::Number>::ZERO
                     || (lethal_damage(d, o) && !d.keywords.contains(Keywords::INDESTRUCTIBLE)));
-            lethal || (types.contains(Types::PLANESWALKER) && o.counters().loyalty == 0)
+            lethal
+                || (types.contains(Types::PLANESWALKER)
+                    && beryl_kernel::Number::is_zero(o.counters().loyalty))
         };
         if dies || (auras && aura.of(d.subtypes) && illegal_aura(s, t, slot)) {
             graveyard.insert(slot);
@@ -250,9 +253,11 @@ fn doomed<L: Layout>(s: &State<L>, t: &GameTable) -> Doomed<L> {
 /// its toughness, the lethal damage of CR 704.5g.
 #[inline]
 fn lethal_damage<L: Layout>(d: &Derived<L>, o: &Object<L>) -> bool {
+    use beryl_kernel::Number as _;
+    let toughness = d.toughness;
     d.types.contains(Types::CREATURE)
-        && d.toughness > 0
-        && i16::from(o.damage()) >= i16::from(d.toughness)
+        && toughness > L::Pt::ZERO
+        && o.damage().to_i64() >= toughness.to_i64()
 }
 
 /// Whether an Aura is unattached or attached illegally (see CR 704.5m).
@@ -295,7 +300,8 @@ fn destroyed_for_damage<L: Layout>(
     graveyard.filter(|slot| {
         let (d, o) = (s.derived(slot), s.object(slot));
         let unattached = aura.of(d.subtypes) && o.attachment().is_none();
-        let no_loyalty = d.types.contains(Types::PLANESWALKER) && o.counters().loyalty == 0;
+        let no_loyalty = d.types.contains(Types::PLANESWALKER)
+            && beryl_kernel::Number::is_zero(o.counters().loyalty);
         lethal_damage(d, o) && !unattached && !no_loyalty
     })
 }
@@ -367,7 +373,7 @@ fn check_losses<L: Layout>(s: &mut State<L>, format: Format, sink: &mut Sink<L>)
     for player in s.players().in_seat_order() {
         let p = s.player(player);
         // Both may hold at one check: life is named.
-        causes[player.index()] = if p.life() <= losses.life {
+        causes[player.index()] = if p.life() <= L::Life::from(losses.life) {
             Some(LossCause::Life)
         } else if losses.empty_library && p.drew_from_empty() {
             Some(LossCause::Library)

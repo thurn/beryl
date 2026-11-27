@@ -36,7 +36,10 @@ pub(super) fn value<L: Layout>(t: &GameTable, s: &State<L>, slot: L::Slot) -> i3
     clock(
         abilities,
         library,
-        i16::from(s.object(slot).counters().loyalty),
+        i16::try_from(beryl_engine::Number::to_i64(
+            s.object(slot).counters().loyalty,
+        ))
+        .unwrap_or(i16::MAX),
         on_turn,
         on_turn && s.tracked(Tracker::LoyaltyActivated, slot),
     )

@@ -79,10 +79,8 @@ impl<L: Layout> Runner<L> {
                         format!("player {player} controls no {card} {what}")
                     })?;
                 let d = s.derived(slot);
-                (
-                    format!("{}/{}", d.power, d.toughness),
-                    format!("{power}/{toughness}"),
-                )
+                let (p, t) = (d.power, d.toughness);
+                (format!("{p}/{t}"), format!("{power}/{toughness}"))
             }
             Assertion::Creature {
                 player,

@@ -14,7 +14,7 @@ use beryl_card::{Colors, FaceIx, Keywords, Supertypes, Types, Zone};
 
 use crate::counters::Counters;
 use crate::ids::{CardId, CardIx, Seat, Slot, SlotId};
-use crate::layout::{Layout, Small};
+use crate::layout::{Layout, Number, Small};
 
 mod ability_mask;
 mod block_list;
@@ -320,8 +320,8 @@ pub struct Object<L: Layout = Small> {
     pub(crate) base_controller: Seat,
     pub(crate) flags: ObjectFlags,
     /// Damage marked this turn.
-    pub(crate) damage: u8,
-    pub(crate) counters: Counters,
+    pub(crate) damage: L::Count,
+    pub(crate) counters: Counters<L>,
     /// The object an Aura or Equipment is attached to.
     pub(crate) attached_to: Option<L::Slot>,
     /// Battlefield entry order, for layers.
@@ -356,7 +356,7 @@ impl<L: Layout> Object<L> {
         owner: Seat::P0,
         base_controller: Seat::P0,
         flags: ObjectFlags::NONE,
-        damage: 0,
+        damage: L::Count::ZERO,
         counters: Counters::NONE,
         attached_to: None,
         timestamp: 0,
@@ -537,14 +537,14 @@ impl<L: Layout> Object<L> {
     ///
     /// [CR 120.6]: https://yawgatog.com/resources/magic-rules/#R1206
     #[inline]
-    pub fn damage(&self) -> u8 {
+    pub fn damage(&self) -> L::Count {
         self.damage
     }
 
     /// Its counters of the kinds the rules themselves read; of any kind,
     /// [`State::counters_of`](crate::State::counters_of).
     #[inline]
-    pub fn counters(&self) -> Counters {
+    pub fn counters(&self) -> Counters<L> {
         self.counters
     }
 
@@ -684,8 +684,8 @@ impl<L: Layout> std::hash::Hash for ObjectRef<L> {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[repr(Rust, packed(2))]
 pub struct Derived<L: Layout = Small> {
-    pub power: i8,
-    pub toughness: i8,
+    pub power: L::Pt,
+    pub toughness: L::Pt,
     pub types: Types,
     pub supertypes: Supertypes,
     pub colors: Colors,

@@ -172,7 +172,8 @@ pub(crate) fn candidates<L: Layout>(
 
 /// A creature's power counted toward a total; less than 0 counts as 0.
 fn power_of<L: Layout>(s: &State<L>, slot: L::Slot) -> u8 {
-    u8::try_from(s.derived(slot).power.max(0)).unwrap_or(0)
+    use beryl_kernel::Number as _;
+    u8::try_from(s.derived(slot).power.to_i64().max(0)).unwrap_or(u8::MAX)
 }
 
 /// Whether `player` has the objects to pay a part with

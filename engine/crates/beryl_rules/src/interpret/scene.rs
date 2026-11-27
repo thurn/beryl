@@ -12,6 +12,7 @@ use beryl_card::{Amount, CastingKind, Condition, Objects, Players, SpecIx, Types
 use beryl_kernel::chosen::ChosenValue;
 use beryl_kernel::memos::LinkKind;
 use beryl_kernel::reference::Current;
+use beryl_kernel::{Number as _, SignedNumber as _, UnsignedNumber as _};
 
 use crate::PlayerSet;
 use crate::bitboard::Bitboard;
@@ -85,10 +86,10 @@ pub(crate) struct Known<L: Layout> {
     /// Its copiable values (see [CR 707.2](https://yawgatog.com/resources/magic-rules/#R7072)),
     /// which a copy of it made after it left has.
     pub(crate) copiable: Option<Copiable<L>>,
-    pub(crate) power: i8,
-    pub(crate) toughness: i8,
+    pub(crate) power: L::Pt,
+    pub(crate) toughness: L::Pt,
     pub(crate) mana_value: u8,
-    pub(crate) counters: CountersHeld,
+    pub(crate) counters: CountersHeld<L>,
 }
 
 /// What a resolution keeps between its instructions.
@@ -615,7 +616,7 @@ impl<L: Layout> Scene<'_, L> {
             Amount::Life(players) => {
                 let who = self.players(players);
                 let players = who.in_seat_order();
-                players.map(|p| i32::from(self.s.player(p).life())).sum()
+                players.map(|p| self.s.player(p).life().to_i32()).sum()
             }
             // Counted for each player this turn, in a game with a card that reads the count
             // (`beryl_kernel`'s `Capability::SpellsCast` and `Capability::CardsDrawn`).
@@ -630,13 +631,13 @@ impl<L: Layout> Scene<'_, L> {
             }
             Amount::Power(objects) => self.total(
                 objects,
-                |scene, slot| i32::from(scene.s.power(scene.t, slot)),
-                |known| i32::from(known.power),
+                |scene, slot| scene.s.power(scene.t, slot).to_i32(),
+                |known| known.power.to_i32(),
             ),
             Amount::Toughness(objects) => self.total(
                 objects,
-                |scene, slot| i32::from(scene.s.toughness(scene.t, slot)),
-                |known| i32::from(known.toughness),
+                |scene, slot| scene.s.toughness(scene.t, slot).to_i32(),
+                |known| known.toughness.to_i32(),
             ),
             // See CR 608.2h: "if it’s no longer in that zone ... the effect uses the
             // object’s last known information." The original spell's chosen face and X
@@ -656,8 +657,8 @@ impl<L: Layout> Scene<'_, L> {
             ),
             Amount::Counters(objects, kind) => self.total(
                 objects,
-                |scene, slot| i32::from(scene.s.counters_of(slot, kind)),
-                |known| i32::from(known.counters.get(kind)),
+                |scene, slot| scene.s.counters_of(slot, kind).to_i32_saturating(),
+                |known| known.counters.get(kind).to_i32_saturating(),
             ),
         }
     }
@@ -666,7 +667,7 @@ impl<L: Layout> Scene<'_, L> {
     fn counted(&self, players: Players, count: Count) -> i32 {
         let who = self.players(players);
         let each = who.in_seat_order();
-        each.map(|player| i32::from(self.s.counted(count, player)))
+        each.map(|player| self.s.counted(count, player).to_i32_saturating())
             .sum()
     }
 
@@ -727,7 +728,7 @@ impl<L: Layout> Scene<'_, L> {
                 let who = self.players(players);
                 let mut each = who.in_seat_order().peekable();
                 each.peek().is_some()
-                    && each.all(|player| self.s.counted(Count::DrewInDrawStep, player) > 0)
+                    && each.all(|p| !self.s.counted(Count::DrewInDrawStep, p).is_zero())
             }
             // See CR 102.1: whether the active player is one of `players`.
             Condition::TurnOf(players) => self.players(players).contains(self.s.turn().active()),
@@ -738,7 +739,7 @@ impl<L: Layout> Scene<'_, L> {
                 let who = self.players(players);
                 let mut each = who.in_seat_order().peekable();
                 each.peek().is_some()
-                    && each.all(|player| self.s.counted(Count::AttackersDeclared, player) > 0)
+                    && each.all(|p| !self.s.counted(Count::AttackersDeclared, p).is_zero())
             }
             // See CR 701.42a (`actions::meld`).
             Condition::MeldPair(partner) => self.meld_pair(partner).is_some(),

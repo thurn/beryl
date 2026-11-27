@@ -162,7 +162,7 @@ impl<L: Layout> State<L> {
         &mut self,
         source: L::Card,
         members: Permanents<L>,
-        changes: &[LayerChange],
+        changes: &[LayerChange<L>],
         duration: Duration,
     ) -> Result<(), Full> {
         let members = members.slots();
@@ -198,7 +198,7 @@ impl<L: Layout> State<L> {
         &mut self,
         source: L::Card,
         members: Bitboard<L::Slot>,
-        change: LayerChange,
+        change: LayerChange<L>,
         duration: Duration,
         timestamp: u16,
     ) -> Result<(), Full> {

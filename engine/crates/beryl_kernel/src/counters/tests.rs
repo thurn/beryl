@@ -51,8 +51,8 @@ fn derive<L: Layout>(t: &GameTable, s: &mut State<L>) {
     for i in 0..cache.battlefield().len() {
         let what = cache.copiable(cache.battlefield()[i]);
         cache.results()[i] = Derived {
-            power: what.power(t),
-            toughness: what.toughness(t),
+            power: L::Pt::from(what.power(t)),
+            toughness: L::Pt::from(what.toughness(t)),
             types: what.face(t).types,
             ..Derived::default()
         };
@@ -72,7 +72,7 @@ fn table_kinds() -> (CounterKind, CounterKind) {
     let mut kinds = CounterKind::ALL
         .iter()
         .copied()
-        .filter(|&kind| Counters::NONE.field(kind).is_none());
+        .filter(|&kind| Counters::<Small>::NONE.field(kind).is_none());
     (kinds.next().unwrap(), kinds.next().unwrap())
 }
 

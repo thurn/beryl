@@ -175,8 +175,8 @@ impl<L: Layout> State<L> {
         printed.supertypes = values.excepted_supertypes(t);
         printed.keywords = keywords;
         if let Some((power, toughness)) = pt {
-            printed.power = power;
-            printed.toughness = toughness;
+            printed.power = L::Pt::from(power);
+            printed.toughness = L::Pt::from(toughness);
             for (ability, index) in values.face(t).abilities.iter().zip(0u8..) {
                 if defines_pt(ability) {
                     printed.lost = printed.lost.with(AbilityIx::new(index)).ok_or(Full)?;

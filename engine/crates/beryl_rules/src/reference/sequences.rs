@@ -105,7 +105,7 @@ pub(crate) fn reference_sequences_for<L: Layout>(
     paying: Paying<L>,
 ) -> Option<bool> {
     let mut pool = Vec::new();
-    for (k, &n) in s.player(player).mana().amounts().iter().enumerate() {
+    for (k, &n) in s.player(player).mana().amounts_u8().iter().enumerate() {
         pool.extend(std::iter::repeat_n(1u8 << k, usize::from(n)));
     }
     if paying.reads_restrictions(t) {

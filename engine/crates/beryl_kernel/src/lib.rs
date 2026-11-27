@@ -738,7 +738,7 @@ pub use beryl_card::TurnPhase;
 pub use bitboard::Bitboard;
 pub use fit::Misfit;
 pub use ids::{CardId, CardIx, LargeCardIx, LargeSlot, Seat, Slot, SlotId, SlotPlace};
-pub use layout::{Large, Layout, Small};
+pub use layout::{Large, Layout, LifeNumber, Number, SignedNumber, Small, UnsignedNumber};
 pub use observation::Observation;
 pub use player_set::PlayerSet;
 pub use query::Copiable;

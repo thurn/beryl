@@ -180,7 +180,7 @@ impl Position {
                     slot.to().expect("the slot fits in Large"),
                     state.derived(slot).relayout(),
                     object.flags().has(Flag::Tapped),
-                    object.damage(),
+                    beryl_engine::UnsignedNumber::to_u8_saturating(object.damage()),
                 )
             })
             .collect();
@@ -195,7 +195,7 @@ impl Position {
                     known
                 })
             }),
-            mana: Seat::BOTH.map(|seat| state.player(seat).mana().amounts()),
+            mana: Seat::BOTH.map(|seat| state.player(seat).mana().amounts_u8()),
             permanents,
         }
     }

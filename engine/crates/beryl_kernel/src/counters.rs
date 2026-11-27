@@ -24,15 +24,15 @@ use beryl_card::{CounterKind, counter_kinds};
 
 use crate::bitboard::Bitboard;
 use crate::event::Event;
-use crate::fit::{Misfit, room};
+use crate::fit::{Misfit, fits_number, room};
 use crate::fixed::Full;
 use crate::ids::SlotId;
 use crate::invariants::{At, Violation, check};
-use crate::layout::{Layout, Queue, Small};
+use crate::layout::{Layout, Number, Queue, Small};
 use crate::object::ObjectRef;
 use crate::observation::Observation;
 use crate::reference::Current;
-use crate::relayout::{Relayout, queue, slot};
+use crate::relayout::{Relayout, number, queue, slot};
 use crate::state::{State, Zone};
 use crate::store::{Duration, Ended, Store};
 use crate::table::GameTable;
@@ -45,28 +45,44 @@ pub const COUNTERS: usize = 32;
 /// Every other kind is a row of the [`CounterTable`]; [`State::counters_of`] and
 /// [`State::counters`] answer for any kind.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub struct Counters {
+pub struct Counters<L: Layout = Small> {
     /// See [CR 613.4c](https://yawgatog.com/resources/magic-rules/#R6134c): "Effects and
     /// counters that modify power and/or toughness (but don't set power and/or toughness to
     /// a specific number or value) are applied."
-    pub plus_one: u8,
-    pub minus_one: u8,
+    pub plus_one: L::Count,
+    pub minus_one: L::Count,
     /// See [CR 306.5c](https://yawgatog.com/resources/magic-rules/#R3065c): "The loyalty of a
     /// planeswalker on the battlefield is equal to the number of loyalty counters on it."
-    pub loyalty: u8,
+    pub loyalty: L::Count,
 }
 
-impl Counters {
-    pub(crate) const NONE: Counters = Counters {
-        plus_one: 0,
-        minus_one: 0,
-        loyalty: 0,
+impl<L: Layout> Counters<L> {
+    pub(crate) const NONE: Counters<L> = Counters {
+        plus_one: L::Count::ZERO,
+        minus_one: L::Count::ZERO,
+        loyalty: L::Count::ZERO,
     };
 
     /// The count of a kind kept in a field. Other kinds are kept in the table.
     #[inline]
-    fn field(mut self, kind: CounterKind) -> Option<u8> {
+    fn field(mut self, kind: CounterKind) -> Option<L::Count> {
         self.field_mut(kind).copied()
+    }
+
+    /// Whether the three counter fields fit layout `M`.
+    pub(crate) fn fits<M: Layout>(self) -> Result<(), Misfit> {
+        fits_number::<M::Count>("+1/+1 counters", self.plus_one.to_i64())?;
+        fits_number::<M::Count>("-1/-1 counters", self.minus_one.to_i64())?;
+        fits_number::<M::Count>("loyalty counters", self.loyalty.to_i64())
+    }
+
+    /// These counters in layout `M`.
+    pub(crate) fn relayout<M: Layout>(self) -> Counters<M> {
+        Counters {
+            plus_one: number(self.plus_one),
+            minus_one: number(self.minus_one),
+            loyalty: number(self.loyalty),
+        }
     }
 }
 
@@ -88,9 +104,9 @@ macro_rules! counter_field {
 
 macro_rules! counter_fields {
     ($($(#[$doc:meta])* $kind:ident = $name:literal),* $(,)?) => {
-        impl Counters {
+        impl<L: Layout> Counters<L> {
             #[inline]
-            fn field_mut(&mut self, kind: CounterKind) -> Option<&mut u8> {
+            fn field_mut(&mut self, kind: CounterKind) -> Option<&mut L::Count> {
                 match kind {
                     $(CounterKind::$kind => counter_field!(self, $kind)),*
                 }
@@ -106,7 +122,7 @@ counter_kinds!(counter_fields);
 struct Row<L: Layout = Small> {
     slot: L::Slot,
     kind: CounterKind,
-    count: u8,
+    count: L::Count,
 }
 
 impl<L: Layout> Default for Row<L> {
@@ -114,7 +130,7 @@ impl<L: Layout> Default for Row<L> {
         Row {
             slot: L::Slot::default(),
             kind: CounterKind::ALL[0],
-            count: 0,
+            count: L::Count::ZERO,
         }
     }
 }
@@ -177,15 +193,19 @@ impl<L: Layout> Store<L> for CounterTable<L> {
             "the counters",
             self.rows.len(),
             <M::Queue<Row<M>, COUNTERS> as Queue<_>>::CAPACITY,
-        )
+        )?;
+        for row in self.rows.iter() {
+            fits_number::<M::Count>("counters", row.count.to_i64())?;
+        }
+        Ok(())
     }
 
     fn check(&self, s: &State<L>, _: &GameTable) -> Result<(), Violation> {
         for (i, row) in self.rows.iter().enumerate() {
             let at = Some(At::Slot(row.slot.index()));
-            check(row.count > 0, "a row of no counters", at)?;
+            check(row.count > L::Count::ZERO, "a row of no counters", at)?;
             check(
-                Counters::NONE.field(row.kind).is_none(),
+                Counters::<L>::NONE.field(row.kind).is_none(),
                 "a row of a kind of counter the object keeps in a field",
                 at,
             )?;
@@ -222,7 +242,7 @@ impl<L: Layout> Relayout for CounterTable<L> {
             rows: queue(self.rows.as_slice(), |row| Row {
                 slot: slot(row.slot),
                 kind: row.kind,
-                count: row.count,
+                count: number(row.count),
             }),
         }
     }
@@ -231,7 +251,7 @@ impl<L: Layout> Relayout for CounterTable<L> {
 /// The counters on one object, of every kind: to read a count and to list them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CountersOf<'a, L: Layout = Small> {
-    fields: Counters,
+    fields: Counters<L>,
     rows: CounterRows<'a, L>,
 }
 
@@ -239,7 +259,7 @@ impl<L: Layout> CountersOf<'_, L> {
     /// How many counters of a kind are on the object
     /// ([CR 122.1](https://yawgatog.com/resources/magic-rules/#R1221)).
     #[inline]
-    pub fn get(&self, kind: CounterKind) -> u8 {
+    pub fn get(&self, kind: CounterKind) -> L::Count {
         match self.fields.field(kind) {
             Some(n) => n,
             None => self.rows.get(kind),
@@ -249,17 +269,17 @@ impl<L: Layout> CountersOf<'_, L> {
     /// Each kind the object has a counter of, with its count, in the order of the
     /// vocabulary's list: the same for two objects with the same counters, however they came
     /// by them.
-    pub fn iter(&self) -> impl Iterator<Item = (CounterKind, u8)> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item = (CounterKind, L::Count)> + '_ {
         CounterKind::ALL.iter().filter_map(|&kind| {
             let n = self.get(kind);
-            (n > 0).then_some((kind, n))
+            (n > L::Count::ZERO).then_some((kind, n))
         })
     }
 
     /// The counts as a value that outlives the object, for an effect that reads them after
     /// moving it.
     #[inline]
-    pub fn held(&self) -> CountersHeld {
+    pub fn held(&self) -> CountersHeld<L> {
         let mut held = CountersHeld {
             fields: self.fields,
             rows: [None; HELD],
@@ -294,10 +314,10 @@ impl<L: Layout> CounterRows<'_, L> {
 
     /// How many counters of a kind kept in the table the object has.
     #[inline]
-    fn get(&self, kind: CounterKind) -> u8 {
+    fn get(&self, kind: CounterKind) -> L::Count {
         self.iter()
             .find(|row| row.kind == kind)
-            .map_or(0, |row| row.count)
+            .map_or(L::Count::ZERO, |row| row.count)
     }
 }
 
@@ -326,15 +346,15 @@ const HELD: usize = 6;
 /// (see [CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h): "the effect uses the
 /// object's last known information"), the kinds it keeps in fields and its rows of the table.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct CountersHeld {
-    fields: Counters,
-    rows: [Option<(CounterKind, u8)>; HELD],
+pub struct CountersHeld<L: Layout = Small> {
+    fields: Counters<L>,
+    rows: [Option<(CounterKind, L::Count)>; HELD],
 }
 
-impl CountersHeld {
+impl<L: Layout> CountersHeld<L> {
     /// How many counters of a kind the object had.
     #[inline]
-    pub fn get(&self, kind: CounterKind) -> u8 {
+    pub fn get(&self, kind: CounterKind) -> L::Count {
         match self.fields.field(kind) {
             Some(n) => n,
             None => self
@@ -342,7 +362,7 @@ impl CountersHeld {
                 .iter()
                 .flatten()
                 .find(|&&(k, _)| k == kind)
-                .map_or(0, |&(_, n)| n),
+                .map_or(L::Count::ZERO, |&(_, n)| n),
         }
     }
 }
@@ -353,7 +373,7 @@ impl<L: Layout> State<L> {
     /// keeps in a field is one read; any other, with nothing stored about the object, one
     /// bit test more.
     #[inline]
-    pub fn counters_of(&self, slot: L::Slot, kind: CounterKind) -> u8 {
+    pub fn counters_of(&self, slot: L::Slot, kind: CounterKind) -> L::Count {
         match self.object(slot).counters.field(kind) {
             Some(n) => n,
             None => self.counter_rows(slot).get(kind),
@@ -399,7 +419,9 @@ impl<L: Layout> State<L> {
         layered: bool,
     ) -> Result<Event<L>, Full> {
         let object = object.reference();
-        let n = self.counters_of(object.slot, kind).saturating_add(amount);
+        let n = self
+            .counters_of(object.slot, kind)
+            .saturating_add(L::Count::from(amount));
         self.set_counters(object.slot, kind, n)?;
         if layered
             || self
@@ -427,9 +449,10 @@ impl<L: Layout> State<L> {
         layered: bool,
     ) -> Event<L> {
         let object = object.reference();
+        let take = L::Count::from(amount);
         match self.object_mut(object.slot).counters.field_mut(kind) {
-            Some(n) => *n -= amount,
-            None => self.take_row(object.slot, kind, amount),
+            Some(n) => *n -= take,
+            None => self.take_row(object.slot, kind, take),
         }
         if layered
             || self
@@ -453,7 +476,7 @@ impl<L: Layout> State<L> {
         &mut self,
         slot: L::Slot,
         kind: CounterKind,
-        n: u8,
+        n: L::Count,
     ) -> Result<(), Full> {
         match self.object_mut(slot).counters.field_mut(kind) {
             Some(field) => {
@@ -467,19 +490,23 @@ impl<L: Layout> State<L> {
     /// [`State::set_counters`] of a kind kept in the table: out of line, since the kinds
     /// every game puts on its permanents are fields.
     #[inline(never)]
-    fn set_row(&mut self, slot: L::Slot, kind: CounterKind, n: u8) -> Result<(), Full> {
+    fn set_row(&mut self, slot: L::Slot, kind: CounterKind, n: L::Count) -> Result<(), Full> {
         let rows = &mut self.counters.rows;
         let found = rows
             .iter()
             .position(|row| row.slot == slot && row.kind == kind);
-        match (found, n) {
-            (None, 0) => {}
-            (None, count) => {
-                rows.push(Row { slot, kind, count })?;
+        match (found, n.is_zero()) {
+            (None, true) => {}
+            (None, false) => {
+                rows.push(Row {
+                    slot,
+                    kind,
+                    count: n,
+                })?;
                 self.keyed.insert(slot);
             }
-            (Some(i), 0) => self.end_row(i),
-            (Some(i), count) => rows.as_mut_slice()[i].count = count,
+            (Some(i), true) => self.end_row(i),
+            (Some(i), false) => rows.as_mut_slice()[i].count = n,
         }
         Ok(())
     }
@@ -487,7 +514,7 @@ impl<L: Layout> State<L> {
     /// Takes `amount` counters from the row of a kind the object in `slot` has that many
     /// of.
     #[inline(never)]
-    fn take_row(&mut self, slot: L::Slot, kind: CounterKind, amount: u8) {
+    fn take_row(&mut self, slot: L::Slot, kind: CounterKind, amount: L::Count) {
         let rows = &mut self.counters.rows;
         let i = rows
             .iter()
@@ -495,7 +522,7 @@ impl<L: Layout> State<L> {
             .expect("counters to take");
         let row = &mut rows.as_mut_slice()[i];
         row.count -= amount;
-        if row.count == 0 {
+        if row.count.is_zero() {
             self.end_row(i);
         }
     }

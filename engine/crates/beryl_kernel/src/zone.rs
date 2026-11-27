@@ -145,7 +145,7 @@ impl<L: Layout> State<L> {
         o.zone = to;
         o.base_controller = o.owner;
         o.flags = o.flags.kept_across_zones();
-        o.damage = 0;
+        o.damage = <L::Count as crate::layout::Number>::ZERO;
         // See [CR 122.2](https://yawgatog.com/resources/magic-rules/#R1222): "Counters on an
         // object are not retained if that object moves from one zone to another." Those of
         // the table's kinds ended with what the stores hold.

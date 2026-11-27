@@ -510,18 +510,23 @@ pub(super) fn looking_ahead<L: Layout>(
     for k in kept.iter() {
         best.push(outlook(sources, k, &ahead, &creatures))?;
     }
-    each_plan(cost, s.player(player).mana().amounts(), sources, &mut |p| {
-        let outcome = sources.outcome(p);
-        if let Some(i) =
-            (kept.iter()).position(|k| k.left == p.left && sources.outcome(k) == outcome)
-        {
-            let o = outlook(sources, p, &ahead, &creatures);
-            if o > best.as_slice()[i] && accepted(p) {
-                best.as_mut_slice()[i] = o;
-                kept[i] = p.clone();
+    each_plan(
+        cost,
+        s.player(player).mana().amounts_u8(),
+        sources,
+        &mut |p| {
+            let outcome = sources.outcome(p);
+            if let Some(i) =
+                (kept.iter()).position(|k| k.left == p.left && sources.outcome(k) == outcome)
+            {
+                let o = outlook(sources, p, &ahead, &creatures);
+                if o > best.as_slice()[i] && accepted(p) {
+                    best.as_mut_slice()[i] = o;
+                    kept[i] = p.clone();
+                }
             }
-        }
-        true
-    });
+            true
+        },
+    );
     Ok(())
 }

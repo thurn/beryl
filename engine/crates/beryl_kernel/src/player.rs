@@ -7,11 +7,13 @@
 use beryl_card::ManaColor;
 
 use crate::event::{Event, Recipient};
+use crate::fit::{Misfit, fits_number};
 use crate::fixed::Full;
 use crate::ids::Seat;
-use crate::layout::{Layout, Queue, Small, Table};
+use crate::layout::{Layout, Number, Queue, Small, Table};
 use crate::mana_memory::{REMEMBERED_MANA, RememberedMana};
 use crate::object::ObjectRef;
+use crate::relayout::number;
 use crate::state::State;
 use crate::static_ability::Inputs;
 
@@ -33,27 +35,47 @@ pub enum MulliganStatus {
 /// (see [CR 106.4](https://yawgatog.com/resources/magic-rules/#R1064)): "When an effect instructs
 /// a player to add mana, that mana goes into a player's mana pool."
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub struct ManaPool([u8; 6]);
+pub struct ManaPool<L: Layout = Small>([L::Mana; 6]);
 
-impl ManaPool {
+impl<L: Layout> ManaPool<L> {
     /// The amounts, indexed as [`ManaColor::ALL`].
     #[inline]
-    pub fn amounts(self) -> [u8; 6] {
+    pub fn amounts(self) -> [L::Mana; 6] {
         self.0
+    }
+
+    /// The amounts as bytes, saturating at `u8::MAX`, indexed as [`ManaColor::ALL`].
+    #[inline]
+    pub fn amounts_u8(self) -> [u8; 6] {
+        use crate::layout::UnsignedNumber;
+        self.0.map(UnsignedNumber::to_u8_saturating)
+    }
+
+    /// Whether every amount in this pool fits layout `M`.
+    pub(crate) fn fits<M: Layout>(self) -> Result<(), Misfit> {
+        for amount in self.0 {
+            fits_number::<M::Mana>("unspent mana", amount.to_i64())?;
+        }
+        Ok(())
+    }
+
+    /// This pool in layout `M`.
+    pub(crate) fn relayout<M: Layout>(self) -> ManaPool<M> {
+        ManaPool(self.0.map(number))
     }
 }
 
-impl std::ops::Index<ManaColor> for ManaPool {
-    type Output = u8;
+impl<L: Layout> std::ops::Index<ManaColor> for ManaPool<L> {
+    type Output = L::Mana;
     #[inline]
-    fn index(&self, color: ManaColor) -> &u8 {
+    fn index(&self, color: ManaColor) -> &L::Mana {
         &self.0[color.index()]
     }
 }
 
-impl std::ops::IndexMut<ManaColor> for ManaPool {
+impl<L: Layout> std::ops::IndexMut<ManaColor> for ManaPool<L> {
     #[inline]
-    fn index_mut(&mut self, color: ManaColor) -> &mut u8 {
+    fn index_mut(&mut self, color: ManaColor) -> &mut L::Mana {
         &mut self.0[color.index()]
     }
 }
@@ -64,9 +86,9 @@ impl std::ops::IndexMut<ManaColor> for ManaPool {
 /// fields are `pub(crate)`: other crates read them through the getters.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Player<L: Layout = Small> {
-    pub(crate) life: i16,
+    pub(crate) life: L::Life,
     /// Unspent mana.
-    pub(crate) mana: ManaPool,
+    pub(crate) mana: ManaPool<L>,
     /// Unspent mana that remembers what it may be spent on ([`crate::mana_memory`]), oldest
     /// first: none in a game whose cards make none.
     pub(crate) remembered: L::Queue<RememberedMana<L>, REMEMBERED_MANA>,
@@ -121,13 +143,13 @@ impl<L: Layout> Player<L> {
     /// The life total (see [CR 119.1](https://yawgatog.com/resources/magic-rules/#R1191)): "Each
     /// player begins the game with a starting life total of 20."
     #[inline]
-    pub fn life(&self) -> i16 {
+    pub fn life(&self) -> L::Life {
         self.life
     }
 
     /// The unspent mana in the player's mana pool (see CR 106.4).
     #[inline]
-    pub fn mana(&self) -> ManaPool {
+    pub fn mana(&self) -> ManaPool<L> {
         self.mana
     }
 
@@ -194,7 +216,7 @@ impl<L: Layout> State<L> {
     #[inline]
     #[must_use]
     pub fn gain_life(&mut self, player: Seat, amount: u8) -> Event<L> {
-        self.player_mut(player).life += i16::from(amount);
+        self.player_mut(player).life += L::Life::from(amount);
         self.life_changed();
         Event::LifeGain { player, amount }
     }
@@ -220,7 +242,7 @@ impl<L: Layout> State<L> {
     #[inline]
     #[must_use]
     pub fn has_life_to_pay(&self, player: Seat, amount: u8) -> bool {
-        amount == 0 || self.player(player).life() >= i16::from(amount)
+        amount == 0 || self.player(player).life() >= L::Life::from(amount)
     }
 
     /// A player loses life (see CR 119.3), as one who pays life does
@@ -230,7 +252,7 @@ impl<L: Layout> State<L> {
     pub fn lose_life(&mut self, player: Seat, amount: i16) -> Event<L> {
         debug_assert!(amount >= 0);
         let life = &mut self.player_mut(player).life;
-        *life = life.saturating_sub(amount);
+        *life = life.saturating_sub(L::Life::from(amount));
         self.life_changed();
         Event::LifeLoss { player, amount }
     }
@@ -252,7 +274,7 @@ impl<L: Layout> State<L> {
         loses_life: bool,
     ) -> Event<L> {
         if loses_life {
-            self.player_mut(player).life -= i16::from(amount);
+            self.player_mut(player).life -= L::Life::from(amount);
             self.life_changed();
         }
         Event::Damage {
@@ -276,7 +298,7 @@ impl<L: Layout> State<L> {
         amount: u8,
     ) -> Event<L> {
         let pool = &mut self.player_mut(player).mana[color];
-        *pool = pool.saturating_add(amount);
+        *pool = pool.saturating_add(L::Mana::from(amount));
         Event::Mana {
             player,
             source,
@@ -293,8 +315,9 @@ impl<L: Layout> State<L> {
     #[inline]
     pub fn spend_mana(&mut self, player: Seat, color: ManaColor, amount: u8) {
         let pool = &mut self.player_mut(player).mana[color];
-        debug_assert!(*pool >= amount, "spending mana the pool lacks");
-        *pool -= amount;
+        let take = L::Mana::from(amount);
+        debug_assert!(*pool >= take, "spending mana the pool lacks");
+        *pool -= take;
     }
 
     /// Empties every player's mana pool

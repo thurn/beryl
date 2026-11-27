@@ -77,7 +77,7 @@ pub const EFFECTS: usize = 64;
 pub enum Continuous<L: Layout = Small> {
     /// Changes one permanent in a layer (architecture §9). An effect that changes several
     /// is [`State::start_effect_on_set`]'s, which locks them in.
-    Layer(Permanent<L>, LayerChange),
+    Layer(Permanent<L>, LayerChange<L>),
     /// Replaces a zone change of the object.
     Move(ObjectRef<L>, MoveReplacement),
     /// Changes a rule of the game for a player or for one object
@@ -320,7 +320,7 @@ pub struct Permitted<L: Layout = Small> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Payload<L: Layout = Small> {
     /// Changes the affected permanent in a layer (architecture §9).
-    Layer(LayerChange),
+    Layer(LayerChange<L>),
     /// Replaces a zone change of the affected object.
     Move(MoveReplacement),
     /// Changes a rule of the game for what it affects
@@ -559,7 +559,7 @@ impl<L: Layout> ContinuousEffect<L> {
 
     /// The permanents it changes in a layer and the change, if that is what it does.
     #[inline]
-    fn layer_change(&self) -> Option<(Permanents<L>, LayerChange)> {
+    fn layer_change(&self) -> Option<(Permanents<L>, LayerChange<L>)> {
         match (self.affected, self.payload) {
             (Affects::Object { slot, incarnation }, Payload::Layer(change)) => {
                 Some((Permanents::One(ObjectRef { slot, incarnation }), change))
@@ -689,7 +689,7 @@ impl<L: Layout> State<L> {
     #[inline]
     pub fn layer_effects(
         &self,
-    ) -> impl Iterator<Item = (&ContinuousEffect<L>, Permanents<L>, LayerChange)> {
+    ) -> impl Iterator<Item = (&ContinuousEffect<L>, Permanents<L>, LayerChange<L>)> {
         self.effects
             .of(Kinds::LAYER)
             .iter()
