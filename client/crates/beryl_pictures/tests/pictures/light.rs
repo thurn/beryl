@@ -288,7 +288,11 @@ fn sweep(part: usize) {
         })
         .collect();
     let start = std::time::Instant::now();
-    let moments = each_replay(&tests, |(name, side)| first_lights(name, *side));
+    // A replay that panics fails with the recording's name and seat, which the panic's own
+    // message does not give.
+    let moments = each_replay(&tests, |(name, side)| {
+        runner::caught(|| first_lights(name, *side)).and_then(|first| first)
+    });
     eprintln!(
         "scanned {} recordings in {:?}",
         tests.len(),
@@ -298,7 +302,9 @@ fn sweep(part: usize) {
     let first: Vec<BTreeMap<String, u64>> = tests
         .iter()
         .zip(moments)
-        .map(|((name, _), first)| first.unwrap_or_else(|error| panic!("{name}: {error}")))
+        .map(|((name, side), first)| {
+            first.unwrap_or_else(|error| panic!("{name} from {side:?}'s seat: {error}"))
+        })
         .collect();
     let lit: Vec<(&str, Side, BTreeSet<u64>)> = tests
         .iter()

@@ -393,31 +393,78 @@ fn spread_by(
 /// `f` applied to every item, on as many threads as [`granted`] allows (see [`spread`]), each
 /// thread taking the next item from a shared index, with the results in the order of `items`.
 /// A panic in `f` is not reported by the default hook while it runs, since `f` reports its
-/// own.
+/// own. When `f` lets a panic escape, `each` panics with its message once the hook is back.
+///
+/// # Panics
+///
+/// When `f` panics on any item.
 pub fn each<T: Sync, R: Send>(items: &[T], f: impl Fn(&T) -> R + Sync) -> Vec<R> {
     let next = AtomicUsize::new(0);
     let results: Mutex<Vec<Option<R>>> = Mutex::new((0..items.len()).map(|_| None).collect());
-    let hook = panic::take_hook();
-    panic::set_hook(Box::new(|_| {}));
+    let escaped: Mutex<Option<(usize, String)>> = Mutex::new(None);
+    let silenced = Silenced::new();
     spread(items.len(), &next, || {
         loop {
             let at = next.fetch_add(1, Ordering::Relaxed);
             let Some(item) = items.get(at) else {
                 break;
             };
-            let result = f(item);
-            results
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)[at] = Some(result);
+            match caught(|| f(item)) {
+                Ok(result) => {
+                    results
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)[at] = Some(result);
+                }
+                Err(why) => {
+                    escaped
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .get_or_insert((at, why));
+                    // Take no more items, so that the threads end soon.
+                    next.store(items.len(), Ordering::Relaxed);
+                    break;
+                }
+            }
         }
     });
-    panic::set_hook(hook);
+    drop(silenced);
+    if let Some((at, why)) = escaped
+        .into_inner()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+    {
+        panic!("item {at} of {}: {why}", items.len());
+    }
     results
         .into_inner()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .into_iter()
         .map(|result| result.expect("every item was run"))
         .collect()
+}
+
+/// The panic hook as it was before [`Silenced::new`] replaced it with one that prints nothing,
+/// put back when this is dropped. A panic that escaped [`each`]'s threads used to leave the
+/// silent hook in place and lose the panic's message, so the test that called `each` failed
+/// with no message at all.
+struct Silenced(Option<Hook>);
+
+/// A panic hook, as [`panic::take_hook`] returns it.
+type Hook = Box<dyn Fn(&panic::PanicHookInfo<'_>) + Sync + Send + 'static>;
+
+impl Silenced {
+    fn new() -> Self {
+        let hook = panic::take_hook();
+        panic::set_hook(Box::new(|_| {}));
+        Self(Some(hook))
+    }
+}
+
+impl Drop for Silenced {
+    fn drop(&mut self) {
+        if let Some(hook) = self.0.take() {
+            panic::set_hook(hook);
+        }
+    }
 }
 
 /// Limits on audit frames other than visibility-only ticks. A longer flight entails more

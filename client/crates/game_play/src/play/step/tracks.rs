@@ -1,5 +1,5 @@
 //! Helpers of `Motion` that work on whole tracks and placements: adding a segment to a track,
-//! comparing two placements, and numbering the abilities on a table's stack.
+//! finding where two placements differ, and numbering the abilities on a table's stack.
 
 use beryl_protocol::protocol::StackItem;
 use beryl_protocol::script::Table as Played;
@@ -24,12 +24,23 @@ pub(crate) fn add(tracks: &mut Vec<Track>, slot: usize, segment: Segment) {
     }
 }
 
-/// Whether `a` and `b` give every slot and every ability the same resting place.
-pub(super) fn same(a: &Placement, b: &Placement) -> bool {
-    a.abilities == b.abilities
-        && (0..a.rests.len().max(b.rests.len())).all(|slot| {
-            a.rests.get(slot).copied().flatten() == b.rests.get(slot).copied().flatten()
-        })
+/// The first difference between the resting places `a` and `b` give, as a line naming the
+/// slot (or the abilities) and both places; `None` when they give every slot and every ability
+/// the same one.
+pub(super) fn difference(a: &Placement, b: &Placement) -> Option<String> {
+    if a.abilities != b.abilities {
+        return Some(format!(
+            "the abilities rest at {:?}, not {:?}",
+            a.abilities, b.abilities
+        ));
+    }
+    (0..a.rests.len().max(b.rests.len())).find_map(|slot| {
+        let (a, b) = (
+            a.rests.get(slot).copied().flatten(),
+            b.rests.get(slot).copied().flatten(),
+        );
+        (a != b).then(|| format!("slot {slot} rests at {a:?}, not {b:?}"))
+    })
 }
 
 /// The numbers of the abilities on `played`'s stack, bottom first.

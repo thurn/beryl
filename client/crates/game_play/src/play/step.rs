@@ -32,7 +32,7 @@ mod tracks;
 use fade::{Regrouped, regroup_fade, retarget};
 use hidden::{hides, hides_in_place};
 use room::{only_height, room_of};
-use tracks::same;
+use tracks::difference;
 pub(crate) use tracks::{add, numbers_of};
 
 pub use out::StepOut;
@@ -333,7 +333,7 @@ impl<'a> Motion<'a> {
 
     /// Makes the resting places the step placed again the table's own, and empties `fresh` for
     /// the next step.
-    fn commit(&mut self, table: &Table, dirty: &[bool]) {
+    fn commit(&mut self, table: &Table, dirty: &[bool], number: usize) {
         // A step that placed every group replaces every resting place; otherwise only the dirty
         // groups' old members leave theirs.
         if self.whole {
@@ -378,10 +378,14 @@ impl<'a> Motion<'a> {
         self.first = false;
         // Checked where the interface checks keep records, so that the allocations the frame gate
         // counts in a debug build are a running game's.
-        if cfg!(debug_assertions) && self.records {
-            assert!(
-                same(&self.rests, &table.placement_of(&self.played_zones())),
-                "placing only the groups a step changed gives what placing every group does"
+        if cfg!(debug_assertions)
+            && self.records
+            && let Some(difference) =
+                difference(&self.rests, &table.placement_of(&self.played_zones()))
+        {
+            panic!(
+                "placing only the groups a step changed gives what placing every group does, \
+                 but after step {number}, {difference}"
             );
         }
     }
@@ -494,7 +498,7 @@ impl<'a> Motion<'a> {
         if self.follow_abilities(number, (mover, &dirty), own, room) && room.to > own.to {
             self.note_closing(None, room.to, number);
         }
-        self.commit(table, &dirty);
+        self.commit(table, &dirty, number);
     }
 
     /// Notes that something the `number`th step does not move itself, the object in `slot` or

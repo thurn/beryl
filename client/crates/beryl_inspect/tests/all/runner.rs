@@ -279,6 +279,19 @@ fn a_panic_in_a_test_is_its_error() {
     assert_eq!(each[2], Ok(10));
 }
 
+#[test]
+fn a_panic_that_escapes_each_keeps_its_message() {
+    let escaped = runner::caught(|| {
+        runner::each(&[1, 2, 3], |&n| {
+            assert_ne!(n, 2, "the second item is bad");
+            n
+        })
+    });
+    let why = escaped.expect_err("each panics");
+    assert!(why.contains("item 1 of 3"), "{why}");
+    assert!(why.contains("the second item is bad"), "{why}");
+}
+
 fn outcome(recording: &str, frames: usize) -> Outcome {
     Outcome {
         test: Test {
