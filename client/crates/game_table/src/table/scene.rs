@@ -643,8 +643,6 @@ impl Table {
         (dress.marks)(on, &mut look);
         (dress.pointer)(slot, &self.camera, &mut look);
         let held = held_at.map_or(look, |pose| Look { pose, ..look });
-        effects::card::write(effects, dress.effects, target, dress.now, &held, builder);
-        self.write_shadow((Some(slot), object.place), &look.pose, under_way, builder);
         let at = self.write_look(
             name,
             (
@@ -657,6 +655,8 @@ impl Table {
             back,
             builder,
         );
+        effects::card::write(effects, dress.effects, target, dress.now, &held, builder);
+        self.write_shadow((Some(slot), object.place), &look.pose, under_way, builder);
         let band = builder.node_band(at);
         if shown.zone == ZoneName::Battlefield {
             own::write(
@@ -680,6 +680,7 @@ impl Table {
         if let Some(note) = note {
             builder.annotate(at, FACE_NOTE, note);
         }
+        builder.clear_owner();
     }
 
     /// The badges share the card's paint band while it moves, is raised or is dragged.

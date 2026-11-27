@@ -164,8 +164,6 @@ impl Table {
             &mut look,
         );
         (dress.marks)(on, &mut look);
-        effects::card::write(effects, dress.effects, target, dress.now, &look, builder);
-        self.write_shadow((None, object.place), &look.pose, under_way, builder);
         self.write_look(
             name,
             (ability_element(id), ABILITY_ROLE, 1),
@@ -174,6 +172,9 @@ impl Table {
             back,
             builder,
         );
+        effects::card::write(effects, dress.effects, target, dress.now, &look, builder);
+        self.write_shadow((None, object.place), &look.pose, under_way, builder);
+        builder.clear_owner();
     }
 }
 
