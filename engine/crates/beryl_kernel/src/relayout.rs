@@ -446,6 +446,7 @@ impl<L: Layout> Relayout for Pending<L> {
                 },
                 spec: c.spec,
                 substituted: c.substituted,
+                paid_colors: c.paid_colors,
                 from: c.from,
                 from_graveyard_permission: c.from_graveyard_permission,
             }),

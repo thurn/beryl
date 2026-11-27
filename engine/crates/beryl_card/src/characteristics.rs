@@ -146,6 +146,18 @@ bitset! {
         /// means 'For each generic mana in this spell's total cost, you may exile a card from
         /// your graveyard rather than pay that mana.'"
         DELVE = 3,
+        /// [CR 702.51a](https://yawgatog.com/resources/magic-rules/#R70251a): "Convoke is a
+        /// static ability that functions while the spell with convoke is on the stack.
+        /// 'Convoke' means 'For each colored mana in this spell's total cost, you may tap an
+        /// untapped creature of that color you control rather than pay that mana. For each
+        /// generic mana in this spell's total cost, you may tap an untapped creature you
+        /// control rather than pay that mana.'"
+        CONVOKE = 4,
+        /// [CR 702.126a](https://yawgatog.com/resources/magic-rules/#R702126a): "Improvise is
+        /// a static ability that functions while the spell with improvise is on the stack.
+        /// 'Improvise' means 'For each generic mana in this spell's total cost, you may tap an
+        /// untapped artifact you control rather than pay that mana.'"
+        IMPROVISE = 5,
         /// [CR 702.19b](https://yawgatog.com/resources/magic-rules/#R70219b): "The
         /// controller of an attacking creature with trample first assigns damage to the
         /// creature(s) blocking it. Once all those blocking creatures are assigned lethal

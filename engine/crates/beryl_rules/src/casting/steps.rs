@@ -25,6 +25,7 @@ use crate::state::{
 };
 use crate::table::{Capability, GameTable};
 
+use super::convoke;
 use super::costs::{spent_by_entry, total_cost, x_range_start};
 use super::graveyard;
 use super::mana_payment::{self, SacrificeCost};
@@ -276,8 +277,8 @@ fn begin_payment<L: Layout>(
     if c.kind == CastKind::Activation {
         return parts::pay(s, t, sink, c, 0);
     }
-    // A game whose cards have no delve pays a spell's mana alone.
-    if t.can(Capability::Delve) {
+    // A game whose cards have no delve, convoke or improvise pays a spell's mana alone.
+    if t.can(Capability::PaysWithObjects) {
         return parts::pay_substitutes(s, t, sink, c);
     }
     pay_mana(s, t, sink, c)
@@ -484,7 +485,8 @@ pub(super) fn ability_event<L: Layout>(entry: &StackEntry<L>) -> Event<L> {
     }
 }
 
-/// The X values the payment can still cover, from the least allowed.
+/// The X values the payment can still cover, from the least allowed, counting the creatures
+/// and artifacts convoke and improvise may tap.
 #[allow(
     clippy::disallowed_methods,
     reason = "reads the face being cast (see CR 709.3b)"
@@ -519,6 +521,8 @@ fn x_options<L: Layout>(
             Some(other) => other.payable(s, t, cost, paying)?,
             None => mana::payable(s, t, c.player, cost, exclude, paying)?,
         };
+        let available = available
+            || (t.can(Capability::PaysWithObjects) && convoke::entry_pays(s, t, c, cost)?);
         if !available {
             break;
         }

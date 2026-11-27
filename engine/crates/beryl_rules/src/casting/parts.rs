@@ -29,6 +29,7 @@ use crate::state::{
 use crate::table::GameTable;
 use crate::zones::counters;
 
+use super::convoke;
 use super::costs::{graveyard_start, remember_cost_pick, total_cost};
 use super::delve::{DELVE, DELVE_PART, delve_candidates, delve_most, delves};
 use super::steps::{finish, pay_mana, top};
@@ -38,7 +39,8 @@ mod moving;
 pub(crate) use moving::pay_with_all;
 
 /// The part at `index` of the cost of the spell or ability `entry`, counting its parts that
-/// are not mana from 0 in the order printed; at [`DELVE_PART`], delve's.
+/// are not mana from 0 in the order printed; at [`DELVE_PART`], delve's, and convoke's or
+/// improvise's at theirs ([`convoke::part`]).
 #[allow(clippy::disallowed_methods, reason = "the face being cast")]
 fn part_at<L: Layout>(
     t: &GameTable,
@@ -47,6 +49,9 @@ fn part_at<L: Layout>(
 ) -> Option<&'static CostPart> {
     if index == DELVE_PART {
         return Some(&DELVE);
+    }
+    if let Some(part) = convoke::part(index) {
+        return Some(part);
     }
     let index = usize::from(index);
     let StackItem::Spell {
@@ -106,7 +111,7 @@ pub(super) fn substitute(
     parts.iter().zip(0..).find_map(|(part, index)| match part {
         CostPart::Chosen(action, chosen) => match chosen.measure {
             Measure::ForGeneric(n) => Some((index, *action, chosen, n)),
-            Measure::Count(_) | Measure::TotalPower(_) => None,
+            Measure::Count(_) | Measure::TotalPower(_) | Measure::ForMana => None,
         },
         CostPart::This(_)
         | CostPart::Loyalty(_)
@@ -199,7 +204,7 @@ pub(crate) fn payable<L: Layout>(
                 .sum(|slot| u32::from(power_of(s, slot)))
                 >= u32::from(n)
         }
-        Measure::ForGeneric(_) => true,
+        Measure::ForGeneric(_) | Measure::ForMana => true,
     }
 }
 
@@ -381,7 +386,7 @@ pub(super) fn pay<L: Layout>(
             CostPart::Chosen(_, chosen) => match chosen.measure {
                 // A zero count needs no objects. Generic substitutions are paid with mana
                 // after the other parts ([`pay_substitutes`]).
-                Measure::Count(0) | Measure::ForGeneric(_) => {}
+                Measure::Count(0) | Measure::ForGeneric(_) | Measure::ForMana => {}
                 Measure::Count(n) | Measure::TotalPower(n) => {
                     c.step = CastStep::Objects(PayingObjects::start(index, n));
                     s.ask(Pending::Casting(c));
@@ -428,10 +433,12 @@ pub(super) fn pay_substitutes<L: Layout>(
             card, face, costs, ..
         } => {
             let face = t.def(card).face(face);
-            delves(face).then(|| {
+            if delves(face) {
                 let cards = delve_candidates(s, t, c.player, itself(entry));
-                (DELVE_PART, delve_most(face, costs, cards))
-            })
+                Some((DELVE_PART, delve_most(face, costs, cards)))
+            } else {
+                convoke::part_of(face).map(|part| (part, u8::MAX))
+            }
         }
         StackItem::Activated { .. } | StackItem::Triggered { .. } => substitute(
             entry
@@ -443,7 +450,7 @@ pub(super) fn pay_substitutes<L: Layout>(
         .map(|(part, _, _, most)| (part, most)),
     };
     if let Some((part, most)) = found {
-        let left = most.min(total_cost(s, t, entry, &c).generic);
+        let left = most.min(convoke::payable_count(part, total_cost(s, t, entry, &c)));
         c.step = CastStep::Objects(PayingObjects::start(part, left));
         if left > 0 && !substitute_options(s, t, &c)?.is_empty() {
             s.ask(Pending::Casting(c));
@@ -470,6 +477,9 @@ fn substitute_options<L: Layout>(
     let paying_objects = step(c);
     let left = paying_objects.left;
     let (action, chosen) = part_being_paid(t, entry, c);
+    if chosen.measure == Measure::ForMana {
+        return convoke::options(s, t, c, entry, cost);
+    }
     if left > 0 {
         let able =
             candidates(s, t, c.player, itself(entry), action, chosen) & !paying_objects.chosen;
@@ -593,6 +603,10 @@ fn choices<L: Layout>(
 pub(crate) fn purpose(action: CostAction, chosen: &Chosen) -> Purpose {
     match (action, chosen.measure) {
         (CostAction::Tap, Measure::TotalPower(_)) => Purpose::Crew,
+        (CostAction::Tap, Measure::ForMana) => Purpose::Convoke,
+        (CostAction::Tap, Measure::ForGeneric(_)) if convoke::improvises(action, chosen) => {
+            Purpose::Improvise
+        }
         (CostAction::Tap, Measure::ForGeneric(_)) => Purpose::Waterbend,
         (CostAction::Exile, Measure::ForGeneric(_)) => Purpose::Delve,
         (CostAction::Exile, Measure::Count(_)) => Purpose::ExileCost,
@@ -620,8 +634,9 @@ pub(super) fn decision<L: Layout>(
             Candidates::Options(substitute_options(s, t, c)?),
             prompt.most(left),
         ),
-        // Each object pays one generic mana, or the rest is paid with mana.
-        Measure::ForGeneric(_) => (
+        // Each object pays one generic mana, or for convoke one mana of its color, or the
+        // rest is paid with mana.
+        Measure::ForGeneric(_) | Measure::ForMana => (
             DecisionKind::ManaPayment,
             Candidates::Options(substitute_options(s, t, c)?),
             prompt.cost(total_cost(s, t, entry, c)),
@@ -703,12 +718,23 @@ pub(super) fn perform<L: Layout>(
     let (action, chosen) = part_being_paid(t, top(s), &c);
     let mut paying = step(&c);
     match chosen.measure {
-        Measure::ForGeneric(_) => {
+        Measure::ForGeneric(_) | Measure::ForMana => {
             // See CR 701.67a: "you may tap an untapped artifact or creature you control rather
             // than pay that mana." see CR 702.66a: "you may exile a card from your graveyard
             // rather than pay that mana." The cards stay in the graveyard until the last is
             // chosen, then go to exile at once ([`end_substitutes`]).
+            let convokes = chosen.measure == Measure::ForMana;
             match option {
+                // See CR 702.51a: "you may tap an untapped creature of that color you control
+                // rather than pay that mana."
+                Some(Opt::Mana { slot, color }) if convokes => {
+                    convoke::pay_with(s, t, sink, &mut c, slot, Some(color))?;
+                    paying.left -= 1;
+                }
+                Some(Opt::Object(slot)) if convokes => {
+                    convoke::pay_with(s, t, sink, &mut c, slot, None)?;
+                    paying.left -= 1;
+                }
                 Some(Opt::Mana { slot, color }) => {
                     if let Some(permanent) = s.permanent_at(slot) {
                         mana::activate(s, t, sink, permanent, color)?;

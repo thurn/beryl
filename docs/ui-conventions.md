@@ -727,7 +727,8 @@ recordings do not show them.
   mana: "Pay {0}." The opening choices: "Play or draw?", answered Play or Draw,
   and "Keep or mulligan?" over Arena's own buttons. Catalogs: "Choose Creature
   Type", "Choose Word to Replace", "Choose New Word". Waterbend: "Tap permanents
-  to Waterbend". What a declared creature is aimed at: "Choose attack target",
+  to Waterbend". Convoke: "Tap creatures to Convoke". Improvise: "Tap artifacts
+  to Improvise". What a declared creature is aimed at: "Choose attack target",
   "Choose what to block". Piles of a split: "Hand", "Exile", "Battlefield". The
   pass button's captions for where Arena shows none: "To Untap", "To Upkeep",
   "To Main 1", "To Main 2", "To Cleanup", "Nothing to play" under a halt and "To

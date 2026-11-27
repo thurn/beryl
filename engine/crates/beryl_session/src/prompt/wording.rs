@@ -459,6 +459,18 @@ pub(crate) const fn wording(prompt: &Prompt, zone: Option<Zone>) -> Wording {
             auto: AUTO_PAY,
             ..NONE
         },
+        // Composed as waterbend's is: the recordings show no convoke or improvise payment
+        // (UI Conventions, "Not seen in Arena").
+        Purpose::Convoke => Wording {
+            title: "Tap creatures to Convoke",
+            auto: AUTO_PAY,
+            ..NONE
+        },
+        Purpose::Improvise => Wording {
+            title: "Tap artifacts to Improvise",
+            auto: AUTO_PAY,
+            ..NONE
+        },
         // "Delve" over "Each card you exile from your graveyard pays for {1}", with "Submit 0"
         // (`5UHzpVvUkfI 47:31.0`): the title alone, as the prompt bar shows one line.
         Purpose::Delve => picks("Delve"),

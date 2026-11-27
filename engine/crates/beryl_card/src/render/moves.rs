@@ -153,6 +153,9 @@ impl Ctx {
                     c.verb("reveal", "reveals"),
                     c.verb("put", "puts")
                 ),
+                Found::OntoBattlefield => {
+                    format!("{} {it} onto the battlefield", c.verb("put", "puts"))
+                }
                 Found::OntoBattlefieldTapped => {
                     format!("{} {it} onto the battlefield tapped", c.verb("put", "puts"))
                 }

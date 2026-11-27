@@ -348,5 +348,61 @@
     "scenario": "Svyelunite Temple and Mana Crypt pay for Dissolve",
     "cr": "CR 601.2g (https://yawgatog.com/resources/magic-rules/#R6012g): \"If the total cost includes a mana payment, the player then has a chance to activate mana abilities (see rule 605, 'Mana Abilities'). Mana abilities must be activated before costs are paid.\"",
     "reason": "Forge's payment never activates Svyelunite Temple's {T}, Sacrifice ability, so with the Temple and Mana Crypt it cannot pay {1}{U}{U} and does not cast Dissolve. The Temple's two mana abilities are separate abilities, and its controller may activate either to pay."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Chord of Calling",
+    "scenario": "generated 4: cast from hand",
+    "cr": "CR 701.23b (https://yawgatog.com/resources/magic-rules/#R70123b): \"If a player is searching a hidden zone for cards with a stated quality, such as a card with a certain card type or color, that player isn't required to find some or all of those cards even if they're present in that zone.\"",
+    "reason": "XMage's Chord of Calling searches with a target of exactly one card (\"from 1 to 1\") whenever one qualifies, so its controller cannot fail to find one."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Chord of Calling",
+    "scenario": "generated 5: cast from hand",
+    "cr": "CR 701.23b (https://yawgatog.com/resources/magic-rules/#R70123b): \"If a player is searching a hidden zone for cards with a stated quality, such as a card with a certain card type or color, that player isn't required to find some or all of those cards even if they're present in that zone.\"",
+    "reason": "XMage's Chord of Calling searches with a target of exactly one card (\"from 1 to 1\") whenever one qualifies, so its controller cannot fail to find one."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Chord of Calling",
+    "scenario": "generated 6: cast from hand",
+    "cr": "CR 701.23b (https://yawgatog.com/resources/magic-rules/#R70123b): \"If a player is searching a hidden zone for cards with a stated quality, such as a card with a certain card type or color, that player isn't required to find some or all of those cards even if they're present in that zone.\"",
+    "reason": "XMage's Chord of Calling searches with a target of exactly one card (\"from 1 to 1\") whenever one qualifies, so its controller cannot fail to find one."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Chord of Calling",
+    "scenario": "generated 7: cast from hand",
+    "cr": "CR 701.23b (https://yawgatog.com/resources/magic-rules/#R70123b): \"If a player is searching a hidden zone for cards with a stated quality, such as a card with a certain card type or color, that player isn't required to find some or all of those cards even if they're present in that zone.\"",
+    "reason": "XMage's Chord of Calling searches with a target of exactly one card (\"from 1 to 1\") whenever one qualifies, so its controller cannot fail to find one."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Chord of Calling",
+    "scenario": "generated 8: cast from hand",
+    "cr": "CR 701.23b (https://yawgatog.com/resources/magic-rules/#R70123b): \"If a player is searching a hidden zone for cards with a stated quality, such as a card with a certain card type or color, that player isn't required to find some or all of those cards even if they're present in that zone.\"",
+    "reason": "XMage's Chord of Calling searches with a target of exactly one card (\"from 1 to 1\") whenever one qualifies, so its controller cannot fail to find one."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Chord of Calling",
+    "scenario": "generated 9: cast from hand",
+    "cr": "CR 701.23b (https://yawgatog.com/resources/magic-rules/#R70123b): \"If a player is searching a hidden zone for cards with a stated quality, such as a card with a certain card type or color, that player isn't required to find some or all of those cards even if they're present in that zone.\"",
+    "reason": "XMage's Chord of Calling searches with a target of exactly one card (\"from 1 to 1\") whenever one qualifies, so its controller cannot fail to find one."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Chord of Calling",
+    "scenario": "generated 10: cast from hand",
+    "cr": "CR 701.23b (https://yawgatog.com/resources/magic-rules/#R70123b): \"If a player is searching a hidden zone for cards with a stated quality, such as a card with a certain card type or color, that player isn't required to find some or all of those cards even if they're present in that zone.\"",
+    "reason": "XMage's Chord of Calling searches with a target of exactly one card (\"from 1 to 1\") whenever one qualifies, so its controller cannot fail to find one."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Chord of Calling",
+    "scenario": "generated 11: cast from hand",
+    "cr": "CR 701.23b (https://yawgatog.com/resources/magic-rules/#R70123b): \"If a player is searching a hidden zone for cards with a stated quality, such as a card with a certain card type or color, that player isn't required to find some or all of those cards even if they're present in that zone.\"",
+    "reason": "XMage's Chord of Calling searches with a target of exactly one card (\"from 1 to 1\") whenever one qualifies, so its controller cannot fail to find one."
   }
 ]

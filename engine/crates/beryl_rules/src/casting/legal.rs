@@ -21,6 +21,7 @@ use crate::mana::{self, Funds};
 use crate::state::{RuleKind, State, Tracker, Zone, ZoneKey};
 use crate::table::{Capability, GameTable};
 
+use super::convoke;
 use super::costs::{From, base_spell_cost, option_sets, x_range_start};
 use super::delve;
 use super::mana_payment;
@@ -138,7 +139,8 @@ fn in_time<L: Layout, const TARGETS: bool>(
     }
 }
 
-/// Whether `cost` is paid with restricted mana or delve (see CR 702.66a).
+/// Whether `cost` is paid with restricted mana, delve (see CR 702.66a), convoke (see CR 702.51a)
+/// or improvise (see CR 702.126a).
 #[cold]
 #[inline(never)]
 #[allow(clippy::too_many_arguments)]
@@ -176,9 +178,12 @@ fn pays_otherwise<L: Layout, const TARGETS: bool>(
             }
         }
     }
-    t.can(Capability::Delve)
-        && delve::delves(face_ref)
-        && delve::delve_pays(s, t, funds, player, slot, face, costs, cost)
+    t.can(Capability::PaysWithObjects)
+        && ((delve::delves(face_ref)
+            && delve::delve_pays(s, t, funds, player, slot, face, costs, cost))
+            || convoke::part_of(face_ref).is_some_and(|index| {
+                convoke::convoke_pays(s, t, funds, player, slot, face, index, cost)
+            }))
 }
 
 /// Why `player` may not cast the card in `slot` with this face and these casting options:
@@ -228,7 +233,7 @@ fn refused<L: Layout, const TARGETS: bool>(
     let cost = now.apply_spell_cost(s, t, face, base_spell_cost(face, costs, x, increase, free));
     if !now.funds(s, t).is_some_and(|f| {
         f.pays(s, t, cost, Bitboard::EMPTY)
-            || (t.can_either(Capability::RemembersMana, Capability::Delve)
+            || (t.can_either(Capability::RemembersMana, Capability::PaysWithObjects)
                 && pays_otherwise(s, t, now, f, cost, player, slot, face_index, face, costs))
             || (t.can_either(Capability::PricedMana, Capability::ManaChanges)
                 && f.pays_for(s, t, cost, Bitboard::EMPTY, mana::Paying::NOTHING))

@@ -137,6 +137,14 @@ pub enum Measure {
     /// "the alternate method to pay for mana described in rule 701.67a may be used only to
     /// pay for the amount of generic mana in the waterbend cost".
     ForGeneric(u8),
+    /// Any number, each rather than one mana of the total cost: one generic mana, or one
+    /// colored mana of a color the object has, as convoke's
+    /// ([CR 702.51a](https://yawgatog.com/resources/magic-rules/#R70251a)): "For each colored
+    /// mana in this spell's total cost, you may tap an untapped creature of that color you
+    /// control rather than pay that mana. For each generic mana in this spell's total cost,
+    /// you may tap an untapped creature you control rather than pay that mana." An object
+    /// never pays a colorless symbol ({C}) this way.
+    ForMana,
 }
 
 impl CostPart {

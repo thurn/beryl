@@ -13,6 +13,7 @@
 //! answers that leave the rest completable, so the machine never has to rewind.
 
 mod adventure;
+mod convoke;
 mod costs;
 mod delve;
 mod graveyard;
@@ -29,6 +30,7 @@ mod targets;
 mod timing;
 
 pub(crate) use adventure::finish_adventure;
+pub(crate) use convoke::card_pays as pays_with_objects;
 pub use costs::cost_being_cast;
 pub use legal::{castable_from_graveyard, payable_responses, pointless};
 pub(crate) use legal::{priority_options, refusal};

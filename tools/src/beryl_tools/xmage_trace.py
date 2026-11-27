@@ -25,6 +25,9 @@ FORCED_CHOICES = ("ChooseObject", "ChooseUpTo")
 # What the prompts are for whose cards XMage asks as targets even when they are identical, as
 # Brainstorm's cards to put back from a hand of Islands: their answers go in the target queue.
 FORCED_TARGETS = ("put-back",)
+# The purposes of the picks of creatures a spell's convoke taps, or artifacts its improvise
+# taps (CR 702.51a, CR 702.126a).
+TAPPED_FOR_A_SPELL = ("convoke", "improvise")
 
 
 @dataclass
@@ -126,6 +129,18 @@ class Position:
         if abilities != [source]:
             raise Unsupported("a target among several abilities on the stack")
         return "stack ability ("
+
+    @staticmethod
+    def taps_objects_next(trace: list[Position], index: int) -> bool:
+        """Whether the cast at `trace[index]` taps creatures for convoke or artifacts for
+        improvise before the next priority, asked or chosen by Beryl unasked."""
+        for after in trace[index + 1 :]:
+            purposes = [after.purpose, *(f.get("purpose") for f in after.forced)]
+            if any(p in TAPPED_FOR_A_SPELL for p in purposes):
+                return True
+            if after.kind == "Priority":
+                return False
+        return False
 
     @staticmethod
     def delves_next(trace: list[Position], index: int) -> bool:

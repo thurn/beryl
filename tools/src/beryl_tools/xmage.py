@@ -395,6 +395,12 @@ class Exporter:
             payment = self.payment()
             paid = None if payment is None else list(payment.taps)
             self.cards.delve_reachable(self.setup, action["player"], paid)
+        if Position.taps_objects_next(self.trace, self.index):
+            # The test player has no command that taps a chosen creature for convoke or
+            # artifact for improvise, and XMage's AI taps its own choice.
+            raise Unsupported(
+                "tapping creatures for convoke or artifacts for improvise"
+            )
         if face == 0 and name == card and card in p.flashback:
             self.flashback(action, p)
             return

@@ -232,6 +232,19 @@ fn onto_battlefield<L: Layout>(
     Ok(run.now_in(objects, Zone::Battlefield))
 }
 
+/// `player` puts cards onto the battlefield, each under its owner's control, simultaneously,
+/// as a search's "put it onto the battlefield" does. A card that leaves a shared library or
+/// graveyard has no owner, and enters under `player`'s control and owned by them.
+pub fn put_onto_battlefield_by<L: Layout>(
+    game: &mut Game<'_, L>,
+    player: Seat,
+    cards: Bitboard<L::Slot>,
+) -> Result<(), Full> {
+    let (to, reason) = (Zone::Battlefield, Reason::Effect);
+    let (s, t, sink) = (&mut *game.state, game.table, &mut *game.sink);
+    event::move_batch_by(s, t, sink, player, cards, to, reason, Entry::default())
+}
+
 /// `player` puts cards onto the battlefield tapped, each under its owner's control,
 /// simultaneously: "Those cards enter tapped." A card that leaves a shared library or graveyard
 /// has no owner, and enters under `player`'s control and owned by them.

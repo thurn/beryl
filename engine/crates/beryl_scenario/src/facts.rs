@@ -542,6 +542,8 @@ fn part_facts(part: &CostPart) -> PartFacts {
                 Measure::Count(n) => out.count = Some(n),
                 Measure::TotalPower(n) => out.total_power = Some(n),
                 Measure::ForGeneric(n) => out.for_generic = Some(n),
+                // No printed cost has it: convoke's part is the rules', not a face's.
+                Measure::ForMana => {}
             }
             out
         }

@@ -8,6 +8,8 @@
 //!   grant them, without the layers' table of grants ([`grants`]).
 //! - Payability: the prefilter, the cached funds and the solver's plans, against a matching
 //!   of each mana symbol to a unit of mana from the pool or a mana ability read off the cards.
+//! - In a game whose cards have convoke or improvise, whether each such spell in a hand can be
+//!   paid, against every set of the creatures or artifacts it could tap ([`objects`]).
 //! - In a game whose cards have priced mana abilities or products of several terms, the cached
 //!   funds and the solver's plans against every sequence of mana abilities ([`sequences`]).
 //!
@@ -29,8 +31,11 @@ use beryl_kernel::chosen::ChosenValue;
 use beryl_kernel::mana_memory::RememberedMana;
 
 mod grants;
+mod objects;
 mod sequences;
 
+#[cfg(test)]
+pub(crate) use objects::reference_pays_with_objects;
 pub(crate) use sequences::reference_sequences;
 
 fn check(ok: bool, what: &'static str, at: Option<At>) -> Result<(), Violation> {
@@ -137,7 +142,7 @@ fn check_layers<L: Layout>(s: &State<L>, t: &GameTable) -> Result<(), Violation>
 /// probes, as the prefilter, the cached funds and the solver say, against
 /// [`reference_pays`].
 fn check_payments<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Result<(), Violation> {
-    let Some(units) = reference_units(s, t, player, Paying::NOTHING) else {
+    let Some(units) = reference_units(s, t, player, Paying::NOTHING, Bitboard::EMPTY) else {
         return Ok(());
     };
     let at = Some(At::Player(player));
@@ -202,7 +207,11 @@ fn check_payments<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Resul
         }
     }
     check_spell_payments(s, t, player, &funds)?;
-    check_ability_payments(s, t, player, &funds, units.as_slice())
+    check_ability_payments(s, t, player, &funds, units.as_slice())?;
+    if t.can(Capability::PaysWithObjects) {
+        objects::check_objects(s, t, player)?;
+    }
+    Ok(())
 }
 
 /// Whether `player` can pay `cost` for no spell, as the cached funds and the solver's plans
@@ -265,7 +274,7 @@ pub(crate) fn reference_payable<L: Layout>(
     player: Seat,
     cost: ManaCost,
 ) -> Option<bool> {
-    let units = reference_units(s, t, player, Paying::NOTHING)?;
+    let units = reference_units(s, t, player, Paying::NOTHING, Bitboard::EMPTY)?;
     Some(reference_pays(units.as_slice(), cost))
 }
 
@@ -298,7 +307,7 @@ fn check_spell_payments<L: Layout>(
         };
         for face in def.face_ixs() {
             let paying = Paying::casting(s, t, slot, face);
-            let Some(units) = reference_units(s, t, player, paying) else {
+            let Some(units) = reference_units(s, t, player, paying, Bitboard::EMPTY) else {
                 continue;
             };
             // X is announced before payment, as 0 here.
@@ -462,7 +471,7 @@ type Units = Fixed<u8, UNITS>;
 /// The units of mana `player` could spend now on what `paying` is for, each as the set of
 /// kinds it may be: their floating mana, and one tap of each untapped permanent they control
 /// with a mana ability whose only costs are {T} and perhaps sacrificing it, read from its face
-/// up. Mana whose spending is restricted counts only where its restriction accepts the spell
+/// up, but those in `exclude`. Mana whose spending is restricted counts only where its restriction accepts the spell
 /// being paid for (see [CR 106.6]), so never for a cost of no spell. `None` where a
 /// permanent's mana abilities make different amounts, which units cannot say, or where there
 /// are more than [`UNITS`].
@@ -482,6 +491,7 @@ fn reference_units<L: Layout>(
     t: &GameTable,
     player: Seat,
     paying: Paying<L>,
+    exclude: Bitboard<L::Slot>,
 ) -> Option<Units> {
     let mut units = Units::new();
     for (k, &n) in s.player(player).mana().amounts().iter().enumerate() {
@@ -499,7 +509,7 @@ fn reference_units<L: Layout>(
     for &slot in s.battlefield() {
         let d = s.derived(slot);
         let o = s.object(slot);
-        if d.controller != player || o.is_tapped() {
+        if d.controller != player || o.is_tapped() || exclude.contains(slot) {
             continue;
         }
         if d.types.intersects(Types::CREATURE)

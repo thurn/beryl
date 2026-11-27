@@ -91,6 +91,51 @@ pub const VANILLA: Contract = Contract {
     text: "",
 };
 
+/// A green creature, to pay a green symbol for convoke: a green 2/2 for {1}{G}, mana value 2,
+/// a Bear, with no abilities.
+pub const GREEN_CREATURE: Contract = Contract {
+    card: "Grizzly Bears",
+    cost: ManaCost::new(1, [0, 0, 0, 0, 1, 0]),
+    types: Types::CREATURE,
+    subtypes: Subtypes::of(&[Subtype::Bear]),
+    stats: Stats::Creature {
+        power: 2,
+        toughness: 2,
+    },
+    keywords: Keywords::NONE,
+    text: "",
+};
+
+/// A creature of two colors, to pay a symbol of either for convoke: a green and white 3/3 for
+/// {G}{W}, mana value 2, a Wolf, with no abilities.
+pub const GREEN_WHITE_CREATURE: Contract = Contract {
+    card: "Watchwolf",
+    cost: ManaCost::new(0, [1, 0, 0, 0, 1, 0]),
+    types: Types::CREATURE,
+    subtypes: Subtypes::of(&[Subtype::Wolf]),
+    stats: Stats::Creature {
+        power: 3,
+        toughness: 3,
+    },
+    keywords: Keywords::NONE,
+    text: "",
+};
+
+/// A colorless creature that is also an artifact, to pay generic mana only for convoke or
+/// improvise: a 0/2 artifact creature with flying for {0}, mana value 0, a Thopter.
+pub const COLORLESS_CREATURE: Contract = Contract {
+    card: "Ornithopter",
+    cost: ManaCost::NONE,
+    types: Types::ARTIFACT.union(Types::CREATURE),
+    subtypes: Subtypes::of(&[Subtype::Thopter]),
+    stats: Stats::Creature {
+        power: 0,
+        toughness: 2,
+    },
+    keywords: Keywords::FLYING,
+    text: "",
+};
+
 /// A creature spell to cast at instant speed: a black 3/2 with flash for {2}{B}, mana value
 /// 3, a Human Assassin.
 pub const FLASH_CREATURE: Contract = Contract {
@@ -240,6 +285,9 @@ pub const THIEF: Contract = Contract {
 pub const ALL: &[Contract] = &[
     FLIER,
     VANILLA,
+    GREEN_CREATURE,
+    GREEN_WHITE_CREATURE,
+    COLORLESS_CREATURE,
     FLASH_CREATURE,
     ARTIFACT,
     EQUIPMENT,
@@ -264,6 +312,12 @@ impl Prop {
     pub const Flier: &str = FLIER.card;
     /// [`VANILLA`].
     pub const Vanilla: &str = VANILLA.card;
+    /// [`GREEN_CREATURE`].
+    pub const GreenCreature: &str = GREEN_CREATURE.card;
+    /// [`GREEN_WHITE_CREATURE`].
+    pub const GreenWhiteCreature: &str = GREEN_WHITE_CREATURE.card;
+    /// [`COLORLESS_CREATURE`].
+    pub const ColorlessCreature: &str = COLORLESS_CREATURE.card;
     /// [`FLASH_CREATURE`].
     pub const FlashCreature: &str = FLASH_CREATURE.card;
     /// [`ARTIFACT`].

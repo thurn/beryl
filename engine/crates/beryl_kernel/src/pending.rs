@@ -105,6 +105,11 @@ pub struct Casting<L: Layout = Small> {
     /// Generic mana of the cost that a part paid with objects rather than with mana
     /// ([`beryl_card::Measure::ForGeneric`]). The steps after that part read it.
     pub substituted: u8,
+    /// The colored symbols of the cost that creatures paid for convoke rather than mana
+    /// ([`beryl_card::Measure::ForMana`]), three bits a color in W, U, B, R, G order: the
+    /// count of color `c` is `(paid_colors >> (3 * c)) & 7`. Generic mana they paid is in
+    /// `substituted`. The steps after that part read it ([`Casting::paid`]).
+    pub paid_colors: u16,
     /// Where a spell was before it moved to the stack (see CR 601.2a).
     pub from: Zone,
     /// The spell is cast from its owner's graveyard under a permanent's permission to cast
@@ -131,6 +136,9 @@ impl<L: Layout> std::hash::Hash for Casting<L> {
         if self.from_graveyard_permission {
             true.hash(h);
         }
+        if self.paid_colors != 0 {
+            self.paid_colors.hash(h);
+        }
     }
 }
 
@@ -143,9 +151,28 @@ impl<L: Layout> Casting<L> {
             step,
             spec: SpecIx::default(),
             substituted: 0,
+            paid_colors: 0,
             from: Zone::Nowhere,
             from_graveyard_permission: false,
         }
+    }
+
+    /// How many symbols of the color with [`beryl_card::ManaColor`] index `color` (0 to 4)
+    /// creatures paid for convoke ([`Casting::paid_colors`]).
+    pub fn paid(&self, color: usize) -> u8 {
+        u8::try_from((self.paid_colors >> (3 * color)) & 7).expect("three bits")
+    }
+
+    /// Records that a creature paid one symbol of the color with index `color` (0 to 4). An
+    /// eighth symbol of one color does not fit its three bits: no cost the card table holds
+    /// has more than seven colored symbols of one color, so that is `Full`, and the game goes
+    /// on in a larger layout, which keeps the same field.
+    pub fn pay_color(&mut self, color: usize) -> Result<(), crate::fixed::Full> {
+        if self.paid(color) == 7 {
+            return Err(crate::fixed::Full);
+        }
+        self.paid_colors += 1 << (3 * color);
+        Ok(())
     }
 
     /// Whether this is a spell cast without paying its mana cost (see CR 118.9).

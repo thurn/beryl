@@ -179,7 +179,7 @@ fn casting_during_a_search_preserves_the_library_and_ends_at_the_first_find() {
     let _mana = s.add_mana(player, None, crate::card::ManaColor::Green, 2);
 
     let (_, foreign) = resolving(&t, &mut s, &mut x, source, &[], |game, resolution| {
-        crate::actions::search::search_library(game, resolution, player, opponent, filter, 2)
+        crate::actions::search::search_library(game, resolution, player, opponent, filter, 2, 0)
     });
     let foreign = foreign.unwrap();
     assert!(matches!(&foreign.candidates, Candidates::Options(options)
@@ -187,7 +187,7 @@ fn casting_during_a_search_preserves_the_library_and_ends_at_the_first_find() {
 
     let mut search = |s: &mut State, answers: &[u8]| {
         resolving(&t, s, &mut x, source, answers, |game, resolution| {
-            crate::actions::search::search_library(game, resolution, player, player, filter, 2)
+            crate::actions::search::search_library(game, resolution, player, player, filter, 2, 0)
         })
     };
     let original = s;
@@ -264,7 +264,15 @@ fn search_for_any_card_cannot_end_early_while_cards_remain() {
 
     // Without cast-while-searching (searching opponent's library): ChooseObject, no Opt::Done.
     let (_, foreign) = resolving(&t, &mut s, &mut x, source, &[], |game, resolution| {
-        crate::actions::search::search_library(game, resolution, player, opponent, Filter::Any, 1)
+        crate::actions::search::search_library(
+            game,
+            resolution,
+            player,
+            opponent,
+            Filter::Any,
+            1,
+            0,
+        )
     });
     let foreign = foreign.unwrap();
     assert_eq!(foreign.kind, DecisionKind::ChooseObject);
@@ -273,7 +281,7 @@ fn search_for_any_card_cannot_end_early_while_cards_remain() {
     // With cast-while-searching (own library): offers both cards and casting, but no Opt::Done.
     let original = s;
     let (_, first) = resolving(&t, &mut s, &mut x, source, &[], |game, resolution| {
-        crate::actions::search::search_library(game, resolution, player, player, Filter::Any, 1)
+        crate::actions::search::search_library(game, resolution, player, player, Filter::Any, 1, 0)
     });
     let first = first.unwrap();
     assert_eq!(first.kind, DecisionKind::ChooseObject);
@@ -297,7 +305,15 @@ fn search_for_any_card_cannot_end_early_while_cards_remain() {
         source,
         &[cast_answer],
         |game, resolution| {
-            crate::actions::search::search_library(game, resolution, player, player, Filter::Any, 1)
+            crate::actions::search::search_library(
+                game,
+                resolution,
+                player,
+                player,
+                Filter::Any,
+                1,
+                0,
+            )
         },
     );
     assert!(next.is_none());

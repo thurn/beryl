@@ -363,6 +363,8 @@ impl ChosenKind {
             | Purpose::Mana
             | Purpose::Crew
             | Purpose::Waterbend
+            | Purpose::Convoke
+            | Purpose::Improvise
             | Purpose::Delve
             | Purpose::Attack
             | Purpose::Block

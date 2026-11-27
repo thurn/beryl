@@ -24,6 +24,11 @@ pub enum Unpayable {
     /// An effect or an intervening "if" names what a cost took
     /// ([`beryl_card::Objects::Paid`]), which the engine does not keep.
     Named,
+    /// A face with two or more of delve, convoke and improvise, whose payments the casting
+    /// steps would have to share out between them, or with convoke and a hybrid symbol in its
+    /// mana cost, which a creature's color might pay either half of. No card needs either
+    /// yet. A Phyrexian symbol is refused already: a mana cost holds none.
+    Substitutes,
 }
 
 /// Whether the engine pays this part of an activation cost: something done to the ability's
@@ -110,10 +115,26 @@ fn ability(a: &Ability) -> Result<(), Unpayable> {
     Ok(())
 }
 
+/// Whether the casting steps can pay for `face` with objects as its keywords say: at most one
+/// of delve, convoke and improvise, and convoke only with no hybrid symbol.
+fn substitutes(face: &beryl_card::Face) -> Result<(), Unpayable> {
+    use beryl_card::Keywords;
+    let k = face.keywords;
+    let count = [Keywords::DELVE, Keywords::CONVOKE, Keywords::IMPROVISE]
+        .into_iter()
+        .filter(|&one| k.contains(one))
+        .count();
+    if count > 1 || (k.contains(Keywords::CONVOKE) && !face.cost.hybrid.is_empty()) {
+        return Err(Unpayable::Substitutes);
+    }
+    Ok(())
+}
+
 /// The first cost of a card's faces the engine cannot pay, among the abilities each face has
 /// and grants and the costs it is cast with.
 pub(crate) fn check(def: &CardDef) -> Result<(), Unpayable> {
     for face in def.faces {
+        substitutes(face)?;
         for a in face.abilities.iter().chain(face.grants) {
             ability(a)?;
         }
@@ -330,6 +351,38 @@ mod tests {
         }],
         tokens: &[],
     };
+    /// Delve and convoke on one face.
+    static DELVING_CONVOKER: CardDef = CardDef {
+        name: "Delving Convoker",
+        shape: beryl_card::definition::Shape::Single,
+        faces: &[Face {
+            keywords: beryl_card::Keywords::DELVE.union(beryl_card::Keywords::CONVOKE),
+            ..Face::EMPTY
+        }],
+        tokens: &[],
+    };
+    /// Convoke with a hybrid symbol, {G/W}.
+    static HYBRID_CONVOKER: CardDef = CardDef {
+        name: "Hybrid Convoker",
+        shape: beryl_card::definition::Shape::Single,
+        faces: &[Face {
+            keywords: beryl_card::Keywords::CONVOKE,
+            cost: beryl_card::mana("{G/W}"),
+            ..Face::EMPTY
+        }],
+        tokens: &[],
+    };
+    /// Improvise with a hybrid symbol, which an artifact never pays.
+    static HYBRID_IMPROVISER: CardDef = CardDef {
+        name: "Hybrid Improviser",
+        shape: beryl_card::definition::Shape::Single,
+        faces: &[Face {
+            keywords: beryl_card::Keywords::IMPROVISE,
+            cost: beryl_card::mana("{1}{G/W}"),
+            ..Face::EMPTY
+        }],
+        tokens: &[],
+    };
     static CARDS: CardTable = CardTable::new(&[
         &FILLER,
         &PAID,
@@ -343,6 +396,9 @@ mod tests {
         &KAROO,
         &OUTLET,
         &REMEMBERER,
+        &DELVING_CONVOKER,
+        &HYBRID_CONVOKER,
+        &HYBRID_IMPROVISER,
     ]);
 
     fn table(card: &'static str) -> Result<GameTable, TableError> {
@@ -359,6 +415,23 @@ mod tests {
         assert!(table("Rite").is_ok());
         assert!(table("Filter Land").is_ok());
         assert!(table("Karoo").is_ok());
+        assert!(table("Hybrid Improviser").is_ok());
+    }
+
+    /// The casting steps keep one count of what objects paid, so a face pays with objects in
+    /// one way only, and a creature paying for convoke is never asked which half of a hybrid
+    /// symbol its color pays.
+    #[test]
+    fn a_table_refuses_two_ways_to_pay_with_objects_and_convoke_with_hybrid_mana() {
+        for card in ["Delving Convoker", "Hybrid Convoker"] {
+            assert_eq!(
+                table(card).err(),
+                Some(TableError::Cost {
+                    card,
+                    unpayable: Unpayable::Substitutes
+                })
+            );
+        }
     }
 
     /// A part no code pays would be skipped as its spell is cast or its ability activated:

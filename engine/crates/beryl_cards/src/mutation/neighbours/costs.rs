@@ -69,6 +69,8 @@ fn changes(part: CostPart) -> Neighbours<CostPart> {
                 Measure::Count(n) => (n, Measure::Count),
                 Measure::TotalPower(n) => (n, Measure::TotalPower),
                 Measure::ForGeneric(n) => (n, Measure::ForGeneric),
+                // No printed cost has it: convoke's part is the rules', not a face's.
+                Measure::ForMana => return Vec::new(),
             };
             let mut out: Neighbours<_> = unsigned(count)
                 .map(|n| {

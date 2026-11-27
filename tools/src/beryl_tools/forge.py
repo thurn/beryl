@@ -575,6 +575,16 @@ def export(
             escape_cast: JsonObject | None = None
             for i, action in enumerate(actions):
                 position = trace[i] if i < len(trace) else {}
+                tapped = [position.get("purpose")] + [
+                    f.get("purpose")
+                    for f in cast(list[JsonObject], position.get("forced", []))
+                ]
+                if any(p in ("convoke", "improvise") for p in tapped):
+                    # The harness scripts only waterbend's generic picks: it cannot say which
+                    # symbol a creature tapped for convoke pays (CR 702.51a).
+                    raise Unsupported(
+                        "tapping creatures for convoke or artifacts for improvise"
+                    )
                 # Include answers Beryl chose silently. Forge can offer more targets or
                 # choose a different X, and needs the final Done for each damage division.
                 for forced in cast(list[JsonObject], position.get("forced", [])):

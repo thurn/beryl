@@ -81,10 +81,11 @@ pub enum Capability {
     /// works in every zone, so a read of the power of an object off the battlefield looks for
     /// one ([`crate::query::defined_power`]).
     DefinesPt,
-    /// A card has delve ([`beryl_card::Keywords::DELVE`]), so paying a spell's mana looks
-    /// for cards in its caster's graveyard to pay generic mana with, and whether a spell is
-    /// castable counts them.
-    Delve,
+    /// A card has delve, convoke or improvise ([`beryl_card::Keywords::DELVE`],
+    /// [`beryl_card::Keywords::CONVOKE`], [`beryl_card::Keywords::IMPROVISE`]), so paying a
+    /// spell's mana looks for objects to pay with instead (cards in its caster's graveyard,
+    /// creatures or artifacts they control), and whether a spell is castable counts them.
+    PaysWithObjects,
     /// A card's copy exception gives a triggered ability ([`beryl_card::CopyChange::Has`]),
     /// which a permanent whose copiable values carry the exception has on no face of its
     /// definition, so trigger matching looks at the exceptions of copies (`beryl_rules`'
@@ -442,8 +443,12 @@ fn replacement_capabilities(replacement: &Replacement) -> u64 {
 /// The capabilities that come from a face's keyword abilities.
 fn keyword_capabilities(keywords: Keywords) -> u64 {
     let mut found = 0;
-    if keywords.contains(Keywords::DELVE) {
-        found |= Capability::Delve.bit();
+    if keywords.intersects(
+        Keywords::DELVE
+            .union(Keywords::CONVOKE)
+            .union(Keywords::IMPROVISE),
+    ) {
+        found |= Capability::PaysWithObjects.bit();
     }
     if keywords.contains(Keywords::BANDING) {
         found |= Capability::Banding.bit();

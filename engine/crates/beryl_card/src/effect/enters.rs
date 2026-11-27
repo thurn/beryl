@@ -58,7 +58,8 @@ impl Effect {
             // A search puts what it finds onto the battlefield only when it says so, and a
             // basic land never chooses as it enters.
             Effect::Search { filter, found, .. } => {
-                matches!(found, Found::OntoBattlefieldTapped) && !requires_basic(filter)
+                matches!(found, Found::OntoBattlefield | Found::OntoBattlefieldTapped)
+                    && !requires_basic(filter)
             }
             Effect::Sequence(_)
             | Effect::If { .. }

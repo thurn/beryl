@@ -106,3 +106,100 @@ pub const CYCLING: &[Scenario] = &[Scenario::new("Cycling Spara's Headquarters")
         Resolve,
         ME.has(Zone::Hand, names::ISLAND, 1),
     ])];
+
+const CHORD: &str = names::CHORD_OF_CALLING;
+const BEARS: &str = props::GREEN_CREATURE.card;
+const WOLF: &str = props::GREEN_WHITE_CREATURE.card;
+const THOPTER: &str = props::COLORLESS_CREATURE.card;
+
+/// Convoke ([CR 702.51a]): "For each colored mana in this spell's total cost, you may tap an
+/// untapped creature of that color you control rather than pay that mana. For each generic mana
+/// in this spell's total cost, you may tap an untapped creature you control rather than pay that
+/// mana." Chord of Calling costs {X}{G}{G}{G}, and its X is chosen before any creature taps
+/// ([CR 702.51b]): "The convoke ability isn't an additional or alternative cost and applies only
+/// after the total cost of the spell with convoke is determined."
+///
+/// [CR 702.51a]: https://yawgatog.com/resources/magic-rules/#R70251a
+/// [CR 702.51b]: https://yawgatog.com/resources/magic-rules/#R70251b
+pub const CONVOKE: &[Scenario] = &[
+    // The Bears cast this turn taps for convoke all the same: it is tapped by the spell's
+    // cost, not by an ability of its own (see CR 302.6).
+    Scenario::new("a creature that entered this turn convokes")
+        .battlefield(P0, &[names::FOREST; 4])
+        .hand(P0, &[BEARS, CHORD])
+        .library(P0, &[THOPTER, names::FOREST])
+        .actions(&[
+            ME.casts(BEARS),
+            Resolve,
+            // Two Forests and the Bears pay {G}{G}{G}, so X is 0 and the Bears is the one
+            // creature to tap: both are asked of no one.
+            ME.casts(CHORD),
+            ME.tapped(BEARS, 1),
+            ME.tapped(names::FOREST, 4),
+            Resolve,
+            ME.picks_up_to(THOPTER),
+            ME.controls(THOPTER, 1),
+        ]),
+    // X is 1: the Bears pays a green symbol, the colorless Ornithopter the generic mana, and
+    // the two Forests the other two green symbols. The Watchwolf in the library has mana value
+    // 2, so the Ornithopter there is the one creature to find.
+    Scenario::new("a green creature pays a green symbol and a colorless one generic mana")
+        .battlefield(P0, &[names::FOREST, names::FOREST, BEARS, THOPTER])
+        .hand(P0, &[CHORD])
+        .library(P0, &[WOLF, THOPTER])
+        .actions(&[
+            ME.casts(CHORD),
+            ME.x(1),
+            ME.deciding(DecisionKind::ManaPayment, 2),
+            ME.chooses(DecisionKind::ManaPayment, BEARS),
+            // The Ornithopter is then the one way left to pay the generic mana.
+            ME.tapped(names::FOREST, 2),
+            ME.tapped(BEARS, 1),
+            ME.tapped(THOPTER, 1),
+            Resolve,
+            ME.deciding(DecisionKind::ChooseUpTo, 2),
+            ME.picks_up_to(THOPTER),
+            ME.controls(THOPTER, 2),
+            ME.has(Zone::Library, WOLF, 1),
+        ]),
+    // With no mana at all, three green creatures pay the three green symbols, and the fourth
+    // stays untapped: there is nothing left for it to pay.
+    Scenario::new("creatures cannot pay more than the total cost")
+        .battlefield(P0, &[BEARS, BEARS, WOLF, BEARS])
+        .hand(P0, &[CHORD])
+        .library(P0, &[THOPTER, names::FOREST])
+        .actions(&[
+            ME.casts(CHORD),
+            ME.x(0),
+            ME.chooses(DecisionKind::ManaPayment, WOLF),
+            // The last two green symbols: two of the Bears, the one kind of creature left.
+            ME.tapped(WOLF, 1),
+            ME.tapped(BEARS, 2),
+            stack(1),
+            Resolve,
+            ME.picks_up_to(THOPTER),
+            ME.controls(THOPTER, 1),
+        ]),
+    // Six creatures and no land pay {3}{G}{G}{G}: X may be 3 and no more, and Chord finds the
+    // creature of mana value 3.
+    Scenario::new(
+        "six creatures cast Chord of Calling for 3, which finds a creature of mana value 3",
+    )
+    .battlefield(P0, &[BEARS, BEARS, BEARS, THOPTER, THOPTER, THOPTER])
+    .hand(P0, &[CHORD])
+    .library(P0, &[props::FLASH_CREATURE.card, names::FOREST])
+    .actions(&[
+        ME.casts(CHORD),
+        ME.deciding(DecisionKind::X, 4),
+        ME.x(3),
+        ME.chooses(DecisionKind::ManaPayment, BEARS),
+        ME.chooses(DecisionKind::ManaPayment, BEARS),
+        ME.chooses(DecisionKind::ManaPayment, BEARS),
+        // Then only the Ornithopters are left, each the one answer.
+        ME.tapped(BEARS, 3),
+        ME.tapped(THOPTER, 3),
+        Resolve,
+        ME.picks_up_to(props::FLASH_CREATURE.card),
+        ME.controls(props::FLASH_CREATURE.card, 1),
+    ]),
+];

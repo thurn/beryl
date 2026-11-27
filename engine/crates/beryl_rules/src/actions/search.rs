@@ -33,7 +33,9 @@ use crate::zones;
 /// to `n`, and [`Opt::Done`](crate::decision::Opt::Done) is not offered while matching cards
 /// remain. Returns the cards found, still in the library: the caller says where they go,
 /// whether they are revealed
-/// ([CR 701.23e](https://yawgatog.com/resources/magic-rules/#R70123e)), and shuffles.
+/// ([CR 701.23e](https://yawgatog.com/resources/magic-rules/#R70123e)), and shuffles. `x` is
+/// the value of X the filter reads, as "a creature card with mana value X or less" does: the
+/// resolving spell's.
 #[inline]
 pub fn search_library<L: Layout>(
     game: &mut Game<'_, L>,
@@ -42,16 +44,17 @@ pub fn search_library<L: Layout>(
     owner: Seat,
     filter: Filter,
     n: u8,
+    x: u8,
 ) -> Result<Bitboard<L::Slot>, Stop> {
     let prompt = Prompt::new(Purpose::Search).most(n);
     let min = if filter == Filter::Any { n } else { 0 };
     if game.table.can(Capability::CastWhileSearching) && player == owner && n != 0 {
-        return search_with_casts(game, resolution, player, filter, min, n, prompt);
+        return search_with_casts(game, resolution, player, filter, min, n, prompt, x);
     }
     let library = game.state.zone(ZoneKey::Of(owner, Zone::Library));
     zones::look_at(game, player, library);
     let words = resolution.words(game);
-    let found = filter.select(game.state, game.table, library, player, &words);
+    let found = filter.select_x(game.state, game.table, library, player, &words, x);
     choices::pick_up_to(game, resolution, player, found, min, n, prompt)
 }
 
@@ -67,6 +70,7 @@ pub fn search_library<L: Layout>(
     clippy::disallowed_methods,
     reason = "reads each face the player may cast while searching"
 )]
+#[allow(clippy::too_many_arguments)]
 fn search_with_casts<L: Layout>(
     game: &mut Game<'_, L>,
     resolution: &mut Resolution<'_, L>,
@@ -75,12 +79,13 @@ fn search_with_casts<L: Layout>(
     min: u8,
     n: u8,
     prompt: Prompt,
+    x: u8,
 ) -> Result<Bitboard<L::Slot>, Stop> {
     loop {
         let library = game.state.zone(ZoneKey::Of(player, Zone::Library));
         zones::look_at(game, player, library);
         let words = resolution.words(game);
-        let found = filter.select(game.state, game.table, library, player, &words);
+        let found = filter.select_x(game.state, game.table, library, player, &words, x);
         let must_find = min > 0 && !found.is_empty();
         let pick =
             choices::search_pick(game, resolution, player, found, library, must_find, prompt)?;
@@ -136,10 +141,11 @@ pub(crate) fn instruction<L: Layout>(
     if count == 0 {
         return Ok(Outcome::NOTHING);
     }
+    let x = run.scene().amount(Amount::X);
     let mut all = Bitboard::EMPTY;
     for player in run.in_turn_order(players) {
         let (game, resolution) = run.resolving();
-        let cards = search_library(game, resolution, player, player, filter, count)?;
+        let cards = search_library(game, resolution, player, player, filter, count, x)?;
         match found {
             Found::ToHand => {
                 for &slot in game.state.in_game_order(game.table, cards)?.iter() {
@@ -153,6 +159,9 @@ pub(crate) fn instruction<L: Layout>(
                     let card = game.state.object_ref(slot);
                     zones::move_to_by(game, player, card, Zone::Hand, Reason::Effect)?;
                 }
+            }
+            Found::OntoBattlefield => {
+                zones::put_onto_battlefield_by(game, player, cards)?;
             }
             Found::OntoBattlefieldTapped => {
                 zones::put_onto_battlefield_tapped(game, player, cards)?;

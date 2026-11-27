@@ -110,7 +110,7 @@ impl Ctx {
                 if chosen.other { "other " } else { "" },
                 noun.plural(kind)
             ),
-            Measure::ForGeneric(_) => return None,
+            Measure::ForGeneric(_) | Measure::ForMana => return None,
         };
         Some(format!("{verb} {things}{from}"))
     }

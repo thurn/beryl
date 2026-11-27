@@ -214,6 +214,9 @@ pub enum Found {
     /// "Reveal it, put it into your hand"
     /// ([CR 701.23e](https://yawgatog.com/resources/magic-rules/#R70123e)).
     RevealToHand,
+    /// "Put it onto the battlefield", under the control of the player searching
+    /// ([CR 110.2a](https://yawgatog.com/resources/magic-rules/#R1102a)).
+    OntoBattlefield,
     /// "Put it onto the battlefield tapped", under the control of the player searching
     /// ([CR 110.2a](https://yawgatog.com/resources/magic-rules/#R1102a)).
     OntoBattlefieldTapped,

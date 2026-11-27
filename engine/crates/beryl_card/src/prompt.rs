@@ -318,6 +318,14 @@ purposes! {
     /// "For each generic mana in that cost, you may tap an untapped artifact or creature you
     /// control rather than pay that mana."
     Waterbend = "waterbend" => Pay,
+    /// Convoke's creatures ([CR 702.51a](https://yawgatog.com/resources/magic-rules/#R70251a)):
+    /// "you may tap an untapped creature of that color you control rather than pay that
+    /// mana."
+    Convoke = "convoke" => Pay,
+    /// Improvise's artifacts
+    /// ([CR 702.126a](https://yawgatog.com/resources/magic-rules/#R702126a)): "you may tap an
+    /// untapped artifact you control rather than pay that mana."
+    Improvise = "improvise" => Pay,
     /// Delve's cards ([CR 702.66a](https://yawgatog.com/resources/magic-rules/#R70266a)):
     /// "For each generic mana in this spell's total cost, you may exile a card from your
     /// graveyard rather than pay that mana."

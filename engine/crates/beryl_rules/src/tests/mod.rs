@@ -18,6 +18,7 @@ mod casting;
 mod chosen;
 mod combat;
 mod companion;
+mod convoke;
 mod delayed;
 mod effects;
 mod entering;

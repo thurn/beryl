@@ -171,6 +171,21 @@ impl<L: Layout> Funds<L> {
         if !any_source && entries.is_empty() {
             return false;
         }
+        self.restricted_units(s, t, exclude, paying, restricted)
+            .pays(cost)
+    }
+
+    /// The units of [`Funds::pays_restricted_with`]: the pool and the sources but `exclude`,
+    /// with the restricted sources and the mana that remembers that `paying` accepts.
+    fn restricted_units(
+        &self,
+        s: &State<L>,
+        t: &GameTable,
+        exclude: Bitboard<L::Slot>,
+        paying: Paying<L>,
+        restricted: &[remembered::Restricted<L>],
+    ) -> Units {
+        let entries = remembered::accepted_entries(s, t, self.player, paying);
         let mut u = self.without_sources(s, t, exclude & self.slots);
         for r in restricted {
             if exclude.contains(r.slot) || !paying.accepts(t, r.restriction, r.chosen_type) {
@@ -187,7 +202,112 @@ impl<L: Layout> Funds<L> {
         for &(_, kind, _) in entries.iter() {
             u.add(1 << kind, 1);
         }
-        u.pays(cost)
+        u
+    }
+
+    /// Whether the player can pay `cost` for what `paying` is for, with none of `exclude`,
+    /// tapping any of `objects` rather than paying one mana each (convoke, CR 702.51a;
+    /// improvise, CR 702.126a). `kinds` gives the kinds of mana an object may pay that way, a
+    /// bit per [`crate::card::ManaColor`]: a creature's colors for convoke, none (generic
+    /// mana only) for a colorless creature or for improvise's artifacts. No object pays a {C}
+    /// symbol, since none of them is colorless mana.
+    ///
+    /// An object that is no mana source is one more unit of its kinds. One that is a plain
+    /// source of one mana is one unit of its mana's kinds or its own, since it either taps
+    /// for mana or pays in its place, never both ([CR 118.3]: "a permanent that's already
+    /// tapped can't be tapped to pay a cost"). Any other source, one that makes more than one
+    /// mana, may sacrifice itself for a different amount, or makes restricted mana, is tried
+    /// both ways. Past [`BOTH_WAYS`] of those, the rest count as mana sources only, so that
+    /// the answer may say no to a cost a payment could make, never yes to one it cannot.
+    ///
+    /// [CR 118.3]: https://yawgatog.com/resources/magic-rules/#R1183
+    #[cold]
+    #[inline(never)]
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn pays_with_objects(
+        &self,
+        s: &State<L>,
+        t: &GameTable,
+        cost: ManaCost,
+        exclude: Bitboard<L::Slot>,
+        paying: Paying<L>,
+        objects: Bitboard<L::Slot>,
+        kinds: impl Fn(L::Slot) -> u8,
+    ) -> bool {
+        // More restricted sources than a small layout holds: the payment's own scan finds
+        // the layout full, and the game goes on in a larger one. In a game whose cards make
+        // no restricted mana the list is empty.
+        let Ok(restricted) = remembered::restricted_sources(s, t, self.player) else {
+            return true;
+        };
+        let reads = paying.reads_restrictions(t);
+        let restricted = restricted.as_slice();
+        let accepted = |slot: L::Slot| {
+            reads
+                && restricted
+                    .iter()
+                    .any(|r| r.slot == slot && paying.accepts(t, r.restriction, r.chosen_type))
+        };
+        let alternatives = t.can(Capability::SacrificeAlternative);
+        let objects = objects & !exclude;
+        // Objects that are one unit of their own kinds or of their mana's: a plain source of
+        // one mana, which makes the same mana whether or not a sacrifice alternative is
+        // counted (a consumed source has none).
+        let merged = objects.filter(|slot| {
+            self.slots.contains(slot)
+                && !accepted(slot)
+                && matches!(
+                    source(s, t, self.player, slot, s.derived(slot)),
+                    Some((_, 1, _, consumed))
+                        if consumed
+                            || sacrifice_alternative(s, t, self.player, slot, alternatives)
+                                .is_none()
+                )
+        });
+        let free = objects.filter(|slot| !self.slots.contains(slot) && !accepted(slot));
+        let both = objects & !merged & !free;
+        let (both, len) = both.fold(
+            ([(L::Slot::default(), 0u8); BOTH_WAYS], 0usize),
+            |(mut list, len), slot| {
+                if len < BOTH_WAYS {
+                    list[len] = (slot, kinds(slot));
+                    (list, len + 1)
+                } else {
+                    (list, len)
+                }
+            },
+        );
+        let both = &both[..len];
+        (0u32..1 << len).any(|tapped| {
+            let mut out = exclude;
+            for (i, &(slot, _)) in both.iter().enumerate() {
+                if tapped & (1 << i) != 0 {
+                    out.insert(slot);
+                }
+            }
+            let mut u = if reads {
+                self.restricted_units(s, t, out, paying, restricted)
+            } else {
+                self.without_sources(s, t, out & self.slots)
+            };
+            for (i, &(_, k)) in both.iter().enumerate() {
+                if tapped & (1 << i) != 0 {
+                    u.add(k, 1);
+                }
+            }
+            let u = free.fold(u, |mut u, slot| {
+                u.add(kinds(slot), 1);
+                u
+            });
+            let u = merged.fold(u, |mut u, slot| {
+                let (made, _, _, _) =
+                    source(s, t, self.player, slot, s.derived(slot)).expect("a source");
+                u.take(made, 1);
+                u.add(made | kinds(slot), 1);
+                u
+            });
+            u.pays(cost)
+        })
     }
 
     /// The untapped sources that can pay for `paying`, including sources without an
@@ -214,6 +334,10 @@ impl<L: Layout> Funds<L> {
         Ok(sources)
     }
 }
+
+/// The most objects [`Funds::pays_with_objects`] tries both as mana sources and as payment in
+/// their place, which is `2^BOTH_WAYS` checks.
+const BOTH_WAYS: usize = 10;
 
 /// The payability prefilter: whether `player` can pay `cost` for what `paying` is for at all.
 pub(crate) fn payable<L: Layout>(

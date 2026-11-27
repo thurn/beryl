@@ -182,7 +182,8 @@ fn with_options(face: &Face, costs: Castings, free: bool) -> ManaCost {
 }
 
 /// The mana still to pay for the spell or ability being cast, once X is announced: its total
-/// cost, less the generic mana objects paid for rather than mana ([`Casting::substituted`]).
+/// cost, less the generic mana objects paid for rather than mana ([`Casting::substituted`])
+/// and the colored mana creatures paid for convoke ([`Casting::paid_colors`]).
 #[allow(
     clippy::disallowed_methods,
     reason = "reads the face of the stack entry being paid for"
@@ -198,8 +199,15 @@ pub(super) fn total_cost<L: Layout>(
         (StackItem::Spell { object, costs, .. }, _) => {
             let increase = s.cost_increase(object);
             let mut cost = spell_cost(s, t, c.player, face, costs, entry.x, increase, c.free());
-            // Cards delve exiled pay for generic mana of the locked-in total (see CR 702.66a).
+            // Cards delve exiled pay for generic mana of the locked-in total (see CR 702.66a),
+            // as do creatures and artifacts tapped for convoke or improvise (see CR 702.51a and
+            // CR 702.126a), and creatures convoke tapped pay for symbols of their colors.
             cost.generic -= c.substituted;
+            if c.paid_colors != 0 {
+                for (color, symbols) in cost.symbols.iter_mut().take(5).enumerate() {
+                    *symbols -= c.paid(color);
+                }
+            }
             cost
         }
         (_, Some(ability)) => {
