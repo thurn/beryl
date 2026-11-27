@@ -54,15 +54,16 @@ pub(super) fn allows<L: Layout>(
         if !required.contains(slot) {
             return None;
         }
-        let assigned = division
+        let assigned: i64 = division
             .shares
             .iter()
             .filter(|share| share.target == Some(slot))
-            .fold(0_u8, |sum, share| sum.saturating_add(share.amount));
+            .map(|share| i64::from(share.amount))
+            .sum();
         let written = if slot == recipient { amount } else { 0 };
         let missing = beryl_kernel::Number::to_i64(s.derived(slot).toughness)
             - beryl_kernel::Number::to_i64(s.object(slot).damage())
-            - i64::from(assigned)
+            - assigned
             - i64::from(written);
         u8::try_from(missing)
             .ok()

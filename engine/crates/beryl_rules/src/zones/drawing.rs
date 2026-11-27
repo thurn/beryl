@@ -89,9 +89,9 @@ pub fn draw<L: Layout>(game: &mut Game<'_, L>, player: Seat, cards: u8) -> Resul
             if let Some(slot) = s.draw(game.sink, player)? {
                 drawn += 1;
                 game.sink.note(Event::DrawCard { slot });
-                s.count(game.table, Count::CardsDrawn, player);
+                s.count(game.table, Count::CardsDrawn, player)?;
                 if in_draw_step {
-                    s.count(game.table, Count::DrewInDrawStep, player);
+                    s.count(game.table, Count::DrewInDrawStep, player)?;
                 }
             }
         }
@@ -242,7 +242,7 @@ pub(crate) fn instruction<L: Layout>(
     players: Players,
     count: Amount,
 ) -> Result<Outcome<L>, Full> {
-    let count = run.scene().amount(count);
+    let count = run.scene().amount(count)?;
     let mut drawn = Bitboard::EMPTY;
     let drawers = run.in_turn_order(players);
     if run.game().table.format().simultaneous_draws() != SimultaneousDraws::Together

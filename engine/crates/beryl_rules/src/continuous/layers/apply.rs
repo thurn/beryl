@@ -75,13 +75,13 @@ pub(super) fn apply_to_members<L: Layout>(
         return grant(s, members, GrantRow::lent(source, lender, lent_ix));
     }
     let each = reads_each::<L>(t, source, change);
-    let change = settle(s, t, source, change, by);
+    let change = settle(s, t, source, change, by)?;
     let mut applied = Ok(());
     for i in 0..s.battlefield().len() {
         let slot = s.battlefield()[i];
         if members.contains(slot) {
             let change = if each {
-                read(s, t, source, change, by, Some(slot))
+                read(s, t, source, change, by, Some(slot))?
             } else {
                 change
             };
@@ -147,18 +147,18 @@ pub(super) fn settle<L: Layout>(
     source: L::Card,
     change: LayerChange<L>,
     by: Option<Reader>,
-) -> LayerChange<L> {
+) -> Result<LayerChange<L>, Full> {
     match change {
         // One that reads each permanent is read as it changes each: what it does depends on
         // nothing the layers change, a permanent's mana value.
-        LayerChange::Read { .. } if reads_each::<L>(t, source, change) => change,
+        LayerChange::Read { .. } if reads_each::<L>(t, source, change) => Ok(change),
         LayerChange::Read { .. } => read(s, t, source, change, by, None),
         // A static ability's "you control" names its permanent's controller as layer 2 has
         // it so far ([CR 613.1b]): "Layer 2: Control-changing effects are applied." So
         // whoever gains control of Control Magic gains control of the creature it enchants.
         //
         // [CR 613.1b]: https://yawgatog.com/resources/magic-rules/#R6131b
-        LayerChange::Control(_) if let Some(by) = by => LayerChange::Control(by.you),
+        LayerChange::Control(_) if let Some(by) = by => Ok(LayerChange::Control(by.you)),
         change @ (LayerChange::Control(_)
         | LayerChange::AddTypes(_)
         | LayerChange::RemoveTypes(_)
@@ -179,7 +179,7 @@ pub(super) fn settle<L: Layout>(
         | LayerChange::DefinedPt(..)
         | LayerChange::AddProtection(_)
         | LayerChange::GrantEscape
-        | LayerChange::Lend { .. }) => change,
+        | LayerChange::Lend { .. }) => Ok(change),
     }
 }
 
@@ -205,7 +205,7 @@ fn read<L: Layout>(
     change: LayerChange<L>,
     by: Option<Reader>,
     member: Option<L::Slot>,
-) -> LayerChange<L> {
+) -> Result<LayerChange<L>, Full> {
     let LayerChange::Read {
         face,
         ability,
@@ -220,15 +220,16 @@ fn read<L: Layout>(
         unreachable!("a static ability's part names its ability and its controller");
     };
     let number = |amount| {
-        <L::Pt as beryl_kernel::Number>::saturating_from_usize(defined(s, t, amount, by, member))
+        let value = defined(s, t, amount, by, member)?;
+        <L::Pt as beryl_kernel::Number>::try_from_usize(value).ok_or(Full)
     };
-    match spec.modifications[usize::from(part)] {
-        Modification::SetPower(power) => LayerChange::DefinedPower(number(power)),
+    Ok(match spec.modifications[usize::from(part)] {
+        Modification::SetPower(power) => LayerChange::DefinedPower(number(power)?),
         Modification::SetPt(power, toughness) => {
-            LayerChange::DefinedPt(number(power), number(toughness))
+            LayerChange::DefinedPt(number(power)?, number(toughness)?)
         }
         Modification::SetBasePt(power, toughness) => {
-            LayerChange::SetBasePt(number(power), number(toughness))
+            LayerChange::SetBasePt(number(power)?, number(toughness)?)
         }
         Modification::Control
         | Modification::AddTypes(_)
@@ -251,7 +252,7 @@ fn read<L: Layout>(
         | Modification::Lend(_) => {
             unreachable!("the layers read the amounts of a part that has some")
         }
-    }
+    })
 }
 
 /// The permanents `ability`, a static ability of the permanent at battlefield position `at`,
@@ -433,8 +434,7 @@ pub(super) fn apply<L: Layout>(
         | LayerChange::GrantEscape
         | LayerChange::Lend { .. } => {}
     }
-    modify(t, s.results(), i, change);
-    Ok(())
+    modify(t, s.results(), i, change)
 }
 
 /// Applies one change that reads nothing but the permanent it changes to the permanent at
@@ -444,7 +444,12 @@ pub(super) fn apply<L: Layout>(
 /// nothing, and inlined into the recompute it costs the rollout benchmark 0.07% of its
 /// instructions.
 #[inline(never)]
-fn modify<L: Layout>(t: &GameTable, derived: &mut [Derived<L>], i: usize, change: LayerChange<L>) {
+fn modify<L: Layout>(
+    t: &GameTable,
+    derived: &mut [Derived<L>],
+    i: usize,
+    change: LayerChange<L>,
+) -> Result<(), Full> {
     let d = &mut derived[i];
     match change {
         // CR 613.1b: "Layer 2: Control-changing effects are applied."
@@ -537,8 +542,8 @@ fn modify<L: Layout>(t: &GameTable, derived: &mut [Derived<L>], i: usize, change
         }
         LayerChange::ModifyPt(p, t) => {
             use beryl_kernel::Number as _;
-            d.power = d.power.saturating_add(p);
-            d.toughness = d.toughness.saturating_add(t);
+            d.power = d.power.checked_add(p).ok_or(Full)?;
+            d.toughness = d.toughness.checked_add(t).ok_or(Full)?;
         }
         // CR 613.4d: "Layer 7d: Effects that switch a creature's power and toughness are
         // applied."
@@ -549,6 +554,7 @@ fn modify<L: Layout>(t: &GameTable, derived: &mut [Derived<L>], i: usize, change
         }
         LayerChange::Read { .. } => unreachable!("settled by `apply_to_members`"),
     }
+    Ok(())
 }
 
 /// The value of an amount a static ability's part reads as its layer applies, for the
@@ -566,21 +572,23 @@ fn defined<L: Layout>(
     amount: &Amount,
     by: Reader,
     member: Option<L::Slot>,
-) -> usize {
-    match *amount {
+) -> Result<usize, Full> {
+    Ok(match *amount {
         Amount::Fixed(n) => usize::from(n),
-        Amount::Times(n, amount) => {
-            usize::from(n).saturating_mul(defined(s, t, amount, by, member))
-        }
+        Amount::Times(n, amount) => usize::from(n)
+            .checked_mul(defined(s, t, amount, by, member)?)
+            .ok_or(Full)?,
         Amount::ManaValue(Objects::Those) => {
             let Some(member) = member else {
                 unreachable!("a part that reads each permanent is read for each");
             };
             usize::from(s.mana_value(t, member))
         }
-        Amount::Plus(n, amount) => defined(s, t, amount, by, member).saturating_add(usize::from(n)),
+        Amount::Plus(n, amount) => defined(s, t, amount, by, member)?
+            .checked_add(usize::from(n))
+            .ok_or(Full)?,
         Amount::Half { of, round_up } => {
-            let whole = defined(s, t, of, by, member);
+            let whole = defined(s, t, of, by, member)?;
             if round_up {
                 whole.div_ceil(2)
             } else {
@@ -607,7 +615,7 @@ fn defined<L: Layout>(
         | Amount::SpellsCastBefore => {
             unreachable!("the card table refuses an amount the layers cannot read")
         }
-    }
+    })
 }
 
 /// Whether the permanent at battlefield position `i` passes `filter`, read by `by`: what
@@ -775,14 +783,15 @@ pub(super) fn amount_reads<L: Layout>(
 ///
 /// [CR 613.4c]: https://yawgatog.com/resources/magic-rules/#R6134c
 #[inline]
-pub(super) fn counters<L: Layout>(s: &mut Rederive<'_, L>) {
+pub(super) fn counters<L: Layout>(s: &mut Rederive<'_, L>) -> Result<(), Full> {
     use beryl_kernel::Number as _;
     for i in 0..s.battlefield().len() {
         let c = s.object(s.battlefield()[i]).counters();
         let d = &mut s.results()[i];
         let delta = c.plus_one.to_i64() - c.minus_one.to_i64();
-        let adjust = |value: L::Pt| L::Pt::saturating_from_i64(value.to_i64() + delta);
-        d.power = adjust(d.power);
-        d.toughness = adjust(d.toughness);
+        let adjust = |v: L::Pt| v.to_i64().checked_add(delta).and_then(L::Pt::try_from_i64);
+        d.power = adjust(d.power).ok_or(Full)?;
+        d.toughness = adjust(d.toughness).ok_or(Full)?;
     }
+    Ok(())
 }

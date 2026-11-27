@@ -368,6 +368,7 @@ impl<L: Layout> State<L> {
             .fold(0, |total, e| {
                 if let Payload::Cost(change) = e.payload {
                     let CostChange::Increase(n) = change;
+                    // Bounded by the `u8` generic cost field of `ManaCost`.
                     total.saturating_add(n)
                 } else {
                     total

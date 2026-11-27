@@ -182,6 +182,7 @@ pub(super) fn improvises(action: CostAction, chosen: &Chosen) -> bool {
 pub(super) fn payable_count(index: u8, cost: ManaCost) -> u8 {
     let colored: u8 = cost.symbols[..5].iter().sum();
     if index == CONVOKE_PART {
+        // Bounded by `ManaCost`'s `u8` generic and colored symbol fields.
         cost.generic.saturating_add(colored)
     } else {
         cost.generic

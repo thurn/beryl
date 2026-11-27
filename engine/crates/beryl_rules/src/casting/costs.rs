@@ -128,6 +128,7 @@ pub(super) fn base_spell_cost(
     } else {
         with_options(face, costs, free)
     };
+    // Generic cost increase is bounded by `ManaCost`'s `u8` vocabulary field.
     ManaCost {
         generic: cost.generic.saturating_add(increase),
         ..cost

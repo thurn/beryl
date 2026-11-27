@@ -81,28 +81,23 @@ pub(crate) fn manual_options<L: Layout>(
             if c.is_restricted() && classes_make(&sources, c, kind) {
                 continue;
             }
-            let spend_ok = helps(remaining, kind) && {
+            let pays_rich = |p, cost| {
+                rich && super::rich::pays_from_state(p, &sources, &taps, 0, &[0; CLASSES], cost)
+            };
+            let mut ok = false;
+            if helps(remaining, kind) {
                 let mut rest = remaining;
                 pay_unit(&mut rest, kind);
                 let mut after = pool;
-                after[kind] = after[kind].saturating_add(c.amount - 1);
-                sources.units(after, &taps).pays(rest)
-                    || (rich
-                        && super::rich::pays_from_state(
-                            after,
-                            &sources,
-                            &taps,
-                            0,
-                            &[0; CLASSES],
-                            rest,
-                        ))
-            };
-            let float_ok = !spend_ok && rich && !c.is_restricted() && {
+                after[kind] = after[kind].checked_add(c.amount - 1).ok_or(Full)?;
+                ok = sources.units(after, &taps).pays(rest) || pays_rich(after, rest);
+            }
+            if !ok && !c.is_restricted() {
                 let mut after = pool;
-                after[kind] = after[kind].saturating_add(c.amount);
-                super::rich::pays_from_state(after, &sources, &taps, 0, &[0; CLASSES], remaining)
-            };
-            if !spend_ok && !float_ok {
+                after[kind] = after[kind].checked_add(c.amount).ok_or(Full)?;
+                ok = pays_rich(after, remaining);
+            }
+            if !ok {
                 continue;
             }
             // A source that may also sacrifice itself for mana names that ability: its

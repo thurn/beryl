@@ -419,7 +419,7 @@ pub(super) fn perform_machine<L: Layout>(
         } => {
             s.settle_question();
             act(s, &mut x.events, d.player, None);
-            mana::choose_mana_type(
+            let chosen = mana::choose_mana_type(
                 s,
                 &mut x.events,
                 slot,
@@ -429,7 +429,7 @@ pub(super) fn perform_machine<L: Layout>(
                 d.candidates.option(c),
             );
             x.events.leave();
-            Ok(())
+            chosen
         }
         Pending::EnterChoosing { slot, pay_life, .. } => {
             s.settle_question();

@@ -116,7 +116,7 @@ pub(crate) fn instruction<L: Layout>(
         event::move_batch_by(s, t, sink, you, cards, to, reason, entry)?;
         return Ok(Outcome::acted_on(cards));
     }
-    let count = run.scene().amount(count);
+    let count = run.scene().amount(count)?;
     let mut discarded = Bitboard::EMPTY;
     for player in run.in_turn_order(players) {
         let (game, resolution) = run.resolving();

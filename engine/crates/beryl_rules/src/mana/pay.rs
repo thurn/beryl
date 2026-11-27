@@ -455,7 +455,7 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
             remembered::add(s, t, sink, permanent, ability, color)?;
         }
         if has_changes {
-            super::changes::add_extra(s, sink, permanent, controller, extra);
+            super::changes::add_extra(s, sink, permanent, controller, extra)?;
         }
         return Ok(());
     }
@@ -523,7 +523,7 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
         crate::interpret::mana_ability(s, t, sink, activation, ability, color)?;
     }
     if has_changes {
-        super::changes::add_extra(s, sink, permanent, controller, extra);
+        super::changes::add_extra(s, sink, permanent, controller, extra)?;
     }
     Ok(())
 }

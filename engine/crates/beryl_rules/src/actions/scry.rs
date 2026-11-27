@@ -88,12 +88,12 @@ pub(crate) fn instruction<L: Layout>(
     players: Players,
     count: Amount,
 ) -> Result<Outcome<L>, Stop> {
-    let count = run.scene().amount(count);
+    let count = run.scene().amount(count)?;
     let mut looked = 0;
     for player in run.in_turn_order(players) {
         let (game, resolution) = run.resolving();
         looked += library::top(game.state, player, count).count();
         scry(game, resolution, player, count)?;
     }
-    Ok(Outcome::of(Bitboard::EMPTY, looked))
+    Ok(Outcome::of(Bitboard::EMPTY, looked)?)
 }

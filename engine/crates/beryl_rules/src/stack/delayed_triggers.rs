@@ -90,7 +90,7 @@ pub(crate) fn instruction<L: Layout>(
     carrying: Option<Amount>,
     object: Option<Objects>,
 ) -> Result<Outcome<L>, Full> {
-    let amount = carrying.map_or(0, |carrying| run.scene().amount(carrying));
+    let amount = carrying.map_or(Ok(0), |carrying| run.scene().amount(carrying))?;
     let object = if let Some(objects) = object {
         run.in_game_order(run.scene().objects(objects))?
             .as_slice()

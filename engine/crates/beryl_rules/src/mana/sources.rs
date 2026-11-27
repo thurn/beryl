@@ -677,6 +677,7 @@ impl<L: Layout> Sources<L> {
             }
             let (kinds, amount, left) = if let Some(twin) = c.twin() {
                 let other = &classes[usize::from(twin)];
+                // Remaining untapped sources in this class; saturating at 0 means none left.
                 let left = c
                     .count()
                     .saturating_sub(taps)

@@ -26,7 +26,7 @@ pub(super) struct Free {
 }
 
 impl Free {
-    pub(super) fn of<L: Layout>(sources: &Sources<L>) -> Vec<Free> {
+    pub(super) fn of<L: Layout>(sources: &Sources<L>) -> Result<Vec<Free>, crate::fixed::Full> {
         let mut free: Vec<Free> = Vec::new();
         for (ei, extra) in sources.extras.iter().enumerate() {
             if !is_free(sources, ei) {
@@ -39,7 +39,7 @@ impl Free {
                         made_by.push((made, u8::try_from(ai).expect("fits u8")));
                     }
                     true
-                });
+                })?;
             }
             made_by.sort_unstable();
             let consumed = extra.activations.iter().any(|a| a.consumed);
@@ -69,7 +69,7 @@ impl Free {
                 });
             }
         }
-        free
+        Ok(free)
     }
 }
 

@@ -183,7 +183,7 @@ fn replaced<L: Layout>(game: &mut Game<'_, L>, mut p: Damage<L>) -> Result<Damag
             Change::PreventAll | Change::PreventSome => {
                 p.amount - game.state.prevent_with(c.at, p.amount)
             }
-            Change::Multiply(n) => p.amount.saturating_mul(n),
+            Change::Multiply(n) => p.amount.checked_mul(n).ok_or(Full)?,
         };
     }
     Ok(p)

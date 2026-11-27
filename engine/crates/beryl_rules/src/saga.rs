@@ -162,7 +162,6 @@ pub(crate) fn advance<L: Layout>(
             && derived.types.contains(Types::ENCHANTMENT)
             && saga.of(derived.subtypes)
             && chapters(s, t, slot).next().is_some()
-            && s.counters_of(slot, CounterKind::Lore) < <L::Count as beryl_kernel::Number>::MAX
         {
             adding.insert(slot);
         }

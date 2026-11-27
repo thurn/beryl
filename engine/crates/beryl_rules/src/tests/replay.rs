@@ -167,7 +167,8 @@ impl CustomBody for ManaWithChoice {
         }
         let added = game
             .state
-            .add_mana(player, Some(source), ManaColor::White, 1);
+            .add_mana(player, Some(source), ManaColor::White, 1)
+            .unwrap();
         game.sink.note_from(Some(source), added);
         Ok(())
     }

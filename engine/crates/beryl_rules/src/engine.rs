@@ -234,7 +234,8 @@ impl Limit {
                     AdvanceUntil::Turn(turn) => s.elapsed_turns() >= turn,
                     AdvanceUntil::EndOfCombat(combat) => s.reached_end_of_combat(combat),
                 };
-                // One loop can silently answer a decision and copy twice to resolve it.
+                // One loop can silently answer a decision and copy twice to resolve it;
+                // saturating at 0 treats any work past the budget as reached.
                 reached || work_limit.saturating_sub(counts.decision_work()) < 3
             }
         }
@@ -475,6 +476,7 @@ fn stall_if_full<L: Layout>(done: Result<(), Full>, s: &mut State<L>) {
 #[inline]
 fn act<L: Layout>(s: &State<L>, sink: &mut Sink<L>, player: Seat, option: Option<Opt<L>>) {
     sink.enter(|_| {
+        // List index of the top stack entry; saturating at 0 is only used when the stack is empty.
         let top = StackIx::at(s.stack().len().saturating_sub(1));
         let next = StackIx::at(s.stack().len());
         let entry = match (s.pending(), option) {

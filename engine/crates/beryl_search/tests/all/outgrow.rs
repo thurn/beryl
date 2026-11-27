@@ -10,7 +10,7 @@
 use beryl_cards::{CARDS, names};
 use beryl_engine::{
     Decision, DecisionKind, GameTable, Opt, Profile, Replay, Scratch, State, Step, TurnStep, next,
-    observe,
+    observe, state::CounterKind,
 };
 use beryl_scenario::{P0, P1, Permanent, Scenario, position};
 use beryl_search::{Agent, AgentDecision, Budget, Family, LongSearch, Mcts, Settings, Sight};
@@ -193,4 +193,58 @@ fn the_turn_search_widens_when_a_scoring_rollout_outgrows_small() {
     let obs = observe(&s, &t, &mut x, P0);
     let c = agent.choose(obs, &d, AgentDecision(0));
     assert_eq!(d.candidates.option(c), Some(Opt::Pass));
+}
+
+/// P0's permanents for the power-overflow test: a Plains for `{W}` and a 2/2 White Knight
+/// that the test starts with 125 +1/+1 counters (127/127, one point below `i8::MAX` overflow).
+const OVERFLOW_BATTLEFIELD: &[Permanent] =
+    &[Permanent::new(PLAINS), Permanent::new(names::WHITE_KNIGHT)];
+
+/// On P0's turn 5, P1 is at 128 life and P0's library is empty. Casting Holy Strength on the
+/// 127/127 White Knight raises its power to 128 (overflowing `Small`'s `i8` power and widening
+/// into `Large`), letting it deal lethal combat damage this turn. Passing leaves P1 at 1 life
+/// and P0 loses on their next draw step.
+const fn power_overflow() -> Scenario {
+    Scenario::new("Holy Strength overflows Small power and wins in Large")
+        .at(5, P0, TurnStep::PrecombatMain)
+        .permanents(P0, OVERFLOW_BATTLEFIELD)
+        .hand(P0, &[names::HOLY_STRENGTH])
+        .library(P0, &[])
+        .life(P1, 128)
+        .library(P1, PLAINS_20)
+}
+
+#[test]
+fn mcts_widens_into_large_when_pumping_power_past_small_width() {
+    let (t, mut s) = position(&CARDS, &power_overflow()).unwrap();
+    let knight = s
+        .battlefield()
+        .iter()
+        .copied()
+        .find(|&slot| s.copiable(slot).name(&t) == names::WHITE_KNIGHT)
+        .expect("White Knight on the battlefield");
+    let object = s.current(s.object_ref(knight)).unwrap();
+    let _ = s
+        .add_counters(object, CounterKind::PlusOne, 125, true)
+        .unwrap();
+    s.set_profile(Profile::SMART);
+    let Step::Decide(d) = next(&mut s, &t, &mut Scratch::new(), &mut Replay) else {
+        panic!("the game ended");
+    };
+    assert_eq!((d.player, d.kind), (P0, DecisionKind::Priority));
+    assert_eq!(s.derived(knight).power, 127);
+
+    let budget = Budget {
+        iterations: 60,
+        trees: 1,
+        parallel: false,
+    };
+    let mut agent = Mcts::new(&t, Sight::Omniscient, budget, 3);
+    let mut x = Scratch::new();
+    let obs = observe(&s, &t, &mut x, P0);
+    let c = agent.choose(obs, &d, AgentDecision(0));
+    assert!(
+        matches!(d.candidates.option(c), Some(Opt::Cast { slot, .. })
+        if s.copiable(slot).name(&t) == names::HOLY_STRENGTH)
+    );
 }

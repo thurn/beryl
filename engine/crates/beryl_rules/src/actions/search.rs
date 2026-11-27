@@ -117,6 +117,7 @@ fn search_with_casts<L: Layout>(
             resolution,
             player,
             found & !first,
+            // Minimum remaining cards to find floors at 0 once satisfied.
             min.saturating_sub(1),
             n - 1,
             prompt,
@@ -140,11 +141,11 @@ pub(crate) fn instruction<L: Layout>(
     count: Amount,
     found: Found,
 ) -> Result<Outcome<L>, Stop> {
-    let count = run.scene().amount(count);
+    let count = run.scene().amount(count)?;
     if count == 0 {
         return Ok(Outcome::NOTHING);
     }
-    let x = run.scene().amount(Amount::X);
+    let x = run.scene().amount(Amount::X)?;
     let mut all = Bitboard::EMPTY;
     for player in run.in_turn_order(players) {
         let (game, resolution) = run.resolving();

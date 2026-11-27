@@ -67,10 +67,10 @@ pub(in crate::mana) fn plans<L: Layout>(
                     made,
                 });
                 true
-            });
+            })?;
         }
     }
-    let free = Free::of(sources);
+    let free = Free::of(sources)?;
     let mut ctx = PlanSearch {
         init_pool: s.player(player).mana().amounts_u8(),
         cost,

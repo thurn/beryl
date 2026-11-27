@@ -198,6 +198,12 @@ fn depends<L: Layout>(
     before != after
 }
 
+/// The permanents an effect applies to and its settled change (or `Full` on overflow).
+type EffectAction<L> = (
+    Option<Bitboard<<L as Layout>::Slot>>,
+    Result<LayerChange<L>, crate::fixed::Full>,
+);
+
 /// What `a` does now: the permanents it applies to, none if it does not exist, and the
 /// change it makes to each.
 fn what_it_does<L: Layout>(
@@ -205,13 +211,13 @@ fn what_it_does<L: Layout>(
     t: &GameTable,
     a: &Apply<L>,
     begun: Read<'_, L>,
-) -> (Option<Bitboard<L::Slot>>, LayerChange<L>) {
+) -> EffectAction<L> {
     let members = members(s, t, a, begun);
     // An effect that applies to nothing settles no amount.
     let change = if members.is_some() {
         apply::settle(s, t, a.source, a.change, super::reader(s, a))
     } else {
-        a.change
+        Ok(a.change)
     };
     (members, change)
 }

@@ -56,7 +56,7 @@ pub(crate) fn instruction<L: Layout>(
     count: Amount,
 ) -> Result<Outcome<L>, Stop> {
     debug_assert_eq!(
-        run.scene().amount(count),
+        run.scene().amount(count)?,
         1,
         "the engine fateseals one card"
     );

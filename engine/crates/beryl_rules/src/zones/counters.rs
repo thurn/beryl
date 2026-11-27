@@ -150,7 +150,7 @@ pub(crate) fn double<L: Layout>(
         add(run.game(), object, kind, has.to_u8_saturating(), true)?;
     }
     let after = counters_on(run, permanents, Some(kind));
-    Ok(Outcome::of(permanents.slots(), after.abs_diff(before)))
+    Outcome::of(permanents.slots(), after.abs_diff(before))
 }
 
 /// [`Effect::RemoveCounters`](beryl_card::Effect::RemoveCounters): "Remove [count] [kind]
@@ -182,7 +182,7 @@ pub(crate) fn remove_all_instruction<L: Layout>(
         }
     }
     let after = counters_on(run, permanents, None);
-    Ok(Outcome::of(permanents.slots(), after.abs_diff(before)))
+    Outcome::of(permanents.slots(), after.abs_diff(before))
 }
 
 /// Puts counters on each permanent `objects` names, or removes them, with `change`, in the
@@ -194,7 +194,7 @@ fn change<L: Layout>(
     count: Amount,
     change: impl Fn(&mut Game<'_, L>, Permanent<L>, CounterKind, u8) -> Result<(), Full>,
 ) -> Result<Outcome<L>, Full> {
-    let count = run.scene().amount(count);
+    let count = run.scene().amount(count)?;
     let permanents = run.permanents(objects);
     let before = counters_on(run, permanents, Some(kind));
     let mut left = permanents;
@@ -202,7 +202,7 @@ fn change<L: Layout>(
         change(run.game(), object, kind, count)?;
     }
     let after = counters_on(run, permanents, Some(kind));
-    Ok(Outcome::of(permanents.slots(), after.abs_diff(before)))
+    Outcome::of(permanents.slots(), after.abs_diff(before))
 }
 
 /// The counters of `kind` on `permanents`, or of every kind with none.

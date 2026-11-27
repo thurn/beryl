@@ -471,6 +471,7 @@ impl BlockSearch {
             let max_k = if a.mb > 0 {
                 left.min(rem_limit)
             } else if a.menace {
+                // Menace needs 2 blockers; saturating at 0 means the requirement is already met.
                 let need = 2u16.saturating_sub(counts[atk]);
                 let alone_need = if self.has_any_alone && total_blockers < 2 {
                     2 - total_blockers

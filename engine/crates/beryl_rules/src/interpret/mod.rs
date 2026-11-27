@@ -125,7 +125,7 @@ pub(crate) fn mana_ability<L: Layout>(
         debug_assert!(mana.includes(color));
         let activation = activation();
         let (player, source) = (activation.of.controller.seat(), activation.of.source);
-        let added = s.add_mana(player, source, color, mana.amount);
+        let added = s.add_mana(player, source, color, mana.amount)?;
         sink.note_from(source, added);
         return layers::refresh(s, t, sink);
     }
@@ -174,7 +174,7 @@ pub(crate) fn mana_ability_multiplied<L: Layout>(
         let amount = mana.amount.checked_mul(multiplier).ok_or(Full)?;
         let activation = activation();
         let (player, source) = (activation.of.controller.seat(), activation.of.source);
-        let added = s.add_mana(player, source, color, amount);
+        let added = s.add_mana(player, source, color, amount)?;
         sink.note_from(source, added);
         return layers::refresh(s, t, sink);
     }
@@ -188,8 +188,10 @@ pub(crate) fn mana_ability_multiplied<L: Layout>(
         for term in ability.product() {
             let amount = if let beryl_card::Amount::Fixed(n) = term.amount {
                 n
+            } else if let Some(sl) = slot {
+                amount_of(s, t, sl, term.amount)?
             } else {
-                slot.map_or(0, |sl| amount_of(s, t, sl, term.amount))
+                0
             };
             if amount == 0 {
                 continue;
@@ -201,7 +203,7 @@ pub(crate) fn mana_ability_multiplied<L: Layout>(
                 }
                 beryl_card::Kinds::Fixed(_) | beryl_card::Kinds::CouldProduce(_) => color,
             };
-            let added = s.add_mana(player, source, kind, scaled);
+            let added = s.add_mana(player, source, kind, scaled)?;
             sink.note_from(source, added);
         }
         return layers::refresh(s, t, sink);
@@ -215,7 +217,7 @@ pub(crate) fn mana_ability_multiplied<L: Layout>(
         .ok_or(Full)?;
     mana_ability(s, t, sink, || activation, ability, color)?;
     if extra > 0 {
-        let added = s.add_mana(player, source, color, extra);
+        let added = s.add_mana(player, source, color, extra)?;
         sink.note_from(source, added);
     }
     Ok(())
@@ -340,7 +342,7 @@ pub(crate) fn amount_of<L: Layout>(
     t: &GameTable,
     slot: L::Slot,
     amount: beryl_card::Amount,
-) -> u8 {
+) -> Result<u8, Full> {
     let (card, face) = s.definition(slot).record(t);
     let subject = ability_of(s, slot, card, face, TriggeredAbility::default());
     without_resolution(s, t, &subject, |scene| scene.amount(amount))
@@ -399,7 +401,7 @@ fn own_amount<L: Layout>(s: &State<L>, you: Seat, amount: Amount) -> Option<u8> 
             filter: Filter::Whose(&Players::You),
         }) => {
             let cards = s.zone(ZoneKey::Of(you, zone)).count();
-            Some(u8::try_from(cards).unwrap_or(u8::MAX))
+            u8::try_from(cards).ok()
         }
         Amount::X
         | Amount::ThatMany
