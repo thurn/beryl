@@ -68,6 +68,7 @@ mod text_field;
 mod touch;
 mod verbs_count;
 mod verbs_fly;
+mod verbs_fly_compact;
 mod widgets;
 
 const REGULAR: kit_base::data::profiles::SizeClass = kit_base::data::profiles::SizeClass::Regular;

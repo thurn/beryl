@@ -34,6 +34,10 @@ use kit_base::pose::{
     Bow, HermiteCurve, MAX_SPLINE_INTERIOR, Pose, Segment, Shape, Spline, SplineNode,
 };
 
+mod separate;
+
+pub(crate) use separate::reseparate_retargeted;
+
 pub const BUILT: bool = true;
 
 /// The path a flight takes.
@@ -611,10 +615,11 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
     };
     let path = path_of(step.act, step.timing.case.as_deref(), fly);
     let paths = &fly.paths;
+    let straight = |spec| separate::straight_spline(step, subject, between, spec);
     let spline = match path {
         Path::DrawLocal => Some(local_draw_spline(step, (from, to))),
         Path::DrawOpponent => Some(opponent_draw_spline(step, (from, to))),
-        Path::PlayLandLocal => Some(straight_spline(step, to, &paths.place_near)),
+        Path::PlayLandLocal => Some(straight(&paths.place_near)),
         Path::PlayLandOpponent => Some(apex_spline(
             step,
             (from, to),
@@ -652,7 +657,7 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
                 spec.curve(),
             ))
         }
-        Path::LibraryToBattlefieldLocal => Some(straight_spline(step, to, &paths.fetch_near)),
+        Path::LibraryToBattlefieldLocal => Some(straight(&paths.fetch_near)),
         Path::FetchFar => Some(apex_spline(
             step,
             (from, to),
@@ -660,7 +665,7 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
             &paths.fetch_far.node,
             paths.fetch_far.curve(),
         )),
-        Path::ExileTransfer => Some(straight_spline(step, to, &paths.return_drift)),
+        Path::ExileTransfer => Some(straight(&paths.return_drift)),
         Path::Straight { .. } | Path::Bowed { .. } => None,
     };
     if let Some(shape) = spline {
@@ -695,6 +700,7 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
         step.places.camera(),
         step.places.layout().target,
     );
+    let segment = separate::bowed(step, subject, segment);
     out.segment(subject, segment);
 }
 

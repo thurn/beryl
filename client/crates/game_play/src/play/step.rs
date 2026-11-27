@@ -489,7 +489,7 @@ impl<'a> Motion<'a> {
                 played = true;
                 continue;
             }
-            self.follow(slot, number, own, (room, regroup), still);
+            self.follow(table, slot, number, own, (room, regroup), still);
         }
         if !played {
             self.play(
@@ -551,6 +551,7 @@ impl<'a> Motion<'a> {
     /// it at the start of the step when it appears, leaves or takes an instant change.
     fn follow(
         &mut self,
+        table: &Table,
         slot: usize,
         number: usize,
         own: Interval,
@@ -607,6 +608,8 @@ impl<'a> Motion<'a> {
                 }
                 let track = self.tracks.get_mut(slot);
                 if retarget(track, &mut self.segments, slot, room.from, &before, &after) {
+                    let tracks = (&mut self.tracks[..], &mut self.segments[..]);
+                    verbs::fly::reseparate_retargeted(tracks, (slot, room.from), table);
                     self.hide_on_arrival(slot);
                     return;
                 }

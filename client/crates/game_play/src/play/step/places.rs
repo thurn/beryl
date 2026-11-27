@@ -5,7 +5,7 @@ use beryl_protocol::script::Subject;
 
 use super::Motion;
 use game_table::table::{Camera, Layout, Table};
-use kit_base::pose::Pose;
+use kit_base::pose::{Interval, Pose, Shape};
 
 /// Where things are as a script's steps so far have them, for a verb that needs more than its
 /// own subject's poses.
@@ -60,5 +60,44 @@ impl Places<'_> {
     #[must_use]
     pub fn camera(&self) -> &Camera {
         self.table.camera()
+    }
+
+    /// Whether `subject` has an authored segment carrying it across the scene at `t`
+    /// (`Track::crossing`).
+    #[must_use]
+    pub fn crossing(&self, subject: Subject, t: u64) -> bool {
+        let Subject::Object { slot } = subject else {
+            return false;
+        };
+        self.motion
+            .tracks
+            .get(usize::from(slot.0))
+            .is_some_and(|track| track.crossing(t))
+    }
+
+    /// Appends every card slot other than `subject` whose track has an authored crossing segment
+    /// overlapping `interval`.
+    pub fn crossing_peers(&self, subject: Subject, interval: Interval, out: &mut Vec<Subject>) {
+        let skip = match subject {
+            Subject::Object { slot } => Some(usize::from(slot.0)),
+            _ => None,
+        };
+        for (slot, track) in self.motion.tracks.iter().enumerate() {
+            if Some(slot) == skip || track.segments().is_empty() {
+                continue;
+            }
+            let overlaps = track.segments().iter().any(|segment| {
+                segment.start < interval.to
+                    && segment.end() > interval.from
+                    && segment
+                        .step
+                        .is_some_and(|step| step.follows == kit_base::pose::Follows::Start)
+                    && segment.shape != Shape::Fading
+                    && (segment.from.position != segment.to.position || segment.arc != 0.0)
+            });
+            if overlaps && let Ok(id) = u16::try_from(slot) {
+                out.push(Subject::Object { slot: ObjectId(id) });
+            }
+        }
     }
 }

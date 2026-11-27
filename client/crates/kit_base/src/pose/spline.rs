@@ -493,6 +493,26 @@ impl Spline {
         usize::from(self.flags & 0x07).min(MAX_SPLINE_INTERIOR)
     }
 
+    /// Whether this spline has zero interior control nodes.
+    #[must_use]
+    pub fn is_straight(&self) -> bool {
+        self.count() == 0
+    }
+
+    /// The start-node frustum weight (`1 / from_rel_scale`).
+    #[must_use]
+    pub fn from_weight(&self) -> f32 {
+        unpack_weight(self.weights, 0)
+    }
+
+    /// Rebuilds this spline with one interior node, keeping its timing curve and flags.
+    #[must_use]
+    pub fn with_interior(&self, node: SplineNode, to: &Pose, eye: Vec3, back: Vec3) -> Self {
+        let ease = self.ease.unpack(self.four_keys());
+        let flips = (self.flips(), self.start_half_turn());
+        Self::new(&[node], self.from_weight(), to, ease, flips, (eye, back))
+    }
+
     fn four_keys(&self) -> bool {
         self.flags & (1 << 3) != 0
     }

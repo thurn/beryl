@@ -15,7 +15,7 @@ mod count;
 mod dwell;
 mod emerge;
 mod flip;
-mod fly;
+pub(crate) mod fly;
 mod lift;
 mod mark;
 mod point;
