@@ -3,7 +3,7 @@
 use app_screens::screens::Screen;
 use beryl_protocol::PlayerView;
 use beryl_protocol::protocol::{Side, ZoneName};
-use game_hud::hud::phase::phase_box;
+use game_hud::hud::phase::{middle_band, phase_box};
 use game_hud::hud::placement_scene::{Group, PlacementScene};
 use game_table::table::labels::ABILITY_ROLE;
 use game_table::table::{Camera, Objects};
@@ -50,10 +50,10 @@ impl super::Client {
                 SHOWN_BOARD_IDS,
             );
         }
-        if let Some(slot) = profile.slot("phase").filter(|_| {
+        if let Some(band) = middle_band(profile, &update.view).filter(|_| {
             self.features.screen == Screen::Game && profile.data().hud.table.contains(&Piece::Phase)
         }) {
-            layout.phase(phase_box(update.view.stack.is_empty(), slot.rect));
+            layout.phase(phase_box(band, update.view.shared.is_some()));
         }
         Some(layout)
     }

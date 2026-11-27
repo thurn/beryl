@@ -30,6 +30,7 @@ pub fn check(frame: &Frame, context: &Context) -> Vec<Fault> {
     faults.extend(duplicates(frame, context));
     faults.extend(text_fits(frame, context));
     faults.extend(super::text_overlap::text_overlap(frame, context));
+    faults.extend(super::covers::covers(frame, context));
     faults.extend(drawn(frame, context));
     faults.extend(named(frame, context));
     faults.extend(clips(frame, context));

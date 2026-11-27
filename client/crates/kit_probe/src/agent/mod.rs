@@ -3,6 +3,7 @@
 //! Each operation reads only frames and options.
 
 pub mod checks;
+pub mod covers;
 pub mod fault;
 pub mod judged;
 pub mod line;

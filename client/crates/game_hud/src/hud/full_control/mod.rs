@@ -15,8 +15,17 @@ mod view;
 /// The position and style of a visible indicator.
 #[derive(Clone, Copy, PartialEq)]
 pub enum Inputs {
-    Dock { area: Rect, pass_on: bool },
-    MiddleBand(Rect),
+    Dock {
+        area: Rect,
+        pass_on: bool,
+    },
+    /// In the phone's middle band, `area`, at the end across from the phase icon: the right
+    /// end, or the left end when the icon stands at the right on a table whose players share
+    /// their piles (`phase::phase_box`).
+    MiddleBand {
+        area: Rect,
+        shared: bool,
+    },
 }
 
 impl Inputs {
@@ -43,7 +52,11 @@ impl Inputs {
         if !layout.table.contains(&Piece::Phase) || !input.stops.full_control {
             return None;
         }
-        Some(Self::MiddleBand(input.profile.slot("phase")?.rect))
+        let view = input.view?;
+        Some(Self::MiddleBand {
+            area: crate::hud::phase::middle_band(input.profile, view)?,
+            shared: view.shared.is_some(),
+        })
     }
 }
 
@@ -75,7 +88,7 @@ impl Feature for FullControl {
     fn view((): &(), input: Inputs) -> Element {
         match input {
             Inputs::Dock { area, pass_on } => view::dock(area, pass_on),
-            Inputs::MiddleBand(area) => view::middle_band(area),
+            Inputs::MiddleBand { area, shared } => view::middle_band(area, shared),
         }
     }
 }

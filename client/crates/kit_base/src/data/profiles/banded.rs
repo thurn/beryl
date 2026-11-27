@@ -84,6 +84,15 @@ pub struct Stack {
     pub depth: f32,
     #[serde(deserialize_with = "nonnegative")]
     pub step_depth: f32,
+    /// The room a stack centred in the middle band leaves free at each end of the band, in
+    /// logical points. The HUD's phase icon stands at the band's right end, and the stack keeps
+    /// the same room at its left end so that it stays centred.
+    #[serde(default, deserialize_with = "nonnegative")]
+    pub ends: f32,
+    /// The same room on a table whose players share one library and graveyard, which lie at the
+    /// band's two ends with the phase icon inside the graveyard.
+    #[serde(default, deserialize_with = "nonnegative")]
+    pub shared_ends: f32,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]

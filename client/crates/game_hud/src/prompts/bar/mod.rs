@@ -10,7 +10,7 @@ use kit_ui::element::{Element, holder};
 use super::feature::{Command, Details, Inputs, ViewKey};
 
 pub(super) use view::Controls;
-pub use view::{captioned, captioned_dock, dock_sized, title, turn_action};
+pub use view::{captioned, captioned_dock, dock_sized, draws_phase, title, turn_action};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Message {
@@ -49,7 +49,8 @@ impl Feature for PromptBar {
         let details = Details::Bar {
             acting_for: view.is_some_and(view::acting_for),
             opponent_acts: view.is_some_and(view::opponent_acts),
-            stack_empty: view.map(|view| view.stack.is_empty()),
+            shared: view.map(|view| view.shared.is_some()),
+            turn: view.map(|view| (view.turn.active, view.turn.step)),
         };
         ViewKey::new(inputs, details)
     }

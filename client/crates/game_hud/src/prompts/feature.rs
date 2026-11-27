@@ -3,6 +3,7 @@
 use std::marker::PhantomData;
 
 use beryl_protocol::prompt::{Click, PromptView};
+use beryl_protocol::protocol::{Side, Step};
 use beryl_protocol::script::Subject;
 use game_table::table::TraySpace;
 use kit_base::data::profiles::{FloatingPrompt, Piece};
@@ -49,7 +50,9 @@ pub(super) enum Details {
     Bar {
         acting_for: bool,
         opponent_acts: bool,
-        stack_empty: Option<bool>,
+        shared: Option<bool>,
+        /// Whose turn it is and its step, which the phase icon the bar draws shows.
+        turn: Option<(Side, Step)>,
     },
     Ways(Vec<Option<FaceId>>),
     Order {

@@ -266,6 +266,22 @@ impl<'a> Profile<'a> {
         self.window.size.screen(ndc)
     }
 
+    /// The inner edges of the shared library and graveyard on a banded table, in logical points
+    /// from the window's left: the library's right edge and the graveyard's left edge. When both
+    /// players share their piles, the phone lays the two at the ends of the middle band, so HUD
+    /// furniture and prompt controls placed in that band must stand between these edges. `None`
+    /// for a profile with no banded table.
+    #[must_use]
+    pub fn shared_pile_edges(self) -> Option<(f32, f32)> {
+        let piles = self.data.table.banded?.shared_piles;
+        let inset = self.window.safe_area;
+        let half = piles.width / 2.0;
+        Some((
+            inset.left + piles.left + half,
+            self.window.size.width - inset.right - piles.right - half,
+        ))
+    }
+
     /// Resolves a named slot in logical points. An unknown name has no slot.
     #[must_use]
     pub fn slot(self, name: &str) -> Option<Slot> {

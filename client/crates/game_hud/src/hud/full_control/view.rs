@@ -38,11 +38,13 @@ pub(super) fn dock(dock: Rect, pass_on: bool) -> Element {
     mark
 }
 
-/// The sign at the end of the phase slot.
-pub(super) fn middle_band(slot: Rect) -> Element {
+/// The sign at the end of the middle band across from the phase icon: the right end, or the
+/// left end on a table whose players share their piles (`shared`), where the icon stands at
+/// the right end.
+pub(super) fn middle_band(slot: Rect, shared: bool) -> Element {
     let side = f32::from(icons::PHASE_SIDE);
     let line = slot.y + slot.height / 2.0;
-    let mut mark = Element::new(Role::Region)
+    let mut mark = Element::new(Role::Icon)
         .name("full control")
         .width(side)
         .height(side)
@@ -53,9 +55,10 @@ pub(super) fn middle_band(slot: Rect) -> Element {
         icons::FULL_CONTROL,
         icons::atlas_size(icons::FULL_CONTROL),
     ));
-    mark.anchor = Some(Anchor::Point(
-        Vec2::new(slot.x + slot.width, line),
-        Vec2::new(1.0, 0.5),
-    ));
+    mark.anchor = Some(if shared {
+        Anchor::Point(Vec2::new(slot.x, line), Vec2::new(0.0, 0.5))
+    } else {
+        Anchor::Point(Vec2::new(slot.x + slot.width, line), Vec2::new(1.0, 0.5))
+    });
     mark
 }

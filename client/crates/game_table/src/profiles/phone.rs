@@ -402,6 +402,8 @@ pub(super) fn layout(profile: &ProfileData, window: Window, data: Banded) -> Lay
         count_room: data.stack.count_room,
         depth: data.stack.depth,
         step_depth: data.stack.step_depth,
+        ends: data.stack.ends,
+        shared_ends: data.stack.shared_ends,
     };
     let anchor = |strip: Band| life_anchor(window, strip.middle(), data.pool_offset);
     Layout {

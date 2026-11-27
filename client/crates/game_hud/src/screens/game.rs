@@ -48,7 +48,7 @@ pub fn game(
     let mut game = holder().name("game");
 
     let under_prompt = (!is_opening && !viewing && covers && layout.table.contains(&Piece::Phase))
-        .then(|| middle(input, views.band_full_control.take()))
+        .then(|| middle(input, views.band_full_control.take(), true))
         .flatten();
     let mut furniture = Vec::with_capacity(layout.table.len());
 
@@ -58,7 +58,11 @@ pub fn game(
                 Piece::Players => views.players.take(),
                 Piece::StepStops => views.steps.take(),
                 Piece::FullControl if !is_opening => views.dock_full_control.take(),
-                Piece::Phase if !covers => middle(input, views.band_full_control.take()),
+                Piece::Phase if !covers => middle(
+                    input,
+                    views.band_full_control.take(),
+                    prompt.is_none() || !prompts::bar::draws_phase(input),
+                ),
                 Piece::Menu if input.sheet.is_none() && input.view.is_some() => menu
                     .take()
                     .and_then(|press| phase::menu(input.profile, press)),
@@ -93,8 +97,8 @@ pub fn game(
     game
 }
 
-fn middle(input: &HudIn, full_control: Option<Element>) -> Option<Element> {
-    phase::middle(input.view?, full_control, input.profile)
+fn middle(input: &HudIn, full_control: Option<Element>, with_phase: bool) -> Option<Element> {
+    phase::middle(input.view?, full_control, input.profile, with_phase)
 }
 
 fn overlays(

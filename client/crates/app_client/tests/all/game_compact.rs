@@ -122,7 +122,7 @@ fn idle_furniture_stands_in_the_strips_without_a_prompt() {
     }
     let menu = centre(frame, find(frame, Role::Button, "Menu"));
     assert!((menu.y - bands.opponent_strip.middle()).abs() < 0.5);
-    let phase = centre(frame, find(frame, Role::Region, "phase"));
+    let phase = centre(frame, find(frame, Role::Icon, "phase"));
     assert!((phase.y - bands.middle.middle()).abs() < 0.5);
     // The desktop's gear, log column and step stops have no place on the phone.
     assert!(!has(frame, Role::Button, "Settings"));

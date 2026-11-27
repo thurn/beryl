@@ -11,20 +11,23 @@ use glam::Vec2;
 use super::Message;
 use super::question::{fit_question_dock, question_title};
 use crate::hud::HudIn;
-use crate::hud::phase::phase_box;
+use crate::hud::phase::{clear_of_shared_piles, phase_box};
 use crate::hud::placement_scene::{Group, PlacementScene, inset, rect};
 use crate::prompts::{covers_table, holds_up, ways};
 use game_table::profiles::Profile;
 use kit_base::data::profiles::{FloatingPrompt, Piece};
 use kit_base::geometry::Rect;
 use kit_base::tokens::{color, shadow, size, space, type_style};
-use kit_scene::{Candidate, NodeQuery};
+use kit_scene::NodeQuery;
 use kit_text::text::TypeStyle;
 use kit_ui::element::{
     Align, Anchor, Element, LayerDepth, Position, TextAlign, column, holder, row, text,
 };
 use kit_ui::layout::{DOCK_BOTTOM, DOCK_RIGHT};
 use kit_ui::widgets::{self, button, icon_button, icons, primary};
+
+mod pill;
+use pill::{PillPlace, pill};
 
 /// Controls a prompt adds to its bar, such as a number's steps, and about how large they are
 /// drawn, in logical points: an estimate on the generous side, as `button_width` makes, which
@@ -243,8 +246,9 @@ pub fn captioned(pressed: Element, caption: &str) -> Element {
 /// - Where the raised dock or the stacked buttons would stand over a permanent of the viewer's
 ///   back row, which they would leave without a square to press, they stand in the middle band
 ///   instead, if they fit there clear of every card and the phase icon: the dock at the band's
-///   right end, and the stacked buttons there, beside the dock, or at the band's left end. The
-///   pill is narrowed to the room between them.
+///   right end, and the stacked buttons there, beside the dock, or at the band's left end.
+///   The pill is narrowed to the room between them. On a table whose players share their
+///   piles, the band's ends are between the library and the graveyard.
 /// - What it asks, `asks`, is a pill on the middle band's line, as Arena writes it across the
 ///   middle of its table, or at the nearest height clear of every card where one lies on that
 ///   line. While the prompt holds cards up, or lists what it asks
@@ -284,12 +288,12 @@ fn floating_bar(
             + pass_on.map_or(0.0, |_| height);
         let (placed, slot) = slots.dock("dock", width, None);
         if slot != 0 {
-            beside_right = width;
+            beside_right = right - placed.x;
         } else {
             dock_bottom = placed.y + placed.height;
         }
         dock.anchor = Some(Anchor::Point(
-            Vec2::new(right, placed.y + height / 2.0),
+            Vec2::new(placed.x + placed.width, placed.y + height / 2.0),
             Vec2::new(1.0, 0.5),
         ));
         dock
@@ -328,7 +332,7 @@ fn floating_bar(
         };
         let strip = rect(right - width, over - tall, width, tall);
         let middle_right = slots.middle(right - beside - width, width, tall);
-        let middle_left = slots.middle(left, width, tall);
+        let middle_left = slots.middle(slots.middle_start(), width, tall);
         let (slot, placed) = slots.place(
             "stacked prompt controls",
             "prompt.stacked",
@@ -337,7 +341,7 @@ fn floating_bar(
         );
         match slot {
             1 => beside_right = right - placed.x,
-            2 => beside_left = placed.width,
+            2 => beside_left = placed.x + placed.width - left,
             _ => {}
         }
         more.anchor = Some(Anchor::Point(
@@ -350,12 +354,26 @@ fn floating_bar(
         let place = PillPlace::beside_controls(slots.held, strip_over, beside_left, beside_right);
         pill(asks, place, slots)
     });
+    let phase = slots.phase_icon(pill.as_ref().map(|(_, bounds)| *bounds));
     // The pill comes first, so that the buttons are drawn over it where they meet.
     holder()
         .name("prompt")
-        .children(pill)
+        .children(pill.map(|(pill, _)| pill))
         .children(more)
         .children(dock)
+        .children(phase)
+}
+
+/// Whether the prompt bar for `input`'s prompt draws the phase icon in the middle band, in place
+/// of the game screen's furniture: while it stands on a table it does not shade, so that it can
+/// leave the icon out where its pill needs the icon's room. In a crowded band, the pill beside
+/// the icon and the bar's buttons can be too narrow for the longest word of what it asks.
+#[must_use]
+pub fn draws_phase(input: &HudIn) -> bool {
+    input.prompt.is_some_and(|prompt| {
+        let held = holds_up(prompt) || covers_table(prompt);
+        !held && PromptSlots::new(input, held).is_some_and(|slots| slots.phase_icon.is_some())
+    })
 }
 
 /// Resolves the slots used by a prompt whose controls can move around the cards.
@@ -370,6 +388,8 @@ struct PromptSlots<'a> {
     held: bool,
     opening: bool,
     phase: (f32, f32),
+    /// The phase icon the bar draws in the middle band, with the view whose phase it shows.
+    phase_icon: Option<(&'a beryl_protocol::PlayerView, Rect)>,
 }
 
 impl<'a> PromptSlots<'a> {
@@ -385,14 +405,17 @@ impl<'a> PromptSlots<'a> {
             "phase",
         ]);
         let bar = bar?.rect;
-        let phase = input
-            .view
+        let shared = input.view.is_some_and(|view| view.shared.is_some());
+        let phase_icon = phase
             .filter(|_| profile.data().hud.table.contains(&Piece::Phase))
-            .and_then(|view| {
-                let bounds = phase_box(view.stack.is_empty(), phase?.rect);
-                Some((bounds.x, bounds.x + bounds.width))
-            })
-            .unwrap_or((bar.x, bar.x));
+            .zip(input.view)
+            .map(|(phase, view)| {
+                let band = clear_of_shared_piles(profile, phase.rect, shared);
+                (view, phase_box(band, shared))
+            });
+        let phase = phase_icon.map_or((bar.x, bar.x), |(_, bounds)| {
+            (bounds.x, bounds.x + bounds.width)
+        });
         let opening = input.view.is_some_and(crate::screens::opening::in_opening);
         let mut dock = dock?.rect;
         if opening
@@ -406,7 +429,7 @@ impl<'a> PromptSlots<'a> {
         Some(Self {
             bar,
             dock,
-            middle: middle?.rect,
+            middle: clear_of_shared_piles(profile, middle?.rect, shared),
             clearance: clearance?.rect,
             asked: asked?.rect,
             metrics,
@@ -414,7 +437,44 @@ impl<'a> PromptSlots<'a> {
             held,
             opening,
             phase,
+            phase_icon,
         })
+    }
+
+    /// The phase icon the bar draws in the middle band while the table is not shaded
+    /// (`draws_phase`), unless the pill, whose box is `pill`, needed the icon's room.
+    fn phase_icon(&self, pill: Option<Rect>) -> Option<Element> {
+        let (view, bounds) = self.phase_icon.filter(|_| !self.held)?;
+        let covered = pill.is_some_and(|pill| {
+            pill.x < bounds.x + bounds.width
+                && bounds.x < pill.x + pill.width
+                && pill.y < bounds.y + bounds.height
+                && bounds.y < pill.y + pill.height
+        });
+        (!covered).then(|| crate::hud::phase::icon(view, bounds))
+    }
+
+    /// Where the middle band's room for a pill or a button starts and ends: beside the phase
+    /// icon, which stands at one of the band's ends (`phase_box`), and otherwise at the band's
+    /// ends.
+    fn middle_room(&self) -> (f32, f32) {
+        let (phase_left, phase_right) = self.phase;
+        let (start, end) = (self.middle.x, self.middle.x + self.middle.width);
+        if phase_right <= phase_left {
+            (start, end)
+        } else if phase_left + phase_right > start + end {
+            (start, end.min(phase_left - self.metrics.gap))
+        } else {
+            (start.max(phase_right + self.metrics.gap), end)
+        }
+    }
+
+    fn middle_start(&self) -> f32 {
+        self.middle_room().0
+    }
+
+    fn middle_end(&self) -> f32 {
+        self.middle_room().1
     }
 
     fn strip_top(&self) -> f32 {
@@ -470,22 +530,23 @@ impl<'a> PromptSlots<'a> {
         (placed, slot)
     }
 
-    /// A control may reach a few points past the band, where the table's card piles do too.
+    /// A box `width` by `height` on the middle band's line, starting at `left` or as far left
+    /// of it as keeps the box within the band's room beside the phase icon, if it fits there.
+    /// A control may reach a few points past the band's top and foot, where the table's card
+    /// piles do too, but not past its ends, where a shared library and graveyard lie.
     fn middle(&self, left: f32, width: f32, height: f32) -> Option<Rect> {
-        let (phase_left, phase_right) = self.phase;
-        let gap = self.metrics.gap;
+        let left = left.min(self.middle_end() - width);
         (!self.held
             && height <= self.middle.height + 2.0 * self.metrics.overlap + 1.0
-            && left >= self.middle.x
-            && (left + width + gap <= phase_left || left - gap >= phase_right))
-            .then(|| {
-                rect(
-                    left,
-                    self.middle.y + (self.middle.height - height) / 2.0,
-                    width,
-                    height,
-                )
-            })
+            && left >= self.middle_start())
+        .then(|| {
+            rect(
+                left,
+                self.middle.y + (self.middle.height - height) / 2.0,
+                width,
+                height,
+            )
+        })
     }
 
     fn place<const N: usize>(
@@ -557,153 +618,6 @@ fn dock(
         }))
 }
 
-/// Where the pill with what a prompt asks stands on the phone.
-#[derive(Clone, Copy)]
-enum PillPlace {
-    /// Centred on the middle band's line, or at the nearest height clear of every card.
-    Middle,
-    /// At the same height, narrowed for buttons this wide at the middle band's left or right
-    /// end.
-    Beside { left: f32, right: f32 },
-    /// Over the viewer's strip, its foot at this height, beside the stacked buttons, while the
-    /// table lies under a shade.
-    Over(f32),
-}
-
-impl PillPlace {
-    fn beside_controls(held: bool, over: f32, left: f32, right: f32) -> Self {
-        if held {
-            Self::Over(over)
-        } else if (left > 0.0) == (right > 0.0) {
-            // Buttons at both ends can leave too little room to wrap the pill without covering a row.
-            Self::Middle
-        } else {
-            Self::Beside { left, right }
-        }
-    }
-}
-
-/// The pill that says what a prompt asks, `asks`, at `place`: a fixed width, so that a long
-/// question is laid out on as many lines as it takes. It lets the pointer through, so it never
-/// covers a card the prompt picks.
-fn pill(asks: &str, place: PillPlace, slots: &PromptSlots<'_>) -> Element {
-    let style = TypeStyle {
-        size: slots.metrics.pill_text,
-        ..type_style::TITLE
-    };
-    let padding = slots.metrics.pill_padding;
-    let height = style.size * style.line_height + padding;
-    let room = |taken: f32| {
-        if taken > 0.0 {
-            taken + slots.metrics.gap
-        } else {
-            0.0
-        }
-    };
-    let (left, right) = match place {
-        PillPlace::Middle => (0.0, 0.0),
-        PillPlace::Beside { left, right } => (room(left), room(right)),
-        PillPlace::Over(_) => (0.0, room(slots.metrics.button_min_width)),
-    };
-    let area = if matches!(place, PillPlace::Over(_)) {
-        slots.asked
-    } else {
-        slots.bar
-    };
-    let width = area.width - left - right;
-    let x = area.x + left;
-    let line = slots.middle.y + (slots.middle.height - height) / 2.0;
-    let top = match place {
-        PillPlace::Over(bottom) => bottom - height,
-        _ => line,
-    };
-    let mut bounds = rect(x, top, width, height);
-    if let Some(scene) = slots.scene {
-        if matches!(place, PillPlace::Over(_)) {
-            scene.place_named("prompt pill", Vec::new(), [("prompt.asked", bounds.into())]);
-        } else {
-            bounds = pill_slot(scene, slots, bounds);
-        }
-    }
-    let mut pill = text(asks)
-        .style(style)
-        .text_align(TextAlign::Center)
-        .width(bounds.width)
-        .min_height(height)
-        .background(color::PANEL)
-        .radius(height / 2.0)
-        .passes(true);
-    pill.style.padding = [padding / 2.0, padding, padding / 2.0, padding];
-    pill.anchor = Some(match place {
-        PillPlace::Over(over) => Anchor::Point(Vec2::new(x, over), Vec2::Y),
-        _ => Anchor::Point(Vec2::new(bounds.x, bounds.y), Vec2::ZERO),
-    });
-    pill
-}
-
-/// Tries the full prompt width at the nearest quiet height. When cards fill the middle of
-/// the board from top to bottom, the pill can use the space to either side of those cards.
-fn pill_slot(scene: &PlacementScene, slots: &PromptSlots, preferred: Rect) -> Rect {
-    let gap = slots.metrics.asked_gap;
-    let height = preferred.height;
-    let cards: Vec<_> = [Group::YourRows, Group::TheirRows, Group::Stack]
-        .into_iter()
-        .flat_map(|group| scene.group(group))
-        .collect();
-    let mut tops = vec![preferred.y];
-    tops.extend(
-        cards
-            .iter()
-            .flat_map(|card| [card.y + card.height + gap, card.y - gap - height])
-            .filter(|&top| top >= slots.clearance.y && top + height <= slots.strip_top()),
-    );
-    tops.sort_by(|a, b| (a - preferred.y).abs().total_cmp(&(b - preferred.y).abs()));
-    let full_width = tops.into_iter().map(|y| Candidate {
-        bounds: Rect { y, ..preferred },
-        clearance: rect(slots.bar.x, y - gap, slots.bar.width, height + 2.0 * gap),
-    });
-
-    let end = preferred.x + preferred.width;
-    // A narrower pill can wrap. Reserve an extra line when finding its horizontal slot.
-    let tall = 2.0 * height - slots.metrics.pill_padding;
-    let (left, right) = cards
-        .iter()
-        .filter(|card| {
-            card.y < preferred.y + tall + gap && card.y + card.height > preferred.y - gap
-        })
-        .fold((end, preferred.x), |(left, right), card| {
-            (left.min(card.x), right.max(card.x + card.width))
-        });
-    let start = preferred.x.max(slots.phase.1 + gap);
-    let room = [((right + gap).max(start), end), (start, left - gap)];
-    let beside = room
-        .into_iter()
-        .filter(|(left, right)| right - left >= slots.metrics.button_min_width)
-        .map(|(left, right)| {
-            let bounds = rect(left, preferred.y, right - left, height);
-            let clearance = inset(
-                Rect {
-                    height: tall,
-                    ..bounds
-                },
-                -gap,
-            );
-            Candidate {
-                bounds,
-                clearance: clearance.clearance,
-            }
-        });
-    scene
-        .place_named(
-            "prompt pill",
-            table_rows(),
-            full_width
-                .chain(beside)
-                .map(|candidate| ("prompt.bar", candidate)),
-        )
-        .map_or(preferred, |(_, bounds)| bounds)
-}
-
 impl PromptSlots<'_> {
     /// Estimates how much room a button needs when finding a clear spot for it.
     fn button_width(&self, label: &str) -> f32 {
@@ -715,6 +629,28 @@ impl PromptSlots<'_> {
         (characters * self.metrics.button_text * self.metrics.character_width
             + 2.0 * self.metrics.button_padding)
             .max(self.metrics.button_min_width)
+    }
+
+    /// Estimates how wide the longest word of `asks` is in the pill, which a line must hold.
+    fn word_width(&self, asks: &str) -> f32 {
+        #[expect(clippy::cast_precision_loss, reason = "a word is a few letters")]
+        let characters = asks
+            .split_whitespace()
+            .map(|word| word.chars().count())
+            .max()
+            .unwrap_or(0) as f32;
+        characters * self.metrics.pill_text * self.metrics.character_width
+    }
+
+    /// Estimates how wide the pill must be to say `asks` on one line.
+    fn pill_width(&self, asks: &str) -> f32 {
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "what a prompt asks is a sentence"
+        )]
+        let characters = asks.chars().count() as f32;
+        characters * self.metrics.pill_text * self.metrics.character_width
+            + 2.0 * self.metrics.pill_padding
     }
 
     fn button(&self, button_view: &PromptButton) -> Element {
@@ -771,8 +707,9 @@ pub(super) fn waiting(input: &HudIn) -> Option<Element> {
         .flat_map(|scene| scene.group(Group::Stack))
         .filter(|item| item.y < line + half && item.y + item.height > line - half)
         .map(|item| item.x + item.width)
-        .fold(slots.phase.1, f32::max);
-    let right = slots.dock.x + slots.dock.width;
+        .fold(slots.middle_start(), f32::max);
+    // In the middle band, the label stays within the room beside the phase icon.
+    let right = (slots.dock.x + slots.dock.width).min(slots.middle_end());
     let room = right - occupied_right - slots.metrics.gap;
     let narrow = (slots.metrics.button_min_width..wide)
         .contains(&room)
@@ -781,7 +718,7 @@ pub(super) fn waiting(input: &HudIn) -> Option<Element> {
     let mut label = slots.sized(label);
     label.style.width = narrow.filter(|_| slot == 2);
     label.anchor = Some(Anchor::Point(
-        Vec2::new(right, placed.y + placed.height / 2.0),
+        Vec2::new(placed.x + placed.width, placed.y + placed.height / 2.0),
         Vec2::new(1.0, 0.5),
     ));
     Some(holder().name("prompt").child(label))

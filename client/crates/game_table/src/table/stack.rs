@@ -29,6 +29,10 @@ pub(crate) struct CentredStack {
     pub count_room: f32,
     pub depth: f32,
     pub step_depth: f32,
+    /// The room left free at each end of `left..right`, and the same on a table whose players
+    /// share their piles (`banded::Stack::ends` and `shared_ends`).
+    pub ends: f32,
+    pub shared_ends: f32,
 }
 
 /// An item of the stack as placement reads it.
@@ -191,12 +195,17 @@ fn arrange(
 ) -> (CascadeLayout, ProjectedUnits) {
     match &layout.stack {
         StackPlacement::Centred(data) => {
+            let ends = if layout.shape.is_shared() {
+                data.shared_ends
+            } else {
+                data.ends
+            };
             let placed = Cascade {
                 direction: Vec2::NEG_X,
                 step: data.step,
             }
             .centred(
-                (data.left, data.right, data.middle),
+                (data.left + ends, data.right - ends, data.middle),
                 Vec2::new(
                     data.height * (camera.data.card.width / camera.data.card.height),
                     data.height,
