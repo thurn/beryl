@@ -46,13 +46,13 @@
     "border": 0.1
   },
   "count": {
-    "right": 0.62,
-    "top": 1.45,
-    "height": 1.44,
-    "padding": 0.3,
-    "radius": 0.3,
-    "border": 0.06,
-    "numerals": 1.15
+    "right": 0.15,
+    "top": 0.15,
+    "height": 2.6,
+    "padding": 0.4,
+    "radius": 0.45,
+    "border": 0.12,
+    "numerals": 2.1
   },
   "note": {
     "top": 3.1,

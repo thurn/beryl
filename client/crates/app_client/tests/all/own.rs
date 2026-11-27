@@ -500,3 +500,131 @@ fn enhanced_combat_emits_vfx_sparks_and_ambient_motion_and_steps_down_cleanly() 
     assert!(stepped.draws.iter().all(|draw| !draw.is_vfx()));
     assert_eq!(marks(&stepped, sprites::CRESCENT).len(), 1);
 }
+
+fn relative_luminance([r, g, b, _]: [u8; 4]) -> f32 {
+    let channel = |c: u8| {
+        let s = f32::from(c) / 255.0;
+        if s <= 0.03928 {
+            s / 12.92
+        } else {
+            ((s + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
+}
+
+fn contrast_ratio(a: [u8; 4], b: [u8; 4]) -> f32 {
+    let l1 = relative_luminance(a);
+    let l2 = relative_luminance(b);
+    let (hi, lo) = if l1 >= l2 { (l1, l2) } else { (l2, l1) };
+    (hi + 0.05) / (lo + 0.05)
+}
+
+fn assert_count_badges(frame: &Frame, expected: usize, check_glyphs: bool, context: &str) {
+    let card_width = frame
+        .draws
+        .iter()
+        .find(|draw| draw.material == Material::Card as u8 && !draw.is_edge_only())
+        .map(|draw| transform(draw).x_axis.length())
+        .expect("a battlefield card");
+    let count_panels: Vec<_> = frame
+        .draws
+        .iter()
+        .enumerate()
+        .filter(|(index, draw)| {
+            frame.band(*index) == Some(Band::TableMarks)
+                && draw.material == Material::Panel as u8
+                && draw.tint == badge::COUNT
+        })
+        .collect();
+    assert_eq!(count_panels.len(), expected, "{context}");
+    for (index, panel) in count_panels {
+        let panel_transform = transform(panel);
+        let width = panel_transform.x_axis.length();
+        let height = panel_transform.y_axis.length();
+        assert!(
+            height >= 0.24 * card_width,
+            "count badge height {height} too small for card width {card_width}"
+        );
+        assert!(
+            width >= 0.28 * card_width,
+            "count badge width {width} too small for card width {card_width}"
+        );
+        if check_glyphs {
+            let has_ink_glyph = frame.draws[index + 1..]
+                .iter()
+                .take_while(|draw| draw.material == Material::Glyph as u8)
+                .any(|draw| draw.tint == badge::COUNT_INK);
+            assert!(has_ink_glyph, "count badge glyphs use COUNT_INK");
+        }
+    }
+}
+
+#[test]
+fn the_land_count_badge_is_large_and_high_contrast_in_the_report_capture() {
+    assert!(
+        contrast_ratio(badge::COUNT, badge::COUNT_INK) >= 7.0,
+        "count badge ink must have AAA contrast against its fill"
+    );
+    assert!(
+        contrast_ratio(badge::COUNT, badge::COUNT_BORDER) >= 4.5,
+        "count badge border must contrast clearly with its fill"
+    );
+
+    let catalog = app_client::stories::embedded();
+    let source = catalog
+        .iter()
+        .find(|source| source.name == "story/game_table/land-stack-count")
+        .expect("the land-stack-count capture story");
+    let Body::Capture { capture, .. } = Story::parse(&source.text).unwrap().body else {
+        panic!("land-stack-count is a capture");
+    };
+
+    for (size, scale, expected_groups) in [
+        (
+            Size {
+                width: 1728.0,
+                height: 1117.0,
+            },
+            2.0,
+            3,
+        ),
+        (
+            Size {
+                width: 393.0,
+                height: 759.0,
+            },
+            3.0,
+            2,
+        ),
+    ] {
+        let mut page = Page::in_window(
+            crate::test_data::data(),
+            Recording(capture.messages.clone()).into(),
+            Side::You,
+            Window {
+                size,
+                scale,
+                ..Window::default()
+            },
+        )
+        .unwrap();
+        page.seek(&"view:2+0ms".parse().unwrap()).unwrap();
+        assert_count_badges(
+            page.frame(),
+            expected_groups,
+            true,
+            &format!("stacked land groups at {size:?}"),
+        );
+    }
+
+    // Verify the opponent's land row also renders the enlarged, high-contrast count badge.
+    let mut client = client();
+    let mut view = ViewBuilder::new();
+    for _ in 0..7 {
+        let land = view.card(ZoneName::Battlefield, Side::Opponent, "Island");
+        land.types = vec![CardType::Land];
+    }
+    let opponent_frame = show(&mut client, &view, 0);
+    assert_count_badges(&opponent_frame, 1, false, "one stacked opponent land group");
+}

@@ -167,11 +167,11 @@ pub mod badge {
     pub const COUNTER_DISC: [u8; 4] = [0x64, 0x68, 0x6f, 0xff];
     pub const COUNTER_DISC_RIM: [u8; 4] = [0x22, 0x24, 0x28, 0xff];
     pub const COUNTER_DISC_INK: [u8; 4] = [0xf5, 0xf3, 0xf0, 0xff];
-    /// The pile count's fill, the middle of `.card-count`'s gradient in
-    /// `card-marks-and-piles.css`, and its border and ink.
-    pub const COUNT: [u8; 4] = [0xec, 0xda, 0xb9, 0xff];
-    pub const COUNT_BORDER: [u8; 4] = [0xb8, 0x92, 0x4e, 0xff];
-    pub const COUNT_INK: [u8; 4] = [0x1d, 0x1b, 0x19, 0xff];
+    /// The pile count's fill, border and ink, matching Arena's dark badge with a light rim and
+    /// white text so it reads clearly over any card art.
+    pub const COUNT: [u8; 4] = [0x18, 0x16, 0x14, 0xff];
+    pub const COUNT_BORDER: [u8; 4] = [0xd8, 0xd4, 0xc8, 0xff];
+    pub const COUNT_INK: [u8; 4] = [0xf5, 0xf3, 0xf0, 0xff];
     /// The panel under a permanent's note or chosen value, `.card-note`'s `background` in
     /// `card-frame.css`, whose text is `color::TYPE`.
     pub const NOTE: [u8; 4] = [0x1c, 0x1a, 0x17, 0xe6];
