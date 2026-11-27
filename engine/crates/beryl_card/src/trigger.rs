@@ -159,6 +159,16 @@ pub enum TriggerEvent {
     ClassLevel(u8),
     /// "Whenever [whose] cast [subject] from [zone]", the zone it occupied before casting.
     CastsFrom(Zone),
+    /// The event of a reflexive triggered ability, which no game event matches: an
+    /// [`crate::Effect::Reflexive`] of its face makes it trigger as that instruction is
+    /// carried out ([CR 603.12]): "These reflexive triggered abilities follow the rules for
+    /// delayed triggered abilities (see rule 603.7), except that they're checked immediately
+    /// after being created and trigger based on whether the trigger event or events occurred
+    /// earlier during the resolution of the spell or ability that created them." Written only
+    /// as [`Trigger::REFLEXIVE`], which is delayed, so no object has it printed.
+    ///
+    /// [CR 603.12]: https://yawgatog.com/resources/magic-rules/#R60312
+    Reflexive,
 }
 
 impl TriggerEvent {
@@ -208,7 +218,8 @@ impl PartialEq for TriggerEvent {
             | TriggerEvent::BecomesTargetOfSpell
             | TriggerEvent::Mutates
             | TriggerEvent::DealsDamage
-            | TriggerEvent::TurnedFaceUp => {
+            | TriggerEvent::TurnedFaceUp
+            | TriggerEvent::Reflexive => {
                 std::mem::discriminant(self) == std::mem::discriminant(other)
             }
         }
@@ -244,6 +255,7 @@ impl std::hash::Hash for TriggerEvent {
             | TriggerEvent::Mutates
             | TriggerEvent::DealsDamage
             | TriggerEvent::TurnedFaceUp
+            | TriggerEvent::Reflexive
             | TriggerEvent::State(_) => {}
         }
     }
@@ -288,6 +300,12 @@ impl Trigger {
 
     pub const DEALS_COMBAT_DAMAGE_TO_A_PLAYER: Trigger =
         Trigger::of(TriggerEvent::DealsCombatDamageToPlayer, Subject::This);
+
+    /// The trigger of a reflexive triggered ability, "when [something happens] this way",
+    /// which an [`crate::Effect::Reflexive`] of its face names and makes trigger (CR 603.12).
+    /// It is delayed: no object has it printed, and it waits for no event.
+    pub const REFLEXIVE: Trigger =
+        Trigger::of(TriggerEvent::Reflexive, Subject::A(Filter::Any)).next();
 
     /// `event` happening to `subject`, whoever the player.
     pub const fn of(event: TriggerEvent, subject: Subject) -> Trigger {

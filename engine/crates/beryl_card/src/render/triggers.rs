@@ -108,6 +108,8 @@ impl Ctx {
                 Amount::Fixed(0),
             )) => format!("when {} has no {} counters on it", self.this, kind.name()),
             TriggerEvent::State(&condition) => format!("when {}", self.condition(condition)),
+            // Its condition is the instruction's that makes it trigger (`Ctx::reflexive`).
+            TriggerEvent::Reflexive => "when you do".to_owned(),
         }
     }
 
@@ -151,6 +153,7 @@ impl Ctx {
             | TriggerEvent::Draws
             | TriggerEvent::ClassLevel(_)
             | TriggerEvent::Chapter { .. }
+            | TriggerEvent::Reflexive
             | TriggerEvent::State(_) => String::new(),
         }
     }

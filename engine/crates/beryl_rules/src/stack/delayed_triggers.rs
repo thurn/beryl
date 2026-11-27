@@ -1,9 +1,11 @@
 //! Delayed triggered abilities
-//! ([CR 603.7](https://yawgatog.com/resources/magic-rules/#R6037)).
+//! ([CR 603.7](https://yawgatog.com/resources/magic-rules/#R6037)), and the reflexive ones
+//! that follow their rules
+//! ([CR 603.12](https://yawgatog.com/resources/magic-rules/#R60312)).
 //!
-//! Implements: CR 603.7
+//! Implements: CR 603.7, CR 603.12
 
-use beryl_card::{Amount, Objects};
+use beryl_card::{Amount, Condition, Objects};
 
 use crate::card::{AbilityIx, TriggerEvent};
 use crate::filter::is_for;
@@ -99,6 +101,40 @@ pub(crate) fn instruction<L: Layout>(
     };
     let (game, resolution) = run.resolving();
     create(game, resolution, ability, amount, object)?;
+    Ok(Outcome::NOTHING)
+}
+
+/// [`Effect::Reflexive`](beryl_card::Effect::Reflexive): "When [something happens] this way,
+/// [effect]", said by a resolving spell or ability: a reflexive triggered ability
+/// ([CR 603.12]): "These reflexive triggered abilities follow the rules for delayed triggered
+/// abilities (see rule 603.7), except that they're checked immediately after being created and
+/// trigger based on whether the trigger event or events occurred earlier during the resolution
+/// of the spell or ability that created them." So its condition is read now, of what the
+/// instructions before did, and if it holds the ability waits at once with the other triggers,
+/// with the controller and source a delayed ability has (CR 603.7d, CR 603.7e). It is put on
+/// the stack the next time a player would receive priority and chooses its targets then, and
+/// one with no legal target is removed from the stack (see [CR 603.3d]): "If a choice is required
+/// when the triggered ability goes on the stack but no legal choices can be made for it ...
+/// the ability is simply removed from the stack." It acts on nothing, so its outcome is
+/// nothing.
+///
+/// [CR 603.12]: https://yawgatog.com/resources/magic-rules/#R60312
+/// [CR 603.3d]: https://yawgatog.com/resources/magic-rules/#R6033d
+#[cold]
+#[inline(never)]
+pub(crate) fn reflexive<L: Layout>(
+    run: &mut Run<'_, '_, L>,
+    condition: Option<Condition>,
+    ability: AbilityIx,
+) -> Result<Outcome<L>, Full> {
+    if condition.is_none_or(|condition| run.scene().holds(&condition)) {
+        let (game, resolution) = run.resolving();
+        let reflexive = PendingTrigger {
+            of: source(resolution, ability),
+            info: TriggerInfo::default(),
+        };
+        game.state.queue_trigger(reflexive)?;
+    }
     Ok(Outcome::NOTHING)
 }
 

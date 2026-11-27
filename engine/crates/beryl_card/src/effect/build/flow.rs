@@ -144,3 +144,23 @@ pub const fn delay_with(ability: u8, object: Objects) -> Effect {
         object: Some(object),
     }
 }
+
+/// [`Effect::Reflexive`]: "when [condition], [effect]", the reflexive triggered ability that is
+/// the `ability`th of its face, counting from 0, triggering if `condition` holds as this
+/// instruction is reached: "when a creature card is exiled this way" is
+/// `reflexive(Condition::Is(those(), creature_card), 1)`.
+pub const fn reflexive(condition: Condition, ability: u8) -> Effect {
+    Effect::Reflexive {
+        condition: Some(condition),
+        ability: AbilityIx::new(ability),
+    }
+}
+
+/// [`Effect::Reflexive`] that always triggers: "when you do", after an instruction that
+/// cannot fail to happen.
+pub const fn reflexive_always(ability: u8) -> Effect {
+    Effect::Reflexive {
+        condition: None,
+        ability: AbilityIx::new(ability),
+    }
+}

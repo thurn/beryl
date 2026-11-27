@@ -64,7 +64,8 @@ pub enum Malformed {
     /// [`Effect::Delay`] of an ability its face does not have, or of one that is not a
     /// delayed triggered ability ([`crate::Trigger::next`]): nothing would wait for it. Or
     /// one carrying a set named by what is in it ([`Objects::All`] and the like), where it
-    /// carries one object.
+    /// carries one object. Or [`Effect::Reflexive`] of an ability that is not written with
+    /// [`crate::Trigger::REFLEXIVE`], or an [`Effect::Delay`] of one that is.
     Delayed,
     /// [`Amount::Carried`] or [`Objects::Carried`] in an ability that is not a delayed
     /// triggered ability: no effect made it, so it carries nothing.
@@ -192,7 +193,7 @@ impl Malformed {
                 "a condition or amount reads an object that an earlier instruction of the same effect moved: read it before the move, or read it of a target or `Objects::Those`, whose controller and numbers are kept"
             }
             Malformed::Delayed => {
-                "`Effect::Delay` or `Effect::ExtraTurn` must name, by index, one of the face's own abilities whose trigger is delayed (`Trigger::next()`; for an extra turn, a step trigger of that turn), and a delay carries one object, not a set such as `Objects::All`"
+                "`Effect::Delay` or `Effect::ExtraTurn` must name, by index, one of the face's own abilities whose trigger is delayed (`Trigger::next()`; for an extra turn, a step trigger of that turn), and a delay carries one object, not a set such as `Objects::All`. `Effect::Reflexive` must name one whose trigger is `Trigger::REFLEXIVE`, which no `Effect::Delay` may name"
             }
             Malformed::Carried => {
                 "`Objects::Carried` and `Amount::Carried` work only in a delayed triggered ability (`Trigger::next()`), and `Amount::Carried` also in a deals-damage trigger: name the object or the amount directly here"

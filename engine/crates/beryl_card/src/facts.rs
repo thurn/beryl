@@ -161,6 +161,7 @@ impl Effect {
             | Effect::MayCast { .. }
             | Effect::UntapUpTo { .. }
             | Effect::Delay { .. }
+            | Effect::Reflexive { .. }
             | Effect::GetEmblem { .. }
             | Effect::WinGame(_)
             | Effect::LoseGame(_)

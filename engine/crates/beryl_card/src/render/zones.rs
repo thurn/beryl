@@ -172,6 +172,7 @@ impl Ctx {
         } else {
             self.acts(("exile", "exiles"), objects, "")
         };
+        self.done_this_way = Some("exiled");
         vec![clause]
     }
 

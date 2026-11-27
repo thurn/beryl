@@ -22,17 +22,15 @@ use crate::card::{Flow, Stop};
 use crate::casting::{payment, start};
 use crate::filter::Evaluate;
 use crate::fixed::Full;
-use crate::game::Game;
-use crate::game::{ending, life, restart, subgame};
+use crate::game::{Game, ending, life, restart, subgame};
 use crate::ids::Seat;
 use crate::interpret::scene::{Outcome, Registers, Scene};
 use crate::keywords::flashback;
 use crate::layout::{Layout, Queue, Table};
 use crate::objects::{copy, linked, one_shot};
 use crate::resolution::Resolution;
-use crate::stack::delayed_triggers;
-use crate::state::TriggeredAbility;
-use crate::state::{AbilityRef, PendingTrigger, StackItem, State, Zone, placed};
+use crate::stack::delayed_triggers::{self, reflexive};
+use crate::state::{AbilityRef, PendingTrigger, StackItem, State, TriggeredAbility, Zone, placed};
 use crate::zones::{self, counters, drawing, emblems, library, tokens};
 use crate::{combat::damage, continuous, continuous::layers, interpret::choices, mana};
 
@@ -265,6 +263,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             | Effect::MayCast { .. }
             | Effect::UntapUpTo { .. }
             | Effect::Delay { .. }
+            | Effect::Reflexive { .. }
             | Effect::GetEmblem { .. }
             | Effect::WinGame(_)
             | Effect::LoseGame(_)
@@ -500,6 +499,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 carrying,
                 object,
             } => delayed_triggers::instruction(self, ability, carrying, object)?,
+            Effect::Reflexive { condition, ability } => reflexive(self, condition, ability)?,
             Effect::GetEmblem { player, emblem } => emblems::instruction(self, player, emblem)?,
             Effect::WinGame(players) => ending::win_instruction(self, players),
             Effect::LoseGame(players) => ending::lose_instruction(self, players),

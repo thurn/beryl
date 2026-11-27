@@ -428,6 +428,7 @@ impl Ctx {
             TriggerEvent::Step(_)
             | TriggerEvent::FirstStep(_)
             | TriggerEvent::MainPhase
+            | TriggerEvent::Reflexive
             | TriggerEvent::State(_) => "it",
         }
         .to_owned()

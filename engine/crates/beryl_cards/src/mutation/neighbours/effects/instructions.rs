@@ -55,6 +55,23 @@ pub(super) fn local(effect: &'static Effect) -> Vec<(Kind, String, Effect)> {
                 },
             );
         }
+        Effect::Reflexive {
+            condition: Some(condition),
+            ability,
+        } => {
+            let negated = match condition {
+                Condition::Not(inner) => *inner,
+                _ => Condition::Not(leak(condition)),
+            };
+            add(
+                Kind::EffectCondition,
+                "condition negated".to_owned(),
+                Effect::Reflexive {
+                    condition: Some(negated),
+                    ability,
+                },
+            );
+        }
         Effect::May { player, effect } => {
             add(Kind::May, "without the may".to_owned(), *effect);
             for (name, player) in chooser(player) {
@@ -748,7 +765,10 @@ pub(super) fn local(effect: &'static Effect) -> Vec<(Kind, String, Effect)> {
         | Effect::AddMana { .. }
         | Effect::AddProduct { .. }
         | Effect::ChangeMana { .. }
-        | Effect::GetEmblem { .. } => {}
+        | Effect::GetEmblem { .. }
+        | Effect::Reflexive {
+            condition: None, ..
+        } => {}
     }
     out
 }

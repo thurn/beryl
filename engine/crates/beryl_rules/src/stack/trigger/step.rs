@@ -42,6 +42,7 @@ pub(in crate::stack) fn begins(
         | TriggerEvent::TurnedFaceUp
         | TriggerEvent::ClassLevel(_)
         | TriggerEvent::Chapter { .. }
+        | TriggerEvent::Reflexive
         | TriggerEvent::State(_) => false,
     }
 }

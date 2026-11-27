@@ -209,7 +209,27 @@ fn unless_discards<L: Layout>(
     player: Seat,
     filter: crate::filter::Filter,
 ) -> Result<bool, Stop> {
-    let instead_of = match *effect {
+    let instead_of = discards_of(run, effect, player);
+    let (game, resolution) = run.resolving();
+    let hand = game.state.zone(ZoneKey::Of(player, Zone::Hand));
+    if instead_of.is_some_and(|cards| cards > 0) && hand.count() == 1 {
+        return Ok(false);
+    }
+    let words = resolution.words(game);
+    let cards = filter.select(game.state, game.table, hand, player, &words);
+    let instead = Prompt::new(Purpose::Discard)
+        .most(instead_of.unwrap_or(1))
+        .part(Part::Instead);
+    may_discard(game, resolution, player, cards, instead)
+}
+
+/// How many cards `effect` has `player` discard, when it is a discard by that player.
+fn discards_of<L: Layout>(
+    run: &Run<'_, '_, L>,
+    effect: &'static Effect,
+    player: Seat,
+) -> Option<u8> {
+    match *effect {
         Effect::Discard { player: who, count } if run.one(who) == Some(player) => {
             Some(run.scene().amount(count))
         }
@@ -288,6 +308,7 @@ fn unless_discards<L: Layout>(
         | Effect::MayCast { .. }
         | Effect::UntapUpTo { .. }
         | Effect::Delay { .. }
+        | Effect::Reflexive { .. }
         | Effect::GetEmblem { .. }
         | Effect::WinGame(_)
         | Effect::LoseGame(_)
@@ -297,16 +318,5 @@ fn unless_discards<L: Layout>(
         | Effect::AdditionalStep(_)
         | Effect::AdditionalPhases { .. }
         | Effect::ExtraTurn(..) => None,
-    };
-    let (game, resolution) = run.resolving();
-    let hand = game.state.zone(ZoneKey::Of(player, Zone::Hand));
-    if instead_of.is_some_and(|cards| cards > 0) && hand.count() == 1 {
-        return Ok(false);
     }
-    let words = resolution.words(game);
-    let cards = filter.select(game.state, game.table, hand, player, &words);
-    let instead = Prompt::new(Purpose::Discard)
-        .most(instead_of.unwrap_or(1))
-        .part(Part::Instead);
-    may_discard(game, resolution, player, cards, instead)
 }

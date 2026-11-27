@@ -652,6 +652,26 @@ pub enum Effect {
         carrying: Option<Amount>,
         object: Option<Objects>,
     },
+    /// "When [condition], [effect]", said in the middle of an effect: a reflexive triggered
+    /// ability ([CR 603.12]): "A resolving spell or ability may allow or instruct a player to
+    /// take an action and create a triggered ability that triggers “when [a player] [does or
+    /// doesn’t]” take that action or “when [something happens] this way.”" It triggers as this
+    /// instruction is reached, when `condition` holds then (with none, always): "a creature
+    /// card was exiled this way" is [`Condition::Is`] of [`Objects::Those`], which reads what
+    /// the instruction before did. It then waits with the other triggers and goes on the stack
+    /// the next time a player would receive priority, choosing its targets then, as any
+    /// triggered ability does.
+    ///
+    /// As for [`Effect::Delay`], the ability is one of its face's, written with
+    /// [`crate::Trigger::REFLEXIVE`] and named here by its place among them. Its controller is
+    /// the player who controls what is resolving, and its source is that spell or that
+    /// ability's source (CR 603.7d and CR 603.7e, which CR 603.12 applies to it).
+    ///
+    /// [CR 603.12]: https://yawgatog.com/resources/magic-rules/#R60312
+    Reflexive {
+        condition: Option<Condition>,
+        ability: AbilityIx,
+    },
     /// "[Player] gets an emblem with [abilities]"
     /// ([CR 114.2](https://yawgatog.com/resources/magic-rules/#R1142)): "This means that
     /// [player] puts an emblem with [ability] into the command zone. The emblem is both

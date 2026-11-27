@@ -283,6 +283,7 @@ impl Ctx {
             } => self.may_cast(player, card, free, free_below, copy, face, within_x),
             // Turns, later events and the game.
             Effect::Delay { ability, .. } => self.delay(ability),
+            Effect::Reflexive { condition, ability } => self.reflexive(condition, ability),
             Effect::GetEmblem { player, emblem } => self.get_emblem(player, emblem),
             Effect::WinGame(player) => {
                 vec![self.stated(player, ("win", "wins"), |_| "the game".to_owned())]

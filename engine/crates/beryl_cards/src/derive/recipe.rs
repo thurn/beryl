@@ -129,7 +129,11 @@ fn trigger(event: Trigger) -> Vec<Recipe> {
         }
         TriggerEvent::Mutates => vec![Recipe::Mutate],
         TriggerEvent::DealsDamage => vec![Recipe::Attack(P0)],
-        TriggerEvent::TurnedFaceUp | TriggerEvent::CastsFrom(_) => Vec::new(),
+        // A reflexive ability triggers as an instruction of its own face runs, which the
+        // recipes of that instruction's ability reach.
+        TriggerEvent::TurnedFaceUp | TriggerEvent::CastsFrom(_) | TriggerEvent::Reflexive => {
+            Vec::new()
+        }
         TriggerEvent::Chapter { first, .. } => vec![Recipe::Chapter(first)],
         TriggerEvent::ClassLevel(level) => vec![Recipe::ClassLevel(level)],
         TriggerEvent::State(condition) => vec![match *condition {

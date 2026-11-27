@@ -119,6 +119,8 @@ impl Effect {
             Effect::Sequence(_)
             | Effect::If { .. }
             | Effect::ChangeRule { .. }
+            // Its condition is read where the instruction's branches are walked.
+            | Effect::Reflexive { .. }
             | Effect::AdditionalStep(_)
             | Effect::Subgame
             | Effect::AdditionalPhases { .. }
@@ -365,7 +367,17 @@ impl Effect {
             | Branches::Unless(effect, _)
             | Branches::ForEachPlayer(effect)
             | Branches::WhenFound(effect) => effect.names_paid(),
-            Branches::Single => false,
+            Branches::Single => {
+                if let Effect::Reflexive {
+                    condition: Some(condition),
+                    ..
+                } = self
+                {
+                    condition.names_paid()
+                } else {
+                    false
+                }
+            }
         }
     }
 }

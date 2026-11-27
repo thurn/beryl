@@ -128,6 +128,10 @@ pub fn listens_to(trigger: &Trigger, zones: ZoneSet) -> Result<Option<EventKind>
         }
         TriggerEvent::Chapter { .. } => return Err(Unmatched::Zone),
         TriggerEvent::Mutates => (EventKind::Mutated, About::This, true),
+        // A reflexive ability waits for no event: the instruction that names it makes it
+        // trigger (see CR 603.12), so no object listens for it.
+        TriggerEvent::Reflexive if trigger.delayed => return Ok(None),
+        TriggerEvent::Reflexive => return Err(Unmatched::Delayed),
     };
     if !AWAY.union(ZoneSet::BATTLEFIELD).includes(zones) {
         return Err(Unmatched::Zone);

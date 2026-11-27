@@ -677,6 +677,7 @@ pub(super) fn subject_of(effect: &Effect) -> Option<Players> {
         | Effect::GainFlashback(_)
         | Effect::ControlPlayer(_)
         | Effect::Wish { .. }
-        | Effect::Delay { .. } => Some(Players::You),
+        | Effect::Delay { .. }
+        | Effect::Reflexive { .. } => Some(Players::You),
     }
 }

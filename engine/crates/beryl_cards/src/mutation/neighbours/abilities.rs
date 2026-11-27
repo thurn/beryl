@@ -254,6 +254,9 @@ fn triggers(trigger: &Trigger) -> Vec<(&'static str, Kind, String, Trigger)> {
             last: last - 1,
         },
         Event::State(condition) => Event::State(leak(Condition::Not(condition))),
+        // What makes a reflexive ability trigger is the condition of the instruction that
+        // names it, whose neighbours negate it.
+        Event::Reflexive => return Vec::new(),
     };
     let subject = match trigger.subject {
         Subject::This => Subject::A(Filter::Any),

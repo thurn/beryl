@@ -155,7 +155,11 @@ impl Scope<'_> {
                 let abilities = self.face.abilities;
                 let delayed = ability.index() < abilities.len()
                     && match abilities[ability.index()].trigger() {
-                        Some(trigger) => trigger.delayed && !trigger.exact_turn,
+                        Some(trigger) => {
+                            trigger.delayed
+                                && !trigger.exact_turn
+                                && !matches!(trigger.event, crate::TriggerEvent::Reflexive)
+                        }
                         None => false,
                     }
                     && !matches!(
@@ -173,6 +177,22 @@ impl Scope<'_> {
                     Ok(())
                 } else {
                     Err(Malformed::Delayed)
+                }
+            }
+            // A reflexive ability is one of the face's own, written with `Trigger::REFLEXIVE`.
+            Effect::Reflexive { condition, ability } => {
+                let abilities = self.face.abilities;
+                let reflexive = ability.index() < abilities.len()
+                    && matches!(
+                        abilities[ability.index()].trigger(),
+                        Some(t) if t.delayed && matches!(t.event, crate::TriggerEvent::Reflexive)
+                    );
+                if !reflexive {
+                    Err(Malformed::Delayed)
+                } else if let Some(condition) = condition {
+                    self.condition(condition)
+                } else {
+                    Ok(())
                 }
             }
             Effect::ExtraTurn(_, Some(ability)) => {

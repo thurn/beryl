@@ -4,9 +4,9 @@ use crate::cost::CastingKind;
 use crate::effect::build::{
     add_mana, carried_object, counter_and_exile, counter_to_top_of_library, deal_damage_to,
     deal_damage_to_any_target, delay, delay_with, destroy, discard, draw, exile, explore, fateseal,
-    for_each_player, get_emblem, if_then, may_cast_free, put_back, return_to_battlefield, search,
-    sequence, shuffle_into, target, target_player, that_player, those, unless, unless_pays,
-    untap_up_to, you,
+    for_each_player, get_emblem, if_then, may_cast_free, put_back, reflexive, reflexive_always,
+    return_to_battlefield, search, sequence, shuffle_into, target, target_player, that_player,
+    those, unless, unless_pays, untap_up_to, you,
 };
 use crate::effect::{Found, LibraryOrder, LibraryRest, Taken};
 use crate::ids::TurnStep;
@@ -206,6 +206,32 @@ fn a_delay_of_no_delayed_trigger_of_the_face_is_refused() {
         assert_eq!(checked(abilities), Err(Malformed::Delayed));
     }
     assert_eq!(checked(WELL_FORMED), Ok(()));
+}
+
+/// "Exile target creature. When a creature is exiled this way, draw a card": an
+/// `Effect::Reflexive` names a `Trigger::REFLEXIVE` ability of its face, and no
+/// `Effect::Delay` names one.
+#[test]
+fn a_reflexive_ability_is_one_of_the_face_written_as_reflexive() {
+    const DRAW: Ability = Ability::triggered(&Trigger::REFLEXIVE).effect(&draw(you(), 1));
+    const EXILED: Condition = Condition::Is(those(), Filter::Types(crate::Types::CREATURE));
+    const EXILE: Ability = Ability::spell()
+        .targeting(&[A_CREATURE])
+        .effect(&sequence(&[exile(target()), reflexive(EXILED, 1)]));
+    const WELL_FORMED: &[Ability] = &[EXILE, DRAW];
+    const ALWAYS: &[Ability] = &[Ability::spell().effect(&reflexive_always(1)), DRAW];
+    const DELAYED: &[Ability] = &[
+        EXILE,
+        Ability::triggered(&Trigger::step(TurnStep::End, Players::EachPlayer).next())
+            .effect(&draw(you(), 1)),
+    ];
+    const PAST_THE_END: &[Ability] = &[EXILE];
+    const DELAY_OF_IT: &[Ability] = &[Ability::spell().effect(&delay(1)), DRAW];
+    assert_eq!(checked(WELL_FORMED), Ok(()));
+    assert_eq!(checked(ALWAYS), Ok(()));
+    for abilities in [DELAYED, PAST_THE_END, DELAY_OF_IT] {
+        assert_eq!(checked(abilities), Err(Malformed::Delayed));
+    }
 }
 
 #[test]

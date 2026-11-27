@@ -442,6 +442,7 @@ fn prevention_filter(effect: &'static Effect) -> Option<&'static Filter> {
         | Effect::MayCast { .. }
         | Effect::UntapUpTo { .. }
         | Effect::Delay { .. }
+        | Effect::Reflexive { .. }
         | Effect::GetEmblem { .. }
         | Effect::WinGame(_)
         | Effect::LoseGame(_)

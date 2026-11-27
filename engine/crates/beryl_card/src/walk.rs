@@ -566,6 +566,7 @@ impl Effect {
                 | Effect::MayCast { .. }
                 | Effect::UntapUpTo { .. }
                 | Effect::Delay { .. }
+                | Effect::Reflexive { .. }
                 | Effect::GetEmblem { .. }
                 | Effect::WinGame(_)
                 | Effect::LoseGame(_)
@@ -619,6 +620,13 @@ impl Effect {
                 effect.walk(visit);
             }
             Branches::Single => {
+                if let Effect::Reflexive {
+                    condition: Some(condition),
+                    ..
+                } = self
+                {
+                    condition.walk(visit);
+                }
                 for modification in self.modifications() {
                     modification.walk(visit);
                 }

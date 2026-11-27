@@ -5,7 +5,7 @@ use super::Ctx;
 use crate::TurnPhase;
 use crate::ability::Behavior;
 use crate::definition::CardDef;
-use crate::effect::{Effect, Objects, Players};
+use crate::effect::{Condition, Effect, Objects, Players};
 use crate::index::AbilityIx;
 use crate::trigger::TriggerEvent;
 
@@ -19,6 +19,60 @@ impl Ctx {
             Some(delayed) => self.delayed(delayed),
             None => vec!["[delayed ability]".to_owned()],
         }
+    }
+
+    /// A reflexive triggered ability made in the middle of an effect ([`Effect::Reflexive`]):
+    /// "when a creature card is exiled this way, put a +1/+1 counter on target creature you
+    /// control" (CR 603.12). The condition is about what the instruction before did, so it is
+    /// written before the text turns to the reflexive ability's own targets.
+    pub(super) fn reflexive(
+        &mut self,
+        condition: Option<Condition>,
+        ability: AbilityIx,
+    ) -> Vec<String> {
+        let lead = match condition {
+            Some(condition) => self.reflexive_condition(condition),
+            None => "you do".to_owned(),
+        };
+        let reflexive = self
+            .face
+            .and_then(|face| face.abilities.get(ability.index()));
+        let Some(reflexive) = reflexive else {
+            return vec![format!("when {lead}, [reflexive ability]")];
+        };
+        let saved = (
+            self.targets,
+            std::mem::take(&mut self.mentioned),
+            self.trigger,
+            self.subject,
+            self.group,
+        );
+        self.begin(reflexive.targets(), reflexive.trigger());
+        let mut clauses = self.body(reflexive.body());
+        (
+            self.targets,
+            self.mentioned,
+            self.trigger,
+            self.subject,
+            self.group,
+        ) = saved;
+        match clauses.first_mut() {
+            Some(first) => *first = format!("when {lead}, {}", super::words::uncapitalized(first)),
+            None => clauses.push(format!("when {lead}")),
+        }
+        clauses
+    }
+
+    /// The condition of a reflexive ability: "a creature card is exiled this way" of what the
+    /// instruction before moved, and otherwise the condition as it follows "if".
+    fn reflexive_condition(&mut self, condition: Condition) -> String {
+        if let (Condition::Is(Objects::Those, filter), Some(done)) = (condition, self.done_this_way)
+        {
+            let kind = super::filters::Kind::Card(None);
+            let noun = self.noun(filter, kind).indefinite(kind);
+            return format!("{noun} is {done} this way");
+        }
+        self.condition(condition)
     }
 
     /// A delayed triggered ability made in the middle of an effect: "at the beginning of the
