@@ -19,7 +19,7 @@ stories: story::Stories
 window: Window
 show: Show
 layer: Layer
-features: features::Features
+features: Box<features::Features>
 routes: input::Routes
 settings: crate::settings::Settings
 session: Option<SessionId>

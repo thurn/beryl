@@ -94,8 +94,10 @@ pub struct Client {
     show: Show,
     /// The flat layer: the screen, the sheet over it and the floats.
     layer: Layer,
-    /// The registered features, their state and the open sheet route.
-    features: features::Features,
+    /// The registered features, their state and the open sheet route. They hold every screen's
+    /// state, about 84 KB, so they are boxed: a client moved or built on the stack would
+    /// otherwise take most of an iPhone main thread's 1 MB stack.
+    features: Box<features::Features>,
     routes: input::Routes,
     settings: crate::settings::Settings,
     /// The session the latest view came from, which stop and concede commands name.
@@ -132,7 +134,7 @@ impl Client {
             window,
             show: Show::new(table),
             layer,
-            features: features::Features::default(),
+            features: Box::default(),
             routes: input::Routes::default(),
             settings: crate::settings::Settings::default(),
             session: None,

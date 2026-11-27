@@ -23,6 +23,8 @@ pub(super) struct Stories {
     atlas: Vec<AssetReady>,
     selected: Option<String>,
     player: Option<Playback>,
+    /// Whether `selected` waits to be built into `player` until the gallery is on screen.
+    pending: bool,
     started: Option<u64>,
     dirty: bool,
     pub(super) generation: u64,
@@ -276,18 +278,35 @@ impl Client {
         }
     }
 
+    /// Chooses the story the gallery shows. The story is built only while the gallery is on
+    /// screen (`load_pending_story`): the client lists the stories, and the gallery chooses
+    /// one, as the app starts, and on an iPhone building it there overflowed the main thread's
+    /// stack.
     pub(super) fn select_story(&mut self, name: &str) {
         self.stories.selected = Some(name.to_owned());
         self.stories.started = None;
         self.stories.generation += 1;
+        self.stories.player = None;
+        self.stories.pending = true;
         self.frame.inset = None;
+        self.load_pending_story();
+    }
+
+    /// Builds the chosen story if the gallery is on screen and it has not been built yet.
+    pub(super) fn load_pending_story(&mut self) {
+        if !self.stories.pending || !self.story_visible() {
+            return;
+        }
+        self.stories.pending = false;
+        let Some(name) = self.stories.selected.clone() else {
+            return;
+        };
         let Some(source) = self
             .stories
             .sources
             .iter()
             .find(|source| source.name == name)
         else {
-            self.stories.player = None;
             return;
         };
         match Playback::new(source, self.data(), self.window.scale) {

@@ -467,3 +467,47 @@ fn the_wheel_scrolls_a_long_opponent_list_to_its_last_agent() {
             .has(StateBits::SELECTED)
     );
 }
+
+/// Runs `body` on a thread with the 1 MB stack an iPhone gives its main thread, where the iOS
+/// host builds the client and draws every frame. The desktop's 8 MB main thread and the
+/// simulator's hide a client that overflows it.
+fn on_one_megabyte_stack(body: impl FnOnce() + Send + 'static) {
+    std::thread::Builder::new()
+        .stack_size(1 << 20)
+        .spawn(body)
+        .unwrap()
+        .join()
+        .expect("the client fits an iPhone main thread's stack");
+}
+
+/// On an iPhone the app crashed as it started: listing the stories made the hidden gallery build
+/// its first story, and with the client built on the same stack that overflowed it. The story
+/// waits until the gallery is shown, and both fit in 1 MB.
+#[test]
+fn the_gallery_builds_its_story_only_when_shown_within_a_small_stack() {
+    on_one_megabyte_stack(|| {
+        let size = Size {
+            width: 393.0,
+            height: 852.0,
+        };
+        let mut start = Page::in_window(
+            crate::test_data::data(),
+            Recording(Vec::new()).into(),
+            Side::You,
+            Window {
+                size,
+                ..Window::default()
+            },
+        )
+        .unwrap()
+        .with_stories(app_client::stories::embedded());
+        start.still();
+        assert!(start.frame().inset.is_none());
+
+        let mut page =
+            gallery(crate::test_data::data(), size).with_stories(app_client::stories::embedded());
+        page.still();
+        page.find("region \"Story preview\"");
+        assert!(page.frame().inset.is_some());
+    });
+}

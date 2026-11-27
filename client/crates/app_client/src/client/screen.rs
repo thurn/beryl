@@ -35,6 +35,7 @@ impl Client {
     /// now, and asks the host for the music it calls for if that has changed.
     pub(super) fn show_screen(&mut self) {
         self.ask_saved_tables();
+        self.load_pending_story();
         // The element a gesture began on is gone with the screen or sheet it was on.
         let sheet = self.features.sheet;
         if self.features.shown != (self.features.screen, sheet) {
