@@ -1,6 +1,8 @@
-______________________________________________________________________
-
-## name: rush description: Put this session's Ignite work ahead of the worker pool's until its ticket lands. Only the operator invokes it, by typing /rush. disable-model-invocation: true
+---
+name: rush
+description: Put this session's Ignite work ahead of the worker pool's until its ticket lands. Only the operator invokes it, by typing /rush.
+disable-model-invocation: true
+---
 
 # Rush
 
