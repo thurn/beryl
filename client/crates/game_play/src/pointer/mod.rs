@@ -467,20 +467,31 @@ fn raised(rest: &Pose, camera: &Camera, (scale, mm): (f32, f32), tuning: &Pointe
 /// `HOVERED`. As the web interface's hand does, the hit test finds hand cards by their resting
 /// places in the fan, which `rest` gives as each card's pose by its slot, so that a
 /// pointer over the part of the fan a raised card has left still finds that card. An element of
-/// the flat layer under the pointer is marked `HOVERED` instead. A card a script is moving is
-/// not hovered until it arrives, and nothing is hovered while a card is held. `in_tray` says
-/// whether the card in a slot is one a prompt holds up in its tray, which rises less.
+/// the flat layer under the pointer is marked `HOVERED` instead. A card a script is moving or one
+/// behind a modal shade (`!hoverable(slot)`) is not hovered, and nothing is hovered while a card
+/// is held. `in_tray` says whether the card in a slot is one a prompt holds up in its tray, which
+/// rises less.
 pub(crate) fn update(
     pointer: &mut Pointer,
     frame: &mut Frame,
-    (rest, in_tray): (impl Fn(usize) -> Option<Pose>, impl Fn(usize) -> bool),
+    (rest, in_tray, hoverable): (
+        impl Fn(usize) -> Option<Pose>,
+        impl Fn(usize) -> bool,
+        impl Fn(usize) -> bool,
+    ),
     (now, camera): (u64, &Camera),
     tuning: &PointerTuning,
 ) {
     pointer
         .lifts
         .retain(|lift| lift.to > 0.0 || !lift.done(now, tuning));
-    hover_under(pointer, frame, (rest, in_tray), (now, camera), tuning);
+    hover_under(
+        pointer,
+        frame,
+        (rest, in_tray, hoverable),
+        (now, camera),
+        tuning,
+    );
 }
 
 /// Hands the card the pointer holds or let go over to `compiled`, a script that starts at
@@ -552,7 +563,11 @@ pub(crate) fn hand_over(
 fn hover_under(
     pointer: &mut Pointer,
     frame: &mut Frame,
-    (rest, in_tray): (impl Fn(usize) -> Option<Pose>, impl Fn(usize) -> bool),
+    (rest, in_tray, hoverable): (
+        impl Fn(usize) -> Option<Pose>,
+        impl Fn(usize) -> bool,
+        impl Fn(usize) -> bool,
+    ),
     (now, camera): (u64, &Camera),
     tuning: &PointerTuning,
 ) {
@@ -594,15 +609,16 @@ fn hover_under(
         pointer.hover(None, None, now, tuning);
         return;
     }
-    if element.state.has(StateBits::MOVING) {
-        // The script takes the card from where it lay in the fan, so it is no longer up.
-        let slot = element.id.0 as usize;
-        pointer.lifts.retain(|lift| lift.slot != slot);
+    let slot = element.id.0 as usize;
+    if !hoverable(slot) || element.state.has(StateBits::MOVING) {
+        if element.state.has(StateBits::MOVING) {
+            // The script takes the card from where it lay in the fan, so it is no longer up.
+            pointer.lifts.retain(|lift| lift.slot != slot);
+        }
         pointer.hover(None, None, now, tuning);
         return;
     }
     element.state.0 |= StateBits::HOVERED;
-    let slot = element.id.0 as usize;
     let rise = if in_tray(slot) {
         Some(Rise::Tray)
     } else {

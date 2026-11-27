@@ -5,9 +5,14 @@ use app_client::Input;
 use app_client::driver::{Duration, Page, Recording};
 use app_client::{Client, Config};
 use beryl_protocol::ipc::FixtureMessage;
-use beryl_protocol::protocol::{CardType, Side, Why, ZoneName};
+use beryl_protocol::prompt::{
+    ButtonId, Pile, PlaceName, PromptButton, PromptView, Purpose, ShapeBody,
+};
+use beryl_protocol::protocol::{
+    CardType, DecisionId, DecisionView, Kind, ObjectId, SessionId, Side, Status, Why, ZoneName,
+};
 use beryl_protocol::script::Act;
-use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, timing};
+use beryl_protocol::testing::{self, ScriptBuilder, ViewBuilder, timing};
 use glam::Vec2;
 use kit_frame::frame::{Frame, Material, Role, StateBits};
 use kit_probe::agent::checks::reachable;
@@ -363,4 +368,158 @@ fn a_raised_hand_card_leaves_its_neighbours_reachable() {
     page.step(ms(100));
     let raised = reachable(page.frame(), &context);
     assert_eq!(raised.len(), at_rest.len(), "{raised:#?}");
+}
+
+fn prompt_decision(seq: u32, kind: Kind, prompt: PromptView) -> Status {
+    Status::Deciding {
+        decision: DecisionView {
+            id: DecisionId {
+                session: SessionId(1),
+                seq,
+            },
+            kind,
+            candidates: Vec::new(),
+            prompt: Box::new(prompt),
+            halt: false,
+            pass_to: None,
+            pass_on: None,
+            resolving: None,
+            source: None,
+            undo: 0,
+            undo_depth: 0,
+            refused: Vec::new(),
+            cancellable: false,
+            acting_for: None,
+        },
+    }
+}
+
+#[test]
+fn a_hovered_hand_card_falls_back_when_order_cards_opens() {
+    let mut builder = sample();
+    let card = "card \"Counterspell\"";
+    let mut page = page(&[builder.clone()]);
+    let rest = page.find(card).rect();
+    page.hover(card);
+    page.step(ms(100));
+    assert!(page.find(card).states().has(StateBits::HOVERED));
+    let up = page.find(card).rect();
+    assert!(
+        up.height > rest.height * 1.2,
+        "raised to {up:?} from {rest:?}"
+    );
+
+    let lib_a = builder.card(ZoneName::Library, Side::You, "Island").slot;
+    let lib_b = builder.card(ZoneName::Library, Side::You, "Plains").slot;
+    let mut order_view = builder.build();
+    order_view.status = prompt_decision(
+        2,
+        Kind::ChooseObject,
+        testing::prompt(
+            Purpose::Arrange,
+            "Order Cards",
+            vec![PromptButton {
+                id: ButtonId::Confirm,
+                label: "Done".to_owned(),
+                caption: String::new(),
+                enabled: true,
+                primary: true,
+            }],
+            ShapeBody::Split {
+                piles: vec![
+                    Pile {
+                        label: "Top".to_owned(),
+                        place: Some(PlaceName::Top),
+                        cards: Vec::new(),
+                        exactly: None,
+                        closed: true,
+                    },
+                    Pile {
+                        label: "Top".to_owned(),
+                        place: Some(PlaceName::Top),
+                        cards: vec![lib_a, lib_b],
+                        exactly: None,
+                        closed: false,
+                    },
+                ],
+            },
+        ),
+    );
+    page.give_input(Input::Update(Box::new(beryl_protocol::GameUpdate {
+        session: SessionId(1),
+        view: order_view,
+    })));
+    page.step(ms(200));
+    assert!(!page.find(card).states().has(StateBits::HOVERED));
+    assert!(
+        same(page.find(card).rect(), rest),
+        "returned to rest {rest:?}, got {:?}",
+        page.find(card).rect()
+    );
+}
+
+#[test]
+fn a_hovered_hand_card_falls_back_when_choose_one_opens() {
+    let card = "card \"Counterspell\"";
+    let mut page = page(&[sample()]);
+    let rest = page.find(card).rect();
+    page.hover(card);
+    page.step(ms(100));
+    assert!(page.find(card).states().has(StateBits::HOVERED));
+    let hand_slot = {
+        let frame = page.frame();
+        ObjectId(
+            u16::try_from(
+                frame
+                    .resolved
+                    .iter()
+                    .find(|element| {
+                        element.role == Role::Card && frame.name(element.name) == "Counterspell"
+                    })
+                    .expect("Counterspell in hand")
+                    .id
+                    .0,
+            )
+            .unwrap(),
+        )
+    };
+    let mut mode_view = sample().build();
+    mode_view.status = prompt_decision(
+        3,
+        Kind::Priority,
+        testing::prompt(
+            Purpose::Act,
+            "Choose One",
+            vec![
+                PromptButton {
+                    id: ButtonId::Option { index: 0 },
+                    label: "Play Counterspell".to_owned(),
+                    caption: String::new(),
+                    enabled: true,
+                    primary: false,
+                },
+                PromptButton {
+                    id: ButtonId::Decline,
+                    label: "Cancel".to_owned(),
+                    caption: String::new(),
+                    enabled: true,
+                    primary: true,
+                },
+            ],
+            ShapeBody::Mode {
+                about: vec![hand_slot],
+            },
+        ),
+    );
+    page.give_input(Input::Update(Box::new(beryl_protocol::GameUpdate {
+        session: SessionId(1),
+        view: mode_view,
+    })));
+    page.step(ms(200));
+    assert!(!page.find(card).states().has(StateBits::HOVERED));
+    assert!(
+        same(page.find(card).rect(), rest),
+        "returned to rest {rest:?}, got {:?}",
+        page.find(card).rect()
+    );
 }

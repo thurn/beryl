@@ -114,15 +114,15 @@ pub fn faces(input: &HudIn) -> Vec<FaceId> {
 
 /// Whether `prompt` lists what it asks about over the table on a shade of its own, so that the
 /// table under it takes no press, as the web interface's `coversTable` in
-/// `ui/src/stage/prompt.ts` has it for an order's waiting triggers and a catalog's entries. A
-/// prompt that holds cards up in its tray covers the table through the tray
-/// (`Table::pressable`).
+/// `ui/src/stage/prompt.ts` has it for an order's waiting triggers, a catalog's entries, and a
+/// card's ways to use it. A prompt that holds cards up in its tray covers the table through the
+/// tray (`Table::pressable`).
 #[must_use]
 pub fn covers_table(prompt: &PromptView) -> bool {
     matches!(
         prompt.body,
         ShapeBody::Order { .. } | ShapeBody::Catalog { .. }
-    )
+    ) || ways(prompt).next().is_some()
 }
 
 /// Whether `prompt` holds cards up in its tray, over a shaded table.

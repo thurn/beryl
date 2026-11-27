@@ -69,6 +69,7 @@ impl Show {
             (
                 |slot| self.drawn_pose(slot, now),
                 |slot| self.table.in_tray(slot),
+                |slot| self.table.hoverable(slot),
             ),
             (now, self.table.camera()),
             &self.table.data().pointer,
