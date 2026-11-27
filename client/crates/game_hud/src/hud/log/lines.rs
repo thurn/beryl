@@ -402,6 +402,12 @@ impl Lines<'_> {
                 );
                 self.say(*player, text);
             }
+            // A word, color, type or card name a player chose, so that a player who missed the
+            // announcement can still read what was chosen: a text change's two words come as
+            // the word replaced, then its replacement.
+            GameEvent::ValueChosen { player, value } => {
+                self.say(*player, format!("{} chose {value}", who(*player)));
+            }
             GameEvent::Lose { player } => {
                 let how = match &view.status {
                     Status::Over {
@@ -560,4 +566,25 @@ impl Lines<'_> {
 
 fn player_life(view: &PlayerView, side: Side) -> i32 {
     player(view, side).life
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn chosen_words_are_logged() {
+        let mut view = beryl_protocol::testing::ViewBuilder::new().build();
+        view.events = ["Island", "Plains"]
+            .map(|value| GameEvent::ValueChosen {
+                player: Side::Opponent,
+                value: value.to_owned(),
+            })
+            .to_vec();
+        let text: Vec<String> = log_lines(&view, &Names::new())
+            .into_iter()
+            .map(|line| line.text)
+            .collect();
+        assert_eq!(text, ["Opponent chose Island", "Opponent chose Plains"]);
+    }
 }

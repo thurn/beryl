@@ -8,6 +8,8 @@
 
 use beryl_card::{ChosenKind, Objects, Prompt, Purpose, TextWord, TextWords, Zone};
 
+use beryl_kernel::event::Event;
+
 use crate::card::Stop;
 use crate::continuous::lasting;
 use crate::continuous::layers;
@@ -65,10 +67,18 @@ pub(crate) fn instruction<L: Layout>(
         named,
         named_word,
     )?;
+    game.sink.note(Event::ValueChosen {
+        player: you,
+        value: from,
+    });
     let from = from.word().expect("a word is chosen as a word");
     let prompt = Prompt::new(Purpose::NewWord);
     let keep = |n| TextWord::of_number(n).and_then(|to| from.to(to)).is_some();
     let to = choices::catalog_among(game, resolution, you, ChosenKind::Word, prompt, named, keep)?;
+    game.sink.note(Event::ValueChosen {
+        player: you,
+        value: to,
+    });
     let change = (to.word().and_then(|to| from.to(to))).expect("a new word of the same kind");
     for &slot in game.state.in_game_order(game.table, named)?.iter() {
         let effect = Continuous::Text(game.state.object_ref(slot), change);
