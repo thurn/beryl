@@ -322,6 +322,20 @@ fn recent_product_catches_run_outside_the_budget_and_other_outcomes_do_not_raise
 }
 
 #[test]
+fn budget_family_product_fixes_do_not_force_or_score_into_the_gate() {
+    let mut world = recent_catch_world();
+    world.ctx.config.rules.budgets = vec!["unit".to_owned()];
+    let tree = TreeId::new("tree-01").unwrap();
+    let gated = world.checks.gate(&world.ctx, &tree, &options(false));
+    assert!(gated.run.passed(), "{:?}", gated.run);
+    let budget = gated.budget.unwrap();
+    assert_eq!(budget.forced, (0, 0.0));
+    assert_eq!(budget.scored, (0, 0.0));
+    assert_eq!(gated.left, 5);
+    assert!(world.launcher.commands("runner").is_empty());
+}
+
+#[test]
 fn check_runs_the_gate_and_answers_the_rest_from_the_cache() {
     let world = seeded();
     let verb = CheckVerb {

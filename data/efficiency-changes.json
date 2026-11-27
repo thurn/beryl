@@ -1115,5 +1115,10 @@
     "label": "The non-resumable verb stall watch (`server/stalled.rs`) no longer treats raw process-group CPU usage as progress and persists its last progress state in `verbs/<handle>/stall.json` across daemon restarts, so CPU-bound hangs and frequent daemon upgrades can no longer keep a stuck `tip-round` alive past `STALL_LIMIT` (20 min). On 2026-11-27, `T-16028` spun in `git grep` on jarvis for 78+ min across four daemon restarts while 30 product commits waited on `staging`",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Exclude `[rules] budgets` families (`counts`, `client-frame-counts`) from `score::product_catches` so count-gate performance fixes no longer force `counts` onto landing gates via `Why::RecentProductCatch` or inflate its landing score, and floor recorded check and family-startup costs from `wall_s` when host CPU time is below 10% of wall time (`>= 5 s`) so VM-hosted checks no longer look 1,000x cheaper than their real duration. Over the prior 24 h, `counts` added 13.8 product ticket-hours of excess landing latency across 38 landed product tickets plus 10.9 h on `ignite check`",
+    "metric": "bead.minutes",
+    "expect": "down"
   }
 ]

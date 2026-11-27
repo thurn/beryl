@@ -21,6 +21,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::config::Rules;
 use crate::ids::{CheckName, Commit};
 use crate::inputs::{self, CrateGraph};
 use crate::protocol::hub::{AreaStats, CheckFix, CheckStatsReply, FixOutcome};
@@ -29,6 +30,45 @@ use crate::traits::Git;
 
 /// How long a recorded product catch makes a check mandatory in its culprit's areas.
 pub const RECENT_PRODUCT_CATCH_SECONDS: f64 = 14.0 * 86_400.0;
+
+/// Minimum total command wall time (in seconds) before host rusage is checked for off-host
+/// execution (such as a check running inside a Lima VM or WSL guest).
+pub const OFF_HOST_MIN_WALL_S: f64 = 5.0;
+
+/// Maximum ratio of host CPU time to wall time for a command whose work runs outside the host
+/// process group. Host-executed checks under load stay well above this ratio, while VM-hosted
+/// checks (such as `counts` and `client-frame-counts`) sit near 0.004 to 0.05.
+pub const OFF_HOST_MAX_CPU_RATIO: f64 = 0.1;
+
+/// Whether a command's host CPU usage is so small relative to its wall time that the actual work
+/// ran outside the host process group (for example inside a VM or remote guest).
+pub fn is_off_host(cpu_s: f64, wall_s: f64, shared_by: u32) -> bool {
+    let total_wall_s = wall_s * f64::from(shared_by.max(1));
+    total_wall_s.is_finite()
+        && total_wall_s >= OFF_HOST_MIN_WALL_S
+        && wall_s > 0.0
+        && cpu_s < wall_s * OFF_HOST_MAX_CPU_RATIO
+}
+
+/// Cost in billions of instructions, floored at `wall_s * BILLIONS_PER_CPU_SECOND` when the
+/// command's work ran outside the host process group so host instruction counters missed it.
+pub fn effective_cost_billions(billions: f64, cpu_s: f64, wall_s: f64, shared_by: u32) -> f64 {
+    if is_off_host(cpu_s, wall_s, shared_by) {
+        billions.max(wall_s * BILLIONS_PER_CPU_SECOND)
+    } else {
+        billions
+    }
+}
+
+/// Cost in CPU seconds, floored at `wall_s` when the command's work ran outside the host process
+/// group so host CPU accounting missed it.
+pub fn effective_cost_cpu_s(cpu_s: f64, wall_s: f64, shared_by: u32) -> f64 {
+    if is_off_host(cpu_s, wall_s, shared_by) {
+        cpu_s.max(wall_s)
+    } else {
+        cpu_s
+    }
+}
 
 /// One check whose failure led to a product fix, with the areas of its first bad commit.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -41,8 +81,13 @@ pub struct ProductCatch {
 
 /// Resolves each culprit once. When a ticket reopens and fixes the same check and culprit
 /// again, use its latest product outcome and count the catch once.
+///
+/// Checks in `[rules] budgets` families are excluded: their fixes touch product code only to
+/// bring a measured cost back under a limit, not to fix a defect a player or caller could see,
+/// matching `upkeep::unproven_holds`.
 pub fn product_catches(
     fixes: Vec<CheckFix>,
+    rules: &Rules,
     graph: &CrateGraph,
     git: &dyn Git,
     now: Timestamp,
@@ -53,7 +98,11 @@ pub fn product_catches(
     let mut by_commit = BTreeMap::<Commit, Vec<String>>::new();
     fixes
         .into_iter()
-        .filter(|fix| fix.outcome == FixOutcome::Product && fix.at <= now)
+        .filter(|fix| {
+            fix.outcome == FixOutcome::Product
+                && fix.at <= now
+                && !rules.is_budget(fix.check.as_str())
+        })
         .filter_map(|fix| {
             let areas = if let Some(commit) = fix.first_bad {
                 if !seen.insert((fix.check.clone(), commit.clone())) {
@@ -364,5 +413,46 @@ mod tests {
             median_cost: 0.0,
         };
         assert!(score(&free, 0.0).is_finite());
+    }
+
+    #[test]
+    fn off_host_wall_time_floors_vm_check_costs_without_affecting_host_checks() {
+        // 15 VM checks sharing 300 s wall, 0.6 s host CPU and 2.7 B host instructions:
+        // per-check share is 20 s wall, 0.04 s CPU, 0.18 B instructions.
+        assert!((effective_cost_billions(0.18, 0.04, 20.0, 15) - 340.0).abs() < 1e-9);
+        assert!((effective_cost_cpu_s(0.04, 20.0, 15) - 20.0).abs() < 1e-9);
+        // Host check under heavy load (50% of one core): keeps host instructions and CPU.
+        assert!((effective_cost_billions(12.0, 10.0, 20.0, 1) - 12.0).abs() < 1e-9);
+        assert!((effective_cost_cpu_s(10.0, 20.0, 1) - 10.0).abs() < 1e-9);
+        // Short command below OFF_HOST_MIN_WALL_S: untouched.
+        assert!((effective_cost_billions(0.5, 0.1, 2.0, 1) - 0.5).abs() < 1e-9);
+        assert!((effective_cost_cpu_s(0.1, 2.0, 1) - 0.1).abs() < 1e-9);
+    }
+
+    #[test]
+    fn product_catches_excludes_budget_families() {
+        let now = Timestamp::parse("2026-11-27T05:00:00Z").unwrap();
+        let make = |check: &str| CheckFix {
+            check: CheckName::new(check).unwrap(),
+            ticket: crate::ids::TicketId::new("T1").unwrap(),
+            at: now,
+            outcome: FixOutcome::Product,
+            source: crate::protocol::hub::FixSource::Regression,
+            first_bad: None,
+            fixing_commit: None,
+        };
+        let rules = Rules {
+            budgets: vec!["counts".to_owned()],
+            ..Rules::default()
+        };
+        let catches = product_catches(
+            vec![make("counts:family/costs"), make("rust:a::b")],
+            &rules,
+            &CrateGraph::default(),
+            &crate::fakes::FakeGit::default(),
+            now,
+        );
+        assert_eq!(catches.len(), 1);
+        assert_eq!(catches[0].check.as_str(), "rust:a::b");
     }
 }

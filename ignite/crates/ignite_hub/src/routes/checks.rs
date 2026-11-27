@@ -409,32 +409,73 @@ fn stored(conn: &Connection, result: &NewResult) -> Result<Option<Stored>, Store
 }
 
 /// What the result says the check cost: billions of instructions where the machine counts
-/// them, otherwise CPU seconds. A result with no cost of its own falls back to the hub's record
-/// it names, if there is one; `None` when neither says.
+/// them, otherwise CPU seconds. When host CPU time is negligible compared to wall time (such as
+/// a check executed inside a VM or remote guest), the cost is floored from wall time so the gate
+/// and tip budgets see its real duration. A result with no cost of its own falls back to the
+/// hub's record it names, if there is one; `None` when neither says.
 fn record_cost(
     conn: &Connection,
     result: &NewResult,
 ) -> Result<Option<(f64, &'static str)>, StoreError> {
+    let shared_by = result.cost.shared_by;
+    let wall_from_record = |conn: &Connection| -> Result<f64, StoreError> {
+        let id = i64::try_from(result.record.0).unwrap_or(i64::MAX);
+        let wall_s: Option<f64> = conn
+            .query_row(
+                "SELECT wall_s FROM records WHERE id = ?1",
+                params![id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        Ok(wall_s.unwrap_or(0.0) / f64::from(shared_by.max(1)))
+    };
     #[allow(clippy::cast_precision_loss)]
     if let Some(count) = result.cost.instructions {
-        return Ok(Some((count as f64 / BILLION, "instructions")));
+        let cpu_s = result.cost.cpu_ms as f64 / 1000.0;
+        let wall_s = if result.cost.wall_ms > 0 {
+            result.cost.wall_ms as f64 / 1000.0
+        } else {
+            wall_from_record(conn)?
+        };
+        let billions = ignite_core::score::effective_cost_billions(
+            count as f64 / BILLION,
+            cpu_s,
+            wall_s,
+            shared_by,
+        );
+        return Ok(Some((billions, "instructions")));
     }
     #[allow(clippy::cast_precision_loss)]
     if result.cost.cpu_ms > 0 {
-        return Ok(Some((result.cost.cpu_ms as f64 / 1000.0, "cpu_s")));
+        let cpu_s = result.cost.cpu_ms as f64 / 1000.0;
+        let wall_s = if result.cost.wall_ms > 0 {
+            result.cost.wall_ms as f64 / 1000.0
+        } else {
+            wall_from_record(conn)?
+        };
+        let cpu_s = ignite_core::score::effective_cost_cpu_s(cpu_s, wall_s, shared_by);
+        return Ok(Some((cpu_s, "cpu_s")));
     }
     let id = i64::try_from(result.record.0).unwrap_or(i64::MAX);
-    let cost: Option<(Option<f64>, f64)> = conn
+    let cost: Option<(Option<f64>, f64, f64)> = conn
         .query_row(
-            "SELECT instructions, cpu_s FROM records WHERE id = ?1",
+            "SELECT instructions, cpu_s, wall_s FROM records WHERE id = ?1",
             params![id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )
         .optional()?;
-    Ok(cost.map(|(instructions, cpu_s)| match instructions {
-        Some(count) => (count / BILLION, "instructions"),
-        None => (cpu_s, "cpu_s"),
-    }))
+    Ok(
+        cost.map(|(instructions, cpu_s, wall_s)| match instructions {
+            Some(count) => (
+                ignite_core::score::effective_cost_billions(count / BILLION, cpu_s, wall_s, 1),
+                "instructions",
+            ),
+            None => (
+                ignite_core::score::effective_cost_cpu_s(cpu_s, wall_s, 1),
+                "cpu_s",
+            ),
+        }),
+    )
 }
 
 fn stats(conn: &Connection, request: &Request) -> Result<Response, Response> {

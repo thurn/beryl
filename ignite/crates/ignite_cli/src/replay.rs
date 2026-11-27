@@ -428,7 +428,7 @@ fn load(
         remote: config.repository.remote,
     };
     let fixes = ignite_store::hub::fix_outcomes::products(&conn).map_err(|e| e.to_string())?;
-    let products = score::product_catches(fixes, &graph, &git, now);
+    let products = score::product_catches(fixes, &config.rules, &graph, &git, now);
     let catches = products
         .iter()
         .filter(|c| c.at >= since && !left_out.contains(c.check.family()))

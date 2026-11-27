@@ -85,7 +85,15 @@ fn product_catches(checks: &Checks, ctx: &Context, tree: &OpenTree) -> Vec<Produ
             eprintln!("ignite: no product catch history from the hub: {error}");
             Vec::new()
         },
-        |fixes| score::product_catches(fixes, &tree.graph, ctx.git.as_ref(), ctx.clock.now()),
+        |fixes| {
+            score::product_catches(
+                fixes,
+                &ctx.config.rules,
+                &tree.graph,
+                ctx.git.as_ref(),
+                ctx.clock.now(),
+            )
+        },
     )
 }
 

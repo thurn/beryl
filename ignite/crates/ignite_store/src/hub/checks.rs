@@ -172,7 +172,7 @@ impl Startup {
 /// orders, so only the family's own results are read.
 pub fn startup(conn: &Connection, family: &str) -> Result<Startup> {
     let mut select = conn.prepare_cached(
-        "SELECT r.instructions, r.cpu_s, n.checks FROM records r
+        "SELECT r.instructions, r.cpu_s, r.wall_s, n.checks FROM records r
          JOIN (SELECT record, count(*) AS checks FROM results
                WHERE check_name > ?1 || ':' AND check_name < ?1 || ';'
                GROUP BY record) n ON n.record = r.id
@@ -184,18 +184,27 @@ pub fn startup(conn: &Connection, family: &str) -> Result<Startup> {
             Ok((
                 row.get::<_, Option<f64>>(0)?,
                 row.get::<_, f64>(1)?,
-                row.get::<_, i64>(2)?,
+                row.get::<_, f64>(2)?,
+                row.get::<_, i64>(3)?,
             ))
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     let size = |checks: i64| u32::try_from(checks).unwrap_or(u32::MAX);
     let billions: Vec<(u32, f64)> = runs
         .iter()
-        .filter_map(|(instructions, _, checks)| Some((size(*checks), (*instructions)? / 1e9)))
+        .filter_map(|(instructions, cpu_s, wall_s, checks)| {
+            let cost = score::effective_cost_billions((*instructions)? / 1e9, *cpu_s, *wall_s, 1);
+            Some((size(*checks), cost))
+        })
         .collect();
     let cpu_s: Vec<(u32, f64)> = runs
         .iter()
-        .map(|(_, cpu_s, checks)| (size(*checks), *cpu_s))
+        .map(|(_, cpu_s, wall_s, checks)| {
+            (
+                size(*checks),
+                score::effective_cost_cpu_s(*cpu_s, *wall_s, 1),
+            )
+        })
         .collect();
     Ok(Startup {
         billions: score::startup(&billions),
