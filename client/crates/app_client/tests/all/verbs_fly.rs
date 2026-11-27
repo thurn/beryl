@@ -292,6 +292,13 @@ fn cases() -> Vec<(&'static str, GameUpdate, GameUpdate, Vec<StepTiming>)> {
             Why::Discard,
         ),
         (
+            "opponent discard",
+            theirs.spell,
+            ZoneName::Hand,
+            ZoneName::Graveyard,
+            Why::Discard,
+        ),
+        (
             "own spell cast",
             mine.spell,
             ZoneName::Hand,
@@ -673,7 +680,7 @@ fn the_opponents_discard_is_seen_as_it_flies_to_their_graveyard() {
         .script
         .as_mut()
         .expect("the flight has a script")
-        .timing = vec![timed("discard", 165.0, 0.0, Curve::EaseOut, true)];
+        .timing = vec![timed("opponent discard", 475.0, 0.0, Curve::EaseOut, true)];
     // The card comes back from the graveyard into the hand, as dredge brings one back.
     let mut returned = flown(
         &after,
