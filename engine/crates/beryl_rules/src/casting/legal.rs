@@ -7,8 +7,8 @@ use std::cell::{Cell, OnceCell};
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityIx, AbilityKind, CastingOption, Castings, CostAction, CostPart, Face, FaceIx,
-    Keywords, ManaCost, ObjectAbility, Timing, Types,
+    Ability, AbilityKind, CastingOption, Castings, CostAction, CostPart, Face, FaceIx, Keywords,
+    ManaCost, ObjectAbility, Timing, Types,
 };
 use crate::continuous::rule_change;
 use crate::decision::{Candidates, OPTIONS, Opt, Refusal};
@@ -29,10 +29,12 @@ use super::targets::{Itself, targetable};
 use super::timing::{activated, instant_speed, sorcery_timing};
 
 mod copies;
+mod others;
 mod preparation;
 pub(super) mod special;
 mod ways;
 
+use others::{granted, has_others};
 pub use ways::castable_from_graveyard;
 use ways::{Ways, cast_sources};
 
@@ -676,38 +678,6 @@ fn activation_options<L: Layout, const TARGETS: bool>(
 #[inline(never)]
 fn graveyard_and_exile<L: Layout>(s: &State<L>, player: Seat) -> Bitboard<L::Slot> {
     s.zone(ZoneKey::Of(player, Zone::Graveyard)) | s.zone(ZoneKey::Of(player, Zone::Exile))
-}
-
-/// The abilities other objects granted the object in `slot`, and those of the cards under it
-/// if it is a merged permanent (see [CR 702.140e]), if `any` card of the game grants one or merges
-/// ([`Capability::Grants`], [`Capability::Merges`]).
-///
-/// [CR 702.140e]: https://yawgatog.com/resources/magic-rules/#R702140e
-fn granted<'a, L: Layout>(
-    s: &'a State<L>,
-    t: &'a GameTable,
-    slot: L::Slot,
-    any: bool,
-) -> impl Iterator<Item = ObjectAbility> + 'a {
-    any.then(|| s.abilities(t, slot))
-        .into_iter()
-        .flatten()
-        .map(|(ability, _)| ability)
-        .filter(|ability| {
-            matches!(
-                ability,
-                ObjectAbility::Granted(_) | ObjectAbility::Merged(..)
-            )
-        })
-}
-
-/// Whether the object in `slot` has an ability other objects granted it, or one of a card
-/// under it as a merged permanent. Out of line: only a game with a card that grants an
-/// ability or merges asks.
-#[inline(never)]
-fn has_others<L: Layout>(s: &State<L>, slot: L::Slot) -> bool {
-    s.has(slot, ObjectAbility::Granted(0))
-        || s.has(slot, ObjectAbility::Merged(0, AbilityIx::new(0)))
 }
 
 /// Appends the priority actions casting and activation add: spells and abilities.

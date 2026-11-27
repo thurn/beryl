@@ -10,11 +10,12 @@ use crate::decision::{Candidates, Decision, Opt, Refusal, Step};
 use crate::ids::{CardId, SlotId};
 use crate::layout::{Item, Layout, Piles, Queue, Table, index};
 use crate::mana_memory::RememberedMana;
+use crate::object::AbilityMask as _;
 use crate::pending::{LethalAssignment, hidden_pick_answer, hidden_pick_of};
 use crate::state::{
-    AbilityRef, CastStep, Casting, DepartedSpell, Derived, GrantRef, LastKnown, Object, ObjectRef,
-    PayingObjects, Pending, PendingTrigger, Player, Resolving, SLOTS, SpentMana, StackEntry,
-    StackItem, State, Target, TriggerInfo, Zones,
+    AbilityRef, CastStep, Casting, DepartedSpell, Derived, GrantRow, GrantSource, LastKnown,
+    Object, ObjectRef, PayingObjects, Pending, PendingTrigger, Player, Resolving, SLOTS, SpentMana,
+    StackEntry, StackItem, State, Target, TriggerInfo, Zones,
 };
 use crate::subgame::{CompletedTurns, OuterGame};
 
@@ -197,13 +198,23 @@ impl<L: Layout> Relayout for Derived<L> {
             protection: self.protection,
             keywords: self.keywords,
             subtypes: self.subtypes,
-            granted: self.granted.map(|g| {
-                g.map(|g| GrantRef {
-                    card: card(g.card),
-                    grant: g.grant,
-                })
-            }),
+            granted: M::AbilityMask::from_bits(self.granted.bits()),
             lost: widen_mask::<L, M>(self.lost),
+        }
+    }
+}
+
+impl<L: Layout> Relayout for GrantRow<L> {
+    type In<M: Layout> = GrantRow<M>;
+
+    fn relayout<M: Layout>(&self) -> GrantRow<M> {
+        GrantRow {
+            card: card(self.card),
+            grant: self.grant,
+            source: match self.source {
+                GrantSource::Permanent(s) => GrantSource::Permanent(slot(s)),
+                GrantSource::Effect(c) => GrantSource::Effect(card(c)),
+            },
         }
     }
 }
@@ -653,6 +664,7 @@ impl<L: Layout> Relayout for State<L> {
             flags,
             outcome,
             elsewhere,
+            grants,
             sideboard_taken,
             turn_plan,
             outer,
@@ -707,6 +719,7 @@ impl<L: Layout> Relayout for State<L> {
             outer: new_outer,
             subgame_turns: M::SubgameTurns::from_turns(subgame_turns.get()),
             restarted_turns: *restarted_turns,
+            grants: queue(grants.as_slice(), GrantRow::relayout),
             elsewhere: queue(
                 elsewhere.as_slice(),
                 crate::query::zone_characteristics::Reach::relayout,

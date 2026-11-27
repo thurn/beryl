@@ -183,15 +183,18 @@ fn depends<L: Layout>(
         let rows = s.rows();
         Table::from_fn(|i| rows.get(i).copied().unwrap_or_default())
     };
+    let grants = s.grant_rows().len();
     if let Some(members) = members(s, t, b, begun) {
         let by = super::reader(s, b);
-        // A removal past a mask's width changes the trial no more than the game, which
-        // stalls once the effect applies for real.
-        let _ = apply::apply_to_members(s, t, members, b.source, b.change, by);
+        let granter = super::granter(s, b.from, b.source);
+        // A removal past a mask's width, or a grant past the table's room, changes the trial
+        // no more than the game, which stalls once the effect applies for real.
+        let _ = apply::apply_to_members(s, t, members, b.source, b.change, by, granter);
     }
     let after = what_it_does(s, t, a, begun);
     let len = s.rows().len();
     s.results().copy_from_slice(&saved.as_slice()[..len]);
+    s.truncate_grants(grants);
     before != after
 }
 

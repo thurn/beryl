@@ -4,6 +4,8 @@
 //! can: a disagreement is an engine bug, never a rules outcome.
 //!
 //! - The layer results and the caches found with them, against a recompute from scratch.
+//! - The abilities each permanent was granted, against the static abilities and effects that
+//!   grant them, without the layers' table of grants ([`grants`]).
 //! - Payability: the prefilter, the cached funds and the solver's plans, against a matching
 //!   of each mana symbol to a unit of mana from the pool or a mana ability read off the cards.
 //! - In a game whose cards have priced mana abilities or products of several terms, the cached
@@ -26,6 +28,7 @@ use crate::table::{Capability, GameTable};
 use beryl_kernel::chosen::ChosenValue;
 use beryl_kernel::mana_memory::RememberedMana;
 
+mod grants;
 mod sequences;
 
 pub(crate) use sequences::reference_sequences;
@@ -67,6 +70,7 @@ pub fn check_references<L: Layout>(s: &State<L>, t: &GameTable) -> Result<(), Vi
         return Ok(());
     }
     check_layers(s, t)?;
+    grants::check_grants(s, t)?;
     // A check of each player alone: the order decides only which violation is reported.
     for p in s.players().in_seat_order() {
         check_payments(s, t, p)?;
@@ -99,6 +103,11 @@ fn check_layers<L: Layout>(s: &State<L>, t: &GameTable) -> Result<(), Violation>
             Some(At::Slot(slot.index())),
         )?;
     }
+    check(
+        fresh.grant_rows() == s.grant_rows(),
+        "the table of grants differs from a fresh recompute",
+        None,
+    )?;
     check(
         fresh.listening() == s.listening(),
         "the trigger listeners differ from a fresh recompute",

@@ -40,7 +40,7 @@ fn chapters<'a, L: Layout>(
                 (card, face, FaceAbility::Own(index))
             }
             ObjectAbility::Granted(index) => {
-                let grant = s.derived(slot).granted[usize::from(index)]?;
+                let grant = s.granted_ability(slot, index)?;
                 (grant.card, FaceIx::FRONT, FaceAbility::Grant(grant.grant))
             }
         };

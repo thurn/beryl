@@ -144,8 +144,8 @@ impl<L: Layout> State<L> {
     /// What layer 1 gives the permanent in `slot`, which has a copy effect on it
     /// ([`Flag::Copy`]): `printed`, the results its definition's face gives, with the power,
     /// toughness, colors and subtypes of its copiable values, which hold its exceptions
-    /// ([`State::copiable_pt`], [`State::copiable_colors`], [`State::copy_subtypes`], [`State::copy_supertypes`]), and the
-    /// activated abilities they give ([`State::copy_grants`]), with the keywords of the faces
+    /// ([`State::copiable_pt`], [`State::copiable_colors`], [`State::copy_subtypes`], [`State::copy_supertypes`]),
+    /// with the keywords of the faces
     /// of a merged permanent's other cards ([`Copiable::merged_faces`]). The mask of
     /// absent abilities starts with any CDA omitted by a power and toughness exception
     /// ([`Copiable::omits_pt_definitions`]).
@@ -173,7 +173,6 @@ impl<L: Layout> State<L> {
         printed.colors = values.colors(t);
         printed.subtypes = values.excepted_subtypes(t);
         printed.supertypes = values.excepted_supertypes(t);
-        printed.granted = self.copy_grants(t, slot);
         printed.keywords = keywords;
         if let Some((power, toughness)) = pt {
             printed.power = power;
@@ -227,30 +226,31 @@ impl<L: Layout> State<L> {
     /// The abilities layer 1 gives the object in `slot`, a copy ([`Flag::Copy`]), that its
     /// exceptions give and that are activated, such as Thespian's Stage's "except it has
     /// this ability" (see [CR 707.9a]): "This ability becomes part of the copiable values for the
-    /// copy, along with any other abilities that were copied." They are kept with the
-    /// abilities granted to it ([`crate::object::Derived::granted`]), which every reader of
-    /// its abilities asks ([`State::abilities`]), as they would be had it been granted them
-    /// first of all; an ability-removing effect removes them as it does the face's. A given
-    /// triggered ability is matched apart ([`Copiable::given_abilities`]).
+    /// copy, along with any other abilities that were copied." The layers keep them with the
+    /// abilities granted to it, as rows of the table of grants ([`State::grant_rows`]) written
+    /// in layer 1, which every reader of its abilities asks ([`State::abilities`]), as they
+    /// would be had it been granted them first of all; an ability-removing effect removes
+    /// them as it does the face's. A given triggered ability is matched apart
+    /// ([`Copiable::given_abilities`]).
     ///
     /// [CR 707.9a]: https://yawgatog.com/resources/magic-rules/#R7079a
     #[cold]
     #[inline(never)]
-    pub fn copy_grants(&self, t: &GameTable, slot: L::Slot) -> [Option<GrantRef<L>>; 4] {
-        let mut granted = [None; 4];
+    pub fn copy_grants<'a>(
+        &'a self,
+        t: &'a GameTable,
+        slot: L::Slot,
+    ) -> impl Iterator<Item = GrantRef<L>> + 'a {
         let given = self.copiable(slot).given_abilities(t);
-        let activated = given.filter(|&(card, face, grant)| {
+        given.filter_map(|(card, face, grant)| {
             // A granted ability is printed on its card's front face (§9).
             debug_assert_eq!(face, FaceIx::FRONT);
             matches!(
                 t.def(card).front().grants[grant.index()].kind(),
                 AbilityKind::Activated | AbilityKind::Mana
             )
-        });
-        for ((card, _, grant), place) in activated.zip(&mut granted) {
-            *place = Some(GrantRef { card, grant });
-        }
-        granted
+            .then_some(GrantRef { card, grant })
+        })
     }
 
     /// [`State::copiable_pt`] of an object with a copy effect on it.

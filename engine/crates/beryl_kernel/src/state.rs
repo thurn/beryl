@@ -16,8 +16,8 @@ pub use crate::effects::{
 pub use crate::last_known::{DEPARTED_SPELLS, DepartedSpell, LAST_KNOWN, LastKnown};
 pub use crate::memos::{Link, LinkKind, MEMOS, Memo, Memos, MemosOf};
 pub use crate::object::{
-    AbilityMask, Attachment, AttackTarget, CombatRole, Derived, Flag, GrantRef, Object,
-    ObjectFlags, ObjectRef, SlotSet,
+    AbilityMask, Attachment, AttackTarget, CombatRole, Derived, Flag, GrantRef, GrantRow,
+    GrantSource, Object, ObjectFlags, ObjectRef, SlotSet,
 };
 pub use crate::pending::{
     CastKind, CastStep, Casting, DamageDivision, DamageShare, FaceUpPayment, LethalAssignment,
@@ -279,6 +279,11 @@ pub struct State<L: Layout = Small> {
     /// apply, as the layers last applied ([`crate::query::zone_characteristics`]): stored with the layer
     /// results, and empty in most games.
     pub(crate) elsewhere: crate::query::zone_characteristics::Reaching<L>,
+    /// The effects in effect that grant an ability, in the order their layer 6 changes
+    /// applied, as the layers last applied: one row for each, whose bit the permanents it
+    /// grants the ability to have in their [`Derived::granted`]. Stored with the layer
+    /// results, and empty in a game with no card that grants an ability.
+    pub(crate) grants: L::Queue<GrantRow<L>, GRANTS>,
     pub(crate) turn_plan: crate::turn::plan::TurnPlan<L>,
     /// Sideboard occurrences that have already entered the game.
     pub(crate) sideboard_taken: crate::sideboard::Taken,
@@ -290,10 +295,15 @@ pub struct State<L: Layout = Small> {
 
 // Subgame storage occupies no space in Small.
 const _: () = {
-    assert!(size_of::<State<Small>>() == 20_472);
+    assert!(size_of::<State<Small>>() == 19_672);
     assert!(size_of::<<Small as Layout>::Outer>() == 0);
     assert!(size_of::<<Small as Layout>::SubgameTurns>() == 0);
 };
+
+/// The most rows of the table of grants a [`Small`] game keeps ([`State::grant_rows`]): as
+/// many as a permanent's [`Derived::granted`] has bits. One past it stalls the game into
+/// [`crate::Large`].
+pub const GRANTS: usize = 16;
 
 /// The most sets of text changes the abilities on the stack keep in a [`Small`] game. One past
 /// it stalls the game into [`crate::Large`].
@@ -361,6 +371,7 @@ impl<L: Layout> State<L> {
             counters,
             // Found from the faces on the battlefield and the memos, which the hash covers.
             elsewhere: _,
+            grants,
             // Bookkeeping about the past that only the loop check reads ([`crate::repeats`]).
             repeats: _,
             // Bookkeeping about the past, which changes no state trigger's condition.
@@ -377,6 +388,11 @@ impl<L: Layout> State<L> {
         objects.hash(h);
         battlefield.hash(h);
         derived.hash(h);
+        // Empty in a game where nothing grants an ability, which hashes as it did before the
+        // table. The masks of the layer results name its rows, so it is hashed with them.
+        if !grants.is_empty() {
+            grants.hash(h);
+        }
         listening.hash(h);
         replacing.hash(h);
         static_rules.hash(h);

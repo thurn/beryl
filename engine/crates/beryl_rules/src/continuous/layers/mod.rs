@@ -24,20 +24,23 @@ use beryl_card::MODIFY_PARTS;
 use beryl_kernel::derive::Rederive;
 
 use crate::bitboard::Bitboard;
-use crate::card::{Ability, AbilityIx, Colors, FaceIx, GrantIx, Layer, LayerSpec, Objects, Words};
+use crate::card::{Ability, AbilityIx, Colors, FaceIx, Layer, LayerSpec, Objects, Words};
 use crate::decision::{Outcome, StallReason};
 use crate::fixed::Full;
 use crate::ids::CardId;
 use crate::layout::{Layout, Queue, index};
 use crate::replacement::event::{Listens, Replaces, Sink};
 use crate::state::{
-    AbilityMask, Derived, Flag, GrantRef, LayerChange, LockedIn, Permanents, Rules, State, Zone,
-    read_layer,
+    AbilityMask, Derived, Flag, LayerChange, LockedIn, Permanents, Rules, State, Zone, read_layer,
 };
 use crate::static_ability::{self, Inputs};
 use crate::table::Capability;
 use crate::table::GameTable;
-use granted::{GRANTED, Granted, GrantedTo, PASSES, granted_ability, granted_layer_effects, slice};
+use granted::{
+    GRANTED, Granted, GrantedTo, PASSES, granted_ability, granted_layer_effects, granter, slice,
+};
+
+pub(crate) use apply::filter_reads;
 
 /// What one continuous effect changes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -271,6 +274,11 @@ pub(crate) fn listening<L: Layout>(
 /// [CR 613.1]: https://yawgatog.com/resources/magic-rules/#R6131
 /// [CR 613.7]: https://yawgatog.com/resources/magic-rules/#R6137
 /// [CR 613.8]: https://yawgatog.com/resources/magic-rules/#R6138
+//
+// Never inlined: [`refresh`] is called far more often than the results are stale, and inlined
+// there the recompute's saving and restoring of registers runs on every call (1.6% of the
+// count gate's instructions when it was).
+#[inline(never)]
 fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable, trials: &mut u64) -> Result<(), Full> {
     let Some(mut s) = s.rederive() else {
         return Ok(());
@@ -359,6 +367,8 @@ fn apply_layers<L: Layout>(
     let mut listed = Ok(());
     let mut merged = false;
     let mut omitted = false;
+    // The rows of the table of grants are written again as the changes that grant apply.
+    s.clear_grants();
     for i in 0..s.battlefield().len() {
         let slot = s.battlefield()[i];
         // Layer 1: the copiable values (CR 613.2a). A copy's are those of what it copies,
@@ -377,7 +387,7 @@ fn apply_layers<L: Layout>(
             protection: Colors::NONE,
             keywords: f.keywords,
             subtypes: what.subtypes(t),
-            granted: [None; 4],
+            granted: Default::default(),
             lost: Default::default(),
         };
         if copy {
@@ -674,8 +684,9 @@ fn apply_one<L: Layout>(
         return applied;
     };
     let by = reader(s, a);
+    let granter = granter(s, a.from, a.source);
     applied.and(apply::apply_to_members(
-        s, t, members, a.source, a.change, by,
+        s, t, members, a.source, a.change, by, granter,
     ))
 }
 
@@ -724,7 +735,7 @@ fn members<L: Layout>(
 /// effect comes up. An ability of its face, if no effect so far removed it. A granted one was
 /// found granted by the run of the layers before ([`Granted`]), and in that run's layers 1
 /// to 5 it is present, as no layer 6 effect has yet applied to take it away; from layer 6 on,
-/// if the permanent has been granted it again in this run.
+/// if the permanent has a row of the table of grants that has granted it again in this run.
 fn has_so_far<L: Layout>(s: &Rederive<'_, L>, from: L::Index, a: &Apply<L>) -> bool {
     let at = position::<L>(from);
     if a.order & merged::MERGED != 0 {
@@ -733,10 +744,7 @@ fn has_so_far<L: Layout>(s: &Rederive<'_, L>, from: L::Index, a: &Apply<L>) -> b
     if a.order & GRANTED == 0 {
         return s.has_ability_so_far(at, AbilityIx::new(a.order));
     }
-    a.layer < Layer::Ability || { s.rows()[at].granted }.contains(&Some(GrantRef {
-        card: a.source,
-        grant: GrantIx::new(a.order & !GRANTED),
-    }))
+    a.layer < Layer::Ability || granted::granted_so_far(s, at, a)
 }
 
 /// A battlefield position the layout's index names, as a `usize`.

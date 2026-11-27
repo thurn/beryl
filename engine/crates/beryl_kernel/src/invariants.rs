@@ -7,7 +7,7 @@ use crate::bitboard::Bitboard;
 use crate::format::Format;
 use crate::ids::{CardId, Seat, SlotId, SlotPlace};
 use crate::layout::{Layout, Piles, Queue, Table};
-use crate::state::{AbilityTarget, Flag, Object, Pending, State, Zone};
+use crate::state::{AbilityMask, AbilityTarget, Flag, Object, Pending, State, Zone};
 use crate::table::GameTable;
 use beryl_card::FaceIx;
 
@@ -65,7 +65,37 @@ impl<L: Layout> State<L> {
             self.outcome.is_some() || !self.flags.derived_dirty,
             "derived characteristics are stale",
             None,
-        )
+        )?;
+        if self.flags.derived_dirty {
+            return Ok(());
+        }
+        self.check_grants(t)
+    }
+
+    /// Each row of the table of grants names an ability its card grants, and each
+    /// permanent's mask of granted abilities names only rows the table has.
+    fn check_grants(&self, t: &GameTable) -> Result<(), Violation> {
+        let rows = self.grants.as_slice();
+        for row in rows {
+            check(row.card.index() < t.len(), "a grant of no such card", None)?;
+            check(
+                row.grant.index() < t.def(row.card).front().grants.len(),
+                "a grant its card does not have",
+                None,
+            )?;
+        }
+        let named = u32::try_from(rows.len())
+            .ok()
+            .and_then(|n| u128::MAX.checked_shl(n))
+            .unwrap_or(0);
+        for (i, d) in self.layer_results().iter().enumerate() {
+            check(
+                d.granted.bits() & named == 0,
+                "a permanent granted a row the table of grants does not have",
+                Some(At::Slot(self.battlefield.as_slice()[i].index())),
+            )?;
+        }
+        Ok(())
     }
 
     fn check_objects(&self, t: &GameTable) -> Result<(), Violation> {

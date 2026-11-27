@@ -300,6 +300,7 @@ impl<L: Layout> State<L> {
             memos: Memos::empty(),
             counters: CounterTable::empty(),
             elsewhere: Default::default(),
+            grants: Default::default(),
             sideboard_taken: crate::sideboard::Taken::default(),
             turn_plan: TurnPlan::default(),
             trackers: Trackers::empty(),

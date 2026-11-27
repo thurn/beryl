@@ -306,7 +306,7 @@ fn face_ability<L: Layout>(
             FaceAbility::Own(i),
         ),
         ObjectAbility::Granted(k) => {
-            let grant = obs.derived(slot).granted[usize::from(k)]?;
+            let grant = obs.granted_ability(slot, k)?;
             (grant.card, FaceIx::FRONT, FaceAbility::Grant(grant.grant))
         }
         ObjectAbility::Merged(place, i) => {

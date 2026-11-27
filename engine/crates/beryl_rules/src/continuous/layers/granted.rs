@@ -10,7 +10,7 @@ use crate::card::{Ability, GrantIx};
 use crate::fixed::Full;
 use crate::ids::CardId;
 use crate::layout::{Layout, Queue, index};
-use crate::state::GrantRef;
+use crate::state::{AbilityMask, GrantRef, GrantSource};
 use crate::table::GameTable;
 
 /// The most times one recompute runs the layers: once, and again for each time a static
@@ -66,8 +66,13 @@ pub(super) fn granted_layer_effects<L: Layout>(
     t: &GameTable,
 ) -> Result<Granted<L>, Full> {
     let mut found: Granted<L> = None;
-    for (i, row) in s.rows().iter().enumerate() {
-        for grant in row.granted.into_iter().flatten() {
+    let rows = s.grant_rows();
+    for (i, permanent) in s.rows().iter().enumerate() {
+        let granted = permanent.granted;
+        for row in
+            (rows.iter().enumerate()).filter_map(|(k, row)| granted.has_row(k).then_some(row))
+        {
+            let grant = row.grant_ref();
             if granted_ability(t, grant).layer().is_some() {
                 // The layout index names every battlefield position.
                 let at = index::<L>(i).into();
@@ -97,3 +102,31 @@ pub(super) fn granted_ability<L: Layout>(t: &GameTable, grant: GrantRef<L>) -> &
 ///
 /// [CR 613.7a]: https://yawgatog.com/resources/magic-rules/#R6137a
 pub(super) const GRANTED: u8 = 0x80;
+
+/// Where the effect a layer change is a part of comes from, as a row of the table of grants
+/// records it: the permanent a static ability is on, at the battlefield position `from`, or
+/// `source`, the card a resolved spell or ability came from.
+pub(super) fn granter<L: Layout>(
+    s: &Rederive<'_, L>,
+    from: Option<(L::Index, bool)>,
+    source: L::Card,
+) -> GrantSource<L> {
+    match from {
+        Some((from, _)) => GrantSource::Permanent(s.battlefield()[Into::<usize>::into(from)]),
+        None => GrantSource::Effect(source),
+    }
+}
+
+/// Whether the permanent at battlefield position `at` has a row of the table of grants, of
+/// those written so far in this run of the layers, that grants it the static ability `a` is a
+/// part of ([`GRANTED`]).
+pub(super) fn granted_so_far<L: Layout>(
+    s: &Rederive<'_, L>,
+    at: usize,
+    a: &super::Apply<L>,
+) -> bool {
+    let grant = GrantIx::new(a.order & !GRANTED);
+    let granted = s.rows()[at].granted;
+    (s.grant_rows().iter().enumerate())
+        .any(|(k, row)| granted.has_row(k) && (row.card, row.grant) == (a.source, grant))
+}

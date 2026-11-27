@@ -24,6 +24,7 @@ mod entering;
 mod entering_together;
 mod events;
 mod game;
+mod grants;
 mod graveyard_return;
 mod invariants;
 mod land_types;

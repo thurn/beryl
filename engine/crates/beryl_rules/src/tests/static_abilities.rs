@@ -675,7 +675,7 @@ fn an_ability_granted_in_layer_6_applies_its_effect_in_an_earlier_layer() {
 fn the_layers_run_at_most_three_times_for_granted_abilities() {
     let (s, _, smith) = granted_by("Test Paradox");
     assert!(!s.derived(smith).types.contains(Types::ARTIFACT));
-    assert!({ s.derived(smith).granted }[0].is_some());
+    assert!(s.granted_ability(smith, 0).is_some());
 }
 
 /// The card table refuses a granted ability whose amount the layers read as they apply: they

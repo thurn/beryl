@@ -15,7 +15,9 @@ use crate::filter::{self, Filter};
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::Layout;
-use crate::state::{AbilityMask, Characteristics, Derived, GrantRef, LayerChange, Zone};
+use crate::state::{
+    AbilityMask, Characteristics, Derived, GrantRow, GrantSource, LayerChange, Zone,
+};
 use crate::table::GameTable;
 
 /// Who reads a static ability as its layer applies: the controller of its permanent as the
@@ -35,9 +37,11 @@ pub(super) struct Reader {
 ///
 /// `by` reads the static ability the change is part of, for an amount the change reads ([`LayerChange::Read`]):
 /// read once, unless it is the mana value of each permanent it changes
-/// ([`static_ability::reads_each`]).
+/// ([`static_ability::reads_each`]). `granter` is where the effect comes from, which a
+/// change that grants an ability records in its row of the table of grants ([`grant`]).
 ///
-/// [`Full`] if a removal of abilities had no place in a member's mask.
+/// [`Full`] if a removal of abilities had no place in a member's mask, or a grant no place
+/// in the table of grants.
 pub(super) fn apply_to_members<L: Layout>(
     s: &mut Rederive<'_, L>,
     t: &GameTable,
@@ -45,9 +49,18 @@ pub(super) fn apply_to_members<L: Layout>(
     source: L::Card,
     change: LayerChange,
     by: Option<Reader>,
+    granter: GrantSource<L>,
 ) -> Result<(), Full> {
     if members.is_empty() {
         return Ok(());
+    }
+    if let LayerChange::Grant(index) = change {
+        let row = GrantRow {
+            card: source,
+            grant: index,
+            source: granter,
+        };
+        return grant(s, members, row);
     }
     let each = reads_each::<L>(t, source, change);
     let change = settle(s, t, source, change, by);
@@ -60,10 +73,37 @@ pub(super) fn apply_to_members<L: Layout>(
             } else {
                 change
             };
-            applied = applied.and(apply(s, t, i, source, change));
+            applied = applied.and(apply(s, t, i, change));
         }
     }
     applied
+}
+
+/// Adds `row` to the table of grants, for an effect that grants an ability as its layer 6
+/// change applies, and gives its bit to each permanent in `members` (see [CR 613.1f]):
+/// "Layer 6: Ability-adding effects, keyword counters, ability-removing effects, and effects
+/// that say an object can't have an ability are applied." The rows are written in the order
+/// the changes apply, so an effect that removes abilities later clears the bits of those
+/// before it and none after. [`Full`] if the table has no place for the row.
+///
+/// Out of line: only a game with a card that grants an ability comes here.
+///
+/// [CR 613.1f]: https://yawgatog.com/resources/magic-rules/#R6131f
+#[inline(never)]
+fn grant<L: Layout>(
+    s: &mut Rederive<'_, L>,
+    members: Bitboard<L::Slot>,
+    row: GrantRow<L>,
+) -> Result<(), Full> {
+    let k = s.add_grant(row)?;
+    for i in 0..s.battlefield().len() {
+        if members.contains(s.battlefield()[i]) {
+            let d = &mut s.results()[i];
+            // `add_grant` gives no place past the mask's width.
+            d.granted = d.granted.with_row(k).ok_or(Full)?;
+        }
+    }
+    Ok(())
 }
 
 /// Whether `change` is a part of a static ability whose amounts read each permanent it
@@ -341,7 +381,6 @@ pub(super) fn apply<L: Layout>(
     s: &mut Rederive<'_, L>,
     t: &GameTable,
     i: usize,
-    source: L::Card,
     change: LayerChange,
 ) -> Result<(), Full> {
     match change {
@@ -376,7 +415,7 @@ pub(super) fn apply<L: Layout>(
         | LayerChange::AddProtection(_)
         | LayerChange::GrantEscape => {}
     }
-    modify(t, s.results(), i, source, change);
+    modify(t, s.results(), i, change);
     Ok(())
 }
 
@@ -387,13 +426,7 @@ pub(super) fn apply<L: Layout>(
 /// nothing, and inlined into the recompute it costs the rollout benchmark 0.07% of its
 /// instructions.
 #[inline(never)]
-fn modify<L: Layout>(
-    t: &GameTable,
-    derived: &mut [Derived<L>],
-    i: usize,
-    source: L::Card,
-    change: LayerChange,
-) {
+fn modify<L: Layout>(t: &GameTable, derived: &mut [Derived<L>], i: usize, change: LayerChange) {
     let d = &mut derived[i];
     match change {
         // CR 613.1b: "Layer 2: Control-changing effects are applied."
@@ -441,7 +474,7 @@ fn modify<L: Layout>(
         // granted it anything yet, so all it has is its rules text's and what a copy effect's
         // exception gave it in layer 1, kept with the granted ones (`State::copy_grants`).
         LayerChange::SetLandTypes(types) => {
-            d.granted = [None; 4];
+            d.granted = L::AbilityMask::default();
             let mut subtypes = d
                 .subtypes
                 .of_types(t.subtypes(), d.types.minus(Types::LAND));
@@ -459,16 +492,7 @@ fn modify<L: Layout>(
         // see CR 702.138a: escape "functions while the card with escape is in a player's
         // graveyard", so a permanent that has it gets nothing a rule reads.
         LayerChange::GrantEscape => {}
-        LayerChange::Grant(grant) => {
-            let mut granted = d.granted;
-            if let Some(free) = granted.iter_mut().find(|g| g.is_none()) {
-                *free = Some(GrantRef {
-                    card: source,
-                    grant,
-                });
-            }
-            d.granted = granted;
-        }
+        LayerChange::Grant(_) => unreachable!("applied by `apply_to_members`"),
         // CR 613.1e: "Layer 5: Color-changing effects are applied."
         LayerChange::SetColors(colors) => d.colors = colors,
         LayerChange::AddColors(colors) => d.colors = d.colors.union(colors),
@@ -479,7 +503,7 @@ fn modify<L: Layout>(
             d.lost = L::AbilityMask::ALL;
             d.keywords = Keywords::NONE;
             d.protection = Colors::NONE;
-            d.granted = [None; 4];
+            d.granted = L::AbilityMask::default();
         }
         LayerChange::LoseAbility(_) => unreachable!("applied by `apply`"),
         // CR 613.4a: "Layer 7a: Effects from characteristic-defining abilities that define
@@ -609,7 +633,7 @@ fn passes<L: Layout>(
 /// The characteristics `filter` reads of a permanent's layer results ([`passes`]): whether it
 /// is tapped, is a token, its name and its mana value are the object's, which no layer after
 /// the first changes.
-pub(super) fn filter_reads(filter: Filter) -> Characteristics {
+pub(crate) fn filter_reads(filter: Filter) -> Characteristics {
     match filter {
         Filter::Any
         | Filter::Owned(_)

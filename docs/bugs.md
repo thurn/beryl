@@ -6,6 +6,20 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **A fifth granted ability was silently dropped.** A permanent held its granted
+  abilities in four slots of its layer result. When a fifth effect granted it
+  one, as five Slivers that each grant an ability would, the layers found no
+  free slot and left the ability out, so the permanent lacked an ability it had,
+  and the game played on wrong instead of stalling into `Large`. Fixed: grants
+  are rows of a table of the state (`State::grant_rows`), 16 in `Small`, and
+  each permanent has a mask of the rows it has; a row with no place returns
+  `Full`, which stalls the game into `Large`. Guard: the engine tests
+  `five_grants_on_one_permanent_stay_in_small` and
+  `seventeen_rows_are_full_in_small_and_fit_in_large`, and the reference
+  `reference::grants` checks each permanent's granted abilities against the
+  static abilities and effects that grant them at every fuzz and scenario
+  decision.
+
 - **A mandatory loop above a waiting trigger was never found, so the game
   stalled instead of ending in a draw.** In a shared-deck fuzz game of the
   identity keystone family (seed 1959), Worldgorger Dragon and Animate Dead

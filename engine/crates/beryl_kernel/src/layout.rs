@@ -285,7 +285,7 @@ impl Layout for Large {
     type Deck<T: Item + Default> = Vec<T>;
     type Piles = LargePiles;
     type PerPlayer<T: Item> = PerSeat<T>;
-    type AbilityMask = u64;
+    type AbilityMask = u128;
     type BlockList = Vec<LargeSlot>;
     type Additions = [Option<Addition<LargeCardIx>>; 8];
     type Outer = LargeOuter;
@@ -337,6 +337,7 @@ impl Layout for Large {
             flags,
             outcome,
             elsewhere,
+            grants,
             sideboard_taken,
             turn_plan,
             outer,
@@ -376,6 +377,7 @@ impl Layout for Large {
             flags: *flags,
             outcome: *outcome,
             elsewhere: elsewhere.clone(),
+            grants: grants.clone(),
             sideboard_taken: *sideboard_taken,
             turn_plan: turn_plan.clone(),
             outer: outer.clone(),
@@ -457,6 +459,7 @@ impl State<Large> {
             memos,
             counters,
             elsewhere,
+            grants,
             sideboard_taken,
             turn_plan,
             outer,

@@ -188,6 +188,7 @@ impl<L: Layout> State<L> {
             flags: _,
             outcome: _,
             elsewhere,
+            grants,
             sideboard_taken: _,
             turn_plan,
             // Asked as a game of its own, below.
@@ -246,6 +247,11 @@ impl<L: Layout> State<L> {
                 "the effects that reach other zones",
                 elsewhere.len(),
                 capacity(|s: &State<M>| &s.elsewhere),
+            ),
+            (
+                "the effects that grant abilities",
+                grants.len(),
+                capacity(|s: &State<M>| &s.grants),
             ),
         ];
         for (list, len, capacity) in lists {

@@ -30,7 +30,7 @@ pub(super) fn activated<L: Layout>(
             if s.object(slot).zone() != Zone::Battlefield {
                 return None;
             }
-            let grant = s.derived(slot).granted[usize::from(k)]?;
+            let grant = s.granted_ability(slot, k)?;
             let granter = Definition::of_card(grant.card);
             Some((granter, FaceAbility::Grant(grant.grant)))
         }

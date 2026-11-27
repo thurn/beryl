@@ -223,7 +223,14 @@
 //! the sets are a table of their own and never part of an entry. Counter kinds cannot be fields of
 //! each of 255 objects, so all but the three hot kinds are a keyed table.
 //!
-//! `size_of::<State<Small>>()` is 20,472 bytes of the 20,480 that [`State`] asserts. A
+//! The table of grants is not a store: the layers write it with their results
+//! ([`State::grant_rows`]). It holds a row of 4 bytes (card, grant and source) for each
+//! effect in effect that grants an ability, at most 16 ([`state::GRANTS`]) in 65 bytes, and
+//! each permanent's layer result has a two-byte mask of the rows that grant it one
+//! ([`state::Derived`] `granted`), which is 36 bytes in `Small`, asserted in its file. The
+//! four two-byte slots the mask replaced cost 512 bytes over the 128 layer results.
+//!
+//! `size_of::<State<Small>>()` is 19,672 bytes of the 20,480 that [`State`] asserts. A
 //! change that grows it reports the new size when it lands. New card state goes to a store,
 //! so a mechanism that needs a field of its own must take bytes back first.
 //!
@@ -545,9 +552,10 @@
 //! battlefield ask these. A reader that holds a permanent in a walk of the battlefield (the
 //! state-based actions, combat, the mana solver) may take its layer result
 //! ([`State::derived`]) instead, which is the same answer. An ability granted by another
-//! permanent's effect is a
-//! [`state::Derived`] `granted` entry that [`State::has_ability`] does not answer for, and
-//! trigger matching reads no granted ability.
+//! permanent's effect is a bit of the [`state::Derived`] `granted` mask naming a row of the
+//! table of grants, which [`State::has_ability`] does not answer for; the `k`th granted
+//! ability ([`beryl_card::ObjectAbility::Granted`]) is that of the `k`th set bit
+//! ([`State::granted_ability`]). Trigger matching reads no granted ability.
 //!
 //! A [`Copiable`] is a definition, the face of it that is up and the exceptions of the copy
 //! effects that made it ([`copiable::additions::Addition`], see CR 707.9b): three in `Small`, a fourth

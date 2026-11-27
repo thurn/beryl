@@ -6,7 +6,7 @@ use beryl_kernel::derive::Rederive;
 use crate::card::AbilityIx;
 use crate::fixed::Full;
 use crate::layout::Layout;
-use crate::state::AbilityMask;
+use crate::state::{AbilityMask, GrantRow, GrantSource};
 use crate::table::{Capability, GameTable};
 
 use super::{Applying, Listed, list_static, merged};
@@ -36,6 +36,7 @@ pub(super) fn list<L: Layout>(
     let mut listed = s.copy_layer_one(t, slot, &mut base);
     let omitted = !{ base.lost }.is_empty();
     s.results()[at] = base;
+    listed = listed.and(copy_grants(s, t, at));
     let what = s.definition(slot);
     let (source, face) = what.record(t);
     for (ability, order) in what.face(t).abilities.iter().zip(0..) {
@@ -57,4 +58,27 @@ pub(super) fn list<L: Layout>(
         return (omitted, merged, listed.and(full));
     }
     (omitted, false, listed)
+}
+
+/// Adds a row of the table of grants for each activated ability the exceptions of the copy
+/// effect on the permanent at `at` give it ([`beryl_kernel::State::copy_grants`]), as though
+/// it had been granted them first of all, and gives the permanent each row's bit. [`Full`] if
+/// the table has no place for one.
+fn copy_grants<L: Layout>(s: &mut Rederive<'_, L>, t: &GameTable, at: usize) -> Result<(), Full> {
+    let slot = s.battlefield()[at];
+    // Read one at a time: the table is written between reads.
+    for n in 0.. {
+        let Some(grant) = s.copy_grants(t, slot).nth(n) else {
+            return Ok(());
+        };
+        let k = s.add_grant(GrantRow {
+            card: grant.card,
+            grant: grant.grant,
+            source: GrantSource::Permanent(slot),
+        })?;
+        let d = &mut s.results()[at];
+        // `add_grant` gives no place past the mask's width.
+        d.granted = d.granted.with_row(k).ok_or(Full)?;
+    }
+    Ok(())
 }

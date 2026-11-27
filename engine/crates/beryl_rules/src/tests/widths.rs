@@ -131,16 +131,19 @@ fn every_member_of_three_locked_in_sets_gets_all_three_effects() {
 #[test]
 fn more_static_abilities_than_the_list_holds_stall_into_large_and_apply_there() {
     // 64 Auras of three static abilities each fill the list's 192 places; the 65th, on the
-    // land, has none. It is not left out: the game stalls and goes on in `Large`.
+    // land, has none. It is not left out: the game stalls and goes on in `Large`. (In `Small`
+    // the seventeenth Aura's grant of crew already has no row in the table of grants, which
+    // stalls the game as well.) The land enters before the tokens, as its move refreshes the
+    // layers.
     let (t, mut small, p) = game();
     let bear = put(&mut small, &t, p, "Test Bear");
     let aura = put(&mut small, &t, p, "Test Reconfiguration");
     small.board().attach(aura, bear);
+    let land = put(&mut small, &t, p, "Test Land");
     let card = card_of(&small, &t, aura);
     for more in tokens(&mut small, p, card, 63) {
         small.board().attach(more, bear);
     }
-    let land = put(&mut small, &t, p, "Test Land");
     let last = tokens(&mut small, p, card, 1)[0];
     small.board().attach(last, land);
     let mut large = small.widen();
@@ -237,4 +240,21 @@ fn large_counter_totals_saturate_power_and_toughness_with_the_right_sign() {
         .unwrap();
     refresh(&mut s, &t);
     assert_eq!(power_and_toughness(&s, bear), (i8::MIN, i8::MIN));
+}
+
+/// A `Small` game whose permanents were granted abilities, widened, is the game its `Large`
+/// recompute gives: the same table of grants in the same order, and the same bits.
+#[test]
+fn a_game_with_grants_widens_to_the_large_one() {
+    let (mut g, _) = super::grants::grunt();
+    super::grants::give(&mut g, "Test Banner", 3);
+    super::grants::give(&mut g, "Test Pennant", 1);
+    super::grants::give(&mut g, "Test Grunt", 2);
+    refresh(&mut g.s, &g.t);
+    assert_eq!(g.s.grant_rows().len(), 4);
+    let widened = g.s.widen();
+    let mut large = widened.clone();
+    large.forget_derived();
+    refresh(&mut large, &g.t);
+    assert_eq!(large.first_difference(&widened), None);
 }

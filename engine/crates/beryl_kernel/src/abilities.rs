@@ -17,16 +17,11 @@
 use beryl_card::{Ability, AbilityIx, FaceIx, ObjectAbility};
 
 use crate::copiable::defines_pt;
-use crate::layout::Layout;
-use crate::object::{Flag, GrantRef};
+use crate::layout::{Layout, Queue};
+use crate::object::{AbilityMask, Flag, GrantRef, GrantRow};
 use crate::query::Copiable;
 use crate::state::State;
 use crate::table::{Capability, GameTable};
-
-/// How many abilities other objects can grant one permanent: the length of
-/// [`crate::object::Derived::granted`].
-const GRANT_LIMIT: u8 = 4;
-const GRANTS: usize = GRANT_LIMIT as usize;
 
 impl<L: Layout> State<L> {
     /// Every ability the object in `slot` has now, in a fixed order: the abilities of its
@@ -35,8 +30,9 @@ impl<L: Layout> State<L> {
     /// each card type specified on either of its halves and each ability in the text box of
     /// each half"), then, of a merged permanent,
     /// those of the cards under its top card from the top of the pile down
-    /// ([`Copiable::merged_faces`]), then those other objects granted it, in the order they
-    /// were granted ([`crate::object::Derived::granted`]). Its
+    /// ([`Copiable::merged_faces`]), then those other objects granted it, in the order the
+    /// layers granted them ([`crate::object::Derived::granted`]): the `k`th of them is
+    /// [`ObjectAbility::Granted`]`(k)`. Its
     /// face up is that of its copiable values ([`State::copiable`]), so a face-down
     /// permanent has none of its hidden card's. An object in a zone other than the
     /// battlefield has no layer results, so it has every ability of its face and none
@@ -58,11 +54,12 @@ impl<L: Layout> State<L> {
     #[inline]
     pub fn abilities<'s>(&'s self, t: &'s GameTable, slot: L::Slot) -> Abilities<'s, L> {
         let face = self.definition(slot).face(t).abilities;
-        // In a game where nothing grants an ability, the granted part starts past its end.
-        let (granted, next_grant) = if t.can(Capability::Grants) {
-            (self.granted_to(slot), 0)
+        // In a game where nothing grants an ability, the granted part is empty, and the mask
+        // is not read.
+        let granted = if t.can(Capability::Grants) {
+            self.granted_to(slot)
         } else {
-            ([None; GRANTS], GRANT_LIMIT)
+            L::AbilityMask::default()
         };
         Abilities {
             state: self,
@@ -78,7 +75,7 @@ impl<L: Layout> State<L> {
             index: 0,
             check_lost: self.flags.abilities_lost,
             granted,
-            next_grant,
+            next_grant: 0,
             table: t,
         }
     }
@@ -90,15 +87,13 @@ impl<L: Layout> State<L> {
     }
 
     /// Whether the object in `slot` has `ability` now ([`State::abilities`]): one of its own
-    /// it has not lost ([`State::has_ability`]), or a granted one that is still granted.
+    /// it has not lost ([`State::has_ability`]), or a `k`th granted one, which it has while
+    /// more than `k` rows of the table of grants grant it an ability.
     #[inline]
     pub fn has(&self, slot: L::Slot, ability: ObjectAbility) -> bool {
         match ability {
             ObjectAbility::Own(index) => self.has_ability(slot, index),
-            ObjectAbility::Granted(k) => self
-                .granted_to(slot)
-                .get(usize::from(k))
-                .is_some_and(Option::is_some),
+            ObjectAbility::Granted(k) => self.granted_to(slot).count() > u32::from(k),
             ObjectAbility::Merged(place, _) => self.has_merged(slot, place),
         }
     }
@@ -168,14 +163,48 @@ impl<L: Layout> State<L> {
             .flat_map(move |values| values.merged_faces(t))
     }
 
-    /// The abilities granted to the object in `slot`: none off the battlefield.
-    fn granted_to(&self, slot: L::Slot) -> [Option<GrantRef<L>>; GRANTS] {
+    /// The rows of the table of grants that grant the object in `slot` an ability, row `k`
+    /// in bit `k`: none off the battlefield.
+    fn granted_to(&self, slot: L::Slot) -> L::AbilityMask {
         if self.object(slot).on_battlefield() {
             self.derived(slot).granted
         } else {
-            [None; GRANTS]
+            L::AbilityMask::default()
         }
     }
+
+    /// The effects in effect that grant an ability, in the order their layer 6 changes
+    /// applied, as the layers last applied: row `k` grants its ability to each permanent
+    /// whose [`crate::object::Derived::granted`] has bit `k`.
+    #[inline]
+    pub fn grant_rows(&self) -> &[GrantRow<L>] {
+        self.grants.as_slice()
+    }
+
+    /// The row of the table of grants that the object in `slot`'s `k`th granted ability
+    /// ([`ObjectAbility::Granted`]`(k)`) comes from, and its place in the table, if it has
+    /// one.
+    #[inline]
+    pub fn granted_row(&self, slot: L::Slot, k: u8) -> Option<(usize, GrantRow<L>)> {
+        let row = nth_bit(self.granted_to(slot), k)?;
+        Some((row, self.grants.as_slice()[row]))
+    }
+
+    /// The ability the object in `slot`'s `k`th granted ability ([`ObjectAbility::Granted`])
+    /// is, if it has one: the card it is printed on and its place among that card's grants.
+    #[inline]
+    pub fn granted_ability(&self, slot: L::Slot, k: u8) -> Option<GrantRef<L>> {
+        self.granted_row(slot, k).map(|(_, row)| row.grant_ref())
+    }
+}
+
+/// The place of the `k`th set bit of `bits`, counting from the lowest.
+#[inline]
+fn nth_bit<M: AbilityMask>(mut bits: M, k: u8) -> Option<usize> {
+    for _ in 0..k {
+        bits = bits.without_lowest();
+    }
+    (!bits.is_empty()).then(|| bits.lowest())
 }
 
 /// The abilities an object has now, from [`State::abilities`].
@@ -198,8 +227,10 @@ pub struct Abilities<'s, L: Layout> {
     place: u8,
     /// Some permanent lost an ability, so each of `own` is asked whether this one has it.
     check_lost: bool,
-    granted: [Option<GrantRef<L>>; GRANTS],
-    /// The place in `granted` of the next granted ability to look at.
+    /// The rows of the table of grants yet to come that grant the object an ability, row `k`
+    /// in bit `k` ([`State::granted_to`]).
+    granted: L::AbilityMask,
+    /// The `k` of [`ObjectAbility::Granted`] of the next of `granted`.
     next_grant: u8,
     table: &'s GameTable,
 }
@@ -275,6 +306,22 @@ impl<L: Layout> Abilities<'_, L> {
     }
 }
 
+impl<L: Layout> Abilities<'_, L> {
+    /// The next ability other objects granted the object, from the lowest of the rows of the
+    /// table of grants left in `granted`.
+    #[inline(never)]
+    fn next_granted(&mut self) -> (ObjectAbility, &'static Ability) {
+        let row = self.granted.lowest();
+        self.granted = self.granted.without_lowest();
+        let k = self.next_grant;
+        self.next_grant += 1;
+        let grant = self.state.grants.as_slice()[row];
+        // A granted ability is printed on its granting card's front face (§9).
+        let ability = &self.table.def(grant.card).front().grants[grant.grant.index()];
+        (ObjectAbility::Granted(k), ability)
+    }
+}
+
 impl<L: Layout> Iterator for Abilities<'_, L> {
     type Item = (ObjectAbility, &'static Ability);
 
@@ -294,15 +341,9 @@ impl<L: Layout> Iterator for Abilities<'_, L> {
         {
             return Some(merged);
         }
-        while usize::from(self.next_grant) < GRANTS {
-            let k = self.next_grant;
-            self.next_grant += 1;
-            if let Some(grant) = self.granted[usize::from(k)] {
-                // A granted ability is printed on its granting card's front face (§9).
-                let ability = &self.table.def(grant.card).front().grants[grant.grant.index()];
-                return Some((ObjectAbility::Granted(k), ability));
-            }
+        if self.granted.is_empty() {
+            return None;
         }
-        None
+        Some(self.next_granted())
     }
 }

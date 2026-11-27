@@ -1365,7 +1365,7 @@ fn an_aura_makes_a_vehicle_artifact_with_crew_and_crewing_makes_it_a_creature() 
     let d = s.derived(bear);
     assert_eq!(d.types, Types::ARTIFACT);
     assert!(d.subtypes.contains(t.subtypes(), Subtype::Vehicle));
-    let grant = d.granted[0].unwrap();
+    let grant = s.granted_ability(bear, 0).unwrap();
     assert_eq!(grant.card, s.copiable(aura).record(&t).0);
     // The bear's abilities are its face's, then the crew ability the Aura grants it.
     let granted = |s: &State<Small>, slot| {

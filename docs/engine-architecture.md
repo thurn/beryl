@@ -949,10 +949,20 @@ pub struct Derived {
     pub protection: Colors,
     pub keywords: Keywords,              // flying, first strike, banding, landwalks, intrinsic mana, ...
     pub subtypes: GameSubtypes,          // 128 bits by the GameTable's numbers of the subtypes its cards name
-    pub granted: [Option<GrantRef>; 4],  // abilities granted by other objects
+    pub granted: AbilityMask,            // the rows of the table of grants that grant it an ability
     pub lost: AbilityMask,               // the face's abilities this permanent has lost: 16 bits in Small
 }
 ```
+
+- **Grants.** The recompute also writes `State::grants`, one row
+  `GrantRow { card, grant, source }` for each effect in effect that grants an
+  ability, in the order the layer 6 changes apply: 16 rows in `Small`, 128 in
+  `Large` (the width of its `u128` mask), and one past that stalls the game. Two
+  permanents that each grant the same ability are two rows. A permanent's
+  `granted` has bit `k` for each row `k` that grants it the ability, and its
+  `k`th granted ability (`ObjectAbility::Granted(k)`) is that of its `k`th set
+  bit. Two rows of one card's same grant are two instances of the ability (CR
+  113.2c), offered for activation once.
 
 - Any mutation that can change a layer result sets `derived_dirty`: a permanent
   entering or leaving, a counter, a floating effect starting or ending, a
@@ -960,6 +970,7 @@ pub struct Derived {
   what no layer writes, as Tarmogoyf reads the graveyards: each face declares
   such inputs (`static_ability::Inputs`), and the zone move marks the cache
   stale for a graveyard only while a permanent on the battlefield reads one.
+
 - The next query recomputes every battlefield object from base, **one layer at a
   time**, because what an effect applies to depends on the layers before it
   (**R5**): copy (1), control (2), types (4), colors (5), abilities (6), then
@@ -969,14 +980,17 @@ pub struct Derived {
   a filter accepts finds its set against the results so far, and a set is locked
   in when the effect has a part in a later layer (CR 611.2c, CR 613.6), so
   Humility with Opalescence and Oko's Elk come out as the rules say.
+
 - When no continuous effect is active, which is most of a game, `derived` is a
   straight copy of base: one branch.
+
 - **Ability removal.** `State::has_ability` is the one question every rules
   reader asks: trigger matching, activation, the static scan, the replacement
   lookups, the rule changes and the mana solver. With no removal in effect it is
   one test of a flag the recompute stores. An effect that removes abilities also
   clears the keywords and grants applied before it. A removal past the mask's
   width stalls the game into `Large`.
+
 - **Dependencies** (CR 613.8). In a layer with two or more effects, A depends on
   B when applying B changes whether A exists, what it applies to or what it
   does. Each layer change declares what it writes and each effect what it reads,
@@ -986,6 +1000,7 @@ pub struct Derived {
   card pairs. The effect applied next is the earliest by timestamp that depends
   on nothing still waiting; with every one waiting, the earliest in a loop (CR
   613.8b).
+
 - **Control from a static ability.** Control Magic's "You control enchanted
   creature" names its permanent's controller as layer 2 has it so far, so
   whoever controls the Aura controls the creature. Such a change shows only in
@@ -994,21 +1009,25 @@ pub struct Derived {
   one the check before saw (a memo), and marks one that changed as not
   continuously controlled since its controller's turn began (CR 302.6). The
   check comes before any player can act (CR 704.3).
+
 - **A granted static ability.** An ability granted in layer 6 whose effect
   belongs to an earlier layer is found only after that layer has run, so the
   recompute runs the layers again with the abilities the run before found
   granted, at most three runs, in a game with such a card
   (`Capability::GrantsLayerEffect`).
+
 - **Land types.** A land has the intrinsic mana ability of each basic land type
   it has (CR 305.6), held as keyword bits (`Keywords::PLAINS_MANA` to
   `FOREST_MANA`); setting a land's types (Blood Moon) replaces them and removes
   its other abilities (CR 305.7). `State::intrinsic_mana` is what the mana
   readers ask.
+
 - **Characteristics off the battlefield** (**R8**). An object elsewhere is
   computed when read: its copiable values, its characteristic-defining power and
   toughness, and the continuous effects that reach other zones, kept as a list
   of at most four parts beside the layer results. A game with none pays a length
   test, and there are no per-slot layer results outside the battlefield.
+
 - **Text changes** (CR 612, **R9**). A color word, basic land type or creature
   type inside an ability is a value of a private type (`beryl_card::words`),
   read only through the word changes of the object the ability is printed on
@@ -1017,11 +1036,14 @@ pub struct Derived {
   permanent whose type line reads otherwise is rewritten before layer 4. An
   ability on the stack keeps the words its source had then, in one of four
   captured sets.
+
 - **As it would exist** (CR 614.12). The replacement pipeline asks how an
   entering object would exist on the battlefield by moving it onto a copy of the
   state and running the recompute there, only for an object whose entry can be
   replaced and only when an effect could change the answer.
+
 - Reads never recompute. Legality checks and state-based actions read arrays.
+
 - Copy effects (layer 1) use copiable values (**R7**): a definition, its face
   and up to three copy exceptions in `Small`. Copying an object copies its
   exceptions and appends the copier's, so a copy of a copy never walks a chain

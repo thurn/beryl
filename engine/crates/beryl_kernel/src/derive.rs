@@ -15,7 +15,7 @@ use beryl_card::{AbilityIx, FaceIx};
 
 use crate::event::{Listens, Replaces};
 use crate::layout::{Layout, PerSeat, Queue, Table};
-use crate::object::{AbilityMask, Derived};
+use crate::object::{AbilityMask, Derived, GrantRow};
 use crate::rule_changes::Rules;
 use crate::state::State;
 use crate::static_ability::Inputs;
@@ -84,6 +84,37 @@ impl<L: Layout> Rederive<'_, L> {
         reaching
             .into_iter()
             .try_for_each(|reach| self.0.elsewhere.push(reach))
+    }
+
+    /// Empties the table of grants, for a run of the layers to write again
+    /// ([`State::grant_rows`]).
+    #[inline]
+    pub fn clear_grants(&mut self) {
+        self.0.grants.clear();
+    }
+
+    /// Adds `row` to the table of grants, after those so far, and returns its place: the bit
+    /// of each permanent's [`Derived::granted`] that it grants the ability to. [`Full`] past
+    /// [`crate::state::GRANTS`] in a fixed layout, or past the width of the layout's mask.
+    ///
+    /// [`Full`]: crate::fixed::Full
+    #[inline]
+    pub fn add_grant(&mut self, row: GrantRow<L>) -> Result<usize, crate::fixed::Full> {
+        let k = self.0.grants.len();
+        if k >= L::AbilityMask::WIDTH {
+            return Err(crate::fixed::Full);
+        }
+        self.0.grants.push(row)?;
+        Ok(k)
+    }
+
+    /// Removes the rows of the table of grants past the first `len`: for a trial of an
+    /// effect, which puts the results back as they were ([`Rederive::results`]).
+    #[inline]
+    pub fn truncate_grants(&mut self, len: usize) {
+        while self.0.grants.len() > len {
+            self.0.grants.pop();
+        }
     }
 
     /// The layer results to write, one for each permanent, in battlefield order.

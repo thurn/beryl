@@ -10,14 +10,18 @@
 use std::fmt::Debug;
 use std::hash::Hash;
 
-use beryl_card::{AbilityIx, Colors, FaceIx, GrantIx, Keywords, Supertypes, Types, Zone};
+use beryl_card::{Colors, FaceIx, Keywords, Supertypes, Types, Zone};
 
 use crate::counters::Counters;
 use crate::ids::{CardId, CardIx, Seat, Slot, SlotId};
 use crate::layout::{Layout, Small};
 
+mod ability_mask;
 mod block_list;
+mod grants;
+pub use ability_mask::AbilityMask;
 pub use block_list::{BlockList, SlotSet};
+pub use grants::{GrantRef, GrantRow, GrantSource};
 
 /// The [`Object::battlefield_index`] of a slot not on the battlefield.
 pub(crate) const OFF_BATTLEFIELD: u16 = u16::MAX;
@@ -674,11 +678,10 @@ impl<L: Layout> std::hash::Hash for ObjectRef<L> {
 /// The result of applying continuous effects to a permanent (architecture §9), by
 /// battlefield index. The layers work fills it in.
 ///
-/// Packed to an alignment of two bytes: its fields fill 40 bytes, and with the two of
-/// [`Derived::lost`] an alignment of eight would round each of the 128 rows up to 48, which
-/// the 20 KiB of a [`State<Small>`](crate::state::State) has no room for. Fields are read and
+/// Packed to an alignment of two bytes: its fields fill 36 bytes in [`Small`], and an
+/// alignment of eight would round each of the 128 rows up to 40. Fields are read and
 /// written by value; a reference to one does not compile.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[repr(Rust, packed(2))]
 pub struct Derived<L: Layout = Small> {
     pub power: i8,
@@ -692,8 +695,11 @@ pub struct Derived<L: Layout = Small> {
     pub keywords: Keywords,
     /// By the game's numbers: read them through [`crate::GameTable::subtypes`].
     pub subtypes: crate::subtypes::GameSubtypes,
-    /// The abilities other objects grant this permanent (§9), in the order granted.
-    pub granted: [Option<GrantRef<L>>; 4],
+    /// The abilities other objects grant this permanent (§9): one bit for each row of the
+    /// state's table of grants ([`crate::state::State::grant_rows`]) the permanent has, row
+    /// `k` in bit `k`. Read it through [`crate::state::State::abilities`] and
+    /// [`crate::state::State::has`], which every reader asks.
+    pub granted: L::AbilityMask,
     /// The abilities of its face it has lost, by their index on the face
     /// (see [CR 613.1f]): "Layer 6: Ability-adding effects, keyword counters, ability-removing
     /// effects, and effects that say an object can't have an ability are applied." Read it
@@ -703,70 +709,7 @@ pub struct Derived<L: Layout = Small> {
     pub lost: L::AbilityMask,
 }
 
-/// The abilities of a face a permanent has lost, one bit for each, by the index of the
-/// ability on the face: as many as the layout's mask is wide ([`AbilityMask::WIDTH`]). An
-/// effect that would remove an ability past that width, or all the abilities of a face
-/// with more, has no place in the mask, and the recompute stalls the game into a layout
-/// whose mask is wider.
-pub trait AbilityMask: Copy + Debug + Default + Eq + Hash + Send + Sync + 'static {
-    /// How many abilities of a face the mask can name.
-    const WIDTH: usize;
-    /// Every ability the mask can name: "loses all abilities".
-    const ALL: Self;
-    /// Whether the ability at `ability` is lost.
-    fn contains(self, ability: AbilityIx) -> bool;
-    /// The mask with the ability at `ability` lost too, or `None` past the mask's width.
-    fn with(self, ability: AbilityIx) -> Option<Self>;
-    /// Whether no ability is lost.
-    fn is_empty(self) -> bool;
-    /// The mask as bits, the ability at index `n` in bit `n`.
-    fn bits(self) -> u64;
-    /// The mask of `bits`, the ability at index `n` in bit `n`, dropping the bits past the
-    /// mask's width.
-    fn from_bits(bits: u64) -> Self;
-}
-
-macro_rules! ability_mask {
-    ($($bits:ty),*) => {$(
-        impl AbilityMask for $bits {
-            const WIDTH: usize = <$bits>::BITS as usize;
-            const ALL: Self = <$bits>::MAX;
-
-            #[inline]
-            fn contains(self, ability: AbilityIx) -> bool {
-                ability.index() < Self::WIDTH && self & (1 << ability.index()) != 0
-            }
-
-            #[inline]
-            fn with(self, ability: AbilityIx) -> Option<Self> {
-                (ability.index() < Self::WIDTH).then(|| self | (1 << ability.index()))
-            }
-
-            #[inline]
-            fn is_empty(self) -> bool {
-                self == 0
-            }
-
-            #[inline]
-            fn bits(self) -> u64 {
-                u64::from(self)
-            }
-
-            #[inline]
-            fn from_bits(bits: u64) -> Self {
-                let low_bits = bits & u64::from(<$bits>::MAX);
-                <$bits>::try_from(low_bits).expect("masked to the layout's ability width")
-            }
-        }
-    )*};
-}
-
-ability_mask!(u16, u64);
-
-/// An ability one card grants to other objects: the card's game index and the index into its
-/// front face's [`beryl_card::Face::grants`] (§9).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct GrantRef<L: Layout = Small> {
-    pub card: L::Card,
-    pub grant: GrantIx,
-}
+// 36 bytes in `Small`, from 40: a two-byte mask of the rows of the table of grants took the
+// place of four two-byte slots that each named a granted ability.
+const _: () = assert!(size_of::<Derived<Small>>() <= 40);
+const _: () = assert!(size_of::<Derived<Small>>() == 36);

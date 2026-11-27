@@ -182,6 +182,13 @@ impl<'a, L: Layout> Observation<'a, L> {
         self.state.derived(slot)
     }
 
+    /// The ability the permanent in `slot`'s `k`th granted ability
+    /// ([`beryl_card::ObjectAbility::Granted`]) is, if it has one ([`State::granted_ability`]):
+    /// public as the battlefield is.
+    pub fn granted_ability(&self, slot: L::Slot, k: u8) -> Option<crate::object::GrantRef<L>> {
+        self.state.granted_ability(slot, k)
+    }
+
     /// The stack, bottom first. This is a public zone (see CR 400.2). A face-down
     /// spell records its public characteristics, and its card is visible through
     /// [`Self::card`] to its controller (see CR 708.5).

@@ -121,9 +121,17 @@ impl<L: Layout> State<L> {
             return Ok(());
         }
         let o = self.object(slot);
+        // The abilities other objects granted it are bits naming rows of the table of grants,
+        // which the layers write again once it has left, so the row keeps none: no ability
+        // that looks back reads a granted ability (the card table refuses a granted one that
+        // would, `listener::read_when_granted`).
+        let derived = Derived {
+            granted: Default::default(),
+            ..*self.derived(slot)
+        };
         let row = LastKnown {
             object,
-            derived: *self.derived(slot),
+            derived,
             counters: o.counters,
             token: o.is_token(),
             copiable: self.copiable(slot),
