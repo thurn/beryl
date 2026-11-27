@@ -5,7 +5,7 @@ use crate::characteristics::Types;
 use crate::continuous::{Duration, LayerSpec, Modification};
 use crate::cost::{CastingKind, Cost, CostPart};
 use crate::counter::CounterKind;
-use crate::effect::build::create_copy_except;
+use crate::effect::build::{create_copy_except, noncreature};
 use crate::effect::{
     Amount, Comparison, Condition, Effect, ExileMatch, LibraryPosition, Objects, Players,
 };
@@ -61,6 +61,16 @@ const BECOME_ARTIFACT_CREATURE: Effect = Effect::Modify {
     duration: Duration::EndOfTurn,
 };
 const ARTIFACT_CREATURE: Types = Types::ARTIFACT.union(Types::CREATURE);
+
+/// Prowess's trigger: "Whenever you cast a noncreature spell" (CR 702.108a).
+const PROWESS_TRIGGER: Trigger = Trigger::casts(Players::You, noncreature());
+
+/// Prowess's effect: this creature gets +1/+1 until end of turn (CR 702.108a).
+pub(crate) static PROWESS_BONUS: Effect = Effect::Modify {
+    objects: Objects::This,
+    modifications: &[Modification::ModifyPt(1, 1)],
+    duration: Duration::EndOfTurn,
+};
 
 /// "At the beginning of your end step", for [`Ability::impending_countdown`].
 const YOUR_END_STEP: Trigger = Trigger::step(TurnStep::End, Players::You);
@@ -149,6 +159,17 @@ impl Ability {
         Ability::triggered(&Trigger::CAST)
             .on_the_stack()
             .effect(&CASCADE)
+    }
+
+    /// Prowess ([CR 702.108a]): "Prowess is a triggered ability. 'Prowess' means 'Whenever you
+    /// cast a noncreature spell, this creature gets +1/+1 until end of turn.'" Each instance
+    /// triggers separately ([CR 702.108b]), which a creature with two copies of this ability
+    /// gets by listing it twice.
+    ///
+    /// [CR 702.108a]: https://yawgatog.com/resources/magic-rules/#R702108a
+    /// [CR 702.108b]: https://yawgatog.com/resources/magic-rules/#R702108b
+    pub const fn prowess() -> Ability {
+        Ability::triggered(&PROWESS_TRIGGER).effect(&PROWESS_BONUS)
     }
 
     /// Impending's static ability (CR 702.176a): "As long as this permanent's impending cost

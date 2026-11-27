@@ -172,6 +172,15 @@ impl Ctx {
         {
             return Some("Cascade".to_owned());
         }
+        // Prowess's whole ability (CR 702.108a).
+        if let Behavior::Data(effect) = ability.body()
+            && std::ptr::eq(effect, &raw const crate::ability::PROWESS_BONUS)
+            && ability
+                .trigger()
+                .is_some_and(|trigger| trigger.event == TriggerEvent::Casts)
+        {
+            return Some("Prowess".to_owned());
+        }
         // Storm's whole ability (CR 702.40a).
         if let Behavior::Data(Effect::CopySpell {
             spells: Objects::This,

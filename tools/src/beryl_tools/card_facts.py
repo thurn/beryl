@@ -608,8 +608,7 @@ class Cards:
         start of XMage's text of Beryl's first of them by index, which a TriggerOrder answer
         naming the card puts on the stack first: XMage tells the two apart by their text. None
         where the card has no two such triggers, or where Beryl's first is the trigger a
-        casting keyword gives (`KEYWORD_TRIGGERS`), which XMage lists first too, so that the
-        card's name chooses it.
+        casting keyword (`KEYWORD_TRIGGERS`) or prowess gives, which XMage lists first too.
 
         Otherwise Beryl's first is the card's first written trigger, as triggers that keywords
         give have no paragraph of their own, and XMage's rule text for it starts as its Oracle
@@ -625,6 +624,8 @@ class Cards:
         does = [
             i["kind"] for i in cast(list[Json], repeated[0].get("instructions", []))
         ]
+        if any(p.startswith("Prowess") for p in self.oracle.get(card, "").split("\n")):
+            made.add("Modify")
         if len(does) == 1 and does[0] in made:
             return None
         paragraphs = self.oracle.get(card, "").split("\n")

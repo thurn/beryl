@@ -2265,8 +2265,12 @@ public final class BerylForgeHarness {
         @Override
         public List<SpellAbility> orderSimultaneousSa(List<SpellAbility> sas) {
             if (sas.size() > 1) {
-                // Beryl names the first trigger by its source; these share one, so Forge's order stands.
-                run.take(player, Set.of("TriggerOrder"), "order " + sas);
+                // Beryl names the first trigger by its source; these share one, so Forge's order
+                // stands. Forge orders them all at once where Beryl asks once for each trigger
+                // but the last.
+                for (int i = 1; i < sas.size(); i++) {
+                    run.take(player, Set.of("TriggerOrder"), "order " + sas);
+                }
             }
             return super.orderSimultaneousSa(sas);
         }

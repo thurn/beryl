@@ -19,7 +19,7 @@ mod zones;
 
 pub use behavior::{Behavior, Custom, Says};
 pub use designation::Designation;
-pub(crate) use keywords::CASCADE;
+pub(crate) use keywords::{CASCADE, PROWESS_BONUS};
 pub use of_kind::DeckCondition;
 use of_kind::OfKind;
 
