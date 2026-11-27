@@ -6,10 +6,13 @@
 //! 1. A ticket labeled `justiciar`, which the integrator's judge files to report a fault in the
 //!    system itself. Like a regression, it skips the test of expected cores. Then:
 //! 2. An open regression ticket. It skips the test of expected cores.
-//! 3. An improvement ticket, when improvements are under their share
+//! 3. A ready ticket with saved work (a `saved_branch` from an earlier release, or a reverted
+//!    landing) whose group is in [`crate::shares::epic_order`], so finished or in-progress work
+//!    lands before its branch rots and conflicts with new landings.
+//! 4. An improvement ticket, when improvements are under their share
 //!    ([`crate::shares::improvements_due`]). The largest saving goes first, taking the three
 //!    units in turn.
-//! 4. A ready ticket from the group furthest below its allocation of workers
+//! 5. A ready ticket from the group furthest below its allocation of workers
 //!    ([`crate::shares::epic_order`]). Within a group, the highest ticket allocation goes first, then the
 //!    longest chain of tickets waiting behind it, then the oldest.
 //!
@@ -50,6 +53,9 @@ pub struct ReadyTicket {
     pub kind: TicketKind,
     /// A repair that tip verification reported as blocking an unfinished tip.
     pub holds_tip: bool,
+    /// Whether the ticket already has committed work to finish and land (a saved branch or a
+    /// reverted landing).
+    pub has_saved_work: bool,
     /// The group it shares workers in ([`crate::shares::group_of`]).
     pub epic: Group,
     /// The ticket weight within its pool.
@@ -295,6 +301,8 @@ pub enum Stage {
     Justiciar,
     /// An open regression ticket.
     Regression,
+    /// A ticket with saved work (a saved branch or a reverted landing) offered ahead of new work.
+    Resume,
     /// An improvement ticket, ahead of the groups because improvements are under their share.
     Improvement,
     /// A ticket in its group's place in the epic order.
@@ -319,6 +327,16 @@ pub fn order<'a>(
             .cmp(&a.holds_tip)
             .then_with(|| queue_order(a, b))
     });
+    let mut resumed: Vec<&ReadyTicket> = ready
+        .iter()
+        .filter(|t| {
+            t.has_saved_work
+                && t.kind != TicketKind::Regression
+                && !t.holds_tip
+                && epic_order.contains(&t.epic)
+        })
+        .collect();
+    resumed.sort_by(|a, b| queue_order(a, b));
     let improvements = improvements.map_or_else(Vec::new, |unit| improvement_order(ready, unit));
     let groups = epic_order.iter().flat_map(|group| {
         let mut tickets: Vec<&ReadyTicket> = ready
@@ -333,6 +351,7 @@ pub fn order<'a>(
         .into_iter()
         .map(|t| (t, Stage::Justiciar))
         .chain(regressions.into_iter().map(|t| (t, Stage::Regression)))
+        .chain(resumed.into_iter().map(|t| (t, Stage::Resume)))
         .chain(improvements.into_iter().map(|t| (t, Stage::Improvement)))
         .chain(groups.map(|t| (t, Stage::Group)))
         .filter(|(ticket, _)| seen.insert(&ticket.id))

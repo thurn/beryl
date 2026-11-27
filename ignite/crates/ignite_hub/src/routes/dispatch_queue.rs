@@ -29,7 +29,7 @@ use ignite_core::fleet::{Allocations, FleetSettings, MachineState};
 use ignite_core::ids::{MachineId, SessionId, TicketId};
 use ignite_core::pins::Pins;
 use ignite_core::protocol::hub::{MachineFree, Reservation};
-use ignite_core::protocol::tickets::{LandedWork, Saving, Status, Ticket, TicketType};
+use ignite_core::protocol::tickets::{LandedWork, REVERTED_KEY, Saving, Status, Ticket, TicketType};
 use ignite_core::shares::{self, Group, Source, Unit};
 use ignite_core::time::Timestamp;
 use ignite_store::hub::{flaky_triage, fleet, fleet_settings, provider_usage, releases, tickets};
@@ -635,11 +635,14 @@ impl Snapshot {
         } else {
             TicketKind::Ordinary
         };
+        let has_saved_work = ticket.metadata.contains_key(super::SAVED_BRANCH)
+            || ticket.metadata.contains_key(REVERTED_KEY);
         ReadyTicket {
             pins,
             needs_os: ticket.needs_os,
             kind,
             holds_tip: self.tip_blockers.contains(ticket.id.as_str()),
+            has_saved_work,
             epic: self.group(&ticket.id),
             allocation: ticket
                 .local_allocation()

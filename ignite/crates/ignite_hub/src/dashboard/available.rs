@@ -36,6 +36,11 @@ fn stage_chip(stage: Stage) -> String {
             Tone::Red,
             Some("A check that tip verification found failing; it holds master back."),
         ),
+        Stage::Resume => c::chip(
+            "Resuming",
+            Tone::Blue,
+            Some("Offered ahead of new work to finish and land a saved branch or reverted landing."),
+        ),
         Stage::Improvement => c::chip(
             "Improvement",
             Tone::Blue,

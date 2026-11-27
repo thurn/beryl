@@ -47,6 +47,7 @@ fn ticket(name: &str, epic: Option<&str>) -> ReadyTicket {
         id: id(name),
         kind: TicketKind::Ordinary,
         holds_tip: false,
+        has_saved_work: false,
         epic: epic.map_or(Group::General, |value| Group::Epic(id(value))),
         allocation: 100,
         chain: 0,
@@ -368,4 +369,67 @@ fn two_calls_on_the_same_snapshot_give_the_same_answer() {
     let second = next_for(&free, &ready, &order, Some(Unit::CoreHours), &[]);
     assert!(first.is_some());
     assert_eq!(first, second);
+}
+
+#[test]
+fn saved_work_goes_before_new_tickets_across_epics_and_improvements() {
+    let mut fresh_top_epic = ticket("Ta", Some("Etop"));
+    fresh_top_epic.created_at = Timestamp::from_millis(100);
+    let mut improvement = ticket("Ti", None);
+    improvement.kind = TicketKind::Improvement;
+    improvement.saving = Some((Unit::CoreHours, 10.0));
+    let mut saved_low_epic = ticket("Ts", Some("Elow"));
+    saved_low_epic.has_saved_work = true;
+    saved_low_epic.created_at = Timestamp::from_millis(9_000);
+    let order = [
+        Group::Epic(id("Etop")),
+        Group::General,
+        Group::Epic(id("Elow")),
+    ];
+    let ready = [fresh_top_epic.clone(), improvement.clone(), saved_low_epic.clone()];
+    assert_eq!(
+        ticket_of(next_for(&everyone(), &ready, &order, Some(Unit::CoreHours), &[])),
+        Some("Ts".to_owned())
+    );
+    // Justiciar and regression tickets still outrank saved work.
+    let mut reg = ticket("Tr", None);
+    reg.kind = TicketKind::Regression;
+    let ready_with_reg = [fresh_top_epic, improvement, saved_low_epic, reg];
+    assert_eq!(
+        ticket_of(next_for(
+            &everyone(),
+            &ready_with_reg,
+            &order,
+            Some(Unit::CoreHours),
+            &[],
+        )),
+        Some("Tr".to_owned())
+    );
+}
+
+#[test]
+fn saved_work_respects_epic_cap_and_orders_reverted_first() {
+    let mut saved_ordinary = ticket("Ts", Some("Elow"));
+    saved_ordinary.has_saved_work = true;
+    saved_ordinary.allocation = 100;
+    let mut reverted = ticket("Trev", Some("Elow"));
+    reverted.has_saved_work = true;
+    reverted.allocation = 300;
+    let mut capped = ticket("Tcap", Some("Ecap"));
+    capped.has_saved_work = true;
+    capped.allocation = 500;
+    let fresh = ticket("Tnew", Some("Etop"));
+    // `Ecap` is omitted from `epic_order` because it is at its `--max-workers` cap.
+    let order = [Group::Epic(id("Etop")), Group::Epic(id("Elow"))];
+    let ready = [fresh, saved_ordinary, reverted, capped];
+    assert_eq!(
+        ticket_of(next_for(&everyone(), &ready, &order, None, &[])),
+        Some("Trev".to_owned())
+    );
+    // Removing `Trev` falls through to `Ts`, never `Tcap`.
+    let ready = [ready[0].clone(), ready[1].clone(), ready[3].clone()];
+    assert_eq!(
+        ticket_of(next_for(&everyone(), &ready, &order, None, &[])),
+        Some("Ts".to_owned())
+    );
 }

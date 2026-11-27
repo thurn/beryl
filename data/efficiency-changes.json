@@ -1135,5 +1135,10 @@
     "label": "Scope platform verification gaps (`DeferredPlatform::families`) to only the families actually deferred at promotion and shrink them in `record_pass` as families pass, and treat `IncompleteReason::NotListed` (a check absent from a clean family listing at an earlier commit) as passing in culprit probes (`tip/coverage.rs`, `tip/culprit.rs`). On 2026-11-27, an unclosing macOS gap at `84d9824` (30 commits behind `master`) and `NotListed` aborts expanded `AB679`, `AE1MC` and `AP41C` to 39-42 suspects, blocking stall auto-revert while 23 product commits (54.2 product commit-hours) waited on `staging`",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Add `Stage::Resume` in `ignite_core::dispatch::order` (after `Regression` and before `Improvement` and `Group`) for ready tickets with `saved_branch` or `reverted` metadata (`ReadyTicket::has_saved_work`), while still respecting epic `--max-workers` caps. Over the prior 7 days, 31 non-deferred `saved_branch` product tickets waited 145.9 product ticket-hours while 17-195 brand-new tickets were claimed ahead of them, and 11 `saved_branch` plus 2 reverted P0 product tickets sat behind brand-new work after the 2026-11-27 18:15Z pool resume",
+    "metric": "bead.minutes",
+    "expect": "down"
   }
 ]

@@ -412,3 +412,22 @@ fn a_ticket_pinned_to_a_silent_machine_names_that_machines_reason() {
         "{waiting}"
     );
 }
+
+#[test]
+fn a_saved_branch_ticket_shows_the_resuming_chip_ahead_of_new_work() {
+    let conn = seeded();
+    conn.execute(
+        "UPDATE tickets SET metadata = '{\"saved_branch\":\"ignite/e1.3\"}' WHERE id = 'e1.3'",
+        [],
+    )
+    .unwrap();
+    let body = page(&conn, "/available");
+    let waiting = section(&body, "waiting");
+    assert!(waiting.contains(">Resuming<"), "{waiting}");
+    let pos_saved = waiting.find("e1.3").unwrap();
+    let pos_fresh = waiting.find("e1.2").unwrap();
+    assert!(
+        pos_saved < pos_fresh,
+        "saved branch e1.3 should appear before fresh e1.2: {waiting}"
+    );
+}

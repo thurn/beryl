@@ -36,6 +36,7 @@ fn ticket(name: &str, cores: f64) -> ReadyTicket {
         id: TicketId::new(name).unwrap(),
         kind: TicketKind::Ordinary,
         holds_tip: false,
+        has_saved_work: false,
         epic: crate::shares::Group::General,
         allocation: 100,
         chain: 0,
