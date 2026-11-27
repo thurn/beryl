@@ -526,15 +526,21 @@ impl Health {
     /// returned an empty conversation ID. Reporting at the first failure filed a justiciar
     /// ticket each time, and the next probe had already ended the hold before anyone read it.
     /// So a hold is reported only once a probe that ran after it started has also failed.
+    ///
+    /// A hold is also not reported while the hub has a usage hold on the same app. When
+    /// Antigravity's third-party quota ran out, its backend sometimes answered a probe with an
+    /// empty conversation ID instead of the quota error, so the daemon filed a justiciar ticket
+    /// about a provider fault when the cause was the quota that `ignite pool list` already
+    /// showed. The hold stays unreported, so it is reported if it outlasts the usage hold.
     fn report_holds(&self, ctx: &Context) {
         let rows = self
             .pool
             .with_database(|conn| cli_slots::holds(conn))
             .unwrap_or_default();
-        for row in rows
-            .iter()
-            .filter(|row| row.reported == 0 && probe_confirmed(row))
-        {
+        let usage_holds = crate::dispatchd::usage_holds(&self.pool, ctx.clock.now());
+        for row in rows.iter().filter(|row| {
+            row.reported == 0 && probe_confirmed(row) && !usage_holds.contains_key(&row.app)
+        }) {
             let hold = hold_of(row, Timestamp::EPOCH);
             let report = JusticiarReport {
                 subject: format!("cli-hold:{}", hold.app),

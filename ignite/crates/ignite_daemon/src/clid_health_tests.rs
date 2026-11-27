@@ -294,6 +294,32 @@ fn a_hold_the_next_probe_ends_is_never_reported() {
 }
 
 #[test]
+fn a_confirmed_hold_is_not_reported_while_a_usage_hold_covers_its_app() {
+    let rig = rig("quota");
+    let mut notice = ignite_core::fleet::FleetNotice::default();
+    notice.holds.insert(
+        "fake".to_owned(),
+        vec![ignite_core::plan_usage::Hold {
+            label: "Weekly · all models".to_owned(),
+            percent_used: 100.0,
+            resets_at: Some(rig.now().plus_seconds(2.0 * PROBE_EVERY_S).to_string()),
+            family: None,
+        }],
+    );
+    crate::fleet_notice::store(&rig.pool, &notice).unwrap();
+    rig.hold_now();
+    rig.advance(PROBE_EVERY_S);
+    rig.failing_probe();
+    rig.tick();
+    assert!(rig.hub.justiciar_reports().is_empty());
+    // Once the usage hold has reset, a hold that is still there is reported.
+    rig.advance(PROBE_EVERY_S);
+    rig.failing_probe();
+    rig.tick();
+    assert_eq!(rig.hub.justiciar_reports().len(), 1);
+}
+
+#[test]
 fn a_successful_probe_ends_the_hold_and_unparks_its_slots() {
     let rig = rig("unparks");
     rig.hold_now();

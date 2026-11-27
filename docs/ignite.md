@@ -3820,7 +3820,9 @@ What follows a turn's end:
    every 5 minutes; the first success resumes every parked slot. A hold posts
    one notification when it starts. It files one justiciar report only after a
    probe that ran after the hold started has also failed, so a backend that
-   recovers within 5 minutes files no ticket. A single API error first retries
+   recovers within 5 minutes files no ticket. It files none while the hub has a
+   usage hold on the same app, because a provider whose quota has run out can
+   fail in ways that look like an API error. A single API error first retries
    after 30 seconds.
 6. Anything else parks the slot and is reported. An end the daemon cannot place
    never releases a ticket and never starts a turn.
