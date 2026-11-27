@@ -3105,13 +3105,18 @@ Non-build failures normally get regression tickets. A prolonged stall can leave
 With `[revert] stall_minutes = 120`, a required non-build failure also qualifies
 for a revert once the oldest landing between `master` and the tip has waited at
 least 120 minutes, measured from the committer date of the last commit in that
-landing. A settled tip with a required failure gets one more round when the
-stall threshold is reached. Checks past the tip budget, and native checks
-catching up on coverage from before `master`, still get regression tickets. A
-platform catching up from `master` itself has no promoted landing to blame, so
-its failures qualify like any other. So does a failed check that has a pass at
-`master` on its platform, however old the gap: the gap did not leave that check
-unverified. The stall setting is optional and independent of `broken_build`.
+landing, provided the check is either `[rules] protected` or has a recorded
+product catch in `check_fix_outcomes` (outside `[rules] budgets` and ignoring
+multi-family closes). An unproven non-build check is never stall-reverted; it
+gets a regression ticket and is left to upkeep to switch off after an hour if it
+still holds `master` back. A settled tip with a stall-revert-eligible failure
+gets one more round when the stall threshold is reached. Checks past the tip
+budget, and native checks catching up on coverage from before `master`, still
+get regression tickets. A platform catching up from `master` itself has no
+promoted landing to blame, so its failures qualify like any other. So does a
+failed check that has a pass at `master` on its platform, however old the gap:
+the gap did not leave that check unverified. The stall setting is optional and
+independent of `broken_build`.
 
 Before that revert, upkeep switches off a check that has held `master` back for
 an hour without a record of catching a real defect. A check holds `master` back

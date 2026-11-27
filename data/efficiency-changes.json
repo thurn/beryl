@@ -1140,5 +1140,10 @@
     "label": "Add `Stage::Resume` in `ignite_core::dispatch::order` (after `Regression` and before `Improvement` and `Group`) for ready tickets with `saved_branch` or `reverted` metadata (`ReadyTicket::has_saved_work`), while still respecting epic `--max-workers` caps. Over the prior 7 days, 31 non-deferred `saved_branch` product tickets waited 145.9 product ticket-hours while 17-195 brand-new tickets were claimed ahead of them, and 11 `saved_branch` plus 2 reverted P0 product tickets sat behind brand-new work after the 2026-11-27 18:15Z pool resume",
     "metric": "bead.minutes",
     "expect": "down"
+  },
+  {
+    "label": "Restrict non-build stall auto-revert (`[revert] stall_minutes`) in `TipVerifier` to `[rules] protected` checks and checks with a recorded product catch (`score::proven_checks`, matching `upkeep::unproven_holds` by excluding `[rules] budgets` and multi-family closes). Unproven non-build checks instead report regressions and let `upkeep::unproven_holds` switch them off after an hour without reverting product landings. Over the prior 24 hours, stall auto-revert on unproven checks while `master` was already stalled reverted 7 product landings (`EP4KG.58`, `ERQ07.6`, `EP4KG.76`, `EP4KG.77`, `EVH5W.42`, `EVH5W.34`, `EVH5W.29`), adding 26.0 product ticket-hours of landing latency",
+    "metric": "bead.minutes",
+    "expect": "down"
   }
 ]

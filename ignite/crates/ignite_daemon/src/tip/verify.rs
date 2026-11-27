@@ -1,6 +1,6 @@
 //! A tip round's check set, verdicts and advancement of master.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use ignite_core::config::Os;
 use ignite_core::ids::{CheckName, Commit};
@@ -491,9 +491,28 @@ impl TipVerifier {
                     && check.runnable
                     && (!split.is_after(check) || regressions.contains(&check.check))
             };
+            // Non-build stall auto-revert applies only to protected checks and checks with a
+            // recorded product-defect catch. Unproven checks are deferred by
+            // `upkeep::unproven_holds` instead of reverting product landings; without this guard,
+            // an unrelated prior stall past `stall_minutes` reverts product landings on the first
+            // failure of any unproven check before `unproven_holds` can act.
+            let has_non_build_candidate = failed
+                .iter()
+                .any(|check| !check.is_build() && can_revert(check));
+            let proven = if has_non_build_candidate && ctx.config.revert.stall_minutes.is_some() {
+                self.work.proven_checks(&ctx.config.rules)
+            } else {
+                BTreeSet::new()
+            };
+            let can_stall_revert = |check: &TipCheck| {
+                !check.is_build()
+                    && can_revert(check)
+                    && (ctx.config.rules.is_protected(check.check.as_str())
+                        || proven.contains(&check.check))
+            };
             let stall_at = failed
                 .iter()
-                .any(|check| !check.is_build() && can_revert(check))
+                .any(|check| can_stall_revert(check))
                 .then(|| self.stall_revert_at(ctx, last, tip))
                 .flatten();
             let now = ctx.clock.now();
@@ -510,12 +529,13 @@ impl TipVerifier {
                     check,
                     prior: prior_for(check),
                     output: verdicts.get(&check.key).and_then(|v| v.output.as_deref()),
-                    allow_revert: can_revert(check)
-                        && if check.is_build() {
-                            ctx.config.revert.broken_build && ctx.config.repository.green.is_some()
-                        } else {
-                            stalled
-                        },
+                    allow_revert: if check.is_build() {
+                        can_revert(check)
+                            && ctx.config.revert.broken_build
+                            && ctx.config.repository.green.is_some()
+                    } else {
+                        stalled && can_stall_revert(check)
+                    },
                 })
                 .collect();
             let blame = self.blame_failed(ctx, last, tip, &regressions, &entries, true)?;

@@ -310,6 +310,12 @@ pub trait TipWork: Send + Sync {
     }
     /// The landings after `from` up to and including `to`, oldest first.
     fn landings(&self, ctx: &Context, from: &Commit, to: &Commit) -> Result<Vec<TipLanding>>;
+    /// Checks with a recorded product-defect catch outside `[rules] budgets`. Non-build stall
+    /// auto-revert applies only to `[rules] protected` checks and checks in this set; unproven
+    /// checks are left to `upkeep::unproven_holds` to switch off instead of reverting landings.
+    fn proven_checks(&self, _rules: &ignite_core::config::Rules) -> BTreeSet<CheckName> {
+        BTreeSet::new()
+    }
     /// What `checks` at `to` are scored by for the tip budget, with the landings since `from`;
     /// `None` when it cannot be known, and then every check runs before `master` moves.
     fn scoring(

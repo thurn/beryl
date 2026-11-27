@@ -8,8 +8,11 @@
 //!
 //! With `[revert] broken_build` set, a failing check of the round's build group (the families
 //! declared `builds = true`, see `green`) can trigger a revert. With `[revert] stall_minutes`
-//! set, a required non-build check can also trigger one once the oldest unverified landing
-//! has waited that long. The round reports a regression unless all of these hold:
+//! set, a required non-build check that is either `[rules] protected` or has a recorded product
+//! catch (`check_fix_outcomes`, outside `[rules] budgets`) can also trigger one once the oldest
+//! unverified landing has waited that long; unproven non-build checks are reported so
+//! `upkeep::unproven_holds` can switch them off instead of reverting product landings. The round
+//! reports a regression unless all of these hold:
 //!
 //! - the culprit search ended at one landing ([`CulpritSearch::OneCandidate`] or
 //!   [`CulpritSearch::Bisected`]);

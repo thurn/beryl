@@ -135,6 +135,34 @@ pub fn product_catches(
         .collect()
 }
 
+/// Checks with a recorded product-defect catch outside `[rules] budgets`, matching
+/// `upkeep::unproven_holds`. A close that stamped checks from more than one family at the same
+/// `(ticket, at)` is ignored, because a fix for one check on a multi-family or reopened ticket
+/// otherwise stamps every unrelated co-filed check as having caught a product defect.
+pub fn proven_checks(fixes: &[CheckFix], rules: &Rules) -> BTreeSet<CheckName> {
+    let mut families_by_close: BTreeMap<(&crate::ids::TicketId, Timestamp), BTreeSet<&str>> =
+        BTreeMap::new();
+    for fix in fixes {
+        if fix.outcome == FixOutcome::Product {
+            families_by_close
+                .entry((&fix.ticket, fix.at))
+                .or_default()
+                .insert(fix.check.family());
+        }
+    }
+    fixes
+        .iter()
+        .filter(|fix| {
+            fix.outcome == FixOutcome::Product
+                && !rules.is_budget(fix.check.as_str())
+                && families_by_close
+                    .get(&(&fix.ticket, fix.at))
+                    .is_some_and(|families| families.len() == 1)
+        })
+        .map(|fix| fix.check.clone())
+        .collect()
+}
+
 impl ProductCatch {
     /// Whether this catch is recent and its culprit shares an area with the change.
     pub fn applies(&self, areas: &[String], now: Timestamp) -> bool {
@@ -454,5 +482,41 @@ mod tests {
         );
         assert_eq!(catches.len(), 1);
         assert_eq!(catches[0].check.as_str(), "rust:a::b");
+    }
+
+    #[test]
+    fn proven_checks_excludes_budgets_non_product_and_multi_family_closes() {
+        let t1 = Timestamp::parse("2026-11-27T05:00:00Z").unwrap();
+        let t2 = Timestamp::parse("2026-11-27T06:00:00Z").unwrap();
+        let make = |check: &str, ticket: &str, at: Timestamp, outcome: FixOutcome| CheckFix {
+            check: CheckName::new(check).unwrap(),
+            ticket: crate::ids::TicketId::new(ticket).unwrap(),
+            at,
+            outcome,
+            source: crate::protocol::hub::FixSource::Regression,
+            first_bad: None,
+            fixing_commit: None,
+        };
+        let rules = Rules {
+            budgets: vec!["counts".to_owned()],
+            ..Rules::default()
+        };
+        let fixes = vec![
+            // Single-family product close: proven.
+            make("rust:a::one", "T1", t1, FixOutcome::Product),
+            make("rust:a::two", "T1", t1, FixOutcome::Product),
+            // Budget family product close: excluded.
+            make("counts:rollouts", "T2", t1, FixOutcome::Product),
+            // Non-product close: excluded.
+            make("pytest:test_a", "T3", t1, FixOutcome::TestOnly),
+            // Multi-family close on same (ticket, at): excluded.
+            make("client-test:one", "T4", t1, FixOutcome::Product),
+            make("pytest:co_filed", "T4", t1, FixOutcome::Product),
+            // Separate single-family close on the same ticket at a later time: proven.
+            make("client-test:two", "T4", t2, FixOutcome::Product),
+        ];
+        let proven = proven_checks(&fixes, &rules);
+        let names: Vec<&str> = proven.iter().map(CheckName::as_str).collect();
+        assert_eq!(names, ["client-test:two", "rust:a::one", "rust:a::two"]);
     }
 }

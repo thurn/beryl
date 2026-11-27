@@ -1,6 +1,6 @@
 //! The scripted [`TipWork`] the tip tests verify with.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
@@ -64,6 +64,8 @@ pub(super) struct FakeWork {
     pub(super) masters: Mutex<Vec<(Vec<CheckName>, Commit)>>,
     /// The checks each commit's listing finds switched off.
     pub(super) off: Mutex<HashMap<Commit, Vec<TipCheck>>>,
+    /// Checks with a recorded product-defect catch outside `[rules] budgets`.
+    pub(super) proven: Mutex<BTreeSet<CheckName>>,
     /// Called when the round starts listing a phase.
     pub(super) before_listing: Mutex<Option<BeforeListing>>,
     /// Called when a family's batches start, before the first claim, where the real work
@@ -82,6 +84,10 @@ pub(super) type BeforeBatches = Arc<dyn Fn() + Send + Sync>;
 type BeforeListing = Box<dyn Fn(ListingPhase) + Send>;
 
 impl FakeWork {
+    pub(super) fn set_proven(&self, check: &CheckName) {
+        self.proven.lock().unwrap().insert(check.clone());
+    }
+
     pub(super) fn listed(&self, at: &Commit) -> Vec<TipCheck> {
         self.checks
             .lock()
@@ -302,6 +308,15 @@ impl TipWork for FakeWork {
         } else {
             ticketed_landings(ctx, commits)
         }
+    }
+    fn proven_checks(&self, rules: &ignite_core::config::Rules) -> BTreeSet<CheckName> {
+        self.proven
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|check| !rules.is_budget(check.as_str()))
+            .cloned()
+            .collect()
     }
 }
 

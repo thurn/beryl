@@ -195,6 +195,13 @@ impl TipWork for CheckTipWork {
     fn landings(&self, ctx: &Context, from: &Commit, to: &Commit) -> Result<Vec<TipLanding>> {
         ticketed_landings(ctx, ignite_git::changed::commits(&ctx.repo, from, to)?)
     }
+
+    fn proven_checks(
+        &self,
+        rules: &ignite_core::config::Rules,
+    ) -> std::collections::BTreeSet<CheckName> {
+        self.checks.proven_checks(rules)
+    }
 }
 
 /// Groups `commits`, oldest first, into landings by the ticket the hub says landed each one.

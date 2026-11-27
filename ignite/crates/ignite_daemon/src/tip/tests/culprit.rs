@@ -244,6 +244,7 @@ fn a_failing_check_outside_the_build_group_is_reported() {
 fn a_required_failure_can_revert_at_the_stall_threshold_after_being_reported() {
     let failing = check("a", 'a');
     let (world, mut ctx, tip) = broken(&failing, &["src/a/lib.rs"], false);
+    world.work.set_proven(&failing.check);
     ctx.config.revert.stall_minutes = Some(120);
     // Master has been quiet for longer than two hours, but the landing has waited 119 minutes.
     world
@@ -752,6 +753,7 @@ fn an_uncached_check_that_passes_at_master_narrows_and_reverts_despite_an_older_
     world
         .work
         .set_outcome(&master, &failing.check, Outcome::Pass);
+    world.work.set_proven(&failing.check);
     world.work.set_checks(&tip, vec![failing]);
     world.git.script_revert(RevertOutcome::Clean {
         commit: commit("cccc000"),
@@ -770,4 +772,31 @@ fn an_uncached_check_that_passes_at_master_narrows_and_reverts_despite_an_older_
     let reverts = world.hub.reverted_landings();
     assert_eq!(reverts.len(), 1, "{:?}", world.hub.regressions());
     assert_eq!(reverts[0].ticket, Some(ticket("tk.42")));
+}
+
+#[test]
+fn an_unproven_check_does_not_revert_during_a_stall() {
+    let failing = check("a", 'a');
+    let (world, mut ctx, tip) = broken(&failing, &["src/a/lib.rs"], false);
+    ctx.config.revert.stall_minutes = Some(120);
+    world.clock.advance(121.0 * 60.0);
+    clean_revert(&world);
+    let mut verifier = reverting(&world);
+
+    verifier.round_at(&ctx, &tip, Seq(0)).unwrap();
+
+    reported_not_reverted(&world);
+    assert!(!verifier.due(&ctx, &tip));
+
+    // Marking the family protected allows stall auto-revert even without product catches.
+    let (world, mut ctx, tip) = broken(&failing, &["src/a/lib.rs"], false);
+    ctx.config.revert.stall_minutes = Some(120);
+    ctx.config.rules.protected.push(failing.family.clone());
+    world.clock.advance(121.0 * 60.0);
+    clean_revert(&world);
+
+    reverting(&world).verify(&ctx, &tip).unwrap();
+
+    assert_eq!(staging_pushes(&world), [commit("cccc000")]);
+    assert_eq!(world.hub.reverted_landings().len(), 1);
 }

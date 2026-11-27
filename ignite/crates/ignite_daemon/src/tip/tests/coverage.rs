@@ -296,6 +296,7 @@ fn a_platform_catching_up_from_master_reverts_during_a_stall() {
         .work
         .add_landing("tk.40", &[tip.as_str()], &["src/windows/lib.rs"]);
     world.work.set_outcome(&tip, &failing.check, Outcome::Fail);
+    world.work.set_proven(&failing.check);
     world.work.set_checks(&tip, vec![failing]);
     world.git.script_revert(RevertOutcome::Clean {
         commit: commit("cccc000"),
@@ -372,6 +373,7 @@ fn a_check_that_passed_at_master_reverts_despite_an_older_gap() {
             .work
             .add_landing("tk.41", &[tip.as_str()], &["src/windows/lib.rs"]);
         world.work.set_outcome(&tip, &failing.check, Outcome::Fail);
+        world.work.set_proven(&failing.check);
         world.work.set_checks(&tip, vec![failing]);
         world.git.script_revert(RevertOutcome::Clean {
             commit: commit("cccc000"),
@@ -694,6 +696,7 @@ fn passing_families_narrow_a_platform_gap_to_only_unverified_families() {
     world
         .work
         .set_outcome(&tip2, &fast_fail.check, Outcome::Fail);
+    world.work.set_proven(&fast_fail.check);
     world.work.set_checks(&tip2, vec![fast_fail]);
     world.git.script_revert(RevertOutcome::Clean {
         commit: commit("dddd000"),

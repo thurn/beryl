@@ -208,6 +208,7 @@ fn open_hub_regression_skips_redundant_bisection_unless_revert_eligible() {
     );
 
     // 2. Stalled, but check already fails at master: probes master once, then skips gap bisection.
+    world.work.set_proven(&failing.check);
     ctx.config.revert.stall_minutes = Some(120);
     world.clock.advance(121.0 * 60.0);
     world
@@ -301,6 +302,7 @@ fn a_newly_added_check_not_listed_at_earlier_commits_isolates_culprit_and_revert
     }
     world.work.set_outcome(&c2, &added.check, Outcome::Fail);
     world.work.set_outcome(&tip, &added.check, Outcome::Fail);
+    world.work.set_proven(&added.check);
     world.work.set_checks(&tip, vec![added]);
     world.git.script_revert(RevertOutcome::Clean {
         commit: commit("cccc000"),

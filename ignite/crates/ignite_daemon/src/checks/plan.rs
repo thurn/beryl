@@ -320,6 +320,18 @@ pub struct Scoring {
 }
 
 impl super::Checks {
+    /// Checks with a recorded product-defect catch outside `[rules] budgets`, for deciding
+    /// whether a stalled non-build failure may auto-revert a product landing.
+    pub(crate) fn proven_checks(&self, rules: &ignite_core::config::Rules) -> BTreeSet<CheckName> {
+        self.history.product_fixes().map_or_else(
+            |error| {
+                eprintln!("ignite: no product catch history from the hub: {error}");
+                BTreeSet::new()
+            },
+            |fixes| score::proven_checks(&fixes, rules),
+        )
+    }
+
     /// The [`Scoring`] of `checks`, named with their families, in `tree`, for a round whose
     /// landings changed `changed`.
     pub(crate) fn scoring(

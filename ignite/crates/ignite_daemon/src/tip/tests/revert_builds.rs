@@ -69,6 +69,7 @@ fn three_landings(calls: bool) -> (World, Context, Commit, TipCheck) {
         .git
         .set_words_before(&commit("bbbb000"), &["land", "Filter", "pub"]);
     let failing = check("a", 'a');
+    world.work.set_proven(&failing.check);
     world.work.set_checks(&tip, vec![failing.clone(), build()]);
     world.work.set_outcome(&tip, &failing.check, Outcome::Fail);
     // Without `tk.40`, `tk.41`'s call does not compile.
