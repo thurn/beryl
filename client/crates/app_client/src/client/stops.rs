@@ -1,5 +1,6 @@
 //! Settings and stops: what a change of either asks of the host and the session.
 
+use beryl_protocol::protocol::Step;
 use beryl_protocol::{GameUpdate, StopsSetting};
 use game_hud::hud::steps;
 
@@ -31,8 +32,7 @@ impl Client {
 
     /// Applies a stop toggle to the saved settings and forwards it when the
     /// session accepts settings changes.
-    pub(super) fn toggle_stop(&mut self, message: steps::Message) {
-        let steps::Message::Toggle { step, theirs } = message;
+    pub(super) fn toggle_stop(&mut self, step: Step, theirs: bool) {
         let set = if theirs {
             &mut self.settings.stops.theirs
         } else {

@@ -8,7 +8,6 @@ use game_hud::hud::counts::CountFloats;
 use game_hud::hud::inspector::{self, Inspector};
 use game_hud::hud::notices::NoticeFloats;
 use game_hud::hud::piles::PileCounts;
-use game_hud::hud::rows::{self, RowCounts};
 use kit_scene::StateUpdate;
 use std::convert::Infallible;
 
@@ -62,18 +61,6 @@ impl Features {
         self.slot::<NoticeFloats>().apply(update)
     }
 
-    pub fn rows(&self) -> &RowCounts {
-        self.state_of::<RowCounts>()
-    }
-
-    pub fn update_rows<U: StateUpdate<RowCounts>>(&mut self, update: U) -> U::Output {
-        self.slot::<RowCounts>().apply(update)
-    }
-
-    pub fn focus_row(&mut self, message: rows::Message) {
-        self.slot::<RowCounts>().update(&message);
-    }
-
     pub fn banner_state(&self) -> &Banner {
         self.state_of::<Banner>()
     }
@@ -107,7 +94,6 @@ trait PassiveFloat:
 
 impl PassiveFloat for PileCounts {}
 impl PassiveFloat for NoticeFloats {}
-impl PassiveFloat for RowCounts {}
 impl PassiveFloat for Banner {}
 impl PassiveFloat for Inspector {}
 impl PassiveFloat for FpsMonitor {}

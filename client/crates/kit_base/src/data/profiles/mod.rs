@@ -18,7 +18,7 @@ mod pile;
 mod slot;
 mod tray;
 pub use anchored::Anchored;
-pub use banded::Banded;
+pub use banded::{Banded, Rows as BandedRows};
 pub use hud::{
     FloatingPrompt, Heading, Hud, Incoming, Inspector, Piece, ResultLayout, SingleRow, WrappedHand,
 };
@@ -178,8 +178,6 @@ pub struct Table {
     pub strip: f32,
     #[serde(deserialize_with = "nonnegative")]
     pub gap: f32,
-    #[serde(deserialize_with = "nonnegative")]
-    pub row_count_gap: f32,
     /// Centre-to-centre spacing for blockers of the same attacker, in card widths.
     #[serde(deserialize_with = "positive")]
     pub blocker_spacing: f32,
@@ -537,6 +535,9 @@ impl ProfileData {
             | SlotName::ManualProposalsPanel
             | SlotName::ManualProposalsShort
             | SlotName::PromptCatalog
+            // `PhaseIcon`: where the phase icon stands as a button of its own, outside the
+            // middle band.
+            | SlotName::PhaseIcon
             | SlotName::PromptWays
             | SlotName::RevealedPile => false,
             SlotName::FullControl => self.hud.table.contains(&Piece::FullControl),

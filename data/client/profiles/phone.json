@@ -13,23 +13,22 @@
         [152.1, 205]
       ]
     },
-    "strip": 44,
+    "strip": 48,
     "creatures": {
       "y": -69,
       "left": -152.1,
       "right": 152.1
     },
     "lands": {
-      "y": -161,
+      "y": -228,
       "left": -152.1,
-      "right": -12
+      "right": 152.1
     },
     "others": {
       "y": -161,
-      "left": 12,
+      "left": -152.1,
       "right": 152.1
     },
-    "row_count_gap": 4,
     "blocker_spacing": 1.04,
     "cloth": { "size": 4000, "depth": 0.5 },
     "pile": {
@@ -47,6 +46,21 @@
     "gap": 4,
     "pile_step": [3, 3],
     "beneath_step": [0.3, 0.17],
+    "inspector": {
+      "stage_height": 759,
+      "base_width": 393,
+      "width": 260,
+      "top": 100,
+      "pad": 6,
+      "artist": 20,
+      "least_width": 200,
+      "narrow_step": 10,
+      "edge": 66.5,
+      "orbs_right": 66.5,
+      "between_top": 100,
+      "stack_left": 326.5,
+      "stack_gap": 0
+    },
     "tray_tuning": {
       "depth": 280,
       "fan": {
@@ -94,13 +108,14 @@
         "gap": 6
       },
       "stack": {
-        "width": 68,
-        "step": 52,
+        "width": 80,
+        "step": 48,
         "count_room": 32,
         "depth": 400,
         "step_depth": 1.5,
-        "ends": 38,
-        "shared_ends": 88
+        "ends": 4,
+        "shared_ends": 4,
+        "side_width": 188
       },
       "hand": {
         "depth": 300,
@@ -108,7 +123,7 @@
         "fan_radius": 14,
         "gap": 4,
         "bias_degrees": 0.6,
-        "clear_piles": true
+        "clear_piles": false
       },
       "opponent_hand": {
         "width": 24,
@@ -131,7 +146,13 @@
       "dock_gap": 6,
       "button_height": 44,
       "pool_offset": [-30, 0],
-      "pool_align": [1, 0.5]
+      "pool_align": [1, 0.5],
+      "rows": {
+        "least_width": 48,
+        "land_least": 0.15,
+        "land_width": 40,
+        "land_room": 70
+      }
     }
   },
   "table_style": {
@@ -240,6 +261,9 @@
     "viewer": {
       "region": "window"
     },
+    "inspector": {
+      "region": "window"
+    },
     "prompt.clearance": {
       "region": "play_area"
     },
@@ -292,6 +316,13 @@
     },
     "phase": {
       "region": "middle"
+    },
+    "phase.icon": {
+      "region": "log_area",
+      "inset": [4, 0, 0, 0],
+      "max_width": 44,
+      "max_height": 44,
+      "align_x": "end"
     },
     "menu": {
       "region": "opponent_strip",
@@ -363,7 +394,7 @@
     }
   },
   "checks": {
-    "target_points": 44,
+    "target_points": 40,
     "text_points": 11
   },
   "test_matrix": {

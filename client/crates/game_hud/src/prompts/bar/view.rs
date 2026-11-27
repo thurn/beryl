@@ -425,8 +425,13 @@ impl<'a> PromptSlots<'a> {
         // The shared piles' column stands at the band's left end, and a pill moved up or down
         // to a height clear of the cards would cover the graveyard or exile pile beside it.
         let bar = clear_of_shared_piles(profile, bar?.rect, shared);
+        // A profile that gives the phase icon a slot of its own draws it there instead
+        // (`phase::corner`), leaving the whole band to the bar.
         let phase_icon = phase
-            .filter(|_| profile.data().hud.table.contains(&Piece::Phase))
+            .filter(|_| {
+                profile.data().hud.table.contains(&Piece::Phase)
+                    && profile.slot(SlotName::PhaseIcon).is_none()
+            })
             .zip(input.view)
             .map(|(phase, view)| {
                 let band = clear_of_shared_piles(profile, phase.rect, shared);

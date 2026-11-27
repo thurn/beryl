@@ -4,7 +4,7 @@ use glam::Vec2;
 use kit_base::data::pointer::PointerTuning;
 use kit_base::geometry::Rect;
 use kit_frame::frame::{ElementId, Frame, FrameBuilder, NameRef, Place, Resolved, Role, StateBits};
-use kit_scene::input::{Direction, Routed, Router, Stage, Target, TouchPolicy};
+use kit_scene::input::{Direction, Hold, Routed, Router, Stage, Target, TouchPolicy};
 use kit_ui::input::{Button, Modifiers, Pointer, PointerKind, PointerPhase, Tier};
 
 const HOME: Vec2 = Vec2::new(10.0, 10.0);
@@ -86,7 +86,7 @@ impl Scene {
                         container: Some(u32::from(node.id.0 != 1)),
                     }),
                     TouchPolicy {
-                        hold: true,
+                        hold: Hold::Long,
                         delayed_pickup: true,
                         ..TouchPolicy::default()
                     },

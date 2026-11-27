@@ -16,6 +16,12 @@ final class TableController: UIViewController {
     private var timer: DispatchSourceTimer?
     /// The surface last passed, so that a layout that changes nothing passes nothing.
     private var passed: (width: UInt32, height: UInt32, scale: Float, insets: UIEdgeInsets)?
+    /// The native field behind the field being edited, which shows the keyboard.
+    let textEntry = TextEntry()
+    /// The height in points of the keyboard over the view's bottom, or 0 while it is down. The
+    /// library is told it as the bottom of the safe area, so that it lays the edited field out
+    /// above the keyboard.
+    private var keyboard: CGFloat = 0
 
     // The table fills the screen. Info.plist's UIStatusBarHidden alone no longer hides it.
     override var prefersStatusBarHidden: Bool { true }
@@ -23,6 +29,9 @@ final class TableController: UIViewController {
     override func loadView() {
         let view = MetalView()
         view.onTouch = { [weak self] id, phase, point in self?.touch(id, phase, point) }
+        view.addSubview(textEntry.view)
+        textEntry.onText = { [weak self] text in self?.text(text) }
+        textEntry.onEnter = { [weak self] in self?.enter() }
         self.view = view
     }
 
@@ -93,6 +102,12 @@ final class TableController: UIViewController {
         center.addObserver(
             self, selector: #selector(becomeActive),
             name: UIApplication.didBecomeActiveNotification, object: nil)
+        center.addObserver(
+            self, selector: #selector(keyboardChanged),
+            name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
+        center.addObserver(
+            self, selector: #selector(keyboardChanged),
+            name: UIResponder.keyboardWillHideNotification, object: nil)
         #if DEBUG
             observeTestNotifications(context: context)
         #endif
@@ -115,7 +130,8 @@ final class TableController: UIViewController {
         let layer = view.layer as! CAMetalLayer
         let scale = view.window?.screen.nativeScale ?? UIScreen.main.nativeScale
         layer.contentsScale = scale
-        let insets = view.safeAreaInsets
+        var insets = view.safeAreaInsets
+        insets.bottom = max(insets.bottom, keyboard)
         let width = UInt32(view.bounds.width * scale)
         let height = UInt32(view.bounds.height * scale)
         if let passed, passed.width == width, passed.height == height,
@@ -141,6 +157,32 @@ final class TableController: UIViewController {
                 id: id, kind: UInt32(BERYL_POINTER_TOUCH), phase: phase, x: Float(point.x),
                 y: Float(point.y), button: UInt32(BERYL_BUTTON_PRIMARY), wheel_x: 0, wheel_y: 0,
                 modifiers: 0))
+    }
+
+    /// The edited field's whole new contents, typed on the keyboard.
+    private func text(_ text: String) {
+        guard let app else { return }
+        resume()
+        text.withCString { beryl_client_text(app, $0) }
+    }
+
+    /// Return on the keyboard, as the Enter key's press and release.
+    private func enter() {
+        guard let app else { return }
+        resume()
+        for phase in [BERYL_KEY_DOWN, BERYL_KEY_UP] {
+            beryl_client_key(
+                app, BerylKey(code: UInt32(BERYL_KEY_ENTER), phase: UInt32(phase), modifiers: 0))
+        }
+    }
+
+    @objc private func keyboardChanged(_ notification: Notification) {
+        let height =
+            notification.name == UIResponder.keyboardWillHideNotification
+            ? 0 : TableController.keyboardHeight(notification, in: view)
+        guard height != keyboard else { return }
+        keyboard = height
+        attach()
     }
 
     @objc private func tick(_ link: CADisplayLink) {

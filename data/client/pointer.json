@@ -37,6 +37,7 @@
     "tap_ms": 300,
     "double_ms": 300,
     "slop_points": 30,
-    "pickup_ms": 150
+    "pickup_ms": 150,
+    "zoom_ms": 180
   }
 }

@@ -2,7 +2,7 @@
 
 use super::Client;
 use app_screens::screens::Screen;
-use game_hud::hud::{counts, notices, rows};
+use game_hud::hud::{counts, notices};
 
 impl Client {
     /// Plays prompt-owned steps and tracks the pointer's aiming arrows.
@@ -34,13 +34,9 @@ impl Client {
 
     /// `prepare` at `table`, the table's own time (`bug`).
     pub(super) fn prepare_table(&mut self, table: u64) {
-        let rows = self.show.rows_key();
         if self.show.prepare(table) {
             self.prepare_counts();
             self.prepare_notices();
-        }
-        if self.show.rows_key() != rows {
-            self.prepare_rows();
         }
         self.prepare_steps();
     }
@@ -51,16 +47,8 @@ impl Client {
     /// whole as the table is placed again, and its notices are laid out only now.
     pub(super) fn prepare_resized(&mut self) {
         self.prepare_revealed_pile();
-        self.prepare_rows();
         self.prepare_counts();
         self.prepare_notices();
-    }
-
-    pub(super) fn prepare_rows(&mut self) {
-        self.features.update_rows(rows::Prepare {
-            layer: &mut self.layer,
-            rows: self.show.coming_rows(),
-        });
     }
 
     pub(super) fn prepare_notices(&mut self) {

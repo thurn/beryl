@@ -75,6 +75,16 @@ Install on a paired iPhone with `just ios-device --user-asked` only when the
 user asks. `just mobile-bugs` pulls the bug reports the phone smokes saved into
 the desktop's bugs folder, and `--device` also pulls from a paired iPhone.
 
+## Sizes on a phone
+
+Everything a finger presses on a phone is at least 40 by 40 points on its own
+(`checks.target_points` in `data/client/profiles/phone.json`). Where a group of
+things cannot all keep that size, such as a crowded row of permanents, collapse
+the group into one target that opens a browser of all of them. Never shrink them
+below the target, and never show a count of the ones left out. Lands are read by
+pressing them and are not targets of their own, so their row may draw them
+smaller.
+
 ## Frame budgets
 
 `just client gate` checks native work against per-board budgets. `--counts`

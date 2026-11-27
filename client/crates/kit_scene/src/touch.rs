@@ -51,6 +51,8 @@ struct Active {
     /// Whether a held touch here means something, and whether a card it presses waits for
     /// `PICKUP_MS` before it can be picked up.
     hold: bool,
+    /// Whether the hold is due after `touch.zoom_ms` rather than `long_press_ms`.
+    quick: bool,
     pickup: bool,
     /// The `now` of the first frame after the finger went down, from which the hold and the
     /// pickup are timed.
@@ -79,6 +81,15 @@ impl Default for Touch {
             tap: None,
             last: None,
         }
+    }
+}
+
+/// How long a hold takes, in milliseconds: a quick one's `touch.zoom_ms`, else `long_press_ms`.
+fn hold_ms(quick: bool, tuning: &PointerTuning) -> u64 {
+    if quick {
+        tuning.touch.zoom_ms
+    } else {
+        tuning.long_press_ms
     }
 }
 
@@ -129,6 +140,7 @@ impl Touch {
                 id,
                 start: at,
                 hold: false,
+                quick: false,
                 pickup: false,
                 since: None,
             }),
@@ -138,10 +150,12 @@ impl Touch {
         landed
     }
 
-    /// Times a hold for the active finger: one held still `LONG_PRESS_MS` is then due.
-    pub fn wait_for_hold(&mut self) {
+    /// Times a hold for the active finger: one held still `LONG_PRESS_MS` is then due, or only
+    /// `touch.zoom_ms` if `quick`.
+    pub fn wait_for_hold(&mut self, quick: bool) {
         if let Some(active) = &mut self.active {
             active.hold = true;
+            active.quick = quick;
         }
     }
 
@@ -247,7 +261,7 @@ impl Touch {
         let active = self.active.as_mut().filter(|active| active.hold)?;
         let due = active
             .since?
-            .saturating_add(nanoseconds(tuning.long_press_ms));
+            .saturating_add(nanoseconds(hold_ms(active.quick, tuning)));
         if now < due {
             return None;
         }
@@ -278,7 +292,7 @@ impl Touch {
         let since = active.since?;
         let hold = active
             .hold
-            .then(|| since.saturating_add(nanoseconds(tuning.long_press_ms)));
+            .then(|| since.saturating_add(nanoseconds(hold_ms(active.quick, tuning))));
         let pickup = active
             .pickup
             .then(|| since.saturating_add(nanoseconds(tuning.touch.pickup_ms)));

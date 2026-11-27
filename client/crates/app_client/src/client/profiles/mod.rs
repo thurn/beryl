@@ -7,7 +7,7 @@ use game_hud::hud::phase::{middle_band, phase_box};
 use game_hud::hud::placement_scene::{Group, PlacementScene};
 use game_table::table::labels::ABILITY_ROLE;
 use game_table::table::{Camera, Objects};
-use kit_base::data::profiles::Piece;
+use kit_base::data::profiles::{Piece, SlotName};
 use kit_frame::frame::{ElementId, Role, ability_element};
 
 const SHOWN_BOARD_IDS: u32 = 1 << 31;
@@ -51,7 +51,9 @@ impl super::Client {
             );
         }
         if let Some(band) = middle_band(profile, &update.view).filter(|_| {
-            self.features.screen == Screen::Game && profile.data().hud.table.contains(&Piece::Phase)
+            self.features.screen == Screen::Game
+                && profile.data().hud.table.contains(&Piece::Phase)
+                && profile.slot(SlotName::PhaseIcon).is_none()
         }) {
             layout.phase(phase_box(band, update.view.shared.is_some()));
         }

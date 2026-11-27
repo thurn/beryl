@@ -41,7 +41,7 @@ mod inspect;
 mod keys;
 use game_hud::hud::{
     banner::Banner, counts::CountFloats, inspector::Inspector, notices::NoticeFloats,
-    piles::PileCounts, rows::RowCounts,
+    piles::PileCounts,
 };
 pub use inspect::{FeatureInfo, composed_features, registered_features};
 mod manual;
@@ -65,7 +65,6 @@ const REGISTRY: &[Registration] = &[
     Registration::of::<GameOver>("game-over", Placement::GameOver),
     Registration::floating::<CountFloats>("life-totals"),
     Registration::floating::<PileCounts>("pile-counts"),
-    Registration::floating::<RowCounts>("row-counts"),
     Registration::floating::<NoticeFloats>("notices"),
     Registration::floating::<Banner>("step-banner"),
     Registration::floating::<Inspector>("inspector"),
@@ -697,7 +696,9 @@ impl Mounted for StepRow {
     }
 
     fn request(client: &mut Client, request: Self::Request) -> bool {
-        client.toggle_stop(request);
+        if let steps::Message::Toggle { step, theirs } = request {
+            client.toggle_stop(step, theirs);
+        }
         true
     }
 }

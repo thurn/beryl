@@ -548,8 +548,10 @@ impl Table {
         // more than half of its quarter turn, from the middle of its step.
         let tapped = [resting, last].iter().flatten().any(|object| object.tapped)
             && pose.rotation.angle_between(Quat::IDENTITY) > FRAC_PI_4;
-        let place = resting
-            .filter(|rest| !begun && !takes_pointer(rest.place))
+        // Until its track begins, a card is where it rested: a pressable place hands its press on
+        // at once, but a place too small to press keeps it out of reach until then.
+        let small = |place| !takes_pointer(place) || self.layout.too_small_to_press(place);
+        let place = (resting.filter(|rest| !begun && small(rest.place)))
             .map_or(object.place, |rest| rest.place);
         // A card overlaps its row's other cards on purpose as where it rests does until its track
         // begins, and as where the script leaves it does once the track has settled. Its row
@@ -616,7 +618,8 @@ impl Table {
         let interactive = state & StateBits::FACE_DOWN == 0
             && object.copies > 0
             && !name.is_empty()
-            && self.pressable(slot, object.place, waiting);
+            && self.pressable(slot, object.place, waiting)
+            && !self.layout.too_small_to_press(object.place);
         let mut look = Look::new(object.pose, face, full, state, interactive);
         let on = Subject::Object {
             slot: ObjectId(u16::try_from(slot).expect("slots are u16")),

@@ -32,7 +32,7 @@ mod stack;
 mod tray;
 mod tray_layout;
 
-use beryl_protocol::protocol::{PlayerView, Side, ZoneName};
+use beryl_protocol::protocol::{PlayerView, RowName, Side, ZoneName};
 use glam::Vec2;
 
 use crate::profiles::TableBands;
@@ -303,6 +303,22 @@ impl LifeDock {
 }
 
 impl Layout {
+    /// Whether a card resting at `place` is too small to be pressed on its own: on a banded
+    /// layout (the phone's), the lands' rows draw lands at most 40 points wide, under the touch
+    /// target, so neither the rows nor the checks give them a target of their own.
+    #[must_use]
+    pub fn too_small_to_press(&self, place: Place) -> bool {
+        self.bands.is_some()
+            && matches!(
+                place,
+                Place::Card {
+                    zone: ZoneName::Battlefield,
+                    row: Some(RowName::Lands),
+                    ..
+                }
+            )
+    }
+
     /// Whether this zone has its own visible pile in the layout.
     #[must_use]
     pub fn pile_visible(&self, zone: ZoneName) -> bool {

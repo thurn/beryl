@@ -3,7 +3,8 @@
 //! other whole, a finger held still shows its card whole, a hand card can be carried off at
 //! once while a manual-table card waits for the finger to rest, a drag scrolls a row instead of
 //! touching a card, a second finger cancels the first only if it lands with it, and a double
-//! tap on bare felt or with two fingers opens the bug report.
+//! tap on bare felt or with two fingers opens the bug report, even when the host drew no frame
+//! for a while before it.
 
 use app_client::Input;
 use app_client::command::{Request, SessionCommand};
@@ -38,6 +39,11 @@ const WINDOW: Size = Size {
 
 /// A client given `update`, with the card records of its cards, drawn at time 0.
 fn client(update: GameUpdate) -> Client {
+    client_in(update, WINDOW, Insets::default())
+}
+
+/// `client` in a window of `size` with the safe area `safe_area`.
+fn client_in(update: GameUpdate, size: Size, safe_area: Insets) -> Client {
     let message = fixture_message(&[FixtureMessage::game_update(&update)], TokenMakers::NONE);
     let records = Recording(vec![message])
         .card_records()
@@ -52,9 +58,9 @@ fn client(update: GameUpdate) -> Client {
         },
     );
     client.handle(Input::Device(DeviceInput::Surface {
-        size: WINDOW,
+        size,
         scale: 2.0,
-        safe_area: Insets::default(),
+        safe_area,
     }));
     client.handle(Input::Cards(Box::new(records)));
     client.handle(Input::Update(Box::new(update)));
@@ -64,6 +70,11 @@ fn client(update: GameUpdate) -> Client {
 
 /// The sample table, with the viewer paying a cost that may use the Counterspell in hand.
 fn paying() -> Client {
+    paying_in(WINDOW, Insets::default())
+}
+
+/// `paying` in a window of `size` with the safe area `safe_area`.
+fn paying_in(size: Size, safe_area: Insets) -> Client {
     let Input::Update(mut update) = deciding(prompt("Pay {1}{U}")) else {
         unreachable!("`deciding` is an update")
     };
@@ -76,7 +87,7 @@ fn paying() -> Client {
             mark: Mark::Eligible,
         }];
     }
-    client(*update)
+    client_in(*update, size, safe_area)
 }
 
 fn object(slot: usize) -> Subject {
@@ -226,23 +237,92 @@ fn the_settings_sheet_blocks_taps_on_cards_and_cancels_an_in_progress_press() {
 }
 
 #[test]
-fn a_finger_held_still_shows_its_card_once_and_its_lift_does_nothing() {
+fn a_finger_held_still_shows_its_card_until_it_lifts_and_its_lift_does_nothing() {
     let mut client = paying();
+    let zoom = client.data().pointer.touch.zoom_ms;
     let frame = client.frame(16 * MS).clone();
     let at = on(&frame, "Counterspell");
     client.handle(finger(1, PointerPhase::Down, at));
     // The hold is timed from the first frame after the finger went down.
     client.frame(20 * MS);
-    let early = client.frame(519 * MS).clone();
+    let early = client.frame((19 + zoom) * MS).clone();
     assert_eq!(inspected(&early), None, "shown before the hold time");
-    let held = client.frame(520 * MS).clone();
+    let held = client.frame((20 + zoom) * MS).clone();
     assert_eq!(inspected(&held).as_deref(), Some("Counterspell"));
     let later = client.frame(1200 * MS).clone();
     assert_eq!(inspected(&later).as_deref(), Some("Counterspell"));
     client.handle(finger(1, PointerPhase::Up, at));
     let lifted = client.frame(1216 * MS).clone();
     assert_eq!(clicks(&mut client), Vec::new(), "the lift clicked the card");
-    assert_eq!(inspected(&lifted).as_deref(), Some("Counterspell"));
+    assert_eq!(
+        inspected(&lifted),
+        None,
+        "the card stayed shown after the lift"
+    );
+}
+
+#[test]
+fn on_a_narrow_window_a_finger_held_on_any_card_shows_it_enlarged_until_it_lifts() {
+    let narrow = Size {
+        width: 393.0,
+        height: 759.0,
+    };
+    let safe_area = Insets {
+        top: 44.0,
+        right: 0.0,
+        bottom: 34.0,
+        left: 0.0,
+    };
+    for name in ["Counterspell", "Serra Angel", "Plains"] {
+        let mut client = paying_in(narrow, safe_area);
+        let zoom = client.data().pointer.touch.zoom_ms;
+        let frame = client.frame(16 * MS).clone();
+        let at = on(&frame, name);
+        client.handle(finger(1, PointerPhase::Down, at));
+        client.frame(20 * MS);
+        let held = client.frame((40 + zoom) * MS).clone();
+        assert_eq!(inspected(&held).as_deref(), Some(name), "{name} held");
+        let panel = (held.resolved.iter())
+            .find(|element| held.name(element.name) == format!("{name}, inspected"))
+            .expect("the inspector's panel");
+        let shown = kit_scene::hit::bounds(panel);
+        assert!(shown.width >= 200.0, "{name} shown {shown:?}");
+        client.handle(finger(1, PointerPhase::Up, at));
+        let lifted = client.frame((60 + zoom) * MS).clone();
+        assert_eq!(inspected(&lifted), None, "{name} after the lift");
+    }
+}
+
+#[test]
+fn a_finger_held_on_a_hand_card_can_still_carry_it_off() {
+    let mut client = paying();
+    let zoom = client.data().pointer.touch.zoom_ms;
+    let frame = client.frame(16 * MS).clone();
+    let (_, counterspell) = card(&frame, "Counterspell");
+    let at = on(&frame, "Counterspell");
+    client.handle(finger(1, PointerPhase::Down, at));
+    client.frame(20 * MS);
+    let held = client.frame((40 + zoom) * MS).clone();
+    assert_eq!(inspected(&held).as_deref(), Some("Counterspell"));
+    // Dragging the card puts the enlarged card away and carries the card, which is played
+    // where it is let go over the table.
+    let out = at - Vec2::new(0.0, 200.0);
+    client.handle(finger(1, PointerPhase::Move, out));
+    let carried = client.frame((60 + zoom) * MS).clone();
+    assert_eq!(
+        inspected(&carried),
+        None,
+        "the enlarged card stayed while dragging"
+    );
+    assert_eq!(client.pointer().held(), Some(counterspell));
+    client.handle(finger(1, PointerPhase::Up, out));
+    client.frame((80 + zoom) * MS);
+    assert_eq!(
+        clicks(&mut client),
+        vec![Click::On {
+            on: object(counterspell)
+        }]
+    );
 }
 
 #[test]
@@ -501,6 +581,22 @@ fn a_double_tap_on_bare_felt_or_with_two_fingers_opens_the_bug_report() {
         assert_eq!(reports(&mut client), opened, "{case}");
         assert_eq!(clicks(&mut client), clicked, "{case}");
     }
+    // A host draws no frames while nothing moves, and hands over the touches that wake it with
+    // the time they came (`Client::catch_up`): the first tap is not taken to last from the last
+    // frame to its lift.
+    let mut client = paying();
+    let frame = client.frame(16 * MS).clone();
+    reports(&mut client);
+    let at = felt(&frame);
+    for now in [5_000, 5_100] {
+        client.catch_up(now * MS);
+        client.handle(finger(1, PointerPhase::Down, at));
+        client.frame((now + 16) * MS);
+        client.catch_up((now + 50) * MS);
+        client.handle(finger(1, PointerPhase::Up, at));
+        client.frame((now + 66) * MS);
+    }
+    assert_eq!(reports(&mut client), 1, "a double tap after an idle while");
     // Taps 400 ms apart are two taps, not a double tap.
     let mut client = paying();
     let frame = client.frame(16 * MS).clone();
@@ -721,12 +817,6 @@ fn an_exile_viewer_enlarges_cards_on_long_press() {
         Some("Counterspell")
     );
     client.handle(finger(1, PointerPhase::Up, target));
-    now += 16 * MS;
-    assert_eq!(
-        inspected(client.frame(now)).as_deref(),
-        Some("Counterspell")
-    );
-    tap(&mut client, 1, target);
     now += 16 * MS;
     assert_eq!(inspected(client.frame(now)), None);
 }

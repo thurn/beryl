@@ -74,6 +74,18 @@ pub fn game(
             };
             furniture.extend(element);
         }
+        // A profile that shows the phase icon as a button of its own (`phase::corner`) has no
+        // stops on its table: the button shows them, and the step row's view is there only
+        // while they are open.
+        if layout.table.contains(&Piece::Phase) && !is_opening {
+            let open = views.steps.is_some();
+            furniture.extend(views.steps.take());
+            furniture.extend(
+                input
+                    .view
+                    .and_then(|view| phase::corner(view, input.profile, open)),
+            );
+        }
     }
     if !is_opening
         && shade.is_none()

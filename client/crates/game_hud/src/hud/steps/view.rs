@@ -19,8 +19,10 @@
 //!   now (`HudIn::turn`), which each `set` step of a script that begins a step of the turn
 //!   changes as it begins (`TurnChange`), as the web draws the row from the table it shows
 //!   step by step. Until the table has shown a view, it is the latest view's step.
-//! - On the phone layout the icons are too small to touch, so they are not shown, and they are
-//!   hidden while a pile's viewer is open over the table.
+//! - On the phone layout the icons are too small to touch about the orbs, so they are not shown
+//!   there. A press on the phone's phase button (`phase::corner`) opens them in a panel under it
+//!   instead (`panel`), each icon as large as the touch target, and a second press closes it.
+//!   They are hidden while a pile's viewer is open over the table.
 //! - On the manual table (`table_tracks`) the icons are the step track: none is a stop, the
 //!   table's phase lights in the active player's rows, and a press on an icon sends
 //!   `TablePress::Step`, which sets the phase (`manual::turn`).
@@ -37,10 +39,11 @@ use kit_base::tokens::ratio;
 use crate::hud::players::face_centre;
 use kit_base::data::{flat::Tooltip, hud::StepTrack};
 use kit_base::pose::Curve;
-use kit_base::tokens::{color, shadow, size};
+use kit_base::tokens::{color, shadow, size, type_style};
 use kit_frame::frame::Role;
 use kit_ui::element::{
-    Action, Anchor, Display, Element, Shadow, Shown, Timing, TipPlacement, TipSide, Track, holder,
+    Action, Align, Anchor, Display, Element, Justify, Shadow, Shown, Timing, TipPlacement, TipSide,
+    Track, holder, text,
 };
 use kit_ui::widgets::{hover_tip, icons};
 
@@ -113,6 +116,9 @@ fn steps(input: &Inputs) -> Option<Element> {
         return None;
     }
     let (active, step, number) = input.current()?;
+    if let Some(corner) = input.panel {
+        return Some(panel(input, (active, step), corner));
+    }
     Some(
         holder().name("steps").children(
             [
@@ -131,6 +137,58 @@ fn steps(input: &Inputs) -> Option<Element> {
             }),
         ),
     )
+}
+
+/// The stops in a panel whose top right corner is at `corner`, under the phone's phase button:
+/// the opponent's turn and then the viewer's, each heading over its twelve icons in two rows of
+/// six in the turn's order, with the menu's look (`kit_ui::widgets::menu`). Each icon is a
+/// square of the touch target, `size::ICON_BUTTON` points, with its glyph at the desktop's size
+/// in the middle.
+fn panel(input: &Inputs, (active, step): (Side, Step), corner: Vec2) -> Element {
+    let side = size::ICON_BUTTON;
+    let mut panel = Element::new(Role::Region)
+        .name("Stops")
+        .display(Display::Grid)
+        .grid_template_columns(vec![Track::Points(side); 6])
+        .padding(size::MENU_PADDING)
+        .background(color::SURFACE)
+        .border((color::METAL, size::MENU_BORDER))
+        .radius(size::MENU_RADIUS)
+        .box_shadow(shadow::LIFTED.to_vec());
+    panel.anchor = Some(Anchor::Point(corner, Vec2::new(1.0, 0.0)));
+    let mut line: i16 = 1;
+    for (side_of, set, heading) in [
+        (Side::Opponent, input.stops.theirs, "Opponent's turn"),
+        (Side::You, input.stops.yours, "Your turn"),
+    ] {
+        let title = text(heading)
+            .style(type_style::MENU_HINT)
+            .color(color::TEXT_DIM)
+            .grid_column((1, 7))
+            .grid_row((line, line + 1));
+        panel = panel.child(title);
+        let whose = match side_of {
+            Side::You => "Your",
+            Side::Opponent => "Opponent's",
+        };
+        let lit = active == side_of;
+        for (at, stop) in STEP_STOPS.iter().enumerate() {
+            let here = lit && (stop.steps.contains(&step) || NEVER.contains(&(at, step)));
+            let name = format!("{whose} {}", stop.label);
+            #[expect(clippy::cast_possible_truncation, reason = "twelve icons")]
+            let (column, row) = ((at % 6) as i16 + 1, line + 1 + (at / 6) as i16);
+            let icon = icon(at, &name, side_of, set, here, input.tuning)
+                .width(side)
+                .height(side)
+                .align_items(Align::Center)
+                .justify_content(Justify::Center)
+                .grid_column((column, column + 1))
+                .grid_row((row, row + 1));
+            panel = panel.child(icon);
+        }
+        line += 3;
+    }
+    panel
 }
 
 /// The two manual step tracks. The manual table maps each icon press to its phase command.

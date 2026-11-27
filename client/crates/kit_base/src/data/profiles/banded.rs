@@ -3,7 +3,7 @@
 use glam::Vec3;
 use serde::{Deserialize, Deserializer};
 
-use super::super::tuning::{finite, nonnegative, positive, vector};
+use super::super::tuning::{finite, nonnegative, positive, positive_fraction, vector};
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -26,6 +26,35 @@ pub struct Banded {
     /// right edge.
     #[serde(default, deserialize_with = "vector")]
     pub pool_align: glam::Vec2,
+    /// How the battlefield's rows shrink, or `None` to keep their cards at full size and let a
+    /// crowded row overlap and scroll.
+    #[serde(default)]
+    pub rows: Option<Rows>,
+}
+
+/// How a banded table's battlefield rows shrink to fit their cards.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Rows {
+    /// The narrowest a card of the creatures' and other permanents' rows is drawn, in logical
+    /// points, so that each stays a target a finger can press. A row shrinks only as far as it
+    /// needs to fit its room, and past this its cards overlap.
+    #[serde(deserialize_with = "positive")]
+    pub least_width: f32,
+    /// The least scale of a crowded lands' row, as a fraction of a full-size card. Lands are no
+    /// targets of their own, so their row may shrink further than the others.
+    #[serde(deserialize_with = "positive_fraction")]
+    pub land_least: f32,
+    /// The widest a land is drawn, in logical points, so that the lands' rows leave the other
+    /// permanents most of the battlefield. Lands this small are read by pressing them, and are not
+    /// targets of their own for the touch-target checks (`Layout::too_small_to_press`).
+    #[serde(deserialize_with = "positive")]
+    pub land_width: f32,
+    /// The table the lands' rows take beyond the camera's required rectangle on each side, in
+    /// millimetres, where the cards of the other rows can stay `least_width` points wide with
+    /// it; on a phone too short for that, the lands get less (`phone::fit_camera`).
+    #[serde(deserialize_with = "positive")]
+    pub land_room: f32,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
@@ -72,7 +101,9 @@ fn centres<'de, D: Deserializer<'de>>(de: D) -> Result<Vec3, D::Error> {
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Stack {
-    /// A clear right-hand column allows the full card size, outside the rows.
+    /// The width of a column at the right of the battlefield, in logical points, in which the
+    /// stack's items stand centred over the rows, or 0 to centre them across the middle band.
+    /// Either way they are `width` wide unless that would leave a creature no strip to press.
     #[serde(default, deserialize_with = "nonnegative")]
     pub side_width: f32,
     #[serde(deserialize_with = "positive")]
@@ -110,8 +141,9 @@ pub struct Hand {
     #[serde(deserialize_with = "finite")]
     pub bias_degrees: f32,
     /// Whether every row of the viewer's hand above the front row starts right of the viewer's
-    /// piles and Mana button, so that a hand too large for one row leaves them in view. A phone
-    /// held upright needs it; a window wide enough that one row holds an ordinary hand does not.
+    /// piles and Mana button, so that a hand too large for one row leaves them in view. Without
+    /// it the rows are centred and hold as nearly the same number of cards as they can, as the
+    /// phone's do.
     #[serde(default)]
     pub clear_piles: bool,
 }

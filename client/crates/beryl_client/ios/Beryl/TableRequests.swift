@@ -25,8 +25,18 @@ extension TableController {
                     logHostEvent(opened ? "open-url" : "open-url failed: \(url)")
                 #endif
             }
-        case BERYL_REQUEST_BEGIN_TEXT_ENTRY, BERYL_REQUEST_END_TEXT_ENTRY:
-            break
+        case BERYL_REQUEST_BEGIN_TEXT_ENTRY:
+            let text = request.text.map { String(cString: $0) } ?? ""
+            textEntry.begin(
+                text: text,
+                rect: CGRect(
+                    x: CGFloat(request.x), y: CGFloat(request.y),
+                    width: CGFloat(request.width), height: CGFloat(request.height)))
+            #if DEBUG
+                logHostEvent("begin-text-entry")
+            #endif
+        case BERYL_REQUEST_END_TEXT_ENTRY:
+            textEntry.end()
         default:
             break
         }

@@ -42,6 +42,10 @@ pub struct NativeSurface {
     /// The platform's time of the first frame asked for, in nanoseconds: the client's clock
     /// counts from it.
     started: Option<u64>,
+    /// The client's time of the latest tick, in nanoseconds since `started`, and when that tick
+    /// came by this process's clock, from which a pointer event between ticks is timed
+    /// (`pointer`).
+    ticked: Option<(u64, Instant)>,
 }
 
 enum State {
@@ -84,6 +88,7 @@ impl NativeSurface {
             display_hz,
             last_drawn: None,
             started: None,
+            ticked: None,
         }
     }
 
@@ -254,8 +259,18 @@ impl NativeSurface {
         self.give(Input::Device(DeviceInput::Lifecycle(lifecycle)));
     }
 
-    /// A mouse, touch or pen event. Dropped before the first surface.
+    /// A mouse, touch or pen event. Dropped before the first surface. The platform stops
+    /// ticking while nothing moves, so the event takes the time that has passed since the last
+    /// tick, not that tick's time (`Client::catch_up`): otherwise the tap that wakes the app
+    /// would seem to last from the last tick to its lift, and would not count as a tap.
     pub fn pointer(&mut self, pointer: Pointer) {
+        if let (State::Running(running), Some((since, at))) = (&mut self.state, self.ticked) {
+            let elapsed = u64::try_from(at.elapsed().as_nanos()).unwrap_or(u64::MAX);
+            running
+                .frames
+                .client()
+                .catch_up(since.saturating_add(elapsed));
+        }
         self.give(Input::Device(DeviceInput::Pointer(pointer)));
     }
 
@@ -298,6 +313,7 @@ impl NativeSurface {
         }
         let started = *self.started.get_or_insert(now);
         let since = now.saturating_sub(started);
+        self.ticked = Some((since, Instant::now()));
         // A display that ticks faster than the rule's rate, because the platform cannot
         // change it or ignored the request, draws only on the ticks the rate falls on.
         if due(

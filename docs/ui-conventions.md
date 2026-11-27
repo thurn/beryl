@@ -20,8 +20,10 @@ Beryl does these and Arena does not. A bug report from the user adds, changes or
 removes an entry; nothing else does.
 
 1. **Phase icons.** Twelve icons, two rows of three on each side of the life
-   total, filled where a stop is set, the same rows for both seats (by-2o5,
-   by-42v, by-sjp, by-cio). Arena shows one row above the action button.
+   total, filled where a stop is set, the same rows for both seats. On the phone
+   they open under the phase icon, each player's twelve in two rows of six
+   (by-2o5, by-42v, by-sjp, by-cio). Arena shows one row above the action
+   button.
 2. **Full cards that tap.** A permanent is its whole card and turns when it
    taps. Each row stands its permanents apart with a gap, and a crowded row
    shrinks them, to no less than three fifths of their size, before it lays one
@@ -434,9 +436,10 @@ Built from motions and shapes Beryl already has. Arena has these, but the
 recordings do not show them.
 
 - **A battlefield row that scrolls.** A row with more cards than fit with a
-  strip of each uncovered shows as many as fit, scrolls one group for each notch
-  of the wheel or 48 points of a sideways drag, and shows the number of cards
-  off each end, as "+12".
+  strip of each uncovered shows as many as fit and scrolls one group for each
+  notch of the wheel or 48 points of a sideways drag. It shows no count of the
+  cards off its ends: a row shrinks its cards far enough that it scrolls only on
+  a board far larger than any game reaches.
 - **A card picked face down.** While the other player still has to pick, as for
   Show and Tell, a card a player has picked from their hand lies apart from that
   hand where the cards a player handles lie: face up for its player, face down
@@ -641,8 +644,7 @@ recordings do not show them.
   at the table's left edge on every layout: the library on the seam between the
   two players' creature rows, the graveyard above it and the exile pile below
   it. The battlefield rows beside the column start right of it, and the phone's
-  prompt pill and phase icon keep clear of it. The per-player pile places stay
-  empty.
+  prompt pill keeps clear of it. The per-player pile places stay empty.
 - **Text-changed cards.** A spell or permanent whose text or type line was
   changed by a text-changing effect shows a "Text changed" tag on the table,
   renders Beryl's card frame with its new type line and rules text on the table
@@ -654,45 +656,52 @@ recordings do not show them.
   face up on the way, as their spells do. Only the player's own are seen.
 - **The phone.** It plays what the desktop plays; its layout and gestures are
   Beryl's own. Every motion is one of the desktop's verbs between the phone's
-  places. A card flies between your hand's fan, the stack in the middle band and
-  its row; the opponent's leaves and joins the card backs at the top edge. A
-  draw leaves the library's pile in its player's strip, and a card put into a
-  graveyard lands on that pile. An ability lifts out of its source to the stack,
-  and a token appears in its row. The rows make room as the middle band grows
-  for the stack, so a source glides aside while its ability lifts. An exiled
-  card rests unseen under its owner's graveyard and is listed in that
+  places. A card flies between your hand's fan, the stack at the right of the
+  middle band and its row; the opponent's leaves and joins the card backs at the
+  top edge. A draw leaves the library's pile in its player's strip, and a card
+  put into a graveyard lands on that pile. An ability lifts out of its source to
+  the stack, and a token appears in its row. The rows make room as the middle
+  band grows for the stack, so a source glides aside while its ability lifts. An
+  exiled card rests unseen under its owner's graveyard and is listed in that
   graveyard's sheet under exile's name, while one held by a permanent remains
   tucked under it. An emblem stands after its controller's other permanents, and
-  its ability lifts from that card. Crowded rows overlap rather than shrinking
-  creature cards below 56px high. A hand too large for one row takes further
-  rows above it, to the right of its player's piles, which stay in view. Its
-  newest cards stand in those rows. The phone centers a board at most 430px wide
-  and scales a 375px board to fit narrower screens. Sounds follow the same
-  steps. What the desktop shows around its table is composed for the phone from
-  the same pieces. On the phone's start screen, the opponent list scrolls
-  between the sound and credits controls at the top and the seed, the Fair deal
-  checkbox and the game buttons at the bottom. The game result shows over the
-  board with its reason and any culprit card centered, and the full-width result
-  buttons stay above the bottom safe area when the result is shown or put aside.
-  The opening shows the coin above two centered rows of cards, with bottom picks
-  in slots beneath the hand and full-width actions above the bottom safe area.
-  The menu button opens the settings with the log and the bug report in them.
-  Undo and full control's mark stand at the end of the middle band, across from
-  the phase. Unspent mana lies beside its player's life total, and the combat
-  damage on its way on the total's rim. A touch on a graveyard, or on a library
-  with a known card, lists its cards; a touch on a card shows it whole, and a
-  touch beside it puts it away. The turn's banner crosses the middle band, a
-  combat step's lies under the opponent's strip, and a scry's pill beside its
-  player's lands, past the end of their row; a coin is tossed just above the
-  middle band. A prompt picked on the table is the desktop's: the button it puts
-  forward stands in the player's strip where the turn button is, with the one
-  that passes on beside it; what it asks is a pill on the middle band's line, as
-  Arena writes it across the middle of the table, or at the nearest height clear
-  of every card where the stack lies on that line, and over the strip while the
-  table is shaded under cards the prompt holds up; its other buttons are stacked
-  over the turn button. A touch on a card the prompt can use uses it, and one it
-  has no use for shows the card whole; a card in your hand is read by a touch
-  and played by carrying it out of the hand. The Revealed Cards lie in the
+  its ability lifts from that card. Each player's permanents stand in three rows
+  across the screen: creatures nearest the middle, then other permanents, then
+  lands. Crowded rows shrink their cards to fit, as the desktop's do, and
+  overlap only past that. Lands are at most 40px wide, less where a short phone
+  has no room for them, and are read by pressing them. Every other card stays at
+  least 40px square to press, and shrinks no further. A hand too large for one
+  row takes further rows above it, centered, the rows holding as nearly the same
+  number of cards as they can. The phone centers a board at most 430px wide and
+  scales a 375px board to fit narrower screens. Sounds follow the same steps.
+  What the desktop shows around its table is composed for the phone from the
+  same pieces. On the phone's start screen, the opponent list scrolls between
+  the sound and credits controls at the top and the seed, the Fair deal checkbox
+  and the game buttons at the bottom. The game result shows over the board with
+  its reason and any culprit card centered, and the full-width result buttons
+  stay above the bottom safe area when the result is shown or put aside. The
+  opening shows the coin above two centered rows of cards, with bottom picks in
+  slots beneath the hand and full-width actions above the bottom safe area. The
+  menu button opens the settings with the log and the bug report in them. Full
+  control's mark stands at the end of the middle band. The phase icon stands
+  under the menu button, unlit; a touch on it opens both players' stops in a
+  panel under it, and another touch closes it. Unspent mana lies beside its
+  player's life total, and the combat damage on its way on the total's rim. A
+  touch on a graveyard, or on a library with a known card, lists its cards; a
+  touch on a card shows it whole, and a touch beside it puts it away. A finger
+  resting on any card shows it whole until the finger lifts or carries the card
+  away. The turn's banner crosses the middle band, a combat step's lies under
+  the opponent's strip, and a scry's pill beside its player's lands, past the
+  end of their row; a coin is tossed just above the middle band. A prompt picked
+  on the table is the desktop's: the button it puts forward stands in the
+  player's strip where the turn button is, with the one that passes on beside
+  it; what it asks is a pill on the middle band's line, as Arena writes it
+  across the middle of the table, or at the nearest height clear of every card
+  where the stack lies on that line, and over the strip while the table is
+  shaded under cards the prompt holds up; its other buttons are stacked over the
+  turn button. A touch on a card the prompt can use uses it, and one it has no
+  use for shows the card whole; a card in your hand is read by a touch and
+  played by carrying it out of the hand. The Revealed Cards lie in the
   opponent's strip beside their graveyard, at a pile's size with no pill, and a
   touch opens them as it opens a pile. The bug reporter freezes the whole page
   and saves both that frame and the region the player selects. On a phone, the

@@ -30,6 +30,7 @@ pub enum SlotName {
     Menu,
     Opening,
     Phase,
+    PhaseIcon,
     PlayerOpponent,
     PlayerYou,
     PromptAsked,
@@ -50,7 +51,7 @@ pub enum SlotName {
 
 impl SlotName {
     /// Every slot name, in the order of their spellings.
-    pub const ALL: [Self; 37] = [
+    pub const ALL: [Self; 38] = [
         Self::BugHint,
         Self::BugSheet,
         Self::BugTools,
@@ -72,6 +73,7 @@ impl SlotName {
         Self::Menu,
         Self::Opening,
         Self::Phase,
+        Self::PhaseIcon,
         Self::PlayerOpponent,
         Self::PlayerYou,
         Self::PromptAsked,
@@ -115,6 +117,7 @@ impl SlotName {
             Self::Menu => "menu",
             Self::Opening => "opening",
             Self::Phase => "phase",
+            Self::PhaseIcon => "phase.icon",
             Self::PlayerOpponent => "player.opponent",
             Self::PlayerYou => "player.you",
             Self::PromptAsked => "prompt.asked",

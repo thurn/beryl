@@ -336,7 +336,7 @@ impl Client {
     }
 
     pub(super) fn step_inputs(&self) -> game_hud::hud::steps::Inputs {
-        game_hud::hud::steps::Inputs::new(&self.screen_in().hud())
+        game_hud::hud::steps::Inputs::shown(&self.screen_in().hud(), self.features.steps().open)
     }
 
     /// Whether the open viewer shows the card in `slot` in one of its boxes.
@@ -355,19 +355,6 @@ impl Client {
     pub(super) fn prompt_covers_table(&self) -> bool {
         self.table_open()
             && (self.features.prompts.current()).is_some_and(game_hud::prompts::covers_table)
-    }
-
-    /// Whether the rows' counts are shown, given whether the hud is `visible` and the table
-    /// `covered` by a prompt: not under a prompt's shade (`prompt_covers_table`), nor while the
-    /// open prompt holds cards up in its tray over a shaded table (`game_hud::prompts::holds_up`),
-    /// nor while a manual table is frozen, whose banner and Lobby stand over the opponent's rows,
-    /// which take no scroll until it thaws.
-    pub(super) fn rows_counted(&self, visible: bool, covered: bool) -> bool {
-        visible
-            && !covered
-            && !(self.features.prompts.current()).is_some_and(game_hud::prompts::holds_up)
-            && !self.table_frozen()
-            && self.features.viewer().open().is_none()
     }
 }
 

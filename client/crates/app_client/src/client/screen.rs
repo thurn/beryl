@@ -14,7 +14,6 @@ use app_screens::screens::{self, Screen, ScreenIn, Sheet, bug_report};
 use game_hud::hud::HudIn;
 use game_hud::hud::inspector::Message as Inspect;
 use game_hud::hud::placement_scene::PlacementScene;
-use game_hud::hud::rows::Message as RowMessage;
 use game_hud::screens::game::Furniture;
 use game_manual::features::{context_menu, table::Message as TableMessage};
 use game_table::faces::{FaceList, Faces};
@@ -43,7 +42,7 @@ impl Client {
             self.refresh_frame_rates();
             self.cancel_gesture();
             self.routes.scrolling.cancel();
-            self.features.focus_row(RowMessage::Focus(None));
+            self.routes.row_focus = None;
             self.cancel_touch();
             self.features.inspect(&Inspect::Pin(None));
         }
@@ -167,7 +166,7 @@ impl Client {
             return Furniture::default();
         }
         let input = self.screen_in().hud();
-        let steps = game_hud::hud::steps::Inputs::new(&input);
+        let steps = game_hud::hud::steps::Inputs::shown(&input, self.features.steps().open);
         let dock = game_hud::hud::full_control::Inputs::dock(&input);
         let band = game_hud::hud::full_control::Inputs::middle_band(&input);
         let players = input

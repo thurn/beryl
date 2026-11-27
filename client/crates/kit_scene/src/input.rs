@@ -69,8 +69,20 @@ impl<T: Copy> Point<T> {
 pub struct TouchPolicy {
     /// A single-finger tap here can participate in a double tap.
     pub double_tap: bool,
-    pub hold: bool,
+    pub hold: Hold,
     pub delayed_pickup: bool,
+}
+
+/// What a finger held still here means.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Hold {
+    /// Nothing.
+    #[default]
+    None,
+    /// A long press, due after `long_press_ms`, as opens a menu.
+    Long,
+    /// A short rest, due after `touch.zoom_ms`, as shows a card enlarged.
+    Quick,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -165,8 +177,8 @@ impl<T: Copy> Router<T> {
         match pointer.phase {
             PointerPhase::Down => match self.touch.down(id, at, now, policy.double_tap, tuning) {
                 Landed::Active => {
-                    if policy.hold {
-                        self.touch.wait_for_hold();
+                    if policy.hold != Hold::None {
+                        self.touch.wait_for_hold(policy.hold == Hold::Quick);
                     }
                     if policy.delayed_pickup {
                         self.touch.wait_for_pickup();

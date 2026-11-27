@@ -8,7 +8,7 @@ use kit_base::geometry::{Rect, Window};
 use kit_scene::{SizeClass, Slot};
 use kit_ui::widgets::screen::ScreenColumn;
 
-use crate::table::{Camera, Layout, RegionFit, RowArea, ScreenProjection, TraySpace};
+use crate::table::{Layout, RegionFit, RowArea, ScreenProjection, TraySpace};
 
 mod desktop;
 mod phone;
@@ -110,7 +110,7 @@ impl<'a> Profile<'a> {
             );
         }
         phone::tray_in(
-            self.window,
+            (self.window, self.data),
             &self.bands().expect("validated banded table"),
             table.banded.expect("validated banded table"),
             table.bands.expect("validated banded table"),
@@ -154,12 +154,12 @@ impl<'a> Profile<'a> {
         let table = &self.data.table;
         let sizes = table.bands?;
         let area = phone::battlefield_with(self.window, sizes, table.camera.card);
-        let camera = Camera::fit_inside(table.camera, self.window, area);
+        let (camera, _) = phone::fit_camera(self.data, self.window, area);
         Some(phone::bands_with(
             &camera,
             sizes,
             table.creatures.y,
-            table.lands.y,
+            table.others.y,
         ))
     }
 

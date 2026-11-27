@@ -1,6 +1,7 @@
-//! The phase icon and full control mark along the table's middle band.
+//! The phase icon and full control mark along the table's middle band, or the phase icon as a
+//! button of its own under the menu where the profile gives it a slot (`phase.icon`).
 
-use beryl_protocol::protocol::{PlayerView, Side, Step};
+use beryl_protocol::protocol::{PlayerView, Step};
 use glam::Vec2;
 use kit_base::data::profiles::SlotName;
 
@@ -10,6 +11,8 @@ use kit_base::tokens::{color, shadow, space};
 use kit_frame::frame::Role;
 use kit_ui::element::{Action, Anchor, Element, Shown};
 use kit_ui::widgets::{icon_button, icons};
+
+use super::steps;
 
 /// The source of the phase indicator and menu button, for the client map.
 pub const SOURCE: &str = file!();
@@ -28,11 +31,29 @@ pub fn menu(profile: Profile, press: Action) -> Option<Element> {
     Some(button)
 }
 
+/// The phase icon as a round button in the profile's `phase.icon` slot, under the menu on the
+/// phone: a press shows both players' stops about their life totals, as the desktop always shows
+/// them, and a second press hides them (`steps::Message::Open`). It is selected while they show.
+/// `None` where the profile gives the icon no slot of its own, and draws it in the middle band.
+#[must_use]
+pub fn corner(view: &PlayerView, profile: Profile, open: bool) -> Option<Element> {
+    let slot = profile.slot(SlotName::PhaseIcon)?.rect;
+    let mut button = icon_button(phase_icon(view.turn.step), "Phase")
+        .selected(open)
+        .on_press(steps::Message::Open);
+    button.anchor = Some(Anchor::Point(
+        Vec2::new(slot.x + slot.width / 2.0, slot.y + slot.height / 2.0),
+        Vec2::new(0.5, 0.5),
+    ));
+    Some(button)
+}
+
 /// The middle band's furniture: the phase icon at one end of the band (`phase_box`), and full
 /// control's mark at the other end while it is on, across from the phase. Neither takes a
 /// press: the phase is shown, and full control is set in the settings. While a prompt's bar
 /// stands on the table, the bar draws the phase icon itself (`with_phase` unset), so that it can
-/// leave it out where its pill needs the icon's room.
+/// leave it out where its pill needs the icon's room. A profile that gives the icon a slot of
+/// its own (`corner`) leaves it out of the band.
 #[must_use]
 pub fn middle(
     view: &PlayerView,
@@ -41,7 +62,8 @@ pub fn middle(
     with_phase: bool,
 ) -> Option<Element> {
     let slot = middle_band(profile, view)?;
-    let phase = with_phase.then(|| icon(view, phase_box(slot, view.shared.is_some())));
+    let phase = (with_phase && profile.slot(SlotName::PhaseIcon).is_none())
+        .then(|| icon(view, phase_box(slot, view.shared.is_some())));
     Some(
         kit_ui::element::holder()
             .name("middle")
@@ -50,10 +72,11 @@ pub fn middle(
     )
 }
 
-/// The phase icon in `bounds`, lit while it is `view`'s viewer's turn.
+/// The phase icon in `bounds`. It is never lit: the web's phase tracker lights the current one
+/// of its five icons, and this one icon is always the current phase, so a light would tell the
+/// player nothing.
 #[must_use]
 pub fn icon(view: &PlayerView, bounds: Rect) -> Element {
-    let yours = view.turn.active == Side::You;
     let side = f32::from(icons::PHASE_SIDE);
     let mut phase = Element::new(Role::Icon)
         .name("phase")
@@ -61,14 +84,9 @@ pub fn icon(view: &PlayerView, bounds: Rect) -> Element {
         .height(side)
         .radius(side / 2.0)
         .background(color::ICON_BUTTON)
-        .color(if yours { color::GOLD } else { color::TEXT_DIM })
-        // `.phase-current .phase-icon`'s glow while lit, else `.phase-icon`'s shadow
-        // (phase-tracker.css), as the web's `PhaseIcon` lights it.
-        .drop_shadow(if yours {
-            shadow::CURRENT_GLOW.to_vec()
-        } else {
-            shadow::PHASE_ICON.to_vec()
-        })
+        .color(color::TEXT_DIM)
+        // `.phase-icon`'s shadow (phase-tracker.css).
+        .drop_shadow(shadow::PHASE_ICON.to_vec())
         .passes(true);
     phase.shows = Some(Shown::Icon(phase_icon(view.turn.step), icons::PHASE_SIDE));
     phase.anchor = Some(Anchor::Point(

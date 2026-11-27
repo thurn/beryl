@@ -305,7 +305,7 @@ fn an_explicit_shipped_layout_also_controls_placement_at_a_conflicting_size() {
     let mut explicit = table_page(&["--layout", "phone", "--size", "800x600"]);
     let profile = explicit.data().profiles.for_size(explicit.size());
     assert_eq!(profile.name, "phone");
-    assert!((profile.checks.target_points - 44.0).abs() < f32::EPSILON);
+    assert!((profile.checks.target_points - 40.0).abs() < f32::EPSILON);
     let insets = profile.test_safe_area();
     assert_ne!(insets, Insets::default());
     assert!(explicit.inputs().iter().any(|input| matches!(

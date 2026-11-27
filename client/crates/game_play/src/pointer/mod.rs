@@ -21,7 +21,6 @@ use glam::{Mat3, Quat, Vec2};
 
 use crate::play::compile::Compiled;
 use game_table::table::Place;
-pub use game_table::table::takes_pointer;
 use game_table::table::{Camera, Look, PILE_IDS};
 use held::{Fall, Heft, Held};
 use kit_base::data::pointer::PointerTuning;

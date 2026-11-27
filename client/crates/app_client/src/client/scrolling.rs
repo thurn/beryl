@@ -9,7 +9,6 @@ use super::{
     input::{Node, ScenePoint},
 };
 use app_screens::screens::Screen;
-use game_hud::hud::rows::Message as RowMessage;
 use game_play::pointer::rows::scroller_of;
 use game_table::table::{Scroller, Table};
 use kit_base::geometry::{GroupWindow, ScrollAxis};
@@ -50,7 +49,7 @@ impl Client {
         if pointer.phase == PointerPhase::Down
             && let Some((Target::Row(row), _)) = at
         {
-            self.features.focus_row(RowMessage::Focus(Some(row)));
+            self.routes.row_focus = Some(row);
             self.layer.focus(None);
         }
         let view = |target| viewport(target, &self.layer, self.show.table(), rows);
@@ -125,9 +124,8 @@ impl Client {
             .map(|(id, offset)| (Target::Element(id), offset))
             .or_else(|| {
                 let row = self
-                    .features
-                    .rows()
-                    .focus()
+                    .routes
+                    .row_focus
                     .filter(|_| self.layer.focused().is_none() && self.rows_scroll())?;
                 let offset = row_viewport(self.show.table(), row)?.key(key, step)?;
                 Some((Target::Row(row), offset))
@@ -167,9 +165,7 @@ impl Client {
                     reason = "group offsets are exact and bounded by a u16 card count"
                 )]
                 let first = offset.x as isize;
-                if self.show.scroll_row(row, first) {
-                    self.prepare_rows();
-                }
+                if self.show.scroll_row(row, first) {}
             }
         }
     }

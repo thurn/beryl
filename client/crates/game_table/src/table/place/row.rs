@@ -92,10 +92,14 @@ impl Zooms {
     /// no lower than the limit's `shared_minimum`, and shrinks further alone to fit its room,
     /// down to the limit's `minimum`. Past it the row's cards overlap and scroll. The desktop
     /// gives every row its own limit and a shared minimum of 1 (`RowZoom::independent`), so
-    /// each row shrinks only as far as it needs to.
+    /// each row shrinks only as far as it needs to. The lands' rows' fits are capped at
+    /// `limits.lands_most`, so that those rows are drawn that small even when they have room.
     fn of_fits(fits: [[f32; 3]; 2], limits: RowZoom) -> Self {
         let back = Some(limits.back);
-        let rows = solver::linked_scales(fits, limits.minimum, [limits.creatures, back, back]);
+        let lands = Some(limits.lands.unwrap_or(limits.back));
+        let capped = fits
+            .map(|[creatures, lands, others]| [creatures, lands.min(limits.lands_most), others]);
+        let rows = solver::linked_scales(capped, limits.minimum, [limits.creatures, lands, back]);
         Self { rows, fits }
     }
 }
@@ -243,31 +247,20 @@ pub(super) fn battlefield_row(
     (ids, stack_slots): (Option<&NameIds<'_>>, Option<&[ObjectId]>),
 ) {
     let RowFit { area, y, .. } = fit;
-    let zoom = placement.zooms.get(side, row);
     let items = cards.len();
     let (cards, under, names) = prepared(cards, row, ids);
+    let beneath = Beneath::new(under, &cards);
+    let groups = grouped((&cards, &beneath), (names, ids, stack_slots));
+    let known = placement.zooms.get(side, row);
+    let zoom = laid_zoom(known, (layout, fit, side, row), (&groups, &beneath));
     let (fitted, scale, container) = row_rules((layout, fit), (side, row), zoom);
-    // A zoomed-out row keeps one edge where it stands at full size, as the web's does: a
-    // creatures' row its edge toward the lane between the two creatures' rows, where combat and
-    // the stack's arrows run, and a back row its edge toward its player. The far edge of the
-    // table is up the screen, so the viewer's creatures and the opponent's back rows keep their
-    // far edges, and move their line of centres that much further away.
-    let line = {
-        let (full, tilt) = fitted.map_or((1.0, 0.0), |fitted| (fitted.scale, fitted.tilt));
-        let shrink = camera.data.card.height / 2.0 * full * (1.0 - zoom) * tilt.cos();
-        if (side == Side::You) == (row == RowName::Creatures) {
-            y + shrink
-        } else {
-            y - shrink
-        }
-    };
+    let banded = layout.bands.is_some();
+    let line = shrunk_line(y, zoom, (fitted, banded, side, row), camera.data.card);
     let height = fitted.map_or(0.0, |fitted| fitted.height(line, camera.data.card));
     let on_line = (camera, area, row, Vec3::new(0.0, line, height));
     let faces = faces(&cards, placement, on_line, layout.blocker_spacing, |x| {
         fit.row.unscaled(x, scale)
     });
-    let beneath = Beneath::new(under, &cards);
-    let groups = grouped((&cards, &beneath), (names, ids, stack_slots));
     let inputs: Vec<_> = groups.solver_groups(&beneath, layout, &faces).collect();
     let place = |zone| Place::Card {
         zone,
@@ -315,7 +308,10 @@ pub(super) fn battlefield_row(
     };
     let project = |placed: &solver::Placed| {
         let (object, pose) = posed(placed);
-        let pressable = placed.copies > 0 && face_up(object) && object.name.as_deref() != Some("");
+        let pressable = placed.copies > 0
+            && face_up(object)
+            && object.name.as_deref() != Some("")
+            && !layout.too_small_to_press(place(object.zone));
         (camera.card_corners(pose.transform()), pressable)
     };
     let capture = placement.decisions.is_some();
@@ -365,6 +361,64 @@ pub(super) fn battlefield_row(
         window.scroll.last,
         (window.before, window.after),
     );
+}
+
+/// The line of centres of a row whose line at full size is `y`, zoomed out by `zoom`. A
+/// zoomed-out row keeps one edge where it stands at full size, as the web's does: a creatures'
+/// row its edge toward the lane between the two creatures' rows, where combat and the stack's
+/// arrows run, and a back row its edge toward its player. The far edge of the table is up the
+/// screen, so the viewer's creatures and the opponent's back rows keep their far edges, and
+/// move their line of centres that much further away. On a `banded` layout (the phone's) a back
+/// row shrinks about its own line instead, since its edge toward its player borders that
+/// player's strip, whose piles would cover its cards, and a creatures' row keeps its edge toward
+/// its player, since the stack's items stand over the lane and leave each creature only a strip
+/// at that edge (`phone::stack_height`).
+fn shrunk_line(
+    y: f32,
+    zoom: f32,
+    (fitted, banded, side, row): (Option<FittedRow>, bool, Side, RowName),
+    card: kit_base::data::Card,
+) -> f32 {
+    if banded && row != RowName::Creatures {
+        return y;
+    }
+    let (full, tilt) = fitted.map_or((1.0, 0.0), |fitted| (fitted.scale, fitted.tilt));
+    let shrink = card.height / 2.0 * full * (1.0 - zoom) * tilt.cos();
+    let lane_edge = row == RowName::Creatures && !banded;
+    if (side == Side::You) == lane_edge {
+        y + shrink
+    } else {
+        y - shrink
+    }
+}
+
+/// The zoom a row lays its cards out at: `zoom`, the one measured for a script's steps at full
+/// size (`rezoom`), or a smaller one if the row's `groups` do not fit at it, down to the row's
+/// least. A row that does not fit then shrinks further rather than overlapping or scrolling
+/// cards it could still show whole: the cards tucked under a permanent keep a strip of the
+/// touch target uncovered, which is wider, in the row's unscaled units, the smaller the row is
+/// drawn, so the fit is measured again at each zoom tried.
+fn laid_zoom(
+    zoom: f32,
+    (layout, fit, side, row): (&Layout, RowFit, Side, RowName),
+    (groups, beneath): (&crate::table::rows::Groups<'_, '_>, &Beneath<'_>),
+) -> f32 {
+    let Some(limits) = layout.row_zoom else {
+        return zoom;
+    };
+    let least = limits.least(row);
+    let mut zoom = zoom;
+    for _ in 0..8 {
+        let (_, _, measure) = row_rules((layout, fit), (side, row), zoom);
+        let room = measure.fit(groups.solver_groups(beneath, layout, &[]));
+        if room >= 1.0 || zoom <= least {
+            break;
+        }
+        // The shortfall twice over: the measure grows as the zoom falls, so the zoom that just
+        // fits lies below the one the measure names.
+        zoom = (zoom * room * room).max(least);
+    }
+    zoom
 }
 
 /// `pose`, laid out on a row's line at full size, in a row shrunk by `scale` to fit its room: its

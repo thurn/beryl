@@ -14,24 +14,26 @@
 //!   that the required rectangle of the table lies inside the battlefield (`battlefield`), and
 //!   its target is chosen so that at 393 by 759, with the test safe area, the rectangle fills
 //!   it to within 4 points on every edge.
-//! - Each side has two battlefield rows, as on the desktop: the creatures nearest the middle,
-//!   and behind them the lands from the left and the other permanents at the right. The web's
-//!   phone layout gives the lands and the other permanents rows of their own, 29 and 42 points
-//!   tall at 393 by 759, which is too small for the phone's 44-point touch target, so a full
-//!   card there could not keep a pointable square.
+//! - Each side has three battlefield rows across the whole column: the creatures nearest the
+//!   middle, the other permanents behind them, and the lands behind those, nearest their
+//!   player. Lands are drawn at most 40 points wide (`banded::Rows::land_width`) and are read by
+//!   pressing them, so their row is thin. Each row shrinks its cards as far as it needs to fit
+//!   its room, as the desktop's do (`row_zoom`), and only past `banded::Rows::least_scale` do
+//!   its cards overlap and scroll.
 //! - The middle band, between the two creatures' rows, is 50 millimetres of table: 44 points at
 //!   375 by 647, as tall as the web's middle while the stack is empty. The stack's items stand
 //!   about its middle and reach over the creatures' rows; the rows never move when a spell is
-//!   cast and the camera stays where it is. An item keeps the web's size, 68 points wide, where
-//!   the band is tall enough, as at 393 by 759 and 430 by 932, and is smaller where it is not
-//!   (`stack_height`), 51 points wide at 375 by 647, so that a tapped creature, 56 points tall
-//!   there, keeps an uncovered strip a press can reach. The items stand in one row, and a stack
-//!   too long for it scrolls as a battlefield row does (`kit_space::arrange::Cascade`).
+//!   cast and the camera stays where it is. Where the profile gives the stack a column at the
+//!   right (`banded::Stack::side_width`), as the phone's does, its items stand centred in that
+//!   column, else across the band. Either way an item keeps the profile's size (80 points wide
+//!   on the phone) where the band is tall enough, and is smaller where it is not
+//!   (`stack_height`), so that a tapped creature keeps an uncovered strip a press can reach. The items stand in one row, and
+//!   a stack too long for it scrolls as a battlefield row does (`kit_space::arrange::Cascade`).
 //! - A hand too large for one row takes further rows above it, which stand in the viewer's
-//!   strip. Each starts right of the viewer's piles and the Mana button (`back_left`), so that
-//!   the piles stay in view and every card of an ordinary hand stays in view too. The newest
-//!   cards stand in those rows, at the right, where a drawn card is held up to be read, so a
-//!   card still flying to the hand lands clear of the cards held up after it.
+//!   strip. Where the profile asks for it (`banded::Hand::clear_piles`), each starts right of
+//!   the viewer's piles and the Mana button (`back_left`) and holds the newest cards. Otherwise,
+//!   as on the phone, the rows are centred and hold as nearly the same number of cards as they
+//!   can.
 //! - Hands, piles, the stack and the players' anchors are placed relative to the camera, at
 //!   the web's places in points, converted for each window when the layout is made
 //!   (`layout`), never on the frame path.
@@ -41,11 +43,13 @@ use glam::{Vec2, Vec3};
 
 use super::row;
 use crate::table::{
-    Across, Camera, CentredStack, HandData, Layout, LifeDock, PlayerAnchor, RegionFit, Second,
-    StackPlacement, TraySpace, Window,
+    Across, Camera, CentredStack, HandData, Layout, LifeDock, PlayerAnchor, RegionFit, RowZoom,
+    Second, StackPlacement, TraySpace, Window,
 };
 use kit_base::data::Card;
-use kit_base::data::profiles::{Banded, Bands, ProfileData, TrayTuning};
+use kit_base::data::profiles::{
+    Banded, BandedRows as Rows, Bands, ProfileData, Row, SlotName, TrayTuning,
+};
 use kit_base::geometry::Band;
 use kit_scene::hit::CELL;
 use kit_ui::input::Rect;
@@ -55,7 +59,9 @@ fn ratio(card: Card) -> f32 {
     card.width / card.height
 }
 
-/// The table's bands, top to bottom, which the game screen lays its controls in. The
+/// The table's bands, top to bottom, which the game screen lays its controls in, with the
+/// creatures' bands split from the back rows' halfway between the creatures' row and the other
+/// permanents' row (`back_y`). The
 /// strips and the hand band are the web interface's. The battlefield's bands are where the
 /// camera shows each row, split halfway between neighbouring rows, so they follow the table at
 /// any window size.
@@ -129,12 +135,12 @@ pub(crate) fn bands_with(
     camera: &Camera,
     sizes: Bands,
     creatures_y: f32,
-    lands_y: f32,
+    back_y: f32,
 ) -> TableBands {
     let window = camera.window;
     let field = camera.area;
     let on_screen = |y: f32| camera.to_screen(Vec3::new(0.0, y, 0.0)).y;
-    let (creatures, back) = (-creatures_y, -lands_y);
+    let (creatures, back) = (-creatures_y, -back_y);
     let half = camera.data.card.height / 2.0;
     // Between the back row and the creatures' row, halfway between the near edge of the one and
     // the far edge of the other.
@@ -164,10 +170,11 @@ pub(crate) fn bands_with(
 }
 
 /// How tall a stack item stands on the phone, in logical points, with its middle at `middle`:
-/// the web interface's size, 68 points wide, unless that would leave a tapped creature in
+/// the profile's `width` (`banded::Stack::width`), unless that would leave a tapped creature in
 /// either side's row less than a press can reach. Each creature must keep a strip the phone's
 /// touch target tall and a cell of the hit test's grid more at each edge, between the item and
-/// its far edge, so that the rows can stay where they are while a spell is on the stack.
+/// its far edge, so that the rows can stay where they are while a spell is on the stack. An item
+/// is never narrower than that target and cell either.
 fn stack_height(camera: &Camera, middle: f32, (width, row_y, target): (f32, f32, f32)) -> f32 {
     let uncovered = target + 2.0 * CELL;
     // A tapped card lies across its row, so its height on the table is a card's width.
@@ -182,7 +189,12 @@ fn stack_height(camera: &Camera, middle: f32, (width, row_y, target): (f32, f32,
         })
         .into_iter()
         .fold(f32::INFINITY, f32::min);
-    (width / ratio(camera.data.card)).min(2.0 * reach)
+    // An item is itself pressed, so it is never narrower than a card a press can reach, even
+    // where it then covers part of a creature, as on the shortest phones.
+    let least = uncovered / ratio(camera.data.card);
+    (width / ratio(camera.data.card))
+        .min(2.0 * reach)
+        .max(least)
 }
 
 /// Where each pile lies and how large its cards are, by side, the viewer's first: in each
@@ -316,13 +328,18 @@ fn opponent_hand(window: Window, bands: &TableBands, data: Banded, card: Card) -
 /// cards are at most as wide as a card of the hand, and keep `least_step` apart, as the stack's
 /// items do, so that each card beneath keeps a square of the touch target uncovered.
 pub(super) fn tray_in(
-    window: Window,
+    (window, profile): (Window, &ProfileData),
     bands: &TableBands,
     data: Banded,
     sizes: Bands,
     (tuning, card, grid_target): (TrayTuning, Card, f32),
 ) -> TraySpace {
     let shape = data.tray;
+    // The phase button under the menu (`phase.icon`) stands at the column's right end, over
+    // the opponent's rows, so the cards held up there keep left of it.
+    let phase = profile.slots.get(&SlotName::PhaseIcon).map_or(0.0, |spec| {
+        spec.max_width.unwrap_or(0.0) + spec.inset[1] + shape.gap
+    });
     let top = bands.opponent_back.top + shape.inset;
     let foot = bands.middle.bottom() + shape.inset;
     // The prompt's buttons stand on the dock's line while it holds cards up (`prompts::bar`):
@@ -339,7 +356,7 @@ pub(super) fn tray_in(
         height: bands.middle.top - shape.inset - top,
         across: Across::Column {
             left: bands.left,
-            width: bands.right - bands.left,
+            width: bands.right - phase - bands.left,
         },
         second: Some(Second {
             y: foot,
@@ -356,6 +373,84 @@ pub(super) fn tray_in(
     }
 }
 
+/// How the battlefield's rows shrink on a phone (`banded::Rows`): each on its own as far as it
+/// needs to fit its room, as on the desktop, the creatures and other permanents to cards no
+/// narrower than `least_width` points, measured on the opponent's other permanents' row at
+/// `far_y`, and the lands' rows to cards at most `width` points wide even on an empty board,
+/// measured on the viewer's lands' row at `lands_y`, the nearer of the two to the camera.
+fn row_zoom(camera: &Camera, (lands_y, far_y): (f32, f32), (rows, width): (Rows, f32)) -> RowZoom {
+    let full = |y: f32| {
+        let width = camera.data.card.width * camera.points_per_millimetre(Vec3::new(0.0, y, 0.0));
+        width.max(f32::EPSILON)
+    };
+    // The opponent's other permanents lie farthest from the camera, where a card is smallest.
+    let least = (rows.least_width / full(far_y)).min(1.0);
+    RowZoom::independent(least).with_lands(rows.land_least, width / full(lands_y))
+}
+
+/// Where the lands' rows lie on a phone: the viewer's row, which the opponent's mirrors, and the
+/// widest a land is drawn there, in logical points.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct LandRows {
+    pub row: Row,
+    pub width: f32,
+}
+
+/// Fits the phone's camera inside the battlefield `area` of `window`. The profile's required
+/// rectangle holds the creatures and the other permanents, and the lands' rows lie beyond it, in
+/// `banded::Rows::land_room` millimetres of table on each side. Where that room would leave a
+/// card of the farthest row narrower than `least_width` points, as on the shortest phones, the
+/// camera leaves the lands only as much room as keeps those cards that wide, down to none, and
+/// the lands are drawn as small as that room holds (`LandRows`). A profile whose rows do not
+/// shrink (`banded::Rows`) places its lands where its `lands` row says.
+pub(crate) fn fit_camera(
+    profile: &ProfileData,
+    window: Window,
+    area: Rect,
+) -> (Camera, Option<LandRows>) {
+    let table = &profile.table;
+    let Some(rows) = table.banded.and_then(|banded| banded.rows) else {
+        return (Camera::fit_inside(table.camera, window, area), None);
+    };
+    // The opponent's other permanents lie farthest from the camera, where a card is smallest.
+    let far = Vec3::new(0.0, table.others.y.abs(), 0.0);
+    let fit = |room: f32| {
+        let mut data = table.camera;
+        let [low, high] = data.required;
+        data.required = [low - Vec2::Y * room, high + Vec2::Y * room];
+        let camera = Camera::fit_inside(data, window, area);
+        let wide = camera.data.card.width * camera.points_per_millimetre(far);
+        (camera, wide)
+    };
+    let (mut camera, wide) = fit(rows.land_room);
+    let mut room = rows.land_room;
+    if wide < rows.least_width {
+        let (mut low, mut high) = (0.0, rows.land_room);
+        for _ in 0..12 {
+            let middle = f32::midpoint(low, high);
+            if fit(middle).1 >= rows.least_width {
+                low = middle;
+            } else {
+                high = middle;
+            }
+        }
+        room = low;
+        camera = fit(room).0;
+    }
+    let edge = table.camera.required[1].y;
+    let y = edge + room / 2.0;
+    let card = camera.data.card;
+    let tall =
+        (room - 2.0 * table.gap).max(0.0) * camera.points_per_millimetre(Vec3::new(0.0, -y, 0.0));
+    let width = rows.land_width.min(tall * card.width / card.height);
+    // The viewer's lands lie on the negative side of the table's middle line.
+    let row = Row {
+        y: -y,
+        ..table.lands
+    };
+    (camera, Some(LandRows { row, width }))
+}
+
 /// The life total at `y` points from the window's top and its mana pool's offset.
 fn life_anchor(window: Window, y: f32, pool_offset: Vec2) -> PlayerAnchor {
     let x = window.size.width / 2.0;
@@ -370,27 +465,23 @@ pub(super) fn layout(profile: &ProfileData, window: Window, data: Banded) -> Lay
     let table = &profile.table;
     let sizes = table.bands.expect("validated banded table");
     let area = battlefield_with(window, sizes, table.camera.card);
-    let camera = Camera::fit_inside(table.camera, window, area);
-    let bands = bands_with(&camera, sizes, table.creatures.y, table.lands.y);
+    let (camera, land_rows) = fit_camera(profile, window, area);
+    let lands = land_rows.map_or(table.lands, |lands| lands.row);
+    let bands = bands_with(&camera, sizes, table.creatures.y, table.others.y);
     let (piles, pile_scale) = piles(&camera, &bands, data);
     let (shared_piles, shared_pile_scale) = shared_piles(&camera, &bands, data);
     let target = profile.checks.target_points;
     let middle = bands.middle.middle();
-    let (stack_left, stack_height) = if data.stack.side_width > 0.0 {
-        (
-            (bands.right - data.stack.side_width).max(bands.left),
-            data.stack.width / ratio(table.camera.card),
-        )
+    let stack_left = if data.stack.side_width > 0.0 {
+        (bands.right - data.stack.side_width).max(bands.left)
     } else {
-        (
-            bands.left,
-            stack_height(
-                &camera,
-                middle,
-                (data.stack.width, table.creatures.y, target),
-            ),
-        )
+        bands.left
     };
+    let stack_height = stack_height(
+        &camera,
+        middle,
+        (data.stack.width, table.creatures.y, target),
+    );
     let stack = CentredStack {
         middle,
         height: stack_height,
@@ -406,11 +497,11 @@ pub(super) fn layout(profile: &ProfileData, window: Window, data: Banded) -> Lay
     let anchor = |strip: Band| life_anchor(window, strip.middle(), data.pool_offset);
     Layout {
         shape: crate::table::TableShape::PerPlayerPiles,
-        camera: table.camera,
+        camera: camera.data,
         camera_area: Some(area),
         strip: table.strip,
         creatures: row(table.creatures, true),
-        lands: row(table.lands, false),
+        lands: row(lands, false),
         others: row(table.others, false),
         gap: table.gap,
         blocker_spacing: table.blocker_spacing,
@@ -424,7 +515,7 @@ pub(super) fn layout(profile: &ProfileData, window: Window, data: Banded) -> Lay
         shared_piles,
         shared_pile_scale,
         tray: tray_in(
-            window,
+            (window, profile),
             &bands,
             data,
             sizes,
@@ -435,7 +526,7 @@ pub(super) fn layout(profile: &ProfileData, window: Window, data: Banded) -> Lay
             window,
             &bands,
             (
-                hand_ceiling(&camera, table.lands.y, target),
+                hand_ceiling(&camera, lands.y, target),
                 Some(back_left(
                     window,
                     data,
@@ -462,7 +553,10 @@ pub(super) fn layout(profile: &ProfileData, window: Window, data: Banded) -> Lay
         target,
         bands: Some(bands),
         region_fit: RegionFit::default(),
-        row_zoom: None,
+        row_zoom: data.rows.map(|rows| {
+            let width = land_rows.map_or(rows.land_width, |lands| lands.width);
+            row_zoom(&camera, (lands.y, -table.others.y), (rows, width))
+        }),
         fitted: None,
         fitted_piles: None,
         tabletop_shade: None,

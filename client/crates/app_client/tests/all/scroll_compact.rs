@@ -79,14 +79,21 @@ fn drawn(frame: &Frame, zone: ZoneName) -> Vec<(usize, u32)> {
     cards
 }
 
-/// The count shown off `line`'s `end` ("left" or "right"), if any.
+/// How many cards `line` has scrolled off its `end` ("left" or "right"), if any.
 fn count(page: &mut Page, line: &str, end: &str) -> Option<usize> {
-    let prefix = format!("{line} {end} ");
-    let frame = page.frame();
-    frame
-        .resolved
-        .iter()
-        .find_map(|element| frame.name(element.name).strip_prefix(&prefix)?.parse().ok())
+    page.frame();
+    let scroller = match line {
+        "Your hand" => game_table::table::Scroller::Hand,
+        "Stack" => game_table::table::Scroller::Stack,
+        _ => panic!("no line {line:?}"),
+    };
+    let window = page.table().row_window(scroller);
+    let off = if end == "left" {
+        window.before()
+    } else {
+        window.after()
+    };
+    (off > 0).then_some(off)
 }
 
 /// The middle of the uncovered part of the card drawn at `at`, counting from the lowest number.

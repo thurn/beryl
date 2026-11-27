@@ -156,6 +156,12 @@ pub struct RowZoom {
     /// The creatures' rows' own limit, or `None` when they take the shared zoom.
     pub creatures: Option<ScaleLimit>,
     pub back: ScaleLimit,
+    /// The lands' rows' own limit, or `None` when they take `back`'s.
+    pub lands: Option<ScaleLimit>,
+    /// The most the lands' rows may be zoomed: below 1 when the layout draws lands smaller than
+    /// other cards even on an empty board, as the phone draws them at most
+    /// `banded::Rows::land_width` points wide.
+    pub lands_most: f32,
 }
 
 impl RowZoom {
@@ -171,6 +177,21 @@ impl RowZoom {
             minimum: 1.0,
             creatures: Some(limit),
             back: limit,
+            lands: None,
+            lands_most: 1.0,
+        }
+    }
+
+    /// `self` with the lands' rows zoomed from `least` to `most`, on their own.
+    #[must_use]
+    pub const fn with_lands(self, least: f32, most: f32) -> Self {
+        Self {
+            lands: Some(ScaleLimit {
+                minimum: least,
+                shared_minimum: 1.0,
+            }),
+            lands_most: most.max(least),
+            ..self
         }
     }
 
@@ -179,7 +200,8 @@ impl RowZoom {
     pub fn least(&self, row: RowName) -> f32 {
         match row {
             RowName::Creatures => self.creatures.map_or(self.minimum, |limit| limit.minimum),
-            _ => self.back.minimum,
+            RowName::Lands => self.lands.unwrap_or(self.back).minimum,
+            RowName::Others => self.back.minimum,
         }
     }
 }

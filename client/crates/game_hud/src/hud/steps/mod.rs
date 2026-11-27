@@ -6,7 +6,12 @@ use std::convert::Infallible;
 use beryl_protocol::protocol::{DecisionId, SessionId, Side, Step, StepSet, StopsSetting};
 use beryl_protocol::script::Turn;
 use glam::Vec2;
-use kit_base::data::{flat::Tooltip, hud::StepTrack, profiles::Piece};
+use kit_base::data::{
+    flat::Tooltip,
+    hud::StepTrack,
+    profiles::{Piece, SlotName},
+};
+use kit_base::tokens::space;
 use kit_scene::{Context, Feature, StateUpdate};
 use kit_ui::element::{Element, row};
 use kit_ui::layout::Layer;
@@ -19,10 +24,12 @@ mod view;
 use view::game_steps;
 pub use view::table_tracks;
 
-/// A press on a stop in the turn step display.
+/// A press on a stop in the turn step display, or on the phone's phase icon, which shows the
+/// stops or hides them again (`Open`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Message {
     Toggle { step: Step, theirs: bool },
+    Open,
 }
 
 /// Kept between frames so playback can swap in a row without building one.
@@ -34,11 +41,15 @@ pub struct State {
     from: Option<RowsFrom>,
     outstanding: VecDeque<StopsSetting>,
     pending_at: Option<(SessionId, DecisionId)>,
+    /// Whether a profile without the stops on its table (the phone's) shows them, after a press
+    /// on its phase icon.
+    pub open: bool,
 }
 
 type RowsFrom = (
     StopsSetting,
     [Vec2; 2],
+    Option<Vec2>,
     Option<Viewed>,
     bool,
     bool,
@@ -61,10 +72,13 @@ impl Feature for StepRow {
     type Request = Message;
 
     fn update(
-        _: &mut State,
+        state: &mut State,
         message: &Message,
         context: &mut Context<'_, Infallible, Message>,
     ) -> bool {
+        if *message == Message::Open {
+            state.open = !state.open;
+        }
         context.request(*message);
         false
     }
@@ -82,6 +96,9 @@ impl Feature for StepRow {
 #[derive(Clone, Copy)]
 pub struct Inputs {
     centres: [Vec2; 2],
+    /// Where the open stops' panel hangs from, its top right corner, on a profile that keeps the
+    /// stops off its table and shows them under its phase button instead (`phase::corner`).
+    panel: Option<Vec2>,
     tuning: StepTrack,
     tooltip: Tooltip,
     enabled: bool,
@@ -95,14 +112,33 @@ pub struct Inputs {
 impl Inputs {
     #[must_use]
     pub fn new(input: &HudIn<'_>) -> Self {
-        let enabled = input.profile.data().hud.table.contains(&Piece::StepStops);
-        let centres = if enabled {
+        Self::shown(input, false)
+    }
+
+    /// The inputs of `input`'s step rows, which show where the profile puts them on the table,
+    /// and on any other profile while they are `open` (`State::open`).
+    #[must_use]
+    pub fn shown(input: &HudIn<'_>, open: bool) -> Self {
+        let on_table = input.profile.data().hud.table.contains(&Piece::StepStops);
+        let enabled = open || on_table;
+        let panel = input
+            .profile
+            .slot(SlotName::PhaseIcon)
+            .filter(|_| open && !on_table)
+            .map(|slot| {
+                Vec2::new(
+                    slot.rect.x + slot.rect.width,
+                    slot.rect.y + slot.rect.height + space::S,
+                )
+            });
+        let centres = if enabled && panel.is_none() {
             [Side::You, Side::Opponent].map(|side| super::players::face_centre(side, input.profile))
         } else {
             [Vec2::ZERO; 2]
         };
         Self {
             centres,
+            panel,
             tuning: input.data.hud.steps,
             tooltip: input.data.flat.tooltip,
             enabled,
@@ -125,6 +161,7 @@ impl Inputs {
         (
             self.stops,
             self.centres,
+            self.panel,
             self.viewing,
             self.opening,
             self.enabled,

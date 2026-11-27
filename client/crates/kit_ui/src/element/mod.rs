@@ -365,19 +365,6 @@ pub mod floats {
         [FloatId(13), FloatId(14), FloatId(15)],
         [FloatId(41), FloatId(42), FloatId(43)],
     ];
-    /// The count of objects scrolled off the left or right end of a row, grouped by side and row.
-    pub const ROW_COUNT: [[[FloatId; 2]; 3]; 2] = [
-        [
-            [FloatId(16), FloatId(17)],
-            [FloatId(18), FloatId(19)],
-            [FloatId(20), FloatId(21)],
-        ],
-        [
-            [FloatId(22), FloatId(23)],
-            [FloatId(24), FloatId(25)],
-            [FloatId(26), FloatId(27)],
-        ],
-    ];
     /// The inspector: the card under the pointer at full size beside the table
     /// (`inspect::inspector`).
     pub const INSPECTOR: FloatId = FloatId(28);
@@ -399,11 +386,6 @@ pub mod floats {
     /// their title lines. Notice pills (`SCRY_PILL`) sit over the table in the same way so a
     /// fading choice or scry pill cannot cover a prompt's shade or buttons.
     pub const UNDER_SCREEN: [FloatId; 4] = [STEP_BANNER, THINKING, SCRY_PILL[0], SCRY_PILL[1]];
-    /// The count of cards scrolled off the left end and the right end of the viewer's hand.
-    pub const HAND_COUNT: [FloatId; 2] = [FloatId(34), FloatId(35)];
-    /// The count of items scrolled off the stack's bottom, at its left, and its top, at its
-    /// right.
-    pub const STACK_COUNT: [FloatId; 2] = [FloatId(36), FloatId(37)];
     /// The word under the opponent's permanent that refused a click by holding the viewer to
     /// sorcery speed (`Client::refusal_frame`).
     pub const REFUSAL: FloatId = FloatId(38);

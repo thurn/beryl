@@ -10,15 +10,14 @@ use super::card_input::Hold;
 use super::carry::Carry;
 use app_screens::screens::settings::{Message as SettingsMessage, slider_setting};
 use app_screens::screens::{Screen, Sheet};
-use game_hud::hud::rows::Message as RowMessage;
 use game_hud::inspect::Viewed;
-use game_table::table::{Place as GamePlace, Table};
+use game_table::table::{Scroller, Table};
 use kit_frame::frame::{
     ElementId, Frame, Place, Resolved, Role, StateBits, TRAY_CARD_BOX_IDS, TRAY_GRID_IDS,
 };
 use kit_scene::Reach;
 use kit_scene::hit::PointerHit;
-use kit_scene::input::{KeyResponse, Point, Router, Target, TouchPolicy};
+use kit_scene::input::{Hold as TouchHold, KeyResponse, Point, Router, Target, TouchPolicy};
 use kit_scene::scroll::ScrollGesture;
 use kit_ui::element::Action;
 use kit_ui::input::{Button, Key, KeyCode, KeyPhase, Pointer, PointerKind, PointerPhase};
@@ -85,6 +84,11 @@ pub(super) struct Routes {
     pub scrolling: ScrollGesture<super::scrolling::Target>,
     pub control: Control,
     action: Option<Action>,
+    /// The row the keys scroll: the last one pressed, until another press or screen.
+    pub row_focus: Option<Scroller>,
+    /// Whether the finger down shows the card it rests on enlarged (`advance_gesture`), until
+    /// it lifts or starts to drag the card.
+    zoomed: bool,
 }
 
 /// The current screen over the last drawn table.
@@ -275,26 +279,40 @@ impl Client {
                 let (target, index, screen_target) = scene.pick(pointer.position, wheel, carried);
                 flat = screen_target;
                 let game = screen == Screen::Game;
-                let game_hold = game
-                    && target.is_some_and(|target| match target.node {
-                        Node::Card(slot) => {
-                            scene.table.in_box(slot)
-                                || target
-                                    .container
-                                    .and_then(GamePlace::in_frame)
-                                    .is_some_and(game_play::pointer::takes_pointer)
-                        }
-                        _ => false,
-                    });
+                // Any card of the game, wherever it rests, is shown enlarged while a finger
+                // rests on it.
+                let game_card =
+                    game && target.is_some_and(|target| matches!(target.node, Node::Card(_)));
                 let policy = TouchPolicy {
                     double_tap: (game || at_table) && !scene.sheet && target.is_none(),
-                    hold: !pinned && (game_hold || (manual_hold && !on_screen(target))),
+                    hold: if pinned {
+                        TouchHold::None
+                    } else if game_card {
+                        TouchHold::Quick
+                    } else if manual_hold && !on_screen(target) {
+                        TouchHold::Long
+                    } else {
+                        TouchHold::None
+                    },
                     delayed_pickup: at_table,
                 };
                 (target, index, policy)
             });
         if routed.cancelled {
             self.cancel_interaction();
+        }
+        // The enlarged card goes once the finger lifts, or as it starts to drag the card.
+        let dragging = routed
+            .point
+            .as_ref()
+            .is_some_and(|point| point.drag.is_some());
+        if self.routes.zoomed
+            && pointer.kind == PointerKind::Touch
+            && (routed.cancelled || ends_gesture(&pointer) || dragging)
+        {
+            self.routes.zoomed = false;
+            self.features
+                .inspect(&game_hud::hud::inspector::Message::Pin(None));
         }
         if let Some(event) = routed.point {
             let point = ScenePoint { event, flat };
@@ -304,7 +322,7 @@ impl Client {
                 self.end_control();
                 self.routes.action = point.action().cloned();
                 self.routes.scrolling.cancel();
-                self.features.focus_row(RowMessage::Focus(None));
+                self.routes.row_focus = None;
             }
             if primary_down && pinned {
                 self.features
@@ -388,11 +406,15 @@ impl Client {
             }) = source
             && let Ok(slot) = u16::try_from(slot)
         {
+            // The card shows enlarged while the finger stays down. The finger keeps its press,
+            // so that it can still drag the card, but lifting it does not use the card.
             self.features
                 .inspect(&game_hud::hud::inspector::Message::Pin(Some(ObjectId(
                     slot,
                 ))));
-            true
+            self.routes.zoomed = true;
+            self.routes.router.suppress_press();
+            false
         } else {
             false
         };
@@ -597,7 +619,7 @@ impl Client {
             return Some(KeyResponse::Handled);
         }
         if key.code == KeyCode::Tab {
-            self.features.focus_row(RowMessage::Focus(None));
+            self.routes.row_focus = None;
             self.layer
                 .move_focus(!key.modifiers.shift, self.features.layer_open);
             return Some(KeyResponse::Handled);

@@ -313,6 +313,12 @@ impl Page {
         self.client.data()
     }
 
+    /// The table the page's client shows now.
+    #[must_use]
+    pub fn table(&self) -> &game_table::table::Table {
+        self.client.table()
+    }
+
     /// The spans and streaks the table shows now: the marks and arrows among them.
     #[must_use]
     pub fn lit(&self) -> &game_play::light::Lit {

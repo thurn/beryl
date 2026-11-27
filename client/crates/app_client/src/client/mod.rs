@@ -25,7 +25,7 @@ use beryl_protocol::script::{OwnTimings, Verb, own_timings};
 
 use app_screens::screens::{Screen, bug_report, start, testing};
 use game_hud::hud::banner;
-use game_hud::hud::{counts, notices, piles, rows};
+use game_hud::hud::{counts, notices, piles};
 use game_hud::prompts;
 use game_manual::features::table::RefusalSound;
 use game_play::play::Show;
@@ -314,7 +314,6 @@ impl Client {
             table,
             views: shown.into_iter().chain(coming),
         });
-        self.prepare_rows();
         self.show_screen();
     }
 
@@ -351,6 +350,15 @@ impl Client {
         self.frame.looking = looking;
     }
 
+    /// Moves the clock on to `now`, in nanoseconds since the client started, for an input that
+    /// arrives between frames at that time. An input otherwise takes the time of the last frame
+    /// (`handle`), and a host that draws no frames while nothing moves can hand over a touch
+    /// seconds after it: a tap that woke the app would seem held that long, and so would not
+    /// count toward a double tap.
+    pub fn catch_up(&mut self, now: u64) {
+        self.now = self.now.max(now);
+    }
+
     /// The frame at `now`, in nanoseconds since the client started.
     pub fn frame(&mut self, now: u64) -> &Frame {
         self.now = now;
@@ -379,7 +387,6 @@ impl Client {
         // The guided start's opening and an open pile viewer cover the table's life totals and
         // pile counts, not notices.
         let counted = visible && !self.guided_start() && self.features.viewer().open().is_none();
-        let rows_counted = self.rows_counted(visible, covers);
         let manual = self.features.screen == Screen::Table;
         let card = self.data().card.size();
         let mut builder = FrameBuilder::new(&mut self.frame, self.tier, card);
@@ -401,7 +408,7 @@ impl Client {
             &mut self.layer,
             &self.show,
             (table_now, self.tier),
-            (visible, counted, rows_counted, covers),
+            (visible, counted, covers),
             targets,
         );
         Tree::solve_float_anchors(&mut self.layer, &builder);
@@ -710,7 +717,7 @@ fn update_hud_features(
     layer: &mut Layer,
     show: &Show,
     (table_now, tier): (u64, Tier),
-    (visible, counted, rows_counted, covers): (bool, bool, bool, bool),
+    (visible, counted, covers): (bool, bool, bool),
     targets: [bool; 2],
 ) {
     let table = show.table();
@@ -741,7 +748,7 @@ fn update_hud_features(
         visible,
     });
     let manual = features.screen == Screen::Table;
-    let banner_shown = features.banner(banner::Draw {
+    features.banner(banner::Draw {
         layer,
         view: show.shown().map(|update| &update.view),
         latest: show.latest().map(|update| &update.view),
@@ -750,12 +757,5 @@ fn update_hud_features(
         allow_thinking: !opening && !manual,
         orb_scale: table.layout().play.life.orb_scale,
         tuning: table.data().hud,
-    });
-    // Hide row overflow counts while the combat step banner is up so they do not draw over its
-    // title on compact layouts where the banner spans the opponent's back row.
-    features.update_rows(rows::Draw {
-        layer,
-        table,
-        visible: rows_counted && !banner_shown,
     });
 }

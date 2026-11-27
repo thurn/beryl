@@ -18,7 +18,7 @@ use game_hud::hud::steps::StepRow;
 use game_hud::hud::viewer::Viewer;
 use game_hud::hud::{
     banner::Banner, counts::CountFloats, inspector::Inspector, notices::NoticeFloats,
-    piles::PileCounts, rows::RowCounts,
+    piles::PileCounts,
 };
 use game_hud::prompts::{self, bar::PromptBar};
 use game_hud::screens::game_over::GameOver;
@@ -86,7 +86,6 @@ feature_slots! {
         game_over: GameOver,
         life_totals: CountFloats,
         pile_counts: PileCounts,
-        row_counts: RowCounts,
         notices: NoticeFloats,
         step_banner: Banner,
         inspector: Inspector,

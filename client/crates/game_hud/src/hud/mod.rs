@@ -15,7 +15,6 @@ pub mod phase;
 pub mod piles;
 pub mod placement_scene;
 pub use counts::players;
-pub mod rows;
 pub mod steps;
 pub mod viewer;
 

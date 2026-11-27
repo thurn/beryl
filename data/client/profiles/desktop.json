@@ -28,7 +28,6 @@
       "left": 20,
       "right": 420
     },
-    "row_count_gap": 4,
     "blocker_spacing": 1.04,
     "cloth": { "size": 4000, "depth": 0.5 },
     "pile": {

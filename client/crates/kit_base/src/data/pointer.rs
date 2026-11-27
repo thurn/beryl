@@ -93,6 +93,10 @@ pub struct TouchTuning {
     #[serde(deserialize_with = "positive")]
     pub slop_points: f32,
     pub pickup_ms: u64,
+    /// How long a finger must rest on a card of the game before the card is shown enlarged, as
+    /// long as the finger stays down (`TouchPolicy::quick_hold`). Short enough to feel like a
+    /// press, and longer than most taps, so that a tap does not flash the enlarged card.
+    pub zoom_ms: u64,
 }
 
 impl PointerTuning {

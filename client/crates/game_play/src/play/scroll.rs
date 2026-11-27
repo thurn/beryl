@@ -6,7 +6,7 @@
 //! it from the nearer end of the row, where placement rests it.
 
 use super::Show;
-use game_table::table::{Rows, Scroller};
+use game_table::table::Scroller;
 
 impl Show {
     /// Scrolls `row` so that the first group in view is `first`, or as near to it as the row's
@@ -23,21 +23,5 @@ impl Show {
     /// begins. The client calls it before `frame`.
     pub fn advance_slide(&mut self, now: u64) {
         self.table.advance_slide(now);
-    }
-
-    /// Which groups of each row are in view: as the table shows the view at rest, then in the
-    /// view each script still to end leads to, in order.
-    pub fn coming_rows(&self) -> impl Iterator<Item = &Rows> {
-        let playing = self
-            .playing
-            .iter()
-            .map(|playing| playing.compiled.finals.rows());
-        let waiting = self
-            .waiting
-            .iter()
-            .map(|waiting| waiting.compiled.finals.rows());
-        std::iter::once(self.table.rows())
-            .chain(playing)
-            .chain(waiting)
     }
 }

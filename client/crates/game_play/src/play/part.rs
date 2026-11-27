@@ -29,7 +29,6 @@
 //! that changes zones in a later step is drawn as it rests, in its old zone, until then, where
 //! the whole script draws its new record at the same pose from the start.
 
-use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
 use beryl_protocol::GameUpdate;
@@ -290,20 +289,6 @@ impl Show {
             .sum::<usize>()
             != notices;
         grew_counts || grew_notices
-    }
-
-    /// A hash of every row window the table shows and the scripts to come lead to
-    /// (`coming_rows`), which changes when any of them does. It allocates nothing. A script
-    /// compiled in parts reads `finals_at` until it is whole, and the finals that compiling
-    /// gives can group a row's cards differently, so the client compares this before and after
-    /// `prepare` to lay out the counts of cards off a row's ends again (`Client::prepare`).
-    #[must_use]
-    pub fn rows_key(&self) -> u64 {
-        let mut hasher = std::hash::DefaultHasher::new();
-        for rows in self.coming_rows() {
-            rows.hash(&mut hasher);
-        }
-        hasher.finish()
     }
 
     /// Begins compiling each waiting script that starts by `now`, as `frame` will start them:
