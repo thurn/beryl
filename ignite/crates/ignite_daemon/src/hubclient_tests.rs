@@ -271,7 +271,9 @@ fn a_hub_that_stays_down_is_given_up_after_the_restart_window() {
     let error = client.records(&[record("test")]).unwrap_err();
     assert!(matches!(error, Error::Unreachable(_)), "{error:?}");
     assert!(began.elapsed() >= Duration::from_millis(300));
-    assert!(began.elapsed() < Duration::from_secs(5));
+    // Windows TCP connection refusal on localhost takes ~2 s per attempt, so two attempts under
+    // load can take ~7 s while still finishing well under `RESTART_WINDOW` (15 s).
+    assert!(began.elapsed() < Duration::from_secs(14));
 }
 
 #[test]
