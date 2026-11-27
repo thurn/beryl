@@ -42,6 +42,7 @@ pub fn update(conn: &mut Connection, update: &TipCoverageUpdate, now: Timestamp)
         if !off.contains(&update.platform)
             && !fleet_settings::checks_only_platforms(&transaction, &settings, now)?
                 .contains(&update.platform)
+            && !fleet_settings::waited_platforms(&transaction)?.contains(&update.platform)
         {
             return Err(StoreError::Rejected(format!(
                 "{} can verify tips again",

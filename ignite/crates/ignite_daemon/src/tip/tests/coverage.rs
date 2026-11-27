@@ -527,3 +527,91 @@ fn family_and_checks_only_deferrals_promote_before_windows_catches_up() {
         server.stop();
     }
 }
+
+#[test]
+fn waited_platform_promotes_and_defers_until_windows_catches_up() {
+    use std::collections::BTreeMap;
+
+    use ignite_core::protocol::tickets::{BatchRequest, Operation, TicketFields, TicketType};
+    use ignite_store::hub;
+
+    use super::rounds::{connect_machine, running_hub, select};
+
+    let world = World::new();
+    let tip = commit("cccc000");
+    world.land(&tip);
+    let (server, database, mut mac) = running_hub(&world, "waited-platform-deferral");
+    mac.config.machine.get_mut("local").unwrap().os = Some(Os::Macos);
+    let windows = connect_machine(world.ctx("m-2"), &server, "windows", Os::Windows);
+    select(&mac, &tip);
+
+    let mut metadata = BTreeMap::new();
+    metadata.insert(
+        "ignite_platform_wait".to_owned(),
+        serde_json::json!({
+            "commit": tip.as_str(),
+            "platform": "windows",
+            "checks": ["unit:win"]
+        }),
+    );
+    let request = BatchRequest {
+        preconditions: Vec::new(),
+        ops: vec![Operation::Create {
+            parent: None,
+            fields: TicketFields {
+                title: Some("Tip verification has waited an hour on machine windows".to_owned()),
+                ticket_type: Some(TicketType::Bug),
+                priority: Some(1),
+                metadata: Some(metadata),
+                ..TicketFields::default()
+            },
+            deps: Vec::new(),
+            request_key: None,
+        }],
+    };
+    let mut hub_conn = hub::open(&database).unwrap();
+    ignite_store::hub::batch::apply(&mut hub_conn, &request, "upkeep", "hub", Timestamp::EPOCH)
+        .unwrap();
+
+    let notice = FleetNotice {
+        waited_platforms: [Os::Windows].into(),
+        ..FleetNotice::default()
+    };
+    let mac_conn = local::open(&database.with_file_name("macos.db")).unwrap();
+    crate::fleet_notice::write(&mac_conn, &notice).unwrap();
+    let mut mac_verifier = world.verifier().with_host("local").with_memory(mac_conn);
+    let mut win_verifier = world.verifier().with_host("windows");
+
+    let mut win = windows_check('b', false);
+    let portable = check("portable", 'c');
+    let mut native_mac = check("macos", 'd');
+    native_mac.key.platform = Some(Os::Macos);
+    world
+        .work
+        .set_checks(&tip, vec![win.clone(), portable, native_mac]);
+
+    assert_eq!(
+        mac_verifier.verify(&mac, &tip).unwrap(),
+        TipOutcome::VerifiedWithDeferrals {
+            checks: [(Os::Windows, vec![win.check.clone()])].into(),
+        }
+    );
+    assert_eq!(world.master(), tip);
+    assert!(
+        mac.hub.tip_coverage().unwrap().platforms[&Os::Windows]
+            .deferred
+            .is_some()
+    );
+
+    win.runnable = true;
+    world.work.set_checks(&tip, vec![win.clone()]);
+    assert!(win_verifier.due(&windows, &tip));
+    assert_eq!(
+        win_verifier.round_at(&windows, &tip, Seq(0)).unwrap(),
+        TipOutcome::Verified
+    );
+    let windows_coverage = &mac.hub.tip_coverage().unwrap().platforms[&Os::Windows];
+    assert_eq!(windows_coverage.through, tip);
+    assert!(windows_coverage.deferred.is_none());
+    server.stop();
+}

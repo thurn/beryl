@@ -44,6 +44,7 @@ impl<'a> Scope<'a> {
             .map_or_else(BTreeSet::new, |notice| {
                 let mut deferred = notice.off_platforms;
                 deferred.extend(notice.checks_only_platforms);
+                deferred.extend(notice.waited_platforms);
                 deferred
             });
         let local = verifier.local_platform(ctx);

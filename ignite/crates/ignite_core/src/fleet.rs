@@ -442,6 +442,10 @@ pub struct FleetNotice {
     /// Platforms with a live checks-only machine and no live active machine.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub checks_only_platforms: BTreeSet<Os>,
+    /// Platforms with an open platform-wait ticket after tip verification waited an hour on them,
+    /// so promotion defers them until they recover.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub waited_platforms: BTreeSet<Os>,
     pub holds: BTreeMap<String, Vec<Hold>>,
 }
 

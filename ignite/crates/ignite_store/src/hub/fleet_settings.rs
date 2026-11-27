@@ -172,6 +172,31 @@ pub fn checks_only_platforms(
     Ok(checks_only)
 }
 
+/// Platforms that currently have an open platform-wait ticket (`ignite_platform_wait`), because
+/// tip verification has already waited an hour on that platform without promotion.
+pub fn waited_platforms(conn: &Connection) -> Result<BTreeSet<Os>> {
+    let mut query = conn.prepare_cached(
+        "SELECT DISTINCT json_extract(metadata, '$.ignite_platform_wait.platform')
+         FROM tickets
+         WHERE status != 'closed'
+           AND json_extract(metadata, '$.ignite_platform_wait.platform') IS NOT NULL",
+    )?;
+    let rows = query.query_map([], |row| row.get::<_, String>(0))?;
+    let mut platforms = BTreeSet::new();
+    for row in rows {
+        match row?.as_str() {
+            "macos" => {
+                platforms.insert(Os::Macos);
+            }
+            "windows" => {
+                platforms.insert(Os::Windows);
+            }
+            _ => {}
+        }
+    }
+    Ok(platforms)
+}
+
 /// Applies a change and records it together, or returns the settings that replaced the
 /// caller's version.
 pub fn put(

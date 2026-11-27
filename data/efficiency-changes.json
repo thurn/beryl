@@ -1120,5 +1120,10 @@
     "label": "Exclude `[rules] budgets` families (`counts`, `client-frame-counts`) from `score::product_catches` so count-gate performance fixes no longer force `counts` onto landing gates via `Why::RecentProductCatch` or inflate its landing score, and floor recorded check and family-startup costs from `wall_s` when host CPU time is below 10% of wall time (`>= 5 s`) so VM-hosted checks no longer look 1,000x cheaper than their real duration. Over the prior 24 h, `counts` added 13.8 product ticket-hours of excess landing latency across 38 landed product tickets plus 10.9 h on `ignite check`",
     "metric": "bead.minutes",
     "expect": "down"
+  },
+  {
+    "label": "Defer Windows verification until after promotion on `client-validation`, `counts`, `ignite-platform`, `native-app` and `native-android` (matching the other heavy client families), and automatically defer any platform with an open `ignite_platform_wait` ticket via `FleetNotice::waited_platforms` in `Scope::new` and `tip_coverage::update` so a slow or stalled platform cannot freeze `master` after macOS is green. Over the prior 24 h, macOS spent 136.6 min across 9 tips running zero-check rounds waiting on Windows after macOS had already verified the tip",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]

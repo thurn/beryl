@@ -27,6 +27,7 @@ pub(super) fn notice(conn: &Connection, machine: &str, now: Timestamp) -> Result
         trees: machine.trees,
         holds: provider_usage::held(conn, &settings, now)?,
         checks_only_platforms: fleet_settings::checks_only_platforms(conn, &settings, now)?,
+        waited_platforms: fleet_settings::waited_platforms(conn)?,
         off_platforms: fleet_settings::unavailable_platforms(conn, &settings, now)?,
     })
 }

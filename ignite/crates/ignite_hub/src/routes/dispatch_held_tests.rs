@@ -600,3 +600,62 @@ fn only_platforms_without_an_online_active_machine_are_deferred() {
     let (_, reply) = post(&mut conn, "/machines/heartbeat", &mac, at(1_803.0));
     assert!(reply["fleet"].get("checks_only_platforms").is_none());
 }
+
+#[test]
+fn heartbeat_reports_waited_platforms_while_platform_wait_ticket_is_open() {
+    use std::collections::BTreeMap;
+
+    use ignite_core::protocol::tickets::{BatchRequest, Operation, TicketFields, TicketType};
+
+    let mut conn = open();
+    crate::routes::dispatch::tests::register(&mut conn);
+    let beat = json!({"machine": "m-1", "version": "d97ed0e", "workers": []});
+
+    let (_, reply) = post(&mut conn, "/machines/heartbeat", &beat, at(1.0));
+    assert!(reply["fleet"].get("waited_platforms").is_none());
+
+    let mut metadata = BTreeMap::new();
+    metadata.insert(
+        "ignite_platform_wait".to_owned(),
+        json!({
+            "commit": "5ed3d9e284c05267e97c943c6c308778c801d7ff",
+            "platform": "windows",
+            "checks": ["counts:family/blank"]
+        }),
+    );
+    let create = BatchRequest {
+        preconditions: Vec::new(),
+        ops: vec![Operation::Create {
+            parent: None,
+            fields: TicketFields {
+                title: Some("Tip verification has waited an hour on machine cygnus".to_owned()),
+                ticket_type: Some(TicketType::Bug),
+                priority: Some(1),
+                metadata: Some(metadata),
+                ..TicketFields::default()
+            },
+            deps: Vec::new(),
+            request_key: None,
+        }],
+    };
+    ignite_store::hub::batch::apply(&mut conn, &create, "upkeep", "hub", at(2.0)).unwrap();
+    let id: String = conn
+        .query_row("SELECT id FROM tickets LIMIT 1", [], |row| row.get(0))
+        .unwrap();
+
+    let (_, reply) = post(&mut conn, "/machines/heartbeat", &beat, at(3.0));
+    assert_eq!(reply["fleet"]["waited_platforms"], json!(["windows"]));
+
+    let close = BatchRequest {
+        preconditions: Vec::new(),
+        ops: vec![Operation::Close {
+            id,
+            reason: "tip verified".to_owned(),
+            include_ready: false,
+        }],
+    };
+    ignite_store::hub::batch::apply(&mut conn, &close, "upkeep", "hub", at(4.0)).unwrap();
+
+    let (_, reply) = post(&mut conn, "/machines/heartbeat", &beat, at(5.0));
+    assert!(reply["fleet"].get("waited_platforms").is_none());
+}
