@@ -54,3 +54,18 @@ fn an_object_with_a_printing_finds_that_printings_face_and_others_find_the_card(
         "the name keeps its art"
     );
 }
+
+#[test]
+fn an_activated_ability_is_found_by_its_colon_outside_quotes_and_bare_reminder_text() {
+    use game_table::faces::says_ability;
+    let activated = |paragraph| says_ability(paragraph, false);
+    assert!(activated("{T}: Add {U}."));
+    assert!(activated(
+        "Cycling {2} ({2}, Discard this card: Draw a card.)"
+    ));
+    assert!(!activated("({T}: Add {U}.)"));
+    assert!(!activated(
+        "Create a Treasure token. (It's an artifact with \"{T}, Sacrifice this artifact: Add one mana of any color.\")"
+    ));
+    assert!(!activated("Flying"));
+}

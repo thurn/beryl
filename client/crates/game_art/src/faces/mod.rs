@@ -542,14 +542,22 @@ fn cost_value(cost: &str) -> u32 {
 }
 
 /// Whether `paragraph` of a face's rules text says a triggered ability (it begins "When",
-/// "Whenever" or "At", or its reminder text says one, as offspring's does) or an activated one
-/// (a cost and a colon before any reminder text, loyalty abilities included), matching how the
-/// session counts ability paragraphs.
+/// "Whenever" or "At", or its reminder text says one, as offspring's does) or an activated one:
+/// a cost and a colon before any reminder text, or a keyword whose reminder text has a colon
+/// outside quotes, as "Cycling {2} ({2}, Discard this card: Draw a card.)" does but a Treasure's
+/// quoted ability and a basic land's bare "({T}: Add {U}.)" do not. The session counts ability
+/// paragraphs the same way.
 #[must_use]
 pub fn says_ability(paragraph: &str, triggered: bool) -> bool {
     if !triggered {
-        let before_reminder = paragraph.split('(').next().unwrap_or("");
-        return before_reminder.contains(':');
+        let (before, reminder) = paragraph.split_once('(').unwrap_or((paragraph, ""));
+        let unquoted = || {
+            reminder
+                .split(['"', '“', '”'])
+                .step_by(2)
+                .any(|p| p.contains(':'))
+        };
+        return before.contains(':') || (!before.trim().is_empty() && unquoted());
     }
     let begins = ["When", "Whenever", "At"].iter().any(|word| {
         paragraph

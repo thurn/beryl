@@ -1489,6 +1489,12 @@
       ]
     },
     {
+      "name": "shape-cycle",
+      "board": "shape-cycle",
+      "until": "first priority decision for seat 0",
+      "clicks": ["Remote Isle"]
+    },
+    {
       "name": "shape-activation",
       "board": "shape-order",
       "until": "first priority decision for seat 0",

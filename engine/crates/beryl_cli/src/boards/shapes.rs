@@ -6,7 +6,7 @@ use beryl_card_names::names::{
     AANGS_ICEBERG, ABHORRENT_OCULUS, BEZA_THE_BOUNDING_SPRING, COUNTERSPELL, CURRENCY_CONVERTER,
     DAMN, ELITE_SPELLBINDER, ISLAND, JACE_THE_MIND_SCULPTOR, JACE_VRYNS_PRODIGY,
     JACE_WIELDER_OF_MYSTERIES, MALCOLM_ALLURING_SCOUNDREL, MANA_CRYPT, MANA_DRAIN, OUST, PLAINS,
-    REPRIEVE, SINK_INTO_STUPOR, SNAPCASTER_MAGE, STOCK_UP, SWIFT_RECONFIGURATION,
+    REMOTE_ISLE, REPRIEVE, SINK_INTO_STUPOR, SNAPCASTER_MAGE, STOCK_UP, SWIFT_RECONFIGURATION,
     THE_WANDERING_EMPEROR, THIEVING_SKYDIVER, THIRST_FOR_DISCOVERY, THUNDERTRAP_TRAINER,
     TRINKET_MAGE, TUNDRA,
 };
@@ -311,6 +311,19 @@ const fn stand(name: &'static str) -> Scenario {
         .library(P1, LANDS)
 }
 
+/// Choosing between playing a land and cycling it: the human's main phase with a cycling land
+/// in hand, no land played yet, and two Islands to pay its cycling cost, so a click on the land
+/// opens the choice between its two ways.
+const fn cycle(name: &'static str) -> Scenario {
+    Scenario::new(name)
+        .at(3, P0, TurnStep::PrecombatMain)
+        .hand(P0, &[REMOTE_ISLE])
+        .permanents(P0, &[ISLAND_, ISLAND_])
+        .permanents(P1, &[ISLAND_])
+        .library(P0, LANDS)
+        .library(P1, LANDS)
+}
+
 pub(super) const SHAPES: &[Scenario] = &[
     // The fixtures' clicks play these.
     yes("shape-yes"),
@@ -383,8 +396,9 @@ pub(super) const SHAPES: &[Scenario] = &[
         Action::answer(P0, DecisionKind::AttackTarget, Pick::DefendingPlayer),
         Action::answer(P0, DecisionKind::Attacker, Pick::Done),
     ]),
-    // The fixture's clicks play it.
+    // The fixtures' clicks play these.
     pick("shape-pick"),
+    cycle("shape-cycle"),
     // The same play, for the seat across the table to watch.
     pick("shape-pick-theirs").actions(&[
         play_land(P0, ISLAND),

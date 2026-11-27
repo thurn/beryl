@@ -9,9 +9,14 @@ use game_table::faces::{CARD_BACK, FaceList, PrintedText};
 fn each_triggered_and_activated_paragraph_of_a_card_has_a_plate_face() {
     let records = card_records(
         &CardRecordsRequest {
-            names: ["Island", "Snapcaster Mage", "Teferi, Time Raveler"]
-                .map(str::to_owned)
-                .to_vec(),
+            names: [
+                "Island",
+                "Snapcaster Mage",
+                "Teferi, Time Raveler",
+                "Remote Isle",
+            ]
+            .map(str::to_owned)
+            .to_vec(),
         },
         TokenMakers::NONE,
     );
@@ -42,6 +47,16 @@ fn each_triggered_and_activated_paragraph_of_a_card_has_a_plate_face() {
     let plate = choice.plate.as_ref().unwrap();
     assert_eq!(plate.rules, teferi[0].1);
     assert!(plate.choice);
+    // Cycling says its cost and colon only in its reminder text. It is the land's second
+    // activated ability, after "{T}: Add {U}.", as the session numbers the choice to cycle.
+    let isle = plates("Remote Isle");
+    assert_eq!(isle.len(), 2, "{isle:?}");
+    assert!(isle[1].1.starts_with("Cycling"));
+    let cycle = list.choice_plate("Remote Isle", 1).unwrap();
+    assert_eq!(
+        faces.get(cycle).unwrap().plate.as_ref().unwrap().rules,
+        isle[1].1
+    );
     // Each plate face is a picture of its own in the compressed cache.
     let mut keys: Vec<&str> = faces.faces.iter().map(|f| f.key.as_str()).collect();
     keys.sort_unstable();
