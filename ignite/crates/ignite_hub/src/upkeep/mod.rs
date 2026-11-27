@@ -86,6 +86,8 @@ mod justiciar_tests;
 #[cfg(test)]
 mod missed_tests;
 #[cfg(test)]
+mod platform_wait_tests;
+#[cfg(test)]
 mod regression_stalls_replay;
 #[cfg(test)]
 mod resource_stalls_tests;

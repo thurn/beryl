@@ -19,7 +19,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, OptionalExtension, params};
+use serde_json::Value;
 
 use ignite_core::fleet::MachineState;
 use ignite_core::ids::{CheckName, TicketId};
@@ -298,6 +299,10 @@ pub const HELD_SECONDS: f64 = 6.0 * 3_600.0;
 /// How long a ticket may stay in progress with a stopped or idle session, in seconds.
 pub const STOPPED_SECONDS: f64 = 30.0 * 60.0;
 
+/// How long upkeep waits before re-filing a `held` ticket for the same subject after a session
+/// closes one without releasing the held ticket, in seconds.
+pub const HELD_REFILE_COOLDOWN_SECONDS: f64 = 2.0 * 3_600.0;
+
 /// The mark a session puts at the start of its title when it stops unfinished.
 const STOPPED_MARK: &str = "⛔";
 
@@ -316,7 +321,11 @@ pub fn stuck_epics(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>> 
         .map(|(epic, lines)| epic_filing(&epic, &lines))
         .collect();
     filings.extend(find_cycles(&graph).iter().map(|cycle| cycle_filing(cycle)));
-    filings.extend(find_held(conn, &graph, now)?.iter().map(held_filing));
+    for held in find_held(conn, &graph, now)? {
+        if !held_recently_closed(conn, &held.ticket, now)? {
+            filings.push(held_filing(&held));
+        }
+    }
     let mut filed = Vec::with_capacity(filings.len());
     for filing in &filings {
         filed.push(filing::file(conn, UPKEEP, filing, now)?);
@@ -674,6 +683,41 @@ fn find_held(conn: &Connection, graph: &Graph, now: Timestamp) -> Result<Vec<Hel
         });
     }
     Ok(found)
+}
+
+/// Whether a session (not upkeep) closed the latest `held` ticket for `subject` within
+/// [`HELD_REFILE_COOLDOWN_SECONDS`] of `now`, so upkeep waits before re-filing it.
+fn held_recently_closed(conn: &Connection, subject: &str, now: Timestamp) -> Result<bool> {
+    let key = Signature::of_subject(subject, "held").key();
+    let newest: Option<(String, String, Option<String>)> = conn
+        .query_row(
+            "SELECT id, closed_at, metadata FROM tickets
+             WHERE json_extract(metadata, '$.ignite_signature') = ?1
+               AND status = 'closed' AND closed_at IS NOT NULL
+             ORDER BY closed_at DESC, id DESC LIMIT 1",
+            [key],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .optional()?;
+    let Some((id, closed_at, metadata)) = newest else {
+        return Ok(false);
+    };
+    if now.seconds_since(parse_time(&closed_at)?) >= HELD_REFILE_COOLDOWN_SECONDS {
+        return Ok(false);
+    }
+    let auto_closed = metadata
+        .as_deref()
+        .and_then(|json| serde_json::from_str::<Value>(json).ok())
+        .is_some_and(|meta| meta.get(filing::AUTO_CLOSED_KEY).is_some());
+    if auto_closed {
+        return Ok(false);
+    }
+    let closed_by_upkeep = tickets::history(conn, &id)?
+        .into_iter()
+        .rev()
+        .find(|row| row.change.pointer("/status/1").and_then(Value::as_str) == Some("closed"))
+        .is_some_and(|row| row.actor == UPKEEP.actor);
+    Ok(!closed_by_upkeep)
 }
 
 /// Whether the session holding a ticket has had a title starting with the stopped mark, or been
