@@ -13,6 +13,17 @@ pub(crate) mod windows;
 #[cfg(windows)]
 pub use windows::become_program;
 
+/// Raises the current process's scheduling priority to normal when it was started below normal
+/// (such as from a Windows scheduled task without an explicit priority), so child build processes
+/// inherit normal priority and are not starved onto efficiency cores. Does nothing on non-Windows
+/// platforms or when the priority is already normal or higher.
+pub fn raise_normal_priority() -> io::Result<()> {
+    #[cfg(windows)]
+    return windows::raise_normal_priority();
+    #[cfg(not(windows))]
+    return Ok(());
+}
+
 /// The exit code of every process that Ignite ends on Windows, where a process ended from
 /// outside still exits with a code: `STATUS_CONTROL_C_EXIT`, the code of a console process
 /// ended by Ctrl+C. Ignite reads it as macOS's "ended by a signal", with no exit code.

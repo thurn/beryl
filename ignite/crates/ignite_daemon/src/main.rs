@@ -316,6 +316,15 @@ fn raise_open_file_limit() {
     }
 }
 
+/// Raises the process scheduling priority to normal when started below normal (for example by a
+/// Windows scheduled task without `<Priority>4</Priority>`), so child build processes are not
+/// starved onto efficiency cores.
+fn raise_process_priority() {
+    if let Err(error) = ignite_os::proc::raise_normal_priority() {
+        eprintln!("ignite: cannot raise the process priority: {error}");
+    }
+}
+
 /// The hidden `ignite hub` subcommand, which the hub's login service runs from `bin/current`:
 /// serves the hub at the addresses in `IGNITE_HUB_LISTEN` and `IGNITE_HUB_PUBLIC_LISTEN`, and
 /// runs its upkeep, until the process ends. It does nothing else, so it starts in well under a
@@ -391,6 +400,7 @@ fn running_version() -> String {
 /// `/`), for the checkout `ignite install` recorded. Returns the exit code.
 pub fn run_daemon(cwd: &Path) -> i32 {
     raise_open_file_limit();
+    raise_process_priority();
     let home = Home::from_env();
     // First, before anything this build could fail at: records the start, and goes back to the
     // last-good build if this one crash-loops.

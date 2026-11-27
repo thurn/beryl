@@ -250,6 +250,7 @@ fn task_xml(user: &str, executable: &str, args: &[String], schedule: Schedule) -
     <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
     <StartWhenAvailable>true</StartWhenAvailable>
     <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <Priority>4</Priority>
     {restart}
     <Enabled>true</Enabled>
   </Settings>
@@ -338,6 +339,7 @@ mod tests {
         assert!(xml.contains("<Arguments>daemon &quot;a &amp; b&quot;</Arguments>"));
         assert!(xml.contains("<RunLevel>LeastPrivilege</RunLevel>"));
         assert!(xml.contains("<StartWhenAvailable>true</StartWhenAvailable>"));
+        assert!(xml.contains("<Priority>4</Priority>"));
     }
 
     #[test]

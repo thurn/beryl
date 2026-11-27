@@ -37,10 +37,11 @@ use windows_sys::Win32::System::JobObjects::{
     QueryInformationJobObject, SetInformationJobObject, TerminateJobObject,
 };
 use windows_sys::Win32::System::Threading::{
-    CREATE_NEW_PROCESS_GROUP, CREATE_NO_WINDOW, CREATE_SUSPENDED, OpenProcess, OpenThread,
-    PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE, PROCESS_TERMINATE,
-    QueryFullProcessImageNameW, ResumeThread, THREAD_SUSPEND_RESUME, TerminateProcess,
-    WaitForSingleObject,
+    BELOW_NORMAL_PRIORITY_CLASS, CREATE_NEW_PROCESS_GROUP, CREATE_NO_WINDOW, CREATE_SUSPENDED,
+    GetCurrentProcess, GetPriorityClass, IDLE_PRIORITY_CLASS, NORMAL_PRIORITY_CLASS, OpenProcess,
+    OpenThread, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE, PROCESS_TERMINATE,
+    QueryFullProcessImageNameW, ResumeThread, SetPriorityClass, THREAD_SUSPEND_RESUME,
+    TerminateProcess, WaitForSingleObject,
 };
 
 use super::{ENDED_EXIT_CODE, Group, Processes};
@@ -473,6 +474,26 @@ pub fn become_program(
     std::process::exit(status.code().unwrap_or(1))
 }
 
+/// Raises the current process's priority class to `NORMAL_PRIORITY_CLASS` if it is currently
+/// `IDLE_PRIORITY_CLASS` or `BELOW_NORMAL_PRIORITY_CLASS`.
+pub fn raise_normal_priority() -> io::Result<()> {
+    // SAFETY: `GetCurrentProcess` returns a pseudo-handle that is always valid for this process.
+    let process = unsafe { GetCurrentProcess() };
+    // SAFETY: `process` is the current process pseudo-handle.
+    let current = unsafe { GetPriorityClass(process) };
+    if current == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    if matches!(current, IDLE_PRIORITY_CLASS | BELOW_NORMAL_PRIORITY_CLASS) {
+        // SAFETY: `process` is the current process pseudo-handle and `NORMAL_PRIORITY_CLASS` is a
+        // valid priority class.
+        if unsafe { SetPriorityClass(process, NORMAL_PRIORITY_CLASS) } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use std::io::{BufRead, BufReader};
@@ -653,5 +674,35 @@ mod tests {
         assert!(Native.terminate_under(pid, &exe_dir).unwrap());
         let _ = child.wait();
         assert!(!alive(pid));
+    }
+
+    #[test]
+    fn raises_below_normal_priority_to_normal() {
+        // SAFETY: `GetCurrentProcess` returns a pseudo-handle that does not need to be closed.
+        let process = unsafe { GetCurrentProcess() };
+        // SAFETY: `process` is the current process pseudo-handle.
+        let original = unsafe { GetPriorityClass(process) };
+        assert_ne!(original, 0);
+
+        // SAFETY: `process` is the current process pseudo-handle and `BELOW_NORMAL_PRIORITY_CLASS`
+        // is a valid priority class.
+        assert_ne!(
+            unsafe { SetPriorityClass(process, BELOW_NORMAL_PRIORITY_CLASS) },
+            0
+        );
+        // SAFETY: `process` is the current process pseudo-handle.
+        assert_eq!(
+            unsafe { GetPriorityClass(process) },
+            BELOW_NORMAL_PRIORITY_CLASS
+        );
+
+        raise_normal_priority().unwrap();
+        // SAFETY: `process` is the current process pseudo-handle.
+        assert_eq!(unsafe { GetPriorityClass(process) }, NORMAL_PRIORITY_CLASS);
+
+        if original != NORMAL_PRIORITY_CLASS {
+            // SAFETY: restoring the caller's original priority class.
+            let _ = unsafe { SetPriorityClass(process, original) };
+        }
     }
 }
