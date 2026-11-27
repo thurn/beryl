@@ -394,8 +394,9 @@ pub mod floats {
     /// The floats drawn under the screen, before it, rather than over it. The web interface
     /// stacks the step banner over the permanents but under the life orbs and the prompts, so
     /// the trigger cards of an order prompt cover the banner instead of the banner covering
-    /// their title lines.
-    pub const UNDER_SCREEN: [FloatId; 1] = [STEP_BANNER];
+    /// their title lines. Notice pills (`SCRY_PILL`) sit over the table in the same way so a
+    /// fading choice or scry pill cannot cover a prompt's shade or buttons.
+    pub const UNDER_SCREEN: [FloatId; 3] = [STEP_BANNER, SCRY_PILL[0], SCRY_PILL[1]];
     /// The count of cards scrolled off the left end and the right end of the viewer's hand.
     pub const HAND_COUNT: [FloatId; 2] = [FloatId(34), FloatId(35)];
     /// The count of items scrolled off the stack's bottom, at its left, and its top, at its

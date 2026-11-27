@@ -12,7 +12,7 @@ use beryl_card_records::{TokenMakers, fixture_message};
 use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::prompt::{ButtonId, Click, ClickRequest};
 use beryl_protocol::protocol::{CardType, ManaPool, Side, ZoneName};
-use beryl_protocol::script::{Act, Table as Played, Tally, time_script};
+use beryl_protocol::script::{Act, Notice, Table as Played, Tally, time_script};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use game_table::profiles::Profile;
 use game_table::table::Window;
@@ -535,4 +535,75 @@ fn a_prompt_that_holds_cards_up_hides_the_rows_counts() {
         at: 0,
     };
     assert!(kit_probe::agent::text_overlap::text_overlap(frame, &context).is_empty());
+}
+
+#[test]
+fn a_fading_notice_pill_stays_under_a_stacked_prompt_button() {
+    for (width, height) in PHONES {
+        let shown = window(width, height);
+        let mut client = compact(width, height);
+        let mut start = ViewBuilder::new();
+        start.script(ScriptBuilder::reset().build());
+        let first = start.update();
+
+        let mut script = ScriptBuilder::default();
+        script.beat(vec![Act::Announce {
+            notice: Notice::Chosen {
+                player: Side::You,
+                value: "Island".to_owned(),
+            },
+        }]);
+        let mut script = script.build();
+        script.timing = time_script(&script, &Played::of(&first.view));
+        let Input::Update(mut after) = deciding(beryl_protocol::testing::prompt(
+            beryl_protocol::prompt::Purpose::Choose,
+            "Choose Word to Replace",
+            vec![super::flat_layer::prompt_button(
+                ButtonId::Confirm,
+                "Submit 0",
+                false,
+            )],
+            beryl_protocol::prompt::ShapeBody::Catalog {
+                entries: ["White", "Blue", "Black", "Red", "Green"]
+                    .map(str::to_owned)
+                    .to_vec(),
+                chosen: None,
+            },
+        )) else {
+            unreachable!("`deciding` gives an update");
+        };
+        after.view.objects = first.view.objects.clone();
+        after.view.battlefield = first.view.battlefield.clone();
+        after.view.players = first.view.players.clone();
+        after.view.script = Some(script);
+
+        client.handle(Input::Update(Box::new(first)));
+        client.frame(0);
+        client.handle(Input::Update(after));
+        client.frame(MS);
+        let frame = client.frame(500 * MS);
+        assert!(has(frame, Role::Button, "Submit 0"), "{width}x{height}");
+        assert!(has(frame, Role::Region, "your pill"), "{width}x{height}");
+        assert_eq!(
+            layer_faults(frame, shown),
+            Vec::<String>::new(),
+            "{width}x{height}"
+        );
+        let context = Context {
+            size_class: crate::COMPACT,
+            audit: crate::test_data::data().audit,
+            checks: crate::test_data::data()
+                .profiles
+                .for_size_class(crate::COMPACT)
+                .checks,
+            size: shown.size,
+            safe_area: shown.safe_area,
+            at: 0,
+        };
+        assert_eq!(
+            text_overlap(frame, &context),
+            Vec::new(),
+            "{width}x{height}"
+        );
+    }
 }
