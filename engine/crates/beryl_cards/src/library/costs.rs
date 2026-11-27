@@ -283,6 +283,7 @@ pub const CONVOKED: &[Scenario] = &[
     // Gold Myr is colorless, so it must tap for {W} mana rather than convoke {4}{W}: it gets
     // no counter even though it was tapped while casting Venerated Loxodon.
     Scenario::new("a creature tapped for mana rather than convoke gets no counter")
+        .interaction(&[names::GOLD_MYR])
         .battlefield(
             P0,
             &[
