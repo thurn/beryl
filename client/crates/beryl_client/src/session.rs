@@ -8,7 +8,8 @@
 //! When a game starts or resumes, the thread gives the client the card store's records for both
 //! decklists, both sideboards and the tokens their cards make (`Input::Cards`), from which the
 //! client lists the match's faces for the host's asset workers to prepare (docs/beryl-3d.md,
-//! "Preparation").
+//! "Preparation"). A manual table gives the records of each deck loaded at it and of each card
+//! its views show (`crate::cards`).
 //!
 //! The thread puts itself in the default scheduling class before it starts or resumes a game.
 //! The game's thread and the search threads are started from it and inherit that class, so the
@@ -26,8 +27,8 @@ use app_client::command::{Reply, SessionCommand};
 use beryl_host::{Class, Inbox};
 use beryl_protocol::AgentView;
 use beryl_protocol::ipc::{
-    Platform, TableHostRequest, TableHostSettings, TableJoinRequest, TableLobbyRequest,
-    TableResumeRequest,
+    LobbyChange, Platform, TableHostRequest, TableHostSettings, TableJoinRequest,
+    TableLobbyRequest, TableResumeRequest,
 };
 use beryl_session::ai::AgentMove;
 use beryl_session::card_records::{CardRecords, CardRecordsRequest, card_records};
@@ -39,6 +40,7 @@ use beryl_table_session::decks::{self, Decks};
 use game_manual::manual::tokens;
 
 use crate::bugs::Job;
+use crate::cards::CardFeed;
 
 /// What answers the frame thread's commands: `Sessions`, or a test's stand-in.
 pub trait Session {
@@ -161,9 +163,8 @@ pub struct Live {
     resume: Option<PathBuf>,
     /// The agents `--offer` adds after the session's own on the start screen.
     offered: Vec<AgentView>,
-    /// The decklists, main decks then sideboards, the client was last given card records for
-    /// (`give_cards`).
-    cards_for: Option<Vec<Vec<(u8, String)>>>,
+    /// The card records last given to the client, which the manual table's views add to.
+    cards: CardFeed,
 }
 
 impl Live {
@@ -186,14 +187,18 @@ impl Live {
             Some(dirs) => beryl_shell::sessions(&beryl_cards::CARDS, &dirs, emit),
             None => Sessions::new(&beryl_cards::CARDS, None, emit),
         };
+        let cards = CardFeed::new(inbox.clone());
         let table_views = inbox.clone();
+        let table_cards = cards.clone();
         let events = inbox.clone();
         // The table's link state is not sent on its own: each of the table's views carries it,
         // and the client reads it there (`manual::link`).
         let tables = TableConnections::new(
             sessions.session_ids(),
             data,
-            move |update| {
+            move |update: beryl_protocol::GameUpdate| {
+                // The records first, so that the view's cards show their faces once prepared.
+                table_cards.view(&update.view);
                 table_views.send(Input::Update(Box::new(update)));
             },
             move |event| match event {
@@ -214,7 +219,7 @@ impl Live {
             played_by: None,
             resume: None,
             offered: Vec::new(),
-            cards_for: None,
+            cards,
         }
     }
 
@@ -307,13 +312,18 @@ impl Live {
         // record as a main deck card does.
         let printings = beryl_session::printings::printings_of(&replay.decks);
         let lists: Vec<_> = replay.decks.into_iter().chain(replay.sideboards).collect();
-        if self.cards_for.as_ref() == Some(&lists) {
-            return;
-        }
-        let mut records = decklist_records(&lists);
-        beryl_session::card_records::add_printings(&mut records, printings);
-        self.inbox.send(Input::Cards(Box::new(records)));
-        self.cards_for = Some(lists);
+        let records = || {
+            let mut records = decklist_records(&lists);
+            beryl_session::card_records::add_printings(&mut records, printings);
+            records
+        };
+        self.cards.decks(lists.clone(), records);
+    }
+
+    /// Gives the client the records of a deck loaded at the manual table, before the table's
+    /// views show its cards.
+    fn give_deck(&self, main: &[(String, u16)], side: &[(String, u16)]) {
+        (self.cards).names(main.iter().chain(side).map(|(name, _)| name.as_str()));
     }
 }
 
@@ -436,7 +446,10 @@ impl Session for Live {
                 Reply::Done(sessions.set_stops(session, stops))
             }
             SessionCommand::Concede(session) => Reply::Done(sessions.concede(session)),
-            SessionCommand::TableSolo(request) => Reply::TableSolo(self.tables.solo(request)),
+            SessionCommand::TableSolo(request) => {
+                self.give_deck(&request.deck.main, &request.deck.side);
+                Reply::TableSolo(self.tables.solo(request))
+            }
             SessionCommand::TableAct(action) => Reply::TableAct(self.tables.act(action)),
             SessionCommand::TableAnswer(answer) => Reply::TableAct(self.tables.answer(answer)),
             SessionCommand::TableLeave => {
@@ -468,6 +481,14 @@ impl Session for Live {
                 (self.tables.saved(Platform::current())).map_err(|error| error.reason),
             ),
             SessionCommand::TableLobby(change) => {
+                match &change {
+                    LobbyChange::LoadDeck { main, side } => self.give_deck(main, side),
+                    LobbyChange::Sideboard {
+                        into_main,
+                        into_side,
+                    } => self.give_deck(into_main, into_side),
+                    _ => {}
+                }
                 let lobby = self.tables.lobby(TableLobbyRequest { change });
                 Reply::TableLobby(lobby.map(|lobby| lobby.map(Box::new)))
             }

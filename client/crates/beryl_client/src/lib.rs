@@ -5,6 +5,7 @@
 pub mod app;
 pub mod audio;
 pub mod bugs;
+pub mod cards;
 mod data;
 pub mod ffi;
 pub mod fixture;

@@ -6,6 +6,7 @@
 //! and saves a pasted decklist in its deck library and lists it.
 
 use kit_ui::input::Input as DeviceInput;
+use std::collections::BTreeSet;
 use std::sync::mpsc::{Receiver, channel};
 
 use app_client::Input;
@@ -189,7 +190,11 @@ fn the_live_session_starts_a_solo_table_and_sends_its_view() {
             .any(|(name, _)| name == "Counterspell"),
         "the solo table starts with the WU Control deck"
     );
+    let deck = request.deck.clone();
     commands.send(SessionCommand::TableSolo(request));
+    // A manual table's cards were drawn as card backs when the client had no records for them,
+    // so the records of every card the first view names must come before it.
+    let mut given = BTreeSet::new();
     let (mut started, mut viewed) = (false, false);
     while !(started && viewed) {
         match inbox.recv().expect("the session thread answers") {
@@ -197,9 +202,27 @@ fn the_live_session_starts_a_solo_table_and_sends_its_view() {
                 result.expect("the solo table starts");
                 started = true;
             }
-            Input::Update(update) if update.view.table.is_some() => viewed = true,
+            Input::Cards(records) => given = records.cards.into_keys().collect(),
+            Input::Update(update) if update.view.table.is_some() && !viewed => {
+                let named: Vec<_> = (update.view.objects.iter())
+                    .filter_map(|object| object.name.clone())
+                    .collect();
+                assert!(!named.is_empty(), "the opening hand is named to its owner");
+                for name in named {
+                    assert!(given.contains(&*name), "no card record for {name}");
+                }
+                viewed = true;
+            }
             _ => {}
         }
+    }
+    // The whole deck's, not only the opening hand's, so that a draw does not make the client
+    // prepare every face again.
+    for (name, _) in &deck.main {
+        assert!(
+            given.contains(name),
+            "no card record for {name}, in the deck"
+        );
     }
     commands.close();
 }
