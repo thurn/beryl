@@ -275,6 +275,7 @@ fn entry(record: Record) -> CardEntry {
         set: record.set,
         collector_number: record.collector_number,
         layout: record.layout,
+        rarity: record.rarity,
         artist: record.artist,
         faces,
     }

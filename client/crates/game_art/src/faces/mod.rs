@@ -113,6 +113,9 @@ pub struct FaceList {
     /// for. It is worked out from the card's record, because the halves of a split card share
     /// one scan and so one listed face.
     mana_values: BTreeMap<String, u32>,
+    /// Each card's printed rarity (`common`, `uncommon`, `rare`, `mythic`, etc.), by the card's
+    /// name and the name it was asked for.
+    rarities: BTreeMap<String, String>,
     /// The face of each printing that an object's `printing` can name. Printing faces are
     /// found only by this map, never by name: a card's name still finds its ordinary face.
     printings: BTreeMap<PrintingIx, FaceId>,
@@ -296,6 +299,19 @@ impl FaceList {
         self.mana_values.get(card).copied()
     }
 
+    /// The printed rarity of the card named `card` (for example `"mythic"`), if known.
+    /// Allocates nothing.
+    #[must_use]
+    pub fn rarity(&self, card: &str) -> Option<&str> {
+        self.rarities.get(card).map(String::as_str)
+    }
+
+    /// Whether the card named `card` is a mythic rare. Allocates nothing.
+    #[must_use]
+    pub fn is_mythic(&self, card: &str) -> bool {
+        self.rarity(card) == Some("mythic")
+    }
+
     /// The type line of the first face of the card named `card`, if it is in the match.
     #[must_use]
     pub fn type_line(&self, card: &str) -> Option<&str> {
@@ -332,6 +348,11 @@ impl FaceList {
             self.mana_values
                 .entry(name.to_owned())
                 .or_insert(mana_value);
+            if !entry.rarity.is_empty() {
+                self.rarities
+                    .entry(name.to_owned())
+                    .or_insert_with(|| entry.rarity.clone());
+            }
         }
         let mut ids = Vec::with_capacity(entry.faces.len());
         for (i, face) in entry.faces.iter().enumerate() {
@@ -629,6 +650,18 @@ impl Faces {
     #[must_use]
     pub fn mana_value(&self, name: &str) -> Option<u32> {
         self.list.mana_value(name)
+    }
+
+    /// The printed rarity of the card named `name`, if known. Allocates nothing.
+    #[must_use]
+    pub fn rarity(&self, name: &str) -> Option<&str> {
+        self.list.rarity(name)
+    }
+
+    /// Whether the card named `name` is a mythic rare. Allocates nothing.
+    #[must_use]
+    pub fn is_mythic(&self, name: &str) -> bool {
+        self.list.is_mythic(name)
     }
 
     /// The listed face of the printing `ix` and its board-size layer, if resident.

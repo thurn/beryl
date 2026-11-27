@@ -691,6 +691,7 @@ fn placeholder(name: &str, large: &str) -> CardEntry {
         set: String::new(),
         collector_number: String::new(),
         layout: "normal".to_owned(),
+        rarity: String::new(),
         artist: String::new(),
         faces: vec![CardFace {
             name: name.to_owned(),

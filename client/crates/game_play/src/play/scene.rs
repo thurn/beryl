@@ -52,6 +52,7 @@ impl Scene<'_> {
         if ago == 0 {
             reach.colors = self.subject_colors(subject);
             reach.settle = self.subject_settle(subject);
+            reach.mythic = self.subject_is_mythic(subject);
             if matches!(subject, Subject::Player { .. }) {
                 let table = self.table();
                 let card = table.camera().data.card;
@@ -107,6 +108,26 @@ impl Scene<'_> {
         };
         kit_base::data::effect::SubjectColors::from_codes(face.colors.iter().map(String::as_str))
     }
+
+    /// Whether the subject card is a mythic rare (`"mythic_only"` layers on `settle`).
+    #[must_use]
+    pub fn subject_is_mythic(&self, subject: Subject) -> bool {
+        let Subject::Object { slot } = subject else {
+            return false;
+        };
+        let Some(object) = self
+            .show
+            .shown
+            .as_ref()
+            .and_then(|shown| shown.view.objects.get(usize::from(slot.0)))
+        else {
+            return false;
+        };
+        object
+            .name
+            .as_deref()
+            .is_some_and(|name| self.show.faces.is_mythic(name))
+    }
 }
 
 impl Scene<'_> {
@@ -152,6 +173,7 @@ impl Scene<'_> {
                     half,
                     colors: kit_base::data::effect::SubjectColors::NONE,
                     settle: kit_base::data::effect::SettleKind::Small,
+                    mythic: false,
                 },
                 element: None,
                 band: PaintBand::Table,
@@ -168,6 +190,7 @@ impl Scene<'_> {
                 half: camera.data.card.half() * pose.scale,
                 colors: kit_base::data::effect::SubjectColors::NONE,
                 settle: kit_base::data::effect::SettleKind::Small,
+                mythic: false,
             },
             element: Some((index, node)),
             band: builder.node_band(index),

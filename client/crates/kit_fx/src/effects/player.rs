@@ -2,8 +2,8 @@
 
 use glam::{Quat, Vec2, Vec3};
 use kit_base::data::effect::{
-    Clock, DirectedSprite, Direction, EffectPalette, LightRecord, NumberOrigin, Primitive, Quad,
-    Scalar, Shape, Surface, Tint, Vfx,
+    Clock, DirectedSprite, Direction, EffectPalette, Layer, LightRecord, NumberOrigin, Primitive,
+    Quad, Scalar, Shape, Surface, Tint, Vfx,
 };
 use kit_frame::frame::{Band, Draw, FrameBuilder, Sprite, sprites};
 use kit_ui::{input::Tier, layout::FloatLook};
@@ -16,6 +16,10 @@ pub(super) fn layers(
     now: u64,
     tier: Tier,
 ) -> impl Iterator<Item = (&Primitive, f32)> {
+    sampled_layers(run, now, tier).map(|(layer, local)| (&layer.primitive, local))
+}
+
+fn sampled_layers(run: &EffectRun, now: u64, tier: Tier) -> impl Iterator<Item = (&Layer, f32)> {
     let elapsed = run.elapsed(now);
     let eased = elapsed.map(|elapsed| run.curve.ease(elapsed));
     run.definition.layers.iter().filter_map(move |layer| {
@@ -31,7 +35,7 @@ pub(super) fn layers(
         };
         (layer.start <= progress && progress <= layer.end).then(|| {
             let local = (progress - layer.start) / (layer.end - layer.start);
-            (&layer.primitive, local)
+            (layer, local)
         })
     })
 }
@@ -63,7 +67,8 @@ pub(super) fn write_light(
     (eye, lift, palette): (Vec3, f32, &EffectPalette),
     builder: &mut FrameBuilder<'_>,
 ) {
-    for (primitive, p) in layers(run, now, builder.tier()) {
+    for (layer, p) in sampled_layers(run, now, builder.tier()) {
+        let primitive = &layer.primitive;
         if !matches!(
             primitive,
             Primitive::Sprite { .. }
@@ -79,73 +84,117 @@ pub(super) fn write_light(
             continue;
         }
         let Some(reach) = reach_at(0) else { return };
-        let basic = reach.half * 2.0;
-        match primitive {
-            Primitive::Sprite { shape, quad } => {
-                let size = if *shape == Shape::Halo {
-                    sprites::halo_size(reach.half)
-                } else {
-                    basic
-                };
-                write_quad(quad, (sprite(*shape), size), (p, lift), run, reach, builder);
-            }
-            Primitive::Ring { quad } => {
-                write_quad(quad, (sprites::RING, basic), (p, lift), run, reach, builder);
-            }
-            Primitive::Burst {
-                quad,
-                on_surface: false,
-            } => {
-                let size = Vec2::splat(basic.max_element());
-                write_quad(quad, (sprites::BURST, size), (p, lift), run, reach, builder);
-            }
-            Primitive::Directed { sprite } => {
-                write_directed(sprite, (p, lift), run, reach, builder);
-            }
-            Primitive::Streak {
-                lookback_ms,
-                width,
-                minimum,
-                tint,
-                opacity,
-                record,
-            } => {
-                write_record(record.as_ref(), (p, lift), run, reach, builder);
-                let before = u64::from(*lookback_ms) * 1_000_000;
-                if let Some(was) = reach_at(before)
-                    && let Some(draw) = light::path_streak(
-                        reach,
-                        was,
-                        (eye, lift),
-                        minimum.at(p),
-                        width.at(p),
-                        light::fade(*tint, opacity.at(p)),
-                    )
-                {
-                    builder.draw(Band::Glows, draw);
-                }
-            }
-            Primitive::Vfx {
-                vfx,
-                size,
-                tint,
-                fade,
-                offset,
-                aspect,
-            } => {
-                if builder.tier() != Tier::Enhanced {
-                    continue;
-                }
-                write_vfx(
-                    (*vfx, size, *tint, fade, *offset, *aspect),
-                    (p, lift, palette),
-                    run,
-                    reach,
-                    builder,
-                );
-            }
-            _ => {}
+        if layer.mythic_only && !reach.mythic {
+            continue;
         }
+        write_light_primitive(
+            primitive,
+            p,
+            reach,
+            &reach_at,
+            (eye, lift, palette),
+            run,
+            builder,
+        );
+    }
+}
+
+fn write_light_primitive(
+    primitive: &Primitive,
+    p: f32,
+    reach: Reach,
+    reach_at: &impl Fn(u64) -> Option<Reach>,
+    (eye, lift, palette): (Vec3, f32, &EffectPalette),
+    run: &EffectRun,
+    builder: &mut FrameBuilder<'_>,
+) {
+    let basic = reach.half * 2.0;
+    match primitive {
+        Primitive::Sprite { shape, quad } => {
+            let size = if *shape == Shape::Halo {
+                sprites::halo_size(reach.half)
+            } else {
+                basic
+            };
+            write_quad(
+                quad,
+                (sprite(*shape), size),
+                (p, lift, palette),
+                run,
+                reach,
+                builder,
+            );
+        }
+        Primitive::Ring { quad } => {
+            write_quad(
+                quad,
+                (sprites::RING, basic),
+                (p, lift, palette),
+                run,
+                reach,
+                builder,
+            );
+        }
+        Primitive::Burst {
+            quad,
+            on_surface: false,
+        } => {
+            let size = Vec2::splat(basic.max_element());
+            write_quad(
+                quad,
+                (sprites::BURST, size),
+                (p, lift, palette),
+                run,
+                reach,
+                builder,
+            );
+        }
+        Primitive::Directed { sprite } => {
+            write_directed(sprite, (p, lift), run, reach, builder);
+        }
+        Primitive::Streak {
+            lookback_ms,
+            width,
+            minimum,
+            tint,
+            opacity,
+            record,
+        } => {
+            write_record(record.as_ref(), (p, lift), run, reach, builder);
+            let before = u64::from(*lookback_ms) * 1_000_000;
+            if let Some(was) = reach_at(before)
+                && let Some(draw) = light::path_streak(
+                    reach,
+                    was,
+                    (eye, lift),
+                    minimum.at(p),
+                    width.at(p),
+                    light::fade(*tint, opacity.at(p)),
+                )
+            {
+                builder.draw(Band::Glows, draw);
+            }
+        }
+        Primitive::Vfx {
+            vfx,
+            size,
+            tint,
+            fade,
+            offset,
+            aspect,
+        } => {
+            if builder.tier() != Tier::Enhanced {
+                return;
+            }
+            write_vfx(
+                (*vfx, size, *tint, fade, *offset, *aspect),
+                (p, lift, palette),
+                run,
+                reach,
+                builder,
+            );
+        }
+        _ => {}
     }
 }
 
@@ -204,7 +253,7 @@ fn write_vfx(
 /// Writes a burst in surface paint order, using the surface's own pose and scale.
 pub(super) fn write_surface_burst(
     quad: &Quad,
-    (progress, lift): (f32, f32),
+    (progress, lift, palette): (f32, f32, &EffectPalette),
     run: &EffectRun,
     reach: Reach,
     builder: &mut FrameBuilder<'_>,
@@ -214,7 +263,7 @@ pub(super) fn write_surface_burst(
         write_quad(
             quad,
             (sprites::BURST, size),
-            (progress, lift),
+            (progress, lift, palette),
             run,
             reach,
             builder,
@@ -246,7 +295,7 @@ fn write_record(
 fn write_quad(
     quad: &Quad,
     (sprite, size): (Sprite, Vec2),
-    (progress, lift): (f32, f32),
+    (progress, lift, palette): (f32, f32, &EffectPalette),
     run: &EffectRun,
     reach: Reach,
     builder: &mut FrameBuilder<'_>,
@@ -257,12 +306,13 @@ fn write_quad(
         quad.record.as_ref()
     };
     write_record(record, (progress, lift), run, reach, builder);
+    let tint = quad.tint.resolve(palette, reach.colors);
     builder.draw(
         Band::Glows,
         light::lying(
             (&reach.pose, lift),
             size * quad.scale.at(progress),
-            light::fade(quad.tint, quad.alpha.at(progress)),
+            light::fade(tint, quad.alpha.at(progress)),
             sprite,
             quad.fade.at(progress).clamp(0.0, 1.0),
         ),

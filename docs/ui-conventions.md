@@ -1056,8 +1056,10 @@ says what a player may do; an effect says what just happened, and is gone.
   shockwave ring outward from under the card, and casts a dark ground shadow
   beneath it, scaled up for higher mana values (small up to 3, medium 4–5, large
   6+ with scrolling cloud and polar-distorted shockwave); flying creatures add
-  wind-swirl wisps (`AhTcvQ-lQQQ` 29:13.5, `UrGalw_f35w` 17:34). Drawn over its
-  card. Beryl: 470 ms, linear.
+  wind-swirl wisps, and mythic rares add a wide soft glow, sharp starburst
+  diamond flare, smoldering edge residue, and dual expanding rings tinted by
+  `subject_colors` (`VFX_ETB_Mythic_Tier2_LUT`, `AhTcvQ-lQQQ` 29:13.5,
+  `UrGalw_f35w` 17:34). Drawn over its card. Beryl: 470 ms, linear.
 - **dissolve.** A card darkens, holds dark, and then breaks up along a stippled
   edge from the top down, for as long as its step: it is destroyed, countered or
   sacrificed. Drawn over its card. Beryl: linear.

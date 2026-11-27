@@ -173,6 +173,7 @@ fn source(run: &StreakRun, scene: &Scene<'_>, builder: &FrameBuilder<'_>) -> Opt
             half: Vec2::ZERO,
             colors: kit_base::data::effect::SubjectColors::NONE,
             settle: kit_base::data::effect::SettleKind::Small,
+            mythic: false,
         }),
         from => Some(scene.light_target(from, builder)?.reach),
     }

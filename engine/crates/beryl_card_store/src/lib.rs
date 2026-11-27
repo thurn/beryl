@@ -48,6 +48,8 @@ pub struct Record {
     pub first_set: Option<String>,
     pub first_released: Option<String>,
     pub layout: String,
+    #[serde(default)]
+    pub rarity: String,
     /// For a meld component, the names of its partner and the result.
     pub meld: Option<Meld>,
     #[serde(default)]

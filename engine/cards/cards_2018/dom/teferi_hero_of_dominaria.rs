@@ -99,5 +99,18 @@ pub mod scenarios {
                 ME.tapped(Card::Tundra, 0),
                 ME.tapped(Card::Island, 0),
             ]),
+        Scenario::new("casts and enters the battlefield")
+            .hand(P0, &[TEFERI])
+            .battlefield(
+                P0,
+                &[
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Island,
+                    Card::Island,
+                ],
+            )
+            .actions(&[ME.casts(TEFERI), Resolve, ME.controls(TEFERI, 1)]),
     ];
 }

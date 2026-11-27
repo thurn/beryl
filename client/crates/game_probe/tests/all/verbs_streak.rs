@@ -183,7 +183,8 @@ fn each_case_of_streak_plays_to_its_placement() {
 
 #[test]
 fn a_streak_is_drawn_while_its_step_plays_and_at_no_other_time() {
-    for mut streaked in [mana(None), damage()] {
+    for make in [|| mana(None), damage] {
+        let mut streaked = make();
         let (from, to) = streaked.step(0);
         assert!(to > from, "the step takes time");
         let mut drawn = 0;

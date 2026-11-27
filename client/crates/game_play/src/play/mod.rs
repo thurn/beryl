@@ -239,6 +239,7 @@ impl Show {
             half: self.table.camera().data.card.size() * 0.5 * pose.scale,
             colors,
             settle,
+            mythic: false,
         };
         match subject {
             Subject::Object { slot } => self.drawn_pose(usize::from(slot.0), now).map(card),
@@ -247,6 +248,7 @@ impl Show {
                 half: Vec2::ZERO,
                 colors,
                 settle,
+                mythic: false,
             }),
             Subject::Ability { id } => self.ability_pose(id, now).map(card),
         }

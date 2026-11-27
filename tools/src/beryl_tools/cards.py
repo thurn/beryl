@@ -601,6 +601,7 @@ def store_record(
         record["first_released"] = first.get("released_at", "")
     record |= {
         "layout": card["layout"],
+        "rarity": card.get("rarity", ""),
         "artist": card.get("artist", ""),
     }
     if "card_back_id" in card:

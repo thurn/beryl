@@ -60,6 +60,8 @@ pub struct CardEntry {
     pub set: String,
     pub collector_number: String,
     pub layout: String,
+    #[serde(default)]
+    pub rarity: String,
     pub artist: String,
     pub faces: Vec<CardFace>,
 }

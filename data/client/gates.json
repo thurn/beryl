@@ -66,55 +66,59 @@
     },
     "vfx_chevron": {
       "samples": 0,
-      "expressions": 493
+      "expressions": 495
     },
     "vfx_shield": {
       "samples": 0,
-      "expressions": 461
+      "expressions": 463
     },
     "vfx_line_ribbon": {
       "samples": 0,
-      "expressions": 422
+      "expressions": 424
     },
     "vfx_line_head": {
       "samples": 0,
-      "expressions": 413
+      "expressions": 415
     },
     "vfx_probe": {
       "samples": 0,
-      "expressions": 158
+      "expressions": 160
     },
     "vfx_counter_add": {
       "samples": 0,
-      "expressions": 385
+      "expressions": 387
     },
     "vfx_counter_add_neg": {
       "samples": 0,
-      "expressions": 398
+      "expressions": 400
     },
     "vfx_counter_remove": {
       "samples": 0,
-      "expressions": 524
+      "expressions": 526
     },
     "vfx_shield_add": {
       "samples": 0,
-      "expressions": 436
+      "expressions": 438
     },
     "vfx_shield_remove": {
       "samples": 0,
-      "expressions": 397
+      "expressions": 399
     },
     "vfx_settle": {
       "samples": 0,
-      "expressions": 579
+      "expressions": 581
     },
     "vfx_highlight_shimmer": {
       "samples": 0,
-      "expressions": 363
+      "expressions": 365
     },
     "vfx_highlight_pop": {
       "samples": 0,
-      "expressions": 303
+      "expressions": 305
+    },
+    "vfx_mythic_arrival": {
+      "samples": 0,
+      "expressions": 475
     }
   },
   "tests": {

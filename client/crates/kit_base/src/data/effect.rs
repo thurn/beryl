@@ -156,6 +156,8 @@ pub enum Vfx {
     HighlightShimmer = 12,
     /// One-shot outward-expanding highlight appear pop burst.
     HighlightPop = 13,
+    /// Mythic rare permanent arrival glow, flare, smoldering residue, and rings (`VFX_ETB_Mythic_Tier2_LUT`).
+    MythicArrival = 14,
 }
 
 /// Visual palette and shimmer style for outline highlight VFX (`Vfx::HighlightShimmer` and
@@ -378,6 +380,8 @@ pub struct Layer {
     pub enhanced_only: bool,
     #[serde(default)]
     pub baseline_only: bool,
+    #[serde(default)]
+    pub mythic_only: bool,
     #[serde(flatten)]
     pub primitive: Primitive,
 }
@@ -580,7 +584,7 @@ pub enum Shape {
 #[serde(deny_unknown_fields)]
 pub struct Quad {
     pub scale: Scalar,
-    pub tint: [u8; 4],
+    pub tint: Tint,
     /// How much the draw material fades the light, from 0 (whole) to 1 (gone).
     pub fade: Scalar,
     /// Multiplier on the tint's alpha, applied before the material fade.

@@ -153,8 +153,15 @@ pub fn write(
                     half: builder.card() * (0.5 * look.pose.scale),
                     colors: kit_base::data::effect::SubjectColors::NONE,
                     settle: kit_base::data::effect::SettleKind::Small,
+                    mythic: false,
                 };
-                player::write_surface_burst(quad, (progress, effects.lift()), run, reach, builder);
+                player::write_surface_burst(
+                    quad,
+                    (progress, effects.lift(), effects.palette()),
+                    run,
+                    reach,
+                    builder,
+                );
             }
             _ => {}
         }

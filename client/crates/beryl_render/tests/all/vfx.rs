@@ -428,3 +428,50 @@ fn highlight_shimmer_and_pop_render_cyan_outlines_with_clean_edges() {
     }
     assert_ne!(t0.pixels, t1.pixels, "shimmer animates smoothly over time");
 }
+
+#[test]
+fn mythic_arrival_vfx_renders_tinted_glow_flare_and_smolder() {
+    let mut renderer = enhanced();
+    let tf = Affine3A::from_scale_rotation_translation(
+        Vec3::new(220.0, 297.0, 1.0),
+        Quat::IDENTITY,
+        Vec3::new(0.0, 0.0, 1.0),
+    );
+    let blue = render_vfx(
+        &mut renderer,
+        Draw::vfx(
+            tf,
+            [64, 168, 255, 255],
+            Vfx::MythicArrival,
+            [0.22, 1.0, 0.3, 1.35],
+        ),
+    );
+    let red = render_vfx(
+        &mut renderer,
+        Draw::vfx(
+            tf,
+            [255, 88, 46, 255],
+            Vfx::MythicArrival,
+            [0.22, 1.0, 0.3, 1.35],
+        ),
+    );
+    let late = render_vfx(
+        &mut renderer,
+        Draw::vfx(
+            tf,
+            [64, 168, 255, 255],
+            Vfx::MythicArrival,
+            [0.72, 1.0, 0.3, 1.35],
+        ),
+    );
+
+    let [br, _, bb] = channel_sums(&blue);
+    let [rr, _, rb] = channel_sums(&red);
+    let [_, _, lb] = channel_sums(&late);
+    assert!(bb > br && bb > 25_000, "blue mythic glow: {br},{bb}");
+    assert!(rr > rb && rr > 25_000, "red mythic glow: {rr},{rb}");
+    assert!(
+        lb > 1_000 && lb < bb,
+        "smoldering residue lingers and fades: {lb} < {bb}"
+    );
+}

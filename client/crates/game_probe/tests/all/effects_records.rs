@@ -32,6 +32,7 @@ fn records(effect: &str, data: &Effects) -> String {
         },
         colors: kit_base::data::effect::SubjectColors::NONE,
         settle: kit_base::data::effect::SettleKind::Small,
+        mythic: false,
     };
     let runs = [EffectRun {
         definition: data.get(effect).unwrap().clone(),
@@ -164,6 +165,7 @@ fn remaining_records(effect: &str, on: Subject, moving: bool, data: &Effects) ->
                         half,
                         colors: kit_base::data::effect::SubjectColors::NONE,
                         settle: kit_base::data::effect::SettleKind::Small,
+                        mythic: false,
                     })
                 },
                 (Vec3::Z, 2.0),

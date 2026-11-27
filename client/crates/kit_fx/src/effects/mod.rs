@@ -31,6 +31,8 @@ pub struct Reach {
     pub colors: SubjectColors,
     /// Mana-value size tier and flying variant for `Vfx::Settle`.
     pub settle: SettleKind,
+    /// Whether the subject card is a mythic rare (`"mythic_only"` layers).
+    pub mythic: bool,
 }
 
 /// Writes the effects that draw in table space, using the subject's current or earlier pose.

@@ -122,6 +122,9 @@ fn dispatch_vfx(in: VfxOut) -> vec4<f32> {
         case VFX_HIGHLIGHT_POP: {
             return shade_highlight_pop(in.mesh_uv, time_s, seed, aspect, tint, in.style);
         }
+        case VFX_MYTHIC_ARRIVAL: {
+            return shade_mythic_arrival(in.mesh_uv, time_s, seed, aspect, tint);
+        }
         default: {
             return vec4<f32>(0.0);
         }
@@ -165,6 +168,9 @@ fn vfx_bloom_gain(kind: u32, style: u32) -> f32 {
         }
         case VFX_HIGHLIGHT_POP: {
             return BLOOM_GAIN_HIGHLIGHT_POP;
+        }
+        case VFX_MYTHIC_ARRIVAL: {
+            return BLOOM_GAIN_MYTHIC_ARRIVAL;
         }
         default: {
             return 0.0;

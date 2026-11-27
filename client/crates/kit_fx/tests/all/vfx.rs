@@ -56,6 +56,7 @@ fn run_probe(effects: &Effects, tier: Tier, colors: SubjectColors, now: u64) -> 
         half: Vec2::new(31.5, 44.0),
         colors,
         settle: kit_base::data::effect::SettleKind::Small,
+        mythic: false,
     };
     let mut frame = Frame::with_capacity(16, 32, 256);
     let mut builder = FrameBuilder::new(&mut frame, tier, Vec2::new(63.0, 88.0));
@@ -185,12 +186,13 @@ fn settle_effect_encodes_mana_tier_and_flying_in_enhanced_and_sprites_in_baselin
         curve: Curve::LINEAR,
         step: 0,
     };
-    let draw_settle = |tier: Tier, settle: SettleKind| {
+    let draw_settle = |tier: Tier, settle: SettleKind, mythic: bool| {
         let reach = Reach {
             pose: Pose::default(),
             half: Vec2::new(31.5, 44.0),
-            colors: SubjectColors::NONE,
+            colors: SubjectColors::BLUE,
             settle,
+            mythic,
         };
         let mut frame = Frame::with_capacity(16, 32, 256);
         let mut builder = FrameBuilder::new(&mut frame, tier, Vec2::new(63.0, 88.0));
@@ -206,9 +208,9 @@ fn settle_effect_encodes_mana_tier_and_flying_in_enhanced_and_sprites_in_baselin
         frame
     };
 
-    let sm = draw_settle(Tier::Enhanced, SettleKind::Small);
-    let lg = draw_settle(Tier::Enhanced, SettleKind::Large);
-    let fly = draw_settle(Tier::Enhanced, SettleKind::FlyingMedium);
+    let sm = draw_settle(Tier::Enhanced, SettleKind::Small, false);
+    let lg = draw_settle(Tier::Enhanced, SettleKind::Large, false);
+    let fly = draw_settle(Tier::Enhanced, SettleKind::FlyingMedium, false);
     assert_eq!(glows(&sm).len(), 1);
     assert_eq!(glows(&sm)[0].uv[0], Vfx::Settle as u16);
     assert_eq!(glows(&sm)[0].uv[3], SettleKind::Small as u16);
@@ -222,10 +224,23 @@ fn settle_effect_encodes_mana_tier_and_flying_in_enhanced_and_sprites_in_baselin
         "large tier scales quad: {lg_w} vs {sm_w}"
     );
 
-    let base = draw_settle(Tier::Baseline, SettleKind::Small);
+    let mythic_enh = draw_settle(Tier::Enhanced, SettleKind::Small, true);
+    assert_eq!(glows(&mythic_enh).len(), 2);
+    assert_eq!(glows(&mythic_enh)[1].uv[0], Vfx::MythicArrival as u16);
+    assert_eq!(
+        glows(&mythic_enh)[1].tint,
+        effects.palette().resolve(SubjectColors::BLUE)
+    );
+
+    let base = draw_settle(Tier::Baseline, SettleKind::Small, false);
+    let mythic_base = draw_settle(Tier::Baseline, SettleKind::Small, true);
     assert!(
         glows(&base).len() >= 2 && glows(&base).iter().all(|d| d.uv[0] != Vfx::Settle as u16),
         "Baseline draws cloud and ring sprites without procedural Vfx"
+    );
+    assert!(
+        glows(&mythic_base).len() > glows(&base).len(),
+        "Baseline mythic settle adds subject-colored sprite/burst/ring layers"
     );
 }
 
