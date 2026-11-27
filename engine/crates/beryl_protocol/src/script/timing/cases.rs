@@ -29,11 +29,49 @@ pub fn case_of(act: &Act, found: &Table, beside: &[&Act]) -> Option<&'static str
                     std::cmp::Ordering::Less => Some("life loss"),
                 }
             }
-            Tally::Counters { counter, .. } => Some(if *counter == Counter::Loyalty {
-                "loyalty"
-            } else {
-                "counter"
-            }),
+            Tally::Counters { counter, object } => {
+                if *counter == Counter::Loyalty {
+                    return Some("loyalty");
+                }
+                let count_of = |view: Option<&crate::protocol::ObjectView>| -> i32 {
+                    view.and_then(|v| v.counters.iter().find(|c| c.kind == *counter))
+                        .map_or(0, |c| c.count)
+                };
+                let now = count_of(Some(object));
+                let was = count_of(found.objects.get(&object.slot));
+                Some(match now.cmp(&was) {
+                    std::cmp::Ordering::Greater => {
+                        if *counter == Counter::Shield {
+                            "shield counter add"
+                        } else if is_negative_counter(*counter) {
+                            "counter add negative"
+                        } else {
+                            "counter add"
+                        }
+                    }
+                    std::cmp::Ordering::Less => {
+                        if *counter == Counter::Shield {
+                            "shield counter remove"
+                        } else {
+                            "counter remove"
+                        }
+                    }
+                    std::cmp::Ordering::Equal => "counter",
+                })
+            }
+            Tally::NamedCounters { name, object } => {
+                let count_of = |view: Option<&crate::protocol::ObjectView>| -> i32 {
+                    view.and_then(|v| v.named_counters.iter().find(|c| c.name == *name))
+                        .map_or(0, |c| c.count)
+                };
+                let now = count_of(Some(object));
+                let was = count_of(found.objects.get(&object.slot));
+                match now.cmp(&was) {
+                    std::cmp::Ordering::Greater => Some("counter add"),
+                    std::cmp::Ordering::Less => Some("counter remove"),
+                    std::cmp::Ordering::Equal => None,
+                }
+            }
             _ => None,
         },
         Act::Fly { from, object, .. } => match (from, object.zone) {
@@ -219,4 +257,38 @@ pub fn case_of(act: &Act, found: &Table, beside: &[&Act]) -> Option<&'static str
         // prompt holds up are cases of `lift`, and those are not timed here.
         Act::Lift { .. } | Act::Flip { .. } | Act::Showcase { .. } => None,
     }
+}
+
+/// Whether `counter` is a harmful/negative counter type (`vfx_counter_spawn_neg` in Arena).
+fn is_negative_counter(counter: Counter) -> bool {
+    matches!(
+        counter,
+        Counter::MinusZeroMinusOne
+            | Counter::MinusZeroMinusTwo
+            | Counter::MinusOneMinusZero
+            | Counter::MinusOne
+            | Counter::MinusTwoMinusOne
+            | Counter::MinusTwoMinusTwo
+            | Counter::Blight
+            | Counter::Corruption
+            | Counter::Death
+            | Counter::Decayed
+            | Counter::Depletion
+            | Counter::Despair
+            | Counter::Doom
+            | Counter::Dread
+            | Counter::Fade
+            | Counter::Finality
+            | Counter::Oil
+            | Counter::Pain
+            | Counter::Petrification
+            | Counter::Plague
+            | Counter::Poison
+            | Counter::Rad
+            | Counter::Rust
+            | Counter::Slumber
+            | Counter::Stun
+            | Counter::Trap
+            | Counter::Void
+    )
 }

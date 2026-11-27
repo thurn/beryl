@@ -22,6 +22,9 @@ pub(super) fn layers(
         if layer.enhanced_only && tier != Tier::Enhanced {
             return None;
         }
+        if layer.baseline_only && tier == Tier::Enhanced {
+            return None;
+        }
         let progress = match layer.clock {
             Clock::Eased => eased?,
             Clock::Elapsed => elapsed?,

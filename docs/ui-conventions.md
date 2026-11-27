@@ -938,7 +938,12 @@ plays that timing. `just client check` checks the motion in a recording, and
   changes about a second after its ability reaches the stack (IEXcjBn3BXk
   22:25.7, IEXcjBn3BXk 25:55.6, sMpAJ0HKDdg 54:54.5, 0VsYGs88NXA 31:13.25,
   5UHzpVvUkfI 19:59.25). Beryl: 400 ms, 125 ms after its cause, ease-out.
-  Effects: pulse as it begins, loss as it begins (life loss), gain as it begins
+  Effects: pulse as it begins (but not life loss, life gain, counter add,
+  counter add negative, counter remove, shield counter add, shield counter
+  remove), counter-add as it begins (counter add), counter-add-neg as it begins
+  (counter add negative), counter-remove as it begins (counter remove),
+  shield-add as it begins (shield counter add), shield-remove as it begins
+  (shield counter remove), loss as it begins (life loss), gain as it begins
   (life gain).
 - **set.** The table changes and nothing moves: a step of the turn begins, a
   library is shuffled, a permanent's characteristics change. Nothing animates as
@@ -1090,6 +1095,25 @@ says what a player may do; an effect says what just happened, and is gone.
 - **gain.** A life total flares green, and the number that says how much it
   gained rises from it and fades, for as long as its step. Drawn over its card.
   Beryl: linear.
+- **counter-add.** A white-cyan vertical flare and hot core flash on the counter
+  badge, followed by an expanding shockwave ring and wispy energy smoke across
+  the card when a positive or standard counter is added (2VW6ZzmS8U4 20:29;
+  PS_Counter_Spawn_Sm_KH). Drawn over its card. Beryl: 520 ms, linear.
+- **counter-add-neg.** A harsher crimson-violet cross-flare, tight shockwave
+  ring, and dark smoky wisps across the card when a harmful (-1/-1 style)
+  counter is added (0VsYGs88NXA 31:09.5; vfx_counter_spawn_neg). Drawn over its
+  card. Beryl: 500 ms, linear.
+- **counter-remove.** A flash and expanding shockwave ring on the counter badge
+  with outward sparks, wispy smoke, and tumbling shatter pieces when a counter
+  is removed (vfx_counter_removal). Drawn over its card. Beryl: 560 ms, linear.
+- **shield-add.** A diamond flash, teal-cyan energy shockwave, sparks, and
+  glowing shield emblem on the badge with a subtle teal card-rim pulse when a
+  shield counter is added (VFX_SNC_Shield_Counter_Add). Drawn over its card.
+  Beryl: 620 ms, linear.
+- **shield-remove.** Ice-white crackle across a deep steel-blue shield emblem on
+  the badge that splits into three flying shards and bits when a shield counter
+  is removed (VFX_SNC_Shield_Counter_Break). Drawn over its card. Beryl: 600 ms,
+  linear.
 
 ## Marks
 

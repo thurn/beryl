@@ -2263,6 +2263,36 @@
           "stagger": null,
           "curve": "none"
         },
+        "counter add": {
+          "duration": 305,
+          "delay": null,
+          "stagger": null,
+          "curve": "none"
+        },
+        "counter add negative": {
+          "duration": 305,
+          "delay": null,
+          "stagger": null,
+          "curve": "none"
+        },
+        "counter remove": {
+          "duration": 305,
+          "delay": null,
+          "stagger": null,
+          "curve": "none"
+        },
+        "shield counter add": {
+          "duration": 305,
+          "delay": null,
+          "stagger": null,
+          "curve": "none"
+        },
+        "shield counter remove": {
+          "duration": 305,
+          "delay": null,
+          "stagger": null,
+          "curve": "none"
+        },
         "loyalty": {
           "duration": 400,
           "delay": null,
@@ -2273,7 +2303,41 @@
       "effects": [
         {
           "effect": "pulse",
-          "when": "start"
+          "when": "start",
+          "except": [
+            "life loss",
+            "life gain",
+            "counter add",
+            "counter add negative",
+            "counter remove",
+            "shield counter add",
+            "shield counter remove"
+          ]
+        },
+        {
+          "effect": "counter-add",
+          "when": "start",
+          "case": "counter add"
+        },
+        {
+          "effect": "counter-add-neg",
+          "when": "start",
+          "case": "counter add negative"
+        },
+        {
+          "effect": "counter-remove",
+          "when": "start",
+          "case": "counter remove"
+        },
+        {
+          "effect": "shield-add",
+          "when": "start",
+          "case": "shield counter add"
+        },
+        {
+          "effect": "shield-remove",
+          "when": "start",
+          "case": "shield counter remove"
         },
         {
           "effect": "loss",
@@ -2750,6 +2814,56 @@
       "layer": "over",
       "values": {
         "duration": null,
+        "delay": null,
+        "curve": "linear"
+      }
+    },
+    {
+      "name": "counter-add",
+      "shows": "A white-cyan vertical flare and hot core flash on the counter badge, followed by an expanding shockwave ring and wispy energy smoke across the card when a positive or standard counter is added (2VW6ZzmS8U4 20:29; PS_Counter_Spawn_Sm_KH).",
+      "layer": "over",
+      "values": {
+        "duration": 520,
+        "delay": null,
+        "curve": "linear"
+      }
+    },
+    {
+      "name": "counter-add-neg",
+      "shows": "A harsher crimson-violet cross-flare, tight shockwave ring, and dark smoky wisps across the card when a harmful (-1/-1 style) counter is added (0VsYGs88NXA 31:09.5; vfx_counter_spawn_neg).",
+      "layer": "over",
+      "values": {
+        "duration": 500,
+        "delay": null,
+        "curve": "linear"
+      }
+    },
+    {
+      "name": "counter-remove",
+      "shows": "A flash and expanding shockwave ring on the counter badge with outward sparks, wispy smoke, and tumbling shatter pieces when a counter is removed (vfx_counter_removal).",
+      "layer": "over",
+      "values": {
+        "duration": 560,
+        "delay": null,
+        "curve": "linear"
+      }
+    },
+    {
+      "name": "shield-add",
+      "shows": "A diamond flash, teal-cyan energy shockwave, sparks, and glowing shield emblem on the badge with a subtle teal card-rim pulse when a shield counter is added (VFX_SNC_Shield_Counter_Add).",
+      "layer": "over",
+      "values": {
+        "duration": 620,
+        "delay": null,
+        "curve": "linear"
+      }
+    },
+    {
+      "name": "shield-remove",
+      "shows": "Ice-white crackle across a deep steel-blue shield emblem on the badge that splits into three flying shards and bits when a shield counter is removed (VFX_SNC_Shield_Counter_Break).",
+      "layer": "over",
+      "values": {
+        "duration": 600,
         "delay": null,
         "curve": "linear"
       }

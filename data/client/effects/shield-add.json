@@ -1,0 +1,28 @@
+{
+  "name": "shield-add",
+  "target": "subject",
+  "layers": [
+    {
+      "kind": "ring",
+      "baseline_only": true,
+      "quad": {
+        "scale": { "from": 0.9, "by": 0.6 },
+        "tint": [110, 219, 199, 204],
+        "fade": { "from": 0, "by": 1 },
+        "record": {
+          "scale": 1,
+          "opacity": { "from": 0.85, "by": -0.85 }
+        }
+      }
+    },
+    {
+      "kind": "vfx",
+      "enhanced_only": true,
+      "vfx": "shield_add",
+      "size": 1.8,
+      "aspect": 1.4,
+      "tint": [110, 219, 199, 255],
+      "fade": { "from": 0, "by": 1, "start": 0.75 }
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "name": "shield-remove",
+  "target": "subject",
+  "layers": [
+    {
+      "kind": "burst",
+      "baseline_only": true,
+      "quad": {
+        "scale": { "from": 0.85, "by": 0.6 },
+        "tint": [140, 200, 240, 190],
+        "fade": { "from": 0, "by": 1 },
+        "record": {
+          "scale": 1,
+          "opacity": { "from": 0.7, "by": -0.7 }
+        }
+      }
+    },
+    {
+      "kind": "vfx",
+      "enhanced_only": true,
+      "vfx": "shield_remove",
+      "size": 1.8,
+      "aspect": 1.4,
+      "tint": [110, 190, 235, 255],
+      "fade": { "from": 0, "by": 1, "start": 0.75 }
+    }
+  ]
+}

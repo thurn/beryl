@@ -146,6 +146,36 @@ fn each_case_of_the_data_is_found_on_one_act() {
             object: card(1, ZoneName::Battlefield, you),
         },
     };
+    let counters_count = |counter, count| {
+        let mut obj = card(1, ZoneName::Battlefield, you);
+        if count != 0 {
+            obj.counters.push(crate::protocol::CounterView {
+                kind: counter,
+                count,
+            });
+        }
+        Act::Count {
+            tally: Tally::Counters {
+                counter,
+                object: obj,
+            },
+        }
+    };
+    let mut table_with_counters = table.clone();
+    {
+        let mut obj = card(1, ZoneName::Battlefield, you);
+        obj.counters = vec![
+            crate::protocol::CounterView {
+                kind: Counter::PlusOne,
+                count: 2,
+            },
+            crate::protocol::CounterView {
+                kind: Counter::Shield,
+                count: 1,
+            },
+        ];
+        table_with_counters.objects.insert(obj.slot, obj);
+    }
     let appear = |from, why| Act::Appear {
         from,
         why,
@@ -374,6 +404,36 @@ fn each_case_of_the_data_is_found_on_one_act() {
         ("life loss", life(17), &table, vec![]),
         ("life gain", life(23), &table, vec![]),
         ("counter", counters(Counter::PlusOne), &table, vec![]),
+        (
+            "counter add",
+            counters_count(Counter::PlusOne, 1),
+            &table,
+            vec![],
+        ),
+        (
+            "counter add negative",
+            counters_count(Counter::MinusOne, 1),
+            &table,
+            vec![],
+        ),
+        (
+            "counter remove",
+            counters_count(Counter::PlusOne, 1),
+            &table_with_counters,
+            vec![],
+        ),
+        (
+            "shield counter add",
+            counters_count(Counter::Shield, 1),
+            &table,
+            vec![],
+        ),
+        (
+            "shield counter remove",
+            counters_count(Counter::Shield, 0),
+            &table_with_counters,
+            vec![],
+        ),
         ("loyalty", counters(Counter::Loyalty), &table, vec![]),
         (
             "step begins",

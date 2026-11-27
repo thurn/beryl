@@ -98,6 +98,21 @@ fn dispatch_vfx(in: VfxOut) -> vec4<f32> {
         case VFX_PROBE: {
             return shade_probe(in.mesh_uv, time_s, seed, aspect, tint);
         }
+        case VFX_COUNTER_ADD: {
+            return shade_counter_add(in.mesh_uv, time_s, seed, aspect, tint);
+        }
+        case VFX_COUNTER_ADD_NEG: {
+            return shade_counter_add_neg(in.mesh_uv, time_s, seed, aspect, tint);
+        }
+        case VFX_COUNTER_REMOVE: {
+            return shade_counter_remove(in.mesh_uv, time_s, seed, aspect, tint);
+        }
+        case VFX_SHIELD_ADD: {
+            return shade_shield_add(in.mesh_uv, time_s, seed, aspect, tint);
+        }
+        case VFX_SHIELD_REMOVE: {
+            return shade_shield_remove(in.mesh_uv, time_s, seed, aspect, tint);
+        }
         default: {
             return vec4<f32>(0.0);
         }
@@ -117,6 +132,21 @@ fn vfx_bloom_gain(kind: u32, style: u32) -> f32 {
         }
         case VFX_PROBE: {
             return BLOOM_GAIN_PROBE;
+        }
+        case VFX_COUNTER_ADD: {
+            return BLOOM_GAIN_COUNTER_ADD;
+        }
+        case VFX_COUNTER_ADD_NEG: {
+            return BLOOM_GAIN_COUNTER_NEG;
+        }
+        case VFX_COUNTER_REMOVE: {
+            return BLOOM_GAIN_COUNTER_REMOVE;
+        }
+        case VFX_SHIELD_ADD: {
+            return BLOOM_GAIN_SHIELD_ADD;
+        }
+        case VFX_SHIELD_REMOVE: {
+            return BLOOM_GAIN_SHIELD_REMOVE;
         }
         default: {
             return 0.0;

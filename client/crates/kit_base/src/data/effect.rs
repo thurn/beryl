@@ -140,6 +140,16 @@ pub enum Vfx {
     LineHead = 4,
     /// Test-only soft expanding ring whose radius follows normalized progress.
     Probe = 5,
+    /// Positive or standard counter added burst (`PS_Counter_Spawn_Sm_KH`).
+    CounterAdd = 6,
+    /// Harmful (-1/-1 style) counter added burst (`vfx_counter_spawn_neg`).
+    CounterAddNeg = 7,
+    /// Counter removed shatter burst (`vfx_counter_removal`).
+    CounterRemove = 8,
+    /// Shield counter added crest burst (`VFX_SNC_Shield_Counter_Add`).
+    ShieldAdd = 9,
+    /// Shield counter broken shatter (`VFX_SNC_Shield_Counter_Break`).
+    ShieldRemove = 10,
 }
 
 /// Either a fixed RGBA tint or a dynamic tint source resolved from the subject at draw time.
@@ -301,6 +311,8 @@ pub struct Layer {
     pub clock: Clock,
     #[serde(default)]
     pub enhanced_only: bool,
+    #[serde(default)]
+    pub baseline_only: bool,
     #[serde(flatten)]
     pub primitive: Primitive,
 }
