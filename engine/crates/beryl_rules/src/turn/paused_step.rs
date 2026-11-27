@@ -73,6 +73,7 @@ pub(crate) fn step_actions<L: Layout>(
         | Pending::ManaType { .. }
         | Pending::Companion { .. }
         | Pending::CompanionPayment { .. }
+        | Pending::PayingToAttack { .. }
         | Pending::ArrangePiles { .. } => Default::default(),
     };
     let inline = a.inline();

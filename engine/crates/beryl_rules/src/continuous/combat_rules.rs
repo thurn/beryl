@@ -10,7 +10,10 @@
 //!
 //! Implements: none. Reads combat rule changes for the declarations that obey them.
 
+use beryl_card::{Governed, ManaCost};
+
 use super::rule_change::{maker_of, object_rules, own_condition_holds};
+use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::Layout;
 use crate::state::{RuleKind, Rules, State};
@@ -97,4 +100,83 @@ fn combat_player_rules<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> 
         .rules_of(RuleKind::CombatLimit)
         .union(t.rules_of(RuleKind::AttackCost));
     s.rules_for(player).common(kinds)
+}
+
+/// What one creature attacking `defending` costs its controller under the rule changes in force
+/// for `defending` ([`RuleKind::AttackCost`]), as "Creatures can't attack you unless their
+/// controller pays {2} for each creature they control that's attacking you." says: the sum
+/// over every permanent that makes such a change for them, so two of them cost {4} a creature
+/// (see [CR 508.1h]): "If any of the chosen creatures require paying costs to attack, or if any
+/// optional costs to attack were chosen, the active player determines the total cost to
+/// attack."
+/// Zero, after one test, in a game whose cards have no combat rule. [`Full`] if the sum has
+/// more of a symbol than a cost holds.
+///
+/// [CR 508.1h]: https://yawgatog.com/resources/magic-rules/#R5081h
+#[inline]
+pub(crate) fn attack_cost<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    defending: Seat,
+) -> Result<ManaCost, Full> {
+    let in_force = combat_rules_for(s, t, defending).common(t.rules_of(RuleKind::AttackCost));
+    if in_force.is_empty() {
+        return Ok(ManaCost::NONE);
+    }
+    attack_cost_of_makers(s, t, defending, in_force)
+}
+
+/// [`attack_cost`] while a cost to attack `defending` is in force: the permanents that make
+/// one of `in_force` for them, each counted once for each such rule it makes. A rule change
+/// is numbered once for the game, so the permanents are counted, not the rules.
+#[cold]
+#[inline(never)]
+fn attack_cost_of_makers<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    defending: Seat,
+    in_force: Rules,
+) -> Result<ManaCost, Full> {
+    let lost = s.any_abilities_lost();
+    let mut total = ManaCost::NONE;
+    for (maker, d) in s.permanents_with_derived() {
+        for id in object_rules(s, t, maker).common(in_force).iter() {
+            let rule = t.rule(id);
+            let Governed::AttackCost(cost) = rule.what else {
+                unreachable!("a rule change of the kind that makes attacking cost mana");
+            };
+            if crate::filter::is_for(&rule.players, defending, d.controller)
+                && (!lost || maker_of(s, t, maker, id).is_some())
+                && own_condition_holds(s, t, maker, id)
+            {
+                total = add_checked(total, cost)?;
+            }
+        }
+    }
+    Ok(total)
+}
+
+/// `cost` paid `n` times: what `n` creatures attacking the same player cost. [`Full`] if the
+/// total has more of a symbol than a cost holds.
+pub(crate) fn times(cost: ManaCost, n: u32) -> Result<ManaCost, Full> {
+    (0..n).try_fold(ManaCost::NONE, |sum, _| add_checked(sum, cost))
+}
+
+/// The two costs together, or [`Full`] where a count would not fit: a cost never saturates.
+fn add_checked(a: ManaCost, b: ManaCost) -> Result<ManaCost, Full> {
+    let fits = |x: u8, y: u8| x.checked_add(y).ok_or(Full);
+    let mut sum = a;
+    sum.generic = fits(a.generic, b.generic)?;
+    for (i, symbol) in sum.symbols.iter_mut().enumerate() {
+        *symbol = fits(a.symbols[i], b.symbols[i])?;
+    }
+    for (colors, n) in b.hybrid.pairs() {
+        let pair = beryl_card::Hybrid::pair(colors).expect("a pair of a hybrid cost");
+        let total = a.hybrid.count(pair) + n;
+        if total > beryl_card::Hybrid::MOST {
+            return Err(Full);
+        }
+        sum.hybrid = sum.hybrid.with_count(pair, total);
+    }
+    Ok(sum)
 }
