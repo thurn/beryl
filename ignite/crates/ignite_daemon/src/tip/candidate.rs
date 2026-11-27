@@ -119,8 +119,7 @@ pub(super) fn ends_checks(
         *since = None;
         return None;
     };
-    if super::round::master_reached(ctx, tip).is_some()
-        || checking_superseded(ctx, &by, &mut since)
+    if super::round::master_reached(ctx, tip).is_some() || checking_superseded(ctx, &by, &mut since)
     {
         return Some(by);
     }

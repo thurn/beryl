@@ -200,7 +200,12 @@ impl TipLoop {
             crate::steps::step(format!("waiting for tip round {handle}"));
             let target = request.and_then(|request| TipRoundVerb::parse(&request).ok());
             return self
-                .wait(ctx, &handle, target.as_ref().map(|(tip, _)| tip), Duration::ZERO)
+                .wait(
+                    ctx,
+                    &handle,
+                    target.as_ref().map(|(tip, _)| tip),
+                    Duration::ZERO,
+                )
                 .map(Some);
         }
         crate::steps::step("waiting for a tip to verify");
