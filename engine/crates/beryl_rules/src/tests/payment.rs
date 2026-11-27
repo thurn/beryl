@@ -50,6 +50,37 @@ fn offering_payments_with_a_full_pool_does_not_wrap_remaining_mana() {
     g.s.board().set_mana(g.me, pool);
     crate::continuous::layers::refresh(&mut g.s, &g.t, &mut Sink::default()).unwrap();
 
+    // Enumerating all plans considers tapping Test Crypt, which would overflow Small's u8 pool
+    // instead of wrapping or saturating.
+    assert_eq!(
+        mana::plans(
+            &g.s,
+            &g.t,
+            &mut Sink::default(),
+            g.me,
+            ManaCost::generic(1),
+            Bitboard::EMPTY,
+            false,
+            mana::Paying::NOTHING,
+        ),
+        Err(crate::fixed::Full)
+    );
+
+    let greedy = mana::plans(
+        &g.s,
+        &g.t,
+        &mut Sink::default(),
+        g.me,
+        ManaCost::generic(1),
+        Bitboard::EMPTY,
+        true,
+        mana::Paying::NOTHING,
+    )
+    .unwrap();
+    assert!(greedy.iter().any(|plan| plan.left[color.index()] == 254));
+
+    pool[color] = u8::MAX - 1;
+    g.s.board().set_mana(g.me, pool);
     let plans = mana::plans(
         &g.s,
         &g.t,
@@ -61,7 +92,7 @@ fn offering_payments_with_a_full_pool_does_not_wrap_remaining_mana() {
         mana::Paying::NOTHING,
     )
     .unwrap();
-    assert!(plans.iter().any(|plan| plan.left[color.index()] == 254));
+    assert!(plans.iter().any(|plan| plan.left[color.index()] == 253));
 }
 
 /// A {1}{W} spell with a Plains, a Strip Mine and a W/U dual: the Plains pays {W}, and the
