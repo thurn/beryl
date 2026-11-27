@@ -66,43 +66,47 @@
     },
     "vfx_chevron": {
       "samples": 0,
-      "expressions": 484
+      "expressions": 487
     },
     "vfx_shield": {
       "samples": 0,
-      "expressions": 452
+      "expressions": 455
     },
     "vfx_line_ribbon": {
       "samples": 0,
-      "expressions": 413
+      "expressions": 416
     },
     "vfx_line_head": {
       "samples": 0,
-      "expressions": 404
+      "expressions": 407
     },
     "vfx_probe": {
       "samples": 0,
-      "expressions": 149
+      "expressions": 152
     },
     "vfx_counter_add": {
       "samples": 0,
-      "expressions": 376
+      "expressions": 379
     },
     "vfx_counter_add_neg": {
       "samples": 0,
-      "expressions": 389
+      "expressions": 392
     },
     "vfx_counter_remove": {
       "samples": 0,
-      "expressions": 515
+      "expressions": 518
     },
     "vfx_shield_add": {
       "samples": 0,
-      "expressions": 427
+      "expressions": 430
     },
     "vfx_shield_remove": {
       "samples": 0,
-      "expressions": 388
+      "expressions": 391
+    },
+    "vfx_settle": {
+      "samples": 0,
+      "expressions": 573
     }
   },
   "tests": {

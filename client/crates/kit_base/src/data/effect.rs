@@ -150,6 +150,53 @@ pub enum Vfx {
     ShieldAdd = 9,
     /// Shield counter broken shatter (`VFX_SNC_Shield_Counter_Break`).
     ShieldRemove = 10,
+    /// Permanent landing dust, collision flash, shockwave, and ground shadow (`vfx_card_dust_*`).
+    Settle = 11,
+}
+
+/// Size and air/ground variant for permanent-landing dust (`Vfx::Settle`), encoded into
+/// `Draw::uv[3]` (`style` in `vfx.wgsl`).
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SettleKind {
+    /// Mana value up to 3, ground permanent (`vfx_card_dust_sm`).
+    #[default]
+    Small = 0,
+    /// Mana value 4 or 5, ground permanent (`vfx_card_dust_med`).
+    Medium = 1,
+    /// Mana value 6 or more, ground permanent (`vfx_card_dust_lg`).
+    Large = 2,
+    /// Mana value up to 3, flying creature (`vfx_card_dust_flying_sm`).
+    FlyingSmall = 3,
+    /// Mana value 4 or 5, flying creature (`vfx_card_dust_flying_med`).
+    FlyingMedium = 4,
+    /// Mana value 6 or more, flying creature (`vfx_card_dust_flying_lg`).
+    FlyingLarge = 5,
+}
+
+impl SettleKind {
+    /// Chooses the landing dust size tier from `mana_value` (`<= 3`, `4..=5`, `6+`) and `flying`.
+    #[must_use]
+    pub const fn from_card(mana_value: Option<u32>, flying: bool) -> Self {
+        match (mana_value, flying) {
+            (Some(6..), false) => Self::Large,
+            (Some(4..=5), false) => Self::Medium,
+            (_, false) => Self::Small,
+            (Some(6..), true) => Self::FlyingLarge,
+            (Some(4..=5), true) => Self::FlyingMedium,
+            (_, true) => Self::FlyingSmall,
+        }
+    }
+
+    /// Quad scale multiplier relative to the base `settle` VFX layer size.
+    #[must_use]
+    pub const fn quad_scale(self) -> f32 {
+        match self {
+            Self::Small | Self::FlyingSmall => 1.0,
+            Self::Medium | Self::FlyingMedium => 1.20,
+            Self::Large | Self::FlyingLarge => 1.45,
+        }
+    }
 }
 
 /// Either a fixed RGBA tint or a dynamic tint source resolved from the subject at draw time.

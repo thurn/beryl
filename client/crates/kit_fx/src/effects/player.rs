@@ -165,7 +165,12 @@ fn write_vfx(
     } else {
         reach.half.x * 2.0
     };
-    let width = card_width * size.at(progress).max(0.0);
+    let scale = if kind == Vfx::Settle {
+        reach.settle.quad_scale()
+    } else {
+        1.0
+    };
+    let width = card_width * size.at(progress).max(0.0) * scale;
     if width <= 0.0 {
         return;
     }
@@ -179,9 +184,20 @@ fn write_vfx(
     );
     let seed = super::vfx::unit_hash(run.particle_seed.unwrap_or(0) as usize, 0);
     let rgba = tint.resolve(palette, reach.colors);
+    let style = if kind == Vfx::Settle {
+        reach.settle as u8
+    } else {
+        0
+    };
     builder.draw(
         Band::Glows,
-        Draw::vfx(transform, rgba, kind, [progress, opacity, seed, aspect]),
+        Draw::vfx_styled(
+            transform,
+            rgba,
+            kind,
+            style,
+            [progress, opacity, seed, aspect],
+        ),
     );
 }
 

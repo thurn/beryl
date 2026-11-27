@@ -18,7 +18,7 @@ use std::sync::Arc;
 use glam::{Vec2, Vec3};
 use kit_frame::frame::{EffectTarget, ElementId, FrameBuilder};
 
-use kit_base::data::effect::{Definition, Effects, SubjectColors};
+use kit_base::data::effect::{Definition, Effects, SettleKind, SubjectColors};
 use kit_base::pose::{Curve, Pose};
 
 /// Where something is, how large, and what colors it has, for the light and VFX drawn to or on it.
@@ -29,6 +29,8 @@ pub struct Reach {
     pub half: Vec2,
     /// Subject card colors for `"tint": "subject_colors"` layers.
     pub colors: SubjectColors,
+    /// Mana-value size tier and flying variant for `Vfx::Settle`.
+    pub settle: SettleKind,
 }
 
 /// Writes the effects that draw in table space, using the subject's current or earlier pose.

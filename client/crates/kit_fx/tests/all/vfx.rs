@@ -55,6 +55,7 @@ fn run_probe(effects: &Effects, tier: Tier, colors: SubjectColors, now: u64) -> 
         pose: Pose::default(),
         half: Vec2::new(31.5, 44.0),
         colors,
+        settle: kit_base::data::effect::SettleKind::Small,
     };
     let mut frame = Frame::with_capacity(16, 32, 256);
     let mut builder = FrameBuilder::new(&mut frame, tier, Vec2::new(63.0, 88.0));
@@ -160,4 +161,70 @@ fn state_loop_marks_ambient_motion_in_enhanced_and_is_silent_under_reduced_motio
     let baseline = draw_loop(Tier::Baseline, 250_000_000, false);
     assert!(baseline.draws.is_empty(), "Baseline emits no state loop");
     assert!(!baseline.ambient_motion);
+}
+
+#[test]
+fn settle_effect_encodes_mana_tier_and_flying_in_enhanced_and_sprites_in_baseline() {
+    use kit_base::data::effect::SettleKind;
+
+    let palette = EffectPalette::parse(PALETTE_JSON).expect("palette.json");
+    let settle_json = include_str!("../../../../../data/client/effects/settle.json");
+    let effects = Effects::parse([("settle", settle_json)])
+        .expect("settle.json")
+        .with_lift(1.0)
+        .with_palette(palette);
+    let definition = Arc::clone(effects.get("settle").expect("settle"));
+    let target = EffectTarget::Key(ElementId(7));
+    let run = EffectRun {
+        definition,
+        on: target,
+        on_point: false,
+        particle_seed: Some(7),
+        start: 1_000,
+        duration: 10_000,
+        curve: Curve::LINEAR,
+        step: 0,
+    };
+    let draw_settle = |tier: Tier, settle: SettleKind| {
+        let reach = Reach {
+            pose: Pose::default(),
+            half: Vec2::new(31.5, 44.0),
+            colors: SubjectColors::NONE,
+            settle,
+        };
+        let mut frame = Frame::with_capacity(16, 32, 256);
+        let mut builder = FrameBuilder::new(&mut frame, tier, Vec2::new(63.0, 88.0));
+        effects::write(
+            &effects,
+            std::slice::from_ref(&run),
+            3_500,
+            |_, _| Some(reach),
+            (Vec3::new(0.0, 0.0, 400.0), 1.0),
+            &mut builder,
+        );
+        builder.finish();
+        frame
+    };
+
+    let sm = draw_settle(Tier::Enhanced, SettleKind::Small);
+    let lg = draw_settle(Tier::Enhanced, SettleKind::Large);
+    let fly = draw_settle(Tier::Enhanced, SettleKind::FlyingMedium);
+    assert_eq!(glows(&sm).len(), 1);
+    assert_eq!(glows(&sm)[0].uv[0], Vfx::Settle as u16);
+    assert_eq!(glows(&sm)[0].uv[3], SettleKind::Small as u16);
+    assert_eq!(glows(&lg)[0].uv[3], SettleKind::Large as u16);
+    assert_eq!(glows(&fly)[0].uv[3], SettleKind::FlyingMedium as u16);
+
+    let sm_w = Vec3::from_slice(&glows(&sm)[0].model[0..3]).length();
+    let lg_w = Vec3::from_slice(&glows(&lg)[0].model[0..3]).length();
+    assert!(
+        lg_w > sm_w * 1.3,
+        "large tier scales quad: {lg_w} vs {sm_w}"
+    );
+
+    let base = draw_settle(Tier::Baseline, SettleKind::Small);
+    assert!(
+        glows(&base).len() >= 2 && glows(&base).iter().all(|d| d.uv[0] != Vfx::Settle as u16),
+        "Baseline draws cloud and ring sprites without procedural Vfx"
+    );
 }

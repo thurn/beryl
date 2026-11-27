@@ -330,3 +330,39 @@ fn probe_vfx_expands_ring_with_progress_and_respects_tint_and_fade() {
     );
     assert_eq!(channel_sums(&faded), [0, 0, 0], "zero fade draws nothing");
 }
+
+#[test]
+fn settle_vfx_renders_mana_tiers_and_flying_wind() {
+    let mut renderer = enhanced();
+    let tf = Affine3A::from_scale_rotation_translation(
+        Vec3::new(160.0, 216.0, 1.0),
+        Quat::IDENTITY,
+        Vec3::new(0.0, 0.0, 1.0),
+    );
+    let tint = [255, 198, 127, 255];
+    let sm = render_vfx(
+        &mut renderer,
+        Draw::vfx_styled(tf, tint, Vfx::Settle, 0, [0.22, 1.0, 0.3, 1.35]),
+    );
+    let lg = render_vfx(
+        &mut renderer,
+        Draw::vfx_styled(tf, tint, Vfx::Settle, 2, [0.22, 1.0, 0.3, 1.35]),
+    );
+    let fly = render_vfx(
+        &mut renderer,
+        Draw::vfx_styled(tf, tint, Vfx::Settle, 3, [0.22, 1.0, 0.3, 1.35]),
+    );
+
+    let [sr, sg, sb] = channel_sums(&sm);
+    let [lr, lg_c, _] = channel_sums(&lg);
+    let [_, _, fb] = channel_sums(&fly);
+    assert!(
+        sr > 20_000 && sr > sg && sg > sb,
+        "warm dust: {sr},{sg},{sb}"
+    );
+    assert!(lr > sr && lg_c > sg, "large tier throws brighter dust");
+    assert!(
+        fb > sb,
+        "flying variant adds cooler wind wisps: {fb} > {sb}"
+    );
+}

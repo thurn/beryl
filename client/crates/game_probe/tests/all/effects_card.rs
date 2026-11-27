@@ -232,9 +232,10 @@ fn a_settling_card_is_drawn_under_a_burst() {
             .count()
     };
     let still = frame(&mut show, &mut buffer, 50 * MS);
-    // A third of the way through the run, past `settle.white`, the card is white.
+    // A third of the way through the run, past `settle.white`, the card is white
+    // and Baseline draws its dust cloud, ring, and burst layers.
     let white = frame(&mut show, &mut buffer, 433 * MS);
-    assert_eq!(glows(&white), glows(&still) + 1);
+    assert_eq!(glows(&white), glows(&still) + 3);
 }
 
 #[test]

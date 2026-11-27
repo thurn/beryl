@@ -4,11 +4,13 @@
 //! [`FaceId`]. The host reads the list (`Client::faces`) so that its asset workers prepare each
 //! face, and each worker reports the layer a face landed in as an `AssetReady::Face`.
 
+mod cost;
 mod dynamic;
 mod plates;
 
 use std::collections::BTreeMap;
 
+use self::cost::cost_value;
 use self::dynamic::{ChangedFace, CustomPlate};
 
 use beryl_protocol::card_records::{CardEntry, CardFace, CardRecords, PrintingIx};
@@ -442,19 +444,6 @@ pub fn name_hash(name: &str) -> u64 {
     hash
 }
 
-/// What the mana symbols of `cost`, written as `{1}{U}{U}`, add up to (`FaceList::mana_value`).
-fn cost_value(cost: &str) -> u32 {
-    (cost.split('{').skip(1))
-        .filter_map(|part| part.split_once('}'))
-        .map(|(symbol, _)| match symbol {
-            "X" | "Y" | "Z" => 0,
-            _ => (symbol.split('/').next())
-                .and_then(|generic| generic.parse().ok())
-                .unwrap_or(1),
-        })
-        .sum()
-}
-
 /// Whether `paragraph` of a face's rules text says a triggered ability (it begins "When",
 /// "Whenever" or "At", or its reminder text says one, as offspring's does) or an activated one:
 /// a cost and a colon before any reminder text, or a keyword whose reminder text has a colon
@@ -634,6 +623,12 @@ impl Faces {
     #[must_use]
     pub fn face(&self, name: &str) -> Option<&ListedFace> {
         self.list.get(self.list.find(name)?)
+    }
+
+    /// The mana value of the card named `name`, if known. Allocates nothing.
+    #[must_use]
+    pub fn mana_value(&self, name: &str) -> Option<u32> {
+        self.list.mana_value(name)
     }
 
     /// The listed face of the printing `ix` and its board-size layer, if resident.

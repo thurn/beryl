@@ -233,10 +233,12 @@ impl Show {
     #[must_use]
     pub fn reach(&self, subject: Subject, now: u64) -> Option<Reach> {
         let colors = kit_base::data::effect::SubjectColors::NONE;
+        let settle = kit_base::data::effect::SettleKind::Small;
         let card = |pose: Pose| Reach {
             pose,
             half: self.table.camera().data.card.size() * 0.5 * pose.scale,
             colors,
+            settle,
         };
         match subject {
             Subject::Object { slot } => self.drawn_pose(usize::from(slot.0), now).map(card),
@@ -244,6 +246,7 @@ impl Show {
                 pose: self.table.player_pose(player),
                 half: Vec2::ZERO,
                 colors,
+                settle,
             }),
             Subject::Ability { id } => self.ability_pose(id, now).map(card),
         }

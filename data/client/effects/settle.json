@@ -12,8 +12,34 @@
       "record": true
     },
     {
+      "kind": "sprite",
+      "baseline_only": true,
+      "shape": "disc",
+      "quad": {
+        "scale": { "from": 1.15, "by": 0.95, "start": 0.05, "end": 0.85 },
+        "tint": [255, 198, 127, 95],
+        "fade": {
+          "rise": { "from": 1, "by": -1, "start": 0.05, "end": 0.22 },
+          "fall": { "from": 0, "by": 1, "start": 0.42, "end": 0.85 }
+        }
+      }
+    },
+    {
+      "kind": "ring",
+      "baseline_only": true,
+      "quad": {
+        "scale": { "from": 0.95, "by": 1.15, "start": 0.08, "end": 0.78 },
+        "tint": [255, 198, 127, 150],
+        "fade": {
+          "rise": { "from": 1, "by": -1, "start": 0.08, "end": 0.20 },
+          "fall": { "from": 0, "by": 1, "start": 0.32, "end": 0.78 }
+        }
+      }
+    },
+    {
       "kind": "burst",
       "on_surface": true,
+      "baseline_only": true,
       "quad": {
         "scale": { "from": 1.32, "by": 1.08, "start": 0.15, "end": 0.36 },
         "tint": [255, 226, 170, 217],
@@ -22,6 +48,15 @@
           "fall": { "from": 0, "by": 1, "start": 0.36, "end": 0.66 }
         }
       }
+    },
+    {
+      "kind": "vfx",
+      "enhanced_only": true,
+      "vfx": "settle",
+      "size": 2.8,
+      "aspect": 1.35,
+      "tint": [255, 198, 127, 255],
+      "fade": { "from": 0, "by": 1, "start": 0.82 }
     }
   ]
 }

@@ -21,6 +21,7 @@ pub const SHADER: &str = concat!(
     include_str!("line_fx.wgsl"),
     include_str!("fx/probe.wgsl"),
     include_str!("fx/counter.wgsl"),
+    include_str!("fx/settle.wgsl"),
 );
 
 /// Pipelines for `Material::Vfx` records, all built once at startup.

@@ -31,6 +31,7 @@ fn records(effect: &str, data: &Effects) -> String {
             Vec2::new(32.0, 44.5)
         },
         colors: kit_base::data::effect::SubjectColors::NONE,
+        settle: kit_base::data::effect::SettleKind::Small,
     };
     let runs = [EffectRun {
         definition: data.get(effect).unwrap().clone(),
@@ -162,6 +163,7 @@ fn remaining_records(effect: &str, on: Subject, moving: bool, data: &Effects) ->
                         pose,
                         half,
                         colors: kit_base::data::effect::SubjectColors::NONE,
+                        settle: kit_base::data::effect::SettleKind::Small,
                     })
                 },
                 (Vec3::Z, 2.0),

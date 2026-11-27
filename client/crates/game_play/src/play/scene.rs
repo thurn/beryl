@@ -51,6 +51,7 @@ impl Scene<'_> {
         let mut reach = self.reach_before(subject, ago)?;
         if ago == 0 {
             reach.colors = self.subject_colors(subject);
+            reach.settle = self.subject_settle(subject);
             if matches!(subject, Subject::Player { .. }) {
                 let table = self.table();
                 let card = table.camera().data.card;
@@ -59,6 +60,30 @@ impl Scene<'_> {
             }
         }
         Some(reach)
+    }
+
+    /// The subject card's landing-dust size tier and flying variant (`Vfx::Settle`).
+    #[must_use]
+    pub fn subject_settle(&self, subject: Subject) -> kit_base::data::effect::SettleKind {
+        let Subject::Object { slot } = subject else {
+            return kit_base::data::effect::SettleKind::Small;
+        };
+        let Some(object) = self
+            .show
+            .shown
+            .as_ref()
+            .and_then(|shown| shown.view.objects.get(usize::from(slot.0)))
+        else {
+            return kit_base::data::effect::SettleKind::Small;
+        };
+        let flying = object
+            .keywords
+            .contains(&beryl_protocol::protocol::Keyword::Flying);
+        let mana_value = object
+            .name
+            .as_deref()
+            .and_then(|name| self.show.faces.mana_value(name));
+        kit_base::data::effect::SettleKind::from_card(mana_value, flying)
     }
 
     /// The subject card's colors as a compact bitmask for `"tint": "subject_colors"` VFX layers.
@@ -126,6 +151,7 @@ impl Scene<'_> {
                     pose,
                     half,
                     colors: kit_base::data::effect::SubjectColors::NONE,
+                    settle: kit_base::data::effect::SettleKind::Small,
                 },
                 element: None,
                 band: PaintBand::Table,
@@ -141,6 +167,7 @@ impl Scene<'_> {
                 pose,
                 half: camera.data.card.half() * pose.scale,
                 colors: kit_base::data::effect::SubjectColors::NONE,
+                settle: kit_base::data::effect::SettleKind::Small,
             },
             element: Some((index, node)),
             band: builder.node_band(index),

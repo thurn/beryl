@@ -1050,11 +1050,13 @@ says what a player may do; an effect says what just happened, and is gone.
   fades: the card is new here, is leaving whole, or sends a streak. On the
   stack, where the spell that acts on a card lies over it, the light is a rim
   inside the card's own frame. Drawn under its card. Beryl: 300 ms, ease-out.
-- **settle.** A permanent that lands is whole for two frames, then whitens over
-  its whole face, bursts in a round bloom of white light with thin rays about
-  one and a half cards wide, throws a soft ring to twice its width and flecks
-  that drift off, and stands washed white until the light is gone. Drawn over
-  its card. Beryl: 470 ms, linear.
+- **settle.** A permanent that lands flashes warm yellow-white with starburst
+  rays (`MAT_CollisionFlash`), spreads a soft warm dust cloud and a wispy
+  shockwave ring outward from under the card, and casts a dark ground shadow
+  beneath it, scaled up for higher mana values (small up to 3, medium 4–5, large
+  6+ with scrolling cloud and polar-distorted shockwave); flying creatures add
+  wind-swirl wisps (`AhTcvQ-lQQQ` 29:13.5, `UrGalw_f35w` 17:34). Drawn over its
+  card. Beryl: 470 ms, linear.
 - **dissolve.** A card darkens, holds dark, and then breaks up along a stippled
   edge from the top down, for as long as its step: it is destroyed, countered or
   sacrificed. Drawn over its card. Beryl: linear.

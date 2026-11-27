@@ -172,6 +172,7 @@ fn source(run: &StreakRun, scene: &Scene<'_>, builder: &FrameBuilder<'_>) -> Opt
             pose: scene.table().pool_pose(player),
             half: Vec2::ZERO,
             colors: kit_base::data::effect::SubjectColors::NONE,
+            settle: kit_base::data::effect::SettleKind::Small,
         }),
         from => Some(scene.light_target(from, builder)?.reach),
     }

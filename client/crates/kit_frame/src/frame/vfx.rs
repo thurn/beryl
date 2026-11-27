@@ -80,6 +80,19 @@ impl Draw {
     /// is `[time_s, fade, seed, aspect]`.
     #[must_use]
     pub fn vfx(transform: Affine3A, tint: [u8; 4], kind: Vfx, params: [f32; 4]) -> Self {
+        Self::vfx_styled(transform, tint, kind, 0, params)
+    }
+
+    /// A procedural Enhanced-tier visual effect of `kind` and `style` byte (`Draw::uv[3]`)
+    /// with effect-specific `params`.
+    #[must_use]
+    pub fn vfx_styled(
+        transform: Affine3A,
+        tint: [u8; 4],
+        kind: Vfx,
+        style: u8,
+        params: [f32; 4],
+    ) -> Self {
         let mut draw = Self::new(
             transform,
             tint,
@@ -87,7 +100,7 @@ impl Draw {
             TextureArray::Atlas,
             Mesh::Quad,
         );
-        draw.uv = [kind as u16, 0, 0, 0];
+        draw.uv = [kind as u16, 0, 0, u16::from(style)];
         draw.params = params;
         draw
     }

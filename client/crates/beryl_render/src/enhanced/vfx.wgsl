@@ -113,6 +113,9 @@ fn dispatch_vfx(in: VfxOut) -> vec4<f32> {
         case VFX_SHIELD_REMOVE: {
             return shade_shield_remove(in.mesh_uv, time_s, seed, aspect, tint);
         }
+        case VFX_SETTLE: {
+            return shade_settle(in.mesh_uv, time_s, seed, aspect, tint, in.style);
+        }
         default: {
             return vec4<f32>(0.0);
         }
@@ -147,6 +150,9 @@ fn vfx_bloom_gain(kind: u32, style: u32) -> f32 {
         }
         case VFX_SHIELD_REMOVE: {
             return BLOOM_GAIN_SHIELD_REMOVE;
+        }
+        case VFX_SETTLE: {
+            return BLOOM_GAIN_SETTLE;
         }
         default: {
             return 0.0;

@@ -2690,7 +2690,7 @@
     },
     {
       "name": "settle",
-      "shows": "A permanent that lands is whole for two frames, then whitens over its whole face, bursts in a round bloom of white light with thin rays about one and a half cards wide, throws a soft ring to twice its width and flecks that drift off, and stands washed white until the light is gone.",
+      "shows": "A permanent that lands flashes warm yellow-white with starburst rays (`MAT_CollisionFlash`), spreads a soft warm dust cloud and a wispy shockwave ring outward from under the card, and casts a dark ground shadow beneath it, scaled up for higher mana values (small up to 3, medium 4–5, large 6+ with scrolling cloud and polar-distorted shockwave); flying creatures add wind-swirl wisps (`AhTcvQ-lQQQ` 29:13.5, `UrGalw_f35w` 17:34).",
       "layer": "over",
       "values": {
         "duration": 470,
