@@ -24,7 +24,7 @@ use kit_probe::driver::atlas::stub_icons;
 use kit_text::text::fonts::Font;
 use kit_ui::art::icons::ALL;
 use kit_ui::widgets::icon_shadows;
-use kit_ui::widgets::icons::{GEAR, atlas_size};
+use kit_ui::widgets::icons::{GEAR, STEPS, STEPS_OUTLINED, atlas_size};
 use swash::FontRef;
 
 /// Reads the pages queued by a worker after flushing or joining it.
@@ -411,6 +411,42 @@ fn every_icon_and_demanded_glyph_fits_the_atlas_at_every_display_scale() {
             assert!(
                 glyphs.iter().any(|cell| cell.key == key),
                 "{key:?} at scale {scale}"
+            );
+        }
+    }
+}
+
+#[test]
+fn every_stoppable_step_icon_has_more_filled_area_when_on_than_off() {
+    // Untap (0) and cleanup (11) are never stops, so their filled forms are unused.
+    for scale in [1.0, 2.0, 3.0] {
+        let pages = rasterize(scale);
+        let cells: Vec<(&[u8], &IconCell)> = pages
+            .iter()
+            .flat_map(|(pixels, cells)| cells.iter().map(move |cell| (pixels.as_slice(), cell)))
+            .collect();
+        let cell_texels = |icon: IconId| -> Vec<u8> {
+            let (pixels, cell) = cells
+                .iter()
+                .find(|(_, cell)| cell.shadow == 0 && cell.icon == icon)
+                .copied()
+                .unwrap_or_else(|| panic!("{icon:?} at scale {scale}"));
+            texels(pixels, cell)
+        };
+        for step in 1..=10 {
+            let on_texels = cell_texels(STEPS[step]);
+            let off_texels = cell_texels(STEPS_OUTLINED[step]);
+            let on: u64 = on_texels.iter().copied().map(u64::from).sum();
+            let off: u64 = off_texels.iter().copied().map(u64::from).sum();
+            let newly_filled = on_texels
+                .iter()
+                .zip(&off_texels)
+                .filter(|&(&a, &b)| a >= 128 && b < 128)
+                .count();
+            assert!(
+                on > off && newly_filled * 12 >= on_texels.len(),
+                "step {step} at scale {scale}: filled ink ({on}) vs outlined ink ({off}), newly_filled {newly_filled}/{}",
+                on_texels.len()
             );
         }
     }
