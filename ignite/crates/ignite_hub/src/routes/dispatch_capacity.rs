@@ -80,8 +80,7 @@ pub(super) fn read<'a>(
                         .and_then(|text| Timestamp::parse(text).ok())
                         .map(|expiry| expiry.plus_seconds(-fleet::RESERVATION_SECONDS))
                 });
-            let build =
-                requirements.needs_build_slot(
+            let build = requirements.needs_build_slot(
                 ticket.id.as_str(),
                 ticket.ticket_type,
                 ticket.needs_os,

@@ -73,8 +73,11 @@ fn a_bug_that_names_only_documents_still_waits_for_a_build_slot() {
     for id in &ids {
         classify(&conn, id, 0.1, body);
     }
-    conn.execute("UPDATE tickets SET type = 'bug' WHERE id = ?1", [ids[0].as_str()])
-        .unwrap();
+    conn.execute(
+        "UPDATE tickets SET type = 'bug' WHERE id = ?1",
+        [ids[0].as_str()],
+    )
+    .unwrap();
     let pressure = DispatchPressure {
         build_slots: 6,
         build_slots_free: 0,

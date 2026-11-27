@@ -10,8 +10,8 @@ use ignite_core::dispatch::RequiredFamily;
 use ignite_core::dispatch_pressure::likely_compiles;
 use ignite_core::ids::CheckName;
 use ignite_core::inputs::path_matches;
-use ignite_core::protocol::tickets::TicketType;
 use ignite_core::manifest::{AnyPlatform, InputPattern, Kind, Manifest, Platforms, Product};
+use ignite_core::protocol::tickets::TicketType;
 use ignite_store::{Result, StoreError};
 
 use super::queue::held;
