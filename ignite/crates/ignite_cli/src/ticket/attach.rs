@@ -13,7 +13,7 @@ use clap::{Args, Subcommand};
 use serde_json::{Value, json};
 
 use ignite_core::protocol::attachments::{
-    Attachment, MAX_ATTACHMENT_BYTES, embed, size_text, sniff,
+    Attachment, MAX_ATTACHMENT_BYTES, embed, size_text, sniff_attachment,
 };
 use ignite_core::protocol::client::{Exit, Reply};
 
@@ -23,7 +23,8 @@ use super::{build, ids, write};
 #[derive(Debug, Args)]
 pub struct AttachArgs {
     pub id: String,
-    /// Image files to attach: PNG, JPEG, GIF or WebP, at most 20 MiB each.
+    /// Files to attach: PNG, JPEG, GIF, WebP, JSON, JSON Lines, plain text or gzip, at most 20 MiB
+    /// each.
     pub files: Vec<PathBuf>,
     /// The Nth most recent image pasted into this Claude Code session; 1 when N is left out.
     #[arg(long, num_args = 0..=1, require_equals = true, default_missing_value = "1")]
@@ -203,7 +204,7 @@ fn upload_all(
     Ok(stored)
 }
 
-/// The image's media type, or why the hub would refuse it.
+/// The file's media type, or why the hub would refuse it.
 fn check(name: &str, bytes: &[u8]) -> Result<&'static str> {
     if bytes.len() as u64 > MAX_ATTACHMENT_BYTES {
         return Err(usage(format!(
@@ -212,9 +213,13 @@ fn check(name: &str, bytes: &[u8]) -> Result<&'static str> {
             size_text(MAX_ATTACHMENT_BYTES)
         )));
     }
-    sniff(bytes)
-        .map(|image| image.media_type)
-        .ok_or_else(|| usage(format!("{name} is not a PNG, JPEG, GIF or WebP image")))
+    sniff_attachment(name, bytes)
+        .map(|file| file.media_type)
+        .ok_or_else(|| {
+            usage(format!(
+                "{name} is not a PNG, JPEG, GIF, WebP, JSON, JSON Lines, plain text or gzip file"
+            ))
+        })
 }
 
 /// The `n`th most recent image pasted into the Claude Code session `CLAUDE_CODE_SESSION_ID`.
@@ -464,7 +469,10 @@ mod tests {
             _ => None,
         };
         let newest = pasted(1, &env).unwrap();
-        assert_eq!(sniff(&newest).map(|i| (i.width, i.height)), Some((2, 3)));
+        assert_eq!(
+            sniff_attachment("pasted", &newest).map(|i| (i.width, i.height)),
+            Some((2, 3))
+        );
         let older = pasted(2, &env).unwrap();
         assert!(older.starts_with(b"GIF87a"));
         let too_far = pasted(3, &env).unwrap_err();
@@ -478,6 +486,19 @@ mod tests {
         assert_eq!(
             check("a.gif", b"GIF89a\x01\x00\x01\x00").unwrap(),
             "image/gif"
+        );
+        assert_eq!(
+            check("replay.json", br#"{"ok":true}"#).unwrap(),
+            "application/json"
+        );
+        assert_eq!(
+            check("journal.jsonl", b"{\"a\":1}\n{\"b\":2}\n").unwrap(),
+            "application/x-ndjson"
+        );
+        assert_eq!(check("tree.txt", b"root\n").unwrap(), "text/plain");
+        assert_eq!(
+            check("frames.jsonl.gz", &[0x1F, 0x8B, 0x08, 0, 0, 0, 0, 0, 0, 0]).unwrap(),
+            "application/gzip"
         );
         assert!(
             check("a.svg", b"<svg/>")

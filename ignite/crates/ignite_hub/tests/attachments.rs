@@ -334,3 +334,86 @@ fn the_private_page_shows_the_images_and_the_public_one_does_not() {
         404
     );
 }
+
+#[test]
+fn json_jsonl_text_and_gzip_files_upload_and_download() {
+    let hubs = Hubs::start();
+    let id = hubs.create("Capture attachments");
+
+    let json_bytes = br#"{"seed":42,"turn":3}"#;
+    let uploaded_json = hubs.upload(&id, "?name=replay.json", json_bytes);
+    assert_eq!(uploaded_json.status, 200, "{}", uploaded_json.text());
+    let json_row = uploaded_json.json();
+    assert_eq!(json_row["name"], "replay.json");
+    assert_eq!(json_row["media_type"], "application/json");
+    assert_eq!(
+        (json_row["width"].as_u64(), json_row["height"].as_u64()),
+        (Some(0), Some(0))
+    );
+
+    let lines_bytes = b"{\"a\":1}\n{\"b\":2}\n";
+    let uploaded_lines = hubs.upload(&id, "?name=journal.jsonl", lines_bytes);
+    assert_eq!(uploaded_lines.status, 200, "{}", uploaded_lines.text());
+    assert_eq!(uploaded_lines.json()["media_type"], "application/x-ndjson");
+
+    let text_bytes = b"root\n  child\n";
+    let uploaded_text = hubs.upload(&id, "?name=tree.txt", text_bytes);
+    assert_eq!(uploaded_text.status, 200, "{}", uploaded_text.text());
+    assert_eq!(uploaded_text.json()["media_type"], "text/plain");
+
+    // A minimal valid gzip stream (header + empty deflate block + crc32 + isize).
+    let gzip_bytes: &[u8] = &[
+        0x1F, 0x8B, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x03, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00,
+    ];
+    let uploaded_gz = hubs.upload(&id, "?name=frames.jsonl.gz", gzip_bytes);
+    assert_eq!(uploaded_gz.status, 200, "{}", uploaded_gz.text());
+    let gz_row = uploaded_gz.json();
+    assert_eq!(gz_row["name"], "frames.jsonl.gz");
+    assert_eq!(gz_row["media_type"], "application/gzip");
+
+    // Malformed JSON and HTML are still refused.
+    assert_eq!(hubs.upload(&id, "?name=bad.json", b"not json").status, 415);
+    assert_eq!(
+        hubs.upload(&id, "?name=x.html", b"<html></html>").status,
+        415
+    );
+
+    // Download JSON and gzip back and verify bytes, content type and nosniff header.
+    let got_json = send(
+        hubs.private(),
+        "GET",
+        &format!("/pj/api/tickets/{id}/attachments/replay.json"),
+        None,
+        b"",
+    );
+    assert_eq!(got_json.status, 200);
+    assert_eq!(got_json.body, json_bytes);
+    assert!(
+        got_json.head.contains("Content-Type: application/json"),
+        "{}",
+        got_json.head
+    );
+    assert!(got_json.head.contains("X-Content-Type-Options: nosniff"));
+
+    let got_gz = send(
+        hubs.private(),
+        "GET",
+        &format!("/pj/api/tickets/{id}/attachments/frames.jsonl.gz"),
+        None,
+        b"",
+    );
+    assert_eq!(got_gz.status, 200);
+    assert_eq!(got_gz.body, gzip_bytes);
+    assert!(
+        got_gz.head.contains("Content-Type: application/gzip"),
+        "{}",
+        got_gz.head
+    );
+
+    // The private dashboard lists non-image files without broken <img> tags.
+    let page = send(hubs.private(), "GET", &format!("/{id}"), None, b"").text();
+    assert!(page.contains("replay.json"), "{page}");
+    assert!(page.contains("frames.jsonl.gz"), "{page}");
+    assert!(!page.contains("width=\"0\""), "{page}");
+}

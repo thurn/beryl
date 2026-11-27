@@ -45,25 +45,58 @@ pub fn embedded(attachments: &[Attachment], name: &str, alt: &str, private: bool
     if !private {
         return format!("<span class=\"c-muted\">{PRIVATE_ONLY}</span>");
     }
-    linked_image(attachment, alt)
+    if attachment.is_image() {
+        linked_image(attachment, alt)
+    } else {
+        let url = esc(&file_url(attachment));
+        format!(
+            "<a href=\"{url}\" target=\"_blank\" rel=\"noopener\">{}</a>",
+            esc(alt)
+        )
+    }
 }
 
-/// The body of the "Attachments" section: one card per attachment with its thumbnail (or why
-/// there is none), name, size and dimensions, and caption.
+/// The body of the "Attachments" section: one card per attachment with its thumbnail (or a
+/// download link for non-image files, or why there is none), name, size and dimensions or type,
+/// and caption.
 pub fn grid(attachments: &[Attachment], private: bool) -> String {
     let cards: String = attachments
         .iter()
         .map(|attachment| {
-            let picture = match (attachment.removed_at, private) {
-                (Some(at), _) => format!(
+            let picture = match (attachment.removed_at, private, attachment.is_image()) {
+                (Some(at), _, _) => format!(
                     "<div class=\"c-attachment-gone\">Removed {}</div>",
                     esc(&at.day())
                 ),
-                (None, false) => format!("<div class=\"c-attachment-gone\">{PRIVATE_ONLY}</div>"),
-                (None, true) => linked_image(
+                (None, false, _) => {
+                    format!("<div class=\"c-attachment-gone\">{PRIVATE_ONLY}</div>")
+                }
+                (None, true, true) => linked_image(
                     attachment,
                     attachment.caption.as_deref().unwrap_or(&attachment.name),
                 ),
+                (None, true, false) => {
+                    let url = esc(&file_url(attachment));
+                    format!(
+                        "<div class=\"c-attachment-gone\"><a href=\"{url}\" target=\"_blank\" \
+                         rel=\"noopener\">{}</a></div>",
+                        esc(&attachment.media_type)
+                    )
+                }
+            };
+            let meta = if attachment.is_image() {
+                format!(
+                    "{} · {}×{}",
+                    esc(&size_text(attachment.bytes)),
+                    attachment.width,
+                    attachment.height
+                )
+            } else {
+                format!(
+                    "{} · {}",
+                    esc(&size_text(attachment.bytes)),
+                    esc(&attachment.media_type)
+                )
             };
             let caption = attachment
                 .caption
@@ -73,11 +106,8 @@ pub fn grid(attachments: &[Attachment], private: bool) -> String {
             format!(
                 "<figure class=\"c-attachment-card\">{picture}<figcaption>\
                  <span class=\"c-mono\">{}</span>\
-                 <span class=\"c-muted\">{} · {}×{}</span>{caption}</figcaption></figure>",
+                 <span class=\"c-muted\">{meta}</span>{caption}</figcaption></figure>",
                 esc(&attachment.name),
-                esc(&size_text(attachment.bytes)),
-                attachment.width,
-                attachment.height
             )
         })
         .collect();

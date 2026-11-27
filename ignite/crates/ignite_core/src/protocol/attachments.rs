@@ -1,11 +1,12 @@
-//! Image attachments on tickets (see "Attachments" in `docs/ignite.md`): the row the hub keeps
-//! for each, the limits a client checks before sending one, and the reading of an image's type
-//! and size from its first bytes.
+//! File attachments on tickets (see "Attachments" in `docs/ignite.md`): the row the hub keeps
+//! for each, the limits a client checks before sending one, and the reading of a file's type
+//! (and an image's size) from its bytes.
 //!
 //! The hub stores each file once under its SHA-256 and serves it only on the private listener,
-//! since a pasted screenshot can show anything on a person's screen. Only PNG, JPEG, GIF and WebP
-//! are accepted, recognized by their bytes and never by a file name. SVG is refused because it
-//! can carry script.
+//! since a pasted screenshot or log can show anything on a person's screen. Images (PNG, JPEG,
+//! GIF and WebP) and gzip archives are recognized by their bytes; JSON, JSON Lines and plain
+//! text files are recognized by their file name extension and validated as UTF-8 (and JSON
+//! where applicable). SVG and HTML are refused because they can carry script.
 
 use serde::{Deserialize, Serialize};
 
@@ -31,7 +32,8 @@ pub struct Attachment {
     pub name: String,
     /// The SHA-256 of the file, in lowercase hexadecimal: its address on the hub.
     pub sha256: String,
-    /// `image/png`, `image/jpeg`, `image/gif` or `image/webp`.
+    /// `image/png`, `image/jpeg`, `image/gif`, `image/webp`, `application/json`,
+    /// `application/x-ndjson`, `application/gzip` or `text/plain`.
     pub media_type: String,
     pub bytes: u64,
     pub width: u32,
@@ -46,18 +48,31 @@ pub struct Attachment {
 }
 
 impl Attachment {
-    /// One line describing it: `screenshot.png  image/png 2880×1800 4.1 MiB`, or the name and
-    /// when the file was removed.
+    /// Whether this attachment is an image that can be rendered inline.
+    #[must_use]
+    pub fn is_image(&self) -> bool {
+        self.media_type.starts_with("image/")
+    }
+
+    /// One line describing it: `screenshot.png  image/png 2880×1800 4.1 MiB` for an image,
+    /// `replay.json  application/json 14.2 KiB` for other files, or the name and when the file
+    /// was removed.
     #[must_use]
     pub fn summary(&self) -> String {
         match self.removed_at {
             Some(at) => format!("{}  removed {}", self.name, at.day()),
-            None => format!(
+            None if self.is_image() => format!(
                 "{}  {} {}×{} {}",
                 self.name,
                 self.media_type,
                 self.width,
                 self.height,
+                size_text(self.bytes)
+            ),
+            None => format!(
+                "{}  {} {}",
+                self.name,
+                self.media_type,
                 size_text(self.bytes)
             ),
         }
@@ -96,6 +111,65 @@ pub fn sniff(bytes: &[u8]) -> Option<ImageInfo> {
         .or_else(|| gif(bytes))
         .or_else(|| jpeg(bytes))
         .or_else(|| webp(bytes))
+}
+
+/// The type (and, for images, dimensions) of an attachment named `name` with contents `bytes`,
+/// or `None` when it is not an accepted image, gzip, JSON, JSON Lines or plain text file.
+#[must_use]
+pub fn sniff_attachment(name: &str, bytes: &[u8]) -> Option<ImageInfo> {
+    if let Some(image) = sniff(bytes) {
+        return Some(image);
+    }
+    if let Some(archive) = gzip(bytes) {
+        return Some(archive);
+    }
+    text_attachment(name, bytes)
+}
+
+/// A gzip header: magic bytes `1f 8b`, deflate compression (`08`), and at least the 10-byte
+/// fixed header.
+fn gzip(bytes: &[u8]) -> Option<ImageInfo> {
+    if bytes.len() >= 10 && bytes.starts_with(&[0x1F, 0x8B, 0x08]) {
+        return Some(info("application/gzip", "gz", (0, 0)));
+    }
+    None
+}
+
+/// Text-based attachments accepted by extension and validated by content.
+fn text_attachment(name: &str, bytes: &[u8]) -> Option<ImageInfo> {
+    let base = name.rsplit(['/', '\\']).next().unwrap_or_default();
+    let (_, ext) = base.rsplit_once('.')?;
+    let ext_lower = ext.to_ascii_lowercase();
+    if bytes.contains(&0) {
+        return None;
+    }
+    let text = std::str::from_utf8(bytes).ok()?;
+    match ext_lower.as_str() {
+        "json" => {
+            serde_json::from_str::<serde_json::Value>(text).ok()?;
+            Some(info("application/json", "json", (0, 0)))
+        }
+        "jsonl" => {
+            for line in text.lines() {
+                if !line.trim().is_empty() {
+                    serde_json::from_str::<serde_json::Value>(line).ok()?;
+                }
+            }
+            Some(info("application/x-ndjson", "jsonl", (0, 0)))
+        }
+        "ndjson" => {
+            for line in text.lines() {
+                if !line.trim().is_empty() {
+                    serde_json::from_str::<serde_json::Value>(line).ok()?;
+                }
+            }
+            Some(info("application/x-ndjson", "ndjson", (0, 0)))
+        }
+        "txt" => Some(info("text/plain", "txt", (0, 0))),
+        "md" => Some(info("text/plain", "md", (0, 0))),
+        "log" => Some(info("text/plain", "log", (0, 0))),
+        _ => None,
+    }
 }
 
 fn info(media_type: &'static str, extension: &'static str, size: (u32, u32)) -> ImageInfo {
@@ -340,5 +414,43 @@ mod tests {
             embed("a.png", Some("the [bad] board")),
             "![the  bad  board](attachment:a.png)"
         );
+    }
+
+    #[test]
+    fn data_and_archive_attachments_are_recognized_and_unsafe_types_refused() {
+        assert_eq!(
+            sniff_attachment("replay.json", br#"{"seed":42}"#),
+            Some(info("application/json", "json", (0, 0)))
+        );
+        assert_eq!(sniff_attachment("bad.json", b"not json"), None);
+        assert_eq!(
+            sniff_attachment("journal.jsonl", b"{\"a\":1}\n{\"b\":2}\n"),
+            Some(info("application/x-ndjson", "jsonl", (0, 0)))
+        );
+        assert_eq!(
+            sniff_attachment("journal.jsonl", b"{\"a\":1}\nnot json\n"),
+            None
+        );
+        assert_eq!(
+            sniff_attachment("tree.txt", b"root\n  child\n"),
+            Some(info("text/plain", "txt", (0, 0)))
+        );
+        assert_eq!(
+            sniff_attachment("report.md", b"# bug\n"),
+            Some(info("text/plain", "md", (0, 0)))
+        );
+        assert_eq!(sniff_attachment("binary.txt", b"a\0b"), None);
+        let gz = [0x1F, 0x8B, 0x08, 0x00, 0, 0, 0, 0, 0, 0];
+        assert_eq!(
+            sniff_attachment("frames.jsonl.gz", &gz),
+            Some(info("application/gzip", "gz", (0, 0)))
+        );
+        assert_eq!(clean_name("frames.jsonl.gz", "gz"), "frames.jsonl.gz");
+        assert_eq!(
+            sniff_attachment("x.svg", b"<svg xmlns='http://www.w3.org/2000/svg'/>"),
+            None
+        );
+        assert_eq!(sniff_attachment("x.html", b"<html></html>"), None);
+        assert_eq!(sniff_attachment("", b"plain text"), None);
     }
 }

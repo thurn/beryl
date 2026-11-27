@@ -16,7 +16,9 @@
 use rusqlite::Connection;
 use serde_json::json;
 
-use ignite_core::protocol::attachments::{MAX_ATTACHMENT_BYTES, clean_name, size_text, sniff};
+use ignite_core::protocol::attachments::{
+    MAX_ATTACHMENT_BYTES, clean_name, size_text, sniff_attachment,
+};
 use ignite_core::time::Timestamp;
 use ignite_store::hub::{attachments, tickets};
 
@@ -78,14 +80,18 @@ fn upload(
         return failure(
             413,
             &format!(
-                "the image is {}, over the limit of {}",
+                "the attachment is {}, over the limit of {}",
                 size_text(body.len() as u64),
                 size_text(MAX_ATTACHMENT_BYTES)
             ),
         );
     }
-    let Some(image) = sniff(body) else {
-        return failure(415, "only PNG, JPEG, GIF and WebP images can be attached");
+    let requested_name = request.param("name").unwrap_or("");
+    let Some(image) = sniff_attachment(requested_name, body) else {
+        return failure(
+            415,
+            "only PNG, JPEG, GIF, WebP, JSON, JSON Lines, plain text and gzip files can be attached",
+        );
     };
     let sha256 = sha256_hex(body);
     match fits(conn, files, &sha256, body.len() as u64) {
@@ -94,9 +100,16 @@ fn upload(
         Err(error) => return failure(500, &error.to_string()),
     }
     if let Err(error) = files.write(body) {
-        return failure(500, &format!("storing the image: {error}"));
+        return failure(500, &format!("storing the attachment: {error}"));
     }
-    let name = clean_name(request.param("name").unwrap_or("image"), image.extension);
+    let name = clean_name(
+        if requested_name.is_empty() {
+            "image"
+        } else {
+            requested_name
+        },
+        image.extension,
+    );
     let caption: Option<String> = request
         .param("caption")
         .map(|text| text.trim().chars().take(MAX_CAPTION_CHARS).collect())
@@ -214,13 +227,17 @@ fn bytes(
     response
 }
 
-/// A stored media type as one of the four the hub accepts; anything else is served as bytes.
+/// A stored media type as one of the types the hub accepts; anything else is served as bytes.
 fn static_media_type(media_type: &str) -> &'static str {
     match media_type {
         "image/png" => "image/png",
         "image/jpeg" => "image/jpeg",
         "image/gif" => "image/gif",
         "image/webp" => "image/webp",
+        "application/json" => "application/json",
+        "application/x-ndjson" => "application/x-ndjson",
+        "application/gzip" => "application/gzip",
+        "text/plain" => "text/plain; charset=utf-8",
         _ => "application/octet-stream",
     }
 }
