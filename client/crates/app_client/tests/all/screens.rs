@@ -113,9 +113,10 @@ fn pressing_start_with_the_second_agent_chosen_starts_against_it() {
 }
 
 #[test]
-fn choosing_the_shared_deck_sends_its_key_and_hides_the_fair_deal() {
+fn choosing_the_shared_deck_sends_its_key_and_keeps_the_fair_deal() {
     let dandan = StartRequest {
         deck: "forgetful-fish".to_owned(),
+        fair: true,
         ..request("random")
     };
     let mut page = page(vec![
@@ -143,14 +144,10 @@ fn choosing_the_shared_deck_sends_its_key_and_hides_the_fair_deal() {
         "{}",
         page.tree()
     );
-    assert!(
-        page.try_find("toggle \"Fair deal\"").is_err(),
-        "{}",
-        page.tree()
-    );
+    page.find("toggle \"Fair deal\"");
     page.press(START);
     page.still();
-    // A request that still asked for a fair deal or the other deck would not match the recording.
+    // A request without the shared deck key or fair deal would not match the recording.
     assert_eq!(replies(&page), 1, "the start was sent and answered");
 }
 

@@ -115,7 +115,7 @@ pub(super) fn start(state: &State, input: &Inputs) -> Element {
         .child(decks)
         .child(agents)
         .child(seed_row)
-        .children(deck_shown(state).then(|| fair_box(state.fair)))
+        .child(fair_box(state.fair))
         .child(buttons)
         .children(game_manual::screens::table_entries::entries(
             input.entries,
@@ -225,8 +225,7 @@ fn start_column(state: &State, input: &Inputs, layout: ScreenColumn) -> Element 
         field.style.grow = 1.0;
         field.style.align_self = Some(Align::Stretch);
     }
-    let fair =
-        deck_shown(state).then(|| fair_box(state.fair).min_height(metrics.field).shrink(0.0));
+    let fair = fair_box(state.fair).min_height(metrics.field).shrink(0.0);
     let (start, back) = start_buttons(going_on, state, startable, input.session);
     let export = button("Export Bug Reports").on_press(bug_report::Message::Export);
     let content = column()
@@ -238,7 +237,7 @@ fn start_column(state: &State, input: &Inputs, layout: ScreenColumn) -> Element 
         // The rest stands at the foot of the column, as the web's `margin-top: auto` puts it.
         .child(row().name("space").grow(1.0))
         .child(seed_row)
-        .children(fair)
+        .child(fair)
         .child(layout.action(start))
         .children(back.map(|back| layout.action(back)))
         .children(game_manual::screens::table_entries::entries(
@@ -443,11 +442,6 @@ fn agent_row(
 /// The "Fair deal" box (`.start-fair`): a checkbox and its label, which a press turns on or off.
 fn fair_box(on: bool) -> Element {
     checkbox("Fair deal", on).on_press(Message::FairDeal)
-}
-
-/// Whether the chosen deck has a library for each player, so that the screen offers a fair deal.
-fn deck_shown(state: &State) -> bool {
-    !state.deck().shared
 }
 
 /// The legend and rows that offer `DECKS`, as radio rows like the opponents'. A phone passes its

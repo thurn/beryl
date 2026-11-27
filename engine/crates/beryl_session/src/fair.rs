@@ -1,9 +1,9 @@
 //! Fair deals: a game started from the deal, out of many candidates, that both players are
 //! judged equally likely to win.
 //!
-//! A new game's seed fixes everything about its deal: both libraries' order, so both opening
-//! hands and every later draw, the coin flip for who chooses to play first, and the reshuffle
-//! after a mulligan. [`fair_seed`] deals [`Fairness::deals`] candidate seeds and plays each one
+//! A new game's seed fixes everything about its deal: the library order (each player's library
+//! or the shared library), so both opening hands and every later draw, the coin flip for who
+//! chooses to play first, and the reshuffle after a mulligan. [`fair_seed`] deals [`Fairness::deals`] candidate seeds and plays each one
 //! out [`Fairness::playouts`] times with the rollout policy in both seats, on the full state:
 //! both players see every card. It keeps the candidate whose first seat won closest to half of
 //! its playouts. Mulligans and the choice to play or draw happen inside the playouts like any

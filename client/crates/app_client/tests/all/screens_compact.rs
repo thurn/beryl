@@ -149,10 +149,22 @@ fn the_start_screen_fits_each_compact_and_starts_with_the_chosen_agent_and_seed(
     for size in PHONES {
         let mut page = start(size, "greedy", Some(1234));
         assert_eq!(layout_faults(&mut page), Vec::<String>::new(), "{size:?}");
-        for locator in ["toggle \"GREEDY\"", "field \"seed\"", "button \"Start\""] {
+        for locator in [
+            "toggle \"GREEDY\"",
+            "field \"seed\"",
+            "toggle \"Fair deal\"",
+            "button \"Start\"",
+        ] {
             let rect = page.find(locator).rect();
             assert!(inside(rect, size), "{locator} {rect:?} in {size:?}");
         }
+        page.press("toggle \"Dandân\"");
+        page.still();
+        assert_eq!(layout_faults(&mut page), Vec::<String>::new(), "{size:?}");
+        let fair = page.find("toggle \"Fair deal\"").rect();
+        assert!(inside(fair, size), "fair {fair:?} in {size:?}");
+        page.press("toggle \"WU Control\"");
+        page.still();
         page.press("toggle \"GREEDY\"");
         page.still();
         assert!(

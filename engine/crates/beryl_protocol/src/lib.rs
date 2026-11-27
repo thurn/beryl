@@ -187,8 +187,7 @@ pub struct DeckChoice {
     pub title: &'static str,
     /// The subtitle shown under "New Game" when this deck is chosen.
     pub subtitle: &'static str,
-    /// Whether both players draw from one shared library, as in the shared-deck format. A
-    /// fair deal, which compares two players' opening hands, has no meaning there.
+    /// Whether both players draw from one shared library, as in the shared-deck format.
     pub shared: bool,
 }
 

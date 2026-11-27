@@ -168,7 +168,7 @@ impl Feature for StartScreen {
                     }
                     context.command(Command::Concede(*session));
                 }
-                let fair = state.fair();
+                let fair = state.fair;
                 context.command(Command::Start(StartRequest {
                     agent: agent.name.clone(),
                     seed,
@@ -220,11 +220,6 @@ impl State {
     /// The chosen deck.
     fn deck(&self) -> beryl_protocol::DeckChoice {
         DECKS[self.deck.min(DECKS.len() - 1)]
-    }
-
-    /// Whether the game is dealt fairly: the box is ticked and the deck has two libraries.
-    fn fair(&self) -> bool {
-        self.fair && !self.deck().shared
     }
 
     /// Whether a fair deal was asked for and its game has sent no view yet.

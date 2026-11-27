@@ -18,6 +18,10 @@ fn start(seed: u64) -> StartGame {
     }
 }
 
+fn shared_start(seed: u64) -> StartGame {
+    beryl_session::start_game("forgetful-fish", "greedy", seed).unwrap()
+}
+
 const SMALL: Fairness = Fairness {
     deals: 6,
     playouts: 8,
@@ -27,6 +31,22 @@ const SMALL: Fairness = Fairness {
 fn the_same_seed_picks_the_same_deal() {
     let a = fair_seed(&CARDS, &start(7), SMALL).unwrap();
     assert_eq!(a, fair_seed(&CARDS, &start(7), SMALL).unwrap());
+}
+
+#[test]
+fn a_shared_deck_start_picks_the_same_candidate_for_a_seed() {
+    let start = shared_start(7);
+    let mut stream = SplitMix64::new(start.seed);
+    let seeds: Vec<u64> = (0..SMALL.deals).map(|_| stream.next_u64()).collect();
+    let picked = fair_seed(&CARDS, &start, SMALL).unwrap();
+    assert!(seeds.contains(&picked));
+    assert_eq!(picked, fair_seed(&CARDS, &shared_start(7), SMALL).unwrap());
+    // Confirm the judge actually distinguishes deals rather than tying every candidate on stalls.
+    let varied = (0..6u64).any(|seed| {
+        let first = SplitMix64::new(seed).next_u64();
+        fair_seed(&CARDS, &shared_start(seed), SMALL).unwrap() != first
+    });
+    assert!(varied, "expected shared-deck playouts to distinguish deals");
 }
 
 /// The candidates are the first `deals` numbers of the starting seed's random stream, so the
