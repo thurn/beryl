@@ -129,7 +129,7 @@ fn every_built_screen_shows_in_its_recording() {
 /// or without its numeric id and box, which change with any change to the recording or the
 /// layout: `card "Island" battlefield.yours.lands interactive tapped` matches the line
 /// `card "Island" #8 battlefield.yours.lands 140,573 121x133 interactive tapped`.
-pub(crate) fn assert_shows(name: &str, entry: &serde_json::Value) {
+fn assert_shows(name: &str, entry: &serde_json::Value) {
     use std::str::FromStr;
 
     use app_client::driver::{Action, Moment};
