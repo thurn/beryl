@@ -8,8 +8,11 @@
 //!   as in the web's `useBannerUp`.
 //! - The banner is a float (`floats::STEP_BANNER`), laid out ahead (`Prepare`), so that
 //!   the frame that shows or hides it lays nothing out and allocates nothing.
+//! - The gold ring under the opponent's orb while the AI decides (`floats::THINKING`) lies where
+//!   the banner does, so it hides while the banner is up, during the opening, and at a manual
+//!   table. It is also laid out ahead (`Prepare`) and pulses via `FloatLook` without allocating.
 
-use beryl_protocol::protocol::{Combat, Kind, PlayerView, Status, Step};
+use beryl_protocol::protocol::{Combat, Kind, PlayerView, Side, Status, Step};
 use glam::Vec2;
 
 use game_table::table::HudAnchor;
@@ -17,6 +20,7 @@ use kit_base::{data::hud::Hud, tokens::size};
 use kit_scene::{Context, Feature, StateUpdate};
 use kit_ui::element::{Element, FloatId, floats};
 use std::convert::Infallible;
+use std::f32::consts::TAU;
 
 mod view;
 use kit_ui::layout::{FloatLook, Layer};
@@ -33,13 +37,20 @@ const DETAILS: [&str; 5] = [
     "Combat damage",
 ];
 
-/// What the banner shows now.
+/// The key the thinking ring is laid out under.
+const RING: u64 = 0;
+
+/// What the banner and the thinking ring show now.
 #[derive(Debug, Default)]
 pub struct Banner {
     /// The detail the view at rest calls for, by index in `DETAILS`, and since when.
     wanted: Option<(usize, u64)>,
     /// The detail the banner float shows, if any.
     shown: Option<usize>,
+    /// Whether the thinking ring float is currently shown.
+    thinking: bool,
+    /// When the thinking ring began showing, on the frame clock.
+    thinking_since: Option<u64>,
 }
 
 impl Feature for Banner {
@@ -71,11 +82,11 @@ impl Feature for Banner {
 
 impl super::FloatFeature for Banner {
     fn floats() -> impl Iterator<Item = FloatId> {
-        std::iter::once(floats::STEP_BANNER)
+        [floats::STEP_BANNER, floats::THINKING].into_iter()
     }
 }
 
-/// Lays out the banner before its view becomes visible.
+/// Lays out the banner and thinking ring before their view becomes visible.
 pub struct Prepare<'a> {
     pub layer: &'a mut Layer,
     pub view: &'a PlayerView,
@@ -90,16 +101,23 @@ impl StateUpdate<Banner> for Prepare<'_> {
                 Banner::view(state, detail)
             });
         }
+        if matches!(self.view.status, Status::Thinking) {
+            self.layer
+                .prepare(floats::THINKING, RING, view::thinking_ring);
+        }
         (false, ())
     }
 }
 
-/// Samples the banner for the view shown at rest.
+/// Samples the banner and thinking ring for the view shown at rest.
 pub struct Draw<'a> {
     pub layer: &'a mut Layer,
     pub view: Option<&'a PlayerView>,
+    pub latest: Option<&'a PlayerView>,
     pub now: u64,
     pub visible: bool,
+    pub allow_thinking: bool,
+    pub orb_scale: f32,
     pub tuning: Hud,
 }
 
@@ -107,7 +125,16 @@ impl StateUpdate<Banner> for Draw<'_> {
     type Output = bool;
 
     fn apply(self, state: &mut Banner) -> (bool, bool) {
-        state.write(self.layer, self.view, self.now, self.visible, self.tuning);
+        state.write(
+            self.layer,
+            self.view,
+            self.latest,
+            self.now,
+            self.visible,
+            self.allow_thinking,
+            self.orb_scale,
+            self.tuning,
+        );
         (false, state.shown.is_some())
     }
 }
@@ -140,6 +167,12 @@ pub fn words(detail: usize) -> (&'static str, &'static str) {
 }
 
 impl Banner {
+    /// Whether the thinking ring is currently shown and pulsing.
+    #[must_use]
+    pub fn thinking(&self) -> bool {
+        self.thinking
+    }
+
     /// Whether the banner is up at `now`.
     #[must_use]
     fn up(&self, now: u64, duration: u64) -> bool {
@@ -147,14 +180,21 @@ impl Banner {
             .is_some_and(|(_, since)| now.saturating_sub(since) < duration)
     }
 
-    /// Shows the banner for the view at rest at the given time while the table is visible.
-    /// Lays nothing out and allocates nothing.
+    /// Shows the banner and thinking ring for the view at rest at the given time while the table
+    /// is visible. Lays nothing out and allocates nothing.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "sampling inputs for banner and thinking floats"
+    )]
     fn write(
         &mut self,
         layer: &mut Layer,
         view: Option<&PlayerView>,
+        latest: Option<&PlayerView>,
         now: u64,
         visible: bool,
+        allow_thinking: bool,
+        orb_scale: f32,
         tuning: Hud,
     ) {
         let wants = view.and_then(combat_banner);
@@ -181,6 +221,39 @@ impl Banner {
                     Vec2::Y * (size::ORB_HEIGHT / 2.0 + size::ORB_BEZEL + tuning.banner_gap),
                 ),
                 FloatLook::default(),
+            );
+        }
+        let thinking = visible
+            && allow_thinking
+            && !up
+            && view.is_some_and(|view| matches!(view.status, Status::Thinking))
+            && latest.is_some_and(|view| matches!(view.status, Status::Thinking));
+        if thinking != self.thinking {
+            layer.show_prepared(floats::THINKING, thinking.then_some(RING));
+            self.thinking = thinking;
+            self.thinking_since = thinking.then_some(now);
+        }
+        if thinking {
+            let style = tuning.thinking;
+            let elapsed = now.saturating_sub(self.thinking_since.unwrap_or(now)) as f32;
+            let wave = 0.5 + 0.5 * (elapsed / style.pulse_ns() * TAU).cos();
+            let opacity = style.min_opacity + (1.0 - style.min_opacity) * wave;
+            let scale = orb_scale * (style.min_scale + (1.0 - style.min_scale) * wave);
+            let offset_y =
+                (size::ORB_HEIGHT / 2.0 + size::ORB_BEZEL + style.gap + size::THINKING / 2.0)
+                    * orb_scale;
+            layer.anchor_float(
+                floats::THINKING,
+                HudAnchor::Life(Side::Opponent).at(
+                    Vec2::ZERO,
+                    Vec2::new(0.5, 0.5),
+                    Vec2::Y * offset_y,
+                ),
+                FloatLook {
+                    opacity,
+                    scale,
+                    ..FloatLook::default()
+                },
             );
         }
     }

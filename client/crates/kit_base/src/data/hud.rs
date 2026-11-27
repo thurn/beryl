@@ -10,9 +10,30 @@ pub struct Hud {
     pub steps: StepTrack,
     pub incoming: IncomingStyle,
     pub opening: OpeningStyle,
+    pub thinking: ThinkingStyle,
     pub banner_ms: u32,
     #[serde(deserialize_with = "nonnegative")]
     pub banner_gap: f32,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ThinkingStyle {
+    #[serde(deserialize_with = "nonnegative")]
+    pub gap: f32,
+    pub pulse_ms: u32,
+    #[serde(deserialize_with = "fraction")]
+    pub min_opacity: f32,
+    #[serde(deserialize_with = "fraction")]
+    pub min_scale: f32,
+}
+
+impl ThinkingStyle {
+    /// One full pulse cycle of the thinking indicator, in nanoseconds.
+    #[must_use]
+    pub const fn pulse_ns(self) -> f32 {
+        (self.pulse_ms as u64 * 1_000_000) as f32
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]

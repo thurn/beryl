@@ -33,3 +33,15 @@ pub(super) fn banner(detail: usize) -> Element {
     element.role = Role::Region;
     element
 }
+
+/// The gold ring under the opponent's orb while the AI opponent decides.
+pub(super) fn thinking_ring() -> Element {
+    Element::new(Role::Region)
+        .name("Opponent thinking")
+        .width(size::THINKING)
+        .height(size::THINKING)
+        .background([0; 4])
+        .border((color::THINKING, size::THINKING_TRACK))
+        .radius(size::THINKING / 2.0)
+        .passes(true)
+}

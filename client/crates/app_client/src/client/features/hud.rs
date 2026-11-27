@@ -74,6 +74,10 @@ impl Features {
         self.slot::<RowCounts>().update(&message);
     }
 
+    pub fn banner_state(&self) -> &Banner {
+        self.state_of::<Banner>()
+    }
+
     pub fn banner<U: StateUpdate<Banner>>(&mut self, update: U) -> U::Output {
         self.slot::<Banner>().apply(update)
     }

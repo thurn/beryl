@@ -677,9 +677,8 @@ impl PromptSlots<'_> {
 const OPPONENTS_TURN: &str = "Opponent's Turn";
 
 /// What stands where the prompt's buttons do while no prompt is open and the opponent acts: a
-/// disabled button saying "Opponent's Turn", as the web's dock shows with no spinner under the
-/// opponent's orb. The opponent acts while they decide, or while their turn plays on without
-/// the viewer, as the web's `opponentActing` says. `None` at any other time.
+/// disabled button saying "Opponent's Turn". The opponent acts while they decide, or while their
+/// turn plays on without the viewer, as the web's `opponentActing` says. `None` at any other time.
 #[must_use]
 pub(super) fn waiting(input: &HudIn) -> Option<Element> {
     let view = input.view?;

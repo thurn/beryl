@@ -525,3 +525,73 @@ fn full_controls_sign_stands_left_of_the_turn_button_and_moves_over_for_pass_on(
         "{sign:?} by {pass_on:?}"
     );
 }
+
+#[test]
+fn ai_thinking_indicator_shows_while_thinking_and_hides_otherwise() {
+    let mut client = client();
+
+    // While the AI opponent is thinking, the pulsing gold ring shows under the opponent's orb.
+    let mut thinking = ViewBuilder::sample().update();
+    thinking.view.status = Status::Thinking;
+    thinking.view.turn.active = Side::Opponent;
+    client.handle(Input::Update(Box::new(thinking.clone())));
+
+    let frame = client.frame(1_000_000);
+    let ring = find(frame, Role::Region, "Opponent thinking");
+    let orb = find(frame, Role::Region, "opponent's orb");
+    assert!(
+        centre(frame, ring).y > centre(frame, orb).y,
+        "thinking ring should sit below opponent's orb"
+    );
+    let start_opacity = frame.resolved[ring].opacity;
+    assert!(
+        matches!(client.display_wake(), kit_frame::frame::Wake::Now),
+        "live display should keep pulsing while thinking"
+    );
+    assert!(
+        !matches!(client.wake(), kit_frame::frame::Wake::Now),
+        "thinking pulse must not delay play"
+    );
+    let mid_frame = client.frame(1_000_000 + 700_000_000);
+    let mid_ring = find(mid_frame, Role::Region, "Opponent thinking");
+    assert!(
+        mid_frame.resolved[mid_ring].opacity < start_opacity,
+        "thinking ring should pulse in opacity over time"
+    );
+
+    // When the AI acts (Status::Playing), the indicator disappears immediately.
+    client.handle(waiting());
+    let frame = client.frame(1_000_000 + 800_000_000);
+    assert!(!has(frame, Role::Region, "Opponent thinking"));
+
+    // While the player is deciding, the indicator does not show.
+    client.handle(deciding(prompt("Pay {1}{U}")));
+    let frame = client.frame(1_000_000 + 900_000_000);
+    assert!(!has(frame, Role::Region, "Opponent thinking"));
+
+    // At a manual table (Status::Free), the indicator does not show.
+    let mut free = ViewBuilder::sample().update();
+    free.view.status = Status::Free;
+    client.handle(Input::Update(Box::new(free)));
+    let frame = client.frame(1_000_000 + 1_000_000_000);
+    assert!(!has(frame, Role::Region, "Opponent thinking"));
+
+    // On a compact layout, the indicator also shows while thinking and is scaled smaller.
+    client.handle(Input::Device(kit_ui::input::Input::Surface {
+        size: kit_ui::input::Size {
+            width: 393.0,
+            height: 759.0,
+        },
+        scale: 2.0,
+        safe_area: kit_ui::input::Insets::default(),
+    }));
+    client.handle(Input::Update(Box::new(thinking)));
+    let compact_frame = client.frame(1_000_000 + 1_100_000_000);
+    let compact_ring = find(compact_frame, Role::Region, "Opponent thinking");
+    let compact_edges = edges(compact_frame, compact_ring);
+    let compact_width = compact_edges.2 - compact_edges.0;
+    assert!(
+        compact_width < 25.0,
+        "compact thinking ring should scale with orb_scale, got width {compact_width}"
+    );
+}

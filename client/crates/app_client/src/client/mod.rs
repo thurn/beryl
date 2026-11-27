@@ -589,7 +589,10 @@ impl Client {
     /// When to paint a live frame, including decorative motion that never delays play.
     #[must_use]
     pub fn display_wake(&self) -> Wake {
-        if self.features.opening.coin_moving || self.frame.ambient_motion {
+        if self.features.opening.coin_moving
+            || self.features.banner_state().thinking()
+            || self.frame.ambient_motion
+        {
             Wake::Now
         } else {
             self.wake()
@@ -715,11 +718,15 @@ fn update_hud_features(
         layout: table.layout(),
         visible,
     });
+    let manual = features.screen == Screen::Table;
     let banner_shown = features.banner(banner::Draw {
         layer,
         view: show.shown().map(|update| &update.view),
+        latest: show.latest().map(|update| &update.view),
         now: table_now,
         visible,
+        allow_thinking: !opening && !manual,
+        orb_scale: table.layout().play.life.orb_scale,
         tuning: table.data().hud,
     });
     // Hide row overflow counts while the combat step banner is up so they do not draw over its

@@ -193,6 +193,15 @@
       }
     },
     {
+      "kind": "exception",
+      "number": 9,
+      "name": "AI thinking indicator",
+      "rule": "While the AI opponent is deciding, a pulsing gold ring shows beneath the opponent's life orb on desktop and phone, and hides as soon as the opponent acts. It does not show during a combat step banner, during the opening, while the player is deciding, or at a manual table. Approved by the user on 2026-11-26.",
+      "arena": {
+        "does": "Arena has no AI opponent and shows only a disabled \"Opponent's Turn\" button."
+      }
+    },
+    {
       "kind": "settled",
       "name": "A batch exile",
       "rule": "Cards exiled together leave one at a time, about 0.3 s apart.",
@@ -808,7 +817,7 @@
     {
       "kind": "settled",
       "name": "The opponent's turn",
-      "rule": "Arena's \"Opponent's Turn\" label shows in the action button's place, and no spinner.",
+      "rule": "Arena's \"Opponent's Turn\" label shows in the action button's place (exception 9 adds the thinking indicator beneath the opponent's orb while the AI is deciding).",
       "reports": [
         "by-58n",
         "by-7ih",

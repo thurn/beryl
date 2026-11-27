@@ -42,6 +42,11 @@
       "recording": "choice-jace",
       "at": "prompt:2",
       "shows": "region \"Top\""
+    },
+    "AI thinking indicator": {
+      "recording": "verbs-cast-theirs",
+      "at": "view:3",
+      "shows": "region \"Opponent thinking\""
     }
   }
 }

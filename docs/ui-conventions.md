@@ -57,6 +57,12 @@ removes an entry; nothing else does.
    your library. (ordering will be done in next step)" with Submit, then orders
    them in an "Order Cards" screen between Bottom and Top (AhTcvQ-lQQQ 4:52,
    IT6nwh6HtYk 10:35).
+9. **AI thinking indicator.** While the AI opponent is deciding, a pulsing gold
+   ring shows beneath the opponent's life orb on desktop and phone, and hides as
+   soon as the opponent acts. It does not show during a combat step banner,
+   during the opening, while the player is deciding, or at a manual table.
+   Approved by the user on 2026-11-26. Arena has no AI opponent and shows only a
+   disabled "Opponent's Turn" button.
 
 ## Settled as Arena
 
@@ -256,7 +262,8 @@ restore the old behavior.
   (SN9QFe2kM4Y 14:50.5, SN9QFe2kM4Y 14:52.7, SN9QFe2kM4Y 13:08.5, iRr-GeSF0lI
   21:16.5).
 - **The opponent's turn.** Arena's "Opponent's Turn" label shows in the action
-  button's place, and no spinner (by-58n, by-7ih, by-oyx).
+  button's place (exception 9 adds the thinking indicator beneath the opponent's
+  orb while the AI is deciding) (by-58n, by-7ih, by-oyx).
 - **Tokens.** They appear at their slot; they do not fly out of their source
   (by-kgc, by-81h). Arena's appears whole with a short glow, about 0.1 s after
   its ability leaves the stack; a batch appears as one group (UrGalw_f35w
