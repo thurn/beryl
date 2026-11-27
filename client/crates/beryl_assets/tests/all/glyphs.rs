@@ -151,7 +151,7 @@ fn familiar_text_still_gets_ink_after_eight_atlas_pages() {
         ("Submit 1", type_style::BUTTON),
         ("Submit 2", type_style::BUTTON),
         ("Library", type_style::TITLE),
-        ("24 Cards · top first", type_style::BODY),
+        ("24 Cards", type_style::BODY),
         ("Your graveyard", type_style::TITLE),
         ("1 card", type_style::BODY),
     ] {

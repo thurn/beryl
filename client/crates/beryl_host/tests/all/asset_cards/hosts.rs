@@ -174,7 +174,7 @@ fn opening_the_retina_library_draws_every_glyph_after_atlas_growth() {
     const SCALE: f32 = 2.0;
     const ORIGINAL_ATLAS_PAGES: u16 = 8;
     const TITLE: &str = "text \"Library\"";
-    const COUNT: &str = "text \"24 Cards · top first\"";
+    const COUNT: &str = "text \"24 Cards\"";
 
     // This is the known-library story's pile, with the two known cards on top.
     let mut view = ViewBuilder::new();

@@ -222,7 +222,7 @@ fn escape_closes_the_viewer() {
     let mut page = page(&graveyard(3));
     page.press(PILE);
     page.step(Duration::from_millis(16));
-    page.find("text \"3 cards · top first\"");
+    page.find("text \"3 cards\"");
     page.run("key Escape");
     page.step(Duration::from_millis(1000));
     assert!(page.try_find("list \"cards\"").is_err(), "Escape closed it");

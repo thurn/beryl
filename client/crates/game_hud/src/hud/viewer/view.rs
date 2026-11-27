@@ -122,24 +122,17 @@ pub fn pile_title(side: Option<Side>, zone: ZoneName) -> &'static str {
     }
 }
 
-/// How many cards the viewer lists, as the web's `viewerCount` says it, with " · top first"
-/// after it for a pile of more than one card.
+/// How many cards the viewer lists, as the web's `viewerCount` says it.
 fn count_text(count: usize, viewed: Viewed) -> String {
     let library = matches!(viewed, Viewed::Pile(_, ZoneName::Library));
-    count_words(count, library, matches!(viewed, Viewed::Pile(..)))
+    count_words(count, library)
 }
 
-/// `count` cards, "Card" in a library's viewer and "card" elsewhere, with " · top first" after
-/// it for more than one card listed `top_first`.
-pub fn count_words(count: usize, library: bool, top_first: bool) -> String {
+/// `count` cards, "Card" in a library's viewer and "card" elsewhere.
+pub fn count_words(count: usize, library: bool) -> String {
     let plural = if count == 1 { "" } else { "s" };
     let card = if library { "Card" } else { "card" };
-    let top = if count > 1 && top_first {
-        " · top first"
-    } else {
-        ""
-    };
-    format!("{count} {card}{plural}{top}")
+    format!("{count} {card}{plural}")
 }
 
 /// The scrolling grid of `boxes`, as many columns as the cards fill up to

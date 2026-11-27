@@ -2,7 +2,7 @@
 
 use beryl_protocol::protocol::ZoneName;
 
-use super::viewers::{PileViewer, SEARCH, Sort, sections};
+use super::viewers::{PileViewer, SEARCH, sections};
 use crate::features::table::Message as TableMessage;
 use game_hud::hud::viewer::Message;
 use game_hud::hud::{HudIn, piles::pile_cards};
@@ -47,8 +47,7 @@ pub(crate) fn table_viewer(input: &HudIn, fields: &Fields, state: &PileViewer) -
     } else {
         grid(boxes.pop().map(|(_, boxes)| boxes).unwrap_or_default())
     };
-    let top_first = state.sort == Sort::Pile && !state.grouped;
-    let count = count_words(cards.len(), zone == ZoneName::Library, top_first);
+    let count = count_words(cards.len(), zone == ZoneName::Library);
     let actions = if state.confirming && state.can_shuffle(view) {
         vec![
             primary("Shuffle").on_press(TableMessage::ViewerFinish(true)),
