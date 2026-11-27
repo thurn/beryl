@@ -32,6 +32,12 @@ const UNREACHED: &[(&str, &str)] = &[
          target, which no generated position puts there; the card's hand-written scenarios do",
     ),
     (
+        "Cabal Coffers: ability 0 (Mana)",
+        "its mana ability costs {2} and counts Swamps its controller controls, and no generated \
+         position puts enough Swamps on the battlefield for it to net mana; the card's \
+         hand-written scenario puts three Swamps on the battlefield and casts Liliana's Shade",
+    ),
+    (
         "Cavern of Souls: ability 2 (Mana)",
         "its mana pays only for a creature spell of the type the land chose as it entered, and a \
          generated position puts the land onto the battlefield having chosen none; the card's \
