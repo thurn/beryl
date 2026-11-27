@@ -92,6 +92,13 @@
       "Elite Spellbinder: when ~ enters , look at target opponent's hand . you may [-exile-] {+choose+} a nonland card [-from-] {+in that player's hand . exile+} it . for as long as that card remains exiled , its owner may play it . a spell cast this way costs {2} more to cast ."
     ]
   },
+  "Emergent Growth": {
+    "reason": "wording",
+    "note": "Oracle joins the +5/+5 modification and the must-be-blocked rule change with \"and\"; the renderer writes them as two sentences in the same order for the same target.",
+    "diff": [
+      "Emergent Growth: target creature gets +5/+5 until end of turn [-and-] {+. it+} must be blocked this turn if able ."
+    ]
+  },
   "Gathan Raiders": {
     "reason": "wording",
     "note": "Hellbent is an ability word with no rules meaning. The renderer puts the hand-size condition before the same +2/+2 bonus.",

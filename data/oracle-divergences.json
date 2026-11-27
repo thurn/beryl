@@ -439,5 +439,12 @@
     "scenario": "generated 3: cast Wetland Sambar paying beside Plains",
     "cr": "CR 613.1f (https://yawgatog.com/resources/magic-rules/#R6131f): \"Layer 6: Ability-adding effects, keyword counters, ability-removing effects, and effects that say an object can't have an ability are applied.\"",
     "reason": "Forge's ComputerUtilMana fails to pay {1}{U} using Chromatic Lantern and a Plains, even though Chromatic Lantern grants the Plains '{T}: Add one mana of any color.' (XMage and Beryl both cast Wetland Sambar)."
+  },
+  {
+    "oracle": "forge",
+    "card": "Emergent Growth",
+    "scenario": "Emergent Growth forces a block and its +5/+5 ends with the turn",
+    "cr": "CR 509.1c (https://yawgatog.com/resources/magic-rules/#R5091c): \"The defending player checks each creature they control to see whether it's affected by any requirements (effects that say a creature must block, or that it must block if some condition is met). If the number of requirements that are being obeyed is fewer than the maximum possible number of requirements that could be obeyed without disobeying any restrictions, the declaration of blockers is illegal. If a creature can't block unless a player pays a cost, that player is not required to pay that cost, even if blocking with that creature would increase the number of requirements being obeyed. If a requirement that says a creature blocks if able during a certain turn refers to a turn with multiple combat phases, the creature blocks if able during each declare blockers step in that turn.\"",
+    "reason": "Forge's blocker AI does not block with an able creature when Emergent Growth requires the attacker to be blocked this turn."
   }
 ]

@@ -71,6 +71,11 @@ const UNREACHED: &[(&str, &str)] = &[
          graveyard of Lurrus's controller; the card's hand-written scenarios cast one from there",
     ),
     (
+        "Mogg Flunkies: ability 0 (Static)",
+        "generated scenarios stop before combat, so they never declare attackers or blockers; \
+         the card's hand-written scenarios exercise both",
+    ),
+    (
         "Panglacial Wurm: ability 0 (Static)",
         "the generator does not start the card in a library and play a search; the card's \
          hand-written scenarios cast it during the search",
@@ -85,6 +90,11 @@ const UNREACHED: &[(&str, &str)] = &[
         "Student of Warfare: ability 2 (Static)",
         "its level 7+ symbol needs seven level counters, which no generated scenario puts on \
          it, as for its level 2-6 symbol",
+    ),
+    (
+        "Taunting Elf: ability 0 (Static)",
+        "generated scenarios stop before combat, so they never declare blockers; the card's \
+         hand-written scenario exercises it",
     ),
     (
         "Thundertrap Trainer: ability 0 (Triggered)",
