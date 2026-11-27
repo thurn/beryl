@@ -324,3 +324,42 @@ fn neither_search_thinks_about_the_order_of_cards_for_the_library_bottom() {
         assert_eq!(mcts.last_search(), None);
     }
 }
+
+/// `cede` stops a paired, anchored search once the default answer's lead cannot be overturned
+/// before the challenger check: over late positions of a greedy game, it plays the same moves
+/// as the search without it, never spends more, and spends less at some decision.
+#[test]
+fn cede_plays_the_same_moves_for_less_work() {
+    let t = mirror();
+    let plain = "pimc4/hidden/rollout/tuned/anchor+guard+paired";
+    let ceding = format!("{plain}+cede");
+    let run = |family: &str, s: &State, d: &Decision| {
+        let mut agent = LongSearch::new(&t, settings(family, 200_000, 1), 7);
+        let mut x = Scratch::new();
+        let choice = agent.choose(observe(s, &t, &mut x, d.decider), d, AgentDecision(0));
+        (choice, agent.last_search().map_or(0, |search| search.work))
+    };
+    let mut saved = 0;
+    for (s, d) in positions(&t, &(2..=10).collect::<Vec<_>>()) {
+        let (move_plain, work_plain) = run(plain, &s, &d);
+        let (move_ceding, work_ceding) = run(&ceding, &s, &d);
+        assert_eq!(move_ceding, move_plain);
+        assert!(work_ceding <= work_plain, "{work_ceding} > {work_plain}");
+        saved += work_plain - work_ceding;
+    }
+    assert!(saved > 0, "cede never stopped early");
+}
+
+/// A family with `cede` prints back as given, and `cede` requires `paired` and the absence
+/// of `means`.
+#[test]
+fn cede_names_itself_and_requires_paired() {
+    let name = "pimc2/hidden/rollout/tuned/anchor+paired+cede";
+    assert_eq!(name.parse::<Family>().unwrap().to_string(), name);
+    for bad in [
+        "pimc2/hidden/rollout/tuned/anchor+cede",
+        "pimc2/hidden/rollout/tuned/anchor+means+paired+cede",
+    ] {
+        assert!(bad.parse::<Family>().is_err(), "{bad} parsed");
+    }
+}

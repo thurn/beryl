@@ -203,6 +203,17 @@ pub struct Options {
     /// the work saved scores more worlds for the roots still in the race. The default's root
     /// and the leader are never dropped. Requires `turnbudget72`.
     pub race: bool,
+    /// With [`Options::paired`], an anchored search stops growing its trees once the default
+    /// answer leads on visits by more than the rest of the free rounds ([`FREE_ROUNDS`]) could
+    /// overturn, and skips the last rounds whenever the default leads after the free rounds.
+    /// Only a challenger that leads after the free rounds gets the paired check with the
+    /// reserved work, so from then on the move is the default's. Without it the last rounds
+    /// still run, and a challenger that first leads in them is checked with whatever work the
+    /// trees left unspent. The ordinary stop rarely fires where two candidates' values stay
+    /// close, such as passing against a minor instant-speed play outside the main phase, so
+    /// those decisions spent the whole budget to play the default. Requires `paired` and
+    /// excludes `means`, whose choice is not the candidate visited most.
+    pub cede: bool,
 }
 
 /// A searcher's settings.
@@ -339,7 +350,7 @@ impl FromStr for Family {
                  hidden, hands or omniscient; \
                  rollout, cutN or eval; estimate, tuned or fitted; options anchor, expert, \
                  guard, mid, means, hold, waste, combat, order, sure, paired, first, walker, prior, bonus, \
-                 fitroll, fitroot and race joined by + in that order; expert, guard, sure and \
+                 fitroll, fitroot, race and cede joined by + in that order; expert, guard, sure and \
                  paired require anchor; first requires paired; walker requires combat; fitroll \
                  and fitroot require tuned, one at a time; race requires turnbudget72)"
             )
@@ -373,6 +384,7 @@ impl FromStr for Family {
                         "fitroll" => &mut o.fitroll,
                         "fitroot" => &mut o.fitroot,
                         "race" => &mut o.race,
+                        "cede" => &mut o.cede,
                         _ => return Err(bad()),
                     };
                     if *flag {
@@ -437,7 +449,8 @@ impl FromStr for Family {
 
 /// Checks that [`Options::fitroll`] and [`Options::fitroot`] in the family named `s` are
 /// set on `tuned` knowledge, and not both, and that [`Options::race`] is set only on
-/// `turnbudget72`, with an error that says why.
+/// `turnbudget72`, and [`Options::cede`] only with `paired` and without `means`, with an
+/// error that says why.
 fn requirements(
     s: &str,
     options: Options,
@@ -448,6 +461,13 @@ fn requirements(
         return Err(format!(
             "{s:?}: race drops losing root moves from the budgeted turn search's scoring \
              worlds, so it requires the method turnbudget72"
+        ));
+    }
+    if options.cede && (!options.paired || options.means) {
+        return Err(format!(
+            "{s:?}: cede stops the search once no challenger can still reach the paired \
+             check, so it requires paired, and it reads the candidate visited most, which \
+             means replaces, so it excludes means"
         ));
     }
     if options.fitroll && options.fitroot {
@@ -469,7 +489,7 @@ fn requirements(
 impl Options {
     /// The options as a family's name spells them, joined by `+` in this order:
     /// `anchor+expert+guard+mid+means+hold+waste+combat+order+sure+paired+first+walker+prior`
-    /// `+bonus+fitroll+fitroot+race`; empty for none.
+    /// `+bonus+fitroll+fitroot+race+cede`; empty for none.
     fn to_name(self) -> String {
         [
             (self.anchor, "anchor"),
@@ -490,6 +510,7 @@ impl Options {
             (self.fitroll, "fitroll"),
             (self.fitroot, "fitroot"),
             (self.race, "race"),
+            (self.cede, "cede"),
         ]
         .into_iter()
         .filter_map(|(on, name)| on.then_some(name))
@@ -661,13 +682,19 @@ impl<L: Layout> LongSearch<L> {
         };
         let mut checked = None;
         match anchor {
-            None => self.rounds(trees, &plan, 1..=ROUNDS, true),
+            None => self.rounds(trees, &plan, 1..=ROUNDS, Stop::Settled),
             Some(g) => {
-                self.rounds(trees, &plan, 1..=FREE_ROUNDS, true);
-                let (b, g) = (self.pick(trees), usize::from(g.0));
-                if b == g || !guards(Choice(b as u16)) {
-                    if !settled(trees, &shares, &credit, &start) {
-                        self.rounds(trees, &plan, FREE_ROUNDS + 1..=ROUNDS, true);
+                let g = usize::from(g.0);
+                let cede = self.settings.family.options.cede;
+                let stop = if cede { Stop::Ceded(g) } else { Stop::Settled };
+                self.rounds(trees, &plan, 1..=FREE_ROUNDS, stop);
+                let b = self.pick(trees);
+                if b == g && cede {
+                    // No challenger leads after the free rounds, so none gets the paired
+                    // check, and the default is played whatever the last rounds find.
+                } else if b == g || !guards(Choice(b as u16)) {
+                    if settled(trees, &plan, ROUNDS).is_none() {
+                        self.rounds(trees, &plan, FREE_ROUNDS + 1..=ROUNDS, Stop::Settled);
                     }
                 } else if self.settings.family.options.paired {
                     checked = Some(Choice(b as u16));
@@ -675,7 +702,7 @@ impl<L: Layout> LongSearch<L> {
                     for tree in trees.iter_mut() {
                         tree.allowed = Some([b, g]);
                     }
-                    self.rounds(trees, &plan, FREE_ROUNDS + 1..=ROUNDS, false);
+                    self.rounds(trees, &plan, FREE_ROUNDS + 1..=ROUNDS, Stop::Never);
                     for tree in trees.iter_mut() {
                         tree.allowed = None;
                     }
@@ -735,18 +762,18 @@ impl<L: Layout> LongSearch<L> {
             start: &start,
             threads: (self.settings.threads.max(1) as usize).min(trees.len()),
         };
-        self.rounds(&mut trees, &plan, 1..=ROUNDS, false);
+        self.rounds(&mut trees, &plan, 1..=ROUNDS, Stop::Never);
         check(&trees, a, b)
     }
 
     /// Grows `trees` through `rounds` of `plan`, each to its share of the work so far, and
-    /// with `stop`, no further once the leader is settled.
+    /// no further once `stop` says so.
     fn rounds(
         &self,
         trees: &mut [Tree<L>],
         plan: &Plan<'_>,
         rounds: std::ops::RangeInclusive<u64>,
-        stop: bool,
+        stop: Stop,
     ) {
         let (table, policy) = (&self.table, &self.policy);
         for round in rounds {
@@ -766,11 +793,31 @@ impl<L: Layout> LongSearch<L> {
             } else {
                 grow_parallel(table, policy, trees, &targets, plan.threads);
             }
-            if stop && round < ROUNDS && settled(trees, plan.shares, plan.credit, plan.start) {
+            let done = match stop {
+                Stop::Never => false,
+                Stop::Settled => settled(trees, plan, ROUNDS).is_some(),
+                Stop::Ceded(default) => {
+                    settled(trees, plan, ROUNDS).is_some()
+                        || settled(trees, plan, FREE_ROUNDS) == Some(default)
+                }
+            };
+            if round < ROUNDS && done {
                 break;
             }
         }
     }
+}
+
+/// When a run of rounds may end before its last.
+#[derive(Clone, Copy, Debug)]
+enum Stop {
+    /// Every round runs.
+    Never,
+    /// Once the leader is settled over the whole budget.
+    Settled,
+    /// As [`Stop::Settled`], or once the root candidate with this index, the default answer,
+    /// leads and is settled over the free rounds ([`Options::cede`]).
+    Ceded(usize),
 }
 
 /// How a decision's work is shared among its trees: each tree's share, the credit its kept
@@ -881,23 +928,22 @@ fn grow_parallel<L: Layout>(
     });
 }
 
-/// Whether the candidate visited most is settled: no other could overtake it if every
-/// iteration the remaining work buys, at what this decision's iterations have cost each
-/// tree, went its way. Equals are told apart by their mean, so every other must stay
-/// strictly behind.
-fn settled<L: Layout>(
-    trees: &[Tree<L>],
-    shares: &[u64],
-    credit: &[u64],
-    start: &[(u64, u64)],
-) -> bool {
+/// The candidate visited most, if it is settled: no other could overtake it by the end of
+/// round `horizon` of `plan` if every iteration the work left until then buys, at what this
+/// decision's iterations have cost each tree, went its way. Equals are told apart by their
+/// mean, so every other must stay strictly behind.
+fn settled<L: Layout>(trees: &[Tree<L>], plan: &Plan<'_>, horizon: u64) -> Option<usize> {
     let mut left = 0u64;
-    for ((tree, &share), (&credit, &(w0, i0))) in
-        trees.iter().zip(shares).zip(credit.iter().zip(start))
+    for ((tree, &share), (&credit, &(w0, i0))) in trees
+        .iter()
+        .zip(plan.shares)
+        .zip(plan.credit.iter().zip(plan.start))
     {
         let spent = tree.work.saturating_sub(w0);
         let iterations = tree.iterations - i0;
-        let remaining = share.saturating_sub(credit).saturating_sub(spent);
+        let remaining = (share * horizon / ROUNDS)
+            .saturating_sub(credit)
+            .saturating_sub(spent);
         let cost = if iterations > 0 {
             spent.div_ceil(iterations).max(1)
         } else {
@@ -911,6 +957,7 @@ fn settled<L: Layout>(
         .iter()
         .enumerate()
         .all(|(i, &n)| i == best || u64::from(visits[best]) > u64::from(n) + left)
+        .then_some(best)
 }
 
 /// The candidate visited most; of equals, the one with the best mean reward, then the first.

@@ -668,6 +668,29 @@ evaluation leaf is scored the same way from its estimate.
 - **Claims:** none.
 - **Measure:** the numbers, 3M, `stronger`.
 
+### 6.11 Rung 10: `cede`, stop once the default cannot be beaten
+
+Built (`Options::cede`), not yet measured. An anchored search with `paired`
+spends its first 12 of 16 rounds (`FREE_ROUNDS`) growing its trees freely. Only
+a challenger that leads after those rounds gets the paired check against the
+default answer, with the work the last four rounds would have used. When the
+default leads instead, the last four rounds still run today, and a challenger
+that first leads in them is checked with whatever work the trees left unspent,
+usually none. The ordinary stop needs the leader settled over the whole budget,
+and at a decision whose candidates score alike, such as passing against a minor
+instant-speed play in combat, it rarely is. Those decisions spend the full 30M
+steps, two to three seconds, and then play the default.
+
+With `cede`, the search stops as soon as the default leads on visits by more
+than the rest of the free rounds could overturn, and skips the last four rounds
+whenever the default leads after the free rounds. It requires `paired` and
+excludes `means`. The move changes only where a late challenger would have won
+its check on leftover work.
+
+- **Claims:** none; it makes those decisions faster for a player watching.
+- **Measure:** the suite, the screen against the champion's last match, and a 3M
+  match against the champion, `plausible`.
+
 ## 7. Speed
 
 - **A faster engine is more verdicts a day.** A match is 6 to 18 hours, so a
