@@ -7,7 +7,6 @@ use crate::card::{
     Ability, AbilityIx, CostAction, FaceAbility, FaceIx, Hybrid, INTRINSIC_MANA, ManaColor,
     ManaCost, ObjectAbility, Types,
 };
-use crate::decision::{OPTIONS, Opt};
 use crate::fixed::Full;
 use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Table};
@@ -15,14 +14,13 @@ use crate::replacement::event::{self, Sink};
 use crate::state::{
     AbilityRef, ManaAmounts, PendingTrigger, State, TriggeredAbility, Zone, ZoneKey,
 };
-use crate::table::{Capability, GameTable, is_instant_mana, is_priced, is_sacrificed, is_simple};
+use crate::table::{Capability, GameTable, is_instant_mana, is_sacrificed, is_simple};
 use beryl_kernel::reference::Permanent;
 
-use super::pool::{helps, pay_unit};
+use super::KINDS;
 use super::remembered::{self, Paying};
 use super::solver::{Plan, fixed_units, lowest_kind, spent_by_class};
-use super::sources::{Class, Sources, allowed, alternative_ability};
-use super::{CLASSES, KINDS, Taps};
+use super::sources::{Class, Sources, allowed};
 
 /// Pays `cost` by `plan`: taps its sources for the mana it needs, sacrificing those whose
 /// ability says so, and spends it.
