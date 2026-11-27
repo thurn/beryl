@@ -450,6 +450,7 @@ impl<L: Layout> Lookahead<'_, L> {
                 &self.extra_used,
                 bonus_land,
                 cost,
+                Units::NONE,
             );
         }
         let (without, without_extra) = tapping.fold(
@@ -476,6 +477,7 @@ impl<L: Layout> Lookahead<'_, L> {
             &without_extra,
             bonus_land,
             cost,
+            Units::NONE,
         )
     }
 

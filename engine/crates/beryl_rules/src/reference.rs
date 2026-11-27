@@ -234,13 +234,17 @@ fn check_sequences<L: Layout>(
     };
     let at = Some(At::Player(player));
     let none = Bitboard::EMPTY;
-    if let Ok(prefilter) = mana::payable(s, t, player, cost, none, Paying::NOTHING) {
-        check(
-            prefilter == expected,
-            "the payability prefilter disagrees with the sequence reference",
-            at,
-        )?;
-    }
+    // More sources the mana solver's classes cannot describe than a small layout holds, as
+    // seventeen lands of different cards under Mana Reflection: the payment's own scan finds the
+    // layout full and the game goes on in a larger one, and the funds answer yes until it does.
+    let Ok(prefilter) = mana::payable(s, t, player, cost, none, Paying::NOTHING) else {
+        return Ok(());
+    };
+    check(
+        prefilter == expected,
+        "the payability prefilter disagrees with the sequence reference",
+        at,
+    )?;
     check(
         funds.pays_for(s, t, cost, none, Paying::NOTHING) == expected,
         "the cached funds disagree with the sequence reference",

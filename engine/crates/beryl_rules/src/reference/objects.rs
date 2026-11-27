@@ -1,23 +1,24 @@
 //! The reference for spells that creatures or artifacts help pay for, convoke's and
 //! improvise's: every set of the objects the spell could tap, each paying one unit of its own
 //! kinds, with the mana of the rest matched symbol by symbol as [`super::reference_pays`]
-//! matches it. It reads the keywords off the spell's face and the objects off the battlefield,
+//! matches it, or, in a game whose cards have priced mana abilities or change mana abilities,
+//! paid by every sequence of mana abilities ([`sequences::reference_sequences_with`]). It reads the keywords off the spell's face and the objects off the battlefield,
 //! and shares no code with the casting steps' check (`Funds::pays_with_objects`), which merges
 //! sources and objects instead of trying each set.
 //!
 //! Implements: none. Checks the payability of convoke and improvise spells by brute force.
 
 use crate::bitboard::Bitboard;
-use crate::card::{Keywords, ManaCost, Types};
+use crate::card::{AbilityKind, Keywords, ManaCost, Types};
 use crate::casting;
 use crate::ids::Seat;
 use crate::invariants::{At, Violation};
 use crate::layout::{Layout, Queue};
 use crate::mana::Paying;
 use crate::state::State;
-use crate::table::GameTable;
+use crate::table::{Capability, GameTable};
 
-use super::{check, reference_pays, reference_units};
+use super::{check, reference_pays, reference_units, sequences};
 
 /// The most objects a spell could tap for the brute force to try every set of them: past it,
 /// the spell is not checked.
@@ -108,12 +109,33 @@ pub(crate) fn reference_pays_with_objects<L: Layout>(
     }
     let objects = &objects[..len];
     let paying = Paying::casting(s, t, slot, face);
+    let rich = t.can_either(Capability::PricedMana, Capability::ManaChanges);
+    // In a game with priced mana abilities or abilities that change mana, an object with no mana
+    // ability is always tapped: it only adds to what pays, and the sequences are slow to try.
+    let idle = (0..len)
+        .filter(|&i| rich && !makes_mana(s, t, objects[i]))
+        .fold(0u32, |m, i| m | (1 << i));
     let mut known = true;
     for tapped in 0u32..1 << len {
+        if tapped & idle != idle {
+            continue;
+        }
         let chosen: Bitboard<L::Slot> = (0..len)
             .filter(|&i| tapped & (1 << i) != 0)
             .map(|i| objects[i])
             .collect();
+        if rich {
+            let spare: Vec<u8> = (0..len)
+                .filter(|&i| tapped & (1 << i) != 0)
+                .map(|i| kinds_of(s, convoke, objects[i]))
+                .collect();
+            match sequences::reference_sequences_with(s, t, player, cost, paying, chosen, &spare) {
+                Some(true) => return Some(true),
+                Some(false) => {}
+                None => known = false,
+            }
+            continue;
+        }
         let Some(mut units) = reference_units(s, t, player, paying, chosen) else {
             known = false;
             continue;
@@ -121,10 +143,7 @@ pub(crate) fn reference_pays_with_objects<L: Layout>(
         let mut full = false;
         for (i, &o) in objects.iter().enumerate() {
             if tapped & (1 << i) != 0 {
-                // A creature's colors, as the layers give them; generic mana only for a
-                // colorless creature or an artifact. Never a colorless symbol.
-                let kinds = if convoke { s.derived(o).colors.0 } else { 0 };
-                full |= units.push(kinds).is_err();
+                full |= units.push(kinds_of(s, convoke, o)).is_err();
             }
         }
         if full {
@@ -136,4 +155,19 @@ pub(crate) fn reference_pays_with_objects<L: Layout>(
         }
     }
     known.then_some(false)
+}
+
+/// The kinds of mana the object in `slot` pays when tapped: a creature's colors for convoke, as
+/// the layers give them; generic mana only for a colorless creature or an artifact. Never a
+/// colorless symbol.
+fn kinds_of<L: Layout>(s: &State<L>, convoke: bool, slot: L::Slot) -> u8 {
+    if convoke { s.derived(slot).colors.0 } else { 0 }
+}
+
+/// Whether the permanent in `slot` has a mana ability, its own or the intrinsic one of a basic
+/// land type (see CR 305.6).
+fn makes_mana<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> bool {
+    s.intrinsic_mana(t, slot) != 0
+        || s.abilities(t, slot)
+            .any(|(_, a)| a.kind() == AbilityKind::Mana)
 }

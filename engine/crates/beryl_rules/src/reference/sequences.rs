@@ -10,6 +10,7 @@
 use std::collections::BTreeSet;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use crate::bitboard::Bitboard;
 use crate::card::{AbilityKind, Amount, CostAction, CostPart, Keywords, ManaCost, Timing, Types};
 use crate::filter::Evaluate;
 use crate::ids::Seat;
@@ -104,6 +105,25 @@ pub(crate) fn reference_sequences_for<L: Layout>(
     cost: ManaCost,
     paying: Paying<L>,
 ) -> Option<bool> {
+    reference_sequences_with(s, t, player, cost, paying, Bitboard::EMPTY, &[])
+}
+
+/// [`reference_sequences_for`] with none of the permanents in `exclude` and the units of
+/// `spare` beside, which pay the cost and never a mana ability's price: the creatures or
+/// artifacts a spell with convoke or improvise taps, and what they pay, which they pay as the
+/// total cost is paid, after the mana abilities are activated (see [CR 601.2h]): "The player
+/// pays the total cost."
+///
+/// [CR 601.2h]: https://yawgatog.com/resources/magic-rules/#R6012h
+pub(super) fn reference_sequences_with<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+    cost: ManaCost,
+    paying: Paying<L>,
+    exclude: Bitboard<L::Slot>,
+    spare: &[u8],
+) -> Option<bool> {
     let mut pool = Vec::new();
     for (k, &n) in s.player(player).mana().amounts_u8().iter().enumerate() {
         pool.extend(std::iter::repeat_n(1u8 << k, usize::from(n)));
@@ -115,13 +135,15 @@ pub(crate) fn reference_sequences_for<L: Layout>(
             }
         }
     }
-    sequences_pay(&pool, &activations(s, t, player, paying)?, cost)
+    let permanents = activations(s, t, player, paying, exclude)?;
+    sequences_pay_with(&pool, &permanents, cost, spare)
 }
 
 /// The mana abilities each untapped permanent `player` controls could be tapped for now, read
 /// from the abilities it has, with the intrinsic ones of its basic land types (see CR 305.6).
 /// Restricted mana is left out unless `paying` accepts it (see CR 106.6), and so is a mana
-/// ability activated only as an instant, which no payment activates.
+/// ability activated only as an instant, which no payment activates, and every permanent in
+/// `exclude`.
 ///
 /// See [CR 302.6](https://yawgatog.com/resources/magic-rules/#R3026): "A creature's activated
 /// ability with the tap symbol or the untap symbol in its activation cost can't be activated
@@ -132,12 +154,14 @@ fn activations<L: Layout>(
     t: &GameTable,
     player: Seat,
     paying: Paying<L>,
+    exclude: Bitboard<L::Slot>,
 ) -> Option<Vec<Vec<Activation>>> {
     let mut permanents = Vec::new();
     for &slot in s.battlefield() {
         let (d, o) = (s.derived(slot), s.object(slot));
         if d.controller != player
             || o.is_tapped()
+            || exclude.contains(slot)
             || (d.types.intersects(Types::CREATURE)
                 && o.is_summoning_sick()
                 && !d.keywords.contains(Keywords::HASTE))
@@ -489,10 +513,17 @@ fn activation(a: &crate::card::Ability) -> Option<Activation> {
 /// activations make, each permanent tapped for at most one of its activations, in an order in
 /// which each activation's price is paid from the units then in the pool: every order and every
 /// way of paying each price, tried. `None` as [`reference_sequences`] says.
-pub(crate) fn sequences_pay(
+#[cfg(test)]
+fn sequences_pay(pool: &[u8], permanents: &[Vec<Activation>], cost: ManaCost) -> Option<bool> {
+    sequences_pay_with(pool, permanents, cost, &[])
+}
+
+/// [`sequences_pay`] with the units of `spare` beside, which pay the cost and never a price.
+fn sequences_pay_with(
     pool: &[u8],
     permanents: &[Vec<Activation>],
     cost: ManaCost,
+    spare: &[u8],
 ) -> Option<bool> {
     let priced = permanents
         .iter()
@@ -505,11 +536,13 @@ pub(crate) fn sequences_pay(
     }
     // A permanent with no priced activation is tapped first, for one of them: more mana never
     // makes a cost unpayable, and what it makes may pay a price. Where each of its
-    // activations makes one unit, that is one unit of any of their kinds.
+    // activations makes one unit, that is one unit of any of their kinds. Each start is kept
+    // once, sorted: under Mana Flare each land of two colors makes two units of either, and
+    // a list of every order would double with each such land.
     let (flexible, plain): (Vec<_>, Vec<_>) = permanents
         .iter()
         .partition(|options| options.iter().any(Activation::is_priced));
-    let mut starts: Vec<Vec<u8>> = vec![pool.to_vec()];
+    let mut starts: BTreeSet<Vec<u8>> = BTreeSet::from([pool.to_vec()]);
     for options in plain {
         let makes: Vec<&Vec<u8>> = options.iter().flat_map(|a| &a.makes).collect();
         let one_unit = makes.iter().all(|made| made.len() == 1);
@@ -524,6 +557,7 @@ pub(crate) fn sequences_pay(
                 ways.iter().map(move |made| {
                     let mut more = start.clone();
                     more.extend(made);
+                    more.sort_unstable();
                     more
                 })
             })
@@ -533,7 +567,7 @@ pub(crate) fn sequences_pay(
     let mut seen = BTreeSet::new();
     let mut unknown = false;
     for start in starts {
-        match search(start, 0, &flexible, cost, &mut seen) {
+        match search(start, 0, &flexible, cost, spare, &mut seen) {
             Some(true) => return Some(true),
             Some(false) => {}
             None => unknown = true,
@@ -543,19 +577,25 @@ pub(crate) fn sequences_pay(
 }
 
 /// [`sequences_pay`] from `pool` once the permanents in `used`, a bit per place in `flexible`,
-/// were tapped: whether the cost is paid now, or after tapping one more. `seen` holds the
-/// positions already tried.
+/// were tapped: whether the cost is paid now, with the units of `spare` beside, or after
+/// tapping one more. `seen` holds the positions already tried.
 fn search(
     mut pool: Vec<u8>,
     used: u16,
     flexible: &[&Vec<Activation>],
     cost: ManaCost,
+    spare: &[u8],
     seen: &mut BTreeSet<(u16, Vec<u8>)>,
 ) -> Option<bool> {
-    if pool.len() > UNITS {
+    if pool.len() + spare.len() > UNITS {
         return None;
     }
-    if reference_pays(&pool, cost) {
+    let paid = if spare.is_empty() {
+        reference_pays(&pool, cost)
+    } else {
+        reference_pays(&[pool.as_slice(), spare].concat(), cost)
+    };
+    if paid {
         return Some(true);
     }
     pool.sort_unstable();
@@ -572,7 +612,7 @@ fn search(
                 for made in &activation.makes {
                     let mut next = left.clone();
                     next.extend(made);
-                    match search(next, used | (1 << i), flexible, cost, seen) {
+                    match search(next, used | (1 << i), flexible, cost, spare, seen) {
                         Some(true) => return Some(true),
                         Some(false) => {}
                         None => unknown = true,

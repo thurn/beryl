@@ -17,6 +17,7 @@
 //! [CR 605.3a]: https://yawgatog.com/resources/magic-rules/#R6053a
 
 mod manual;
+mod objects;
 mod plans;
 mod terms;
 mod walk;
@@ -44,6 +45,7 @@ use super::units::Units;
 use super::{CLASSES, KINDS, Taps, amounts_pay};
 
 pub(super) use manual::{manual_can_spend_after, manual_extra_options, manual_pay_extra};
+pub(super) use objects::pays_with_objects;
 pub(super) use plans::{each_plan, plans};
 pub(super) use terms::{EvaluatedTerm, RichActivation};
 
@@ -172,11 +174,14 @@ fn collect_extra<L: Layout>(
         return Ok(());
     }
     let key = s.definition(slot).key();
-    let card_mana = s.makes_card_mana(t, slot);
-    if card_mana
-        && let Some(existing) = extras
-            .iter_mut()
-            .find(|e| e.least == key && e.count < u8::MAX && e.activations == activations)
+    // Permanents of one card with the same activations are one extra, though an effect such as
+    // Mana Flare or Urborg, Tomb of Yawgmoth changes what they make: the activations above
+    // apply it, and each names the ability it activates, so one that lost or gained a mana
+    // ability has different activations. A player may control more such lands than there is
+    // room for extras.
+    if let Some(existing) = extras
+        .iter_mut()
+        .find(|e| e.least == key && e.count < u8::MAX && e.activations == activations)
     {
         existing.members.insert(slot);
         existing.count += 1;
@@ -326,10 +331,22 @@ pub(super) fn pays_from_state<L: Layout>(
     extra_used: &[u8; CLASSES],
     cost: ManaCost,
 ) -> bool {
-    pays_from_state_with(pool, sources, taps, rem_used, extra_used, None, cost)
+    pays_from_state_with(
+        pool,
+        sources,
+        taps,
+        rem_used,
+        extra_used,
+        None,
+        cost,
+        Units::NONE,
+    )
 }
 
-/// [`pays_from_state`] with an optional unplayed land `(kinds, amount)` the look-ahead considers.
+/// [`pays_from_state`] with an optional unplayed land `(kinds, amount)` the look-ahead
+/// considers, and the units of `spare` beside, which pay the cost and never a price, as the
+/// creatures or artifacts tapped for convoke or improvise do.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn pays_from_state_with<L: Layout>(
     pool: [u8; KINDS],
     sources: &Sources<L>,
@@ -338,6 +355,7 @@ pub(super) fn pays_from_state_with<L: Layout>(
     extra_used: &[u8; CLASSES],
     bonus_land: Option<(u8, u8)>,
     cost: ManaCost,
+    spare: Units,
 ) -> bool {
     let mut base = Units::NONE;
     for (k, &n) in pool.iter().enumerate() {
@@ -346,7 +364,7 @@ pub(super) fn pays_from_state_with<L: Layout>(
     if let Some((kinds, amount)) = bonus_land {
         base.add(kinds, u16::from(amount));
     }
-    let mut restricted = Units::NONE;
+    let mut restricted = spare;
     for (i, &(_, kind, _)) in sources.remembered().iter().enumerate() {
         if rem_used & (1 << i) == 0 {
             restricted.add(1 << kind, 1);

@@ -71,5 +71,55 @@ pub mod scenarios {
             .library(P0, &[Card::Island; 7])
             .library(P1, &[Card::CavernOfSouls, Card::Island, Card::Island])
             .actions(&[ME.plays(Card::Island), ME.tapped(Card::Island, 0)]),
+        // Under Mana Flare one Mountain makes {R}{R}, and two creatures pay the {2} of Stoke the
+        // Flames by convoke. The casting steps' check for convoke once counted only plain
+        // sources, which a land under Mana Flare is not, so the spell was not offered.
+        Scenario::new("Mana Flare's mana and two creatures pay for a convoke spell")
+            .interaction(&[Card::StokeTheFlames])
+            .battlefield(
+                P0,
+                &[
+                    Card::ManaFlare,
+                    Card::Mountain,
+                    Prop::ColorlessCreature,
+                    Prop::ColorlessCreature,
+                ],
+            )
+            .hand(P0, &[Card::StokeTheFlames])
+            .library(P0, &[Card::Island; 7])
+            .actions(&[
+                ME.casts(Card::StokeTheFlames),
+                ME.targets_player(THEM),
+                ME.tapped(Prop::ColorlessCreature, 2),
+                ME.tapped(Card::Mountain, 1),
+                Resolve,
+                THEM.life(16),
+            ]),
+        // An opponent holds a convoke spell under Mana Flare with six lands: the reference for
+        // spells that creatures help pay for once counted one mana for each land, and the
+        // casting steps' check counted Mana Flare's extra mana.
+        Scenario::new("A convoke spell under Mana Flare")
+            .interaction(&[Card::StokeTheFlames])
+            .battlefield(P0, &[Card::Mountain, Card::Mountain, Card::Mountain])
+            .battlefield(
+                P1,
+                &[
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::Mountain,
+                ],
+            )
+            .hand(P0, &[Card::ManaFlare])
+            .hand(P1, &[Card::StokeTheFlames])
+            .library(P0, &[Card::Island; 7])
+            .library(P1, &[Card::Island; 7])
+            .actions(&[
+                ME.casts(Card::ManaFlare),
+                Resolve,
+                ME.has(Zone::Battlefield, Card::ManaFlare, 1),
+            ]),
     ];
 }

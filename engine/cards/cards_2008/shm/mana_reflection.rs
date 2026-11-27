@@ -15,3 +15,42 @@ static DOUBLE_MANA: ManaChange = ManaChange::Multiplies {
 pub static CARD: CardDef = Printed::ManaReflection
     .abilities(&[Ability::mana_change(&DOUBLE_MANA)])
     .card();
+
+#[cfg(feature = "scenarios")]
+pub mod scenarios {
+    use crate::prelude::*;
+
+    pub const SCENARIOS: &[Scenario] = &[
+        // Under Mana Reflection every land is a source the mana solver's plain classes cannot
+        // describe. Lands of one card once made one such source each, so seventeen of them
+        // were more than a payment holds in any layout and the game stalled.
+        Scenario::new("Mana Reflection with seventeen lands of seven cards")
+            .interaction(&[Card::SkycloudExpanse])
+            .battlefield(
+                P0,
+                &[
+                    Card::ManaReflection,
+                    Card::SkycloudExpanse,
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::Forest,
+                    Card::Forest,
+                    Card::Forest,
+                    Card::SnowCoveredIsland,
+                    Card::SnowCoveredIsland,
+                    Card::Island,
+                    Card::Island,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Swamp,
+                    Card::Swamp,
+                    Card::Swamp,
+                ],
+            )
+            .hand(P0, &[Card::Island])
+            .library(P0, &[Card::Island; 7])
+            .actions(&[ME.plays(Card::Island), ME.controls(Card::Island, 3)]),
+    ];
+}

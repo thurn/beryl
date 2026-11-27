@@ -6,6 +6,49 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **The sequence reference failed games with many lands under Mana Reflection
+  or Mana Flare.** With Mana Reflection and seventeen lands, `just fuzz`
+  reported "the cached funds disagree with the sequence reference" for a `{C}`
+  probe that no permanent could pay. Under Mana Reflection every land is a
+  source the solver's classes cannot describe, and with more of them than the
+  `Small` layout holds, `Sources::of` is `Full` and `Funds::pays_for` answers
+  yes on purpose, so that the payment's own scan moves the game to `Large`.
+  `check_sequences` held that answer to the reference anyway. The layout filled
+  because `collect_extra` merged lands of one card into one source only when
+  `makes_card_mana` held, which no permanent does while a mana-changing effect
+  or Urborg, Tomb of Yawgmoth is in play, so each land was a source of its own
+  and seventeen were more than `Large` holds too: the game then stalled. Fixed:
+  permanents of one card with the same activations merge, since each activation
+  names the ability it activates and applies the effects that change its mana,
+  and `check_sequences` skips a position where the prefilter finds the layout
+  full, as the other payment checks already did. In
+  the same games the reference listed one starting pool for every combination
+  of each two-color land's output under Mana Flare, doubling with each such
+  land, until a fuzz game ran for an hour. It now keeps each starting pool
+  once, sorted. Guard: the scenario "Mana Reflection with seventeen lands of
+  seven cards". No scenario reaches the skip on a full layout, which needs
+  seventeen mana sources of different cards that the one-tap reference can
+  read, and no check catches a slow reference except a fuzz run that does not
+  finish.
+
+- **A convoke spell that needed Mana Flare's extra mana was not offered.**
+  With Mana Flare, one Mountain and two creatures, Stoke the Flames (`{2}{R}{R}`,
+  convoke) could not be cast, though the Mountain makes `{R}{R}` and the
+  creatures pay the `{2}`. Mana Flare makes every land a source that the
+  solver's plain classes cannot describe, and `Funds::pays_with_objects`, which
+  decides whether a convoke or improvise spell can be paid, counted only plain
+  sources. Its reference (`reference_pays_with_objects`) was wrong the other
+  way: it counted one mana per land and no extra mana, so the two disagreed in
+  `just fuzz` whenever a player held such a spell under Mana Flare. Fixed: where
+  the plain count says no in a game with priced mana abilities or mana changes,
+  `mana::rich::pays_with_objects` tries the payment in sequence, with the tapped
+  objects' units paying only the cost and never a price. In such games the
+  reference tries every set of objects against every sequence of mana abilities
+  (`reference_sequences_with`). Guard: the scenarios "Mana Flare's mana and two
+  creatures pay for a convoke spell" and "A convoke spell under Mana Flare".
+  The class is a fast path that a newer rich path did not reach; the
+  references catch it only where a fuzzed game happens to hold both cards.
+
 - **A mana ability lent by a lending card did not make its borrower a source of
   mana.** A creature with a +1/+1 counter beside a lending artifact such as
   Agatha's Soul Cauldron, with a creature card exiled whose only activated

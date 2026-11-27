@@ -234,7 +234,9 @@ impl<L: Layout> Funds<L> {
     /// already tapped can't be tapped to pay a cost"). Any other source, one that makes more than one
     /// mana, may sacrifice itself for a different amount, or makes restricted mana, is tried
     /// both ways. Past [`BOTH_WAYS`] of those, the rest count as mana sources only, so that
-    /// the answer may say no to a cost a payment could make, never yes to one it cannot.
+    /// the answer may say no to a cost a payment could make, never yes to one it cannot. Where
+    /// that says no in a game whose cards have priced mana abilities or change mana abilities,
+    /// the rich path answers (`mana::rich::pays_with_objects`).
     ///
     /// [CR 118.3]: https://yawgatog.com/resources/magic-rules/#R1183
     #[cold]
@@ -294,7 +296,7 @@ impl<L: Layout> Funds<L> {
             },
         );
         let both = &both[..len];
-        (0u32..1 << len).any(|tapped| {
+        let plain = (0u32..1 << len).any(|tapped| {
             let mut out = exclude;
             for (i, &(slot, _)) in both.iter().enumerate() {
                 if tapped & (1 << i) != 0 {
@@ -323,7 +325,21 @@ impl<L: Layout> Funds<L> {
                 u
             });
             u.pays(cost)
-        })
+        });
+        // Under Mana Flare, or with priced mana abilities, the units above cannot say what the
+        // sources make: the rich path tries the payment in sequence.
+        plain
+            || (t.can_either(Capability::PricedMana, Capability::ManaChanges)
+                && super::rich::pays_with_objects(
+                    s,
+                    t,
+                    self.player,
+                    cost,
+                    exclude,
+                    paying,
+                    objects,
+                    &kinds,
+                ))
     }
 
     /// The untapped sources that can pay for `paying`, including sources without an
