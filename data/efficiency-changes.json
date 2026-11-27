@@ -1090,5 +1090,10 @@
     "label": "Prevent landing livelocks when staging moves during a baseline check, when a commit deletes a file matched only by a family-wide glob, or when a host runs too many concurrent builds: `gate_pass` now files confirmed baseline regressions whenever intervening staging commits touch none of the failing check's inputs and carries unaffected passing families across baseline rebases in both verdict and strict modes; `checks_with_deleted_inputs` no longer promotes broad family globs to `Why::DeletedInput` outside the gate budget (and known regressions stay skipped); and `SHARED_CORES_PER_BUILD_TICKET` rose from 2.0 to 2.5 (capping a 6-shared-core host at 2 build tickets instead of 3)",
     "metric": "bead.minutes",
     "expect": "down"
+  },
+  {
+    "label": "Tip verification advances the shared `tip_candidate` past any pre-revert or pre-fix ancestor when a round pushes an automatic revert or proves a failing check already passes at a newer `staging` tip, so subsequent rounds verify the revert or fix immediately instead of spending a round on an older commit that still contains the broken landing",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]

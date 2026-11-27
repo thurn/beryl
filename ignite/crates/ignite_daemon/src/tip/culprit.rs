@@ -361,6 +361,7 @@ impl TipVerifier {
             && self.passes_at(ctx, &newest, check);
         super::round::require_running()?;
         if repaired {
+            super::candidate::advance_to_best_effort(ctx, &newest);
             eprintln!(
                 "ignite: {} fails at {tip}, but passes at {newest}; not reporting",
                 check.check

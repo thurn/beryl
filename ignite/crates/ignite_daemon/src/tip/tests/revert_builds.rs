@@ -188,3 +188,154 @@ fn a_revert_that_does_not_build_with_no_later_caller_is_reported() {
         regressions[0].output
     );
 }
+
+#[test]
+fn a_pushed_revert_advances_a_pre_revert_candidate_to_the_revert() {
+    use ignite_core::tipround::{TipCandidate, TipCandidateUpdate};
+
+    let (world, ctx, tip, _) = three_landings(true);
+    world.git.set_not_ancestor(&tip, &world.master());
+    let pre_revert = commit("deed000");
+    // While the round is running its checks at `tip`, another machine selects a pre-revert
+    // commit as the shared candidate.
+    let hub = world.hub.clone();
+    let selected = pre_revert.clone();
+    world.work.before_batches.lock().unwrap().insert(
+        "unit".to_owned(),
+        Arc::new(move || {
+            let expected = hub.tip_candidate().unwrap();
+            assert!(
+                hub.update_tip_candidate(&TipCandidateUpdate {
+                    expected,
+                    replacement: TipCandidate {
+                        commit: selected.clone(),
+                        retry_on_new_tip: false,
+                    },
+                })
+                .unwrap()
+            );
+        }),
+    );
+
+    verify(&world, &ctx, &tip);
+
+    assert_eq!(
+        world.hub.tip_candidate().unwrap(),
+        Some(TipCandidate {
+            commit: commit(WITH_CALLER),
+            retry_on_new_tip: false,
+        })
+    );
+    assert_eq!(
+        world.verifier().next_target(&ctx).unwrap(),
+        Some(commit(WITH_CALLER))
+    );
+}
+
+#[test]
+fn a_proven_fix_on_staging_advances_an_older_candidate_to_that_tip() {
+    use ignite_core::tipround::{TipCandidate, TipCandidateUpdate};
+
+    let world = World::new();
+    let ctx = world.ctx("m-1");
+    let tip = commit("bbbb000");
+    let intermediate = commit("cccc000");
+    let fixed = commit("dddd000");
+    world.land(&tip);
+    world.git.set_not_ancestor(&tip, &world.master());
+    let failing = check("a", 'a');
+    world.work.set_checks(&tip, vec![failing.clone()]);
+    world.work.set_outcome(&tip, &failing.check, Outcome::Fail);
+    world.git.set_changed(&tip, &fixed, &["src/a"]);
+    world
+        .work
+        .set_outcome(&fixed, &failing.check, Outcome::Pass);
+    // While the round is running at `tip`, another machine selects `intermediate` and a
+    // newer landing `fixed` arrives on `staging`.
+    let hub = world.hub.clone();
+    let git = world.git.clone();
+    let selected = intermediate.clone();
+    let newest = fixed.clone();
+    world.work.before_batches.lock().unwrap().insert(
+        "unit".to_owned(),
+        Arc::new(move || {
+            git.set_tip("staging", newest.clone());
+            let expected = hub.tip_candidate().unwrap();
+            assert!(
+                hub.update_tip_candidate(&TipCandidateUpdate {
+                    expected,
+                    replacement: TipCandidate {
+                        commit: selected.clone(),
+                        retry_on_new_tip: false,
+                    },
+                })
+                .unwrap()
+            );
+        }),
+    );
+
+    verify(&world, &ctx, &tip);
+
+    assert!(world.hub.regressions().is_empty());
+    assert_eq!(
+        world.hub.tip_candidate().unwrap(),
+        Some(TipCandidate {
+            commit: fixed,
+            retry_on_new_tip: false,
+        })
+    );
+}
+
+#[test]
+fn advance_to_keeps_a_candidate_at_or_ahead_of_the_target() {
+    use ignite_core::tipround::{TipCandidate, TipCandidateUpdate};
+
+    let world = World::new();
+    let ctx = world.ctx("m-1");
+    let target = commit("bbbb000");
+    let ahead = commit("cccc000");
+
+    // Already at `target` with `retry_on_new_tip = true`: do not clear the retry flag.
+    world
+        .hub
+        .update_tip_candidate(&TipCandidateUpdate {
+            expected: None,
+            replacement: TipCandidate {
+                commit: target.clone(),
+                retry_on_new_tip: true,
+            },
+        })
+        .unwrap();
+    super::super::candidate::advance_to(&ctx, &target).unwrap();
+    assert_eq!(
+        world.hub.tip_candidate().unwrap(),
+        Some(TipCandidate {
+            commit: target.clone(),
+            retry_on_new_tip: true,
+        })
+    );
+
+    // Already past `target` (not an ancestor of `target`): do not step backwards.
+    world
+        .hub
+        .update_tip_candidate(&TipCandidateUpdate {
+            expected: Some(TipCandidate {
+                commit: target.clone(),
+                retry_on_new_tip: true,
+            }),
+            replacement: TipCandidate {
+                commit: ahead.clone(),
+                retry_on_new_tip: false,
+            },
+        })
+        .unwrap();
+    world.git.set_not_ancestor(&ahead, &target);
+    super::super::candidate::advance_to(&ctx, &target).unwrap();
+    assert_eq!(
+        world.hub.tip_candidate().unwrap(),
+        Some(TipCandidate {
+            commit: ahead,
+            retry_on_new_tip: false,
+        })
+    );
+}

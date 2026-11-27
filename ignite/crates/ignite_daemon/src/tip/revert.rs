@@ -103,9 +103,10 @@ enum Pushed {
     /// The revert commit is on `staging`. It undoes these landings, oldest first: the culprit,
     /// then any later landings that had to go with it for the tree to build.
     Done(Commit, Vec<TipLanding>),
-    /// The tip moved with a change to what the check reads, and the check does not fail there;
-    /// the next round runs it there.
-    NextRound,
+    /// The tip moved with a change to what the check reads, and the check does not fail there
+    /// (carrying that tip when known, so the shared candidate can jump to it); the next round
+    /// runs it there.
+    NextRound(Option<Commit>),
     /// The revert does not build; the text says what was tried (see [`Handled::Unbuildable`]).
     Unbuildable(String),
 }
@@ -230,9 +231,17 @@ impl TipVerifier {
         }
         let (revert, undone) = match self.push_revert(ctx, tip, check, landing)? {
             Pushed::Done(revert, undone) => (revert, undone),
-            Pushed::NextRound => return Ok(Handled::NextRound),
+            Pushed::NextRound(base) => {
+                if let Some(base) = base {
+                    super::candidate::advance_to_best_effort(ctx, &base);
+                }
+                return Ok(Handled::NextRound);
+            }
             Pushed::Unbuildable(note) => return Ok(Handled::Unbuildable(note)),
         };
+        // Advance the shared candidate past any pre-revert commit so rounds verify the revert
+        // immediately instead of spending a round on an ancestor that still has the culprit.
+        super::candidate::advance_to_best_effort(ctx, &revert);
         let machine = if self.host.is_empty() {
             ctx.machine.to_string()
         } else {
@@ -334,7 +343,7 @@ impl TipVerifier {
                          the check does not fail there; the next round runs it there",
                         check.check
                     );
-                    return Ok(Pushed::NextRound);
+                    return Ok(Pushed::NextRound(Some(base)));
                 }
             }
             let commits: Vec<Commit> = undone.iter().flat_map(|l| l.commits.clone()).collect();
@@ -411,7 +420,7 @@ impl TipVerifier {
             // Keep the round alive until a pushed revert has been reported or saved for
             // retry, so the landing's ticket can be reopened.
             if !crate::steps::refuse_stop(&format!("its revert push to {staging} has begun")) {
-                return Ok(Pushed::NextRound);
+                return Ok(Pushed::NextRound(None));
             }
             let pushed = ctx.git.push(&ctx.repo, &revert, staging);
             if matches!(pushed, Ok(Push::Pushed { .. })) {

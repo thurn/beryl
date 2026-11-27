@@ -93,3 +93,35 @@ pub(super) fn allow_newer(ctx: &Context, tip: &Commit) -> Result<()> {
     })?;
     Ok(())
 }
+
+/// Moves the shared candidate forward to `target` when it is absent or a strict ancestor of
+/// `target`, so rounds do not spend time on commits before a revert or proven fix. Leaves a
+/// candidate that is already at `target` (preserving its `retry_on_new_tip` flag) or not an
+/// ancestor of `target` alone.
+pub(super) fn advance_to(ctx: &Context, target: &Commit) -> Result<()> {
+    loop {
+        let current = ctx.hub.tip_candidate()?;
+        if let Some(candidate) = &current
+            && (candidate.commit == *target || !ctx.git.is_ancestor(&candidate.commit, target)?)
+        {
+            return Ok(());
+        }
+        let update = TipCandidateUpdate {
+            expected: current,
+            replacement: TipCandidate {
+                commit: target.clone(),
+                retry_on_new_tip: false,
+            },
+        };
+        if ctx.hub.update_tip_candidate(&update)? {
+            return Ok(());
+        }
+    }
+}
+
+/// Like [`advance_to`], logging any error instead of failing the caller's revert or blame step.
+pub(super) fn advance_to_best_effort(ctx: &Context, target: &Commit) {
+    if let Err(error) = advance_to(ctx, target) {
+        eprintln!("ignite: could not advance tip candidate to {target}: {error}");
+    }
+}
