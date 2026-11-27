@@ -112,7 +112,6 @@ mod playback {
         #[cfg(feature = "stories")]
         pub fn check_story(&mut self) -> Option<Checked> {
             let moment = Moment::At(Duration(self.story_moment?));
-            self.set_looking(true);
             self.seek(&moment).ok()?;
             let context = self.context();
             let at_rest = self.client.wake() == kit_frame::frame::Wake::Never;

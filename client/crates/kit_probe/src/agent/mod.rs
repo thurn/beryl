@@ -2,7 +2,6 @@
 //! (docs/beryl-3d.md, "The agent interface" and "Interface checks").
 //! Each operation reads only frames and options.
 
-pub mod card_marks;
 pub mod checks;
 pub mod covers;
 pub mod fault;

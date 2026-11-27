@@ -224,7 +224,6 @@ impl Page {
         }
 
         let mut page = self.fresh(true);
-        page.set_looking(true);
         let mut faults = Vec::new();
         // The arrows of the last frame the frame checks ran on, for "lines hold".
         let mut kept: Vec<KeptArrow> = Vec::new();

@@ -682,11 +682,15 @@ impl Table {
         }
     }
 
-    /// The badges share the card's paint band, matching `own::write`.
+    /// The badges share the card's paint band while it moves, is raised or is dragged.
     fn badges_on(&self, look: &Look, band: PaintBand) -> badges::On {
         badges::On {
             pose: look.pose,
-            band: band.records(Band::TableMarks),
+            band: match band {
+                PaintBand::Moving | PaintBand::Dragged => band.records(Band::TableMarks),
+                _ if look.state & StateBits::RAISED != 0 => band.records(Band::TableMarks),
+                _ => Band::TableMarks,
+            },
             opacity: look.pose.opacity,
             show_copy_label: self.layout.style.show_copy_labels,
         }
