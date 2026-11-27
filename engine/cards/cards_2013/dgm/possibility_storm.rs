@@ -35,7 +35,6 @@ pub mod scenarios {
 
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("Shares one card type and the cast is from exile")
-            .interaction(&[Card::Ornithopter])
             .battlefield(P0, &[STORM, Card::Plains])
             .hand(P0, &[Prop::Artifact])
             .library(P0, &[Card::Island, Card::Ornithopter, Card::Mountain])

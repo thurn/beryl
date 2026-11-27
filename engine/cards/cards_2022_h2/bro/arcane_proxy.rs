@@ -122,7 +122,7 @@ pub mod scenarios {
         // card of mana value 2 is still in the graveyard to target. The printed face and the
         // prototyped face each carry their own copy of the ability.
         Scenario::new("another permanent entering beside a prototyped Proxy does not trigger it")
-            .interaction(&[TWO, Card::Ornithopter])
+            .interaction(&[TWO])
             .battlefield(P0, &[ISLAND; 3])
             .hand(P0, &[PROXY, Card::Ornithopter])
             .graveyard(P0, &[TWO, TWO])
@@ -140,7 +140,7 @@ pub mod scenarios {
         Scenario::new(
             "another permanent entering beside a Proxy cast normally does not trigger it",
         )
-        .interaction(&[TWO, Card::Ornithopter])
+        .interaction(&[TWO])
         .battlefield(P0, &[ISLAND; 7])
         .hand(P0, &[PROXY, Card::Ornithopter])
         .graveyard(P0, &[TWO, TWO])
@@ -262,7 +262,7 @@ pub mod scenarios {
         // Storm lets P0 cast the Proxy from exile without paying its mana cost, and P0 casts it
         // prototyped: it is a blue 2/1, and no land was tapped.
         Scenario::new("cast prototyped from exile without paying its mana cost")
-            .interaction(&[Card::PossibilityStorm, Card::Ornithopter])
+            .interaction(&[Card::PossibilityStorm])
             .battlefield(P0, &[Card::PossibilityStorm, ISLAND])
             .hand(P0, &[Card::Ornithopter])
             .library(P0, &[ISLAND, PROXY, Card::Mountain])
