@@ -27,9 +27,10 @@ impl Trees {
             let rows = store::all(&locked.db).map_err(|e| store_error(&e))?;
             let now = self.now();
             let mut freed = Vec::new();
-            for row in rows.iter().filter(|row| {
-                super::reset::is_unheld_lease(row) && Self::reclaimable(&locked, row)
-            }) {
+            for row in rows
+                .iter()
+                .filter(|row| super::reset::is_unheld_lease(row) && Self::reclaimable(&locked, row))
+            {
                 let id = id_of(row)?;
                 let path = Path::new(&row.path);
                 let _guard = if path.exists() {

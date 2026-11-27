@@ -463,7 +463,13 @@ impl Trees {
                 }
                 locked.build_space.reclaiming = true;
                 locked.build_space.measuring.remove(&id);
-                (row.clone(), guard, id, self.directories(&locked, &row), unheld)
+                (
+                    row.clone(),
+                    guard,
+                    id,
+                    self.directories(&locked, &row),
+                    unheld,
+                )
             };
             let (row, guard, id, directories, unheld) = candidate;
             self.finish_reclaim(row, guard, &id, &directories, unheld)?;

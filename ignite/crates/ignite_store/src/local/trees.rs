@@ -354,20 +354,48 @@ mod tests {
         );
         assert!(transition(&conn, "tree-01", State::Leased, State::Resetting, "t2").unwrap());
         assert!(
-            !restore_lease(&conn, "tree-01", Some("T.2"), Some("sess-1"), Some("t1"), "t3")
-                .unwrap()
+            !restore_lease(
+                &conn,
+                "tree-01",
+                Some("T.2"),
+                Some("sess-1"),
+                Some("t1"),
+                "t3"
+            )
+            .unwrap()
         );
         assert!(
-            !restore_lease(&conn, "tree-01", Some("T.1"), Some("sess-2"), Some("t1"), "t3")
-                .unwrap()
+            !restore_lease(
+                &conn,
+                "tree-01",
+                Some("T.1"),
+                Some("sess-2"),
+                Some("t1"),
+                "t3"
+            )
+            .unwrap()
         );
         assert!(
-            !restore_lease(&conn, "tree-01", Some("T.1"), Some("sess-1"), Some("t9"), "t3")
-                .unwrap()
+            !restore_lease(
+                &conn,
+                "tree-01",
+                Some("T.1"),
+                Some("sess-1"),
+                Some("t9"),
+                "t3"
+            )
+            .unwrap()
         );
         assert!(
-            restore_lease(&conn, "tree-01", Some("T.1"), Some("sess-1"), Some("t1"), "t3")
-                .unwrap()
+            restore_lease(
+                &conn,
+                "tree-01",
+                Some("T.1"),
+                Some("sess-1"),
+                Some("t1"),
+                "t3"
+            )
+            .unwrap()
         );
         assert_eq!(get(&conn, "tree-01").unwrap().unwrap().state, "leased");
 
@@ -375,8 +403,15 @@ mod tests {
         assert!(release(&conn, "tree-01", None, "t4").unwrap());
         assert!(lease(&conn, "tree-01", State::Resetting, None, None, None, "t5").unwrap());
         assert!(
-            !restore_lease(&conn, "tree-01", Some("T.1"), Some("sess-1"), Some("t1"), "t6")
-                .unwrap()
+            !restore_lease(
+                &conn,
+                "tree-01",
+                Some("T.1"),
+                Some("sess-1"),
+                Some("t1"),
+                "t6"
+            )
+            .unwrap()
         );
         assert!(!restore_lease(&conn, "tree-01", None, None, Some("t5"), "t6").unwrap());
         assert_eq!(get(&conn, "tree-01").unwrap().unwrap().state, "resetting");
