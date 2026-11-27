@@ -144,7 +144,7 @@ fn activations<L: Layout>(
         {
             continue;
         }
-        let (extra_terms, type_produced) = live_mana_changes(s, t, slot);
+        let (extra_terms, type_produced, multiplier) = live_mana_changes(s, t, slot)?;
         let intrinsic = s.intrinsic_mana(t, slot);
         let mut options: Vec<Activation> = (0..6)
             .map(|k| 1u8 << k)
@@ -152,7 +152,7 @@ fn activations<L: Layout>(
             .map(|k| {
                 let mut terms =
                     Vec::with_capacity(1 + extra_terms.len() + usize::from(type_produced > 0));
-                terms.push((k, 1, false));
+                terms.push((k, multiplier, false));
                 terms.extend_from_slice(&extra_terms);
                 if type_produced > 0 {
                     terms.push((k, type_produced, false));
@@ -169,7 +169,15 @@ fn activations<L: Layout>(
             {
                 continue;
             }
-            options.push(activation_on(s, t, slot, a, &extra_terms, type_produced)?);
+            options.push(activation_on(
+                s,
+                t,
+                slot,
+                a,
+                &extra_terms,
+                type_produced,
+                multiplier,
+            )?);
         }
         if !options.is_empty() {
             permanents.push(options);
@@ -178,10 +186,12 @@ fn activations<L: Layout>(
     Some(permanents)
 }
 
+type ReferenceChanges = (Vec<(u8, u8, bool)>, u8, u8);
+
 /// Reads live mana-changing continuous effects from the Effects store and permanent
 /// `AbilityKind::ManaChange` abilities from the battlefield (independent of `mana::changes` and
-/// `mana::rich`), returning `(fixed_extra_terms, type_produced_count)` when `slot` is tapped
-/// for mana.
+/// `mana::rich`), returning `(fixed_extra_terms, type_produced_count, multiplier)` when `slot`
+/// is tapped for mana, or `None` if the product of multipliers overflows `u8`.
 #[allow(
     clippy::disallowed_methods,
     reason = "reads the source card's printed face to look up the ChangeMana instruction data"
@@ -190,9 +200,11 @@ fn live_mana_changes<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     slot: L::Slot,
-) -> (Vec<(u8, u8, bool)>, u8) {
+) -> Option<ReferenceChanges> {
     let mut terms = Vec::new();
     let mut type_produced = 0u8;
+    let mut multiplier = 1u8;
+    let tapped_controller = s.controller(slot);
     let mut record = |added: Added| match added {
         Added::Of(mana) => terms.push((mana.colors, mana.amount, false)),
         Added::TypeProduced => type_produced = type_produced.saturating_add(1),
@@ -209,36 +221,129 @@ fn live_mana_changes<L: Layout>(
         let Some(change) = root.mana_change_at(effect.part) else {
             continue;
         };
-        let ManaChange::Adds {
-            tapped: Tapped::A(filter),
-            added,
-        } = *change
-        else {
-            continue;
-        };
         let words = Words::of_changes(effect.colors, effect.lands);
-        if filter.matches(s, t, slot, effect.controller, &words) {
-            record(added);
+        match *change {
+            ManaChange::Adds {
+                tapped: Tapped::A(filter),
+                added,
+            } if filter.matches(s, t, slot, effect.controller, &words) => record(added),
+            ManaChange::Multiplies { tapped, by }
+                if tapped_controller == effect.controller
+                    && tapped.matches(s, t, slot, effect.controller, &words) =>
+            {
+                multiplier = multiplier.checked_mul(by)?;
+            }
+            ManaChange::Adds { .. } | ManaChange::Multiplies { .. } => {}
         }
     }
     for &source_slot in s.battlefield() {
+        let source_controller = s.controller(source_slot);
         for (_, a) in s.abilities(t, source_slot) {
-            let Some(&ManaChange::Adds { tapped, added }) = a.changes_mana() else {
+            let Some(change) = a.changes_mana() else {
                 continue;
             };
-            let matches = match tapped {
-                Tapped::A(filter) => {
-                    let words = s.words_of(source_slot);
-                    filter.matches(s, t, slot, s.controller(source_slot), &words)
+            match *change {
+                ManaChange::Adds { tapped, added } => {
+                    let matches = match tapped {
+                        Tapped::A(filter) => {
+                            let words = s.words_of(source_slot);
+                            filter.matches(s, t, slot, source_controller, &words)
+                        }
+                        Tapped::AttachedTo => s.object(source_slot).attached_to() == Some(slot),
+                    };
+                    if matches {
+                        record(added);
+                    }
                 }
-                Tapped::AttachedTo => s.object(source_slot).attached_to() == Some(slot),
-            };
-            if matches {
-                record(added);
+                ManaChange::Multiplies { tapped, by } => {
+                    let words = s.words_of(source_slot);
+                    if tapped_controller == source_controller
+                        && tapped.matches(s, t, slot, source_controller, &words)
+                    {
+                        multiplier = multiplier.checked_mul(by)?;
+                    }
+                }
             }
         }
     }
-    (terms, type_produced)
+    Some((terms, type_produced, multiplier))
+}
+
+/// Independent least-fixed-point computation of the mana types permanents matching `filter`
+/// could produce (see CR 106.7), sharing no code with `mana::changes::could_produce`.
+fn reference_could_produce<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    controller: Seat,
+    filter: &beryl_card::Filter,
+    words: &Words,
+) -> u8 {
+    let battlefield = s.battlefield();
+    let mut kinds = vec![0u8; battlefield.len()];
+    for (i, &slot) in battlefield.iter().enumerate() {
+        let mut mask = s.intrinsic_mana(t, slot);
+        for (_, a) in s.abilities(t, slot) {
+            if a.kind() != AbilityKind::Mana {
+                continue;
+            }
+            for term in a.product() {
+                let n = if let Amount::Fixed(n) = term.amount {
+                    n
+                } else {
+                    crate::interpret::amount_of(s, t, slot, term.amount)
+                };
+                if n > 0
+                    && let beryl_card::Kinds::Fixed(bits) = term.kinds
+                {
+                    mask |= bits;
+                }
+            }
+        }
+        kinds[i] = mask;
+    }
+    for _ in 0..6 {
+        let mut changed = false;
+        for (i, &slot) in battlefield.iter().enumerate() {
+            let mut extra = 0u8;
+            let c = s.controller(slot);
+            let w = s.words_of(slot);
+            for (_, a) in s.abilities(t, slot) {
+                if a.kind() != AbilityKind::Mana {
+                    continue;
+                }
+                for term in a.product() {
+                    let beryl_card::Kinds::CouldProduce(sub) = term.kinds else {
+                        continue;
+                    };
+                    let n = if let Amount::Fixed(n) = term.amount {
+                        n
+                    } else {
+                        crate::interpret::amount_of(s, t, slot, term.amount)
+                    };
+                    if n == 0 {
+                        continue;
+                    }
+                    for (j, &other) in battlefield.iter().enumerate() {
+                        if sub.matches(s, t, other, c, &w) {
+                            extra |= kinds[j];
+                        }
+                    }
+                }
+            }
+            if kinds[i] | extra != kinds[i] {
+                kinds[i] |= extra;
+                changed = true;
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+    battlefield
+        .iter()
+        .enumerate()
+        .filter(|(_, slot)| filter.matches(s, t, **slot, controller, words))
+        .fold(0u8, |acc, (i, _)| acc | kinds[i])
 }
 
 /// The activation of a mana ability on `slot`, read from its cost and product: `None` for a cost
@@ -250,6 +355,7 @@ fn activation_on<L: Layout>(
     a: &crate::card::Ability,
     extra_terms: &[(u8, u8, bool)],
     type_produced: u8,
+    multiplier: u8,
 ) -> Option<Activation> {
     let tap_only = a.cost().does(CostAction::Tap)
         && a.cost().parts().iter().all(|part| {
@@ -262,14 +368,33 @@ fn activation_on<L: Layout>(
         return None;
     }
     let mut own_terms = Vec::new();
+    let words = s.words_of(slot);
     for term in a.product() {
         let n = if let Amount::Fixed(n) = term.amount {
             n
         } else {
             crate::interpret::amount_of(s, t, slot, term.amount)
         };
-        if n > 0 {
-            own_terms.push((term.kinds, n, term.uniform));
+        if n == 0 {
+            continue;
+        }
+        let kinds = match term.kinds {
+            beryl_card::Kinds::Fixed(bits) => bits,
+            beryl_card::Kinds::CouldProduce(filter) => {
+                reference_could_produce(s, t, s.controller(slot), filter, &words)
+            }
+        };
+        if kinds == 0 {
+            continue;
+        }
+        if multiplier > 1 && !term.uniform && !kinds.is_power_of_two() && n > 1 {
+            for _ in 0..n {
+                own_terms.push((kinds, multiplier, true));
+            }
+        } else {
+            let scaled = n.checked_mul(multiplier)?;
+            let uniform = term.uniform || (multiplier > 1 && !kinds.is_power_of_two());
+            own_terms.push((kinds, scaled, uniform));
         }
     }
     let mut price = a.cost().mana;
@@ -351,10 +476,10 @@ fn activation(a: &crate::card::Ability) -> Option<Activation> {
     }
     let mut terms = Vec::new();
     for term in a.product() {
-        let Amount::Fixed(n) = term.amount else {
+        let (beryl_card::Kinds::Fixed(bits), Amount::Fixed(n)) = (term.kinds, term.amount) else {
             return None;
         };
-        terms.push((term.kinds, n, term.uniform));
+        terms.push((bits, n, term.uniform));
     }
     Some(Activation::of(a.cost().mana, &terms))
 }

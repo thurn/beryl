@@ -92,7 +92,14 @@ class Exporter:
         self.index = 0
         self.taken: set[int] = set()
         # Each player's payments, which XMage may pay with sources of its own choosing.
-        self.payments = Payments(self.cards)
+        player_cards: dict[str, set[str]] = {}
+        for seat, p in enumerate(cast(list[Json], setup.get("players", []))):
+            who = self.player(seat)
+            player_cards[who] = {
+                cast(str, perm["card"])
+                for perm in cast(list[Json], p.get("battlefield", []))
+            }
+        self.payments = Payments(self.cards, player_cards)
         # How many targets of an "up to N" spec are still to come when fewer than N were
         # announced: XMage asks for more until told to stop.
         self.targets_short: int | None = None

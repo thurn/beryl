@@ -77,7 +77,9 @@ pub use effect::{
 pub use filter::Filter;
 pub use ids::{Seat, TurnPhase, TurnStep, Zone, ZoneSet};
 pub use index::{AbilityIx, CastingIx, ExceptIx, GrantIx, ModeIx, SpecIx};
-pub use mana::{Hybrid, INTRINSIC_MANA, ManaColor, ManaCost, ManaRestriction, ManaSet, Term, mana};
+pub use mana::{
+    Hybrid, INTRINSIC_MANA, Kinds, ManaColor, ManaCost, ManaRestriction, ManaSet, Term, mana,
+};
 pub use prompt::{Part, Place, Prompt, Purpose, Shape};
 pub use target::{Abilities, Takes, TargetKind, TargetSpec};
 pub use trigger::{CastNumber, Subject, Trigger, TriggerEvent};
@@ -100,11 +102,11 @@ pub mod prelude {
         CastingKind, CastingOption, Castings, ChosenKind, Colors, Comparison, Condition,
         CopyChange, CopyException, Cost, CostAction, CostPart, CounterKind, DeckCondition,
         Duration, Effect, ExceptIx, ExileMatch, Face, FaceIx, Filter, Found, Governed, GrantIx,
-        Keywords, LayerSpec, Lends, Lent, LentFrom, LibraryOrder, LibraryPosition, LibraryRest,
-        ManaChange, ManaColor, ManaCost, ManaRestriction, ManaSet, Modification, Named, Objects,
-        Place, PlayerRules, Players, Prevention, Prompt, Protection, Purpose, PutOnto, Recipients,
-        Replacement, Rewrite, RuleChange, SpellCost, Subtype, Subtypes, Supertypes, Taken, Tapped,
-        TargetKind, TargetSpec, Term, TextWord, TextWords, Trigger, TriggerEvent, TurnPhase,
-        TurnStep, Types, When, Zone, ZoneSet, card, card_with_shape, mana,
+        Keywords, Kinds, LayerSpec, Lends, Lent, LentFrom, LibraryOrder, LibraryPosition,
+        LibraryRest, ManaChange, ManaColor, ManaCost, ManaRestriction, ManaSet, Modification,
+        Named, Objects, Place, PlayerRules, Players, Prevention, Prompt, Protection, Purpose,
+        PutOnto, Recipients, Replacement, Rewrite, RuleChange, SpellCost, Subtype, Subtypes,
+        Supertypes, Taken, Tapped, TargetKind, TargetSpec, Term, TextWord, TextWords, Trigger,
+        TriggerEvent, TurnPhase, TurnStep, Types, When, Zone, ZoneSet, card, card_with_shape, mana,
     };
 }

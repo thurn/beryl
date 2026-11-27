@@ -84,7 +84,10 @@ pub(super) fn has_extra_mana<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Sl
         return true;
     }
     s.abilities(t, slot).any(|(_, a)| {
-        is_priced(a) || (a.kind() == AbilityKind::Mana && a.produces() == ManaSet::NONE)
+        is_priced(a)
+            || (a.kind() == AbilityKind::Mana
+                && a.produces() == ManaSet::NONE
+                && !crate::table::is_could_produce(a))
     })
 }
 
@@ -133,7 +136,7 @@ fn collect_extra<L: Layout>(
             let mut terms = [EvaluatedTerm::default(); 8];
             terms[0] = EvaluatedTerm {
                 kinds: 1 << k,
-                amount: 1,
+                amount: changes.multiplier,
                 uniform: false,
             };
             let mut count = 1usize;
@@ -206,6 +209,9 @@ fn eval_activation<L: Layout>(
     }
     let mut terms = [EvaluatedTerm::default(); 8];
     let mut count = 0usize;
+    let tapped = a.cost().does(CostAction::Tap);
+    let multiplier = if tapped { changes.multiplier } else { 1 };
+    let words = s.words_of(slot);
     for term in a.product() {
         let amount = if let Amount::Fixed(n) = term.amount {
             n
@@ -215,15 +221,43 @@ fn eval_activation<L: Layout>(
         if amount == 0 {
             continue;
         }
-        terms[count] = EvaluatedTerm {
-            kinds: term.kinds,
-            amount,
-            uniform: term.uniform,
+        let kinds = match term.kinds {
+            beryl_card::Kinds::Fixed(bits) => bits,
+            beryl_card::Kinds::CouldProduce(filter) => {
+                super::changes::could_produce(s, t, s.controller(slot), filter, &words)
+            }
         };
-        count += 1;
+        if kinds == 0 {
+            continue;
+        }
+        if multiplier > 1 && !term.uniform && !kinds.is_power_of_two() && amount > 1 {
+            for _ in 0..amount {
+                if count >= terms.len() {
+                    return Err(Full);
+                }
+                terms[count] = EvaluatedTerm {
+                    kinds,
+                    amount: multiplier,
+                    uniform: true,
+                };
+                count += 1;
+            }
+        } else {
+            let scaled = amount.checked_mul(multiplier).ok_or(Full)?;
+            let uniform = term.uniform || (multiplier > 1 && !kinds.is_power_of_two());
+            if count >= terms.len() {
+                return Err(Full);
+            }
+            terms[count] = EvaluatedTerm {
+                kinds,
+                amount: scaled,
+                uniform,
+            };
+            count += 1;
+        }
     }
     let own_term_count = count;
-    let type_produced = if a.cost().does(CostAction::Tap) {
+    let type_produced = if tapped {
         super::changes::append_extra_mana(&mut terms, own_term_count, &mut count, changes.fixed)?;
         changes.type_produced
     } else {
@@ -600,11 +634,15 @@ pub(super) fn activate_extra_step<L: Layout>(
     let permanent = tapped_source(s, slot);
     let has_changes =
         act.ability.is_none() && t.can(Capability::ManaChanges) && s.has_mana_changes();
-    let extra = if has_changes {
+    let (multiplier, extra) = if has_changes {
         let color_ix = act.terms()[0].kinds.trailing_zeros() as usize;
-        super::changes::matching(s, t, slot)?.add_for_single_color(ManaColor::ALL[color_ix])?
+        let changes = super::changes::matching(s, t, slot)?;
+        (
+            changes.multiplier,
+            changes.add_for_single_color(ManaColor::ALL[color_ix])?,
+        )
     } else {
-        [0; KINDS]
+        (1, [0; KINDS])
     };
     event::set_tapped(s, t, sink, permanent, true)?;
     if act.consumed {
@@ -634,7 +672,13 @@ pub(super) fn activate_extra_step<L: Layout>(
                 },
                 ..PendingTrigger::default()
             };
-            crate::interpret::mana_ability(s, t, sink, activation, intrinsic, color)?;
+            if multiplier > 1 {
+                crate::interpret::mana_ability_multiplied(
+                    s, t, sink, activation, intrinsic, color, multiplier,
+                )?;
+            } else {
+                crate::interpret::mana_ability(s, t, sink, activation, intrinsic, color)?;
+            }
             if has_changes {
                 super::changes::add_extra(s, sink, permanent, player, extra);
             }

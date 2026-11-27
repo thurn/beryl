@@ -345,3 +345,119 @@ pub const WILD_GROWTH: &[Scenario] = &[
             THEM.tapped(names::ISLAND, 1),
         ]),
 ];
+
+/// Mana-multiplying replacement effects (CR 106.12b): Mana Reflection multiplies the tapped
+/// ability's own product without multiplying triggered mana abilities (`ManaChange::Adds`),
+/// and multiple copies multiply together.
+pub const MANA_REFLECTION: &[Scenario] = &[
+    Scenario::new("Mana Reflection doubles an Island")
+        .battlefield(P0, &[names::MANA_REFLECTION, names::ISLAND])
+        .hand(P0, &[props::VANILLA.card])
+        .actions(&[
+            ME.casts(props::VANILLA.card),
+            Resolve,
+            ME.controls(props::VANILLA.card, 1),
+            ME.tapped(names::ISLAND, 1),
+            ME.mana(ManaColor::Blue, 0),
+        ]),
+    Scenario::new("Mana Reflection doubles a Mana Crypt")
+        .interaction(&[names::MANA_CRYPT])
+        .battlefield(P0, &[names::MANA_REFLECTION, names::MANA_CRYPT])
+        .hand(P0, &[props::EQUIPMENT.card; 4])
+        .actions(&[
+            ME.casts(props::EQUIPMENT.card),
+            Resolve,
+            ME.casts(props::EQUIPMENT.card),
+            Resolve,
+            ME.casts(props::EQUIPMENT.card),
+            Resolve,
+            ME.casts(props::EQUIPMENT.card),
+            Resolve,
+            ME.controls(props::EQUIPMENT.card, 4),
+            ME.tapped(names::MANA_CRYPT, 1),
+            ME.mana(ManaColor::Colorless, 0),
+        ]),
+    Scenario::new("Two Mana Reflections quadruple an Island")
+        .battlefield(
+            P0,
+            &[
+                names::MANA_REFLECTION,
+                names::MANA_REFLECTION,
+                names::ISLAND,
+            ],
+        )
+        .hand(P0, &[props::PLANESWALKER.card])
+        .actions(&[
+            ME.casts(props::PLANESWALKER.card),
+            Resolve,
+            ME.controls(props::PLANESWALKER.card, 1),
+            ME.tapped(names::ISLAND, 1),
+            ME.mana(ManaColor::Blue, 0),
+        ]),
+    Scenario::new("Mana Reflection with High Tide makes three blue from an Island, not four")
+        .interaction(&[names::HIGH_TIDE])
+        .battlefield(P0, &[names::MANA_REFLECTION, names::ISLAND, names::ISLAND])
+        .hand(
+            P0,
+            &[names::HIGH_TIDE, props::EQUIPMENT.card, props::VANILLA.card],
+        )
+        .actions(&[
+            // First Island makes {U}{U}: {U} casts High Tide and {U} casts the Equipment.
+            ME.casts(names::HIGH_TIDE),
+            Resolve,
+            ME.casts(props::EQUIPMENT.card),
+            Resolve,
+            // Second Island makes {U}{U} (doubled) + {U} (High Tide) = {U}{U}{U}, leaving 1 blue
+            // after {1}{U} (not 2, as four blue would).
+            ME.casts(props::VANILLA.card),
+            Resolve,
+            ME.controls(props::VANILLA.card, 1),
+            ME.mana(ManaColor::Blue, 1),
+        ]),
+];
+
+/// Reading what a source could produce (CR 106.7): Reflecting Pool makes any type a land its
+/// controller controls could produce, ignoring costs and tapped state, with a least fixed point
+/// so two Reflecting Pools alone make nothing and may still be tapped.
+pub const REFLECTING_POOL: &[Scenario] = &[
+    Scenario::new("Reflecting Pool with a Tundra makes white or blue")
+        .permanents(
+            P0,
+            &[
+                Permanent::new(names::TUNDRA).tapped(),
+                Permanent::new(names::REFLECTING_POOL),
+                Permanent::new(names::REFLECTING_POOL),
+                Permanent::new(names::REFLECTING_POOL),
+            ],
+        )
+        .hand(P0, &[props::ARTIFACT.card, props::VANILLA.card])
+        .actions(&[
+            ME.casts(props::ARTIFACT.card),
+            Resolve,
+            ME.casts(props::VANILLA.card),
+            Resolve,
+            ME.controls(props::ARTIFACT.card, 1),
+            ME.controls(props::VANILLA.card, 1),
+            ME.tapped(names::REFLECTING_POOL, 3),
+        ]),
+    Scenario::new("Two Reflecting Pools alone make nothing and may still be tapped")
+        .battlefield(P0, &[names::REFLECTING_POOL, names::REFLECTING_POOL])
+        .actions(&[
+            ME.activates(names::REFLECTING_POOL, 0),
+            ME.tapped(names::REFLECTING_POOL, 1),
+            ME.mana(ManaColor::White, 0),
+            ME.mana(ManaColor::Blue, 0),
+            ME.mana(ManaColor::Colorless, 0),
+        ]),
+    Scenario::new("Reflecting Pool reads a land's ability whose cost cannot be paid")
+        .interaction(&[names::SKYCLOUD_EXPANSE])
+        .battlefield(P0, &[names::REFLECTING_POOL, names::SKYCLOUD_EXPANSE])
+        .hand(P0, &[props::ARTIFACT.card])
+        .actions(&[
+            ME.casts(props::ARTIFACT.card),
+            Resolve,
+            ME.controls(props::ARTIFACT.card, 1),
+            ME.tapped(names::REFLECTING_POOL, 1),
+            ME.tapped(names::SKYCLOUD_EXPANSE, 0),
+        ]),
+];

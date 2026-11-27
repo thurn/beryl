@@ -34,6 +34,19 @@ fn is_tap_multi_mana(a: &Ability) -> bool {
         && matches!(a.cost().parts(), [CostPart::This(CostAction::Tap)])
 }
 
+fn is_tap_multi_mana_now<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+    a: &Ability,
+    words: &crate::card::Words,
+) -> bool {
+    is_tap_multi_mana(a)
+        && allowed(s, t, a, player, words)
+        && (!crate::table::is_could_produce(a)
+            || super::changes::could_produce_of(s, t, player, a, words) == 0)
+}
+
 fn has_tap_multi_mana<L: Layout>(
     s: &State<L>,
     t: &GameTable,
@@ -46,7 +59,7 @@ fn has_tap_multi_mana<L: Layout>(
     }
     let words = s.words_of(slot);
     s.abilities(t, slot)
-        .any(|(_, a)| is_tap_multi_mana(a) && allowed(s, t, a, player, &words))
+        .any(|(_, a)| is_tap_multi_mana_now(s, t, player, a, &words))
 }
 
 /// The standalone mana activations offered at priority, under manual payment or to the player
@@ -183,6 +196,7 @@ fn activate_multi_mana<L: Layout>(
     event::set_tapped(s, t, sink, permanent, true)?;
     crate::coverage::hit(ability);
     let source = Some(permanent.into());
+    let words = s.words_of(slot);
     let mut produced_mask = 0u8;
     for term in ability.product() {
         let amount = if let Amount::Fixed(n) = term.amount {
@@ -193,9 +207,19 @@ fn activate_multi_mana<L: Layout>(
         if amount == 0 {
             continue;
         }
-        let kind = ManaColor::ALL[lowest_kind(term.kinds)];
+        let kinds = match term.kinds {
+            beryl_card::Kinds::Fixed(bits) => bits,
+            beryl_card::Kinds::CouldProduce(filter) => {
+                super::changes::could_produce(s, t, player, filter, &words)
+            }
+        };
+        if kinds == 0 {
+            continue;
+        }
+        let scaled = amount.checked_mul(changes.multiplier).ok_or(Full)?;
+        let kind = ManaColor::ALL[lowest_kind(kinds)];
         produced_mask |= 1 << kind.index();
-        let added = s.add_mana(player, source, kind, amount);
+        let added = s.add_mana(player, source, kind, scaled);
         sink.note_from(source, added);
     }
     if has_changes {
@@ -354,7 +378,7 @@ fn add_activations<L: Layout>(
         if rich && can_tap(s, player, slot, d) {
             let words = s.words_of(slot);
             for (ability, a) in s.abilities(t, slot) {
-                if is_tap_multi_mana(a) && allowed(s, t, a, player, &words) {
+                if is_tap_multi_mana_now(s, t, player, a, &words) {
                     out.push(Opt::Activate { slot, ability })?;
                 }
             }

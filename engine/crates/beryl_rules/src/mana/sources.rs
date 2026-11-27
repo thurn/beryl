@@ -7,12 +7,12 @@ use crate::bitboard::Bitboard;
 use crate::card::AbilityKind;
 #[cfg(doc)]
 use crate::card::ManaColor;
-use crate::card::{Ability, AbilityIx, Face, Keywords, ObjectAbility, Types, Words};
+use crate::card::{AbilityIx, Face, Keywords, ObjectAbility, Types};
+use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::state::{Derived, State};
 use crate::table::{Capability, GameTable, ManaFace, has_other_ability, is_sacrificed, is_simple};
-use crate::{filter::Evaluate, fixed::Full};
 
 use super::remembered::{self, Paying};
 use super::rich::Extra;
@@ -122,22 +122,7 @@ pub(crate) struct Sources<L: Layout = Small> {
     pub(super) extras: Vec<Extra<L>>,
 }
 
-/// Whether `player` may activate a mana ability now (see
-/// [CR 602.5](https://yawgatog.com/resources/magic-rules/#R6025)): "A player can't begin to
-/// activate an ability that's prohibited from being activated." Read through `words`.
-pub(super) fn allowed<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    a: &Ability,
-    player: Seat,
-    words: &Words,
-) -> bool {
-    a.only_if_you_control().is_none_or(|f| {
-        s.battlefield()
-            .iter()
-            .any(|&slot| s.controller(slot) == player && f.matches(s, t, slot, player, words))
-    })
-}
+pub(super) use super::changes::allowed;
 
 /// The rank of every class a plan consumes, above any other source's: kinds count for at
 /// most five colors and {C}, two ranks each.
@@ -287,13 +272,22 @@ fn read_source<L: Layout>(
     }
     let mut abilities = s.abilities(t, slot).map(|(_, a)| a);
     for a in abilities.clone().filter(|a| is_simple(a)) {
-        conditional |= a.only_if_you_control().is_some();
+        let dynamic = crate::table::is_could_produce(a);
+        conditional |= dynamic || a.only_if_you_control().is_some();
         if !allowed(s, t, a, player, &words) {
             continue;
         }
-        kinds |= a.produces().colors;
-        debug_assert!(amount == 0 || amount == a.produces().amount);
-        amount = a.produces().amount;
+        let (k, n) = if dynamic {
+            let cp = super::changes::could_produce_of(s, t, player, a, &words);
+            (cp, u8::from(cp != 0))
+        } else {
+            (a.produces().colors, a.produces().amount)
+        };
+        if n > 0 {
+            kinds |= k;
+            debug_assert!(amount == 0 || amount == n);
+            amount = n;
+        }
     }
     if kinds == 0 {
         // A Treasure: its one mana ability sacrifices it.

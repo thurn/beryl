@@ -16,8 +16,11 @@ class Payments:
     sources for a payment the commands leave to it, which later payments must allow for.
     """
 
-    def __init__(self, cards: Cards) -> None:
+    def __init__(
+        self, cards: Cards, player_cards: dict[str, set[str]] | None = None
+    ) -> None:
         self.cards = cards
+        self.player_cards: dict[str, set[str]] = player_cards or {}
         # Players whose earlier payments were left to XMage (`pay`), so their untapped
         # sources may differ from Beryl's when paying another cost.
         self.left_to_xmage: set[str] = set()
@@ -89,7 +92,9 @@ class Payments:
         if (
             not self.cards.change_land_types()
             and who not in self.left_to_xmage
-            and any(map(self.cards.mana_choice, taps))
+            and any(
+                self.cards.mana_choice(t) or _any_type_mana(self.cards, t) for t in taps
+            )
         ):
             try:
                 return self.as_made_taps(who, at, taps, list(mana))
@@ -146,15 +151,48 @@ class Payments:
         for name in taps:
             made = made_by(name, mana)
             text = self.cards.made_text(name, made)
+            if text is None and _any_type_mana(self.cards, name):
+                text = "{T}: Add one mana of any type"
             if text is None:
                 raise Unsupported(f"tapping {name} for mana no ability text names")
             lines.append(self.cards.tap_source(at, who, name, text))
-            if text.endswith("any color"):
+            if text.endswith("any color") or (
+                text.endswith("any type")
+                and _multiple_land_mana_types(
+                    self.cards, self.player_cards.get(who, set())
+                )
+            ):
                 lines.append(
                     f"setChoice({who}, {java_string(cast(str, made['color']))});"
                 )
         self.as_made = True
         return lines
+
+
+def _any_type_mana(cards: Cards, source: str) -> bool:
+    """Whether `source` has a mana ability making mana of any type another permanent could
+    produce, whose color XMage asks with a choice prompt when two or more types exist.
+    """
+    return any("any type that" in p for p in cards.paragraphs(source))
+
+
+def _multiple_land_mana_types(cards: Cards, names: set[str]) -> bool:
+    """Whether the cards in `names` together have mana abilities producing more than one
+    type of mana (so XMage prompts for a mana type choice on an `_any_type_mana` land).
+    """
+    colors: set[str] = set()
+    for name in names:
+        for a in cards.abilities(name):
+            if a["kind"] != "Mana":
+                continue
+            produces = cast(Json, a.get("produces", {}))
+            colors.update(cast(list[str], produces.get("colors", [])))
+        for p in cards.paragraphs(name):
+            if "{T}: Add " in p:
+                for sym, col in _MANA_SYMBOLS.items():
+                    if sym in p:
+                        colors.add(col)
+    return len(colors) > 1
 
 
 _MANA_SYMBOLS = {

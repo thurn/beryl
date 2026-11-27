@@ -62,11 +62,30 @@ pub(crate) fn add_product_instruction<L: Layout>(
     let terms = resolution.ability.product();
     let mut added = 0;
     for term in terms {
-        let kind = if term.kinds.is_power_of_two() {
-            beryl_card::ManaColor::ALL[term.kinds.trailing_zeros() as usize]
-        } else {
-            debug_assert!(term.kinds & (1 << chosen.index()) != 0);
-            chosen
+        let kind = match term.kinds {
+            beryl_card::Kinds::Fixed(bits) if bits.is_power_of_two() => {
+                beryl_card::ManaColor::ALL[bits.trailing_zeros() as usize]
+            }
+            beryl_card::Kinds::Fixed(bits) => {
+                debug_assert!(bits & (1 << chosen.index()) != 0);
+                chosen
+            }
+            beryl_card::Kinds::CouldProduce(filter) => {
+                let controller = run.resolution().entry.controller();
+                let source_obj = run.resolution().entry.object();
+                let g = run.game();
+                let words = source_obj
+                    .filter(|&o| g.state.is_current(o))
+                    .map(|o| g.state.words_of(o.slot))
+                    .unwrap_or_default();
+                let bits =
+                    super::changes::could_produce(g.state, g.table, controller, filter, &words);
+                if bits == 0 {
+                    continue;
+                }
+                debug_assert!(bits & (1 << chosen.index()) != 0);
+                chosen
+            }
         };
         let amount = run.scene().amount(term.amount);
         for player in run.in_turn_order(players) {

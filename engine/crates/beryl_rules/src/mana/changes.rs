@@ -1,7 +1,9 @@
 //! Live mana-changing effects ([`beryl_card::ManaChange`]) applied when a permanent is tapped
-//! for mana.
+//! for mana, and the types of mana a permanent could produce ([CR 106.7]).
 //!
-//! Implements: CR 106.12, CR 605.1b, CR 605.4a
+//! Implements: CR 106.7, CR 106.12, CR 605.1b, CR 605.4a
+//!
+//! [CR 106.7]: https://yawgatog.com/resources/magic-rules/#R1067
 
 use crate::filter::Evaluate;
 use crate::fixed::Full;
@@ -9,22 +11,37 @@ use crate::ids::{CardId, Seat};
 use crate::layout::Layout;
 use crate::replacement::event::Sink;
 use crate::state::{ManaEffect, State};
-use crate::table::{Capability, GameTable};
-use beryl_card::{Added, Behavior, ManaChange, ManaColor, Tapped, Words};
+use crate::table::{Capability, GameTable, is_could_produce};
+use beryl_card::{
+    Ability, AbilityKind, Added, Amount, Behavior, Filter, Kinds, ManaChange, ManaColor, Tapped,
+    Term, Words,
+};
 use beryl_kernel::event::Replaces;
 use beryl_kernel::reference::Permanent;
 
 use super::KINDS;
 
-/// Additional mana contributed by all live mana-changing effects and permanent abilities when
-/// a permanent is tapped for mana.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// Additional mana and multipliers contributed by all live mana-changing effects and permanent
+/// abilities when a permanent is tapped for mana.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct MatchingChanges {
     /// Fixed additional mana of each kind ([`Added::Of`]).
     pub(super) fixed: [u8; KINDS],
     /// Count of triggered mana abilities that add one mana of any type the tap produced
     /// ([`Added::TypeProduced`]).
     pub(super) type_produced: u8,
+    /// Product of all matching [`ManaChange::Multiplies`] replacement effects (1 when none).
+    pub(super) multiplier: u8,
+}
+
+impl Default for MatchingChanges {
+    fn default() -> Self {
+        Self {
+            fixed: [0; KINDS],
+            type_produced: 0,
+            multiplier: 1,
+        }
+    }
 }
 
 impl MatchingChanges {
@@ -80,17 +97,22 @@ pub(super) fn read_mana_change(
 #[cold]
 #[inline(never)]
 pub(super) fn matches_any<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> bool {
+    let tapped_controller = s.controller(slot);
     for (card, effect) in s.mana_effects() {
         let change = read_mana_change(t, card, effect);
-        if let ManaChange::Adds {
-            tapped: Tapped::A(filter),
-            ..
-        } = *change
-        {
-            let words = Words::of_changes(effect.colors, effect.lands);
-            if filter.matches(s, t, slot, effect.controller, &words) {
+        let words = Words::of_changes(effect.colors, effect.lands);
+        match *change {
+            ManaChange::Adds {
+                tapped: Tapped::A(filter),
+                ..
+            } if filter.matches(s, t, slot, effect.controller, &words) => return true,
+            ManaChange::Multiplies { tapped, .. }
+                if tapped_controller == effect.controller
+                    && tapped.matches(s, t, slot, effect.controller, &words) =>
+            {
                 return true;
             }
+            ManaChange::Adds { .. } | ManaChange::Multiplies { .. } => {}
         }
     }
     if s.replacing().is_some_and(Replaces::has_mana_change) {
@@ -99,11 +121,27 @@ pub(super) fn matches_any<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot)
             if !s.definition(source_slot).facts(t).has_mana_change && !merges {
                 continue;
             }
+            let source_controller = s.controller(source_slot);
             for (_, a) in s.abilities(t, source_slot) {
-                if let Some(&ManaChange::Adds { tapped, .. }) = a.changes_mana()
-                    && permanent_matches(s, t, source_slot, slot, tapped)
-                {
-                    return true;
+                match a.changes_mana() {
+                    Some(&ManaChange::Adds { tapped, .. })
+                        if permanent_matches(s, t, source_slot, slot, tapped) =>
+                    {
+                        return true;
+                    }
+                    Some(&ManaChange::Multiplies { tapped, .. })
+                        if tapped_controller == source_controller
+                            && tapped.matches(
+                                s,
+                                t,
+                                slot,
+                                source_controller,
+                                &s.words_of(source_slot),
+                            ) =>
+                    {
+                        return true;
+                    }
+                    Some(&ManaChange::Adds { .. } | &ManaChange::Multiplies { .. }) | None => {}
                 }
             }
         }
@@ -111,10 +149,10 @@ pub(super) fn matches_any<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot)
     false
 }
 
-/// Total additional fixed mana and [`Added::TypeProduced`] triggers contributed by all live
-/// mana-changing effects and permanent abilities when `slot` is tapped for mana ([CR 106.12]):
-/// "To 'tap [a permanent] for mana' is to activate a mana ability of that permanent that includes
-/// the {T} symbol in its activation cost."
+/// Total additional fixed mana, [`Added::TypeProduced`] triggers, and multipliers contributed by
+/// all live mana-changing effects and permanent abilities when `slot` is tapped for mana
+/// ([CR 106.12]): "To 'tap [a permanent] for mana' is to activate a mana ability of that
+/// permanent that includes the {T} symbol in its activation cost."
 ///
 /// [CR 106.12]: https://yawgatog.com/resources/magic-rules/#R10612
 #[cold]
@@ -125,18 +163,24 @@ pub(super) fn matching<L: Layout>(
     slot: L::Slot,
 ) -> Result<MatchingChanges, Full> {
     let mut out = MatchingChanges::default();
+    let tapped_controller = s.controller(slot);
     for (card, effect) in s.mana_effects() {
         let change = read_mana_change(t, card, effect);
-        let ManaChange::Adds {
-            tapped: Tapped::A(filter),
-            added,
-        } = *change
-        else {
-            continue;
-        };
         let words = Words::of_changes(effect.colors, effect.lands);
-        if filter.matches(s, t, slot, effect.controller, &words) {
-            record_added(&mut out, added)?;
+        match *change {
+            ManaChange::Adds {
+                tapped: Tapped::A(filter),
+                added,
+            } if filter.matches(s, t, slot, effect.controller, &words) => {
+                record_added(&mut out, added)?;
+            }
+            ManaChange::Multiplies { tapped, by }
+                if tapped_controller == effect.controller
+                    && tapped.matches(s, t, slot, effect.controller, &words) =>
+            {
+                out.multiplier = out.multiplier.checked_mul(by).ok_or(Full)?;
+            }
+            ManaChange::Adds { .. } | ManaChange::Multiplies { .. } => {}
         }
     }
     if s.replacing().is_some_and(Replaces::has_mana_change) {
@@ -145,12 +189,29 @@ pub(super) fn matching<L: Layout>(
             if !s.definition(source_slot).facts(t).has_mana_change && !merges {
                 continue;
             }
+            let source_controller = s.controller(source_slot);
             for (_, a) in s.abilities(t, source_slot) {
-                if let Some(&ManaChange::Adds { tapped, added }) = a.changes_mana()
-                    && permanent_matches(s, t, source_slot, slot, tapped)
-                {
-                    crate::coverage::hit(a);
-                    record_added(&mut out, added)?;
+                match a.changes_mana() {
+                    Some(&ManaChange::Adds { tapped, added })
+                        if permanent_matches(s, t, source_slot, slot, tapped) =>
+                    {
+                        crate::coverage::hit(a);
+                        record_added(&mut out, added)?;
+                    }
+                    Some(&ManaChange::Multiplies { tapped, by })
+                        if tapped_controller == source_controller
+                            && tapped.matches(
+                                s,
+                                t,
+                                slot,
+                                source_controller,
+                                &s.words_of(source_slot),
+                            ) =>
+                    {
+                        crate::coverage::hit(a);
+                        out.multiplier = out.multiplier.checked_mul(by).ok_or(Full)?;
+                    }
+                    Some(&ManaChange::Adds { .. } | &ManaChange::Multiplies { .. }) | None => {}
                 }
             }
         }
@@ -189,10 +250,144 @@ pub(super) fn standalone_kinds<L: Layout>(
     let words = s.words_of(slot);
     for (_, a) in s.abilities(t, slot) {
         if crate::table::is_simple(a) && super::sources::allowed(s, t, a, player, &words) {
-            kinds |= a.produces().colors;
+            if is_could_produce(a) {
+                kinds |= could_produce_of(s, t, player, a, &words);
+            } else {
+                kinds |= a.produces().colors;
+            }
         }
     }
     kinds
+}
+
+/// Whether `player` may activate a mana ability now (see
+/// [CR 602.5](https://yawgatog.com/resources/magic-rules/#R6025)): "A player can't begin to
+/// activate an ability that's prohibited from being activated." Read through `words`.
+pub(super) fn allowed<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    a: &Ability,
+    player: Seat,
+    words: &Words,
+) -> bool {
+    a.only_if_you_control().is_none_or(|f| {
+        s.battlefield()
+            .iter()
+            .any(|&slot| s.controller(slot) == player && f.matches(s, t, slot, player, words))
+    })
+}
+
+/// Evaluates the [`Kinds::CouldProduce`] filter of a single-term ability `a` ([`is_could_produce`]).
+#[inline]
+pub(super) fn could_produce_of<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    controller: Seat,
+    a: &Ability,
+    words: &Words,
+) -> u8 {
+    match a.product() {
+        [
+            Term {
+                kinds: Kinds::CouldProduce(filter),
+                ..
+            },
+        ] => could_produce(s, t, controller, filter, words),
+        _ => 0,
+    }
+}
+
+/// The union of mana types that permanents matching `filter` (evaluated for `controller` with
+/// `words`) could produce ([CR 106.7]), ignoring costs and tapped state and reading only
+/// abilities of the permanents themselves (not `ManaChange::Adds` triggers). Abilities whose
+/// own product is [`Kinds::CouldProduce`] start empty and are iterated to their least fixed
+/// point in at most six rounds.
+///
+/// [CR 106.7]: https://yawgatog.com/resources/magic-rules/#R1067
+#[cold]
+#[inline(never)]
+pub(super) fn could_produce<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    controller: Seat,
+    filter: &Filter,
+    words: &Words,
+) -> u8 {
+    let battlefield = s.battlefield();
+    let mut known = vec![0u8; battlefield.len()];
+    let mut has_dynamic = false;
+    for (i, &slot) in battlefield.iter().enumerate() {
+        let mut kinds = s.intrinsic_mana(t, slot);
+        for (_, a) in s.abilities(t, slot) {
+            if a.kind() != AbilityKind::Mana {
+                continue;
+            }
+            for term in a.product() {
+                let amount = if let Amount::Fixed(n) = term.amount {
+                    n
+                } else {
+                    crate::interpret::amount_of(s, t, slot, term.amount)
+                };
+                if amount == 0 {
+                    continue;
+                }
+                match term.kinds {
+                    Kinds::Fixed(bits) => kinds |= bits,
+                    Kinds::CouldProduce(_) => has_dynamic = true,
+                }
+            }
+        }
+        known[i] = kinds;
+    }
+    if has_dynamic {
+        for _ in 0..KINDS {
+            let mut changed = false;
+            for (i, &slot) in battlefield.iter().enumerate() {
+                let mut added = 0u8;
+                let slot_controller = s.controller(slot);
+                let slot_words = s.words_of(slot);
+                for (_, a) in s.abilities(t, slot) {
+                    if a.kind() != AbilityKind::Mana {
+                        continue;
+                    }
+                    for term in a.product() {
+                        let Kinds::CouldProduce(sub_filter) = term.kinds else {
+                            continue;
+                        };
+                        let amount = if let Amount::Fixed(n) = term.amount {
+                            n
+                        } else {
+                            crate::interpret::amount_of(s, t, slot, term.amount)
+                        };
+                        if amount == 0 {
+                            continue;
+                        }
+                        for (j, &other) in battlefield.iter().enumerate() {
+                            if known[j] != 0
+                                && sub_filter.matches(s, t, other, slot_controller, &slot_words)
+                            {
+                                added |= known[j];
+                            }
+                        }
+                    }
+                }
+                if known[i] | added != known[i] {
+                    known[i] |= added;
+                    changed = true;
+                }
+            }
+            if !changed {
+                break;
+            }
+        }
+    }
+    let mut out = 0u8;
+    for (j, &slot) in battlefield.iter().enumerate() {
+        if known[j] != 0 && filter.matches(s, t, slot, controller, words) {
+            out |= known[j];
+        }
+    }
+    out
 }
 
 /// Appends non-zero entries of `extra` onto `terms` starting at `fixed_start`, merging into an

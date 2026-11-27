@@ -145,14 +145,27 @@ impl Ctx {
 
     /// One term of a mana ability's product ([`Term`]).
     fn term(&mut self, term: Term) -> String {
+        let bits = match term.kinds {
+            crate::mana::Kinds::Fixed(bits) => bits,
+            crate::mana::Kinds::CouldProduce(filter) => {
+                let kind = super::filters::Kind::Permanent;
+                let what = self.noun(*filter, kind).indefinite(kind);
+                let count = if let Amount::Fixed(n) = term.amount {
+                    number(n)
+                } else {
+                    self.amount(term.amount)
+                };
+                return format!("{count} mana of any type that {what} could produce");
+            }
+        };
         let kinds: Vec<ManaColor> = ManaColor::ALL
             .into_iter()
-            .filter(|&color| term.kinds & (1 << color.index()) != 0)
+            .filter(|&color| bits & (1 << color.index()) != 0)
             .collect();
         match (term.amount, kinds.as_slice()) {
             (Amount::Fixed(n), [kind]) => symbol(*kind).repeat(usize::from(n)),
             (Amount::Fixed(n), _) if term.uniform => mana_set(crate::ManaSet {
-                colors: term.kinds,
+                colors: bits,
                 amount: n,
             }),
             // Each unit of its own kind: every choice, as "{W}{W}, {W}{U}, or {U}{U}" lists.

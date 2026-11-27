@@ -642,7 +642,7 @@ pub(super) fn check_mana_changes(def: &CardDef) -> Result<(), super::TableError>
                         tapped: Tapped::A(_) | Tapped::AttachedTo,
                         added,
                     } if supported_added(added)
-                );
+                ) || matches!(*change, ManaChange::Multiplies { by, .. } if by >= 2);
                 if !ok {
                     return Err(super::TableError::ManaChange { card: def.name });
                 }
@@ -652,13 +652,13 @@ pub(super) fn check_mana_changes(def: &CardDef) -> Result<(), super::TableError>
                     matches!(
                         instruction,
                         Effect::ChangeMana { change, .. }
-                            if !matches!(
+                            if !(matches!(
                                 **change,
                                 ManaChange::Adds {
                                     tapped: Tapped::A(_),
                                     added,
                                 } if supported_added(added)
-                            )
+                            ) || matches!(**change, ManaChange::Multiplies { by, .. } if by >= 2))
                     )
                 })
             {

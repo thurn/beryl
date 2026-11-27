@@ -442,10 +442,27 @@ impl ManaSet {
 /// kind, `uniform` says nothing, and the builders set it false.
 ///
 /// [CR 106.1b]: https://yawgatog.com/resources/magic-rules/#R1061b
+/// The kinds of mana a [`Term`] can produce: either a fixed set of mana types or any type
+/// that a permanent matching a filter could produce ([CR 106.7]).
+///
+/// [CR 106.7]: https://yawgatog.com/resources/magic-rules/#R1067
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Kinds {
+    /// A fixed set of mana types, a bit per [`ManaColor`].
+    Fixed(u8),
+    /// Any type of mana that a permanent matching the filter could produce ([CR 106.7]):
+    /// "Some abilities produce mana based on the type of mana another permanent or permanents
+    /// 'could produce.' The type of mana a permanent could produce at any time includes any
+    /// type of mana that an ability of that permanent would produce if the ability were to
+    /// resolve at that time, taking into account any applicable replacement effects in any
+    /// possible order."
+    CouldProduce(&'static Filter),
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Term {
-    /// A bit per [`ManaColor`].
-    pub kinds: u8,
+    /// The kinds of mana this term can produce.
+    pub kinds: Kinds,
     pub amount: Amount,
     pub uniform: bool,
 }
@@ -454,7 +471,7 @@ impl Term {
     /// `amount` mana of one kind, as "{U}{U}" in "Add {U}{U}." says.
     pub const fn of(color: ManaColor, amount: u8) -> Term {
         Term {
-            kinds: 1 << color.index(),
+            kinds: Kinds::Fixed(1 << color.index()),
             amount: Amount::Fixed(amount),
             uniform: false,
         }
@@ -469,7 +486,7 @@ impl Term {
     /// you control." says.
     pub const fn counted(color: ManaColor, amount: Amount) -> Term {
         Term {
-            kinds: 1 << color.index(),
+            kinds: Kinds::Fixed(1 << color.index()),
             amount,
             uniform: false,
         }
@@ -479,8 +496,19 @@ impl Term {
     /// {U}{U}." says of two units of {W} and {U}.
     pub const fn each_of(kinds: u8, amount: u8) -> Term {
         Term {
-            kinds,
+            kinds: Kinds::Fixed(kinds),
             amount: Amount::Fixed(amount),
+            uniform: false,
+        }
+    }
+
+    /// One mana of any type that a permanent matching `filter` could produce ([CR 106.7]).
+    ///
+    /// [CR 106.7]: https://yawgatog.com/resources/magic-rules/#R1067
+    pub const fn could_produce(filter: &'static Filter) -> Term {
+        Term {
+            kinds: Kinds::CouldProduce(filter),
+            amount: Amount::Fixed(1),
             uniform: false,
         }
     }
@@ -488,7 +516,7 @@ impl Term {
     /// The term of a [`ManaSet`]: `amount` mana of one kind of its colors.
     pub const fn of_set(set: ManaSet) -> Term {
         Term {
-            kinds: set.colors,
+            kinds: Kinds::Fixed(set.colors),
             amount: Amount::Fixed(set.amount),
             uniform: set.colors.count_ones() > 1,
         }
@@ -497,14 +525,11 @@ impl Term {
     /// The [`ManaSet`] that says the same as this term, if one does: a fixed amount, of one
     /// kind, of units of one kind together ([`Term::uniform`]), or a single unit.
     pub const fn as_set(self) -> Option<ManaSet> {
-        let Amount::Fixed(amount) = self.amount else {
+        let (Kinds::Fixed(colors), Amount::Fixed(amount)) = (self.kinds, self.amount) else {
             return None;
         };
-        if self.kinds.is_power_of_two() || self.uniform || amount == 1 {
-            Some(ManaSet {
-                colors: self.kinds,
-                amount,
-            })
+        if colors.is_power_of_two() || self.uniform || amount == 1 {
+            Some(ManaSet { colors, amount })
         } else {
             None
         }

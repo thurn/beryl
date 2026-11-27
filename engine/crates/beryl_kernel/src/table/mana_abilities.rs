@@ -22,6 +22,21 @@ pub fn is_simple(a: &Ability) -> bool {
     is_tap_for_mana(a) && a.spend().is_none()
 }
 
+/// Whether `a` is a `{T}`-only unrestricted mana ability whose product is a single
+/// [`beryl_card::Kinds::CouldProduce`] term of fixed amount 1 (such as Reflecting Pool).
+#[inline]
+pub fn is_could_produce(a: &Ability) -> bool {
+    is_simple(a)
+        && matches!(
+            a.product(),
+            [beryl_card::Term {
+                kinds: beryl_card::Kinds::CouldProduce(_),
+                amount: beryl_card::Amount::Fixed(1),
+                ..
+            }]
+        )
+}
+
 /// Whether an ability is a mana ability whose whole cost is {T}: [`is_simple`], or one whose
 /// mana is restricted, which the solver taps only for a payment the restriction accepts.
 #[inline]

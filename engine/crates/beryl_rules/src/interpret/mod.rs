@@ -151,6 +151,76 @@ pub(crate) fn mana_ability<L: Layout>(
     done
 }
 
+/// [`mana_ability`] with a multiplier from [`beryl_card::ManaChange::Multiplies`] (`multiplier > 1`).
+/// Out of line: only called when a multiplier replacement effect applies to this tap.
+#[cold]
+#[inline(never)]
+pub(crate) fn mana_ability_multiplied<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    activation: impl FnOnce() -> PendingTrigger<L>,
+    ability: &'static Ability,
+    color: ManaColor,
+    multiplier: u8,
+) -> Result<(), Full> {
+    crate::coverage::hit(ability);
+    if let Behavior::Data(&Effect::AddMana {
+        player: Players::You,
+        mana,
+    }) = ability.body()
+    {
+        debug_assert!(mana.includes(color));
+        let amount = mana.amount.checked_mul(multiplier).ok_or(Full)?;
+        let activation = activation();
+        let (player, source) = (activation.of.controller.seat(), activation.of.source);
+        let added = s.add_mana(player, source, color, amount);
+        sink.note_from(source, added);
+        return layers::refresh(s, t, sink);
+    }
+    if let Behavior::Data(&Effect::AddProduct {
+        player: Players::You,
+    }) = ability.body()
+    {
+        let activation = activation();
+        let (player, source) = (activation.of.controller.seat(), activation.of.source);
+        let slot = source.filter(|&r| s.is_current(r)).map(|r| r.slot);
+        for term in ability.product() {
+            let amount = if let beryl_card::Amount::Fixed(n) = term.amount {
+                n
+            } else {
+                slot.map_or(0, |sl| amount_of(s, t, sl, term.amount))
+            };
+            if amount == 0 {
+                continue;
+            }
+            let scaled = amount.checked_mul(multiplier).ok_or(Full)?;
+            let kind = match term.kinds {
+                beryl_card::Kinds::Fixed(bits) if bits.is_power_of_two() => {
+                    ManaColor::ALL[bits.trailing_zeros() as usize]
+                }
+                beryl_card::Kinds::Fixed(_) | beryl_card::Kinds::CouldProduce(_) => color,
+            };
+            let added = s.add_mana(player, source, kind, scaled);
+            sink.note_from(source, added);
+        }
+        return layers::refresh(s, t, sink);
+    }
+    let activation = activation();
+    let (player, source) = (activation.of.controller.seat(), activation.of.source);
+    let extra = ability
+        .produces()
+        .amount
+        .checked_mul(multiplier - 1)
+        .ok_or(Full)?;
+    mana_ability(s, t, sink, || activation, ability, color)?;
+    if extra > 0 {
+        let added = s.add_mana(player, source, color, extra);
+        sink.note_from(source, added);
+    }
+    Ok(())
+}
+
 /// Whether the condition of a static or replacement ability of the permanent in `slot`
 /// holds, or it has none: its "as long as" or "while", read for the permanent as "this"
 /// and its controller as "you". `ability` names it among the permanent's abilities

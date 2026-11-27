@@ -1506,23 +1506,21 @@ fn reference_agrees_with_mana_changes_on_200_seeded_boards() {
     assert!(payable_count > 80, "only {payable_count} payable boards");
     assert!(manual_steps > 150, "only {manual_steps} manual steps");
 }
-
-/// Unimplemented `ManaChange` variants (`Tapped::AttachedTo` on an effect,
-/// `ManaChange::Multiplies` on an effect or permanent ability) are refused by the game table.
+/// `ManaChange::Multiplies` with `by < 2`) are refused by the game table.
 #[test]
 fn table_refuses_unimplemented_mana_changes() {
     static ATTACHED: beryl_card::ManaChange = beryl_card::ManaChange::Adds {
         tapped: beryl_card::Tapped::AttachedTo,
         added: beryl_card::Added::Of(beryl_card::ManaSet::one(ManaColor::Green)),
     };
-    static MULTIPLIES: beryl_card::ManaChange = beryl_card::ManaChange::Multiplies {
+    static BAD_MULTIPLIER: beryl_card::ManaChange = beryl_card::ManaChange::Multiplies {
         tapped: beryl_card::Filter::Types(Types::LAND),
-        by: 2,
+        by: 1,
     };
     static ATTACHED_EFFECT: beryl_card::Effect =
         beryl_card::effect::build::change_mana(&ATTACHED, beryl_card::Duration::EndOfTurn);
-    static MULTIPLIES_EFFECT: beryl_card::Effect =
-        beryl_card::effect::build::change_mana(&MULTIPLIES, beryl_card::Duration::EndOfTurn);
+    static BAD_MULTIPLIER_EFFECT: beryl_card::Effect =
+        beryl_card::effect::build::change_mana(&BAD_MULTIPLIER, beryl_card::Duration::EndOfTurn);
     static C1: CardDef = CardDef {
         name: "Test Attached",
         shape: beryl_card::definition::Shape::Single,
@@ -1535,23 +1533,23 @@ fn table_refuses_unimplemented_mana_changes() {
         tokens: &[],
     };
     static C2: CardDef = CardDef {
-        name: "Test Reflection Spell",
+        name: "Test Bad Multiplier Spell",
         shape: beryl_card::definition::Shape::Single,
         faces: &[Face {
             types: Types::INSTANT,
             cost: beryl_card::mana("{G}"),
-            abilities: &[Ability::spell().effect(&MULTIPLIES_EFFECT)],
+            abilities: &[Ability::spell().effect(&BAD_MULTIPLIER_EFFECT)],
             ..Face::EMPTY
         }],
         tokens: &[],
     };
     static C3: CardDef = CardDef {
-        name: "Test Reflection Permanent",
+        name: "Test Bad Multiplier Permanent",
         shape: beryl_card::definition::Shape::Single,
         faces: &[Face {
             types: Types::ENCHANTMENT,
             cost: beryl_card::mana("{G}"),
-            abilities: &[Ability::mana_change(&MULTIPLIES)],
+            abilities: &[Ability::mana_change(&BAD_MULTIPLIER)],
             ..Face::EMPTY
         }],
         tokens: &[],
@@ -1559,8 +1557,8 @@ fn table_refuses_unimplemented_mana_changes() {
     static CARDS: CardTable = CardTable::new(&[&ISLAND, &C1, &C2, &C3]);
     for name in [
         "Test Attached",
-        "Test Reflection Spell",
-        "Test Reflection Permanent",
+        "Test Bad Multiplier Spell",
+        "Test Bad Multiplier Permanent",
     ] {
         let deck: &[(u8, &str)] = &[(36, "Test Island"), (4, name)];
         let res = crate::GameTable::new(
@@ -2159,4 +2157,309 @@ fn reference_agrees_with_permanent_mana_changes_on_200_seeded_boards() {
     }
     assert!(payable_count > 80, "only {payable_count} payable boards");
     assert!(manual_steps > 150, "only {manual_steps} manual steps");
+}
+
+static TEST_REFLECTION_CHANGE: beryl_card::ManaChange = beryl_card::ManaChange::Multiplies {
+    tapped: beryl_card::Filter::Any,
+    by: 2,
+};
+static TEST_MANA_REFLECTION: CardDef = CardDef {
+    name: "Test Mana Reflection",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::ENCHANTMENT,
+        cost: beryl_card::mana("{4}{G}{G}"),
+        abilities: &[Ability::mana_change(&TEST_REFLECTION_CHANGE)],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+static TEST_LAND_YOU_CONTROL: &[beryl_card::Filter] = &[
+    beryl_card::Filter::Types(Types::LAND),
+    beryl_card::Filter::Whose(&beryl_card::Players::You),
+];
+static TEST_LAND_YOU_CONTROL_FILTER: beryl_card::Filter =
+    beryl_card::Filter::All(TEST_LAND_YOU_CONTROL);
+static TEST_REFLECTING_POOL_TERMS: [beryl_card::Term; 1] = [beryl_card::Term::could_produce(
+    &TEST_LAND_YOU_CONTROL_FILTER,
+)];
+static TEST_REFLECTING_POOL: CardDef = CardDef {
+    name: "Test Reflecting Pool",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::LAND,
+        abilities: &[Ability::mana_of(
+            beryl_card::Cost::TAP,
+            &TEST_REFLECTING_POOL_TERMS,
+        )],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+static TEST_CRYPT: CardDef = CardDef {
+    name: "Test Mana Crypt",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::ARTIFACT,
+        abilities: &[Ability::tap_for_mana(beryl_card::ManaSet::of(
+            ManaColor::Colorless,
+            2,
+        ))],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+static TEST_SKYCLOUD_TERMS: [beryl_card::Term; 2] = [
+    beryl_card::Term::one(ManaColor::White),
+    beryl_card::Term::one(ManaColor::Blue),
+];
+static TEST_SKYCLOUD: CardDef = CardDef {
+    name: "Test Skycloud Expanse",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::LAND,
+        abilities: &[Ability::mana_of(
+            Cost::of(ManaCost::generic(1), &[CostPart::TAP]),
+            &TEST_SKYCLOUD_TERMS,
+        )],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+/// Overflowing a multiplier product past `u8::MAX` returns `Full` rather than saturating.
+#[test]
+fn mana_reflection_overflow_returns_full() {
+    static CARDS: CardTable = CardTable::new(&[&ISLAND, &TEST_MANA_REFLECTION, &TEST_CRYPT]);
+    let deck: &[(u8, &str)] = &[
+        (20, "Test Island"),
+        (16, "Test Mana Reflection"),
+        (4, "Test Mana Crypt"),
+    ];
+    let t = crate::GameTable::new(
+        beryl_kernel::format::Format::CONSTRUCTED,
+        &CARDS,
+        [deck, deck],
+    )
+    .unwrap();
+    let mut s = crate::State::new(&t, 1, Profile::EXACT).unwrap();
+    super::begin(&t, &mut s);
+    let p = s.turn().starting_player();
+    // Eight Mana Reflections give 2^8 = 256, which overflows u8.
+    let mut placed = 0;
+    for sl in s.library(p).to_vec() {
+        if s.definition_name(&t, sl) == "Test Mana Reflection" && placed < 8 {
+            s.board().place(sl, Zone::Battlefield).unwrap();
+            placed += 1;
+        }
+    }
+    assert_eq!(placed, 8);
+    let island = s
+        .library(p)
+        .iter()
+        .copied()
+        .find(|&sl| s.definition_name(&t, sl) == "Test Island")
+        .unwrap();
+    s.board().place(island, Zone::Battlefield).unwrap();
+    crate::continuous::layers::refresh(&mut s, &t, &mut Sink::off()).unwrap();
+    assert!(
+        mana::plans(
+            &s,
+            &t,
+            &mut Sink::off(),
+            p,
+            ManaCost::new(0, [0, 1, 0, 0, 0, 0]),
+            Bitboard::EMPTY,
+            false,
+            mana::Paying::NOTHING,
+        )
+        .is_err(),
+        "2^8 multiplier must return Full"
+    );
+}
+
+/// 200 seeded boards mixing Mana Reflection, Reflecting Pool, Mana Crypt, Skycloud Expanse,
+/// Tundra, Island, Mana Flare, and tapped/opponent lands agree between `Funds`, `mana::plans`,
+/// `mana::pay`, `manual_options`/`manual_pay`, and `reference_sequences`.
+#[test]
+#[allow(clippy::too_many_lines)]
+fn mana_reflection_and_reflecting_pool_agree_with_reference_on_200_seeded_boards() {
+    static CARDS: CardTable = CardTable::new(&[
+        &ISLAND,
+        &TEST_TUNDRA,
+        &TEST_CRYPT,
+        &TEST_SKYCLOUD,
+        &TEST_REFLECTING_POOL,
+        &TEST_MANA_REFLECTION,
+        &TEST_FLARE_CREATURE,
+    ]);
+    let deck: &[(u8, &str)] = &[
+        (8, "Test Island"),
+        (6, "Test Tundra"),
+        (4, "Test Mana Crypt"),
+        (4, "Test Skycloud Expanse"),
+        (6, "Test Reflecting Pool"),
+        (6, "Test Mana Reflection"),
+        (6, "Test Flare Creature"),
+    ];
+    let t = crate::GameTable::new(
+        beryl_kernel::format::Format::CONSTRUCTED,
+        &CARDS,
+        [deck, deck],
+    )
+    .unwrap();
+    let mut rng = SplitMix64::new(0x005E_ED13_2026);
+    let mut payable_count = 0usize;
+    let mut manual_steps = 0usize;
+    for board_ix in 0..200u64 {
+        let mut s = crate::State::new(&t, board_ix + 1000, Profile::EXACT).unwrap();
+        super::begin(&t, &mut s);
+        let p = s.turn().starting_player();
+        let opp = s.opponents_of(p).sole().unwrap();
+        let place_some =
+            |s: &mut crate::State, seat: beryl_card::Seat, name: &str, count: usize, tap: bool| {
+                let mut n = 0;
+                for sl in s.library(seat).to_vec() {
+                    if n >= count {
+                        break;
+                    }
+                    if s.definition_name(&t, sl) == name {
+                        s.board().place(sl, Zone::Battlefield).unwrap();
+                        if tap {
+                            s.board().set_tapped(sl, true);
+                        }
+                        n += 1;
+                    }
+                }
+            };
+        let n_islands = rng.below(3) as usize;
+        let n_tundras = rng.below(2) as usize;
+        let n_crypts = rng.below(2) as usize;
+        let n_skyclouds = rng.below(2) as usize;
+        let n_pools = (rng.below(3) + 1) as usize;
+        let n_reflections = rng.below(3) as usize;
+        let n_flares = rng.below(2) as usize;
+        place_some(&mut s, p, "Test Island", n_islands, rng.below(3) == 0);
+        place_some(&mut s, p, "Test Tundra", n_tundras, rng.below(3) == 0);
+        place_some(&mut s, p, "Test Mana Crypt", n_crypts, false);
+        place_some(&mut s, p, "Test Skycloud Expanse", n_skyclouds, false);
+        place_some(&mut s, p, "Test Reflecting Pool", n_pools, false);
+        place_some(&mut s, p, "Test Mana Reflection", n_reflections, false);
+        place_some(&mut s, p, "Test Flare Creature", n_flares, false);
+        // Opponent lands and Mana Reflection should not affect P0's pool or multiplier.
+        place_some(&mut s, opp, "Test Tundra", rng.below(2) as usize, false);
+        place_some(
+            &mut s,
+            opp,
+            "Test Mana Reflection",
+            rng.below(2) as usize,
+            false,
+        );
+        let mut pool = ManaPool::default();
+        for color in [ManaColor::White, ManaColor::Blue, ManaColor::Colorless] {
+            pool[color] = rng.below(2) as u8;
+        }
+        s.board().set_mana(p, pool);
+        crate::continuous::layers::refresh(&mut s, &t, &mut Sink::off()).unwrap();
+        let cost = ManaCost::new(
+            rng.below(5) as u8,
+            [
+                rng.below(3) as u8,
+                rng.below(3) as u8,
+                0,
+                0,
+                0,
+                rng.below(3) as u8,
+            ],
+        );
+        let Some(expected) = crate::reference::reference_sequences(&s, &t, p, cost) else {
+            continue;
+        };
+        let funds = mana::Funds::of(&s, &t, p).unwrap();
+        let actual = funds.pays_for(&s, &t, cost, Bitboard::EMPTY, mana::Paying::NOTHING);
+        assert_eq!(
+            actual, expected,
+            "board={board_ix} refl={n_reflections} pools={n_pools} flares={n_flares} cost={cost:?}"
+        );
+        for greedy in [false, true] {
+            let plans = mana::plans(
+                &s,
+                &t,
+                &mut Sink::off(),
+                p,
+                cost,
+                Bitboard::EMPTY,
+                greedy,
+                mana::Paying::NOTHING,
+            )
+            .unwrap();
+            assert_eq!(
+                !plans.is_empty(),
+                expected,
+                "plans mismatch board={board_ix} greedy={greedy} cost={cost:?}"
+            );
+            for plan in plans.as_slice() {
+                let mut paid = s;
+                mana::pay(
+                    &mut paid,
+                    &t,
+                    &mut Sink::off(),
+                    p,
+                    cost,
+                    Bitboard::EMPTY,
+                    plan,
+                    mana::Paying::NOTHING,
+                )
+                .unwrap();
+                assert_eq!(
+                    paid.player(p).mana().amounts(),
+                    plan.left,
+                    "plan.left mismatch board={board_ix} cost={cost:?}"
+                );
+            }
+        }
+        if expected && !cost.is_zero() {
+            payable_count += 1;
+            for trial in 0..2 {
+                let mut ms = s;
+                let mut rem = cost;
+                let mut guard = 0;
+                while !rem.is_zero() {
+                    let opts = mana::manual_options(
+                        &ms,
+                        &t,
+                        p,
+                        rem,
+                        Bitboard::EMPTY,
+                        mana::Paying::NOTHING,
+                    )
+                    .unwrap();
+                    assert!(
+                        !opts.is_empty(),
+                        "manual_options empty board={board_ix} rem={rem:?}"
+                    );
+                    let pick_ix = if trial == 0 { 0 } else { opts.len() - 1 };
+                    rem = mana::manual_pay(
+                        &mut ms,
+                        &t,
+                        &mut Sink::off(),
+                        p,
+                        rem,
+                        opts.as_slice()[pick_ix],
+                        mana::Paying::NOTHING,
+                    )
+                    .unwrap()
+                    .0;
+                    manual_steps += 1;
+                    guard += 1;
+                    assert!(
+                        guard < 40,
+                        "manual payment did not terminate board={board_ix}"
+                    );
+                }
+            }
+        }
+    }
+    assert!(payable_count > 80, "only {payable_count} payable boards");
+    assert!(manual_steps > 100, "only {manual_steps} manual steps");
 }

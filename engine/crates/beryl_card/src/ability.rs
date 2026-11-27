@@ -294,10 +294,9 @@ impl Ability {
         );
         let mut i = 0;
         while i < terms.len() {
-            assert!(
-                terms[i].kinds != 0 && terms[i].kinds < 64,
-                "a term makes kinds of mana"
-            );
+            if let crate::mana::Kinds::Fixed(bits) = terms[i].kinds {
+                assert!(bits != 0 && bits < 64, "a term makes kinds of mana");
+            }
             i += 1;
         }
         Ability {

@@ -440,14 +440,17 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
     {
         // Its only cost is {T} (see CR 602.2b, see CR 601.2h).
         let has_changes = t.can(Capability::ManaChanges) && s.has_mana_changes();
-        let extra = if has_changes {
-            super::changes::matching(s, t, slot)?.add_for_single_color(color)?
+        let (multiplier, extra) = if has_changes {
+            let changes = super::changes::matching(s, t, slot)?;
+            (changes.multiplier, changes.add_for_single_color(color)?)
         } else {
-            [0; KINDS]
+            (1, [0; KINDS])
         };
         let controller = s.controller(slot);
         event::set_tapped(s, t, sink, permanent, true)?;
-        remembered::add(s, t, sink, permanent, ability, color)?;
+        for _ in 0..multiplier {
+            remembered::add(s, t, sink, permanent, ability, color)?;
+        }
         if has_changes {
             super::changes::add_extra(s, sink, permanent, controller, extra);
         }
@@ -474,10 +477,11 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
     // cost's parts in any order, and the order changes nothing here.
     let tapped = ability.cost().does(CostAction::Tap);
     let has_changes = tapped && t.can(Capability::ManaChanges) && s.has_mana_changes();
-    let extra = if has_changes {
-        super::changes::matching(s, t, slot)?.add_for_single_color(color)?
+    let (multiplier, extra) = if has_changes {
+        let changes = super::changes::matching(s, t, slot)?;
+        (changes.multiplier, changes.add_for_single_color(color)?)
     } else {
-        [0; KINDS]
+        (1, [0; KINDS])
     };
     if tapped {
         event::set_tapped(s, t, sink, permanent, true)?;
@@ -503,7 +507,13 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
         },
         ..PendingTrigger::default()
     };
-    crate::interpret::mana_ability(s, t, sink, activation, ability, color)?;
+    if multiplier > 1 {
+        crate::interpret::mana_ability_multiplied(
+            s, t, sink, activation, ability, color, multiplier,
+        )?;
+    } else {
+        crate::interpret::mana_ability(s, t, sink, activation, ability, color)?;
+    }
     if has_changes {
         super::changes::add_extra(s, sink, permanent, controller, extra);
     }
@@ -535,9 +545,15 @@ fn makes_now<L: Layout>(
     a: &Ability,
     color: ManaColor,
 ) -> bool {
+    let player = s.controller(slot);
+    let words = s.words_of(slot);
+    let makes_color = a.produces().includes(color)
+        || (crate::table::is_could_produce(a)
+            && super::changes::could_produce_of(s, t, player, a, &words) & (1 << color.index())
+                != 0);
     (is_simple(a) || is_sacrificed(a) || is_instant_mana(a))
-        && a.produces().includes(color)
-        && allowed(s, t, a, s.controller(slot), &s.words_of(slot))
+        && makes_color
+        && allowed(s, t, a, player, &words)
 }
 
 /// Manual payment (the `manual_mana` flag): the floating mana and the sources, one per

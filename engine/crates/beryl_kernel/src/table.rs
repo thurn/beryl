@@ -32,7 +32,9 @@ mod names;
 pub use crate::payable::{ANY_COLOR, is_instant_mana};
 pub use capability::Capability;
 pub use cards::CardTable;
-pub use mana_abilities::{has_other_ability, is_priced, is_sacrificed, is_simple, is_tap_for_mana};
+pub use mana_abilities::{
+    has_other_ability, is_could_produce, is_priced, is_sacrificed, is_simple, is_tap_for_mana,
+};
 
 /// A decklist: how many of each card, by name.
 pub type Decklist = [(u8, &'static str)];
@@ -718,7 +720,9 @@ impl ManaFace {
     pub fn of(face: &Face) -> ManaFace {
         if face.abilities.iter().any(|a| {
             is_priced(a)
-                || (a.kind() == AbilityKind::Mana && a.produces() == beryl_card::ManaSet::NONE)
+                || (a.kind() == AbilityKind::Mana
+                    && a.produces() == beryl_card::ManaSet::NONE
+                    && !is_could_produce(a))
         }) {
             return ManaFace::Priced;
         }
@@ -734,7 +738,7 @@ impl ManaFace {
         }
         let other = has_other_ability(face);
         if (intrinsic == 0 && simple().next().is_none())
-            || simple().any(|a| a.only_if_you_control().is_some())
+            || simple().any(|a| a.only_if_you_control().is_some() || is_could_produce(a))
         {
             return ManaFace::Read { other };
         }

@@ -186,8 +186,11 @@ impl Ability {
         for part in self.cost().parts() {
             part.walk(visit);
         }
-        // What a mana ability makes: an amount a term counts.
+        // What a mana ability makes: an amount a term counts, or a filter whose kinds it reads.
         for term in self.product() {
+            if let crate::mana::Kinds::CouldProduce(filter) = term.kinds {
+                filter.walk(visit);
+            }
             term.amount.walk(visit);
         }
         if let Some(trigger) = self.trigger() {
