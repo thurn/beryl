@@ -310,6 +310,31 @@ fn an_open_regression_ticket_is_told_once_per_stuck_landing_instead_of_a_new_tic
 }
 
 #[test]
+fn a_regression_closed_with_a_landed_fix_waits_for_verification_before_a_lag_ticket() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    landing(&mut conn, &clock);
+    clock.advance(MASTER_LAG_SECONDS + 60.0);
+    let regression = regression(&mut conn, &clock);
+    land(&mut conn, &regression, &clock.now().to_string());
+    close(&mut conn, &regression, &clock.now().to_string());
+
+    // The fix landed seconds ago and tip verification has not seen it yet.
+    clock.advance(34.0);
+    assert!(
+        justiciar::master_lag(&mut conn, clock.now())
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(lag_tickets(&conn, &clock), 0);
+
+    // The stall outlasted the wait, so the fix did not work and a ticket is filed.
+    clock.advance(MASTER_LAG_SECONDS);
+    let filed = justiciar::master_lag(&mut conn, clock.now()).unwrap();
+    assert_eq!(filed[0].change, Change::Created);
+}
+
+#[test]
 fn a_closed_ticket_for_the_same_stuck_landing_waits_before_a_new_one() {
     let clock = start();
     let mut conn = hub::open_in_memory().unwrap();

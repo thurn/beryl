@@ -399,6 +399,25 @@ fn recently_closed_for(conn: &Connection, landing: &str, now: Timestamp) -> Resu
         .any(|seen| seen.lines().next() == Some(landing)))
 }
 
+/// Whether a regression ticket closed less than [`MASTER_LAG_SECONDS`] before `now` with a
+/// landed fix. While the regression was open it held `master` back and explained the stall.
+/// Its fix needs a tip verification round to reach `master`, so filing a master-lag ticket in
+/// the moments after it closes would report a stall the fix is about to end. A stall that
+/// outlasts the wait gets a ticket, in case the fix did not work.
+fn regression_fix_awaiting_verification(conn: &Connection, now: Timestamp) -> Result<bool> {
+    let mut statement = conn.prepare_cached(
+        "SELECT t.closed_at FROM regressions r JOIN tickets t ON t.id = r.ticket
+         WHERE t.status = 'closed' AND t.landed_at IS NOT NULL AND t.closed_at IS NOT NULL",
+    )?;
+    let closed = statement.query_map([], |row| row.get::<_, String>(0))?;
+    for closed_at in closed {
+        if now.seconds_since(parse_time(&closed_at?)?) < MASTER_LAG_SECONDS {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 fn tip_failure_note(conn: &Connection, landed_at: Timestamp) -> Result<String> {
     let (report, context) = if let Some(report) = tips::candidate_failures(conn)? {
         (report, "Required checks reported failures at candidate")
@@ -426,8 +445,8 @@ fn tip_failure_note(conn: &Connection, landed_at: Timestamp) -> Result<String> {
 
 /// Files a justiciar ticket when a landing has waited [`MASTER_LAG_SECONDS`] for `master`.
 /// When open regression tickets explain the stall, it tells the ones making progress and
-/// escalates the ones that stalled. A recently closed master-lag ticket gives its fix time to
-/// reach the verified branch.
+/// escalates the ones that stalled. A recently closed master-lag ticket, or a regression
+/// ticket closed with a landed fix, gives its fix time to reach the verified branch.
 pub fn master_lag(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>> {
     let Some((landed_at, ticket)) = oldest_unverified_landing(conn, now)? else {
         return Ok(Vec::new());
@@ -456,7 +475,8 @@ pub fn master_lag(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>> {
         filed.extend(tell_regressions(conn, &progressing, &ticket, &text, now)?);
         return Ok(filed);
     }
-    if recently_closed_for(conn, &ticket, now)? {
+    if recently_closed_for(conn, &ticket, now)? || regression_fix_awaiting_verification(conn, now)?
+    {
         return Ok(Vec::new());
     }
     let failures = tip_failure_note(conn, landed_at)?;
