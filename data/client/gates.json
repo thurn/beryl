@@ -82,7 +82,8 @@
     }
   },
   "tests": {
-    "median_audit_frames": 50,
-    "most_audit_frames": 2400
+    "median_audit_frames": 57,
+    "most_audit_frames": 2400,
+    "reason": "The default matrix now includes the three phone windows alongside the four desktop windows, raising the fixture median audit frames from 50 to 57."
   }
 }

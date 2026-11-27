@@ -79,8 +79,8 @@ fn a_tests_name_opens_its_recording_in_tree() {
 }
 
 /// The whole matrix is the four desktop windows, one of them at the Retina scale, and the three
-/// phone windows, from each seat a recording is recorded for; the default run plays only the desktop ones and `--phone-only`
-/// only the phone ones.
+/// phone windows, from each seat a recording is recorded for; the default run plays all seven and
+/// `--phone-only` only the phone ones.
 #[test]
 fn the_window_matrix_has_seven_sizes_from_each_recorded_seat() {
     let names = |windows| -> Vec<String> {

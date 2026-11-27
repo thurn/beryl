@@ -40,7 +40,8 @@ pub(super) const RAISE: &str = "--raise";
 /// played.
 pub(super) const STOP_AFTER: &str = "--stop-after";
 
-/// The switch that plays the phone windows of the matrix instead of the desktop ones.
+/// The switch that plays only the phone windows of the matrix. Without it a run plays the
+/// desktop and the phone windows.
 pub(super) const COMPACT_ONLY: &str = "--phone-only";
 
 /// The switch that prints the names of the tests the rest of the command line would play, one
@@ -88,7 +89,7 @@ pub(super) fn test(options: &Options) -> Result<Printed, Usage> {
 
 fn audit(options: &Options, prefix: &str) -> Result<Printed, Usage> {
     let (mode, windows) = switches(options)?;
-    let default_matrix = windows == Windows::Class(SizeClass::Regular);
+    let default_matrix = windows == Windows::All;
     let stop = stop(options)?;
     let all = options.switch(ALL);
     let tests = selected_tests(prefix, windows, all)?;
@@ -110,7 +111,7 @@ fn audit(options: &Options, prefix: &str) -> Result<Printed, Usage> {
     let outcomes = runner::run_until(&tests, mode, stop);
     let seconds = started.elapsed().as_secs_f64();
     let deferred = tests.len() - outcomes.len();
-    // Check the median for a complete desktop matrix. Only the full pack may drop
+    // Check the median for a complete window matrix. Only the full pack may drop
     // allowlist entries for recordings that were not played.
     let complete = prefix.is_empty() && deferred == 0 && default_matrix;
     let every_test = all && complete;
@@ -194,7 +195,7 @@ fn list_tests(tests: &[Test]) -> Printed {
 fn frame_limits(options: &Options, prefix: &str) -> Result<Printed, Usage> {
     let (mode, windows) = switches(options)?;
     if !prefix.is_empty()
-        || windows != Windows::Class(SizeClass::Regular)
+        || windows != Windows::All
         || options.switch(ALL)
         || stop(options)?.is_some()
         || mode != Mode::AtCheckTimes
@@ -297,11 +298,10 @@ fn switches(options: &Options) -> Result<(Mode, Windows), Usage> {
              {EVERY_TICK}"
         )));
     }
-    // The phone layout is still being built, and its faults are fixed rather than listed, so a
-    // phone run never writes the list: it could only add phone entries or drop desktop ones.
+    // A phone-only run is never the whole matrix, so writing the list could drop desktop entries.
     if options.switch(COMPACT_ONLY) && options.switch(UPDATE) {
         return Err(Usage(format!(
-            "{UPDATE} lists the desktop tests' faults, so it does not go with {COMPACT_ONLY}"
+            "{UPDATE} needs the full matrix, so it does not go with {COMPACT_ONLY}"
         )));
     }
     let compact_only = options.switch(COMPACT_ONLY);
@@ -318,7 +318,7 @@ fn switches(options: &Options) -> Result<(Mode, Windows), Usage> {
     } else if compact_only {
         Windows::Class(SizeClass::Compact)
     } else {
-        Windows::Class(SizeClass::Regular)
+        Windows::All
     };
     let mode = if options.switch(EVERY_TICK) {
         Mode::EveryTick

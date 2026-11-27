@@ -219,7 +219,9 @@ def test_frame_limits_have_a_separate_native_family_with_all_card_inputs(
     config = tomllib.loads((paths.REPO / "ignite.toml").read_text())
     assert adapter.FRAME_LIMITS_FAMILY in config["machine"]["cygnus"]["families"]
     monkeypatch.setattr(
-        adapter, "test_names", lambda: ["a/you/1440x900", "b/you/1440x900"]
+        adapter,
+        "test_names",
+        lambda: ["a/you/1440x900", "a/you/393x759", "b/you/1440x900"],
     )
     monkeypatch.setattr(
         adapter,
@@ -228,6 +230,7 @@ def test_frame_limits_have_a_separate_native_family_with_all_card_inputs(
     )
     assert [entry.check for entry in adapter.LISTS["client-interface"]()] == [
         "client-interface:a/you/1440x900",
+        "client-interface:a/you/393x759",
         "client-interface:b/you/1440x900",
     ]
     assert adapter.LISTS[adapter.FRAME_LIMITS_FAMILY]() == [

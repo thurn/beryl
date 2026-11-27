@@ -340,7 +340,7 @@ const COMMANDS: &[Command] = &[
             ),
             (
                 "--phone-only",
-                "the phone windows (393x759, 375x647, 430x932) instead of the desktop ones",
+                "only the phone windows (393x759, 375x647, 430x932), not the desktop ones",
             ),
             (
                 "--list",

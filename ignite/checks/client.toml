@@ -332,8 +332,8 @@ inputs = [
   "tools/src/beryl_tools/ignite/client_validation.py",
 ]
 
-# Every interface test (`just client test`): each recording from each seat in each desktop window,
-# `client-interface:<recording>/<seat>/<window>`, with the checks applied at the check times
+# Every interface test (`just client test`): each recording from each seat in each desktop and phone
+# window, `client-interface:<recording>/<seat>/<window>`, with the checks applied at the check times
 # (docs/beryl-3d.md, "Test speed"), held to data/client/test-faults.json. Each check reads the
 # card files its recording plays.
 #

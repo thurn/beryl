@@ -42,11 +42,12 @@ granted.
 
 `ignite test <check>` runs the `client-*` families in
 `ignite/checks/client.toml`. Use the smallest check that observes the change.
-`just client test` checks the corpus and standalone scenes in the desktop window
-matrix. Use a test name prefix for one scene or `--phone-only` for the phone
-windows. `just client record` builds the corpus pack from the fixtures in
-`data/client/fixtures.json` and card spec moments. `just client corpus --sweep`
-checks card spec moments for signatures the corpus lacks.
+`just client test` checks the corpus and standalone scenes in the desktop and
+phone window matrices. Use a test name prefix for one scene or `--phone-only`
+for only the phone windows. `just client record` builds the corpus pack from the
+fixtures in `data/client/fixtures.json` and card spec moments.
+`just client corpus --sweep` checks card spec moments for signatures the corpus
+lacks.
 
 ## Seeing the result
 
