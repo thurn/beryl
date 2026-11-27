@@ -1752,8 +1752,9 @@ or harnesses changed (`oracle_selection.py`).
   plays each action as it is chosen, so the script replays as written. The
   generator avoids what the oracles' harnesses would read another way, rather
   than rules: cards that trigger before the main phase, two cards of one name an
-  action could mean, and tap abilities of mana sources an oracle may have tapped
-  to pay.
+  action could mean, tap abilities of mana sources an oracle may have tapped to
+  pay, and a second spell cast by one player, whose mana an oracle may have
+  taken from the source the first one's payment left for it.
 - A generated scenario an oracle fails for a gap in its exporter, not a rules
   difference, is listed with the gap in `data/oracle-exporter-gaps.json` and
   reported as unsupported; an entry whose scenario no longer fails fails the

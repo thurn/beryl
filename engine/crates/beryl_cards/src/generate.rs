@@ -303,6 +303,13 @@ fn player(rng: &mut SplitMix64, pools: &Pools) -> PlayerSetup {
     }
 }
 
+/// Records in `cast` that the player of `action` has cast a spell, if it is a cast.
+fn note_cast(cast: &mut [bool; 2], action: &Action) {
+    if let Action::Cast { player, .. } = *action {
+        cast[player.index()] = true;
+    }
+}
+
 /// The scenario of `seed`, or `None` where the runner refuses its script or it has no
 /// action.
 fn one(pools: &Pools, seed: u64) -> Option<Scenario> {
@@ -317,6 +324,11 @@ fn one(pools: &Pools, seed: u64) -> Option<Scenario> {
     let combat = rng.below(3) == 0;
     let mut played = 0;
     let mut advanced = false;
+    // The players that have cast a spell in the script. A second spell may need the mana source
+    // the first one was paid with, and an oracle pays a cost its own way, so it may have
+    // tapped that source: the scenario would be played by the oracle with the spell
+    // unaffordable.
+    let mut cast = [false; 2];
     for _ in 0..80 {
         if chance_in_library(&live) {
             return None;
@@ -370,6 +382,7 @@ fn one(pools: &Pools, seed: u64) -> Option<Scenario> {
         let options: Vec<Action> = picks
             .into_iter()
             .filter(|a| !matches!(a, Action::Answer { .. }))
+            .filter(|a| !matches!(*a, Action::Cast { player, .. } if cast[player.index()]))
             .collect();
         let past_combat = (now.step() as u8) > TurnStep::CombatDamage as u8;
         // Something went on the stack as the game played on, as a trigger of what resolved:
@@ -377,7 +390,11 @@ fn one(pools: &Pools, seed: u64) -> Option<Scenario> {
         let arrived = !live.state().stack().is_empty() && !matches!(intent, Intent::Resolve);
         let action = match intent {
             _ if arrived => Action::pass(d.player),
-            Intent::Resolve if !options.is_empty() && rng.below(3) == 0 => pick(&mut rng, &options),
+            Intent::Resolve if !options.is_empty() && rng.below(3) == 0 => {
+                let action = pick(&mut rng, &options);
+                note_cast(&mut cast, &action);
+                action
+            }
             Intent::Resolve => Action::Resolve,
             Intent::Play
                 if d.player == P0
@@ -385,7 +402,9 @@ fn one(pools: &Pools, seed: u64) -> Option<Scenario> {
                     && !options.is_empty() =>
             {
                 played += 1;
-                pick(&mut rng, &options)
+                let action = pick(&mut rng, &options);
+                note_cast(&mut cast, &action);
+                action
             }
             Intent::Advance => {
                 advanced = true;
