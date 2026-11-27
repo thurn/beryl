@@ -363,6 +363,9 @@ impl<L: Layout> Runner<L> {
         self.set_profile(Profile {
             breakpoint,
             taps_mana,
+            // `only_idle` passes a priority whose only non-pass options are standalone mana
+            // abilities, so a scenario activating one with nothing else to do holds priority.
+            full_control: taps_mana,
             ..TRACED
         });
         loop {

@@ -632,6 +632,7 @@ pub(crate) fn plans_accepting<L: Layout, const CHECK: bool>(
         && !sources.has_consumed()
         && !sources.has_several()
         && sources.remembered().is_empty()
+        && sources.extras.is_empty()
     {
         Some(if sources.has_memory() && sources.has_rider() {
             2
@@ -759,11 +760,8 @@ pub(crate) fn plans_accepting<L: Layout, const CHECK: bool>(
                 sources.sacrificed(q) < sacrificed && other.expect("scored").0 >= sc
             }))?;
         }
-        let mut i = 0;
-        out.retain(|_| {
-            i += 1;
-            !dominated.as_slice()[i - 1]
-        });
+        let mut keep = dominated.iter();
+        out.retain(|_| !*keep.next().expect("scored"));
     }
     let mut kept = out;
     // Only a pool can leave mana floating that a source would make again: a source's own
