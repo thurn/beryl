@@ -19,6 +19,7 @@ impl Scheduler {
             cores_file: None,
             reserve: None,
             priority_ticket: None,
+            urgency: None,
         });
         let id = state.ledger.begin_express(request, self.clock.now());
         self.advance(&mut state);
@@ -33,6 +34,7 @@ impl Scheduler {
             resources: Vec::new(),
             cores_file: None,
             priority_ticket: None,
+            urgency: None,
         })
     }
 }

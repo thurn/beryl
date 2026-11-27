@@ -59,6 +59,7 @@ fn pages(class: Class) -> GrantRequest {
         cores_file: None,
         reserve: None,
         priority_ticket: None,
+        urgency: None,
     }
 }
 

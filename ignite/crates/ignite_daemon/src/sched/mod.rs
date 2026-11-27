@@ -12,6 +12,8 @@
 //!   nothing while a higher one has a request waiting for cores.
 //! - Within `agent`, commands for regressions and master-lag justiciar tickets are served
 //!   before other agents. The priority changes only the order of queued requests.
+//! - Urgent commands ([`Urgency`]), an emergency's then a rushed session's, are ranked in
+//!   `land` behind tip builds, may take every shared core and never give cores back.
 //! - One command takes at most two thirds of the cores. Among requests of equal priority,
 //!   those that waited [`AGED_SECONDS`] go first, then the smallest. Each gets what it asked
 //!   for before the next gets anything (see `ledger/order.rs`).
@@ -54,6 +56,7 @@ mod express;
 mod ledger;
 mod measured;
 pub mod roots;
+mod urgency;
 
 #[cfg(test)]
 mod tests;
@@ -79,6 +82,7 @@ use serde::Serialize;
 
 pub use ledger::{AGED_SECONDS, Ledger, RECLAIM_SECONDS, SMALL_CORES, Step};
 pub use measured::{LEND_WINDOW_SECONDS, RECENT_SECONDS};
+pub use urgency::Urgency;
 
 /// How often [`Scheduler::sample_every`] reads the machine. Each reading is also a step, and a
 /// shrinking grant gives back one core per step, so a waiting landing gets a 12-core build's
@@ -114,6 +118,8 @@ pub struct GrantRequest {
     pub reserve: Option<ignite_core::traits::Reserve>,
     /// The ticket that holds master back, giving this request priority within the agent queue.
     pub priority_ticket: Option<TicketId>,
+    /// An emergency's or a rush's command, scheduled ahead of every class ([`Urgency`]).
+    pub urgency: Option<Urgency>,
 }
 
 /// How an adopted grant keeps following its command after a daemon restart: the cores file its
@@ -139,6 +145,8 @@ pub struct Adoption {
     pub reserve: Option<ignite_core::traits::Reserve>,
     /// The ticket whose agent priority the original grant used.
     pub priority_ticket: Option<TicketId>,
+    /// The urgency the original grant was made with.
+    pub urgency: Option<Urgency>,
 }
 
 /// Cores and resources held until released with [`Scheduler::release`].
@@ -154,6 +162,8 @@ pub struct Grant {
     pub cores_file: Option<PathBuf>,
     /// The ticket whose priority the grant used.
     pub priority_ticket: Option<TicketId>,
+    /// The urgency the grant was made with.
+    pub urgency: Option<Urgency>,
 }
 
 impl Grant {
@@ -284,6 +294,9 @@ pub struct Status {
     pub agent_borrowed: u32,
     /// Running commands granted with agent queue priority, by ticket.
     pub priority_grants: BTreeMap<TicketId, u32>,
+    /// Commands of a rushed session ([`Urgency::Rush`]) holding a grant, and waiting for one.
+    pub rush_running: u32,
+    pub rush_waiting: u32,
     pub classes: Vec<ClassStatus>,
     pub resources: Vec<ResourceStatus>,
 }
@@ -596,6 +609,7 @@ impl Scheduler {
             follow,
             reserve: None,
             priority_ticket: None,
+            urgency: None,
         }]);
         grants.pop().expect("one grant for one adoption")
     }
@@ -628,7 +642,7 @@ impl Scheduler {
             }
             state
                 .ledger
-                .record_priority(id, adoption.priority_ticket.clone());
+                .record_priority(id, adoption.priority_ticket.clone(), adoption.urgency);
             let cores_file = adoption.follow.map(|f| f.cores_file);
             if let Some(file) = &cores_file {
                 state.files.insert(id, file.clone());
@@ -640,6 +654,7 @@ impl Scheduler {
                 queued_s: 0,
                 cores_file,
                 priority_ticket: adoption.priority_ticket,
+                urgency: adoption.urgency,
             });
         }
         self.advance(&mut state);

@@ -237,6 +237,7 @@ fn commands_taken_over_after_a_restart_never_hold_more_than_the_machine() {
         memory_mb: None,
         reserve: None,
         priority_ticket: None,
+        urgency: None,
         follow: follow.map(|name| crate::sched::Follow {
             cores_file: dir.join(name),
             asked: 16,

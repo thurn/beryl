@@ -187,6 +187,13 @@ pub enum Command {
         #[command(subcommand)]
         command: Option<crate::emergency::EmergencyCommand>,
     },
+    /// For the operator's `/rush` skill only: put this session's work ahead of every class but
+    /// tip builds and emergencies until its ticket lands or is released.
+    #[command(hide = true)]
+    Rush {
+        #[command(subcommand)]
+        command: Option<RushCommand>,
+    },
     /// Check an epic's ticket graph.
     Plan {
         #[command(subcommand)]
@@ -720,6 +727,7 @@ impl Command {
             Command::Tell { .. } => "tell",
             Command::Justiciar { .. } => "justiciar",
             Command::Emergency { .. } => "emergency",
+            Command::Rush { .. } => "rush",
             Command::Plan { .. } => "plan",
             Command::Gate { .. } => "gate",
             Command::Flaky { .. } => "flaky",
@@ -737,6 +745,14 @@ impl Command {
             Command::TurnEnded { .. } => "turn-ended",
         }
     }
+}
+
+/// The subcommands of `ignite rush`, which the daemon's `rush` verb answers (see
+/// `ignite_daemon::rush`).
+#[derive(Debug, Subcommand)]
+pub enum RushCommand {
+    /// End this session's rush before its ticket lands.
+    End,
 }
 
 #[cfg(test)]

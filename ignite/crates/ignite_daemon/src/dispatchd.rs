@@ -44,6 +44,7 @@ mod wake;
 mod work;
 #[path = "dispatchd_workers.rs"]
 mod workers;
+pub(crate) use cli::PREFIX as CLI_SESSION_PREFIX;
 #[cfg(test)]
 pub(crate) use workers::capacity_report;
 

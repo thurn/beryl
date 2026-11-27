@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use ignite_core::protocol::Class;
 
-use super::super::Status;
+use super::super::{Status, Urgency};
 use super::{Ledger, Origin};
 
 /// Dispatch can reuse a reading across a few missed samples before falling back to wait time.
@@ -90,6 +90,16 @@ impl Ledger {
             tip_build_used: self.tip_reserve_used(),
             agent_borrowed: self.agent_borrowed(),
             priority_grants,
+            rush_running: self
+                .held
+                .values()
+                .filter(|h| h.urgency == Some(Urgency::Rush))
+                .count() as u32,
+            rush_waiting: self
+                .waiting
+                .iter()
+                .filter(|w| w.request.urgency == Some(Urgency::Rush))
+                .count() as u32,
             classes,
             resources,
         }

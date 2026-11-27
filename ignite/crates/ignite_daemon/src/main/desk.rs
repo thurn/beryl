@@ -415,9 +415,17 @@ impl Host for DaemonHost {
         ])
     }
 
+    /// While a rushed session's command holds or waits for cores, the ceiling is zero, so no
+    /// ordinary worker starts and adds to the load the rush competes with. Regression and
+    /// justiciar tickets bypass the ceiling as they always do (see [`crate::rush`]).
     fn worker_capacity(&self) -> (u32, bool, Option<u64>) {
         let (pressed, free) = self.scheduler.worker_memory();
-        (self.worker_ceiling, pressed, free)
+        let ceiling = if self.scheduler.rush_busy() {
+            0
+        } else {
+            self.worker_ceiling
+        };
+        (ceiling, pressed, free)
     }
 
     fn observe_queue(&self, now: Timestamp) {

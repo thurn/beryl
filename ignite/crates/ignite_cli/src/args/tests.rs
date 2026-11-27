@@ -271,3 +271,24 @@ fn parses_the_storage_probe_command() {
             && root == std::path::Path::new("E:\\trees")
     ));
 }
+
+/// `ignite rush [end]` reaches the daemon's `rush` verb, and the verb is left out of `--help`:
+/// only the operator's `/rush` skill names it.
+#[test]
+fn rush_reaches_the_daemon_and_is_hidden_from_help() {
+    for (raw, args) in [
+        (vec!["ignite", "rush"], Vec::<&str>::new()),
+        (vec!["ignite", "rush", "end"], vec!["end"]),
+    ] {
+        let raw: Vec<String> = raw.into_iter().map(str::to_owned).collect();
+        let cli = Cli::try_parse_from(&raw).unwrap();
+        assert!(matches!(cli.command, Command::Rush { .. }));
+        let request = crate::client::request(cli.command.verb(), &raw, PathBuf::default(), None);
+        assert_eq!(request.verb, "rush");
+        assert_eq!(request.args, args);
+    }
+    let help = <Cli as clap::CommandFactory>::command()
+        .render_help()
+        .to_string();
+    assert!(!help.contains("rush"), "{help}");
+}

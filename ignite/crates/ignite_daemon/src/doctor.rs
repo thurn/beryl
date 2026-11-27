@@ -122,6 +122,13 @@ impl StatusSection for CoresSection {
                 "{count} {commands} for {ticket} granted cores with priority because the ticket holds master back"
             )
         }));
+        if s.rush_running + s.rush_waiting > 0 {
+            lines.push(format!(
+                "{} running and {} waiting for a rushed session, ahead of every class but tip \
+                 builds and emergencies",
+                s.rush_running, s.rush_waiting
+            ));
+        }
         lines
     }
 }

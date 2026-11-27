@@ -157,6 +157,7 @@ impl Ledger {
                 agent_lent: 0,
                 reserve: None,
                 priority_ticket: None,
+                urgency: None,
             },
         );
         Some(extra)
@@ -265,11 +266,12 @@ impl Ledger {
         let queued_s = now.seconds_since(waiter.since).max(0.0) as u64;
         // A grant with a cores file grows: its command follows the file through its jobserver,
         // and a command that rereads the file starts more threads.
-        let grows_to = waiter
-            .request
-            .cores_file
-            .is_some()
-            .then(|| waiter.request.cores.clamp(1, self.limits.max_per_command()));
+        let grows_to = waiter.request.cores_file.is_some().then(|| {
+            waiter
+                .request
+                .cores
+                .clamp(1, self.limits.max_for(&waiter.request))
+        });
         self.held.insert(
             waiter.id,
             Held {
@@ -289,6 +291,7 @@ impl Ledger {
                 agent_lent,
                 reserve: waiter.request.reserve,
                 priority_ticket: waiter.request.priority_ticket.clone(),
+                urgency: waiter.request.urgency,
             },
         );
         Grant {
@@ -298,6 +301,7 @@ impl Ledger {
             queued_s,
             cores_file: waiter.request.cores_file,
             priority_ticket: waiter.request.priority_ticket,
+            urgency: waiter.request.urgency,
         }
     }
 }

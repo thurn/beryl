@@ -250,6 +250,7 @@ fn an_adopted_tip_build_holds_the_reserve_until_released() {
         follow: None,
         reserve: Some(Reserve::TipBuild),
         priority_ticket: None,
+        urgency: None,
     }]);
     assert_eq!(scheduler.status().tip_build_used, 4);
     assert_eq!(scheduler.status().granted, 0);

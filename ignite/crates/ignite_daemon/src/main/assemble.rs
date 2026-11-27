@@ -181,6 +181,7 @@ pub fn machinery(base: &Base, setup: TreeSetup) -> Result<Machinery> {
                 base.open()?,
                 base.home(crate::mirror::FILE),
                 base.hub.clone(),
+                base.clock.clone(),
             ),
     );
     super::startup_step(
@@ -493,12 +494,9 @@ pub fn server(
         landing: parts.landing.clone(),
     }));
     registry.register(Box::new(RemovedDispatchVerb));
-    registry.register(Box::new(
-        PoolVerb::new(parts.headless_dispatch.clone()).ending(parts.emergencies.clone()),
-    ));
-    registry.register(Box::new(crate::emergency::EmergencyVerb(
-        parts.emergencies.clone(),
-    )));
+    for verb in control_verbs(parts) {
+        registry.register(verb);
+    }
     registry.register(Box::new(TellVerb));
     registry.register(Box::new(TurnEndedVerb::new(
         parts.headless_dispatch.clone(),
@@ -616,6 +614,16 @@ pub fn long_verbs(checks: &Arc<Checks>, landing: &Arc<Landing>, idle: &Arc<Idle>
     ]
 }
 
+/// The verbs that pause the fleet's work or put one session's ahead of it: `pool`, `emergency`
+/// and `rush`.
+fn control_verbs(parts: &loops::Parts) -> [Box<dyn Verb>; 3] {
+    [
+        Box::new(PoolVerb::new(parts.headless_dispatch.clone()).ending(parts.emergencies.clone())),
+        Box::new(crate::emergency::EmergencyVerb(parts.emergencies.clone())),
+        Box::new(crate::rush::RushVerb(parts.rushes.clone())),
+    ]
+}
+
 /// The commit of the executable a handle's verb runs under: the one its verb process recorded,
 /// or this daemon's own for a verb the daemon runs.
 fn executable_of(base: &Base) -> Result<doctor::ExecutableOf> {
@@ -659,6 +667,7 @@ fn status_sections(base: &Base, parts: &loops::Parts) -> Vec<Box<dyn StatusSecti
         Box::new(crate::emergency::EmergencySection(
             parts.emergencies.clone(),
         )),
+        Box::new(crate::rush::RushSection(parts.rushes.clone())),
         Box::new(crate::pool::PauseSection {
             headless_dispatch: parts.headless_dispatch.clone(),
             hub: parts.ctx.hub.clone(),

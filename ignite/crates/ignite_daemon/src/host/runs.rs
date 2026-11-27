@@ -218,6 +218,7 @@ impl RunStarter for SupervisedStarter {
             cores_file: None,
             reserve: spec.reserve,
             priority_ticket: None,
+            urgency: None,
         };
         match &self.scheduler {
             Some(scheduler) => scheduler.describe(&request),

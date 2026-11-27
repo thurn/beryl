@@ -42,6 +42,7 @@ fn ask(class: Class, cores: u32) -> GrantRequest {
         cores_file: None,
         reserve: None,
         priority_ticket: None,
+        urgency: None,
     }
 }
 
@@ -470,6 +471,7 @@ fn a_grant_sets_the_thread_counts() {
         queued_s: 0,
         cores_file: Some("/runs/1/cores".into()),
         priority_ticket: None,
+        urgency: None,
     };
     let env = grant.env();
     for name in [
@@ -725,6 +727,7 @@ mod elastic;
 mod lending;
 mod outside;
 mod reserve;
+mod urgency;
 
 /// A verb process asks again for a command after the daemon restarted, passing the moment it
 /// first asked. The new daemon's queue puts it ahead of a request first asked for later, even

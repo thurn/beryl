@@ -494,6 +494,8 @@ mod tests {
             tip_build_used: 0,
             agent_borrowed: 0,
             priority_grants: std::collections::BTreeMap::new(),
+            rush_running: 0,
+            rush_waiting: 0,
             classes: vec![],
             resources: vec![],
         };

@@ -4,9 +4,10 @@
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
+use ignite_core::ids::SessionId;
 use ignite_core::traits::Result;
 
-use super::{LeaseRequest, TreeLease, Trees};
+use super::{LeaseRequest, Locked, TreeLease, Trees};
 
 pub(super) enum SlotState {
     Waiting,
@@ -115,5 +116,31 @@ impl Drop for Waiter {
             SlotState::Taken => *state = SlotState::Taken,
             SlotState::Waiting | SlotState::Served(Err(_)) | SlotState::Abandoned => {}
         }
+    }
+}
+
+impl Trees {
+    /// Where a lease for `request` joins the queue: at the end, except that a rushed session's
+    /// lease goes ahead of every queued lease but an earlier rush's (see `crate::rush`).
+    pub(super) fn queue_position(&self, locked: &Locked, request: &LeaseRequest) -> usize {
+        let end = locked.waiters.len();
+        if !self.rushed(locked, request) {
+            return end;
+        }
+        locked
+            .waiters
+            .iter()
+            .position(|waiter| !self.rushed(locked, waiter.request()))
+            .unwrap_or(end)
+    }
+
+    /// Whether `request` comes from a rushed session or for a rushed ticket.
+    fn rushed(&self, locked: &Locked, request: &LeaseRequest) -> bool {
+        crate::rush::rushed(
+            &locked.db,
+            self.inner.clock.now(),
+            Some(&request.ticket),
+            request.session.as_ref().map(SessionId::as_str),
+        )
     }
 }

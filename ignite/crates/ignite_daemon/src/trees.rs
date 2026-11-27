@@ -417,7 +417,8 @@ impl Trees {
                 tree
             } else {
                 let slot = Arc::new(Slot::new(request, Self::busy_reason(&locked)?));
-                locked.waiters.push_back(Arc::clone(&slot));
+                let at = self.queue_position(&locked, slot.request());
+                locked.waiters.insert(at, Arc::clone(&slot));
                 return Ok(Lease::Waiting(Waiter::new(slot, self.clone())));
             }
         };

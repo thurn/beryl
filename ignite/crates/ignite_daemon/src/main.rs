@@ -173,6 +173,10 @@ impl Daemon {
                 base.clock.clone(),
                 Some(base.open()?),
             )),
+            rushes: Arc::new(crate::rush::Rushes {
+                db: Mutex::new(base.open()?),
+                clock: base.clock.clone(),
+            }),
             cli,
             titles: Arc::new(crate::session_title::TitleHook::new(
                 crate::session_title::app_data(&|name: &str| std::env::var(name).ok()),

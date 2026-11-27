@@ -417,6 +417,36 @@ fn a_lease_with_no_free_tree_waits_and_is_served_by_the_next_release() {
     assert_eq!(status.trees[0].ticket.as_deref(), Some("T.2"));
 }
 
+/// A rushed session's lease goes ahead of the tickets already waiting (see `crate::rush`).
+#[test]
+fn a_rushed_session_waits_ahead_of_the_queue() {
+    let f = Fixture::new(1, 1);
+    let _first = f.lease("T.1", false);
+    let waiting = |ticket: &str| match f.trees.lease(f.request(ticket, false)).unwrap() {
+        Lease::Waiting(waiter) => waiter,
+        Lease::Ready(_) => panic!("the only ticket tree is leased"),
+    };
+    let _second = waiting("T.2");
+    let _third = waiting("T.3");
+    crate::rush::start(
+        &f.trees.lock().db,
+        f.clock.now(),
+        &SessionId::new("local_T_4").unwrap(),
+        None,
+    )
+    .unwrap();
+    let _rushed = waiting("T.4");
+    let queue: Vec<String> = f
+        .trees
+        .status()
+        .unwrap()
+        .waiting
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    assert_eq!(queue, ["T.4", "T.2", "T.3"]);
+}
+
 #[test]
 fn a_waiter_that_gives_up_leaves_the_queue() {
     let f = Fixture::new(1, 1);

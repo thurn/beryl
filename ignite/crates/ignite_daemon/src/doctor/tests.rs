@@ -467,6 +467,8 @@ fn status_shows_the_sections_its_flags_ask_for() {
         tip_build_used: 0,
         agent_borrowed: 0,
         priority_grants: BTreeMap::new(),
+        rush_running: 0,
+        rush_waiting: 0,
         classes: vec![],
         resources: vec![],
     });
@@ -540,6 +542,8 @@ fn status_shows_the_tip_reserve_and_grants_with_ticket_priority() {
         tip_build_used: 3,
         agent_borrowed: 2,
         priority_grants: BTreeMap::from([(ignite_core::ids::TicketId::new("FIX").unwrap(), 1)]),
+        rush_running: 0,
+        rush_waiting: 0,
         classes: vec![],
         resources: vec![],
     });

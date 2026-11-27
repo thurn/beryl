@@ -284,6 +284,7 @@ mod grants {
             cores_file: None,
             reserve: None,
             priority_ticket: None,
+            urgency: None,
         }
     }
 
@@ -609,6 +610,7 @@ mod stop_grace {
             cores_file: None,
             reserve: None,
             priority_ticket: None,
+            urgency: None,
         };
         // An agent takes the two cores the idle command left, so a landing has no cores free
         // and the scheduler stops the idle command for it.

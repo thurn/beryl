@@ -37,6 +37,7 @@ pub mod mirror;
 pub mod monitor;
 pub mod outbox;
 pub mod pool;
+pub mod rush;
 pub mod sched;
 pub mod server;
 pub mod session_title;

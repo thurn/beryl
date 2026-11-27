@@ -1408,6 +1408,17 @@ Rules for cores:
   running commands. While a command granted this priority runs, `ignite status`
   names its ticket in the cores section.
 
+- Two kinds of command are urgent and go ahead of every class, behind only tip
+  builds: first the `agent` and `land` commands of an `incident` or `justiciar`
+  ticket (an emergency), then those of a session the operator rushed (see
+  [Rush](#rush)). An urgent request is scheduled in `land` and served before
+  every landing gate. It may take every shared core instead of two thirds of
+  them, the shrinking grants of every class give cores back to it, a
+  non-shrinking urgent request waits for them as a landing does, and its own
+  grant gives none back. The `tip` and `batch` floors still hold, so `master`
+  and experiments keep moving. A run's `spec.json` records the urgency of its
+  grant, and is left without the field when the grant had none.
+
 - Within a class, a request that has waited two minutes goes first, in arrival
   order. The others go smallest first, then in arrival order. Each request gets
   all the cores it asked for before the next one gets any. On 2026-11-20, 16 to
@@ -4394,6 +4405,38 @@ full pause for a broken build, hub or daemon fault, or resource exhaustion.
   `ignite emergency clear --local`, which follows the same rule.
 - When a declaration replaces another session's emergency, the earlier
   declarer's ticket gets a comment and an `ignite tell`.
+
+### Rush
+
+The operator sometimes needs one session's work done before the pool's: a fix
+someone is waiting for, while up to 15 workers hold the machine's cores, trees
+and worker room. Typing `/rush` in a desktop session runs the `rush` skill,
+which runs `ignite rush`. The skill sets `disable-model-invocation`, so only the
+operator can start it, and no guide, prime text or other skill names the verb.
+
+- `ignite rush` marks the calling session. It refuses a headless worker (a
+  session named `cli-…`) and a request with no session. At most two sessions
+  rush on one machine; a third is refused with the names of the two.
+- Every `agent` or `land` command of the rushed session, or of its ticket, is
+  urgent (see
+  [Cores, memory and shared resources](#cores-memory-and-shared-resources)):
+  only tip builds and emergencies come before it. The commands of two rushes are
+  served in the usual order within a class.
+- While a rushed session's command holds or waits for cores, the machine's
+  worker ceiling is zero, so no new ordinary worker starts. Regression and
+  justiciar tickets bypass the ceiling as they always do, and running workers go
+  on with smaller grants.
+- A rushed session's `ignite start` that must wait for a ticket tree goes ahead
+  of every queued lease but an earlier rush's. Landing trees have no queue, so a
+  rushed landing's gate is rushed only through its cores.
+- The rush ends when its ticket's tree is given back (the ticket landed, was
+  released or was closed), with `ignite rush end`, or four hours after
+  `ignite rush` last ran. A session that rushes before `ignite start` gets its
+  ticket attached once it leases a tree.
+- An emergency pause refuses a rushed session's heavy verbs like any other's.
+- The daemon keeps the rushes in its local database, so a restart keeps them.
+  `ignite status` lists them in a `rush` section, and its `cores` section counts
+  the rushed commands running and waiting.
 
 ### The landings freeze
 

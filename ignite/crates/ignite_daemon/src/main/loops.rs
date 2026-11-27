@@ -96,6 +96,8 @@ pub struct Parts {
     pub reporter: Arc<crate::justiciar::Reporter>,
     /// The emergency pause, which each heartbeat's reply updates.
     pub emergencies: Arc<crate::emergency::Emergencies>,
+    /// The sessions the operator rushed (see [`crate::rush`]).
+    pub rushes: Arc<crate::rush::Rushes>,
     /// Reports session titles to the hub, both as a hook on each command and from the sender
     /// loop for the sessions holding trees.
     pub titles: Arc<crate::session_title::TitleHook>,

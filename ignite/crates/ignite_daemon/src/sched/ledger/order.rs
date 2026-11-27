@@ -21,12 +21,13 @@
 
 use std::{cmp::Ordering, collections::BTreeSet};
 
+use ignite_core::ids::TicketId;
 use ignite_core::protocol::Class;
 use ignite_core::time::Timestamp;
 
 use ignite_core::traits::Reserve;
 
-use super::super::GrantRequest;
+use super::super::{GrantRequest, Urgency};
 use super::{Held, Ledger, Waiter};
 
 /// How long a request waits before it goes ahead of every request of its class that has waited
@@ -60,6 +61,11 @@ impl Ledger {
         if tip_build(a) != tip_build(b) {
             return tip_build(b).cmp(&tip_build(a));
         }
+        // `None` sorts before `Some`, so an urgent request is compared as the lower key.
+        let urgency = |w: &Waiter| w.request.urgency.map_or(2, |u| u as u8);
+        if urgency(a) != urgency(b) {
+            return urgency(a).cmp(&urgency(b));
+        }
         let priority = |w: &Waiter| w.request.priority_ticket.is_some();
         if priority(a) != priority(b) {
             return priority(b).cmp(&priority(a));
@@ -75,15 +81,32 @@ impl Ledger {
         }
     }
 
+    /// Restores the ticket whose priority, and the urgency, an adopted grant used.
+    pub(in crate::sched) fn record_priority(
+        &mut self,
+        id: u64,
+        ticket: Option<TicketId>,
+        urgency: Option<Urgency>,
+    ) {
+        if let Some(held) = self.held.get_mut(&id) {
+            held.priority_ticket = ticket;
+            held.urgency = urgency;
+        }
+    }
+
     /// Whether `waiter` is one a shrinking grant of its own class gives cores back for: it is
-    /// small ([`SMALL_CORES`]) or has waited [`AGED_SECONDS`].
+    /// urgent ([`Urgency`](super::super::Urgency)), small ([`SMALL_CORES`]) or has waited
+    /// [`AGED_SECONDS`].
     pub(super) fn ranks_ahead_of_grants(&self, waiter: &Waiter, now: Timestamp) -> bool {
-        self.want_of(waiter) <= SMALL_CORES || aged(waiter, now)
+        waiter.request.urgency.is_some() || self.want_of(waiter) <= SMALL_CORES || aged(waiter, now)
     }
 
     /// The cores `waiter` would take with nothing else waiting.
     pub(super) fn want_of(&self, waiter: &Waiter) -> u32 {
-        waiter.request.cores.clamp(1, self.limits.max_per_command())
+        waiter
+            .request
+            .cores
+            .clamp(1, self.limits.max_for(&waiter.request))
     }
 
     pub(super) fn record_core_waits(&mut self, waiting_for_cores: &BTreeSet<u64>, now: Timestamp) {
@@ -108,7 +131,9 @@ impl Ledger {
 }
 
 /// The class a request is scheduled in: its own, except that a tip round's build check
-/// (`Reserve::TipBuild`) is scheduled in `land`, the highest, and goes first within it.
+/// (`Reserve::TipBuild`) is scheduled in `land`, the highest, and goes first within it, and an
+/// emergency's or a rush's command ([`Urgency`](super::super::Urgency)) is scheduled in `land`
+/// right behind it.
 ///
 /// On 2026-11-20 tip rounds on one machine took 35 to 90 minutes, most of it building, while up
 /// to 15 agent sessions held the machine's cores. A tip build took its reserve at once but waited
@@ -117,8 +142,13 @@ impl Ledger {
 /// for 11 hours. A tip build decides when `green` moves, where every new ticket starts, so it now
 /// takes free cores before landings and agents do, makes their shrinking grants give cores back,
 /// and gives none back itself ([`Held::rank`]). It is still reported in `tip`.
+///
+/// The operator starts a rush with `/rush` when one session's work must finish first. Its
+/// commands, and those of an incident or justiciar ticket, take free cores before landings and
+/// agents do, make the shrinking grants of every class give cores back, and give none back
+/// themselves, as a tip build does.
 pub(super) fn rank(request: &GrantRequest) -> Class {
-    if request.reserve == Some(Reserve::TipBuild) {
+    if request.reserve == Some(Reserve::TipBuild) || request.urgency.is_some() {
         Class::Land
     } else {
         request.class
@@ -128,7 +158,7 @@ pub(super) fn rank(request: &GrantRequest) -> Class {
 impl Held {
     /// The class this grant is scheduled in ([`rank`]).
     pub(super) fn rank(&self) -> Class {
-        if self.reserve == Some(Reserve::TipBuild) {
+        if self.reserve == Some(Reserve::TipBuild) || self.urgency.is_some() {
             Class::Land
         } else {
             self.class

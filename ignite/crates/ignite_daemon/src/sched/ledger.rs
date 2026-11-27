@@ -12,7 +12,7 @@ use ignite_core::time::Timestamp;
 use ignite_core::traits::Reserve;
 
 use super::measured::{GrantUse, Pressure};
-use super::{Grant, GrantRequest, Limits};
+use super::{Grant, GrantRequest, Limits, Urgency};
 
 mod observe;
 mod order;
@@ -74,6 +74,9 @@ struct Held {
     /// every class ([`Held::rank`]) and never gives cores back for another request.
     reserve: Option<Reserve>,
     priority_ticket: Option<TicketId>,
+    /// An emergency's or a rush's grant, scheduled ahead of every class and never giving cores
+    /// back for another request ([`Held::rank`]).
+    urgency: Option<Urgency>,
 }
 
 impl Held {
@@ -237,16 +240,10 @@ impl Ledger {
                 agent_lent: 0,
                 reserve: None,
                 priority_ticket: None,
+                urgency: None,
             },
         );
         id
-    }
-
-    /// Restores the ticket whose priority an adopted grant used.
-    pub(super) fn record_priority(&mut self, id: u64, ticket: Option<TicketId>) {
-        if let Some(held) = self.held.get_mut(&id) {
-            held.priority_ticket = ticket;
-        }
     }
 
     /// While draining, `idle` requests start nothing and every `idle` grant is asked to stop,
@@ -610,6 +607,7 @@ impl Ledger {
             if held.shrinks
                 && held.rank() == class
                 && held.reserve != Some(Reserve::TipBuild)
+                && held.urgency.is_none()
                 && !held.stopping
                 && held.cores > share
                 && gives_back(held) > 0

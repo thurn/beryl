@@ -59,7 +59,7 @@ pub(super) enum Call {
 }
 
 /// The start of every CLI session and slot placeholder.
-const PREFIX: &str = "cli-";
+pub(crate) const PREFIX: &str = "cli-";
 /// What follows the app in a slot's placeholder, `cli-<app>-slot-<k>`.
 const SLOT_INFIX: &str = "-slot-";
 

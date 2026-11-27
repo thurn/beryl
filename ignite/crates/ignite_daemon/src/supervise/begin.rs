@@ -103,6 +103,7 @@ impl SupervisedLauncher {
             shrinks,
             reserve: spec.reserve,
             priority_ticket: grant.priority_ticket.clone(),
+            urgency: grant.urgency,
         };
         let env = grant.env();
         let queued_s = grant.queued_s as f64;
@@ -138,6 +139,7 @@ impl SupervisedLauncher {
             queued_s: 0,
             cores_file: None,
             priority_ticket: None,
+            urgency: None,
         };
         let env = grant.env();
         let held = GrantGuard::new(None, grant);
@@ -210,8 +212,14 @@ impl SupervisedLauncher {
                 queued_s: 0,
                 cores_file: None,
                 priority_ticket: None,
+                urgency: None,
             });
         };
+        let placing = self
+            .agent_priority
+            .as_ref()
+            .map(|priority| priority.place(spec))
+            .unwrap_or_default();
         let request = GrantRequest {
             class: spec.class,
             cores: spec.cores,
@@ -223,10 +231,8 @@ impl SupervisedLauncher {
             grows: spec.grows,
             cores_file,
             reserve: spec.reserve,
-            priority_ticket: self
-                .agent_priority
-                .as_ref()
-                .and_then(|priority| priority.ticket(spec)),
+            priority_ticket: placing.priority_ticket,
+            urgency: placing.urgency,
         };
         match since {
             Some(since) => scheduler.acquire_since(&request, since, cancelled),

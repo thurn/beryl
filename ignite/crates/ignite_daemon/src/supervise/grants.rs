@@ -44,6 +44,10 @@ pub struct GrantFile {
     /// Agent queue priority, if the command's ticket held master back when it started.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub priority_ticket: Option<TicketId>,
+    /// The command was an emergency's or a rush's, scheduled ahead of every class. Left out
+    /// when unset, like `reserve`, so older and newer daemons read each other's files.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub urgency: Option<crate::sched::Urgency>,
 }
 
 /// A grant that is released when this value is dropped, so that a panic between asking for
@@ -127,6 +131,7 @@ impl SupervisedLauncher {
                         follow,
                         reserve: file.reserve,
                         priority_ticket: file.priority_ticket,
+                        urgency: file.urgency,
                     });
                     adopted.push((run, class));
                 }
@@ -197,6 +202,7 @@ mod tests {
         let reserved = GrantFile {
             reserve: Some(Reserve::TipBuild),
             priority_ticket: None,
+            urgency: None,
             ..grant
         };
         let text = serde_json::to_string(&reserved).unwrap();

@@ -131,6 +131,7 @@ fn a_restarted_daemon_registers_the_grants_of_commands_still_running() {
         shrinks: false,
         reserve: None,
         priority_ticket: Some(ticket.clone()),
+        urgency: None,
     };
     fs::write(
         run_dir.join("spec.json"),
@@ -190,6 +191,7 @@ fn an_adopted_grant_keeps_growing_through_its_cores_file() {
         shrinks: true,
         reserve: None,
         priority_ticket: None,
+        urgency: None,
     };
     fs::write(
         run_dir.join("spec.json"),
