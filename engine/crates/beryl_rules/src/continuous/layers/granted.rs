@@ -6,12 +6,12 @@
 
 use beryl_kernel::derive::Rederive;
 
-use crate::card::{Ability, GrantIx};
+use crate::card::{Ability, AbilityKind, GrantIx};
 use crate::fixed::Full;
 use crate::ids::CardId;
 use crate::layout::{Layout, Queue, index};
 use crate::state::{AbilityMask, GrantRef, GrantSource};
-use crate::table::GameTable;
+use crate::table::{Capability, GameTable};
 
 /// The most times one recompute runs the layers: once, and again for each time a static
 /// ability granted in layer 6 is found that the run before did not apply ([`Granted`]).
@@ -189,4 +189,25 @@ pub(super) fn lent_index<L: Layout>(
         }
     }
     unreachable!("a LayerChange::Lend names a Modification::Lend on its card")
+}
+
+/// Whether a permanent may make mana its card's facts do not say (`State::makes_card_mana`):
+/// an effect changed a land's land types (`land_types`), or a row of the table of grants the
+/// layers just wrote grants a mana ability. In a game with no card that grants one, the rows
+/// are not read.
+pub(super) fn mana_changed<L: Layout>(
+    s: &Rederive<'_, L>,
+    t: &GameTable,
+    land_types: bool,
+) -> bool {
+    land_types || (t.can(Capability::GrantsMana) && grants_mana(s, t))
+}
+
+/// Whether a row of the table of grants grants a mana ability. Out of line: only a game with a
+/// card that grants one asks.
+#[cold]
+#[inline(never)]
+fn grants_mana<L: Layout>(s: &Rederive<'_, L>, t: &GameTable) -> bool {
+    (s.grant_rows().iter())
+        .any(|row| granted_ability(t, row.grant_ref()).kind() == AbilityKind::Mana)
 }

@@ -286,9 +286,10 @@ fn read_source<L: Layout>(
         return None;
     }
     let mut abilities = s.abilities(t, slot).map(|(_, a)| a);
-    for a in abilities.clone().filter(|a| is_simple(a)) {
+    // A granted one is read through its granting card's words.
+    for (ability, a) in s.abilities(t, slot).filter(|(_, a)| is_simple(a)) {
         conditional |= a.only_if_you_control().is_some();
-        if !allowed(s, t, a, player, &words) {
+        if !allowed(s, t, a, player, &s.ability_words(slot, ability)) {
             continue;
         }
         kinds |= a.produces().colors;

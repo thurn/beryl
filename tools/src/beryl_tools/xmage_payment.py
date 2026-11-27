@@ -86,10 +86,12 @@ class Payments:
             return []
         if restricted:
             return self.as_made_taps(who, at, taps, mana)
+        # A source with several mana abilities, or one that asks a color, is tapped for the
+        # mana the trace records it made.
         if (
             not self.cards.change_land_types()
             and who not in self.left_to_xmage
-            and any(map(self.cards.mana_choice, taps))
+            and any(self.cards.mana_choice(n) or self.cards.asks_color(n) for n in taps)
         ):
             try:
                 return self.as_made_taps(who, at, taps, list(mana))

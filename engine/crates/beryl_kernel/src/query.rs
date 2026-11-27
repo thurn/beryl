@@ -249,9 +249,13 @@ impl<L: Layout> State<L> {
     /// ([`crate::table::FaceFacts::mana`]): it has every ability of its face and no intrinsic
     /// mana ability of a basic land type but its face's (see [CR 305.7]), and it is no merged
     /// permanent with the abilities of cards under its top card
-    /// ([`crate::query::Copiable::merged_faces`]). With no effect on the battlefield removing
-    /// abilities or changing land types and no merged permanent, as most games go, one test
-    /// of a flag the layers store.
+    /// ([`crate::query::Copiable::merged_faces`]), and no other object grants it an ability.
+    /// The last is asked only while some permanent is granted a mana ability
+    /// ([`crate::listener::read_when_granted`]), which its card's facts do not count: the
+    /// kernel does not know which ability a row of the table of grants
+    /// ([`State::grant_rows`]) is, so a permanent with any row is read ability by ability. With
+    /// no effect on the battlefield removing abilities, changing land types or granting a mana
+    /// ability and no merged permanent, as most games go, one test of a flag the layers store.
     ///
     /// [CR 305.7]: https://yawgatog.com/resources/magic-rules/#R3057
     #[inline]
@@ -259,8 +263,9 @@ impl<L: Layout> State<L> {
         !self.flags.mana_changed || self.keeps_card_mana(slot)
     }
 
-    /// [`State::makes_card_mana`] when some effect changed abilities or land types, or a
-    /// merged permanent is on the battlefield. Out of line: most games never come here.
+    /// [`State::makes_card_mana`] when some effect changed abilities or land types or granted
+    /// a mana ability, or a merged permanent is on the battlefield. Out of line: most games
+    /// never come here.
     #[cold]
     #[inline(never)]
     fn keeps_card_mana(&self, slot: L::Slot) -> bool {
@@ -272,7 +277,10 @@ impl<L: Layout> State<L> {
             let d = self.derived[i];
             let merged = self.object(slot).flags.has(Flag::Copy)
                 && self.copiable(slot).merged_face(0).is_some();
-            { d.lost }.is_empty() && { d.keywords }.intrinsic_mana() == 0 && !merged
+            { d.lost }.is_empty()
+                && { d.keywords }.intrinsic_mana() == 0
+                && { d.granted }.is_empty()
+                && !merged
         })
     }
 

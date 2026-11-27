@@ -124,6 +124,21 @@ def test_a_source_with_one_mana_ability_taps_by_its_text() -> None:
     assert not gadget(mana(0, "Colorless")).mana_choice("Gadget")
 
 
+def test_a_source_with_no_mana_of_its_own_taps_for_the_mana_a_card_grants() -> None:
+    # Gemhide Sliver's "All Slivers have '{T}: Add one mana of any color.'": XMage asks the
+    # color, which the payment names from the mana the trace records.
+    colors = ["White", "Blue", "Black", "Red", "Green"]
+    grant = {**mana(0, *colors), "index": "Grant 0"}
+    gem = {"faces": [{"name": "Gem", "abilities": [], "grants": [grant]}]}
+    cards = Cards({"Gadget": card(), "Gem": gem, "Land": card(mana(0, "Blue"))})
+    assert cards.mana_text("Land") == "{T}: Add {U}"
+    assert cards.asks_color("Gadget")
+    assert not cards.asks_color("Land")
+    made: Json = {"source": "Gadget", "color": "Red", "restricted": False}
+    assert cards.made_text("Gadget", made) == "{T}: Add one mana of any color"
+    assert cards.mana_abilities("Land") == [mana(0, "Blue")]
+
+
 def test_a_source_of_several_kinds_of_mana_is_left_to_xmage() -> None:
     dual = gadget(mana(0, "White"), mana(1, "Blue"))
     assert dual.mana_text("Gadget") is None

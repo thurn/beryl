@@ -4,8 +4,8 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityIx, CostAction, FaceIx, Hybrid, INTRINSIC_MANA, ManaColor, ManaCost,
-    ObjectAbility, Types,
+    Ability, AbilityIx, CostAction, FaceAbility, FaceIx, Hybrid, INTRINSIC_MANA, ManaColor,
+    ManaCost, ObjectAbility, Types,
 };
 use crate::decision::{OPTIONS, Opt};
 use crate::fixed::Full;
@@ -410,16 +410,20 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
     let restricted = RESTRICTED;
     let slot = permanent.slot();
     let (card, face) = s.definition(slot).record(t);
-    // The card table refuses a card that grants a mana ability (`TableError::Granted`), so
-    // the one found is the permanent's own, or, of a merged permanent, that of a card under
-    // it (see CR 702.140e), printed on that card's face.
+    // The ability found is the permanent's own, one another object granted it, which is
+    // printed among the granting card's front face's grants (§9), or, of a merged permanent,
+    // that of a card under it (see CR 702.140e), printed on that card's face. Two instances of
+    // one granted ability are one ability to activate (see CR 113.2c): the first is found.
     let find = |preferred: bool| {
         s.abilities(t, slot)
             .filter(move |&(_, a)| !preferred || is_sacrificed(a) == consume)
             .find_map(|(ability, a)| match ability {
-                ObjectAbility::Own(i) if !restricted && makes_now(s, t, slot, a, color) => {
-                    Some((card, face, i, a))
+                ObjectAbility::Own(i)
+                    if !restricted && makes_now(s, t, slot, ability, a, color) =>
+                {
+                    Some((card, face, TriggeredAbility::own(i), a))
                 }
+                ObjectAbility::Granted(k) if !restricted => granted_mana(s, t, slot, k, a, color),
                 ObjectAbility::Merged(..) if !restricted => merged_mana(s, t, slot, ability, color),
                 ObjectAbility::Own(_)
                 | ObjectAbility::Granted(_)
@@ -461,7 +465,12 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
         .or_else(|| {
             (s.intrinsic_mana(t, slot) & (1 << color.index()) != 0).then(|| {
                 let intrinsic = &INTRINSIC_MANA[color.index()];
-                (card, face, AbilityIx::new(u8::MAX), intrinsic)
+                (
+                    card,
+                    face,
+                    TriggeredAbility::own(AbilityIx::new(u8::MAX)),
+                    intrinsic,
+                )
             })
         })
         .expect("a mana ability that makes the chosen mana");
@@ -497,7 +506,7 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
         of: AbilityRef {
             source: Some(source),
             controller: controller.into(),
-            ability: TriggeredAbility::own(index),
+            ability: index,
             card,
             face,
         },
@@ -521,23 +530,48 @@ fn merged_mana<L: Layout>(
     slot: L::Slot,
     ability: ObjectAbility,
     color: ManaColor,
-) -> Option<(L::Card, FaceIx, AbilityIx, &'static Ability)> {
+) -> Option<(L::Card, FaceIx, TriggeredAbility, &'static Ability)> {
     let (card, face, i, a) = s.merged_ability(t, slot, ability)?;
-    makes_now(s, t, slot, a, color).then_some((card, face, i, a))
+    makes_now(s, t, slot, ability, a, color).then_some((card, face, TriggeredAbility::own(i), a))
 }
 
-/// Whether `a`, an unrestricted mana ability of the permanent in `slot`, makes `color` and its
-/// controller may activate it now ([`allowed`]).
+/// The granting card, its front face, the grant and the ability `a` of the object in `slot`'s
+/// `k`th granted ability ([`ObjectAbility::Granted`]), if it is a mana ability that makes
+/// `color` now. Out of line: only a game with a card that grants a mana ability has one.
+#[cold]
+#[inline(never)]
+fn granted_mana<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    slot: L::Slot,
+    k: u8,
+    a: &'static Ability,
+    color: ManaColor,
+) -> Option<(L::Card, FaceIx, TriggeredAbility, &'static Ability)> {
+    let grant = s.granted_ability(slot, k)?;
+    let given = TriggeredAbility::of(FaceAbility::Grant(grant.grant));
+    makes_now(s, t, slot, ObjectAbility::Granted(k), a, color).then_some((
+        grant.card,
+        FaceIx::FRONT,
+        given,
+        a,
+    ))
+}
+
+/// Whether `a`, the unrestricted mana ability `ability` of the permanent in `slot`, makes
+/// `color` and its controller may activate it now ([`allowed`]), read through its words
+/// ([`State::ability_words`]).
 fn makes_now<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     slot: L::Slot,
+    ability: ObjectAbility,
     a: &Ability,
     color: ManaColor,
 ) -> bool {
     (is_simple(a) || is_sacrificed(a) || is_instant_mana(a))
         && a.produces().includes(color)
-        && allowed(s, t, a, s.controller(slot), &s.words_of(slot))
+        && allowed(s, t, a, s.controller(slot), &s.ability_words(slot, ability))
 }
 
 /// Manual payment (the `manual_mana` flag): the floating mana and the sources, one per

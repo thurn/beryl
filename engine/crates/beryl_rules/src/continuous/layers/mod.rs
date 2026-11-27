@@ -301,8 +301,8 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable, trials: &mut u64) -> Re
     };
     let Applied {
         removed,
-        land_types,
         protection,
+        ..
     } = applied;
     let (listening, mut replacing) = if removed {
         listening(&s, t, s.rows())
@@ -312,8 +312,7 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable, trials: &mut u64) -> Re
     if protection {
         replacing |= Replaces::PROTECTION;
     }
-    // A permanent that may change a rule for players said so in the mask just read for
-    // the replacements: with none on the battlefield, one AND.
+    // The replacing mask says whether a permanent may change a rule for players: one AND.
     let rules = if replacing.changes_player_rules() {
         player_rules(&s, t)
     } else {
@@ -331,7 +330,8 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable, trials: &mut u64) -> Re
     } else {
         Inputs::NONE
     };
-    s.finish(listening, replacing, rules, inputs, removed, land_types);
+    let mana = granted::mana_changed(&s, t, applied.land_types);
+    s.finish(listening, replacing, rules, inputs, removed, mana);
     listed
 }
 

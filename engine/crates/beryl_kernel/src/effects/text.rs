@@ -83,6 +83,38 @@ impl<L: Layout> State<L> {
             })
     }
 
+    /// The words through which `ability` of the object in `slot` is read. A granted ability
+    /// is printed on the card that grants it, so a text-changing effect on the permanent whose
+    /// static ability grants it changes it (see CR 612.1: "This can apply to any words or
+    /// symbols printed on that object"), and the text of a spell or ability that granted it
+    /// as it resolved is read as printed. A change to the object's own text leaves it alone
+    /// (see CR 612.3: "any abilities that are granted to an object can't be modified by
+    /// text-changing effects that affect that object"). The object's own abilities, and those
+    /// of the cards under a merged permanent, are read through its words
+    /// ([`State::words_of`]).
+    #[inline]
+    pub fn ability_words(&self, slot: L::Slot, ability: beryl_card::ObjectAbility) -> Words {
+        match ability {
+            beryl_card::ObjectAbility::Granted(k) => self.granted_words(slot, k),
+            // Printed on a card in another zone, which the borrower's text changes leave alone.
+            beryl_card::ObjectAbility::Lent(..) => Words::NONE,
+            beryl_card::ObjectAbility::Own(_) | beryl_card::ObjectAbility::Merged(..) => {
+                self.words_of(slot)
+            }
+        }
+    }
+
+    /// [`State::ability_words`] of the object in `slot`'s `k`th granted ability. Out of line:
+    /// only a game with a card that grants an ability asks.
+    #[cold]
+    #[inline(never)]
+    fn granted_words(&self, slot: L::Slot, k: u8) -> Words {
+        match self.granted_row(slot, k).map(|(_, row)| row.source) {
+            Some(crate::object::GrantSource::Permanent(from)) => self.words_of(from),
+            Some(crate::object::GrantSource::Effect(_)) | None => Words::NONE,
+        }
+    }
+
     /// The text changes on the spell in `slot`, which it carries onto the battlefield
     /// (see CR 400.7a). Empty while no text change is in force.
     ///

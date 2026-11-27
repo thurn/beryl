@@ -212,10 +212,15 @@ pub enum Capability {
     /// [CR 508.1d]: https://yawgatog.com/resources/magic-rules/#R5081d
     /// [CR 509.1c]: https://yawgatog.com/resources/magic-rules/#R5091c
     CombatRequirements,
+    /// A card grants another permanent a mana ability ([`crate::listener::read_when_granted`]),
+    /// so the layers look among the grants they write for one, and a permanent with one is
+    /// read ability by ability by the mana solver rather than through its card's mana facts
+    /// ([`crate::State::makes_card_mana`]).
+    GrantsMana,
 }
 
 // The game keeps its capabilities in a `u64`.
-const _: () = assert!((Capability::CombatRequirements as u32) < u64::BITS);
+const _: () = assert!((Capability::GrantsMana as u32) < u64::BITS);
 
 impl Capability {
     /// The capabilities of every face and subtype the game can contain.
@@ -256,8 +261,11 @@ impl Capability {
             found |= Capability::LayerInputs.bit();
         }
         found |= u64::from(unwatched_state_trigger(face)) * Capability::UnwatchedStateTrigger.bit();
-        if !face.grants.is_empty() {
+        for a in face.grants {
             found |= Capability::Grants.bit();
+            // An ability a permanent is granted reads what one of its own does.
+            found |= u64::from(a.layer().is_some()) * Capability::GrantsLayerEffect.bit();
+            found |= u64::from(a.kind() == AbilityKind::Mana) * Capability::GrantsMana.bit();
         }
         let gives_triggers = (0..face.grants.len()).any(|i| {
             face.grants[i].trigger().is_some() && crate::listener::given_by_exception(face, i)
@@ -291,10 +299,6 @@ impl Capability {
                 .is_some_and(|spec| spec.modifications.contains(&Modification::Control))
         }) {
             found |= Capability::StaticControl.bit();
-        }
-        // An ability a permanent is granted reads what one of its own does.
-        if face.grants.iter().any(|a| a.layer().is_some()) {
-            found |= Capability::GrantsLayerEffect.bit();
         }
         for a in face.abilities.iter().chain(face.grants) {
             if a.chapter_numbers().is_some() {

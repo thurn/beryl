@@ -266,6 +266,7 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
     ("mana", names::HIGH_TIDE, mana::HIGH_TIDE),
     ("mana", names::MANA_FLARE, mana::MANA_FLARE),
     ("mana", names::WILD_GROWTH, mana::WILD_GROWTH),
+    ("mana", names::GEMHIDE_SLIVER, mana::GRANTED),
     (
         "replacement",
         names::CLEVER_IMPERSONATOR,

@@ -970,7 +970,10 @@ pub struct Derived {
   `granted` has bit `k` for each row `k` that grants it the ability, and its
   `k`th granted ability (`ObjectAbility::Granted(k)`) is that of its `k`th set
   bit. Two rows of one card's same grant are two instances of the ability (CR
-  113.2c), offered for activation once.
+  113.2c), offered for activation once. A granted mana ability whose whole cost
+  is {T} (Gemhide Sliver's) is read by the mana solver from the abilities the
+  permanent has: while a row grants a mana ability, `State::makes_card_mana` is
+  false for each permanent with any row, so its card's mana facts are not used.
 
 - Any mutation that can change a layer result sets `derived_dirty`: a permanent
   entering or leaving, a counter, a floating effect starting or ending, a

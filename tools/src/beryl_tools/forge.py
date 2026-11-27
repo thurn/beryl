@@ -23,7 +23,6 @@ from .card_facts import (
     ESCAPE,
     FACE_DOWN,
     Unsupported,
-    SYMBOLS,
     cost_text,
     setup_face,
     keyword_cost,
@@ -31,6 +30,7 @@ from .card_facts import (
     named_cards,
     payment_position,
 )
+from .mana_symbols import SYMBOLS
 
 HARNESS: Path = paths.TOOLS / "oracles" / "BerylForgeHarness.java"
 HARNESS_CLASS = "beryl.BerylForgeHarness"

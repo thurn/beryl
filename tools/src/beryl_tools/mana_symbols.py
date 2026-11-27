@@ -52,3 +52,38 @@ def priced_mana_text(abilities: list[Json], paragraphs: list[str]) -> str | None
         if ": Add " in p:
             return p.rstrip(".")
     return None
+
+
+def made_text(abilities: list[Json], made: Json) -> str | None:
+    """The start of the text of the mana ability among `abilities` that made the mana `made`
+    (an entry of the trace's `mana`): the one restricted or not as the mana is, whose only
+    cost is `{T}`, that makes one color, as `{T}: Add {C}`, or one mana of any color.
+    None where no such ability says it."""
+    color = cast(str, made["color"])
+    made_amount = cast(int, made.get("amount", 1))
+    for a in abilities:
+        if a["kind"] != "Mana" or bool(a.get("restricted")) != made["restricted"]:
+            continue
+        if a.get("cost") != {"parts": [{"action": "Tap", "of": "This"}]}:
+            continue
+        produces = cast(Json, a["produces"])
+        colors = cast(list[str], produces["colors"])
+        amount = cast(int, produces["amount"])
+        if amount != made_amount:
+            continue
+        if colors == [color]:
+            return "{T}: Add " + SYMBOLS[color] * amount
+        if len(colors) == len(SYMBOLS) - 1 and color in colors and amount == 1:
+            return "{T}: Add one mana of any color"
+    return None
+
+
+def asks_color(abilities: list[Json]) -> bool:
+    """Whether a mana ability among `abilities` makes one mana of a color chosen as it
+    resolves, which XMage asks (`Payments.as_made_taps` names it)."""
+    return any(
+        a["kind"] == "Mana"
+        and len(cast(list[str], cast(Json, a["produces"])["colors"])) > 1
+        and cast(int, cast(Json, a["produces"])["amount"]) == 1
+        for a in abilities
+    )

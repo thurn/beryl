@@ -18,7 +18,7 @@ from collections.abc import Iterable, Sequence
 from itertools import pairwise
 from typing import cast
 
-from .mana_symbols import SYMBOLS, tap_text
+from .mana_symbols import asks_color, made_text, tap_text
 
 Json = dict[str, object]
 
@@ -283,14 +283,28 @@ class Cards:
                 "a delve with mana sources left untapped, which XMage's AI taps first"
             )
 
+    def mana_abilities(self, source: str) -> list[Json]:
+        """The mana abilities of a source a payment tapped: its own, or, where it has none
+        and one card of the scenario grants abilities, the mana abilities that card grants,
+        as Gemhide Sliver grants each Sliver "{T}: Add one mana of any color"."""
+        own = [a for a in self.abilities(source) if a["kind"] == "Mana"]
+        if own or len(self.grants) != 1:
+            return own
+        return [a for a in self.grants[0][1] if a["kind"] == "Mana"]
+
     def mana_text(self, source: str) -> str | None:
         """The text of a mana source's one mana ability, `{T}: Add` and what it makes, where
         that is all it can tap for. XMage taps its own choice of sources for a payment, so a
         payment tapping only these is replayed."""
         if source in self.modal_back:
             return None
-        mana = [a for a in self.abilities(source) if a["kind"] == "Mana"]
+        mana = self.mana_abilities(source)
         return tap_text(mana[0]) if len(mana) == 1 else None
+
+    def asks_color(self, source: str) -> bool:
+        """Whether a mana ability of `source`, its own or granted, asks a color (`asks_color`
+        in `mana_symbols`): a payment with it names the color the trace records."""
+        return asks_color(self.mana_abilities(source))
 
     def taps_for_one_mana(self, source: str) -> bool:
         """Whether every mana ability of `source` costs only tapping it and makes one mana,
@@ -345,27 +359,10 @@ class Cards:
         )
 
     def made_text(self, source: str, made: Json) -> str | None:
-        """The start of the text of the mana ability of `source` that made the mana `made`
-        (an entry of the trace's `mana`): the one restricted or not as the mana is, whose only
-        cost is `{T}`, that makes one color, as `{T}: Add {C}`, or one mana of any color.
-        None where no such ability says it."""
-        color = cast(str, made["color"])
-        made_amount = cast(int, made.get("amount", 1))
-        for a in self.abilities(source):
-            if a["kind"] != "Mana" or bool(a.get("restricted")) != made["restricted"]:
-                continue
-            if a.get("cost") != {"parts": [{"action": "Tap", "of": "This"}]}:
-                continue
-            produces = cast(Json, a["produces"])
-            colors = cast(list[str], produces["colors"])
-            amount = cast(int, produces["amount"])
-            if amount != made_amount:
-                continue
-            if colors == [color]:
-                return "{T}: Add " + SYMBOLS[color] * amount
-            if len(colors) == len(SYMBOLS) - 1 and color in colors and amount == 1:
-                return "{T}: Add one mana of any color"
-        return None
+        """The start of the text of the mana ability of `source` that made `made` (`made_text`
+        in `mana_symbols`), among its own or granted mana abilities (`mana_abilities`).
+        """
+        return made_text(self.mana_abilities(source), made)
 
     def printed_name(self, card: str) -> str:
         """The name used to load a card, including both halves of a split card."""

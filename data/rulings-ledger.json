@@ -1307,6 +1307,20 @@
       ]
     }
   ],
+  "Gemhide Sliver": [
+    {
+      "published_at": "2013-07-01",
+      "hash": "1eda39fd19f4",
+      "covered": "Filter::Subtype"
+    },
+    {
+      "published_at": "2013-07-01",
+      "hash": "4c5c9cebfd46",
+      "scenario": [
+        "Two Gemhide Slivers pay as two sources, without a payment choice"
+      ]
+    }
+  ],
   "Gemrazer": [],
   "Gisela, the Broken Blade": [
     {

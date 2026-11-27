@@ -345,3 +345,60 @@ pub const WILD_GROWTH: &[Scenario] = &[
             THEM.tapped(names::ISLAND, 1),
         ]),
 ];
+
+/// Mana abilities a permanent is granted (CR 613.1f): Gemhide Sliver's "All Slivers have
+/// '{T}: Add one mana of any color.'" reaches every Sliver, either player's, and a Sliver
+/// still can't tap for it until it has been under its controller's control continuously
+/// since their most recent turn began (CR 302.6). Muscle Sliver is the opponent's Sliver.
+/// Each payment needs the granted mana, so a wrong one leaves the spell in hand.
+pub const GRANTED: &[Scenario] = &[
+    Scenario::new("Gemhide Sliver's granted mana pays a spell's {U}")
+        .battlefield(P0, &[names::GEMHIDE_SLIVER, names::PLAINS])
+        .hand(P0, &[props::VANILLA.card])
+        .actions(&[
+            ME.casts(props::VANILLA.card),
+            Resolve,
+            ME.controls(props::VANILLA.card, 1),
+            ME.tapped(names::GEMHIDE_SLIVER, 1),
+            ME.tapped(names::PLAINS, 1),
+        ]),
+    Scenario::new("A Sliver that came under its controller's control this turn can't tap for mana")
+        .permanents(
+            P0,
+            &[
+                Permanent::new(names::GEMHIDE_SLIVER).sick(),
+                Permanent::new(names::PLAINS),
+            ],
+        )
+        .hand(P0, &[props::VANILLA.card])
+        .actions(&[
+            // Only Pass is legal: the Plains alone can't pay {1}{U}.
+            ME.deciding(DecisionKind::Priority, 1),
+            advance_to(1, TurnStep::End),
+            ME.has(Zone::Hand, props::VANILLA.card, 1),
+            ME.tapped(names::GEMHIDE_SLIVER, 0),
+        ]),
+    Scenario::new("An opponent's Sliver has the granted ability and its controller uses it")
+        .interaction(&[names::MUSCLE_SLIVER])
+        .at(2, P1, TurnStep::PrecombatMain)
+        .battlefield(P0, &[names::GEMHIDE_SLIVER])
+        .battlefield(P1, &[names::MUSCLE_SLIVER, names::PLAINS])
+        .hand(P1, &[props::VANILLA.card])
+        .actions(&[
+            THEM.casts(props::VANILLA.card),
+            Resolve,
+            THEM.controls(props::VANILLA.card, 1),
+            THEM.tapped(names::MUSCLE_SLIVER, 1),
+            ME.tapped(names::GEMHIDE_SLIVER, 0),
+        ]),
+    Scenario::new("Two Gemhide Slivers pay as two sources, without a payment choice")
+        .battlefield(P0, &[names::GEMHIDE_SLIVER, names::GEMHIDE_SLIVER])
+        .hand(P0, &[props::VANILLA.card])
+        .actions(&[
+            ME.casts(props::VANILLA.card),
+            stack(1),
+            ME.tapped(names::GEMHIDE_SLIVER, 2),
+            Resolve,
+            ME.controls(props::VANILLA.card, 1),
+        ]),
+];

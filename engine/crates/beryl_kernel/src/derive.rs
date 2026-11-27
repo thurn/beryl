@@ -129,8 +129,9 @@ impl<L: Layout> Rederive<'_, L> {
     /// and `rules`, the rules their static abilities change for each
     /// player, by seat ([`State::rule_applies`]), `inputs`, what the permanents' static
     /// abilities read that no layer writes ([`Inputs`]), `removed`, whether an effect that
-    /// removes abilities applied, for [`State::has_ability`], and `land_types`, whether an
-    /// effect that changes a land's land types applied, for [`State::makes_card_mana`].
+    /// removes abilities applied, for [`State::has_ability`], and `mana`, whether an effect
+    /// that changes a land's land types applied or a row of the table of grants grants a mana
+    /// ability, for [`State::makes_card_mana`].
     /// It notes whether any permanent is face down, for [`State::any_face_down`], and that the
     /// state triggers are due to be matched ([`State::states_due`]).
     /// Control is settled now, so each face-down
@@ -146,7 +147,7 @@ impl<L: Layout> Rederive<'_, L> {
         rules: PerSeat<Rules>,
         inputs: Inputs,
         removed: bool,
-        land_types: bool,
+        mana: bool,
     ) {
         let s = self.0;
         s.listening = listening;
@@ -166,7 +167,7 @@ impl<L: Layout> Rederive<'_, L> {
             }
         }
         s.flags.abilities_lost = removed;
-        s.flags.mana_changed = removed || land_types || s.has_mana_changes();
+        s.flags.mana_changed = removed || mana || s.has_mana_changes();
         s.flags.face_down = face_down;
         s.flags.derived_dirty = false;
         // A stored result may change a state trigger's condition ([`State::states_due`]).

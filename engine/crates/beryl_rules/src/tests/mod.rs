@@ -26,6 +26,7 @@ mod entering;
 mod entering_together;
 mod events;
 mod game;
+mod granted_mana;
 mod grants;
 mod graveyard_return;
 mod invariants;
