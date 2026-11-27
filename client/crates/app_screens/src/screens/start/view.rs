@@ -73,7 +73,7 @@ pub(super) fn start(state: &State, input: &Inputs) -> Element {
 
     let heading = [
         text("New Game").style(TITLE).color(color::GOLD),
-        text(&format!("{} mirror", state.deck().title))
+        text(state.deck().subtitle)
             .style(SUBTITLE)
             .color(color::TEXT_DIM)
             .margin([-size::START_SUBTITLE_PULL, 0.0, 0.0, 0.0]),

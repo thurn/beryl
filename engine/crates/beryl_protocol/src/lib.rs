@@ -185,6 +185,8 @@ pub struct DeckChoice {
     pub key: &'static str,
     /// What the start screen calls it.
     pub title: &'static str,
+    /// The subtitle shown under "New Game" when this deck is chosen.
+    pub subtitle: &'static str,
     /// Whether both players draw from one shared library, as in the shared-deck format. A
     /// fair deal, which compares two players' opening hands, has no meaning there.
     pub shared: bool,
@@ -196,11 +198,13 @@ pub const DECKS: [DeckChoice; 2] = [
     DeckChoice {
         key: "wu-control",
         title: "WU Control",
+        subtitle: "WU Control mirror",
         shared: false,
     },
     DeckChoice {
         key: "forgetful-fish",
         title: "Dandân",
+        subtitle: "Dandân · shared deck",
         shared: true,
     },
 ];

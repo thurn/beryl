@@ -127,6 +127,7 @@ fn choosing_the_shared_deck_sends_its_key_and_hides_the_fair_deal() {
             .states()
             .has(StateBits::SELECTED)
     );
+    page.find("text \"WU Control mirror\"");
     page.find("toggle \"Fair deal\"");
     page.press("toggle \"Fair deal\"");
     page.press("toggle \"Dandân\"");
@@ -135,6 +136,12 @@ fn choosing_the_shared_deck_sends_its_key_and_hides_the_fair_deal() {
         page.find("toggle \"Dandân\"")
             .states()
             .has(StateBits::SELECTED)
+    );
+    page.find("text \"Dandân · shared deck\"");
+    assert!(
+        page.try_find("text \"Dandân mirror\"").is_err(),
+        "{}",
+        page.tree()
     );
     assert!(
         page.try_find("toggle \"Fair deal\"").is_err(),
