@@ -1,11 +1,61 @@
 //! `Places`: where things stand as a script's steps so far have them, for a verb.
 
-use beryl_protocol::protocol::ObjectId;
-use beryl_protocol::script::Subject;
+use beryl_protocol::protocol::{ObjectId, ZoneName};
+use beryl_protocol::script::{Act, Subject};
 
-use super::Motion;
-use game_table::table::{Camera, Layout, Table};
+use super::{Motion, hidden};
+use game_table::table::{Camera, Group, Layout, Table};
 use kit_base::pose::{Interval, Pose, Shape};
+
+impl Motion<'_> {
+    /// Where the step's own subject starts at `t`: on its track or resting place (restoring
+    /// opacity if it was scrolled out of a container), or—when an `Act::Fly` launches a new
+    /// object such as a copy cast from exile, graveyard or library—on top of that origin pile.
+    pub(super) fn subject_from(&self, table: &Table, slot: usize, act: &Act, t: u64) -> Pose {
+        if let Some(mut pose) = self.placed(slot, t) {
+            // A card hidden outside its container's window is seen as its own step moves it,
+            // from where it rests (`hidden`).
+            if let Some(rest) = self
+                .rests
+                .rests
+                .get(slot)
+                .and_then(Option::as_ref)
+                .filter(|&rest| hidden::scrolled_out(Some(rest)))
+            {
+                pose.opacity = rest.pose.opacity;
+            }
+            return pose;
+        }
+        if let Act::Fly {
+            from,
+            object,
+            origin,
+            ..
+        } = act
+        {
+            let (zone, raw_side) = match origin {
+                Some(origin) => (origin.zone, origin.side),
+                None => (*from, object.owner),
+            };
+            if matches!(
+                zone,
+                ZoneName::Library | ZoneName::Graveyard | ZoneName::Exile
+            ) {
+                let side = (!table.layout().shape.is_shared()).then_some(raw_side);
+                let count = self.members[Group::Pile { side, zone }.index()].len();
+                let mut pose = table.pile_top_pose(side, zone, count);
+                if zone == ZoneName::Library && object.name.is_none() {
+                    pose.turn = 1.0;
+                }
+                return pose;
+            }
+        }
+        Pose {
+            opacity: 0.0,
+            ..Pose::default()
+        }
+    }
+}
 
 /// Where things are as a script's steps so far have them, for a verb that needs more than its
 /// own subject's poses.

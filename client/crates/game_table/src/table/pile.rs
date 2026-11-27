@@ -360,6 +360,35 @@ pub(super) fn lay_unseen_exile(
 }
 
 impl Table {
+    /// Where a card leaving `side`'s pile of `zone` starts: on top of the pile (or at its base
+    /// when `count == 0`). When the layout hides exile beneath the graveyard (the phone layout),
+    /// returns that hidden exile pose.
+    #[must_use]
+    pub fn pile_top_pose(&self, side: Option<Side>, zone: ZoneName, count: usize) -> Pose {
+        let (layout, camera) = (self.layout(), self.camera());
+        let card = camera.data.card;
+        if layout.pile_visible(zone) {
+            let pile = fit(layout, camera, (side, zone), (count, None));
+            let bottom = bottom_pose(card, pile.base, pile.scale, pile.tilt, pile.skew);
+            Pile::vertical(card).pose(bottom, count.saturating_sub(1))
+        } else {
+            let scale = nominal_scale(layout, side);
+            let anchor = match side {
+                Some(_) => {
+                    let graveyard = PileShown::index(side, ZoneName::Graveyard);
+                    layout.piles[graveyard / 3][graveyard % 3]
+                }
+                None => layout.shared_piles[1],
+            };
+            let at = camera.on_table(anchor);
+            Pose {
+                position: at.extend(card.layer * layout.pile.hidden_pile_layer),
+                scale,
+                ..Pose::default()
+            }
+        }
+    }
+
     /// How many cards the pile numbered `index` (`PileShown::index`) holds as the table stands
     /// now, whether or not a box of the flat layer shows its top card.
     #[must_use]

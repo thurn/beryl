@@ -466,12 +466,7 @@ impl<'a> Motion<'a> {
             let before = self.rests.rests.get(slot).and_then(Option::as_ref);
             if Some(slot) == subject {
                 let after = self.now(slot, &dirty);
-                let mut from = self.pose(slot, own.from);
-                // A card hidden outside its container's window is seen as its own step moves
-                // it, from where it rests (`hidden`).
-                if let Some(rest) = before.filter(|&rest| hidden::scrolled_out(Some(rest))) {
-                    from.opacity = rest.pose.opacity;
-                }
+                let from = self.subject_from(table, slot, &step.act, own.from);
                 let to = after.map(|rest| rest.pose).or_else(|| {
                     before.map(|_| Pose {
                         opacity: 0.0,
