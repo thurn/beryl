@@ -201,7 +201,7 @@ fn a_daemon_without_slot_fields_can_only_receive_light_work() {
 
 #[test]
 fn build_handoffs_start_in_threes_then_wait_for_recovery_and_ramp_one_at_a_time() {
-    for admit_cores in [None, Some(13.0)] {
+    for admit_cores in [None, Some(15.0)] {
         check_ramp(admit_cores);
     }
 }
@@ -232,13 +232,13 @@ fn check_ramp(admit_cores: Option<f64>) {
             ids[index].as_str()
         );
     }
-    let paced = ask_with_cores(&mut conn, "local_d", &pressure, 89.0, admit_cores);
+    let paced = ask_with_cores(&mut conn, "local_d", &pressure, 149.0, admit_cores);
     assert!(
         paced["nothing"].as_str().unwrap().contains("in 1 s"),
         "{paced}"
     );
     pressure.recovery_seconds = 30;
-    let recovering = ask_with_cores(&mut conn, "local_d", &pressure, 89.0, admit_cores);
+    let recovering = ask_with_cores(&mut conn, "local_d", &pressure, 149.0, admit_cores);
     let reason = recovering["nothing"].as_str().unwrap();
     assert!(reason.contains("healthy build queue"), "{reason}");
     assert!(
@@ -247,14 +247,14 @@ fn check_ramp(admit_cores: Option<f64>) {
     );
     pressure.recovery_seconds = 0;
     assert_eq!(
-        ask_with_cores(&mut conn, "local_d", &pressure, 120.0, admit_cores)["ticket"],
+        ask_with_cores(&mut conn, "local_d", &pressure, 150.0, admit_cores)["ticket"],
         ids[3].as_str()
     );
     assert!(
-        ask_with_cores(&mut conn, "local_e", &pressure, 120.0, admit_cores)["nothing"].is_string()
+        ask_with_cores(&mut conn, "local_e", &pressure, 150.0, admit_cores)["nothing"].is_string()
     );
     assert_eq!(
-        ask_with_cores(&mut conn, "local_e", &pressure, 210.0, admit_cores)["ticket"],
+        ask_with_cores(&mut conn, "local_e", &pressure, 300.0, admit_cores)["ticket"],
         ids[4].as_str()
     );
 }
@@ -408,7 +408,7 @@ fn a_build_reservation_from_polling_limits_a_lane_successor_and_vice_versa() {
         }
 
         let pressure = DispatchPressure {
-            shared_cores: Some(8),
+            shared_cores: Some(9),
             build_slots: 6,
             build_slots_free: 5,
             slot_holders: [rust].into(),
@@ -522,7 +522,7 @@ fn a_lane_successor_can_use_the_build_capacity_its_predecessor_releases() {
             200
         );
         let pressure = DispatchPressure {
-            shared_cores: Some(8),
+            shared_cores: Some(9),
             build_slots: 9,
             build_slots_free: 9,
             ..DispatchPressure::default()

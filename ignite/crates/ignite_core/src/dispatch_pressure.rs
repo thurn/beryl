@@ -28,10 +28,16 @@ const BACKLOG_BUSY_PERCENT: u32 = 90;
 const INITIAL_BUILD_TICKETS: u32 = 3;
 // Build commands overlap in bursts. At 2.0 shared cores per ticket, three concurrent heavy
 // client builds on a six-shared-core host drove 13+ queued cores and 3+ GiB of swap, stretching
-// single landings past the interval between staging commits. At 2.5, a 6-core host caps at 2
-// build tickets and a 10-core host caps at 4.
-const SHARED_CORES_PER_BUILD_TICKET: f64 = 2.5;
-const RAMP_SECONDS: u32 = 90;
+// single landings past the interval between staging commits. At 2.5, a burst of ten bug
+// reports put 8 build tickets on an idle 20-core Mac before its builds began. CPU then sat at
+// 100% with 29 cores queued, commands waited ten minutes for cores and tip verification
+// stalled behind them. At 3.0, a 6-core host caps at 2 build tickets, a 9-core host at 3 and
+// a 20-core host at 6.
+const SHARED_CORES_PER_BUILD_TICKET: f64 = 3.0;
+// A worker reads its ticket for a few minutes before its first build, so the queue a build
+// ticket adds shows up late. 150 s between handoffs after the first three gives the host's
+// measurements more time to catch up than the earlier 90 s did.
+const RAMP_SECONDS: u32 = 150;
 const BUILD_WAIT_SECONDS: f64 = 30.0;
 const RECOVERY_SECONDS: f64 = 90.0;
 
