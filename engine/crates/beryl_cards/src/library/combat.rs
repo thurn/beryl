@@ -413,3 +413,149 @@ pub const MUST_ATTACK: &[Scenario] = &[
             THEM.life(20),
         ]),
 ];
+
+pub const ATTACK_COST: &[Scenario] = &[
+    Scenario::new("under Propaganda two attackers cost {4} and four lands are tapped")
+        .battlefield(
+            P0,
+            &[
+                GROUND,
+                GROUND,
+                names::ISLAND,
+                names::ISLAND,
+                names::ISLAND,
+                names::ISLAND,
+            ],
+        )
+        .battlefield(P1, &[names::PROPAGANDA])
+        .actions(&[
+            advance_to(1, TurnStep::BeginningOfCombat),
+            ME.passes(),
+            ME.attacks_with(GROUND),
+            // Two attackers use every creature: the declaration finishes without asking.
+            ME.attacks_with(GROUND),
+            advance_to(1, TurnStep::DeclareAttackers),
+            ME.attacking(GROUND, 2),
+            ME.tapped(names::ISLAND, 4),
+            advance_to(1, TurnStep::PostcombatMain),
+            THEM.life(16),
+        ]),
+    Scenario::new("under Propaganda three lands pay for one attacker and a second is not offered")
+        .battlefield(
+            P0,
+            &[GROUND, GROUND, names::ISLAND, names::ISLAND, names::ISLAND],
+        )
+        .battlefield(P1, &[names::PROPAGANDA])
+        .actions(&[
+            advance_to(1, TurnStep::BeginningOfCombat),
+            ME.passes(),
+            // Done and one of the two interchangeable creatures.
+            ME.deciding(DecisionKind::Attacker, 2),
+            ME.attacks_with(GROUND),
+            // {4} for two attackers is more than three lands make: only Done is left, so the
+            // declaration finishes without asking.
+            advance_to(1, TurnStep::DeclareAttackers),
+            ME.attacking(GROUND, 1),
+            ME.tapped(names::ISLAND, 2),
+            advance_to(1, TurnStep::PostcombatMain),
+            THEM.life(18),
+        ]),
+    Scenario::new("under Propaganda a creature that taps for mana cannot pay for its own attack")
+        .interaction(&[names::GOLD_MYR])
+        .battlefield(P0, &[names::GOLD_MYR, GROUND, names::ISLAND])
+        .battlefield(P1, &[names::PROPAGANDA])
+        .actions(&[
+            advance_to(1, TurnStep::BeginningOfCombat),
+            ME.passes(),
+            // Gold Myr would tap as it attacks, leaving one Island for {2}: Done and the
+            // other creature are offered.
+            ME.deciding(DecisionKind::Attacker, 2),
+            // Gold Myr can't attack with it: {4} for two is more than an Island makes.
+            ME.attacks_with(GROUND),
+            advance_to(1, TurnStep::DeclareAttackers),
+            ME.attacking(names::GOLD_MYR, 0),
+            ME.tapped(names::GOLD_MYR, 1),
+            ME.tapped(names::ISLAND, 1),
+            advance_to(1, TurnStep::PostcombatMain),
+            THEM.life(18),
+        ]),
+    Scenario::new("under Propaganda attacking Jace, the Mind Sculptor costs nothing")
+        .battlefield(P0, &[GROUND, names::ISLAND, names::ISLAND])
+        .battlefield(P1, &[names::PROPAGANDA, props::PLANESWALKER.card])
+        .actions(&[
+            advance_to(1, TurnStep::BeginningOfCombat),
+            ME.passes(),
+            ME.attacks_with(GROUND),
+            // Two Islands pay {2}, so the player and Jace are both offered.
+            ME.deciding(DecisionKind::AttackTarget, 2),
+            ME.chooses(DecisionKind::AttackTarget, props::PLANESWALKER.card),
+            advance_to(1, TurnStep::DeclareAttackers),
+            ME.tapped(names::ISLAND, 0),
+            advance_to(1, TurnStep::PostcombatMain),
+            THEM.has_loyalty(props::PLANESWALKER.card, 1),
+            THEM.life(20),
+        ]),
+    Scenario::new("under two Propagandas one attacker costs {4}")
+        .battlefield(
+            P0,
+            &[
+                GROUND,
+                GROUND,
+                names::ISLAND,
+                names::ISLAND,
+                names::ISLAND,
+                names::ISLAND,
+            ],
+        )
+        .battlefield(P1, &[names::PROPAGANDA, names::PROPAGANDA])
+        .actions(&[
+            advance_to(1, TurnStep::BeginningOfCombat),
+            ME.passes(),
+            ME.deciding(DecisionKind::Attacker, 2),
+            // {8} for two is more than four lands make: only Done is left.
+            ME.attacks_with(GROUND),
+            advance_to(1, TurnStep::DeclareAttackers),
+            ME.attacking(GROUND, 1),
+            ME.tapped(names::ISLAND, 4),
+            advance_to(1, TurnStep::PostcombatMain),
+            THEM.life(18),
+        ]),
+    Scenario::new("under Propaganda each combat's attack is paid for")
+        .interaction(&[names::RELENTLESS_ASSAULT, names::SERRA_ANGEL])
+        .hand(P0, &[names::RELENTLESS_ASSAULT])
+        .battlefield(
+            P0,
+            &[
+                names::SERRA_ANGEL,
+                names::MOUNTAIN,
+                names::MOUNTAIN,
+                names::ISLAND,
+                names::ISLAND,
+                names::ISLAND,
+                names::ISLAND,
+                names::ISLAND,
+                names::ISLAND,
+            ],
+        )
+        .battlefield(P1, &[names::PROPAGANDA])
+        .actions(&[
+            // Relentless Assault's additional combat follows this main phase.
+            ME.casts(names::RELENTLESS_ASSAULT),
+            Resolve,
+            ME.tapped(names::ISLAND, 2),
+            advance_to(1, TurnStep::BeginningOfCombat),
+            ME.passes(),
+            ME.attacks_with(names::SERRA_ANGEL),
+            advance_to(1, TurnStep::PostcombatMain),
+            THEM.life(16),
+            ME.tapped(names::ISLAND, 4),
+            // The Angel has vigilance, so it can attack again in the second combat, and pays
+            // again.
+            advance_to(1, TurnStep::BeginningOfCombat),
+            ME.passes(),
+            ME.attacks_with(names::SERRA_ANGEL),
+            advance_to(1, TurnStep::PostcombatMain),
+            THEM.life(12),
+            ME.tapped(names::ISLAND, 6),
+        ]),
+];

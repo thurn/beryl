@@ -2535,6 +2535,48 @@
       "covered": "Effect::MayCast"
     }
   ],
+  "Propaganda": [
+    {
+      "published_at": "2004-10-04",
+      "hash": "89047f45aec3",
+      "scenario": [
+        "under Propaganda two attackers cost {4} and four lands are tapped"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "aed664307204",
+      "scenario": [
+        "under Propaganda two attackers cost {4} and four lands are tapped"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "f11401661854",
+      "scenario": [
+        "under Propaganda each combat's attack is paid for"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "7efb5979ee3e",
+      "scenario": [
+        "under two Propagandas one attacker costs {4}"
+      ]
+    },
+    {
+      "published_at": "2007-02-01",
+      "hash": "1dd6a5247e06",
+      "untestable": "Beryl plays only two-player games, so there is no Two-Headed Giant team to attack"
+    },
+    {
+      "published_at": "2014-02-01",
+      "hash": "7f99d5bbd832",
+      "scenario": [
+        "under Propaganda attacking Jace, the Mind Sculptor costs nothing"
+      ]
+    }
+  ],
   "Quicksilver Gargantuan": [
     {
       "published_at": "2011-01-01",

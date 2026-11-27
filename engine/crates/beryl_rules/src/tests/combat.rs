@@ -902,6 +902,7 @@ fn passing_goes_to_the_next_smart_stop() {
 }
 
 mod assignments;
+mod attack_cost;
 mod group_picks;
 mod keywords;
 mod requirements;
