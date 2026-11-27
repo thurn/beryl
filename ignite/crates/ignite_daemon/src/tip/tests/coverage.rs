@@ -226,6 +226,7 @@ fn a_returning_platform_blames_from_before_the_first_deferral() {
                 deferred: Some(DeferredPlatform {
                     since: missed.clone(),
                     last_good: commit("aaaa000"),
+                    families: std::collections::BTreeSet::new(),
                 }),
             },
         )]
@@ -283,6 +284,7 @@ fn a_platform_catching_up_from_master_reverts_during_a_stall() {
                 deferred: Some(DeferredPlatform {
                     since: tip.clone(),
                     last_good: master.clone(),
+                    families: std::collections::BTreeSet::new(),
                 }),
             },
         )]
@@ -338,6 +340,7 @@ fn a_check_that_passed_at_master_reverts_despite_an_older_gap() {
                     deferred: Some(DeferredPlatform {
                         since: commit("9999111"),
                         last_good: old.clone(),
+                        families: std::collections::BTreeSet::new(),
                     }),
                 },
             )]
@@ -614,4 +617,106 @@ fn waited_platform_promotes_and_defers_until_windows_catches_up() {
     assert_eq!(windows_coverage.through, tip);
     assert!(windows_coverage.deferred.is_none());
     server.stop();
+}
+
+/// When a platform with an open whole-platform gap verifies a tip whose non-deferred families all
+/// pass (while `defer_platforms` keeps another family deferred), `record_pass` narrows the gap to
+/// only the unverified family. Later failures in a verified family then blame from `master` and
+/// may revert during a stall, while failures in a still-deferred family still blame across the gap.
+#[test]
+fn passing_families_narrow_a_platform_gap_to_only_unverified_families() {
+    use ignite_core::tipround::{DeferredPlatform, PlatformVerification, TipCoverage};
+    use ignite_core::traits::RevertOutcome;
+
+    let world = World::new();
+    let old = commit("9999000");
+    let master = world.master();
+    let tip1 = commit("bbbb000");
+    world.land(&tip1);
+    world.hub.set_tip_coverage(TipCoverage {
+        platforms: [(
+            Os::Windows,
+            PlatformVerification {
+                through: master.clone(),
+                deferred: Some(DeferredPlatform {
+                    since: commit("9999111"),
+                    last_good: old.clone(),
+                    families: std::collections::BTreeSet::new(),
+                }),
+            },
+        )]
+        .into(),
+        ..TipCoverage::default()
+    });
+    let mut fast = super::rounds::in_family("ok", "fast");
+    fast.key.platform = Some(Os::Windows);
+    let mut slow = super::rounds::in_family("deferred", "slow");
+    slow.key.platform = Some(Os::Windows);
+    world
+        .work
+        .defer_platforms
+        .lock()
+        .unwrap()
+        .insert("slow".to_owned(), vec![Os::Windows]);
+    world
+        .work
+        .set_checks(&tip1, vec![fast.clone(), slow.clone()]);
+    let mut win_ctx = world.ctx("m-2");
+    win_ctx.config.revert.stall_minutes = Some(120);
+
+    // Passing `fast` while `slow` is deferred narrows the whole-platform gap to `{"slow"}`.
+    assert!(matches!(
+        world
+            .verifier()
+            .with_host("windows")
+            .verify(&win_ctx, &tip1)
+            .unwrap(),
+        TipOutcome::VerifiedWithDeferrals { .. }
+    ));
+    let gap = world.hub.tip_coverage().unwrap().platforms[&Os::Windows]
+        .deferred
+        .clone()
+        .expect("slow remains deferred");
+    assert_eq!(gap.last_good, old);
+    assert_eq!(gap.families, ["slow".to_owned()].into_iter().collect());
+
+    // A later failure in `fast` (cleared from the gap) blames from `tip1` (master) and reverts
+    // during a stall without probing `old` or `tip1`.
+    let tip2 = commit("cccc000");
+    world.land(&tip2);
+    world.clock.advance(121.0 * 60.0);
+    world
+        .work
+        .add_landing("tk.fast", &[tip2.as_str()], &["src/fast/lib.rs"]);
+    let mut fast_fail = super::rounds::in_family("ok", "fast");
+    fast_fail.key.platform = Some(Os::Windows);
+    fast_fail.key.hash = InputHash::new("e".repeat(64)).unwrap();
+    world
+        .work
+        .set_outcome(&tip2, &fast_fail.check, Outcome::Fail);
+    world.work.set_checks(&tip2, vec![fast_fail]);
+    world.git.script_revert(RevertOutcome::Clean {
+        commit: commit("dddd000"),
+    });
+    let before_runs = world.work.runs().len();
+    world
+        .verifier()
+        .with_host("windows")
+        .pausing_with(Arc::new(|_| {}))
+        .verify(&win_ctx, &tip2)
+        .unwrap();
+    assert_eq!(world.hub.reverted_landings().len(), 1);
+    assert_eq!(
+        world.hub.reverted_landings()[0].ticket,
+        Some(ticket("tk.fast"))
+    );
+    assert!(
+        !world
+            .work
+            .runs()
+            .into_iter()
+            .skip(before_runs)
+            .any(|(_, at, _, _)| at == tip1 || at == old),
+        "verified family must not probe master or the old gap"
+    );
 }

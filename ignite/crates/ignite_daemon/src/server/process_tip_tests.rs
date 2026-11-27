@@ -474,6 +474,7 @@ fn a_round_blocked_in_listing_yields_to_master_and_the_latest_tip_runs() {
         deferred: Some(DeferredPlatform {
             since: target.clone(),
             last_good,
+            families: std::collections::BTreeSet::new(),
         }),
     };
     assert!(

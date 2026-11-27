@@ -650,6 +650,9 @@ pub enum IncompleteReason {
     BuildFailed,
     /// The checks' manifest entry is invalid: their inputs cannot be resolved.
     InvalidEntry,
+    /// The check's family listed cleanly at this commit without the check (for example, a check
+    /// added by a later landing).
+    NotListed,
 }
 
 /// `POST /audits`: a rerun of a cache hit that disagreed with the cached result.

@@ -12,7 +12,7 @@ use std::collections::{HashMap, HashSet};
 
 use ignite_core::ids::{CheckName, Commit};
 use ignite_core::protocol::Outcome;
-use ignite_core::protocol::hub::{FoundBy, RegressionReport};
+use ignite_core::protocol::hub::{FoundBy, IncompleteReason, RegressionReport};
 use ignite_core::tipround::CulpritSearch;
 use ignite_core::traits::Result;
 
@@ -26,6 +26,17 @@ use crate::server::Context;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct CulpritHint {
     pub first_bad: Commit,
+}
+
+/// Outcome of a culprit probe at an earlier commit. When a check's family listed cleanly there
+/// without the check, the check did not exist yet (it was added by a later landing) and was not
+/// failing, so treat it as passing rather than stopping bisection early.
+fn probe_outcome(run: &TipRun) -> Outcome {
+    if run.outcome == Outcome::Incomplete && run.reason == Some(IncompleteReason::NotListed) {
+        Outcome::Pass
+    } else {
+        run.outcome
+    }
 }
 
 /// Outcome of probing `master` before searching across an older platform gap.
@@ -309,7 +320,7 @@ impl TipVerifier {
                 self.probe(ctx, at, std::slice::from_ref(&check.check), false)
                     .into_iter()
                     .find(|run| run.check == check.check)
-                    .map(|run| run.outcome)
+                    .map(|run| probe_outcome(&run))
             },
         ))
     }
@@ -385,7 +396,7 @@ impl TipVerifier {
         super::round::require_running()?;
         let mut outcomes = HashMap::with_capacity(names.len());
         for run in runs {
-            let probe = match run.outcome {
+            let probe = match probe_outcome(&run) {
                 Outcome::Pass | Outcome::Flaky => MasterProbe::Passed,
                 Outcome::Fail => MasterProbe::Failed,
                 Outcome::Incomplete => MasterProbe::Unknown,
@@ -503,7 +514,10 @@ impl TipVerifier {
                 let runs = self.probe(ctx, at, &batch, false);
                 let mut by_name: HashMap<CheckName, Outcome> = runs
                     .into_iter()
-                    .map(|run| (run.check, run.outcome))
+                    .map(|run| {
+                        let outcome = probe_outcome(&run);
+                        (run.check, outcome)
+                    })
                     .collect();
                 for name in batch {
                     let outcome = by_name.remove(&name);

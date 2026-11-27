@@ -82,6 +82,7 @@ mod tests {
                     deferred: Some(DeferredPlatform {
                         since: Commit::new("bbb1234").unwrap(),
                         last_good: Commit::new("aaa1234").unwrap(),
+                        families: std::collections::BTreeSet::new(),
                     }),
                 },
             )]

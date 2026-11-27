@@ -491,7 +491,9 @@ impl Checks {
                 .any(|(f, _)| f == name.family());
             if !listed && !family_failed {
                 let error = Error::NotFound(format!("{name} is not listed by its family"));
-                run.finish(name, Outcome::Incomplete, Some(incomplete(name, &error)));
+                let mut failure = incomplete(name, &error);
+                failure.reason = Some(IncompleteReason::NotListed);
+                run.finish(name, Outcome::Incomplete, Some(failure));
             }
         }
         for family in &mut prepared {
@@ -748,6 +750,7 @@ fn incomplete_message(
         }
         IncompleteReason::BuildFailed => BUILD_FAILED.to_owned(),
         IncompleteReason::InvalidEntry => "its manifest entry is invalid".to_owned(),
+        IncompleteReason::NotListed => "not listed by its family".to_owned(),
     };
     match said {
         Some(said) => format!("{why}: {said}"),

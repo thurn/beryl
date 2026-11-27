@@ -105,7 +105,10 @@ impl<'a> Scope<'a> {
 
     pub fn last_good_for(&self, check: &TipCheck) -> Option<&Commit> {
         self.catching_up
-            .filter(|(os, _)| check.key.platform == Some(*os))
+            .filter(|(os, gap)| {
+                check.key.platform == Some(*os)
+                    && (gap.families.is_empty() || gap.families.contains(&check.family))
+            })
             .map(|(_, gap)| &gap.last_good)
     }
 
@@ -210,8 +213,24 @@ impl<'a> Scope<'a> {
     ) -> Result<()> {
         // Save the gap before pushing master, so a crash between the two cannot lose the
         // first missed tip or its blame range.
-        for &platform in deferred.keys() {
-            self.advance(ctx, platform, tip, Some(last))?;
+        for (&platform, checks) in deferred {
+            let families = if self.fleet_deferred.contains(&platform) {
+                BTreeSet::new()
+            } else {
+                checks
+                    .iter()
+                    .map(|check| check.family().to_owned())
+                    .collect()
+            };
+            self.advance(
+                ctx,
+                platform,
+                tip,
+                &CoverageChange::Defer {
+                    last_good: last,
+                    families,
+                },
+            )?;
         }
         Ok(())
     }
@@ -223,30 +242,34 @@ impl<'a> Scope<'a> {
         checks: &[TipCheck],
         verdicts: &HashMap<ResultKey, TipRun>,
         unlisted: &[Unlisted],
-        deferred_here: bool,
+        deferred_here: Option<&BTreeSet<String>>,
     ) -> Result<bool> {
         let Some(os) = self
             .local
-            .filter(|_| deferred_here || self.catching_up.is_some())
+            .filter(|_| deferred_here.is_some() || self.catching_up.is_some())
         else {
             return Ok(false);
         };
-        let passed = checks
+        let mut still_unverified = deferred_here.cloned().unwrap_or_default();
+        for check in checks.iter().filter(|check| check.key.platform == Some(os)) {
+            let passed = verdicts
+                .get(&check.key)
+                .is_some_and(|run| matches!(run.outcome, Outcome::Pass | Outcome::Flaky));
+            if !passed {
+                still_unverified.insert(check.family.clone());
+            }
+        }
+        for missing in unlisted
             .iter()
-            .filter(|check| check.key.platform == Some(os))
-            .all(|check| {
-                verdicts
-                    .get(&check.key)
-                    .is_some_and(|run| matches!(run.outcome, Outcome::Pass | Outcome::Flaky))
-            });
-        if passed
-            && !unlisted
-                .iter()
-                .any(|missing| missing.platforms.contains(&os))
+            .filter(|missing| missing.platforms.contains(&os))
         {
-            self.advance(ctx, os, tip, None)?;
+            still_unverified.insert(missing.family.clone());
+        }
+        if still_unverified.is_empty() {
+            self.advance(ctx, os, tip, &CoverageChange::Clear)?;
             return Ok(true);
         }
+        self.advance(ctx, os, tip, &CoverageChange::Narrow(still_unverified))?;
         Ok(false)
     }
 
@@ -257,35 +280,86 @@ impl<'a> Scope<'a> {
         ctx: &Context,
         platform: Os,
         tip: &Commit,
-        deferring_from: Option<&Commit>,
+        change: &CoverageChange<'_>,
     ) -> Result<()> {
         let mut expected = self.coverage.platforms.get(&platform).cloned();
         loop {
-            if let Some(prior) = &expected {
-                if !ctx.git.is_ancestor(&prior.through, tip)? {
-                    return Ok(());
-                }
-                if prior.through == *tip && (deferring_from.is_some() || prior.deferred.is_none()) {
-                    return Ok(());
-                }
+            if let Some(prior) = &expected
+                && !ctx.git.is_ancestor(&prior.through, tip)?
+            {
+                return Ok(());
             }
-            let deferred = deferring_from.map(|last_good| {
-                expected
-                    .as_ref()
-                    .and_then(|prior| prior.deferred.clone())
-                    .unwrap_or_else(|| DeferredPlatform {
-                        since: tip.clone(),
-                        last_good: last_good.clone(),
-                    })
-            });
+            let (replacement_deferred, checks_deferred) = match change {
+                CoverageChange::Clear => {
+                    if expected
+                        .as_ref()
+                        .is_some_and(|prior| prior.through == *tip && prior.deferred.is_none())
+                    {
+                        return Ok(());
+                    }
+                    (None, false)
+                }
+                CoverageChange::Defer {
+                    last_good,
+                    families,
+                } => {
+                    let deferred = match expected.as_ref().and_then(|prior| prior.deferred.as_ref())
+                    {
+                        Some(prior) => DeferredPlatform {
+                            since: prior.since.clone(),
+                            last_good: prior.last_good.clone(),
+                            families: if prior.families.is_empty() || families.is_empty() {
+                                BTreeSet::new()
+                            } else {
+                                prior.families.union(families).cloned().collect()
+                            },
+                        },
+                        None => DeferredPlatform {
+                            since: tip.clone(),
+                            last_good: (*last_good).clone(),
+                            families: families.clone(),
+                        },
+                    };
+                    if expected.as_ref().is_some_and(|prior| {
+                        prior.through == *tip && prior.deferred.as_ref() == Some(&deferred)
+                    }) {
+                        return Ok(());
+                    }
+                    (Some(deferred), !self.fleet_deferred.contains(&platform))
+                }
+                CoverageChange::Narrow(remaining) => {
+                    let Some(gap) = expected.as_ref().and_then(|prior| prior.deferred.as_ref())
+                    else {
+                        return Ok(());
+                    };
+                    let next_families: BTreeSet<String> = if gap.families.is_empty() {
+                        remaining.clone()
+                    } else {
+                        gap.families.intersection(remaining).cloned().collect()
+                    };
+                    if next_families.is_empty() {
+                        (None, false)
+                    } else if !gap.families.is_empty() && next_families == gap.families {
+                        return Ok(());
+                    } else {
+                        (
+                            Some(DeferredPlatform {
+                                since: gap.since.clone(),
+                                last_good: gap.last_good.clone(),
+                                families: next_families,
+                            }),
+                            true,
+                        )
+                    }
+                }
+            };
             let update = TipCoverageUpdate {
                 platform,
-                checks_deferred: deferring_from.is_some()
-                    && !self.fleet_deferred.contains(&platform),
+                checks_deferred,
                 expected,
                 replacement: PlatformVerification {
                     through: tip.clone(),
-                    deferred,
+                    deferred: replacement_deferred,
                 },
             };
             if ctx.hub.update_tip_coverage(&update)? {
@@ -294,6 +368,15 @@ impl<'a> Scope<'a> {
             expected = ctx.hub.tip_coverage()?.platforms.remove(&platform);
         }
     }
+}
+
+enum CoverageChange<'a> {
+    Clear,
+    Defer {
+        last_good: &'a Commit,
+        families: BTreeSet<String>,
+    },
+    Narrow(BTreeSet<String>),
 }
 
 /// Only keys from a plan published for this exact commit can wait until after promotion.

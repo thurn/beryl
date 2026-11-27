@@ -270,6 +270,11 @@ fn cause(report: &IncompleteReport, checks: &[&CheckName]) -> Cause {
             ),
             signature: Signature::of_output(family, "hung", platform, &output, host),
         },
+        IncompleteReason::NotListed => Cause {
+            title: format!("Checks not listed by {family}"),
+            why: format!("The family {family} listed cleanly on {host}, but did not list {these}."),
+            signature: Signature::of_output(family, "not-listed", platform, &output, host),
+        },
     }
 }
 

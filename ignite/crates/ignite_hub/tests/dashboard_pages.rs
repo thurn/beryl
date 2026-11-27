@@ -749,6 +749,7 @@ fn attention_names_the_first_tip_with_deferred_platform_checks() {
         deferred: Some(DeferredPlatform {
             since: Commit::new("bbb1234").unwrap(),
             last_good: Commit::new("aaa1234").unwrap(),
+            families: std::collections::BTreeSet::new(),
         }),
     };
     let defer = TipCoverageUpdate {

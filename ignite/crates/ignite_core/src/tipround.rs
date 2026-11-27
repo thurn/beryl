@@ -25,7 +25,7 @@
 //!   landing, ran out of runs, or never ran ([`CulpritSearch`]), so its ticket never presents a
 //!   range as if it were the culprit.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -113,6 +113,10 @@ pub struct DeferredPlatform {
     pub since: Commit,
     /// Where master was before that deferral, for the returning round's culprit search.
     pub last_good: Commit,
+    /// Families that still owe verification across this gap. Empty means the whole platform was
+    /// deferred (for example, while the platform was off, checks-only or waited).
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub families: BTreeSet<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

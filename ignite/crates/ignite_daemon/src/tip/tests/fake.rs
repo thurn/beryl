@@ -38,6 +38,8 @@ pub(super) struct FakeWork {
     pub(super) unlisted: Mutex<HashMap<Commit, Vec<Unlisted>>>,
     /// Checks whose incomplete runs carry no reason, as when no landing tree was free.
     pub(super) unreasoned: Mutex<HashSet<CheckName>>,
+    /// `(commit, check)` pairs whose family listed cleanly at `commit` without listing `check`.
+    pub(super) not_listed: Mutex<HashSet<(Commit, CheckName)>>,
     /// Makes `landings` fail, as when git cannot walk the range.
     pub(super) landings_fail: Mutex<bool>,
     /// Checks that a failed build of the named product kept from running.
@@ -392,7 +394,18 @@ impl FakeWork {
                 reason: (outcome == Outcome::Incomplete
                     && !self.unreasoned.lock().unwrap().contains(check)
                     && !self.unbuilt.lock().unwrap().contains_key(check))
-                .then_some(IncompleteReason::Unreported),
+                .then(|| {
+                    if self
+                        .not_listed
+                        .lock()
+                        .unwrap()
+                        .contains(&(at.clone(), check.clone()))
+                    {
+                        IncompleteReason::NotListed
+                    } else {
+                        IncompleteReason::Unreported
+                    }
+                }),
                 build: self.unbuilt.lock().unwrap().get(check).cloned(),
             });
         }

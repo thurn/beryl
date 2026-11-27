@@ -1130,5 +1130,10 @@
     "label": "Batch tip-round culprit probes (`newest`, `master`, and bisection commits) across co-failing checks of the same family and search range with a round-local probe cache, and skip redundant culprit searches for checks already open as regressions on the hub when not eligible to revert (`blame_failed` in `tip/culprit.rs`). Between 09:12Z and 11:30Z on 2026-11-27, one-check-at-a-time probing and re-bisecting already-open `AE1MC` checks ran 100 `build client` builds (198.1 build-minutes) across `jarvis` and `multivac` while 19 product commits (36.1 product commit-hours) waited on `staging`",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Scope platform verification gaps (`DeferredPlatform::families`) to only the families actually deferred at promotion and shrink them in `record_pass` as families pass, and treat `IncompleteReason::NotListed` (a check absent from a clean family listing at an earlier commit) as passing in culprit probes (`tip/coverage.rs`, `tip/culprit.rs`). On 2026-11-27, an unclosing macOS gap at `84d9824` (30 commits behind `master`) and `NotListed` aborts expanded `AB679`, `AE1MC` and `AP41C` to 39-42 suspects, blocking stall auto-revert while 23 product commits (54.2 product commit-hours) waited on `staging`",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]

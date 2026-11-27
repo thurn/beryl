@@ -360,7 +360,13 @@ impl TipVerifier {
         self.report_unlisted(ctx, tip, &unlisted);
         self.save(ctx);
         self.require_machine_on()?;
-        let explicitly_deferred_here = scope.local.is_some_and(|os| deferred.contains_key(&os));
+        let explicit_deferred_families: std::collections::BTreeSet<String> = scope
+            .local
+            .and_then(|os| deferred.get(&os))
+            .into_iter()
+            .flatten()
+            .map(|check| check.family().to_owned())
+            .collect();
 
         let mut failed: Vec<&TipCheck> = Vec::new();
         let mut waiting = newly_covered_regressions;
@@ -566,13 +572,14 @@ impl TipVerifier {
             return Ok(outcome);
         }
         self.run_after(ctx, last, tip, scope, &checks, &split, &mut verdicts, tally)?;
-        if !explicitly_deferred_here {
-            let deferred_here = scope.local.is_some_and(|os| deferred.contains_key(&os));
-            if scope.record_pass(ctx, tip, &checks, &verdicts, &unlisted, deferred_here)?
-                && let Some(os) = scope.local
-            {
-                deferred.remove(&os);
-            }
+        let deferred_here = scope
+            .local
+            .is_some_and(|os| deferred.contains_key(&os))
+            .then_some(&explicit_deferred_families);
+        if scope.record_pass(ctx, tip, &checks, &verdicts, &unlisted, deferred_here)?
+            && let Some(os) = scope.local
+        {
+            deferred.remove(&os);
         }
         Ok(if deferred.is_empty() {
             outcome

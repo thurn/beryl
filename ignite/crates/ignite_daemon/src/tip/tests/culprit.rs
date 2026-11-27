@@ -736,6 +736,7 @@ fn an_uncached_check_that_passes_at_master_narrows_and_reverts_despite_an_older_
                 deferred: Some(DeferredPlatform {
                     since: commit("9999111"),
                     last_good: old,
+                    families: std::collections::BTreeSet::new(),
                 }),
             },
         )]

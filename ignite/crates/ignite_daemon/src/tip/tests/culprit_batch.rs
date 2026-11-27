@@ -48,6 +48,7 @@ fn co_failing_checks_share_one_probe_per_commit() {
                 deferred: Some(DeferredPlatform {
                     since: commit("9999111"),
                     last_good: old,
+                    families: std::collections::BTreeSet::new(),
                 }),
             },
         )]
@@ -180,6 +181,7 @@ fn open_hub_regression_skips_redundant_bisection_unless_revert_eligible() {
                 deferred: Some(DeferredPlatform {
                     since: commit("9999111"),
                     last_good: old.clone(),
+                    families: std::collections::BTreeSet::new(),
                 }),
             },
         )]
@@ -241,5 +243,80 @@ fn open_hub_regression_skips_redundant_bisection_unless_revert_eligible() {
     assert_eq!(
         world.hub.reverted_landings()[0].ticket,
         Some(ticket("tk.42"))
+    );
+}
+
+/// When a newly-added check fails after `master`, probing `master` or an earlier commit before the
+/// check existed returns `Outcome::Incomplete` with `IncompleteReason::NotListed`. Both
+/// `probe_master_batch` and bisection treat `NotListed` as passing (the check did not fail there),
+/// so the search isolates the exact culprit landing and can revert during a stall instead of
+/// expanding across an open platform gap and aborting with dozens of suspects.
+#[test]
+fn a_newly_added_check_not_listed_at_earlier_commits_isolates_culprit_and_reverts() {
+    let world = World::new();
+    let old = commit("9999000");
+    let master = world.master();
+    let c1 = commit("bbbb001");
+    let c2 = commit("bbbb002");
+    let tip = commit("bbbb003");
+    world.land(&tip);
+    world.clock.advance(121.0 * 60.0);
+    world
+        .work
+        .add_landing("tk.1", &[c1.as_str()], &["src/shared/lib.rs"]);
+    world
+        .work
+        .add_landing("tk.2", &[c2.as_str()], &["src/shared/lib.rs"]);
+    world
+        .work
+        .add_landing("tk.3", &[tip.as_str()], &["src/shared/lib.rs"]);
+    world.hub.set_tip_coverage(TipCoverage {
+        platforms: [(
+            Os::Macos,
+            PlatformVerification {
+                through: master.clone(),
+                deferred: Some(DeferredPlatform {
+                    since: commit("9999111"),
+                    last_good: old,
+                    families: std::collections::BTreeSet::new(),
+                }),
+            },
+        )]
+        .into(),
+        ..TipCoverage::default()
+    });
+    let mut added = in_same_family("added", "src/shared/lib.rs");
+    added.key.platform = Some(Os::Macos);
+    // Check did not exist at `master` or `c1`, was added and failing at `c2` and `tip`.
+    for absent in [&master, &c1] {
+        world
+            .work
+            .set_outcome(absent, &added.check, Outcome::Incomplete);
+        world
+            .work
+            .not_listed
+            .lock()
+            .unwrap()
+            .insert((absent.clone(), added.check.clone()));
+    }
+    world.work.set_outcome(&c2, &added.check, Outcome::Fail);
+    world.work.set_outcome(&tip, &added.check, Outcome::Fail);
+    world.work.set_checks(&tip, vec![added]);
+    world.git.script_revert(RevertOutcome::Clean {
+        commit: commit("cccc000"),
+    });
+    let mut ctx = world.ctx("m-1");
+    ctx.config.revert.stall_minutes = Some(120);
+
+    world
+        .verifier()
+        .pausing_with(Arc::new(|_| {}))
+        .verify(&ctx, &tip)
+        .unwrap();
+
+    assert_eq!(world.hub.reverted_landings().len(), 1);
+    assert_eq!(
+        world.hub.reverted_landings()[0].ticket,
+        Some(ticket("tk.2"))
     );
 }
