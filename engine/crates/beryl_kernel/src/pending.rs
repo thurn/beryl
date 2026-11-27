@@ -664,6 +664,7 @@ mod tests {
             candidates: Candidates::Objects(Bitboard::EMPTY),
             prompt: Prompt::new(Purpose::ALL[0]),
             about: Bitboard::EMPTY,
+            filter: None,
         };
         let mut s = State::<Small>::empty(Profile::EXACT);
         s.board().set_known(Seat::P0, known, true);

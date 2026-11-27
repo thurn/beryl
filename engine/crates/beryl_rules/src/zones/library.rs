@@ -286,7 +286,10 @@ pub fn dig<L: Layout>(
                 .count(n)
                 .most(1)
                 .places(prompt::Place::Hand, prompt::Place::None);
-            if let Some(slot) = choices::may_pick(game, resolution, player, accepted, look)? {
+            let picked = resolution.described_by(filter, |resolution| {
+                choices::may_pick(game, resolution, player, accepted, look)
+            })?;
+            if let Some(slot) = picked {
                 reveal::reveal(game, player, slot);
                 let card = game.state.object_ref(slot);
                 zones::move_to_by(game, player, card, Zone::Hand, Reason::Effect)?;

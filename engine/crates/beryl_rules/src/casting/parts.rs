@@ -661,6 +661,7 @@ pub(super) fn decision<L: Layout>(
         candidates,
         prompt,
         about: Bitboard::EMPTY,
+        filter: None,
     })
 }
 

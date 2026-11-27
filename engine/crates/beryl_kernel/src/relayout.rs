@@ -557,6 +557,7 @@ impl<L: Layout> Relayout for Decision<L> {
             // The prompt has no slot in it: it is the same in every layout.
             prompt: self.prompt,
             about: bits(self.about),
+            filter: self.filter,
         }
     }
 }

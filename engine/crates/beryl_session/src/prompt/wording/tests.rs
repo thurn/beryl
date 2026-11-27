@@ -10,13 +10,14 @@ use super::{
 use crate::protocol::Step;
 
 /// The holes a template may have.
-const HOLES: [&str; 10] = [
+const HOLES: [&str; 11] = [
     "count",
     "most",
     "most:words",
     "cost",
     "source",
     "name",
+    "what",
     "from",
     "picked",
     "of",
@@ -173,7 +174,7 @@ fn a_title_never_comes_out_empty_for_want_of_a_name() {
     let nameless = Holes::default();
     for &purpose in Purpose::ALL {
         for entry in entries(purpose) {
-            let named = ["{source}", "{name}", "{cost}"]
+            let named = ["{source}", "{name}", "{cost}", "{what}"]
                 .iter()
                 .any(|hole| entry.title.contains(hole));
             assert_eq!(named, !entry.unnamed.is_empty(), "{purpose:?}");

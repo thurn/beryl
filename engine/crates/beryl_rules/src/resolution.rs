@@ -4,9 +4,10 @@
 //!
 //! Implements: none. Stores a resolution and manages replay of its answers.
 
-use crate::card::{Ability, AbilityKind, CastingIx, ManaColor, Stop, Words};
+use crate::card::{Ability, AbilityKind, CastingIx, FilterIx, ManaColor, Stop, Words};
 use crate::casting;
 use crate::decision::{Answers, Choice, Decision, Opt, Outcome, StallReason};
+use crate::filter::Filter;
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small, index};
@@ -40,6 +41,10 @@ pub struct Resolution<'a, L: Layout = Small> {
     /// For a mana ability that can produce more than one kind of mana, the kind its
     /// activator chose.
     pub(crate) mana: ManaColor,
+    /// The filter of the ability that chose the candidates of the questions being asked, set
+    /// by [`Resolution::described_by`] and given to the question that pauses the run
+    /// ([`Decision::filter`]).
+    filter: Option<FilterIx>,
 }
 
 impl<'a, L: Layout> Resolution<'a, L> {
@@ -58,6 +63,7 @@ impl<'a, L: Layout> Resolution<'a, L> {
             answers,
             question: None,
             mana: ManaColor::Colorless,
+            filter: None,
         }
     }
 
@@ -80,6 +86,21 @@ impl<'a, L: Layout> Resolution<'a, L> {
     pub(crate) fn answered_by(mut self, answers: Option<&'a mut dyn Answers<L>>) -> Self {
         self.answers = answers;
         self
+    }
+
+    /// `ask` run with its questions' candidates described by `filter`, one of the ability's
+    /// filters, so that a question it pauses at can name what it takes
+    /// ([`Decision::filter`]).
+    pub(crate) fn described_by<T>(
+        &mut self,
+        filter: Filter,
+        ask: impl FnOnce(&mut Self) -> T,
+    ) -> T {
+        let before = self.filter;
+        self.filter = self.ability.filter_index(filter);
+        let asked = ask(self);
+        self.filter = before;
+        asked
     }
 
     /// The spell's card or the ability's source.
@@ -254,7 +275,7 @@ impl<'a, L: Layout> Resolution<'a, L> {
         if self.ability.kind() == AbilityKind::Mana && !game.sink.asking.is_open() {
             return Ok(Choice(0));
         }
-        self.question = Some(d.clone());
+        self.question = Some(d.clone().described_by(self.filter));
         Err(Stop::Pause)
     }
 }

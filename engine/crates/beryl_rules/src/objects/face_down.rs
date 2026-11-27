@@ -218,6 +218,7 @@ pub(crate) fn decision<L: Layout>(
                 candidates: Candidates::Options(options),
                 prompt: Prompt::new(Purpose::Mana).part(Part::Plan),
                 about: Bitboard::single(slot),
+                filter: None,
             });
         }
         FaceUpPayment::Mana(remaining) => remaining,
@@ -231,6 +232,7 @@ pub(crate) fn decision<L: Layout>(
                 candidates: Candidates::Objects(collapse(s, objects)),
                 prompt: Prompt::new(parts::purpose(action, &chosen)).most(paying.left),
                 about: Bitboard::EMPTY,
+                filter: None,
             });
         }
     };
@@ -274,6 +276,7 @@ pub(crate) fn special_action_payment<L: Layout>(
         candidates: Candidates::Options(list),
         prompt: Prompt::new(Purpose::Mana).cost(remaining).part(part),
         about: Bitboard::EMPTY,
+        filter: None,
     })
 }
 

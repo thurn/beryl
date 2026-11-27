@@ -415,7 +415,8 @@ fn searching() -> Play {
 #[test]
 fn whether_to_search_is_asked_under_full_control() {
     let mut play = searching();
-    let open = "yesNo may-search: Search your library?\n\
+    let open = "yesNo may-search: Search your library for an artifact card with mana value 1 or \
+                less?\n\
                 0[Take Action]* 1[Decline]\n";
     assert_eq!(play.prompt(), open);
     let before = play.view.players.you.library.clone();

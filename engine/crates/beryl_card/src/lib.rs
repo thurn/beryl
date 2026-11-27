@@ -81,7 +81,7 @@ pub use mana::{Hybrid, INTRINSIC_MANA, ManaColor, ManaCost, ManaRestriction, Man
 pub use prompt::{Part, Place, Prompt, Purpose, Shape};
 pub use target::{Abilities, Takes, TargetKind, TargetSpec};
 pub use trigger::{CastNumber, Subject, Trigger, TriggerEvent};
-pub use walk::Node;
+pub use walk::{FilterIx, Node};
 pub use words::{
     ColorChanges, ColorWords, LandChanges, LandTypeWords, SubtypeWord, SubtypeWords, TextChange,
     TextWord, TextWords, Words,

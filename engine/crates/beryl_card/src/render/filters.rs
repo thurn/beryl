@@ -53,6 +53,18 @@ pub(super) struct Noun {
     suffixes: Vec<String>,
 }
 
+/// One card that passes `filter`, with its article, as a prompt names what it takes: "an
+/// artifact, creature, enchantment, or land card", "an artifact card with mana value 1 or
+/// less". The text changes `words` are read through, as the ability that asks reads them.
+pub fn render_card_filter(filter: Filter, words: &crate::words::Words) -> String {
+    let mut ctx = Ctx {
+        words: *words,
+        ..Ctx::bare(crate::ability::AbilityKind::Spell)
+    };
+    let kind = Kind::Card(None);
+    ctx.noun(filter, kind).indefinite(kind)
+}
+
 impl Ctx {
     /// The noun phrase `filter` says of things of kind `kind`.
     pub(super) fn noun(&mut self, filter: Filter, kind: Kind) -> Noun {
