@@ -2,6 +2,7 @@
 //! life, mana, counters, tokens, and permanents untapped.
 
 use super::Ctx;
+use super::filters::Kind;
 use super::words::{mana_set, number, symbol, with_article};
 use crate::characteristics::Types;
 use crate::counter::CounterKind;
@@ -77,11 +78,13 @@ impl Ctx {
 
     /// "Double the number of +1/+1 counters on each creature you control".
     pub(super) fn double_counters(&mut self, objects: Objects, kind: CounterKind) -> Vec<String> {
-        let on = format!(
-            "the number of {} counters on {}",
-            kind.name(),
+        let target = if let Objects::All { zone, filter } = objects {
+            let kind = Kind::of_zone(zone);
+            format!("each {}", self.noun(filter, kind).singular(kind))
+        } else {
             self.objects(objects)
-        );
+        };
+        let on = format!("the number of {} counters on {target}", kind.name());
         vec![self.clause(Players::You, ("double", "doubles"), |_| on.clone())]
     }
 

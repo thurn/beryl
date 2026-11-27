@@ -111,7 +111,7 @@ def entering_counters(oracle: str, kind: str) -> int:
     """How many counters of Beryl's kind `kind` a permanent with this Oracle text enters with
     ("Dark Depths enters with ten ice counters on it"), which XMage's `addCard` puts on it.
     """
-    word = COUNTERS[kind].lower()
+    word = {"PlusOne": "+1/+1", "MinusOne": "-1/-1"}.get(kind, COUNTERS[kind].lower())
     found = re.search(rf"enters with (\w+) {re.escape(word)} counters? on it", oracle)
     return NUMBER_WORDS.get(found.group(1), 0) if found else 0
 
