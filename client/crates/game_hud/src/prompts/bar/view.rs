@@ -13,7 +13,7 @@ use super::question::{fit_question_dock, question_title};
 use crate::hud::HudIn;
 use crate::hud::phase::{clear_of_shared_piles, phase_box};
 use crate::hud::placement_scene::{Group, PlacementScene, inset, rect};
-use crate::prompts::{covers_table, holds_up, ways};
+use crate::prompts::{bar_buttons, covers_table, holds_up};
 use game_table::profiles::Profile;
 use kit_base::data::profiles::{FloatingPrompt, Piece};
 use kit_base::geometry::Rect;
@@ -93,10 +93,7 @@ pub(super) fn bar(prompt: &PromptView, input: &HudIn, controls: Option<Controls>
                 .text_align(TextAlign::Center)
         }
     });
-    let ways = || ways(prompt).map(|way| way.id);
-    let buttons: Vec<&PromptButton> = (prompt.buttons.iter())
-        .filter(|button_view| !ways().any(|id| id == button_view.id))
-        .collect();
+    let buttons: Vec<&PromptButton> = bar_buttons(prompt).collect();
     let forward = buttons
         .iter()
         .copied()
@@ -262,10 +259,7 @@ fn floating_bar(
     slots: &PromptSlots,
     held_up: bool,
 ) -> Element {
-    let ways = || ways(prompt).map(|way| way.id);
-    let buttons: Vec<&PromptButton> = (prompt.buttons.iter())
-        .filter(|button_view| !ways().any(|id| id == button_view.id))
-        .collect();
+    let buttons: Vec<&PromptButton> = bar_buttons(prompt).collect();
     let forward = buttons
         .iter()
         .copied()

@@ -142,7 +142,7 @@ pub fn opening(input: &HudIn) -> Option<Element> {
     let actions = if picking.is_some() {
         1
     } else {
-        prompt.map_or(0, |prompt| prompt.buttons.len())
+        prompt.map_or(0, |prompt| crate::prompts::bar_buttons(prompt).count())
     };
     let shown: Vec<ObjectId> = (hand.iter().copied())
         .filter(|&slot| !picked(slot))

@@ -444,11 +444,11 @@ recordings do not show them.
 - **A creature that enters attacking.** It gets an explicit choice of what it
   attacks, and its line stays drawn throughout (by-l26, by-y3sp).
 - **A free mulligan.** In a shared-deck game, when a player's opening hand
-  qualifies before a regular mulligan, the mode mulligan prompt adds a third
-  button, "Free Mulligan", stacked with "Mulligan" above the primary "Keep 7"
-  button. Taking it reveals the hand to the opponent in the Revealed Cards pile
-  (showcase) before the hand goes back into the shared library with the
-  mulligan's motion and a new seven-card hand is dealt.
+  qualifies before a regular mulligan, the mode mulligan prompt shows "Free
+  Mulligan" in place of "Mulligan" above the primary "Keep 7" button. Taking it
+  reveals the hand to the opponent in the Revealed Cards pile (showcase) before
+  the hand goes back into the shared library with the mulligan's motion and a
+  new seven-card hand is dealt.
 - **A hand in two rows.** In the client, a hand with more cards than one fan
   across the window holds with a strip of each uncovered, such as 60 cards, is
   laid in two or more fans, one behind and above the other, in hand order from

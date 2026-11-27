@@ -166,6 +166,17 @@ pub fn ways(prompt: &PromptView) -> impl Iterator<Item = &PromptButton> {
         })
 }
 
+/// The buttons of `prompt` that belong in the prompt bar: everything except `ways` (which stand
+/// over the table) and the regular "Mulligan" button when a "Free Mulligan" is offered (a regular
+/// mulligan while a free one is on offer is never better).
+pub fn bar_buttons(prompt: &PromptView) -> impl Iterator<Item = &PromptButton> {
+    let has_free_mulligan = prompt.is(Purpose::Mulligan)
+        && (prompt.buttons.iter()).any(|button| button.label == "Free Mulligan");
+    (prompt.buttons.iter())
+        .filter(|button| !ways(prompt).any(|way| way.id == button.id))
+        .filter(move |button| !(has_free_mulligan && button.label == "Mulligan"))
+}
+
 /// Begins and ends the marks and arrows on the table that the client draws itself for the
 /// prompt `shown`, which was `was` before (none when it has just opened), as one beat of
 /// `steps`. `shown` is none when the prompt `was` has closed, which ends what it drew. Where

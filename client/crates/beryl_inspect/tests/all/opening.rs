@@ -533,3 +533,49 @@ fn opening_corners(frame: &Frame, name: &str) -> [Vec2; 4] {
         .unwrap_or_else(|| panic!("missing opening element {name:?}"))
         .corners
 }
+
+#[test]
+fn free_mulligan_replaces_regular_mulligan_in_both_layouts() {
+    let cases = [
+        (SizeClass::Regular, REPORTED_SIZE),
+        (
+            SizeClass::Compact,
+            Size {
+                width: 393.0,
+                height: 759.0,
+            },
+        ),
+    ];
+    for (class, size) in cases {
+        let mut p = page("opening-free-mulligan", Side::You, class, size)
+            .unwrap_or_else(|why| panic!("{why}"));
+        p.seek(&Moment::from_str("prompt:1").unwrap())
+            .unwrap_or_else(|why| panic!("{why}"));
+        p.still();
+        p.find("button \"Free Mulligan\"");
+        p.find("button \"Keep 7\"");
+        let frame = p.frame();
+        let has_regular_mulligan = frame
+            .resolved
+            .iter()
+            .any(|element| element.role == Role::Button && frame.name(element.name) == "Mulligan");
+        assert!(
+            !has_regular_mulligan,
+            "regular Mulligan should be hidden when Free Mulligan is offered ({class:?})"
+        );
+
+        p.seek(&Moment::from_str("prompt:2").unwrap())
+            .unwrap_or_else(|why| panic!("{why}"));
+        p.still();
+        p.find("button \"Mulligan\"");
+        p.find("button \"Keep 7\"");
+        let frame = p.frame();
+        let has_free_mulligan = frame.resolved.iter().any(|element| {
+            element.role == Role::Button && frame.name(element.name) == "Free Mulligan"
+        });
+        assert!(
+            !has_free_mulligan,
+            "Free Mulligan should not be shown after taking it ({class:?})"
+        );
+    }
+}
