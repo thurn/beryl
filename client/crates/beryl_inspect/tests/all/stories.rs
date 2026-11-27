@@ -16,7 +16,7 @@ fn command(words: &[&str]) -> cli::Ran {
 #[test]
 fn a_story_is_listed_drawn_and_checked_as_a_scene() {
     let button = "story/kit_ui/button-states";
-    let list = command(&["list", "story/"]);
+    let list = command(&["list", "story/", "--full"]);
     assert!(list.stdout.contains(button));
     assert!(list.stdout.contains("story/kit_space/forty-rectangles"));
     assert!(list.stdout.contains("story/kit_fx/glow"));
@@ -43,7 +43,7 @@ fn a_story_is_listed_drawn_and_checked_as_a_scene() {
 
 #[test]
 fn migrated_replays_are_listed_and_draw_the_same_frames_under_both_names() {
-    let list = command(&["list", "story/"]);
+    let list = command(&["list", "story/", "--full"]);
     for legacy in [
         "stress-255",
         "stress-hand",
