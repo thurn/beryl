@@ -127,6 +127,8 @@ class Payments:
                         "sources of"
                     )
                 lines.append(self.cards.tap_source(at, who, name, text))
+                for choice in _extra_type_choices(name, text, mana):
+                    lines.append(f"setChoice({who}, {java_string(choice)});")
         return lines
 
     def as_made_taps(
@@ -153,3 +155,38 @@ class Payments:
                 )
         self.as_made = True
         return lines
+
+
+_MANA_SYMBOLS = {
+    "{W}": "White",
+    "{U}": "Blue",
+    "{B}": "Black",
+    "{R}": "Red",
+    "{G}": "Green",
+    "{C}": "Colorless",
+}
+
+
+def _extra_type_choices(name: str, text: str, mana: list[Json]) -> list[str]:
+    """Colors chosen for an `Added::TypeProduced` trigger (e.g. Mana Flare) when tapping a
+    permanent whose mana ability produces more than one type of mana (e.g. `{T}: Add {W}{U}`).
+    """
+    _, _, tail = text.partition("Add ")
+    printed: dict[str, int] = {}
+    for sym, color in _MANA_SYMBOLS.items():
+        count = tail.count(sym)
+        if count > 0:
+            printed[color] = count
+    if len(printed) <= 1:
+        return []
+    produced: dict[str, int] = {}
+    for entry in mana:
+        if entry.get("source") == name:
+            color = cast(str, entry["color"])
+            produced[color] = produced.get(color, 0) + cast(int, entry.get("amount", 1))
+    choices: list[str] = []
+    for color, base in printed.items():
+        extra = produced.get(color, 0) - base
+        if extra > 0:
+            choices.extend([color] * extra)
+    return choices

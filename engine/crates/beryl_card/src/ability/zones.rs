@@ -19,7 +19,8 @@ pub(super) const fn usual_zones(kind: AbilityKind) -> ZoneSet {
         | AbilityKind::Mana
         | AbilityKind::Triggered
         | AbilityKind::Static
-        | AbilityKind::Replacement => ZoneSet::BATTLEFIELD,
+        | AbilityKind::Replacement
+        | AbilityKind::ManaChange => ZoneSet::BATTLEFIELD,
     }
 }
 

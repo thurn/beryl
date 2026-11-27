@@ -28,6 +28,7 @@ use super::{act, collapse};
 /// remembers it. The sink only counts the payment solver's runs. It is built as its own
 /// player's to answer: `next` gives it to the player controlling them, if one does
 /// ([`controlled`]).
+#[allow(clippy::too_many_lines)]
 pub(crate) fn decision<L: Layout>(
     s: &State<L>,
     t: &GameTable,
@@ -106,6 +107,37 @@ pub(crate) fn decision<L: Layout>(
             ChosenKind::Color,
             Bitboard::single(slot),
         ),
+        Pending::ManaType {
+            slot,
+            player,
+            kinds,
+            ..
+        } => {
+            if kinds & (1 << crate::card::ManaColor::Colorless.index()) == 0 {
+                catalog::decision_among(
+                    t,
+                    player,
+                    ChosenKind::Color,
+                    Prompt::new(ChosenKind::Color.purpose()),
+                    Bitboard::single(slot),
+                    |n| kinds & (1 << n) != 0,
+                )
+            } else {
+                let mut list: L::Queue<Opt<L>, OPTIONS> = Default::default();
+                for (k, &color) in crate::card::ManaColor::ALL.iter().enumerate() {
+                    if kinds & (1 << k) != 0 {
+                        list.push(Opt::Mana { slot, color })?;
+                    }
+                }
+                Ok(Decision::options(
+                    player,
+                    DecisionKind::ChooseObject,
+                    list,
+                    Prompt::new(ChosenKind::Color.purpose()),
+                )
+                .about(Bitboard::single(slot)))
+            }
+        }
         // The question is about the land entering.
         Pending::EnterChoosing { slot, kind, .. } => {
             catalog::decision(t, s.object(slot).owner(), kind, Bitboard::single(slot))
@@ -296,6 +328,7 @@ pub(crate) fn controlled<L: Layout>(s: &State<L>, mut d: Decision<L>) -> Decisio
 
 /// Answers a question of the casting machine, a paused resolution, if one is open, or one of the rules' own questions that a general kind asks: the
 /// pending state says which question it is, where the kind says only the form of its answer.
+#[allow(clippy::too_many_lines)]
 pub(super) fn perform_machine<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
@@ -366,6 +399,26 @@ pub(super) fn perform_machine<L: Layout>(
             let done = mana::activate_chosen(s, t, &mut x.events, source, d.candidates.option(c));
             x.events.leave();
             done
+        }
+        Pending::ManaType {
+            slot,
+            player,
+            kinds,
+            remaining,
+        } => {
+            s.settle_question();
+            act(s, &mut x.events, d.player, None);
+            mana::choose_mana_type(
+                s,
+                &mut x.events,
+                slot,
+                player,
+                kinds,
+                remaining,
+                d.candidates.option(c),
+            );
+            x.events.leave();
+            Ok(())
         }
         Pending::EnterChoosing { slot, pay_life, .. } => {
             s.settle_question();

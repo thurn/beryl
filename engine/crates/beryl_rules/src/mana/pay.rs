@@ -438,15 +438,16 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
         && let Some((_, ability)) = remembered::makes(s, t, permanent, color)
     {
         // Its only cost is {T} (see CR 602.2b, see CR 601.2h).
-        let extra = if s.has_mana_changes() {
-            super::changes::matching_added(s, t, slot)?
+        let has_changes = t.can(Capability::ManaChanges) && s.has_mana_changes();
+        let extra = if has_changes {
+            super::changes::matching(s, t, slot)?.add_for_single_color(color)?
         } else {
             [0; KINDS]
         };
         let controller = s.controller(slot);
         event::set_tapped(s, t, sink, permanent, true)?;
         remembered::add(s, t, sink, permanent, ability, color)?;
-        if s.has_mana_changes() {
+        if has_changes {
             super::changes::add_extra(s, sink, permanent, controller, extra);
         }
         return Ok(());
@@ -471,8 +472,9 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
     // total cost." The hand is discarded before the source is sacrificed: the player pays a
     // cost's parts in any order, and the order changes nothing here.
     let tapped = ability.cost().does(CostAction::Tap);
-    let extra = if tapped && s.has_mana_changes() {
-        super::changes::matching_added(s, t, slot)?
+    let has_changes = tapped && t.can(Capability::ManaChanges) && s.has_mana_changes();
+    let extra = if has_changes {
+        super::changes::matching(s, t, slot)?.add_for_single_color(color)?
     } else {
         [0; KINDS]
     };
@@ -501,7 +503,7 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
         ..PendingTrigger::default()
     };
     crate::interpret::mana_ability(s, t, sink, activation, ability, color)?;
-    if tapped && s.has_mana_changes() {
+    if has_changes {
         super::changes::add_extra(s, sink, permanent, controller, extra);
     }
     Ok(())

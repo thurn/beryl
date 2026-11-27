@@ -244,6 +244,7 @@ impl Ctx {
             if let Some(clause) = effects.peek().and_then(|&next| {
                 self.hidden_put(effect, next)
                     .or_else(|| self.chosen_exile(effect, next))
+                    .or_else(|| self.chosen_return_to_hand(effect, next))
                     .or_else(|| self.chosen_at_random(effect, next))
             }) {
                 effects.next();
@@ -357,6 +358,41 @@ impl Ctx {
             let kind = super::filters::Kind::Card(Some(crate::Zone::Hand));
             let card = ctx.noun(*filter, kind).indefinite(kind);
             format!("{card} from {} hand", ctx.possessive(*player))
+        }))
+    }
+
+    /// A player chooses a permanent they control, then returns it to its owner's hand.
+    fn chosen_return_to_hand(&mut self, choose: &Effect, bounce: &Effect) -> Option<String> {
+        let Effect::Choose {
+            player,
+            among:
+                Objects::InZoneOf {
+                    zone: crate::Zone::Battlefield,
+                    players,
+                    filter,
+                },
+            optional: false,
+            hidden: false,
+            ..
+        } = choose
+        else {
+            return None;
+        };
+        if player != *players || !matches!(bounce, Effect::ReturnToHand(Objects::Those)) {
+            return None;
+        }
+        self.discarded = None;
+        self.those_named = None;
+        self.plural = false;
+        Some(self.clause(*player, ("return", "returns"), |ctx| {
+            let kind = super::filters::Kind::Permanent;
+            let perm = ctx.noun(*filter, kind).indefinite(kind);
+            let control = if *player == Players::You {
+                "you control"
+            } else {
+                "they control"
+            };
+            format!("{perm} {control} to its owner's hand")
         }))
     }
 

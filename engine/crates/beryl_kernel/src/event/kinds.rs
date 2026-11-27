@@ -167,6 +167,10 @@ impl Replaces {
     ///
     /// [CR 702.16e]: https://yawgatog.com/resources/magic-rules/#R70216e
     pub const PROTECTION: Replaces = Replaces(1 << 62);
+    /// Not a replacement: a permanent on the battlefield has a mana-changing ability
+    /// ([`beryl_card::AbilityKind::ManaChange`]) that it has not lost. Collected in the layers'
+    /// pass alongside replacements so checking for permanent mana changes stays one test.
+    pub const MANA_CHANGE: Replaces = Replaces(1 << 61);
 
     /// The mask of one kind of replacement.
     #[inline]
@@ -190,6 +194,12 @@ impl Replaces {
     #[inline]
     pub const fn protects(self) -> bool {
         self.0 & Replaces::PROTECTION.0 != 0
+    }
+
+    /// Whether a permanent may have a mana-changing ability ([`Replaces::MANA_CHANGE`]).
+    #[inline]
+    pub const fn has_mana_change(self) -> bool {
+        self.0 & Replaces::MANA_CHANGE.0 != 0
     }
 
     #[inline]

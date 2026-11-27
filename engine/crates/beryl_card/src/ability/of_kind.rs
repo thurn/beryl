@@ -3,7 +3,7 @@
 //! mana ability's terms. The builders and readers of each are here.
 
 use super::{Ability, AbilityKind};
-use crate::continuous::{LayerSpec, Replacement};
+use crate::continuous::{LayerSpec, ManaChange, Replacement};
 use crate::filter::Filter;
 use crate::ids::{Zone, ZoneSet};
 use crate::mana::ManaRestriction;
@@ -39,6 +39,8 @@ pub(super) enum OfKind {
     BandsWithOther(&'static Filter),
     /// Replacement abilities: what they replace and how.
     Replacement(&'static Replacement),
+    /// Permanent mana-changing abilities ([`Ability::mana_change`]).
+    ManaChange(&'static ManaChange),
     /// Mana abilities. First, "Activate only if you control a [permanent this filter
     /// accepts]" ([CR 602.5]): "A player can't begin to activate an ability that's
     /// prohibited from being activated." Second, what the mana it makes may be spent on
@@ -57,6 +59,7 @@ impl OfKind {
             | OfKind::Trigger(_)
             | OfKind::Layer(_)
             | OfKind::Replacement(_)
+            | OfKind::ManaChange(_)
             | OfKind::CastWhileSearching
             | OfKind::Companion(_)
             | OfKind::CastFromGraveyard(_)
@@ -109,6 +112,7 @@ impl Ability {
             | OfKind::CastFromGraveyard(_)
             | OfKind::BandsWithOther(_)
             | OfKind::Replacement(_)
+            | OfKind::ManaChange(_)
             | OfKind::Mana(..) => None,
         }
     }
@@ -138,6 +142,7 @@ impl Ability {
             | OfKind::CastWhileSearching
             | OfKind::Companion(_)
             | OfKind::Replacement(_)
+            | OfKind::ManaChange(_)
             | OfKind::Mana(..) => None,
         }
     }
@@ -177,6 +182,7 @@ impl Ability {
             | OfKind::Companion(_)
             | OfKind::CastFromGraveyard(_)
             | OfKind::Replacement(_)
+            | OfKind::ManaChange(_)
             | OfKind::Mana(..) => None,
         }
     }
@@ -243,6 +249,7 @@ impl Ability {
             OfKind::None
             | OfKind::Layer(_)
             | OfKind::Replacement(_)
+            | OfKind::ManaChange(_)
             | OfKind::Mana(..)
             | OfKind::CastWhileSearching
             | OfKind::Companion(_)
@@ -259,6 +266,24 @@ impl Ability {
             OfKind::None
             | OfKind::Trigger(_)
             | OfKind::Layer(_)
+            | OfKind::ManaChange(_)
+            | OfKind::Mana(..)
+            | OfKind::CastWhileSearching
+            | OfKind::Companion(_)
+            | OfKind::CastFromGraveyard(_)
+            | OfKind::BandsWithOther(_) => None,
+        }
+    }
+
+    /// A permanent's mana-changing ability ([`Ability::mana_change`]); `None` for any other kind.
+    #[inline]
+    pub const fn changes_mana(&self) -> Option<&'static ManaChange> {
+        match self.of_kind {
+            OfKind::ManaChange(change) => Some(change),
+            OfKind::None
+            | OfKind::Trigger(_)
+            | OfKind::Layer(_)
+            | OfKind::Replacement(_)
             | OfKind::Mana(..)
             | OfKind::CastWhileSearching
             | OfKind::Companion(_)
@@ -275,6 +300,7 @@ impl Ability {
             OfKind::None
             | OfKind::Trigger(_)
             | OfKind::Replacement(_)
+            | OfKind::ManaChange(_)
             | OfKind::Mana(..)
             | OfKind::CastWhileSearching
             | OfKind::Companion(_)

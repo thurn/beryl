@@ -198,7 +198,16 @@ fn replaced(def: &CardDef, rule_changes: &mut RuleChanges) -> Result<Replaces, T
             card: def.name,
             unchecked,
         })?;
-    Ok(replaces | changes)
+    let mana_change = if def.faces.iter().any(|f| {
+        f.abilities
+            .iter()
+            .any(|a| a.kind() == AbilityKind::ManaChange)
+    }) {
+        Replaces::MANA_CHANGE
+    } else {
+        Replaces::NONE
+    };
+    Ok(replaces | changes | mana_change)
 }
 
 /// Whether every token and emblem `def`'s effects create is one of `defs`, the cards of a
@@ -217,33 +226,6 @@ fn listed(def: &CardDef, defs: &[&'static CardDef]) -> Result<(), TableError> {
         }),
         None => Ok(()),
     }
-}
-
-/// Refuses any [`beryl_card::ManaChange`] variant that the engine does not implement yet.
-fn check_mana_changes(def: &CardDef) -> Result<(), TableError> {
-    use beryl_card::{Added, Behavior, Effect, ManaChange, Tapped};
-    for face in def.faces {
-        for ability in face.abilities.iter().chain(face.grants) {
-            if let Behavior::Data(effect) = ability.body()
-                && effect.any(&|instruction| {
-                    matches!(
-                        instruction,
-                        Effect::ChangeMana { change, .. }
-                            if !matches!(
-                                **change,
-                                ManaChange::Adds {
-                                    tapped: Tapped::A(_),
-                                    added: Added::Of(mana),
-                                } if mana.amount > 0 && mana.colors.is_power_of_two()
-                            )
-                    )
-                })
-            {
-                return Err(TableError::ManaChange { card: def.name });
-            }
-        }
-    }
-    Ok(())
 }
 
 impl GameTable {
@@ -304,7 +286,7 @@ impl GameTable {
                 card: def.name,
                 unpayable,
             })?;
-            check_mana_changes(def)?;
+            capability::check_mana_changes(def)?;
         }
         let mut here = Indexed::default();
         let mut away = Indexed::default();
@@ -629,6 +611,8 @@ pub struct FaceFacts {
     pub land_mana: u8,
     /// Whether the face has a `{T}` mana ability whose mana is restricted (`Ability::spend`).
     pub has_restricted_mana: bool,
+    /// Whether the face has a mana-changing ability ([`AbilityKind::ManaChange`]).
+    pub has_mana_change: bool,
     /// What its static abilities read as the layers apply that no layer writes.
     pub inputs: Inputs,
     /// A bit per [`AbilityIx`] of its activated abilities.
@@ -641,6 +625,7 @@ impl FaceFacts {
         mana: ManaFace::Read { other: false },
         land_mana: 0,
         has_restricted_mana: false,
+        has_mana_change: false,
         inputs: Inputs::NONE,
         activated: 0,
     };
@@ -680,6 +665,10 @@ impl FaceFacts {
                 .abilities
                 .iter()
                 .any(|a| is_tap_for_mana(a) && a.spend().is_some()),
+            has_mana_change: face
+                .abilities
+                .iter()
+                .any(|a| a.kind() == AbilityKind::ManaChange),
             inputs: Inputs::of(face),
             activated: 0,
         };

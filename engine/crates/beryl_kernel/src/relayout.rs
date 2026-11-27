@@ -379,6 +379,7 @@ impl<L: Layout> Relayout for crate::pending::DamageDivision<L> {
 impl<L: Layout> Relayout for Pending<L> {
     type In<M: Layout> = Pending<M>;
 
+    #[allow(clippy::too_many_lines)]
     fn relayout<M: Layout>(&self) -> Pending<M> {
         match self {
             Pending::None => Pending::None,
@@ -403,6 +404,17 @@ impl<L: Layout> Relayout for Pending<L> {
             &Pending::ManaColor { slot: s, ability } => Pending::ManaColor {
                 slot: slot(s),
                 ability,
+            },
+            &Pending::ManaType {
+                slot: s,
+                player,
+                kinds,
+                remaining,
+            } => Pending::ManaType {
+                slot: slot(s),
+                player,
+                kinds,
+                remaining,
             },
             &Pending::Companion { chooser } => Pending::Companion { chooser },
             &Pending::CompanionPayment { player, remaining } => {

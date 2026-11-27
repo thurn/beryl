@@ -323,6 +323,7 @@ impl<L: Layout> State<L> {
             | Pending::OrderEntered { .. }
             | Pending::EnterChoosing { .. }
             | Pending::ManaColor { .. }
+            | Pending::ManaType { .. }
             | Pending::Companion { .. }
             | Pending::CompanionPayment { .. }
             | Pending::ArrangePiles { .. } => Ok(()),

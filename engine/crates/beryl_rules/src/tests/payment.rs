@@ -1507,17 +1507,13 @@ fn reference_agrees_with_mana_changes_on_200_seeded_boards() {
     assert!(manual_steps > 150, "only {manual_steps} manual steps");
 }
 
-/// Unimplemented `ManaChange` variants (`Tapped::AttachedTo`, `Added::TypeProduced`,
-/// `ManaChange::Multiplies`) are refused by the game table.
+/// Unimplemented `ManaChange` variants (`Tapped::AttachedTo` on an effect,
+/// `ManaChange::Multiplies` on an effect or permanent ability) are refused by the game table.
 #[test]
 fn table_refuses_unimplemented_mana_changes() {
     static ATTACHED: beryl_card::ManaChange = beryl_card::ManaChange::Adds {
         tapped: beryl_card::Tapped::AttachedTo,
         added: beryl_card::Added::Of(beryl_card::ManaSet::one(ManaColor::Green)),
-    };
-    static TYPE_PRODUCED: beryl_card::ManaChange = beryl_card::ManaChange::Adds {
-        tapped: beryl_card::Tapped::A(beryl_card::Filter::Types(Types::LAND)),
-        added: beryl_card::Added::TypeProduced,
     };
     static MULTIPLIES: beryl_card::ManaChange = beryl_card::ManaChange::Multiplies {
         tapped: beryl_card::Filter::Types(Types::LAND),
@@ -1525,8 +1521,6 @@ fn table_refuses_unimplemented_mana_changes() {
     };
     static ATTACHED_EFFECT: beryl_card::Effect =
         beryl_card::effect::build::change_mana(&ATTACHED, beryl_card::Duration::EndOfTurn);
-    static TYPE_PRODUCED_EFFECT: beryl_card::Effect =
-        beryl_card::effect::build::change_mana(&TYPE_PRODUCED, beryl_card::Duration::EndOfTurn);
     static MULTIPLIES_EFFECT: beryl_card::Effect =
         beryl_card::effect::build::change_mana(&MULTIPLIES, beryl_card::Duration::EndOfTurn);
     static C1: CardDef = CardDef {
@@ -1541,18 +1535,7 @@ fn table_refuses_unimplemented_mana_changes() {
         tokens: &[],
     };
     static C2: CardDef = CardDef {
-        name: "Test Flare",
-        shape: beryl_card::definition::Shape::Single,
-        faces: &[Face {
-            types: Types::INSTANT,
-            cost: beryl_card::mana("{R}"),
-            abilities: &[Ability::spell().effect(&TYPE_PRODUCED_EFFECT)],
-            ..Face::EMPTY
-        }],
-        tokens: &[],
-    };
-    static C3: CardDef = CardDef {
-        name: "Test Reflection",
+        name: "Test Reflection Spell",
         shape: beryl_card::definition::Shape::Single,
         faces: &[Face {
             types: Types::INSTANT,
@@ -1562,8 +1545,23 @@ fn table_refuses_unimplemented_mana_changes() {
         }],
         tokens: &[],
     };
+    static C3: CardDef = CardDef {
+        name: "Test Reflection Permanent",
+        shape: beryl_card::definition::Shape::Single,
+        faces: &[Face {
+            types: Types::ENCHANTMENT,
+            cost: beryl_card::mana("{G}"),
+            abilities: &[Ability::mana_change(&MULTIPLIES)],
+            ..Face::EMPTY
+        }],
+        tokens: &[],
+    };
     static CARDS: CardTable = CardTable::new(&[&ISLAND, &C1, &C2, &C3]);
-    for name in ["Test Attached", "Test Flare", "Test Reflection"] {
+    for name in [
+        "Test Attached",
+        "Test Reflection Spell",
+        "Test Reflection Permanent",
+    ] {
         let deck: &[(u8, &str)] = &[(36, "Test Island"), (4, name)];
         let res = crate::GameTable::new(
             beryl_kernel::format::Format::CONSTRUCTED,
@@ -1577,7 +1575,6 @@ fn table_refuses_unimplemented_mana_changes() {
         );
     }
 }
-
 static CREATURES_YOU_CONTROL: &[beryl_card::Filter] = &[
     beryl_card::Filter::Types(Types::CREATURE),
     beryl_card::Filter::Whose(&beryl_card::Players::You),
@@ -1772,4 +1769,394 @@ fn spend_as_any_color_covers_matching_activations_only() {
             .collect();
         assert!(!opp_opts.contains(&act(opp_creature, 0)));
     }
+}
+
+static TEST_FLARE_CHANGE: beryl_card::ManaChange = beryl_card::ManaChange::Adds {
+    tapped: beryl_card::Tapped::A(beryl_card::Filter::Types(Types::LAND)),
+    added: beryl_card::Added::TypeProduced,
+};
+
+static TEST_WILD_GROWTH_CHANGE: beryl_card::ManaChange = beryl_card::ManaChange::Adds {
+    tapped: beryl_card::Tapped::AttachedTo,
+    added: beryl_card::Added::Of(beryl_card::ManaSet::one(ManaColor::Green)),
+};
+
+static TEST_FLARE_CREATURE: CardDef = CardDef {
+    name: "Test Flare Creature",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::CREATURE,
+        cost: beryl_card::mana("{2}{R}"),
+        power: Some(2),
+        toughness: Some(2),
+        abilities: &[Ability::mana_change(&TEST_FLARE_CHANGE)],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+static TEST_WILD_GROWTH_AURA: CardDef = CardDef {
+    name: "Test Wild Growth",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::ENCHANTMENT,
+        subtypes: beryl_card::SubtypeWords::new(beryl_card::Subtypes::of(&[
+            beryl_card::Subtype::Aura,
+        ])),
+        cost: beryl_card::mana("{G}"),
+        abilities: &[
+            Ability::spell().target(&beryl_card::TargetSpec::permanent(
+                beryl_card::Filter::Types(Types::LAND),
+            )),
+            Ability::mana_change(&TEST_WILD_GROWTH_CHANGE),
+        ],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+static TEST_WU_TERMS: [beryl_card::Term; 2] = [
+    beryl_card::Term::one(ManaColor::White),
+    beryl_card::Term::one(ManaColor::Blue),
+];
+
+static TEST_CHANCERY: CardDef = CardDef {
+    name: "Test Chancery",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::LAND,
+        abilities: &[Ability::mana_of(Cost::TAP, &TEST_WU_TERMS)],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+/// A creature with a permanent mana-change ability that lost its abilities adds nothing.
+#[test]
+fn permanent_mana_change_that_lost_abilities_adds_nothing() {
+    static CARDS: CardTable = CardTable::new(&[&ISLAND, &TEST_FLARE_CREATURE]);
+    let deck: &[(u8, &str)] = &[(36, "Test Island"), (4, "Test Flare Creature")];
+    let t = crate::GameTable::new(
+        beryl_kernel::format::Format::CONSTRUCTED,
+        &CARDS,
+        [deck, deck],
+    )
+    .unwrap();
+    let mut s = crate::State::new(&t, 1, Profile::EXACT).unwrap();
+    super::begin(&t, &mut s);
+    let p = s.turn().starting_player();
+    let island = s
+        .library(p)
+        .iter()
+        .copied()
+        .find(|&sl| s.definition_name(&t, sl) == "Test Island")
+        .unwrap();
+    let creature = s
+        .library(p)
+        .iter()
+        .copied()
+        .find(|&sl| s.definition_name(&t, sl) == "Test Flare Creature")
+        .unwrap();
+    s.board().place(island, Zone::Battlefield).unwrap();
+    s.board().place(creature, Zone::Battlefield).unwrap();
+    crate::continuous::layers::refresh(&mut s, &t, &mut Sink::off()).unwrap();
+    let two_blue = ManaCost::new(0, [0, 2, 0, 0, 0, 0]);
+    assert!(s.has_mana_changes());
+    assert!(mana::Funds::of(&s, &t, p).unwrap().pays_for(
+        &s,
+        &t,
+        two_blue,
+        Bitboard::EMPTY,
+        mana::Paying::NOTHING
+    ));
+    // Remove all abilities from the creature.
+    let card = s.definition(creature).record(&t).0;
+    let creature_perm = s.permanent_at(creature).unwrap();
+    s.start_effect(
+        card,
+        crate::state::Continuous::Layer(creature_perm, crate::state::LayerChange::LoseAllAbilities),
+        crate::state::Duration::EndOfTurn,
+    )
+    .unwrap();
+    crate::continuous::layers::refresh(&mut s, &t, &mut Sink::off()).unwrap();
+    assert!(!s.has_mana_changes());
+    assert!(!mana::Funds::of(&s, &t, p).unwrap().pays_for(
+        &s,
+        &t,
+        two_blue,
+        Bitboard::EMPTY,
+        mana::Paying::NOTHING
+    ));
+    assert_eq!(
+        crate::reference::reference_sequences(&s, &t, p, two_blue),
+        Some(false)
+    );
+}
+
+/// Activating a land that produces two types of mana at priority under Mana Flare asks the
+/// player to choose one of the produced types, and adds one mana of the chosen type.
+#[test]
+fn mana_flare_two_type_land_asks_choice_at_priority() {
+    static CARDS: CardTable = CardTable::new(&[&TEST_CHANCERY, &TEST_FLARE_CREATURE]);
+    let deck: &[(u8, &str)] = &[(36, "Test Chancery"), (4, "Test Flare Creature")];
+    let t = crate::GameTable::new(
+        beryl_kernel::format::Format::CONSTRUCTED,
+        &CARDS,
+        [deck, deck],
+    )
+    .unwrap();
+    let mut s = crate::State::new(&t, 1, Profile::EXACT).unwrap();
+    super::begin(&t, &mut s);
+    let p = s.turn().starting_player();
+    let mut profile = Profile::EXACT;
+    profile.taps_mana = Some(p);
+    let mut s = crate::State::new(&t, 1, profile).unwrap();
+    super::begin(&t, &mut s);
+    let p = s.turn().starting_player();
+    let chancery = s
+        .library(p)
+        .iter()
+        .copied()
+        .find(|&sl| s.definition_name(&t, sl) == "Test Chancery")
+        .unwrap();
+    let flare = s
+        .library(p)
+        .iter()
+        .copied()
+        .find(|&sl| s.definition_name(&t, sl) == "Test Flare Creature")
+        .unwrap();
+    s.board().place(chancery, Zone::Battlefield).unwrap();
+    s.board().place(flare, Zone::Battlefield).unwrap();
+    crate::continuous::layers::refresh(&mut s, &t, &mut Sink::off()).unwrap();
+    let mut x = crate::Scratch::default();
+    let crate::Step::Decide(d) = crate::next(&mut s, &t, &mut x, &mut crate::Replay) else {
+        panic!("expected priority decision");
+    };
+    let act_ix = (0..d.len() as u16)
+        .map(crate::Choice)
+        .find(|&c| {
+            matches!(
+                d.candidates.option(c),
+                Some(crate::Opt::Activate { slot, .. }) if slot == chancery
+            )
+        })
+        .expect("chancery activation offered at priority");
+    crate::apply(&mut s, &t, &mut x, &mut crate::Replay, act_ix);
+    let crate::Step::Decide(choose) = crate::next(&mut s, &t, &mut x, &mut crate::Replay) else {
+        panic!("expected mana type choice");
+    };
+    assert_eq!(choose.kind, beryl_card::DecisionKind::ChooseObject);
+    assert_eq!(choose.len(), 2, "only White and Blue offered");
+    // Pick the second option (Blue).
+    crate::apply(&mut s, &t, &mut x, &mut crate::Replay, crate::Choice(1));
+    assert_eq!(s.player(p).mana()[ManaColor::White], 1);
+    assert_eq!(s.player(p).mana()[ManaColor::Blue], 2);
+}
+
+/// On 200 seeded boards with permanent mana-changing abilities (Mana Flare and Wild Growth),
+/// the solver's payability, plans (`KeepMostPayable` and `Greedy`), and `Payment::Manual` agree
+/// with `reference_sequences`.
+#[test]
+#[allow(clippy::too_many_lines)]
+fn reference_agrees_with_permanent_mana_changes_on_200_seeded_boards() {
+    static CARDS: CardTable = CardTable::new(&[
+        &LAND,
+        &ISLAND,
+        &TEST_TUNDRA,
+        &TEST_SWAMP,
+        &TEST_SIGNET,
+        &TEST_CHANCERY,
+        &TEST_FLARE_CREATURE,
+        &TEST_WILD_GROWTH_AURA,
+    ]);
+    let deck: &[(u8, &str)] = &[
+        (8, "Test Land"),
+        (8, "Test Island"),
+        (8, "Test Tundra"),
+        (8, "Test Swamp"),
+        (4, "Test Signet"),
+        (4, "Test Chancery"),
+        (4, "Test Flare Creature"),
+        (4, "Test Wild Growth"),
+    ];
+    let t = crate::GameTable::new(
+        beryl_kernel::format::Format::CONSTRUCTED,
+        &CARDS,
+        [deck, deck],
+    )
+    .unwrap();
+    let lands = [
+        "Test Land",
+        "Test Island",
+        "Test Tundra",
+        "Test Swamp",
+        "Test Signet",
+        "Test Chancery",
+    ];
+    let mut rng = SplitMix64::new(0xF1A2_E907);
+    let mut payable_count = 0usize;
+    let mut manual_steps = 0usize;
+    for board_ix in 0..200 {
+        let mut s = crate::State::new(&t, board_ix as u64 + 1, Profile::EXACT).unwrap();
+        super::begin(&t, &mut s);
+        let p = s.turn().starting_player();
+        let n_lands = rng.below(5) as usize + 1;
+        let mut placed_lands = Vec::new();
+        for _ in 0..n_lands {
+            let name = lands[rng.below(lands.len() as u64) as usize];
+            if let Some(&slot) = s
+                .library(p)
+                .iter()
+                .find(|&&sl| s.definition_name(&t, sl) == name)
+            {
+                s.board().place(slot, Zone::Battlefield).unwrap();
+                if name != "Test Signet" {
+                    placed_lands.push(slot);
+                }
+            }
+        }
+        // Place 0..=2 Mana Flare creatures (at least one change overall).
+        let n_flares = rng.below(3) as usize;
+        let mut has_change = false;
+        for _ in 0..n_flares {
+            if let Some(&slot) = s
+                .library(p)
+                .iter()
+                .find(|&&sl| s.definition_name(&t, sl) == "Test Flare Creature")
+            {
+                s.board().place(slot, Zone::Battlefield).unwrap();
+                has_change = true;
+            }
+        }
+        // Attach 0..=2 Wild Growths to placed lands (at least 1 if no Mana Flare).
+        let n_growths = if has_change { rng.below(3) as usize } else { 1 };
+        if !placed_lands.is_empty() {
+            for _ in 0..n_growths {
+                if let Some(&aura) = s
+                    .library(p)
+                    .iter()
+                    .find(|&&sl| s.definition_name(&t, sl) == "Test Wild Growth")
+                {
+                    let host = placed_lands[rng.below(placed_lands.len() as u64) as usize];
+                    s.board().place(aura, Zone::Battlefield).unwrap();
+                    s.board().attach(aura, host);
+                }
+            }
+        }
+        let mut pool = ManaPool::default();
+        for color in [
+            ManaColor::White,
+            ManaColor::Blue,
+            ManaColor::Black,
+            ManaColor::Green,
+        ] {
+            pool[color] = rng.below(2) as u8;
+        }
+        s.board().set_mana(p, pool);
+        crate::continuous::layers::refresh(&mut s, &t, &mut Sink::off()).unwrap();
+        let cost = ManaCost::new(
+            rng.below(4) as u8,
+            [
+                rng.below(3) as u8,
+                rng.below(3) as u8,
+                rng.below(2) as u8,
+                0,
+                rng.below(2) as u8,
+                0,
+            ],
+        );
+        let Some(expected) = crate::reference::reference_sequences(&s, &t, p, cost) else {
+            continue;
+        };
+        let funds = mana::Funds::of(&s, &t, p).unwrap();
+        let actual = funds.pays_for(&s, &t, cost, Bitboard::EMPTY, mana::Paying::NOTHING);
+        assert_eq!(
+            actual, expected,
+            "board={board_ix} flares={n_flares} growths={n_growths} cost={cost:?}"
+        );
+        for greedy in [false, true] {
+            let plans = mana::plans(
+                &s,
+                &t,
+                &mut Sink::off(),
+                p,
+                cost,
+                Bitboard::EMPTY,
+                greedy,
+                mana::Paying::NOTHING,
+            )
+            .unwrap();
+            assert_eq!(
+                !plans.is_empty(),
+                expected,
+                "plans mismatch board={board_ix} greedy={greedy} cost={cost:?}"
+            );
+            for plan in plans.as_slice() {
+                let mut paid = s;
+                mana::pay(
+                    &mut paid,
+                    &t,
+                    &mut Sink::off(),
+                    p,
+                    cost,
+                    Bitboard::EMPTY,
+                    plan,
+                    mana::Paying::NOTHING,
+                )
+                .unwrap();
+                assert_eq!(
+                    paid.player(p).mana().amounts(),
+                    plan.left,
+                    "plan.left mismatch board={board_ix} cost={cost:?}"
+                );
+            }
+        }
+        if expected && !cost.is_zero() {
+            payable_count += 1;
+            for trial in 0..3 {
+                let mut ms = s;
+                let mut rem = cost;
+                let mut guard = 0;
+                while !rem.is_zero() {
+                    let opts = mana::manual_options(
+                        &ms,
+                        &t,
+                        p,
+                        rem,
+                        Bitboard::EMPTY,
+                        mana::Paying::NOTHING,
+                    )
+                    .unwrap();
+                    assert!(
+                        !opts.is_empty(),
+                        "manual_options empty board={board_ix} rem={rem:?}"
+                    );
+                    let pick_ix = match trial {
+                        0 => 0,
+                        1 => opts.len() - 1,
+                        _ => rng.below(opts.len() as u64) as usize,
+                    };
+                    rem = mana::manual_pay(
+                        &mut ms,
+                        &t,
+                        &mut Sink::off(),
+                        p,
+                        rem,
+                        opts.as_slice()[pick_ix],
+                        mana::Paying::NOTHING,
+                    )
+                    .unwrap()
+                    .0;
+                    manual_steps += 1;
+                    guard += 1;
+                    assert!(
+                        guard < 40,
+                        "manual payment did not terminate board={board_ix}"
+                    );
+                }
+            }
+        }
+    }
+    assert!(payable_count > 80, "only {payable_count} payable boards");
+    assert!(manual_steps > 150, "only {manual_steps} manual steps");
 }

@@ -440,11 +440,12 @@ fn support_cards(catalog: &'static Catalog) -> &'static [&'static CardDef] {
                         .union(Types::ARTIFACT)
                         .union(Types::ENCHANTMENT)
                         .union(Types::PLANESWALKER),
-                ) && !d
-                    .front()
-                    .abilities
-                    .iter()
-                    .any(|a| matches!(a.kind(), AbilityKind::Static | AbilityKind::Replacement))
+                ) && !d.front().abilities.iter().any(|a| {
+                    matches!(
+                        a.kind(),
+                        AbilityKind::Static | AbilityKind::Replacement | AbilityKind::ManaChange
+                    )
+                })
             })
             .collect();
         supports.sort_by_key(|d| (d.front().abilities.len(), d.front().cost.generic, d.name));

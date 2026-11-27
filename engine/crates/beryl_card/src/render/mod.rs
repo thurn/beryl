@@ -139,6 +139,7 @@ enum Attached {
     /// creatures ([CR 303.4b](https://yawgatog.com/resources/magic-rules/#R3034b)).
     Aura {
         creature: bool,
+        land: bool,
         /// It enchants a card in a graveyard: "enchanted creature card", where an instruction
         /// moves that card.
         card: bool,
@@ -160,8 +161,13 @@ impl Ctx {
                 .and_then(|spell| spell.targets().first());
             let creature =
                 enchant.is_some_and(|spec| spec.filter == crate::Filter::Types(Types::CREATURE));
+            let land = enchant.is_some_and(|spec| spec.filter == crate::Filter::Types(Types::LAND));
             let card = enchant.is_some_and(|spec| spec.kind == crate::TargetKind::GraveyardCard);
-            Attached::Aura { creature, card }
+            Attached::Aura {
+                creature,
+                land,
+                card,
+            }
         } else if subtypes.contains(Subtype::Equipment) {
             Attached::Equipment
         } else {
@@ -186,7 +192,8 @@ impl Ctx {
                 | AbilityKind::Mana
                 | AbilityKind::Triggered
                 | AbilityKind::Static
-                | AbilityKind::Replacement => "this permanent".to_owned(),
+                | AbilityKind::Replacement
+                | AbilityKind::ManaChange => "this permanent".to_owned(),
             },
             attached: Attached::Neither,
             targets: &[],

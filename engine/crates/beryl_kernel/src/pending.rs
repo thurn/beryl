@@ -425,6 +425,15 @@ pub enum Pending<L: Layout = Small> {
     ///
     /// [CR 731.3a]: https://yawgatog.com/resources/magic-rules/#R7313a
     ArrangePiles { group: Bitboard<L::Slot> },
+    /// A triggered mana ability ([`beryl_card::Added::TypeProduced`]) triggered on tapping `slot`
+    /// for mana that produced more than one type (`kinds`, bitmask of [`beryl_card::ManaColor`]
+    /// indices), so `player` chooses one of those types `remaining` times (see CR 605.1b).
+    ManaType {
+        slot: L::Slot,
+        player: Seat,
+        kinds: u8,
+        remaining: u8,
+    },
 }
 
 // The original derived hash wrote each variant's tag as an isize. The enum now has a
@@ -478,6 +487,12 @@ impl<L: Layout> std::hash::Hash for Pending<L> {
                 (20_isize, player, remaining).hash(state);
             }
             Self::ArrangePiles { group } => (21_isize, group).hash(state),
+            Self::ManaType {
+                slot,
+                player,
+                kinds,
+                remaining,
+            } => (22_isize, slot, player, kinds, remaining).hash(state),
         }
     }
 }
@@ -505,6 +520,7 @@ impl<L: Layout> Pending<L> {
             | Pending::OrderEntered { .. }
             | Pending::EnterChoosing { .. }
             | Pending::ManaColor { .. }
+            | Pending::ManaType { .. }
             | Pending::Companion { .. }
             | Pending::CompanionPayment { .. }
             | Pending::ArrangePiles { .. } => None,

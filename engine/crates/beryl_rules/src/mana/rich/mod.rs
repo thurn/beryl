@@ -18,6 +18,7 @@
 
 mod manual;
 mod plans;
+mod terms;
 
 use std::collections::BTreeSet;
 
@@ -31,9 +32,7 @@ use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::replacement::event::{self, Sink};
 use crate::state::{AbilityRef, Derived, ManaAmounts, PendingTrigger, State, TriggeredAbility};
-#[cfg(doc)]
-use crate::table::Capability;
-use crate::table::{GameTable, is_priced, is_sacrificed};
+use crate::table::{Capability, GameTable, is_priced, is_sacrificed};
 
 use super::pay::{activate_consuming, activate_restricted, tapped_source};
 use super::pool::Funds;
@@ -45,135 +44,7 @@ use super::{CLASSES, KINDS, Taps, amounts_pay};
 
 pub(super) use manual::{manual_can_spend_after, manual_extra_options, manual_pay_extra};
 pub(super) use plans::plans;
-
-/// One evaluated term of a mana ability's product: `amount` units of mana of `kinds`.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub(super) struct EvaluatedTerm {
-    pub(super) kinds: u8,
-    pub(super) amount: u8,
-    pub(super) uniform: bool,
-}
-
-/// One mana ability on an [`Extra`] permanent, with its terms evaluated for the board now.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub(super) struct RichActivation {
-    /// `None` for the intrinsic mana ability of a basic land type (see CR 305.6).
-    pub(super) ability: Option<ObjectAbility>,
-    pub(super) price: ManaCost,
-    pub(super) terms: [EvaluatedTerm; 8],
-    pub(super) term_count: u8,
-    pub(super) consumed: bool,
-}
-
-impl RichActivation {
-    pub(super) fn terms(&self) -> &[EvaluatedTerm] {
-        &self.terms[..usize::from(self.term_count)]
-    }
-
-    pub(super) fn total_mana(&self) -> u32 {
-        self.terms().iter().map(|t| u32::from(t.amount)).sum()
-    }
-
-    /// Calls `f` with each concrete `[u8; KINDS]` color assignment this activation can produce.
-    pub(super) fn each_made(&self, f: &mut impl FnMut([u8; KINDS]) -> bool) -> bool {
-        let mut made = [0u8; KINDS];
-        assign_terms(self.terms(), 0, &mut made, f)
-    }
-
-    /// Calls `f` with each `Units` representation this activation can produce (branching only on
-    /// `uniform` multi-kind terms).
-    fn each_units(&self, base: Units, f: &mut impl FnMut(Units) -> bool) -> bool {
-        assign_term_units(self.terms(), 0, base, f)
-    }
-}
-
-fn assign_terms(
-    terms: &[EvaluatedTerm],
-    ix: usize,
-    made: &mut [u8; KINDS],
-    f: &mut impl FnMut([u8; KINDS]) -> bool,
-) -> bool {
-    let Some(&term) = terms.get(ix) else {
-        return f(*made);
-    };
-    if term.kinds.is_power_of_two() {
-        let k = term.kinds.trailing_zeros() as usize;
-        made[k] = made[k].saturating_add(term.amount);
-        let cont = assign_terms(terms, ix + 1, made, f);
-        made[k] -= term.amount;
-        return cont;
-    }
-    if term.uniform {
-        for k in 0..KINDS {
-            if term.kinds & (1 << k) != 0 {
-                made[k] = made[k].saturating_add(term.amount);
-                let cont = assign_terms(terms, ix + 1, made, f);
-                made[k] -= term.amount;
-                if !cont {
-                    return false;
-                }
-            }
-        }
-        return true;
-    }
-    assign_each_of(term.kinds, 0, term.amount, made, &mut |m| {
-        assign_terms(terms, ix + 1, m, f)
-    })
-}
-
-fn assign_each_of(
-    kinds: u8,
-    from: usize,
-    left: u8,
-    made: &mut [u8; KINDS],
-    f: &mut impl FnMut(&mut [u8; KINDS]) -> bool,
-) -> bool {
-    if left == 0 {
-        return f(made);
-    }
-    for k in from..KINDS {
-        if kinds & (1 << k) == 0 {
-            continue;
-        }
-        let rest_mask = kinds & !((1u8 << (k + 1)).wrapping_sub(1));
-        let min_n = if rest_mask == 0 { left } else { 0 };
-        for n in (min_n..=left).rev() {
-            made[k] = made[k].saturating_add(n);
-            let cont = assign_each_of(kinds, k + 1, left - n, made, f);
-            made[k] -= n;
-            if !cont {
-                return false;
-            }
-        }
-        return true;
-    }
-    true
-}
-
-fn assign_term_units(
-    terms: &[EvaluatedTerm],
-    ix: usize,
-    mut units: Units,
-    f: &mut impl FnMut(Units) -> bool,
-) -> bool {
-    let Some(&term) = terms.get(ix) else {
-        return f(units);
-    };
-    if !term.uniform || term.kinds.is_power_of_two() {
-        units.add(term.kinds, u16::from(term.amount));
-        return assign_term_units(terms, ix + 1, units, f);
-    }
-    for k in 0..KINDS {
-        if term.kinds & (1 << k) != 0 {
-            let mut next = units;
-            next.add(1 << k, u16::from(term.amount));
-            if !assign_term_units(terms, ix + 1, next, f) {
-                return false;
-            }
-        }
-    }
-    true
-}
+pub(super) use terms::{EvaluatedTerm, RichActivation};
 
 /// A class of interchangeable sources the plain classes cannot say: permanents with a priced mana
 /// ability ([`is_priced`]) or a mana ability whose product one [`ManaSet`] cannot say.
@@ -250,10 +121,10 @@ fn collect_extra<L: Layout>(
         return Ok(());
     }
     let words = s.words_of(slot);
-    let extra_mana = if s.has_mana_changes() {
-        super::changes::matching_added(s, t, slot)?
+    let changes = if s.has_mana_changes() {
+        super::changes::matching(s, t, slot)?
     } else {
-        [0; KINDS]
+        super::changes::MatchingChanges::default()
     };
     let mut activations = Vec::new();
     let intrinsic = s.intrinsic_mana(t, slot);
@@ -266,12 +137,14 @@ fn collect_extra<L: Layout>(
                 uniform: false,
             };
             let mut count = 1usize;
-            super::changes::append_extra_mana(&mut terms, &mut count, extra_mana)?;
+            super::changes::append_extra_mana(&mut terms, 1, &mut count, changes.fixed)?;
             activations.push(RichActivation {
                 ability: None,
                 price: ManaCost::NONE,
                 terms,
+                own_term_count: 1,
                 term_count: u8::try_from(count).expect("fits u8"),
+                type_produced: changes.type_produced,
                 consumed: false,
             });
         }
@@ -284,7 +157,7 @@ fn collect_extra<L: Layout>(
         {
             continue;
         }
-        let Some(act) = eval_activation(s, t, slot, obj_ability, a, extra_mana)? else {
+        let Some(act) = eval_activation(s, t, slot, obj_ability, a, changes)? else {
             continue;
         };
         if act.total_mana() > 0 {
@@ -323,7 +196,7 @@ fn eval_activation<L: Layout>(
     slot: L::Slot,
     obj_ability: ObjectAbility,
     a: &Ability,
-    extra_mana: [u8; KINDS],
+    changes: super::changes::MatchingChanges,
 ) -> Result<Option<RichActivation>, Full> {
     let sacrificed = is_sacrificed(a);
     let tap_and_mana =
@@ -349,9 +222,13 @@ fn eval_activation<L: Layout>(
         };
         count += 1;
     }
-    if a.cost().does(CostAction::Tap) {
-        super::changes::append_extra_mana(&mut terms, &mut count, extra_mana)?;
-    }
+    let own_term_count = count;
+    let type_produced = if a.cost().does(CostAction::Tap) {
+        super::changes::append_extra_mana(&mut terms, own_term_count, &mut count, changes.fixed)?;
+        changes.type_produced
+    } else {
+        0
+    };
     let mut price = a.cost().mana;
     if crate::continuous::rule_change::spends_as_any_color(s, t, s.controller(slot), slot) {
         price = price.as_any_color();
@@ -360,7 +237,9 @@ fn eval_activation<L: Layout>(
         ability: Some(obj_ability),
         price,
         terms,
+        own_term_count: u8::try_from(own_term_count).expect("fits u8"),
         term_count: u8::try_from(count).expect("fits u8"),
+        type_produced,
         consumed: sacrificed,
     }))
 }
@@ -458,6 +337,7 @@ pub(super) fn pays_from_state<L: Layout>(
         if extra.activations.len() == 1 {
             let act = &extra.activations[0];
             if act.price.is_zero()
+                && act.type_produced == 0
                 && act
                     .terms()
                     .iter()
@@ -668,8 +548,11 @@ pub(super) fn activate_extra_step<L: Layout>(
         }
     }
     let permanent = tapped_source(s, slot);
-    let extra = if act.ability.is_none() && s.has_mana_changes() {
-        super::changes::matching_added(s, t, slot)?
+    let has_changes =
+        act.ability.is_none() && t.can(Capability::ManaChanges) && s.has_mana_changes();
+    let extra = if has_changes {
+        let color_ix = act.terms()[0].kinds.trailing_zeros() as usize;
+        super::changes::matching(s, t, slot)?.add_for_single_color(ManaColor::ALL[color_ix])?
     } else {
         [0; KINDS]
     };
@@ -702,7 +585,7 @@ pub(super) fn activate_extra_step<L: Layout>(
                 ..PendingTrigger::default()
             };
             crate::interpret::mana_ability(s, t, sink, activation, intrinsic, color)?;
-            if s.has_mana_changes() {
+            if has_changes {
                 super::changes::add_extra(s, sink, permanent, player, extra);
             }
             Ok(())

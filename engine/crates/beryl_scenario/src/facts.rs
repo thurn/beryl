@@ -332,6 +332,7 @@ fn ability_facts(index: String, ability: &Ability) -> AbilityFacts {
         AbilityKind::Triggered => "Triggered",
         AbilityKind::Static => "Static",
         AbilityKind::Replacement => "Replacement",
+        AbilityKind::ManaChange => "ManaChange",
     };
     let mut instructions = Vec::new();
     let custom = match ability.body() {

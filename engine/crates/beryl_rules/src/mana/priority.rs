@@ -3,12 +3,15 @@
 //! Implements: none. Offers the activations of CR 605.3, which `mana::pay` implements.
 
 use crate::bitboard::Bitboard;
-use crate::card::{ChosenKind, CostAction, ManaColor, ObjectAbility};
+use crate::card::{
+    Ability, AbilityKind, Amount, ChosenKind, CostAction, CostPart, ManaColor, ManaSet,
+    ObjectAbility, Timing,
+};
 use crate::decision::{Candidates, OPTIONS, Opt};
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
-use crate::replacement::event::Sink;
+use crate::replacement::event::{self, Sink};
 use crate::state::{Pending, State};
 use crate::table::{Capability, GameTable, is_instant_mana, is_sacrificed};
 use beryl_kernel::chosen::ChosenValue;
@@ -19,6 +22,32 @@ use super::pay::{activate, activate_consuming};
 use super::remembered;
 use super::solver::lowest_kind;
 use super::sources::{allowed, alternative_ability, can_tap, controlled, is_alternative, source};
+
+/// Whether `a` is a `{T}`-only multi-term or counted mana ability (`Ability::mana_of`), offered
+/// as `Opt::Activate` at priority when manual tapping is active.
+fn is_tap_multi_mana(a: &Ability) -> bool {
+    a.kind() == AbilityKind::Mana
+        && a.produces() == ManaSet::NONE
+        && a.timing() != Timing::AsInstant
+        && a.spend().is_none()
+        && a.cost().mana.is_zero()
+        && matches!(a.cost().parts(), [CostPart::This(CostAction::Tap)])
+}
+
+fn has_tap_multi_mana<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+    slot: L::Slot,
+    d: &crate::state::Derived<L>,
+) -> bool {
+    if !can_tap(s, player, slot, d) {
+        return false;
+    }
+    let words = s.words_of(slot);
+    s.abilities(t, slot)
+        .any(|(_, a)| is_tap_multi_mana(a) && allowed(s, t, a, player, &words))
+}
 
 /// The standalone mana activations offered at priority, under manual payment or to the player
 /// [`crate::Profile::taps_mana`] names
@@ -37,10 +66,12 @@ pub(crate) fn standalone_options<L: Layout>(
     out: &mut L::Queue<Opt<L>, OPTIONS>,
 ) {
     let mana_changes = t.can(Capability::ManaChanges) && s.has_mana_changes();
+    let rich = t.can_either(Capability::PricedMana, Capability::ManaChanges);
     let sources: Bitboard<L::Slot> = controlled(s, player)
         .filter(|&(slot, d)| {
             source(s, t, player, slot, d).is_some()
                 || (mana_changes && super::changes::standalone_kinds(s, t, player, slot, d) != 0)
+                || (rich && has_tap_multi_mana(s, t, player, slot, d))
         })
         .map(|(slot, _)| slot)
         .collect();
@@ -109,20 +140,117 @@ pub(crate) fn begin_instant<L: Layout>(
     ability: ObjectAbility,
 ) -> Result<(), Full> {
     let slot = permanent.slot();
-    let (kinds, consume) = s
+    let printed = s
         .abilities(t, slot)
         .find(|&(a, _)| a == ability)
-        .map(|(_, a)| (a.produces().colors, is_sacrificed(a)))
+        .map(|(_, a)| a)
         .expect("an ability offered");
     // See CR 117.3c: "If a player has priority when they ... activate an ability ..., that player
     // receives priority afterward."
     s.reset_passes();
+    if printed.produces() == ManaSet::NONE {
+        return activate_multi_mana(s, t, sink, permanent, printed);
+    }
+    let (kinds, consume) = (printed.produces().colors, is_sacrificed(printed));
     if kinds.is_power_of_two() {
         let color = ManaColor::ALL[lowest_kind(kinds)];
         return activate_consuming(s, t, sink, permanent, color, consume);
     }
     s.ask(Pending::ManaColor { slot, ability });
     Ok(())
+}
+
+/// Activates a `{T}`-only multi-term mana ability (`Ability::mana_of`) at priority, applying
+/// any live mana changes and asking `Pending::ManaType` if `Added::TypeProduced` triggered on a
+/// tap that produced more than one type of mana.
+#[cold]
+#[inline(never)]
+fn activate_multi_mana<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    permanent: Permanent<L>,
+    ability: &'static Ability,
+) -> Result<(), Full> {
+    let slot = permanent.slot();
+    let player = s.controller(slot);
+    let has_changes = t.can(Capability::ManaChanges) && s.has_mana_changes();
+    let changes = if has_changes {
+        super::changes::matching(s, t, slot)?
+    } else {
+        super::changes::MatchingChanges::default()
+    };
+    event::set_tapped(s, t, sink, permanent, true)?;
+    crate::coverage::hit(ability);
+    let source = Some(permanent.into());
+    let mut produced_mask = 0u8;
+    for term in ability.product() {
+        let amount = if let Amount::Fixed(n) = term.amount {
+            n
+        } else {
+            crate::interpret::amount_of(s, t, slot, term.amount)
+        };
+        if amount == 0 {
+            continue;
+        }
+        let kind = ManaColor::ALL[lowest_kind(term.kinds)];
+        produced_mask |= 1 << kind.index();
+        let added = s.add_mana(player, source, kind, amount);
+        sink.note_from(source, added);
+    }
+    if has_changes {
+        super::changes::add_extra(s, sink, permanent, player, changes.fixed);
+        if changes.type_produced > 0 && produced_mask != 0 {
+            if produced_mask.is_power_of_two() {
+                let kind = ManaColor::ALL[lowest_kind(produced_mask)];
+                let added = s.add_mana(player, source, kind, changes.type_produced);
+                sink.note_from(source, added);
+            } else {
+                s.ask(Pending::ManaType {
+                    slot,
+                    player,
+                    kinds: produced_mask,
+                    remaining: changes.type_produced,
+                });
+            }
+        }
+    }
+    crate::continuous::layers::refresh(s, t, sink)
+}
+
+/// Adds one mana of the type chosen in answer to [`Pending::ManaType`], and asks again if more
+/// `Added::TypeProduced` triggers remain.
+pub(crate) fn choose_mana_type<L: Layout>(
+    s: &mut State<L>,
+    sink: &mut Sink<L>,
+    slot: L::Slot,
+    player: Seat,
+    kinds: u8,
+    remaining: u8,
+    opt: Option<Opt<L>>,
+) {
+    let color = match opt {
+        Some(Opt::Mana { color, .. }) => color,
+        other => {
+            let ChosenValue::Color(colors) =
+                crate::interpret::catalog::value(ChosenKind::Color, other)
+            else {
+                unreachable!("a mana type among the produced types");
+            };
+            ManaColor::ALL[lowest_kind(colors.0)]
+        }
+    };
+    let source = s.permanent_at(slot).map(Into::into);
+    let added = s.add_mana(player, source, color, 1);
+    sink.note_from(source, added);
+    if remaining > 1 {
+        s.ask(Pending::ManaType {
+            slot,
+            player,
+            kinds,
+            remaining: remaining - 1,
+        });
+    }
 }
 
 /// Activates the mana ability [`Pending::ManaColor`] asked about, of `permanent`, for the
@@ -154,6 +282,9 @@ pub(crate) fn is_instant<L: Layout>(
     (t.can(Capability::InstantMana)
         && s.abilities(t, slot)
             .any(|(a, printed)| a == ability && is_instant_mana(printed)))
+        || (t.can_either(Capability::PricedMana, Capability::ManaChanges)
+            && s.abilities(t, slot)
+                .any(|(a, printed)| a == ability && is_tap_multi_mana(printed)))
         || is_alternative(s, t, slot, ability)
 }
 
@@ -193,6 +324,7 @@ fn add_activations<L: Layout>(
     let remembers = t.can(Capability::RemembersMana);
     let alternatives = t.can(Capability::SacrificeAlternative);
     let mana_changes = t.can(Capability::ManaChanges) && s.has_mana_changes();
+    let rich = t.can_either(Capability::PricedMana, Capability::ManaChanges);
     // Tapping ahead is optional, so a full list keeps the options it already holds.
     let _full = Candidates::<L>::extend_options(out, sources, |out, slot| {
         let d = s.derived(slot);
@@ -207,18 +339,25 @@ fn add_activations<L: Layout>(
         } else {
             0
         };
-        let Some(kinds) = source(s, t, player, slot, d)
+        if let Some(kinds) = source(s, t, player, slot, d)
             .map(|(kinds, ..)| kinds | more)
             .or(((more | extra_kinds) != 0).then_some(more | extra_kinds))
-        else {
-            return Ok(());
-        };
-        for kind in (0..KINDS).filter(|&k| kinds & (1 << k) != 0) {
-            let option = Opt::Mana {
-                slot,
-                color: ManaColor::ALL[kind],
-            };
-            out.push(option)?;
+        {
+            for kind in (0..KINDS).filter(|&k| kinds & (1 << k) != 0) {
+                let option = Opt::Mana {
+                    slot,
+                    color: ManaColor::ALL[kind],
+                };
+                out.push(option)?;
+            }
+        }
+        if rich && can_tap(s, player, slot, d) {
+            let words = s.words_of(slot);
+            for (ability, a) in s.abilities(t, slot) {
+                if is_tap_multi_mana(a) && allowed(s, t, a, player, &words) {
+                    out.push(Opt::Activate { slot, ability })?;
+                }
+            }
         }
         // A source's mana ability that sacrifices it, beside the ones above
         // ([`sacrifice_alternative`]): an option of its own, as each kind above activates

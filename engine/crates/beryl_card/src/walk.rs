@@ -39,6 +39,7 @@ impl CardDef {
     /// its abilities, of the abilities it grants and of the costs it is cast with, those
     /// inside them included. A token it makes is a card of its own ([`CardDef::tokens`]) and
     /// is not walked.
+    #[allow(clippy::too_many_lines)]
     pub fn walk(&self, visit: Visit) {
         for face in self.faces {
             for ability in face.abilities.iter().chain(face.grants) {
@@ -177,6 +178,7 @@ impl Ability {
     /// conditions, its continuous effect, what it replaces, the rule change it names, the
     /// amounts of what a mana ability makes and its effect data. A Rust body holds none
     /// anything can read.
+    #[allow(clippy::too_many_lines)]
     pub fn walk(&self, visit: Visit) {
         for spec in self.targets() {
             spec.filter.walk(visit);
@@ -199,6 +201,21 @@ impl Ability {
         }
         if let Some(layer) = self.layer() {
             layer.walk(visit);
+        }
+        if let Some(change) = self.changes_mana() {
+            match change {
+                crate::continuous::ManaChange::Adds {
+                    tapped: crate::continuous::Tapped::A(filter),
+                    ..
+                }
+                | crate::continuous::ManaChange::Multiplies { tapped: filter, .. } => {
+                    filter.walk(visit);
+                }
+                crate::continuous::ManaChange::Adds {
+                    tapped: crate::continuous::Tapped::AttachedTo,
+                    ..
+                } => {}
+            }
         }
         match self.replacement().map(|r| &r.replaces) {
             Some(Replaced::Draw(players, _)) => players.walk(visit),
@@ -310,6 +327,7 @@ impl Modification {
 
 impl Filter {
     /// Calls `visit` with this filter and then with every part inside it.
+    #[allow(clippy::too_many_lines)]
     pub fn walk(&self, visit: Visit) {
         visit(Node::Filter(self));
         match self {
@@ -385,6 +403,7 @@ impl Players {
 
 impl Amount {
     /// Calls `visit` with this amount and then with every part inside it.
+    #[allow(clippy::too_many_lines)]
     pub fn walk(&self, visit: Visit) {
         visit(Node::Amount(self));
         match self {
@@ -415,6 +434,7 @@ impl Amount {
 
 impl Condition {
     /// Calls `visit` with this condition and then with every part inside it.
+    #[allow(clippy::too_many_lines)]
     pub fn walk(&self, visit: Visit) {
         visit(Node::Condition(self));
         match self {

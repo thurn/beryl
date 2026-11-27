@@ -21,7 +21,7 @@ pub(super) fn ability_neighbours(
         out.push((format!("{at}, {field}"), kind, name, changed));
     };
     match ability.kind() {
-        AbilityKind::Spell => {}
+        AbilityKind::Spell | AbilityKind::ManaChange => {}
         AbilityKind::Activated | AbilityKind::Mana => {
             for (kind, name, cost) in
                 costs::costs(*ability.cost(), ability.kind() == AbilityKind::Activated)
@@ -67,7 +67,8 @@ pub(super) fn ability_neighbours(
                 AbilityKind::Spell
                 | AbilityKind::Activated
                 | AbilityKind::Mana
-                | AbilityKind::Static => Kind::AbilityCondition,
+                | AbilityKind::Static
+                | AbilityKind::ManaChange => Kind::AbilityCondition,
             },
             "negated".to_owned(),
             ability.only_if(leak(Condition::Not(condition))),

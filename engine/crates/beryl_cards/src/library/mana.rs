@@ -266,3 +266,82 @@ pub const HIGH_TIDE: &[Scenario] = &[
             ME.controls(props::FLASH_CREATURE.card, 1),
         ]),
 ];
+
+/// Permanent triggered mana abilities (CR 605.1b, CR 106.12): Mana Flare adds one mana of any
+/// type a land produced whenever any player taps a land for mana.
+pub const MANA_FLARE: &[Scenario] = &[
+    Scenario::new("Mana Flare makes an Island produce {U}{U} for its controller")
+        .battlefield(P0, &[names::MANA_FLARE, names::ISLAND])
+        .hand(P0, &[props::VANILLA.card])
+        .actions(&[
+            ME.casts(props::VANILLA.card),
+            Resolve,
+            ME.controls(props::VANILLA.card, 1),
+            ME.tapped(names::ISLAND, 1),
+            ME.mana(ManaColor::Blue, 0),
+        ]),
+    Scenario::new("Mana Flare makes an Island produce {U}{U} for the opponent")
+        .at(2, P1, TurnStep::PrecombatMain)
+        .battlefield(P0, &[names::MANA_FLARE])
+        .battlefield(P1, &[names::ISLAND])
+        .hand(P1, &[props::VANILLA.card])
+        .actions(&[
+            THEM.casts(props::VANILLA.card),
+            THEM.controls(props::VANILLA.card, 1),
+            THEM.tapped(names::ISLAND, 1),
+        ]),
+    Scenario::new("Under Mana Flare, a land tapped for two types adds one of the chosen type")
+        .interaction(&[names::SKYCLOUD_EXPANSE])
+        .battlefield(
+            P0,
+            &[names::MANA_FLARE, names::SKYCLOUD_EXPANSE, names::ISLAND],
+        )
+        .hand(P0, &[props::FLIER.card])
+        .actions(&[
+            // Island makes {U}{U} under Mana Flare; {U} activates Skycloud Expanse for {W}{U}
+            // plus Mana Flare's chosen {W}, paying {1}{W}{W} and leaving {U} floating.
+            ME.casts(props::FLIER.card),
+            Resolve,
+            ME.controls(props::FLIER.card, 1),
+            ME.tapped(names::SKYCLOUD_EXPANSE, 1),
+            ME.tapped(names::ISLAND, 1),
+            ME.mana(ManaColor::White, 0),
+            ME.mana(ManaColor::Blue, 1),
+        ]),
+];
+
+/// Aura triggered mana abilities (CR 605.1b, CR 106.12): Wild Growth adds an additional {G}
+/// to the enchanted land's controller whenever that land is tapped for mana.
+pub const WILD_GROWTH: &[Scenario] = &[
+    Scenario::new("Wild Growth's enchanted land makes its own mana and {G}")
+        .battlefield(P0, &[names::FOREST, names::ISLAND])
+        .hand(P0, &[names::WILD_GROWTH, props::VANILLA.card])
+        .actions(&[
+            ME.casts(names::WILD_GROWTH),
+            ME.targets(names::ISLAND),
+            Resolve,
+            // Forest is tapped for Wild Growth; the enchanted Island alone pays {1}{U}.
+            ME.casts(props::VANILLA.card),
+            Resolve,
+            ME.controls(props::VANILLA.card, 1),
+            ME.tapped(names::ISLAND, 1),
+            ME.mana(ManaColor::Blue, 0),
+            ME.mana(ManaColor::Green, 0),
+        ]),
+    Scenario::new("Wild Growth on an opponent's land gives the {G} to that land's controller")
+        .battlefield(P0, &[names::FOREST])
+        .hand(P0, &[names::WILD_GROWTH])
+        .library(P0, &[names::PLAINS; 2])
+        .battlefield(P1, &[names::ISLAND])
+        .hand(P1, &[props::VANILLA.card])
+        .library(P1, &[names::PLAINS; 2])
+        .actions(&[
+            ME.casts(names::WILD_GROWTH),
+            ME.targets(names::ISLAND),
+            Resolve,
+            advance_to(2, TurnStep::PrecombatMain),
+            THEM.casts(props::VANILLA.card),
+            THEM.controls(props::VANILLA.card, 1),
+            THEM.tapped(names::ISLAND, 1),
+        ]),
+];

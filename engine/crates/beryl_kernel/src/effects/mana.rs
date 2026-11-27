@@ -31,10 +31,11 @@ pub struct ManaEffect {
 }
 
 impl<L: Layout> State<L> {
-    /// Whether any mana-changing continuous effect is live. One AND when none is live.
+    /// Whether any mana-changing continuous effect is live or any permanent on the battlefield
+    /// has a mana-changing ability it has not lost.
     #[inline]
     pub fn has_mana_changes(&self) -> bool {
-        self.effects.kinds.0 & Kinds::MANA != 0
+        self.effects.kinds.0 & Kinds::MANA != 0 || self.replacing.has_mana_change()
     }
 
     /// The live mana-changing continuous effects, each with the card that created it, in the

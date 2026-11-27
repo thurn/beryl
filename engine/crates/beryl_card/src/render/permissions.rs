@@ -27,33 +27,34 @@ impl Ctx {
         vec![format!("{prefix}{}", self.rule_change(rule))]
     }
 
-    /// A mana change from a resolving spell or ability, with how long it lasts:
-    /// "until end of turn, whenever a player taps an Island for mana, that player adds an
-    /// additional {U}".
-    pub(super) fn change_mana(&mut self, change: &ManaChange, duration: Duration) -> Vec<String> {
-        let prefix = match duration {
-            Duration::EndOfTurn => "until end of turn, ",
-            Duration::UntilYourNextTurn => "until your next turn, ",
-            Duration::Indefinite => "",
-        };
-        let body = match *change {
-            ManaChange::Adds { tapped, added } => {
-                let what = match tapped {
-                    Tapped::A(filter) => self
-                        .noun(filter, Kind::Permanent)
-                        .indefinite(Kind::Permanent),
-                    Tapped::AttachedTo => "enchanted permanent".to_owned(),
-                };
-                let mana = match added {
-                    Added::Of(set) => super::words::mana_set(set),
-                    Added::TypeProduced => {
-                        "one mana of any type that permanent produced".to_owned()
-                    }
-                };
-                format!(
-                    "whenever a player taps {what} for mana, that player adds an additional {mana}"
-                )
-            }
+    /// A mana change clause, used by both [`Effect::ChangeMana`] and [`AbilityKind::ManaChange`].
+    pub(super) fn mana_change_clause(&mut self, change: &ManaChange) -> String {
+        match *change {
+            ManaChange::Adds { tapped, added } => match tapped {
+                Tapped::AttachedTo => {
+                    let what = self.attached_to();
+                    let mana = match added {
+                        Added::Of(set) => format!("an additional {}", super::words::mana_set(set)),
+                        Added::TypeProduced => {
+                            let noun = what.strip_prefix("enchanted ").unwrap_or("permanent");
+                            format!("one mana of any type that {noun} produced")
+                        }
+                    };
+                    format!("whenever {what} is tapped for mana, its controller adds {mana}")
+                }
+                Tapped::A(filter) => {
+                    let noun = self.noun(filter, Kind::Permanent);
+                    let what = noun.indefinite(Kind::Permanent);
+                    let mana = match added {
+                        Added::Of(set) => format!("an additional {}", super::words::mana_set(set)),
+                        Added::TypeProduced => format!(
+                            "one mana of any type that {} produced",
+                            noun.singular(Kind::Permanent)
+                        ),
+                    };
+                    format!("whenever a player taps {what} for mana, that player adds {mana}")
+                }
+            },
             ManaChange::Multiplies { tapped, by } => {
                 let what = self
                     .noun(tapped, Kind::Permanent)
@@ -67,8 +68,19 @@ impl Ctx {
                     "if you tap {what} for mana, it produces {times} as much of that mana instead"
                 )
             }
+        }
+    }
+
+    /// A mana change from a resolving spell or ability, with how long it lasts:
+    /// "until end of turn, whenever a player taps an Island for mana, that player adds an
+    /// additional {U}".
+    pub(super) fn change_mana(&mut self, change: &ManaChange, duration: Duration) -> Vec<String> {
+        let prefix = match duration {
+            Duration::EndOfTurn => "until end of turn, ",
+            Duration::UntilYourNextTurn => "until your next turn, ",
+            Duration::Indefinite => "",
         };
-        vec![format!("{prefix}{body}")]
+        vec![format!("{prefix}{}", self.mana_change_clause(change))]
     }
 
     /// "Target instant card in your graveyard gains flashback until end of turn. The

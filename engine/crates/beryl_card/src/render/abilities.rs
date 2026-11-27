@@ -106,6 +106,10 @@ impl Ctx {
             AbilityKind::Triggered => self.triggered(ability),
             AbilityKind::Static => self.static_clauses(ability),
             AbilityKind::Replacement => self.replacement(ability),
+            AbilityKind::ManaChange => {
+                let change = ability.changes_mana().expect("mana change ability");
+                vec![self.mana_change_clause(change)]
+            }
         };
         sentences(&clauses)
     }

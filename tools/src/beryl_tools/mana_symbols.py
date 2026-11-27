@@ -39,9 +39,14 @@ def has_priced_mana(abilities: list[Json]) -> bool:
 
 
 def priced_mana_text(abilities: list[Json], paragraphs: list[str]) -> str | None:
-    """The Oracle text prefix of a card's single priced mana ability, for XMage's `tapSource`."""
+    """The Oracle text prefix of a card's single priced or multi-term mana ability, for XMage's `tapSource`."""
     mana = [a for a in abilities if a["kind"] == "Mana"]
-    if len(mana) != 1 or not cast(Json, mana[0].get("cost", {})).get("mana"):
+    if len(mana) != 1:
+        return None
+    produces = cast(Json, mana[0].get("produces", {}))
+    has_mana_cost = bool(cast(Json, mana[0].get("cost", {})).get("mana"))
+    is_multi_term = cast(int, produces.get("amount", 0)) == 0
+    if not (has_mana_cost or is_multi_term):
         return None
     for p in paragraphs:
         if ": Add " in p:

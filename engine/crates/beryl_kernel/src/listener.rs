@@ -250,9 +250,10 @@ pub fn found_where_it_works(ability: &Ability) -> bool {
                 // it of the sideboard's cards before the game begins.
                 || (ability.companion_condition().is_some() && ability.zones().is_empty())
         }
-        AbilityKind::Spell | AbilityKind::Mana | AbilityKind::Replacement => {
-            ability.works_where_its_kind_does()
-        }
+        AbilityKind::Spell
+        | AbilityKind::Mana
+        | AbilityKind::Replacement
+        | AbilityKind::ManaChange => ability.works_where_its_kind_does(),
     }
 }
 
@@ -287,7 +288,10 @@ pub fn read_when_granted(ability: &Ability) -> bool {
         // abilities (`State::abilities`), as Animate Dead gains "enchant creature put onto the
         // battlefield with this Aura".
         AbilityKind::Spell => !ability.targets().is_empty(),
-        AbilityKind::Mana | AbilityKind::Triggered | AbilityKind::Replacement => false,
+        AbilityKind::Mana
+        | AbilityKind::Triggered
+        | AbilityKind::Replacement
+        | AbilityKind::ManaChange => false,
     }
 }
 

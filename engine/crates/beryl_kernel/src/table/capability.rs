@@ -249,6 +249,7 @@ impl Capability {
     }
 
     /// The capabilities a face gives a game that can contain it.
+    #[allow(clippy::too_many_lines)]
     fn of(face: &Face) -> u64 {
         let mut found = casting_capabilities(face) | keyword_capabilities(face.keywords);
         if Inputs::of(face) != Inputs::NONE {
@@ -343,6 +344,9 @@ impl Capability {
                 found |= Capability::LoyaltyActivated.bit();
             }
             found |= mana_capabilities(a);
+            if a.kind() == AbilityKind::ManaChange {
+                found |= Capability::ManaChanges.bit();
+            }
             if a.kind() == AbilityKind::Activated
                 && (a.zones().contains(Zone::Graveyard) || a.zones().contains(Zone::Exile))
             {
@@ -599,4 +603,47 @@ pub(super) fn merged_listen_away(capabilities: u64, away: Listens, here: Listens
     } else {
         away | here
     }
+}
+
+/// Refuses any [`beryl_card::ManaChange`] variant that the engine does not implement yet.
+pub(super) fn check_mana_changes(def: &CardDef) -> Result<(), super::TableError> {
+    use beryl_card::{Added, ManaChange, Tapped};
+    let supported_added = |added: Added| match added {
+        Added::Of(mana) => mana.amount > 0 && mana.colors.is_power_of_two(),
+        Added::TypeProduced => true,
+    };
+    for face in def.faces {
+        for ability in face.abilities.iter().chain(face.grants) {
+            if let Some(change) = ability.changes_mana() {
+                let ok = matches!(
+                    *change,
+                    ManaChange::Adds {
+                        tapped: Tapped::A(_) | Tapped::AttachedTo,
+                        added,
+                    } if supported_added(added)
+                );
+                if !ok {
+                    return Err(super::TableError::ManaChange { card: def.name });
+                }
+            }
+            if let Behavior::Data(effect) = ability.body()
+                && effect.any(&|instruction| {
+                    matches!(
+                        instruction,
+                        Effect::ChangeMana { change, .. }
+                            if !matches!(
+                                **change,
+                                ManaChange::Adds {
+                                    tapped: Tapped::A(_),
+                                    added,
+                                } if supported_added(added)
+                            )
+                    )
+                })
+            {
+                return Err(super::TableError::ManaChange { card: def.name });
+            }
+        }
+    }
+    Ok(())
 }

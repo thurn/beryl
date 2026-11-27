@@ -119,15 +119,19 @@ fn activations<L: Layout>(
         {
             continue;
         }
-        let extra_terms = live_mana_changes(s, t, slot);
+        let (extra_terms, type_produced) = live_mana_changes(s, t, slot);
         let intrinsic = s.intrinsic_mana(t, slot);
         let mut options: Vec<Activation> = (0..6)
             .map(|k| 1u8 << k)
             .filter(|k| intrinsic & k != 0)
             .map(|k| {
-                let mut terms = Vec::with_capacity(1 + extra_terms.len());
+                let mut terms =
+                    Vec::with_capacity(1 + extra_terms.len() + usize::from(type_produced > 0));
                 terms.push((k, 1, false));
                 terms.extend_from_slice(&extra_terms);
+                if type_produced > 0 {
+                    terms.push((k, type_produced, false));
+                }
                 Activation::of(ManaCost::NONE, &terms)
             })
             .collect();
@@ -140,7 +144,7 @@ fn activations<L: Layout>(
             {
                 continue;
             }
-            options.push(activation_on(s, t, slot, a, &extra_terms)?);
+            options.push(activation_on(s, t, slot, a, &extra_terms, type_produced)?);
         }
         if !options.is_empty() {
             permanents.push(options);
@@ -149,15 +153,25 @@ fn activations<L: Layout>(
     Some(permanents)
 }
 
-/// Reads live mana-changing continuous effects directly from the Effects store and the cards
-/// (independent of `mana::changes` and `mana::rich`), returning each matching additional mana term
-/// when `slot` is tapped for mana.
+/// Reads live mana-changing continuous effects from the Effects store and permanent
+/// `AbilityKind::ManaChange` abilities from the battlefield (independent of `mana::changes` and
+/// `mana::rich`), returning `(fixed_extra_terms, type_produced_count)` when `slot` is tapped
+/// for mana.
 #[allow(
     clippy::disallowed_methods,
     reason = "reads the source card's printed face to look up the ChangeMana instruction data"
 )]
-fn live_mana_changes<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> Vec<(u8, u8, bool)> {
+fn live_mana_changes<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    slot: L::Slot,
+) -> (Vec<(u8, u8, bool)>, u8) {
     let mut terms = Vec::new();
+    let mut type_produced = 0u8;
+    let mut record = |added: Added| match added {
+        Added::Of(mana) => terms.push((mana.colors, mana.amount, false)),
+        Added::TypeProduced => type_produced = type_produced.saturating_add(1),
+    };
     for entry in s.effects() {
         let Payload::Mana(effect) = entry.payload else {
             continue;
@@ -172,17 +186,34 @@ fn live_mana_changes<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> V
         };
         let ManaChange::Adds {
             tapped: Tapped::A(filter),
-            added: Added::Of(mana),
+            added,
         } = *change
         else {
             continue;
         };
         let words = Words::of_changes(effect.colors, effect.lands);
         if filter.matches(s, t, slot, effect.controller, &words) {
-            terms.push((mana.colors, mana.amount, false));
+            record(added);
         }
     }
-    terms
+    for &source_slot in s.battlefield() {
+        for (_, a) in s.abilities(t, source_slot) {
+            let Some(&ManaChange::Adds { tapped, added }) = a.changes_mana() else {
+                continue;
+            };
+            let matches = match tapped {
+                Tapped::A(filter) => {
+                    let words = s.words_of(source_slot);
+                    filter.matches(s, t, slot, s.controller(source_slot), &words)
+                }
+                Tapped::AttachedTo => s.object(source_slot).attached_to() == Some(slot),
+            };
+            if matches {
+                record(added);
+            }
+        }
+    }
+    (terms, type_produced)
 }
 
 /// The activation of a mana ability on `slot`, read from its cost and product: `None` for a cost
@@ -193,6 +224,7 @@ fn activation_on<L: Layout>(
     slot: L::Slot,
     a: &crate::card::Ability,
     extra_terms: &[(u8, u8, bool)],
+    type_produced: u8,
 ) -> Option<Activation> {
     let tap_only = a.cost().does(CostAction::Tap)
         && a.cost().parts().iter().all(|part| {
@@ -204,7 +236,7 @@ fn activation_on<L: Layout>(
     if !tap_only {
         return None;
     }
-    let mut terms = Vec::new();
+    let mut own_terms = Vec::new();
     for term in a.product() {
         let n = if let Amount::Fixed(n) = term.amount {
             n
@@ -212,15 +244,72 @@ fn activation_on<L: Layout>(
             crate::interpret::amount_of(s, t, slot, term.amount)
         };
         if n > 0 {
-            terms.push((term.kinds, n, term.uniform));
+            own_terms.push((term.kinds, n, term.uniform));
         }
     }
-    terms.extend_from_slice(extra_terms);
     let mut price = a.cost().mana;
     if super::reference_spends_as_any_color(s, t, s.controller(slot), slot) {
         price = price.as_any_color();
     }
-    Some(Activation::of(price, &terms))
+    if type_produced == 0 {
+        own_terms.extend_from_slice(extra_terms);
+        return Some(Activation::of(price, &own_terms));
+    }
+    // Expand each own-term choice down to concrete single-color units so we know the exact set
+    // of mana types the tapped ability itself produced, then append fixed extras and
+    // `type_produced` units of `produced_mask`.
+    let mut makes: Vec<Vec<u8>> = vec![Vec::new()];
+    for &(kinds, amount, uniform) in &own_terms {
+        let single_kinds: Vec<u8> = (0..6)
+            .map(|k| 1u8 << k)
+            .filter(|k| kinds & k != 0)
+            .collect();
+        if uniform || amount == 1 || single_kinds.len() == 1 {
+            makes = makes
+                .iter()
+                .flat_map(|made| {
+                    single_kinds.iter().map(move |&kind| {
+                        let mut more = made.clone();
+                        more.extend(std::iter::repeat_n(kind, usize::from(amount)));
+                        more
+                    })
+                })
+                .collect();
+        } else {
+            for _ in 0..amount {
+                makes = makes
+                    .iter()
+                    .flat_map(|made| {
+                        single_kinds.iter().map(move |&kind| {
+                            let mut more = made.clone();
+                            more.push(kind);
+                            more
+                        })
+                    })
+                    .collect();
+            }
+        }
+    }
+    let mut result_makes = Vec::with_capacity(makes.len());
+    for mut made in makes {
+        let produced_mask = made.iter().copied().fold(0u8, |acc, k| acc | k);
+        for &(kinds, amount, _) in extra_terms {
+            made.extend(std::iter::repeat_n(kinds, usize::from(amount)));
+        }
+        if produced_mask != 0 {
+            made.extend(std::iter::repeat_n(
+                produced_mask,
+                usize::from(type_produced),
+            ));
+        }
+        if !result_makes.contains(&made) {
+            result_makes.push(made);
+        }
+    }
+    Some(Activation {
+        price,
+        makes: result_makes,
+    })
 }
 
 #[cfg(test)]

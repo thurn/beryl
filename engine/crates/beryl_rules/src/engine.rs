@@ -104,6 +104,7 @@ fn replay_paused<'a, L: Layout>(
         | Pending::OrderEntered { .. }
         | Pending::EnterChoosing { .. }
         | Pending::ManaColor { .. }
+        | Pending::ManaType { .. }
         | Pending::Companion { .. }
         | Pending::CompanionPayment { .. }
         | Pending::ArrangePiles { .. } => None,

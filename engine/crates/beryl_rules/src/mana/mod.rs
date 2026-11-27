@@ -39,8 +39,8 @@ pub(crate) use add::{add_instruction, add_of_kind_instruction, add_product_instr
 pub(crate) use pay::{activate, manual_options, manual_pay, pay};
 pub(crate) use pool::{Funds, payable};
 pub(crate) use priority::{
-    activate_chosen, begin_instant, instant_options, is_instant, standalone_options,
-    waterbend_mana_options,
+    activate_chosen, begin_instant, choose_mana_type, instant_options, is_instant,
+    standalone_options, waterbend_mana_options,
 };
 pub(crate) use remembered::{Paying, RESTRICTED, Restricted, restricted_sources};
 pub(crate) use solver::{Plan, plans, plans_accepting};

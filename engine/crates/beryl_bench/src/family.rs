@@ -345,7 +345,10 @@ pub fn stand_in(def: &'static CardDef) -> &'static CardDef {
             let kept = |a: &&Ability| {
                 !matches!(
                     a.kind(),
-                    AbilityKind::Static | AbilityKind::Replacement | AbilityKind::Triggered
+                    AbilityKind::Static
+                        | AbilityKind::Replacement
+                        | AbilityKind::Triggered
+                        | AbilityKind::ManaChange
                 )
             };
             // A casting option (overload, mutate) names the face's ability it adds by index,

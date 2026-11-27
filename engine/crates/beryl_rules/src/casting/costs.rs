@@ -260,6 +260,7 @@ pub fn cost_being_cast<L: Layout>(s: &State<L>, t: &GameTable, x: u8) -> Option<
         | Pending::OrderEntered { .. }
         | Pending::EnterChoosing { .. }
         | Pending::ManaColor { .. }
+        | Pending::ManaType { .. }
         | Pending::Companion { .. }
         | Pending::CompanionPayment { .. }
         | Pending::ArrangePiles { .. } => None,

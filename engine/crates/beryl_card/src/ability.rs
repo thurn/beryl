@@ -1,6 +1,6 @@
 //! An ability of a face: its interface as data, and what it does.
 
-use crate::continuous::{LayerSpec, Replacement, RuleChange};
+use crate::continuous::{LayerSpec, ManaChange, Replacement, RuleChange};
 use crate::cost::Cost;
 use crate::effect::{Condition, Effect, Objects, Players};
 use crate::ids::ZoneSet;
@@ -36,6 +36,10 @@ pub enum AbilityKind {
     Static,
     /// A static ability that creates a replacement effect (CR 614).
     Replacement,
+    /// A triggered mana ability on a permanent ([CR 605.1b](https://yawgatog.com/resources/magic-rules/#R6051b))
+    /// or mana-multiplying replacement effect ([CR 106.12b](https://yawgatog.com/resources/magic-rules/#R10612b))
+    /// that changes the mana produced when a permanent is tapped for mana.
+    ManaChange,
 }
 
 /// When an ability may be activated or a spell cast.
@@ -356,6 +360,16 @@ impl Ability {
         Ability {
             of_kind: OfKind::Replacement(replacement),
             ..Ability::of(AbilityKind::Replacement)
+        }
+    }
+
+    /// A permanent's ability that changes the mana produced when a permanent is tapped for
+    /// mana ([`ManaChange`], [CR 605.1b](https://yawgatog.com/resources/magic-rules/#R6051b)).
+    /// Never uses the stack and is never offered as a choice at priority.
+    pub const fn mana_change(change: &'static ManaChange) -> Ability {
+        Ability {
+            of_kind: OfKind::ManaChange(change),
+            ..Ability::of(AbilityKind::ManaChange)
         }
     }
 }

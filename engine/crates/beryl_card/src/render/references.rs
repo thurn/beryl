@@ -381,14 +381,17 @@ impl Ctx {
     /// "Enchanted creature", "equipped creature"
     /// ([CR 303.4b](https://yawgatog.com/resources/magic-rules/#R3034b)): "The object or
     /// player an Aura is attached to is called enchanted."
-    fn attached_to(&self) -> String {
+    pub(super) fn attached_to(&self) -> String {
         match self.attached {
             Attached::Aura { creature: true, .. } | Attached::Equipment => match self.attached {
                 Attached::Equipment => "equipped creature",
                 Attached::Aura { .. } | Attached::Neither => "enchanted creature",
             },
+            Attached::Aura { land: true, .. } => "enchanted land",
             Attached::Aura {
-                creature: false, ..
+                creature: false,
+                land: false,
+                ..
             } => "enchanted permanent",
             Attached::Neither => "the permanent it's attached to",
         }

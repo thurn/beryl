@@ -261,6 +261,8 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
     ("mana", crate::props::VANILLA.card, mana::EQUIVALENT_SOURCES),
     ("mana", names::AZORIUS_SIGNET, mana::PRICED_MANA),
     ("mana", names::HIGH_TIDE, mana::HIGH_TIDE),
+    ("mana", names::MANA_FLARE, mana::MANA_FLARE),
+    ("mana", names::WILD_GROWTH, mana::WILD_GROWTH),
     (
         "replacement",
         names::CLEVER_IMPERSONATOR,

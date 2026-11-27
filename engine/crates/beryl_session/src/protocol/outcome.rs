@@ -74,7 +74,7 @@ pub(super) fn ability_ref(face: &Face, a: FaceAbility) -> AbilityRef {
         FaceAbility::Grant(i) => (face.grants, i.index()),
     };
     let class = |a: &Ability| match a.kind() {
-        AbilityKind::Triggered => Some(AbilityClass::Triggered),
+        AbilityKind::Triggered | AbilityKind::ManaChange => Some(AbilityClass::Triggered),
         AbilityKind::Activated | AbilityKind::Mana => Some(AbilityClass::Activated),
         AbilityKind::Static | AbilityKind::Replacement => Some(AbilityClass::Static),
         AbilityKind::Spell => None,

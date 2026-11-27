@@ -97,6 +97,7 @@ fn resolve_top<L: Layout>(
         | Pending::OrderEntered { .. }
         | Pending::EnterChoosing { .. }
         | Pending::ManaColor { .. }
+        | Pending::ManaType { .. }
         | Pending::Companion { .. }
         | Pending::CompanionPayment { .. }
         | Pending::ArrangePiles { .. } => Default::default(),
