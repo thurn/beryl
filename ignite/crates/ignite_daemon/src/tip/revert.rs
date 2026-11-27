@@ -76,7 +76,7 @@ const LEASE_WAITS: u32 = 30;
 const SUBJECT_CHARS: usize = 60;
 
 /// How a revert commit's subject starts.
-const REVERT_PREFIX: &str = "revert: ";
+pub(super) const REVERT_PREFIX: &str = "revert: ";
 
 /// What `blame` does with a failing check after [`TipVerifier::try_revert`].
 #[derive(Debug, PartialEq, Eq)]

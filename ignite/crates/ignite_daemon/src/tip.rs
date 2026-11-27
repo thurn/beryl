@@ -88,6 +88,8 @@ use ignite_core::traits::Result;
 use crate::checks::Scoring;
 use crate::server::Context;
 
+#[cfg(test)]
+pub(crate) use candidate::CHECKING_GRACE_S;
 pub(crate) use culprit::{bisect, with_culprit};
 pub use round::{ROUND_VERB, TipLoop, TipRoundVerb};
 pub use work::{CheckTipWork, ticketed_landings};
@@ -386,8 +388,11 @@ pub struct TipVerifier {
     /// The exact keys that held the last failed tip, also saved before culprit searches.
     failed: Option<state::FailedTip>,
     /// The round running its own checks at a candidate before `master` moves, saved so the tip
-    /// loop does not stop it for a newer candidate (see `round::checking`).
+    /// loop gives it a bounded grace window when a newer candidate appears (see `round::checking`).
     checking: Option<state::RoundAt>,
+    /// When this checking round first saw a newer hub candidate replace its target, used by
+    /// `candidate::ends_checks` to enforce [`CHECKING_GRACE_S`].
+    superseded_since: std::sync::Mutex<Option<Timestamp>>,
     /// When a failed tip gets one more round to consider a revert after a master stall.
     retry_for_stall: Option<(Commit, Timestamp)>,
     /// Policy under which the last round started. An operator may make the same tip runnable.
@@ -453,6 +458,7 @@ impl TipVerifier {
             settled: None,
             failed: None,
             checking: None,
+            superseded_since: std::sync::Mutex::new(None),
             retry_for_stall: None,
             fleet_version: None,
             master_at_start: None,

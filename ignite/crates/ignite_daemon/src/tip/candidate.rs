@@ -1,7 +1,10 @@
 //! Automatic tip rounds use the same candidate until it is promoted or a newer landing may
 //! fix a blocker. This lets required native checks meet at one commit during active landings.
 
+use std::sync::{Mutex, PoisonError};
+
 use ignite_core::ids::Commit;
+use ignite_core::time::Timestamp;
 use ignite_core::tipround::{TipCandidate, TipCandidateUpdate};
 use ignite_core::traits::Result;
 
@@ -59,23 +62,69 @@ pub(super) fn replacement(ctx: &Context, tip: &Commit) -> Option<Commit> {
     (candidate.commit != *tip).then_some(candidate.commit)
 }
 
-/// The newer candidate that ends a round's own checks before they finish: only once `master`
-/// has reached `tip`, when there is nothing left for them to hold.
+/// How long a round running its own checks before `master` moves may continue after the hub
+/// selects a different candidate. Long enough for fresh rounds to finish short checks and
+/// report failures during rapid candidate churn, and short enough that a slow round on a
+/// dead or reverted commit does not starve the newer candidate or hit `TIP_STALLS_AFTER`.
+pub(crate) const CHECKING_GRACE_S: f64 = 900.0;
+
+/// Whether `commit` is a revert commit (from an automatic round revert or a manual git revert).
+fn is_revert(ctx: &Context, commit: &Commit) -> bool {
+    ctx.git.subject(&ctx.repo, commit).is_ok_and(|subject| {
+        subject.starts_with(super::revert::REVERT_PREFIX) || subject.starts_with("Revert ")
+    })
+}
+
+/// Whether a checking round whose target has been replaced by `by` should stop: either `by` is
+/// a revert commit, or `tip` has been replaced for at least [`CHECKING_GRACE_S`]. Records the
+/// first time a replacement was seen in `since`.
+pub(super) fn checking_superseded(
+    ctx: &Context,
+    by: &Commit,
+    since: &mut Option<Timestamp>,
+) -> bool {
+    if is_revert(ctx, by) {
+        return true;
+    }
+    let now = ctx.clock.now();
+    let first = *since.get_or_insert(now);
+    now.seconds_since(first) >= CHECKING_GRACE_S
+}
+
+/// The newer candidate that ends a round's own checks before they finish: once `master` has
+/// reached `tip`, once a revert commit has replaced `tip`, or once `tip` has been replaced by
+/// a newer candidate for at least [`CHECKING_GRACE_S`].
 ///
-/// A replacement alone does not end them. The hub replaces a candidate as soon as any machine
-/// reports a required failure at it, so that a newer landing can bring the fix. On 2026-11-25 a
-/// Windows-only lint failed at every tip from 14:21 to 20:50, and every landing in that time
-/// replaced the candidate within minutes and ended the other machines' rounds before they ran
-/// their checks: 84 rounds between 15:40 and 21:50 ran about 5,000 checks between them, against
-/// some 24,000 in one full round. Breakages that landed meanwhile went unseen and were found
-/// one at a time after the lint stopped failing, and the last of them was reverted at 22:14,
-/// 1 h 40 min after it landed. A round that finishes its checks reports every failure at the
-/// tip at once, so each is searched and reverted in the same round, and the newer tip reuses
-/// its results wherever inputs did not change. A round with a failure of its own still stops
-/// starting checks and goes on to its verdict and culprit search (see `verify_round`).
-pub(super) fn ends_checks(ctx: &Context, tip: &Commit) -> Option<Commit> {
-    super::round::master_reached(ctx, tip)?;
-    replacement(ctx, tip)
+/// A fresh replacement alone does not end them immediately. The hub replaces a candidate as
+/// soon as any machine reports a required failure at it, so that a newer landing can bring the
+/// fix. On 2026-11-25 a Windows-only lint failed at every tip from 14:21 to 20:50, and every
+/// landing in that time replaced the candidate within minutes and ended the other machines'
+/// rounds before they ran their checks: 84 rounds between 15:40 and 21:50 ran about 5,000
+/// checks between them, against some 24,000 in one full round. Breakages that landed meanwhile
+/// went unseen and were found one at a time after the lint stopped failing, and the last of
+/// them was reverted at 22:14, 1 h 40 min after it landed. Giving a checking round a bounded
+/// grace window lets fresh rounds finish short checks and report failures at `tip`, while
+/// preventing a slow round on a dead or reverted commit from running for hours and starving
+/// the newer candidate. A round with a failure of its own still stops starting checks and goes
+/// on to its verdict and culprit search (see `verify_round`).
+pub(super) fn ends_checks(
+    ctx: &Context,
+    tip: &Commit,
+    superseded_since: &Mutex<Option<Timestamp>>,
+) -> Option<Commit> {
+    let mut since = superseded_since
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    let Some(by) = replacement(ctx, tip) else {
+        *since = None;
+        return None;
+    };
+    if super::round::master_reached(ctx, tip).is_some()
+        || checking_superseded(ctx, &by, &mut since)
+    {
+        return Some(by);
+    }
+    None
 }
 
 /// Lets a later staging tip try all required checks when this tip has a failed or blocked

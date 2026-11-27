@@ -26,7 +26,8 @@
 //!   that has recorded its failed verdict finishes its culprit search whatever newer tip
 //!   appears, and stops only when `master` passes its target or all failed keys pass, so
 //!   ordinary verification can resume. A round still running its own checks before `master`
-//!   moves finishes them too, unless `master` reaches its target.
+//!   moves gets a bounded grace window when a newer candidate appears, and yields immediately
+//!   when `master` reaches its target or a revert replaces it.
 //!
 //! A round whose verb process dies is not run again: its handle ends `incomplete`, and the next
 //! turn of the loop starts a new round when the tip still needs one.
@@ -40,9 +41,10 @@ use serde::{Deserialize, Serialize};
 use ignite_core::ids::{Commit, Handle, Seq};
 use ignite_core::protocol::Class;
 use ignite_core::protocol::client::{Exit, Reply, Request};
+use ignite_core::time::Timestamp;
 use ignite_core::traits::{Error, Result};
 
-use super::{TipOutcome, TipVerifier, TipWork, families};
+use super::{TipOutcome, TipVerifier, TipWork, candidate, families};
 use crate::handles::Waited;
 use crate::server::{Context, Server, Verb, error_reply};
 
@@ -167,6 +169,8 @@ pub struct TipLoop {
     since: Seq,
     /// Whether to check for new work without waiting on the feed.
     retry_now: bool,
+    /// How long to wait on a round's handle between checks for supersession or recovery.
+    poll_every: Duration,
 }
 
 impl TipLoop {
@@ -177,7 +181,14 @@ impl TipLoop {
             verb,
             since,
             retry_now: false,
+            poll_every: Duration::from_secs(u64::from(WAIT_S)),
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn poll_every(mut self, every: Duration) -> Self {
+        self.poll_every = every;
+        self
     }
 
     /// One turn of the loop: waits for a round still running from before a restart, or else
@@ -189,7 +200,7 @@ impl TipLoop {
             crate::steps::step(format!("waiting for tip round {handle}"));
             let target = request.and_then(|request| TipRoundVerb::parse(&request).ok());
             return self
-                .wait(ctx, &handle, target.as_ref().map(|(tip, _)| tip), 0)
+                .wait(ctx, &handle, target.as_ref().map(|(tip, _)| tip), Duration::ZERO)
                 .map(Some);
         }
         crate::steps::step("waiting for a tip to verify");
@@ -204,7 +215,8 @@ impl TipLoop {
         let request = TipRoundVerb::request(&tip, self.since, &ctx.repo);
         let handle = self.server.start_internal(self.verb.clone(), request);
         crate::steps::step(format!("verifying tip {tip} in {handle}"));
-        self.wait(ctx, &handle, Some(&tip), WAIT_S).map(Some)
+        self.wait(ctx, &handle, Some(&tip), self.poll_every)
+            .map(Some)
     }
 
     /// Waits for the round and reads its reply. An adopted round can already be obsolete,
@@ -214,17 +226,19 @@ impl TipLoop {
         ctx: &Context,
         handle: &Handle,
         target: Option<&Commit>,
-        mut wait_s: u32,
+        mut wait: Duration,
     ) -> Result<(Commit, TipOutcome)> {
         let handles = self.server.handles();
         let mut interrupted = None;
+        let mut superseded_since = None;
         let reply = loop {
-            match handles.wait(handle, wait_s, None) {
+            match handles.wait_for(handle, wait, None) {
                 Waited::Running(_) => {
-                    wait_s = WAIT_S;
+                    wait = self.poll_every;
                     if interrupted.is_none()
                         && let Some(tip) = target
-                        && let Some(outcome) = self.interruption(ctx, tip, handle)
+                        && let Some(outcome) =
+                            self.interruption(ctx, tip, handle, &mut superseded_since)
                         && self.server.stop_internal(handle)
                     {
                         interrupted = Some((tip.clone(), outcome));
@@ -268,15 +282,31 @@ impl TipLoop {
     /// the newest `staging` anyway. `master` reaching the tip, or the failed checks passing,
     /// still ends the search, since neither its culprits nor its revert would then be needed.
     ///
-    /// Nor does a newer candidate stop a round still running its own checks before `master`
-    /// moves, for the reason given at `candidate::ends_checks`.
-    fn interruption(&self, ctx: &Context, tip: &Commit, handle: &Handle) -> Option<TipOutcome> {
+    /// A round still running its own checks before `master` moves gets a bounded grace window
+    /// when a newer candidate appears, and yields immediately when `master` reaches its target
+    /// or a revert replaces it, for the reason given at `candidate::ends_checks`.
+    fn interruption(
+        &self,
+        ctx: &Context,
+        tip: &Commit,
+        handle: &Handle,
+        superseded_since: &mut Option<Timestamp>,
+    ) -> Option<TipOutcome> {
         let verifier = self.verb.verifier();
-        if let Some(by) = self.superseding_tip(ctx, tip)
-            && (master_reached(ctx, tip).is_some()
-                || !(searching(&verifier, tip, handle) || checking(&verifier, tip, handle)))
-        {
-            return Some(TipOutcome::Superseded { by });
+        if let Some(by) = self.superseding_tip(ctx, tip) {
+            let is_checking = checking(&verifier, tip, handle);
+            let grace_done =
+                is_checking && candidate::checking_superseded(ctx, &by, superseded_since);
+            if !is_checking {
+                *superseded_since = None;
+            }
+            if master_reached(ctx, tip).is_some()
+                || (!searching(&verifier, tip, handle) && (!is_checking || grace_done))
+            {
+                return Some(TipOutcome::Superseded { by });
+            }
+        } else {
+            *superseded_since = None;
         }
         verifier
             .failure_recovered(ctx, tip, Some(handle))

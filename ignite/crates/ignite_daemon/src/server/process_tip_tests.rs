@@ -928,3 +928,116 @@ fn a_stalled_tip_round_keeps_its_stall_clock_across_daemon_restarts() {
         .unwrap();
     assert_eq!(row.state, "incomplete");
 }
+
+#[test]
+fn a_checking_round_waits_for_the_grace_window_then_yields_to_a_newer_candidate() {
+    let machine = TipMachine::new("grace-window-checking-round");
+    let ctx = machine.threads.ctx.clone();
+    let target = machine.git.tip("staging").unwrap();
+    let master = machine.git.tip("master").unwrap();
+    let candidate = |commit: &Commit| TipCandidate {
+        commit: commit.clone(),
+        retry_on_new_tip: false,
+    };
+    assert!(
+        machine
+            .hub
+            .update_tip_candidate(&TipCandidateUpdate {
+                expected: None,
+                replacement: candidate(&target),
+            })
+            .unwrap()
+    );
+    let (server, tips) = machine.daemon();
+    machine.switch.set(Some(server));
+    let tips = tips.poll_every(Duration::from_millis(10));
+    let checking = turn_on_a_thread(tips, ctx.clone());
+    assert!(until(|| machine.commands.begun() == 1));
+
+    // A newer candidate replaces `target` while checks are running. Inside the grace window,
+    // the round keeps running so short checks can finish during rapid candidate churn.
+    let newer = Commit::new("cccc000").unwrap();
+    machine.git.set_not_ancestor(&newer, &master);
+    machine.git.set_tip("staging", newer.clone());
+    assert!(
+        machine
+            .hub
+            .update_tip_candidate(&TipCandidateUpdate {
+                expected: Some(candidate(&target)),
+                replacement: candidate(&newer),
+            })
+            .unwrap()
+    );
+    std::thread::sleep(Duration::from_millis(50));
+    machine.clock.advance(crate::tip::CHECKING_GRACE_S * 0.5);
+    std::thread::sleep(Duration::from_millis(50));
+    assert_eq!(machine.switch.stops.load(Ordering::SeqCst), 0);
+
+    // Once the grace window elapses, the loop stops the stale checking round and verifies
+    // the newer candidate on the next turn.
+    machine.clock.advance(crate::tip::CHECKING_GRACE_S);
+    assert!(until(|| machine.switch.stops.load(Ordering::SeqCst) > 0));
+    machine.commands.finish_all();
+    let (tips, turn) = checking.join().unwrap();
+    assert_eq!(
+        turn.unwrap(),
+        Some((target, TipOutcome::Superseded { by: newer.clone() }))
+    );
+
+    let next = turn_on_a_thread(tips, ctx);
+    assert!(until(|| machine.commands.begun() == 2));
+    machine.commands.finish_all();
+    let (_, turn) = next.join().unwrap();
+    assert_eq!(turn.unwrap(), Some((newer, TipOutcome::Verified)));
+}
+
+#[test]
+fn a_checking_round_yields_immediately_when_superseded_by_a_revert() {
+    let machine = TipMachine::new("revert-supersedes-checking-round");
+    let ctx = machine.threads.ctx.clone();
+    let target = machine.git.tip("staging").unwrap();
+    let master = machine.git.tip("master").unwrap();
+    let candidate = |commit: &Commit| TipCandidate {
+        commit: commit.clone(),
+        retry_on_new_tip: false,
+    };
+    assert!(
+        machine
+            .hub
+            .update_tip_candidate(&TipCandidateUpdate {
+                expected: None,
+                replacement: candidate(&target),
+            })
+            .unwrap()
+    );
+    let (server, tips) = machine.daemon();
+    machine.switch.set(Some(server));
+    let tips = tips.poll_every(Duration::from_millis(10));
+    let checking = turn_on_a_thread(tips, ctx);
+    assert!(until(|| machine.commands.begun() == 1));
+
+    // A revert landing replaces `target` as the shared candidate; the checking round yields
+    // without waiting for the grace window.
+    let revert = Commit::new("cccc000").unwrap();
+    machine.git.set_not_ancestor(&revert, &master);
+    machine
+        .git
+        .set_subject(&revert, "revert: feat: broken change");
+    machine.git.set_tip("staging", revert.clone());
+    assert!(
+        machine
+            .hub
+            .update_tip_candidate(&TipCandidateUpdate {
+                expected: Some(candidate(&target)),
+                replacement: candidate(&revert),
+            })
+            .unwrap()
+    );
+    assert!(until(|| machine.switch.stops.load(Ordering::SeqCst) > 0));
+    machine.commands.finish_all();
+    let (_, turn) = checking.join().unwrap();
+    assert_eq!(
+        turn.unwrap(),
+        Some((target, TipOutcome::Superseded { by: revert }))
+    );
+}

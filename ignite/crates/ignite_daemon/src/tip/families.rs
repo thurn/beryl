@@ -106,9 +106,9 @@ impl Round<'_> {
     }
 
     /// Before promotion, landings can keep advancing `staging` while both verifiers work
-    /// on the same candidate, and a newer candidate ends the round only once `master` has
-    /// reached its tip (see `candidate::ends_checks`). After promotion, a newer `staging` tip
-    /// can use these trees.
+    /// on the same candidate, and a newer candidate ends the round once `master` reaches its
+    /// tip, a revert replaces it, or the grace window expires (see `candidate::ends_checks`).
+    /// After promotion, a newer `staging` tip can use these trees.
     fn should_stop(&self) -> bool {
         if crate::steps::stop_requested()
             || self.verifier.machine_is_off()
@@ -123,7 +123,7 @@ impl Round<'_> {
                 other => Some(other),
             }
         } else {
-            candidate::ends_checks(self.ctx, self.tip).map(Ok)
+            candidate::ends_checks(self.ctx, self.tip, &self.verifier.superseded_since).map(Ok)
         };
         let mut state = lock(&self.ended);
         if state.is_none() {

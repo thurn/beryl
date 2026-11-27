@@ -451,6 +451,17 @@ impl Handles {
     /// Waits at most `wait_s` seconds for the operation to finish. `session` is the session
     /// waiting, which [`Handles::interrupt`] names.
     pub fn wait(&self, handle: &Handle, wait_s: u32, session: Option<&SessionId>) -> Waited {
+        self.wait_for(handle, Duration::from_secs(u64::from(wait_s)), session)
+    }
+
+    /// Waits at most `wait` for the operation to finish. `session` is the session waiting, which
+    /// [`Handles::interrupt`] names.
+    pub(crate) fn wait_for(
+        &self,
+        handle: &Handle,
+        wait: Duration,
+        session: Option<&SessionId>,
+    ) -> Waited {
         let mut state = lock(&self.state);
         let id = state.next_waiter;
         state.next_waiter += 1;
@@ -461,7 +472,7 @@ impl Handles {
                 interrupt: None,
             },
         );
-        let deadline = Instant::now() + Duration::from_secs(u64::from(wait_s));
+        let deadline = Instant::now() + wait;
         let waited = loop {
             if let Some(reply) = state.waiters.get_mut(&id).and_then(|w| w.interrupt.take()) {
                 break Waited::Interrupted(reply);

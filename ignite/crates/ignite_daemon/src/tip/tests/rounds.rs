@@ -810,3 +810,127 @@ fn a_failed_tip_cannot_promote_an_ancestor_missing_a_required_result() {
     assert_eq!(world.master(), commit("aaaa000"));
     assert_eq!(world.work.runs().len(), 1);
 }
+
+#[test]
+fn a_checking_round_stops_starting_families_after_the_grace_window() {
+    let world = World::new();
+    let ctx = world.ctx("m-1");
+    let master = world.master();
+    let tip = commit("bbbb000");
+    let newer = commit("cccc000");
+    world.land(&tip);
+    world.git.set_not_ancestor(&tip, &master);
+    select(&ctx, &tip);
+    let first = in_family("a", "first");
+    let second = in_family("b", "second");
+    let third = in_family("c", "third");
+    world
+        .work
+        .set_checks(&tip, vec![first.clone(), second.clone(), third.clone()]);
+    let (hub, git, clock_half, clock_done, landed, old_tip) = (
+        world.hub.clone(),
+        world.git.clone(),
+        world.clock.clone(),
+        world.clock.clone(),
+        newer.clone(),
+        tip.clone(),
+    );
+    world.work.before_batches.lock().unwrap().insert(
+        "first".to_owned(),
+        Arc::new(move || {
+            git.set_tip("staging", landed.clone());
+            assert!(
+                hub.update_tip_candidate(&TipCandidateUpdate {
+                    expected: Some(TipCandidate {
+                        commit: old_tip.clone(),
+                        retry_on_new_tip: false,
+                    }),
+                    replacement: TipCandidate {
+                        commit: landed.clone(),
+                        retry_on_new_tip: false,
+                    },
+                })
+                .unwrap()
+            );
+        }),
+    );
+    world.work.before_batches.lock().unwrap().insert(
+        "second".to_owned(),
+        Arc::new(move || {
+            clock_half.advance(crate::tip::CHECKING_GRACE_S * 0.5);
+        }),
+    );
+    world.work.before_batches.lock().unwrap().insert(
+        "third".to_owned(),
+        Arc::new(move || {
+            clock_done.advance(crate::tip::CHECKING_GRACE_S);
+        }),
+    );
+
+    let outcome = world.verifier().verify(&ctx, &tip).unwrap();
+    let ran = ran_checks(&world);
+
+    assert_eq!(outcome, TipOutcome::Superseded { by: newer });
+    assert!(
+        ran.contains(&first.check),
+        "first family should run within the grace window: {ran:?}"
+    );
+    assert!(
+        ran.contains(&second.check),
+        "second family should still run within the grace window: {ran:?}"
+    );
+    assert!(
+        !ran.contains(&third.check),
+        "third family should not start after the grace window expired: {ran:?}"
+    );
+}
+
+#[test]
+fn a_checking_round_stops_starting_families_when_superseded_by_a_revert() {
+    let world = World::new();
+    let ctx = world.ctx("m-1");
+    let master = world.master();
+    let tip = commit("bbbb000");
+    let revert = commit("cccc000");
+    world.land(&tip);
+    world.git.set_not_ancestor(&tip, &master);
+    select(&ctx, &tip);
+    let first = in_family("a", "first");
+    let second = in_family("b", "second");
+    world.work.set_checks(&tip, vec![first, second.clone()]);
+    world.git.set_subject(&revert, "revert: feat: broken");
+    let (hub, git, landed, old_tip) = (
+        world.hub.clone(),
+        world.git.clone(),
+        revert.clone(),
+        tip.clone(),
+    );
+    world.work.before_batches.lock().unwrap().insert(
+        "first".to_owned(),
+        Arc::new(move || {
+            git.set_tip("staging", landed.clone());
+            assert!(
+                hub.update_tip_candidate(&TipCandidateUpdate {
+                    expected: Some(TipCandidate {
+                        commit: old_tip.clone(),
+                        retry_on_new_tip: false,
+                    }),
+                    replacement: TipCandidate {
+                        commit: landed.clone(),
+                        retry_on_new_tip: false,
+                    },
+                })
+                .unwrap()
+            );
+        }),
+    );
+
+    let outcome = world.verifier().verify(&ctx, &tip).unwrap();
+    let ran = ran_checks(&world);
+
+    assert_eq!(outcome, TipOutcome::Superseded { by: revert });
+    assert!(
+        !ran.contains(&second.check),
+        "second family should not start once a revert superseded the candidate: {ran:?}"
+    );
+}

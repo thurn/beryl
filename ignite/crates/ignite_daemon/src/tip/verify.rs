@@ -51,6 +51,10 @@ impl TipVerifier {
         self.require_machine_on()?;
         self.failed = None;
         self.checking = None;
+        *self
+            .superseded_since
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
         self.retry_for_stall = None;
         crate::steps::step(format!("verifying tip {tip}"));
         let last = ctx.git.tip(&ctx.config.repository.master)?;
@@ -68,6 +72,10 @@ impl TipVerifier {
         let mut tally = meter::Tally::default();
         let outcome = self.verify_round(&metered, &last, tip, &scope, &mut tally);
         self.checking = None;
+        *self
+            .superseded_since
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
         self.save(ctx);
         meter::send(ctx, &meter.finish(ctx, tip, &tally));
         outcome
@@ -126,7 +134,7 @@ impl TipVerifier {
             Self::fill_from_cache(ctx, &checks, &mut verdicts)?;
             tally.cached = tally.cached.saturating_add(count(verdicts.len() - before));
             require_running()?;
-            if let Some(by) = candidate::ends_checks(ctx, tip) {
+            if let Some(by) = candidate::ends_checks(ctx, tip, &self.superseded_since) {
                 return Ok(TipOutcome::Superseded { by });
             }
             if last != tip && !green::advance_if_ready(ctx, tip, &checks, &unlisted, &verdicts) {
@@ -198,7 +206,7 @@ impl TipVerifier {
             // A native verifier may have finished its checks while we listed the other families.
             Self::fill_from_cache(ctx, builds, &mut verdicts)?;
             require_running()?;
-            if let Some(by) = candidate::ends_checks(ctx, tip) {
+            if let Some(by) = candidate::ends_checks(ctx, tip, &self.superseded_since) {
                 return Ok(TipOutcome::Superseded { by });
             }
             if green::advance_if_ready(ctx, tip, builds, unlisted_builds, &verdicts) {
@@ -229,7 +237,7 @@ impl TipVerifier {
                             .is_some_and(|run| run.outcome == Outcome::Fail)
                 })
         };
-        if let Some(by) = candidate::ends_checks(ctx, tip) {
+        if let Some(by) = candidate::ends_checks(ctx, tip, &self.superseded_since) {
             return Ok(TipOutcome::Superseded { by });
         }
         tally.budget.clone_from(&split.budget);
