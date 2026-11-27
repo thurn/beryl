@@ -1,10 +1,11 @@
 //! Why the view says a card in the human's hand can't be played at their priority
 //! (`DecisionView::refused`), as the engine decides it: no target, no mana, sorcery speed and
-//! the permanent imposing it, a land played.
+//! the permanent imposing it, a land played. A card with an ability its owner may activate from
+//! their hand, such as cycling, is never refused.
 
 use beryl_cards::CARDS;
 use beryl_cards::names::{
-    COUNTERSPELL, DANDAN, ISLAND, MIND_BEND, PLAINS, SWAMP, TEFERI_TIME_RAVELER,
+    COUNTERSPELL, DANDAN, ISLAND, MIND_BEND, PLAINS, REMOTE_ISLE, SWAMP, TEFERI_TIME_RAVELER,
     THIRST_FOR_DISCOVERY, THUNDERTRAP_TRAINER,
 };
 use beryl_engine::{
@@ -136,6 +137,33 @@ fn a_creature_short_of_mana_lacks_it_and_a_second_land_waits() {
         at_decisions(&SCENARIO),
         [
             vec![(THUNDERTRAP_TRAINER.to_owned(), RefusalView::Mana, None)],
+            vec![(ISLAND.to_owned(), RefusalView::LandPlayed, None)],
+        ]
+    );
+}
+
+#[test]
+fn a_cycling_land_may_still_be_cycled_once_a_land_is_played() {
+    // Remote Isle's cycling {2} works from the hand whether or not a land may be played, so
+    // with the turn's land played and Islands to pay it, the human can still click it to
+    // cycle it; the second Island can only wait.
+    const SCENARIO: Scenario = Scenario::new("cycling-land-played")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .permanents(P0, ISLANDS)
+        .hand(P0, &[REMOTE_ISLE, ISLAND, ISLAND])
+        .library(P0, LIBRARY)
+        .library(P1, LIBRARY)
+        .actions(&[
+            Action::PlayLand {
+                player: P0,
+                card: ISLAND,
+            },
+            Action::pass(P0),
+        ]);
+    assert_eq!(
+        at_decisions(&SCENARIO),
+        [
+            vec![],
             vec![(ISLAND.to_owned(), RefusalView::LandPlayed, None)],
         ]
     );

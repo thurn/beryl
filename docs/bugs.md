@@ -6,6 +6,22 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **A cycling land could not be clicked once the turn's land was played.** In a
+  Dandân game, Remote Isle in hand could be cycled only while a land play was
+  left. The engine offered its cycling ability, but each priority view lists the
+  cards of the hand the client should refuse a click on
+  (`DecisionView::refused`), and `casting::refusal` asked only whether the card
+  could be cast or played as a land, so it marked the land "land played" and the
+  client swallowed the click. A spell with cycling that its owner could not
+  afford to cast was refused the same way. Fixed: `casting::refusal` returns no
+  refusal when the card has an ability its owner may activate now, checked with
+  the same `activatable` test that builds the priority options. Guard:
+  `beryl_session`'s
+  `refused::a_cycling_land_may_still_be_cycled_once_a_land_is_played`. No type
+  ties the refusal to the options, because the refusal also explains why a card
+  is not offered; a check that every refused card has no option in the priority
+  decision would cover the class.
+
 - **A fifth granted ability was silently dropped.** A permanent held its granted
   abilities in four slots of its layer result. When a fifth effect granted it
   one, as five Slivers that each grant an ability would, the layers found no

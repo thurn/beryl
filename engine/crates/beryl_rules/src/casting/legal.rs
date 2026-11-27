@@ -290,8 +290,9 @@ fn keep_furthest<L: Layout>(most: &mut Option<Refusal<L>>, r: Refusal<L>) {
 
 /// Why `player` may not cast the card in `slot` at priority now: the refusal of the way of
 /// casting it, by face and casting options, that passes the most checks, or `land`, why they
-/// may not play it as a land, if that passes as many. None if one way is legal, or if the
-/// card has no face to cast and `land` is none.
+/// may not play it as a land, if that passes as many. None if one way is legal, if they may
+/// activate one of its abilities where it lies (cycling from a hand), or if the card has no
+/// face to cast and `land` is none.
 #[allow(
     clippy::disallowed_methods,
     reason = "reads each face the card may be cast as"
@@ -304,6 +305,9 @@ pub(crate) fn refusal<L: Layout>(
     land: Option<Refusal<L>>,
 ) -> Result<Option<Refusal<L>>, Full> {
     let now = Situation::of(player);
+    if activates_now(s, t, &now, slot) {
+        return Ok(None);
+    }
     let Some(def) = s.card_def(t, slot) else {
         return if s.prepare_spells_for(player).contains(slot) {
             preparation::refusal(s, t, &now, slot)
@@ -352,6 +356,32 @@ pub(crate) fn refusal<L: Layout>(
     }
     now.complete()?;
     Ok(most)
+}
+
+/// Whether the priority holder may activate one of the abilities of the object in `slot` now,
+/// as [`activation_options`] would offer it: a card refused every way of being cast or played
+/// may still be clicked for this. see CR 117.1b: "A player may activate an activated ability
+/// any time they have priority."
+fn activates_now<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    now: &Situation<L>,
+    slot: L::Slot,
+) -> bool {
+    let facts = s.definition(slot).facts(t);
+    if !facts.activates() {
+        return false;
+    }
+    let prohibited = rule_change::prohibitions(s, t, now.player);
+    if !prohibited.is_empty()
+        && rule_change::unprohibited(s, t, prohibited, now.player, Bitboard::single(slot))
+            .is_empty()
+    {
+        return false;
+    }
+    let lost = !s.has_every_ability(slot);
+    (facts.activated().map(ObjectAbility::Own))
+        .any(|ability| (!lost || s.has(slot, ability)) && activatable(s, t, now, slot, ability))
 }
 
 /// Appends the spells `player` can cast now, by card, face and casting options.
