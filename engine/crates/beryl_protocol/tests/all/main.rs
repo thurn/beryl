@@ -56,6 +56,7 @@ fn each_prompt_purpose_round_trips_as_its_name() {
             purpose,
             part: PartName::Pick,
             title: String::new(),
+            subtitle: String::new(),
             words: Words::default(),
             count: None,
             about: Vec::new(),

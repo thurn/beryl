@@ -26,6 +26,11 @@ pub struct PromptView {
     pub part: PartName,
     /// What the prompt asks, in words, from the wording table.
     pub title: String,
+    /// The line under the title that says how to answer, from the wording table: Arena's
+    /// "Click an option below to select it." under "Choose One". Empty where the prompt has
+    /// none, and then left off the wire.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub subtitle: String,
     /// The words of the buttons a UI that holds the prompt's state itself puts on it.
     pub words: Words,
     /// How much the prompt is about as a whole: the cards looked at on top of a library, a

@@ -1,11 +1,12 @@
 //! The pill that says what a prompt asks on the phone, and where it stands.
 
+use beryl_protocol::prompt::PromptView;
 use glam::Vec2;
 use kit_base::geometry::Rect;
 use kit_base::tokens::{color, type_style};
 use kit_scene::Candidate;
 use kit_text::text::TypeStyle;
-use kit_ui::element::{Anchor, Element, TextAlign, text};
+use kit_ui::element::{Align, Anchor, Element, TextAlign, column, text};
 
 use super::{PromptSlots, table_rows};
 use crate::hud::placement_scene::{Group, PlacementScene, inset, rect};
@@ -36,16 +37,31 @@ impl PillPlace {
     }
 }
 
-/// The pill that says what a prompt asks, `asks`, at `place`: a fixed width, so that a long
-/// question is laid out on as many lines as it takes. It lets the pointer through, so it never
-/// covers a card the prompt picks.
-pub(super) fn pill(asks: &str, place: PillPlace, slots: &PromptSlots<'_>) -> (Element, Rect) {
+/// The pill that says what `prompt` asks, `asks`, at `place`, with the prompt's subtitle on a
+/// line under it where it has one: a fixed width, so that a long question is laid out on as
+/// many lines as it takes. It lets the pointer through, so it never covers a card the prompt
+/// picks.
+pub(super) fn pill(
+    asks: &str,
+    prompt: &PromptView,
+    place: PillPlace,
+    slots: &PromptSlots<'_>,
+) -> (Element, Rect) {
     let style = TypeStyle {
         size: slots.metrics.pill_text,
         ..type_style::TITLE
     };
     let padding = slots.metrics.pill_padding;
-    let height = style.size * style.line_height + padding;
+    let line = style.size * style.line_height + padding;
+    // The subtitle's body type is scaled down as far as the pill's title is from the dock's, but
+    // never under the least text size the phone allows.
+    let below_size =
+        (type_style::BODY.size * style.size / type_style::TITLE.size).max(slots.text_points);
+    let below = super::subtitle(prompt, below_size);
+    let height = line
+        + below
+            .as_ref()
+            .map_or(0.0, |_| below_size * type_style::BODY.line_height);
     let room = |taken: f32| {
         if taken > 0.0 {
             taken + slots.metrics.gap
@@ -93,10 +109,10 @@ pub(super) fn pill(asks: &str, place: PillPlace, slots: &PromptSlots<'_>) -> (El
         }
     };
     let width = end - x;
-    let line = slots.middle.y + (slots.middle.height - height) / 2.0;
+    let centred = slots.middle.y + (slots.middle.height - height) / 2.0;
     let top = match place {
         PillPlace::Over(bottom) => bottom - height,
-        _ => line,
+        _ => centred,
     };
     let mut bounds = rect(x, top, width, height);
     if let Some(scene) = slots.scene {
@@ -106,14 +122,20 @@ pub(super) fn pill(asks: &str, place: PillPlace, slots: &PromptSlots<'_>) -> (El
             bounds = pill_slot(scene, slots, bounds, slots.pill_width(asks));
         }
     }
-    let mut pill = text(asks)
-        .style(style)
-        .text_align(TextAlign::Center)
-        .width(bounds.width)
-        .min_height(height)
-        .background(color::PANEL)
-        .radius(height / 2.0)
-        .passes(true);
+    let title = text(asks).style(style).text_align(TextAlign::Center);
+    let mut pill = match below {
+        Some(below) => column()
+            .align_items(Align::Stretch)
+            .child(title.passes(true))
+            .child(below),
+        None => title,
+    }
+    .width(bounds.width)
+    .min_height(height)
+    .background(color::PANEL)
+    // A pill of two lines keeps the ends of one, rounding only its corners.
+    .radius(line / 2.0)
+    .passes(true);
     pill.style.padding = [padding / 2.0, padding, padding / 2.0, padding];
     pill.anchor = Some(match place {
         PillPlace::Over(over) => Anchor::Point(Vec2::new(x, over), Vec2::Y),

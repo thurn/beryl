@@ -68,9 +68,9 @@ fn entries(purpose: Purpose) -> impl Iterator<Item = Wording> {
     })
 }
 
-fn templates(w: &Wording) -> [&'static str; 8] {
+fn templates(w: &Wording) -> [&'static str; 9] {
     [
-        w.title, w.unnamed, w.confirm, w.counted, w.decline, w.yes, w.no, w.auto,
+        w.title, w.subtitle, w.unnamed, w.confirm, w.counted, w.decline, w.yes, w.no, w.auto,
     ]
 }
 

@@ -1,7 +1,8 @@
 //! The words of every prompt: one table keyed by purpose ([`wording`]), and the filling of
 //! its templates ([`Holes`]).
 //!
-//! An entry is a prompt's title and the labels of its buttons. The match on the purpose is
+//! An entry is a prompt's title, the line under it where Arena draws one, and the labels of
+//! its buttons. The match on the purpose is
 //! exhaustive, so a purpose without words does not compile. Where one purpose is worded two
 //! ways, the entry turns on the rest of the record: the part asked, how many it takes, the
 //! place a card goes, the zone the cards lie in.
@@ -56,6 +57,9 @@ use crate::protocol::Step;
 pub(crate) struct Wording {
     /// What the prompt asks.
     pub title: &'static str,
+    /// The line under the title that says how to answer, where Arena draws one: "Click an
+    /// option below to select it." under "Choose One".
+    pub subtitle: &'static str,
     /// What it asks when a hole of its title has nothing to fill it: a card with no name the
     /// viewer knows, a cost of no mana.
     pub unnamed: &'static str,
@@ -75,6 +79,7 @@ pub(crate) struct Wording {
 
 const NONE: Wording = Wording {
     title: "",
+    subtitle: "",
     unnamed: "",
     confirm: "",
     counted: "",
@@ -458,6 +463,7 @@ pub(crate) const fn wording(prompt: &Prompt, zone: Option<Zone>) -> Wording {
         // `3sEoP_s4DQE 17:48.0`).
         Purpose::Act => Wording {
             title: "Choose One",
+            subtitle: "Click an option below to select it.",
             ..NONE
         },
         // "Choose Color", under "Choose One" (`UrGalw_f35w 45:18.5`). Arena takes a color at

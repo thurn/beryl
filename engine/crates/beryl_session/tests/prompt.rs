@@ -70,6 +70,7 @@ fn prompt(
         purpose,
         part: PartName::Pick,
         title: title.to_owned(),
+        subtitle: String::new(),
         words: Words::default(),
         count: None,
         about: Vec::new(),

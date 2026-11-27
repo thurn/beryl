@@ -104,6 +104,7 @@ fn worded(prompt: &Prompt, zone: Option<Zone>, holes: &Holes) -> PromptView {
         purpose: prompt.purpose,
         part: prompt.part.into(),
         title: holes.title(&words),
+        subtitle: holes.label(words.subtitle),
         words: Words {
             confirm: holes.label(words.confirm),
             counted: holes.label(words.counted),

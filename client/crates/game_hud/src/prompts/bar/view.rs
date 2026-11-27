@@ -93,6 +93,7 @@ pub(super) fn bar(prompt: &PromptView, input: &HudIn, controls: Option<Controls>
                 .text_align(TextAlign::Center)
         }
     });
+    let subtitle = subtitle(prompt, type_style::BODY.size);
     let buttons: Vec<&PromptButton> = bar_buttons(prompt).collect();
     let forward = buttons
         .iter()
@@ -115,6 +116,7 @@ pub(super) fn bar(prompt: &PromptView, input: &HudIn, controls: Option<Controls>
         .collect();
     let dock = bar_column(input.profile)
         .children(title)
+        .children(subtitle)
         .children(others)
         .children(controls.map(|controls| controls.element))
         .children(forward.map(|forward| {
@@ -135,6 +137,21 @@ pub(super) fn bar(prompt: &PromptView, input: &HudIn, controls: Option<Controls>
         return fit_question_dock(dock, input.profile);
     }
     dock
+}
+
+/// The line under the title of `prompt` that says how to answer, where the session sends one,
+/// in body type `size` points high: Arena draws "Click an option below to select it." under
+/// "Choose One" (`SN9QFe2kM4Y 14:02.5`).
+pub(super) fn subtitle(prompt: &PromptView, size: f32) -> Option<Element> {
+    (!prompt.subtitle.is_empty()).then(|| {
+        text(&prompt.subtitle)
+            .style(TypeStyle {
+                size,
+                ..type_style::BODY
+            })
+            .text_align(TextAlign::Center)
+            .passes(true)
+    })
 }
 
 /// The desktop's action dock, as the web's `.dock` in `ui/src/screens/styles/controls.css`
@@ -346,7 +363,7 @@ fn floating_bar(
     });
     let pill = (!asks.is_empty()).then(|| {
         let place = PillPlace::beside_controls(slots.held, strip_over, beside_left, beside_right);
-        pill(asks, place, slots)
+        pill(asks, prompt, place, slots)
     });
     let phase = slots.phase_icon(pill.as_ref().map(|(_, bounds)| *bounds));
     // The pill comes first, so that the buttons are drawn over it where they meet.
@@ -378,6 +395,8 @@ struct PromptSlots<'a> {
     clearance: Rect,
     asked: Rect,
     metrics: FloatingPrompt,
+    /// The least size of text the profile's checks allow, in points, or 0.
+    text_points: f32,
     scene: Option<&'a PlacementScene>,
     held: bool,
     opening: bool,
@@ -429,6 +448,7 @@ impl<'a> PromptSlots<'a> {
             clearance: clearance?.rect,
             asked: asked?.rect,
             metrics,
+            text_points: profile.data().checks.text_points.unwrap_or(0.0),
             scene: input.placement_scene,
             held,
             opening,
