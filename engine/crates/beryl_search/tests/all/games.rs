@@ -15,7 +15,7 @@ use beryl_engine::card::{CardDef, Colors, FaceIx, Words};
 use beryl_engine::coverage;
 use beryl_engine::filter::Filter;
 use beryl_engine::rng::SplitMix64;
-use beryl_engine::state::Pending;
+use beryl_engine::state::{Pending, StackItem};
 use beryl_engine::{
     CardId, CardIx, CardTable, Choice, Counts, Decision, Format, GameTable, Large, LargeCardIx,
     LargeSlot, Layout, Misfit, Observation, Opt, Outcome, Placement, Profile, Relayout, Replay,
@@ -191,7 +191,9 @@ fn eighty_card_decks_are_refused_by_small_and_play_in_large() {
             "seed {seed}: {outcome:?}"
         );
         assert!(!fixed || decisions > 40, "seed {seed}: a short game");
-        // The cards a player owns are still their 80, wherever they went.
+        // The cards a player owns are still their 80, wherever they went. A game that ends
+        // while a spell is resolving leaves its card on the stack, which no owned zone holds
+        // (see CR 405.1).
         for p in Seat::BOTH {
             let owned = [
                 Zone::Library,
@@ -203,7 +205,19 @@ fn eighty_card_decks_are_refused_by_small_and_play_in_large() {
             .map(|zone| s.zone(ZoneKey::Of(p, zone)).count())
             .iter()
             .sum::<u32>();
-            assert!(owned >= 80, "seed {seed}: player {p:?} owns {owned}");
+            let on_stack = s
+                .stack()
+                .iter()
+                .filter(|entry| match entry.item {
+                    StackItem::Spell { object, .. } => s.object(object.slot).owner() == p,
+                    _ => false,
+                })
+                .map(|_| 1)
+                .sum::<u32>();
+            assert!(
+                owned + on_stack >= 80,
+                "seed {seed}: player {p:?} owns {owned} and has {on_stack} on the stack"
+            );
         }
     }
 }
