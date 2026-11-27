@@ -248,7 +248,7 @@ pub fn captioned(pressed: Element, caption: &str) -> Element {
 ///   instead, if they fit there clear of every card and the phase icon: the dock at the band's
 ///   right end, and the stacked buttons there, beside the dock, or at the band's left end.
 ///   The pill is narrowed to the room between them. On a table whose players share their
-///   piles, the band's ends are between the library and the graveyard.
+///   piles, the band starts right of the shared piles' column.
 /// - What it asks, `asks`, is a pill on the middle band's line, as Arena writes it across the
 ///   middle of its table, or at the nearest height clear of every card where one lies on that
 ///   line. While the prompt holds cards up, or lists what it asks
@@ -404,8 +404,10 @@ impl<'a> PromptSlots<'a> {
             "prompt.asked",
             "phase",
         ]);
-        let bar = bar?.rect;
         let shared = input.view.is_some_and(|view| view.shared.is_some());
+        // The shared piles' column stands at the band's left end, and a pill moved up or down
+        // to a height clear of the cards would cover the graveyard or exile pile beside it.
+        let bar = clear_of_shared_piles(profile, bar?.rect, shared);
         let phase_icon = phase
             .filter(|_| profile.data().hud.table.contains(&Piece::Phase))
             .zip(input.view)
@@ -533,7 +535,7 @@ impl<'a> PromptSlots<'a> {
     /// A box `width` by `height` on the middle band's line, starting at `left` or as far left
     /// of it as keeps the box within the band's room beside the phase icon, if it fits there.
     /// A control may reach a few points past the band's top and foot, where the table's card
-    /// piles do too, but not past its ends, where a shared library and graveyard lie.
+    /// piles do too, but not past its ends, or into the shared piles' column at its left.
     fn middle(&self, left: f32, width: f32, height: f32) -> Option<Rect> {
         let left = left.min(self.middle_end() - width);
         (!self.held

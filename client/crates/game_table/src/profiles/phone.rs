@@ -211,21 +211,19 @@ fn piles(camera: &Camera, bands: &TableBands, data: Banded) -> ([[Vec2; 3]; 2], 
     (piles, scale)
 }
 
-/// Where the shared library, graveyard and exile sit on a banded layout: library at the left edge
-/// and graveyard at the right edge of the seam between the two players' creature rows, with exile
-/// beneath the graveyard.
+/// Where the shared library, graveyard and exile sit on a banded layout: one column at the left
+/// edge, the library on the seam between the two players' creature rows, the graveyard above it
+/// and the exile pile below it, `gap` points apart.
 fn shared_piles(camera: &Camera, bands: &TableBands, data: Banded) -> ([Vec2; 3], f32) {
     let window = camera.window;
-    let inset = window.safe_area;
+    let x = window.safe_area.left + data.shared_piles.left;
     let y = bands.middle.middle() + data.shared_piles.y_offset;
-    let library = window.size.ndc(inset.left + data.shared_piles.left, y);
-    let graveyard = window
-        .size
-        .ndc(window.size.width - inset.right - data.shared_piles.right, y);
+    let step = data.shared_piles.width / ratio(camera.data.card) + data.shared_piles.gap;
+    let [library, graveyard, exile] = [y, y - step, y + step].map(|y| window.size.ndc(x, y));
     let base = camera.on_table(library).extend(0.0);
     let scale =
         data.shared_piles.width / (camera.data.card.width * camera.points_per_millimetre(base));
-    ([library, graveyard, graveyard], scale)
+    ([library, graveyard, exile], scale)
 }
 
 /// The highest the top edge of the viewer's hand may reach on a phone, in logical points from the

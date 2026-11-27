@@ -53,12 +53,13 @@ pub struct Pile {
 pub struct SharedPiles {
     #[serde(deserialize_with = "positive")]
     pub width: f32,
-    /// The left pile's centre from the left edge of the safe area, in logical points.
+    /// The piles' centre from the left edge of the safe area, in logical points. The three
+    /// stand in one column there: the graveyard above the library and the exile pile below it.
     #[serde(deserialize_with = "positive")]
     pub left: f32,
-    /// The right pile's centre from the right edge of the safe area, in logical points.
-    #[serde(deserialize_with = "positive")]
-    pub right: f32,
+    /// The space between two piles of the column, in logical points.
+    #[serde(deserialize_with = "nonnegative")]
+    pub gap: f32,
     /// Vertical offset from the seam between the two middle rows, in logical points.
     #[serde(default, deserialize_with = "finite")]
     pub y_offset: f32,

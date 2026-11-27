@@ -49,12 +49,15 @@ pub struct Pile {
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct SharedPiles {
+    /// Each shared pile's centre in normalized device coordinates. The three stand in one
+    /// column at the table's left edge: the graveyard above the seam between the players'
+    /// creature rows, the library on it and the exile pile below it.
     #[serde(deserialize_with = "vector")]
-    pub left: Vec2,
+    pub library: Vec2,
     #[serde(deserialize_with = "vector")]
-    pub middle: Vec2,
+    pub graveyard: Vec2,
     #[serde(deserialize_with = "vector")]
-    pub right: Vec2,
+    pub exile: Vec2,
     #[serde(deserialize_with = "positive")]
     pub scale: f32,
 }

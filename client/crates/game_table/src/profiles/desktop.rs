@@ -29,9 +29,9 @@ pub(super) fn reference(profile: &ProfileData, data: &Anchored) -> Layout {
         piles: piles.map(|pile| [pile.outer, pile.middle, pile.inner]),
         pile_scale: piles.map(|pile| pile.scale),
         shared_piles: [
-            data.shared_piles.left,
-            data.shared_piles.middle,
-            data.shared_piles.right,
+            data.shared_piles.library,
+            data.shared_piles.graveyard,
+            data.shared_piles.exile,
         ],
         shared_pile_scale: data.shared_piles.scale,
         tray: tray(

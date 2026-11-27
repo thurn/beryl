@@ -90,7 +90,7 @@
       "shared_piles": {
         "width": 44,
         "left": 27,
-        "right": 27
+        "gap": 6
       },
       "stack": {
         "width": 68,

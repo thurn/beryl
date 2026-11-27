@@ -620,12 +620,12 @@ recordings do not show them.
   out".
 - **Shared piles.** A shared-deck table draws one shared library, one shared
   graveyard and one shared exile pile with the same card look, tilt and scale as
-  per-player piles, placed at new positions from each profile's `shared_piles`
-  data: on desktop, the library at the middle left and the graveyard and exile
-  at the middle right; on phone and wide-compact, the library at the left edge
-  and the graveyard at the right edge of the seam between the two players'
-  creature rows, with exile beneath the graveyard. The per-player pile places
-  stay empty.
+  per-player piles, placed from each profile's `shared_piles` data in one column
+  at the table's left edge on every layout: the library on the seam between the
+  two players' creature rows, the graveyard above it and the exile pile below
+  it. The battlefield rows beside the column start right of it, and the phone's
+  prompt pill and phase icon keep clear of it. The per-player pile places stay
+  empty.
 - **Text-changed cards.** A spell or permanent whose text or type line was
   changed by a text-changing effect shows a "Text changed" tag on the table,
   renders Beryl's card frame with its new type line and rules text on the table

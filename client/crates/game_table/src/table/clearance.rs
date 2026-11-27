@@ -1,7 +1,9 @@
-//! Battlefield row regions cropped around the stack and each player's life total.
+//! Battlefield row regions cropped around the stack, each player's life total and the shared
+//! piles.
 
 use beryl_protocol::protocol::{RowName, Side};
 use glam::{Vec2, Vec3};
+use kit_base::geometry::Rect;
 use kit_base::tokens::size;
 use kit_scene::hit::CELL;
 
@@ -15,7 +17,7 @@ use super::{Camera, Layout, RowArea, stack};
 /// also present when the stack is empty, so casting a spell does not move the row. A row
 /// keeps its whole area if it has room above or below the stack, or if the cut would leave
 /// too little room for a tapped card. The two parts of the back row also end clear of their
-/// player's life total.
+/// player's life total, and on a shared-deck table every row starts clear of the shared piles.
 pub fn row_area((layout, camera): (&Layout, &Camera), side: Side, row: RowName) -> (RowArea, f32) {
     // The desktop layout fitted to a window has each side's rows where the web interface draws
     // them, already clear of the stack's column and the life orbs (`ROOM` and `ROWS` in
@@ -25,7 +27,50 @@ pub fn row_area((layout, camera): (&Layout, &Camera), side: Side, row: RowName) 
         return (area, area.y);
     }
     let (area, y) = left_of_stack((layout, camera), side, row);
-    (clear_of_life((layout, camera), side, row, (area, y)), y)
+    let area = clear_of_life((layout, camera), side, row, (area, y));
+    (right_of_shared_piles((layout, camera), (area, y)), y)
+}
+
+/// `area`, a row at height `y` on the table, started a `layout.gap` right of the shared piles'
+/// column where the row's band of the screen meets the column's. The shared library, graveyard
+/// and exile stand in one column at the table's left edge, so on a shared-deck table the rows
+/// beside it give up that part of the table. A row clear of the column's height, and every row
+/// of a table with per-player piles, keeps its area. The row keeps room for one tapped card.
+fn right_of_shared_piles(
+    (layout, camera): (&Layout, &Camera),
+    (area, y): (RowArea, f32),
+) -> RowArea {
+    if !layout.shape.is_shared() {
+        return area;
+    }
+    let card = camera.data.card;
+    let column = layout.shared_piles_bounds(camera);
+    let (right, top, bottom) = (column.x + column.width, column.y, column.y + column.height);
+    // The band a tapped card of the row lies across or an untapped one stands across, the
+    // taller of the two.
+    let reach = card.height.max(card.width) / 2.0;
+    let height = |along: f32| camera.to_screen(Vec3::new(0.0, y + along, 0.0)).y;
+    let (near, far) = (height(-reach), height(reach));
+    if near.max(far) < top || near.min(far) > bottom {
+        return area;
+    }
+    // Along a line of the table at one height, a point's place across the screen is linear in
+    // its x. Of the two ends of a card's left edge, the one further left on screen meets the
+    // column first.
+    let left = [-reach, reach]
+        .map(|along| {
+            let point = Vec3::new(0.0, y + along, 0.0);
+            (right - camera.to_screen(point).x) / camera.points_per_millimetre(point)
+        })
+        .into_iter()
+        .fold(f32::NEG_INFINITY, f32::max);
+    RowArea {
+        left: area
+            .left
+            .max(left + layout.gap)
+            .min(area.right - card.height),
+        ..area
+    }
 }
 
 /// `area`, the lands' or other permanents' part of `side`'s back row at height `y` on the table,
@@ -142,4 +187,33 @@ fn left_of_stack((layout, camera): (&Layout, &Camera), side: Side, row: RowName)
         ..area
     };
     (area, y)
+}
+
+impl Layout {
+    /// The box on the screen, in logical points, that the bottom cards of the three shared piles
+    /// cover together. A pile's cards stand a little higher than its bottom card, so a control
+    /// that keeps clear of this box keeps a small gap from it as well.
+    #[must_use]
+    pub fn shared_piles_bounds(&self, camera: &Camera) -> Rect {
+        let card = camera.data.card;
+        let half = Vec2::new(card.width, card.height) * self.shared_pile_scale / 2.0;
+        let corners = self.shared_piles.iter().flat_map(|&anchor| {
+            let base = camera.on_table(anchor);
+            [-1.0, 1.0].into_iter().flat_map(move |across: f32| {
+                [-1.0, 1.0].map(|along: f32| {
+                    camera.to_screen((base + half * Vec2::new(across, along)).extend(0.0))
+                })
+            })
+        });
+        let (low, high) = corners.fold(
+            (Vec2::splat(f32::INFINITY), Vec2::splat(f32::NEG_INFINITY)),
+            |(low, high), corner| (low.min(corner), high.max(corner)),
+        );
+        Rect {
+            x: low.x,
+            y: low.y,
+            width: high.x - low.x,
+            height: high.y - low.y,
+        }
+    }
 }

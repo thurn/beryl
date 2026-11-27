@@ -79,7 +79,7 @@ pub fn icon(view: &PlayerView, bounds: Rect) -> Element {
 
 /// The part of the middle band (the `phase` slot) where its furniture and a prompt's controls
 /// may stand in the game `view`: the whole band, or, when both players share one library and
-/// graveyard, the part between those two piles, which lie at the band's ends, less a gap on
+/// graveyard, the part right of the shared piles' column at the band's left end, less a gap on
 /// each side.
 #[must_use]
 pub fn middle_band(profile: Profile, view: &PlayerView) -> Option<Rect> {
@@ -87,15 +87,15 @@ pub fn middle_band(profile: Profile, view: &PlayerView) -> Option<Rect> {
     Some(clear_of_shared_piles(profile, slot, view.shared.is_some()))
 }
 
-/// `area`, a box across the middle band, narrowed to stand between the shared library and
-/// graveyard with a gap on each side when the game is `shared`.
+/// `area`, a box across the middle band, narrowed to stand right of the shared piles' column and
+/// inside the safe area, with a gap on each side, when the game is `shared`.
 #[must_use]
 pub fn clear_of_shared_piles(profile: Profile, area: Rect, shared: bool) -> Rect {
-    let Some((library, graveyard)) = profile.shared_pile_edges().filter(|_| shared) else {
+    let Some((piles, end)) = profile.shared_pile_edges().filter(|_| shared) else {
         return area;
     };
-    let left = area.x.max(library + space::M);
-    let right = (area.x + area.width).min(graveyard - space::M);
+    let left = area.x.max(piles + space::M);
+    let right = (area.x + area.width).min(end - space::M);
     Rect {
         x: left,
         width: (right - left).max(0.0),
@@ -108,9 +108,9 @@ pub fn clear_of_shared_piles(profile: Profile, area: Rect, shared: bool) -> Rect
 /// at both ends (`banded::Stack::ends`), or the pill that says what a prompt asks, which the
 /// prompt bar fits beside the icon. It stands at the left end, because the prompt bar puts its
 /// buttons at the right end, where they stand over the dock. On a table whose players share
-/// their piles (`shared`), it stands at the right end instead: the cards a look takes from the
-/// library lie beside the library at the band's left end, and nothing lies beside the
-/// graveyard at its right end.
+/// their piles (`shared`), it stands at the right end instead: the shared piles stand in a
+/// column at the band's left end and the cards a look takes from the library lie beside it,
+/// while nothing lies at the band's right end.
 #[must_use]
 pub fn phase_box(slot: Rect, shared: bool) -> Rect {
     let side = f32::from(icons::PHASE_SIDE);

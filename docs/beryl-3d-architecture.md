@@ -260,13 +260,15 @@ module in `game_table` for what data cannot say.
   data. A shared table has three: the library, the graveyard and the exile pile,
   placed by the profile's `shared_piles` data, and the places the per-player
   piles had stay empty. Hands, rows, the stack, life totals and the prompt tray
-  do not change. On the desktop `shared_piles` holds positions (`left`, `middle`
-  and `right`, for the library, graveyard and exile) and a scale. The phone and
-  `wide-compact` profiles hold a `width` and the insets `left` and `right`, so
-  the library sits at the left edge and the graveyard at the right edge of the
-  seam between the two players' creature rows, with exile beneath the graveyard.
-  A card moves between a shared pile and a hand, the stack or the battlefield
-  with the same verbs as any other, from the pile's position.
+  do not change, except that the battlefield rows beside the shared piles start
+  right of them (`table::clearance`). The three piles stand in one column at the
+  table's left edge: the library on the seam between the two players' creature
+  rows, the graveyard above it and the exile pile below it. On the desktop
+  `shared_piles` holds their positions (`library`, `graveyard` and `exile`) and
+  a scale. The phone and `wide-compact` profiles hold a `width`, the inset
+  `left` and the `gap` between two piles of the column. A card moves between a
+  shared pile and a hand, the stack or the battlefield with the same verbs as
+  any other, from the pile's position.
 
 ## Features
 
