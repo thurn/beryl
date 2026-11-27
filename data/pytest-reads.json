@@ -237,7 +237,7 @@
       "engine/crates/beryl_protocol/src/script/act.rs",
       "engine/crates/beryl_protocol/src/script/table.rs",
       "engine/crates/beryl_protocol/src/script/text.rs",
-      "engine/crates/beryl_protocol/src/script/timing.rs",
+      "engine/crates/beryl_protocol/src/script/timing/cases.rs",
       "engine/crates/beryl_protocol/src/script/verb.rs"
     ],
     "tools/tests/test_client_profiles.py": [

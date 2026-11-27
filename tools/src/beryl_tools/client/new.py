@@ -385,7 +385,7 @@ def add_verb(files: Files, _: argparse.Namespace) -> None:
         f'            Act::{variant} {{ subject }} => write!(f, "{{verb}} {{subject}}"),\n',
     )
     files.insert(
-        script / "timing.rs",
+        script / "timing" / "cases.rs",
         "        Act::Lift { .. } | Act::Flip { .. }",
         f"        Act::{variant} {{ .. }} => None,\n",
     )

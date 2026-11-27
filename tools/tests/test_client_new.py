@@ -80,7 +80,7 @@ CASES: dict[str, tuple[list[str], list[str], str]] = {
     "verb": (
         [
             PROTOCOL + "script/" + file
-            for file in ("verb.rs", "act.rs", "table.rs", "text.rs", "timing.rs")
+            for file in ("verb.rs", "act.rs", "table.rs", "text.rs", "timing/cases.rs")
         ]
         + [
             CRATES + "game_play/src/verbs/mod.rs",

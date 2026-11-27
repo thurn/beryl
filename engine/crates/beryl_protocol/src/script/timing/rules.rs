@@ -433,3 +433,39 @@ fn draw_timing_splits_by_phase_and_compresses_large_batch_stagger() {
         150.0
     );
 }
+
+/// An opponent's discard takes longer than the player's own quick hop to their adjacent
+/// graveyard, including in a shared-deck game where the graveyard card carries a fixed side.
+#[test]
+fn opponent_discard_uses_its_own_duration_including_in_shared_games() {
+    let own = fly(
+        ZoneName::Hand,
+        Why::Discard,
+        card(1, ZoneName::Graveyard, Side::You),
+    );
+    let opp = fly(
+        ZoneName::Hand,
+        Why::Discard,
+        card(2, ZoneName::Graveyard, Side::Opponent),
+    );
+    assert_eq!(alone(&own).case.as_deref(), Some("discard"));
+    assert_eq!(alone(&own).duration, 165.0);
+    assert_eq!(alone(&opp).case.as_deref(), Some("opponent discard"));
+    assert_eq!(alone(&opp).duration, 475.0);
+
+    // In a shared-deck game, a card in the opponent's hand loses its owner on entering the
+    // shared graveyard (`owner == Side::You`), so timing reads the hand it left from `found`.
+    let mut shared = Table::empty(20);
+    shared.objects.insert(
+        ObjectId(3),
+        ObjectView::hidden(ObjectId(3), ZoneName::Hand, Side::Opponent, Side::Opponent),
+    );
+    let shared_discard = fly(
+        ZoneName::Hand,
+        Why::Discard,
+        card(3, ZoneName::Graveyard, Side::You),
+    );
+    let timing = timing_of(&shared_discard, &shared, None, &[&shared_discard]);
+    assert_eq!(timing.case.as_deref(), Some("opponent discard"));
+    assert_eq!(timing.duration, 475.0);
+}
