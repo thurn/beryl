@@ -30,10 +30,13 @@ use crate::table::{Capability, GameTable};
 use beryl_kernel::chosen::ChosenValue;
 use beryl_kernel::mana_memory::RememberedMana;
 
+mod combat;
 mod grants;
 mod objects;
 mod sequences;
 
+#[cfg(test)]
+pub(crate) use combat::verify_all_paths;
 #[cfg(test)]
 pub(crate) use objects::reference_pays_with_objects;
 pub(crate) use sequences::reference_sequences;
@@ -76,6 +79,7 @@ pub fn check_references<L: Layout>(s: &State<L>, t: &GameTable) -> Result<(), Vi
     }
     check_layers(s, t)?;
     grants::check_grants(s, t)?;
+    combat::check_combat(s, t)?;
     // A check of each player alone: the order decides only which violation is reported.
     for p in s.players().in_seat_order() {
         check_payments(s, t, p)?;

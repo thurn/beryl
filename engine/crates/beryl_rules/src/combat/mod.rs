@@ -24,6 +24,7 @@ use beryl_kernel::reference::Permanent;
 mod assignment;
 mod banding;
 pub mod damage;
+pub(crate) mod requirements;
 
 pub use assignment::{assigner, preferred_damage};
 pub(crate) use assignment::{
@@ -156,13 +157,17 @@ pub(crate) fn attack_decision<L: Layout>(
 ) -> Result<Decision<L>, Full> {
     let mut list: L::Queue<Opt<L>, OPTIONS> = Default::default();
     let (player, kind, part) = if attacker.is_none() {
-        list.push(Opt::Done)?;
-        let attackers = collapse(s, eligible_attackers::<L, false>(s, t).collect());
-        Candidates::<L>::extend_options(&mut list, attackers, |out, slot| {
-            out.push(Opt::attack(slot))
-        })?;
-        if t.can(Capability::Banding) {
-            banding::append_attack_options(s, t, attackers, &mut list)?;
+        if t.can(Capability::CombatRequirements) {
+            requirements::attack_options(s, t, &mut list)?;
+        } else {
+            list.push(Opt::Done)?;
+            let attackers = collapse(s, eligible_attackers::<L, false>(s, t).collect());
+            Candidates::<L>::extend_options(&mut list, attackers, |out, slot| {
+                out.push(Opt::attack(slot))
+            })?;
+            if t.can(Capability::Banding) {
+                banding::append_attack_options(s, t, attackers, &mut list)?;
+            }
         }
         (s.turn().active(), DecisionKind::Attacker, Part::Pick)
     } else {
@@ -366,7 +371,12 @@ fn declare_attack<L: Layout>(
 ///
 /// See [CR 702.16f](https://yawgatog.com/resources/magic-rules/#R70216f): "Attacking creatures with
 /// protection can’t be blocked by creatures that have the stated quality."
-fn can_block<L: Layout>(s: &State<L>, t: &GameTable, blocker: L::Slot, attacker: L::Slot) -> bool {
+pub(crate) fn can_block<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    blocker: L::Slot,
+    attacker: L::Slot,
+) -> bool {
     let Some(target) = s.object(attacker).attack_target() else {
         return false;
     };
@@ -490,11 +500,16 @@ pub(crate) fn block_decision<L: Layout>(
         } else {
             legal.collect()
         };
+        let candidates = if t.can(Capability::CombatRequirements) {
+            requirements::block_targets(s, t, blocker, attackers)
+        } else {
+            collapse(s, attackers)
+        };
         return Ok(Decision {
             player,
             decider: player,
             kind: DecisionKind::BlockTarget,
-            candidates: Candidates::Objects(collapse(s, attackers)),
+            candidates: Candidates::Objects(candidates),
             // The creature just chosen is the one being aimed.
             prompt: Prompt::new(Purpose::Block).part(Part::Aim),
             about: Bitboard::single(blocker),
@@ -506,11 +521,15 @@ pub(crate) fn block_decision<L: Layout>(
         .next()
         .expect("a block declaration has a defending player");
     let mut list: L::Queue<Opt<L>, OPTIONS> = Default::default();
-    list.push(Opt::Done)?;
-    let able = eligible_blockers(s, t).collect();
-    Candidates::<L>::extend_options(&mut list, collapse(s, able), |out, slot| {
-        out.push(Opt::Block(slot))
-    })?;
+    if t.can(Capability::CombatRequirements) {
+        requirements::block_options(s, t, &mut list)?;
+    } else {
+        list.push(Opt::Done)?;
+        let able = eligible_blockers(s, t).collect();
+        Candidates::<L>::extend_options(&mut list, collapse(s, able), |out, slot| {
+            out.push(Opt::Block(slot))
+        })?;
+    }
     Ok(Decision {
         player,
         decider: player,
@@ -526,9 +545,17 @@ pub(crate) fn block_decision<L: Layout>(
 /// "The defending player chooses which creatures they control, if any, will block."
 ///
 /// [CR 509.1a]: https://yawgatog.com/resources/magic-rules/#R5091a
-pub(crate) fn choose_blocker<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, option: Opt<L>) {
+pub(crate) fn choose_blocker<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    option: Opt<L>,
+) -> Result<(), Full> {
     match option {
-        Opt::Block(slot) => block_with(s, s.permanent_at(slot).expect("a declared blocker")),
+        Opt::Block(slot) => {
+            block_with(s, s.permanent_at(slot).expect("a declared blocker"));
+            Ok(())
+        }
         Opt::Pass
         | Opt::PlayLand(_)
         | Opt::Play
@@ -553,7 +580,7 @@ pub(crate) fn choose_blocker<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, op
         | Opt::Ability(_)
         | Opt::Object(_)
         | Opt::TurnFaceUp(_)
-        | Opt::Companion => finish_blocks(s, sink),
+        | Opt::Companion => finish_blocks(s, t, sink),
     }
 }
 
@@ -590,7 +617,7 @@ pub(crate) fn block_attacker<L: Layout>(
     let blocker = s.permanent_at(blocker).expect("a declared blocker");
     let attacker = s.permanent_at(attacker).expect("a declared attacker");
     s.block(blocker, attacker)?;
-    if t.can(Capability::Banding) {
+    if t.can(Capability::Banding) && !t.can(Capability::CombatRequirements) {
         banding::spread_block(s, blocker, attacker)?;
     }
     s.ask(Pending::DeclareBlockers { blocker: None });
@@ -603,12 +630,27 @@ pub(crate) fn block_attacker<L: Layout>(
 /// recording sink is told: no card yet reads a block, so the declaration goes through no trigger
 /// matching, and a search pays one branch for it.
 ///
+/// When [`Capability::CombatRequirements`] is set, banding spreads declared blocks to other band
+/// members here (see [CR 702.22h]), after the declaration has been checked against requirements
+/// and restrictions ([CR 509.1b], [CR 509.1c]).
+///
 /// [CR 509.1]: https://yawgatog.com/resources/magic-rules/#R5091
-pub(crate) fn finish_blocks<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>) {
+/// [CR 509.1b]: https://yawgatog.com/resources/magic-rules/#R5091b
+/// [CR 509.1c]: https://yawgatog.com/resources/magic-rules/#R5091c
+/// [CR 702.22h]: https://yawgatog.com/resources/magic-rules/#R70222h
+pub(crate) fn finish_blocks<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+) -> Result<(), Full> {
+    if t.can(Capability::Banding) && t.can(Capability::CombatRequirements) {
+        banding::spread_blocks(s)?;
+    }
     s.settle_question();
     if sink.records() {
         note_blocks(s, sink);
     }
+    Ok(())
 }
 
 #[cold]

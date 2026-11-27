@@ -189,7 +189,11 @@ fn generated_card(name: &str) -> ExitCode {
         eprintln!("beryl_scenario: no card named {name} is built");
         return ExitCode::from(2);
     };
-    let written = beryl_cards::written_scenarios_for(def.name).len();
+    let written = beryl_cards::written_scenarios_for(def.name).len()
+        + beryl_cards::library::by_card()
+            .filter(|&(card, _)| card == def.name)
+            .map(|(_, scenarios)| scenarios.len())
+            .sum::<usize>();
     let derived = derive_card(def);
     let (scenarios, cut) = if let Some(derived) = &derived {
         if !derived.failures.is_empty() {

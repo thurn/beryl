@@ -123,6 +123,9 @@ bitset! {
         /// [CR 702.22a](https://yawgatog.com/resources/magic-rules/#R70222a): "Banding is
         /// a static ability that modifies the rules for combat."
         BANDING = 21,
+        /// [CR 702.111b](https://yawgatog.com/resources/magic-rules/#R702111b): "A creature
+        /// with menace can’t be blocked except by two or more creatures."
+        MENACE = 22,
         /// [CR 702.9b](https://yawgatog.com/resources/magic-rules/#R7029b): "A creature with
         /// flying can't be blocked except by creatures with flying and/or reach."
         FLYING = 8,

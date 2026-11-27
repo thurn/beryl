@@ -807,3 +807,32 @@ fn mirror_games_rarely_stall() {
         2 * n
     );
 }
+
+/// A seeded game between rollout policies with Lure, Alley Strangler and Bloodrock Cyclops in
+/// both decks plays to its end with the debug invariants and reference checks on.
+#[test]
+fn combat_requirements_rollout_game_plays_to_end() {
+    let deck: &[(u8, &str)] = &[
+        (8, names::FOREST),
+        (8, names::SWAMP),
+        (8, names::MOUNTAIN),
+        (4, names::LURE),
+        (4, names::ALLEY_STRANGLER),
+        (4, names::BLOODROCK_CYCLOPS),
+        (4, names::GRIZZLY_BEARS),
+    ];
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [deck, deck]).expect("combat req table");
+    let mut s: State = State::new(&t, 42, Profile::EXACT).expect("state");
+    let mut x = Scratch::new();
+    let mut agents = [GreedyAgent::new(&t), GreedyAgent::new(&t)];
+    let outcome = play(&t, &mut s, &mut x, &mut agents, |s, d| {
+        assert!(!d.is_empty(), "empty decision: {d:?}");
+        if let Err(v) = beryl_engine::check_references(s, &t) {
+            panic!("combat requirements reference violation: {v:?}");
+        }
+    });
+    assert!(
+        matches!(outcome, Outcome::Win(_) | Outcome::Draw),
+        "expected game to finish, got {outcome:?}"
+    );
+}

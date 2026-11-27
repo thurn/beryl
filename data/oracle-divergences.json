@@ -411,5 +411,12 @@
     "scenario": "generated 3: cast from hand with filter partners",
     "cr": "CR 601.2h (https://yawgatog.com/resources/magic-rules/#R6012h): \"The player pays the total cost. First, they pay all costs that don't involve random elements or moving objects from the library to a public zone, in any order. Then they pay all remaining costs in any order. Partial payments are not allowed. Unpayable costs can't be paid.\"",
     "reason": "Forge's AI removes the spell's own targets when choosing permanents to sacrifice for a cost (ComputerUtilCost.paymentChoicesWithoutTargets), so it refuses to play Shrapnel Blast when Ornithopter is both its target and the only artifact to sacrifice."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Bloodrock Cyclops",
+    "scenario": "a creature that must attack withholds Done until it is declared",
+    "cr": "CR 508.1d (https://yawgatog.com/resources/magic-rules/#R5081d): \"The active player checks each creature they control to see whether it's affected by any requirements (effects that say a creature attacks if able, or that it attacks if some condition is met). If the number of requirements that are being obeyed is fewer than the maximum possible number of requirements that could be obeyed without disobeying any restrictions, the declaration of attackers is illegal.\"",
+    "reason": "XMage's strict-choose test harness reports a missing ATTACKER def when declaring attackers with AttacksEachCombatStaticAbility alongside an optional attacker; Forge agrees with Beryl."
   }
 ]

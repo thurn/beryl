@@ -654,10 +654,7 @@ fn perform<L: Layout>(
             | Opt::Companion => unreachable!("a trigger-order decision offers only triggers"),
         },
         DecisionKind::Attacker | DecisionKind::AttackTarget => combat::attack(s, t, sink, option()),
-        DecisionKind::Blocker => {
-            combat::choose_blocker(s, sink, option());
-            Ok(())
-        }
+        DecisionKind::Blocker => combat::choose_blocker(s, t, sink, option()),
         DecisionKind::BlockTarget => combat::block_attacker(s, t, object()),
         DecisionKind::DamageDivision => combat::divide(s, t, sink, option()),
         DecisionKind::X

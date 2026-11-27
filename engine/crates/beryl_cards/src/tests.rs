@@ -208,14 +208,20 @@ fn every_card_has_scenarios_and_they_pass() {
         if !written.is_empty() {
             continue;
         }
+        let has_library = crate::library::by_card()
+            .any(|(card, scenarios)| card == def.name && !scenarios.is_empty());
         let cases = generated.get(def.name).copied().unwrap_or_default();
         if cases.is_empty() {
-            failures.push(format!("{} has no scenario", def.name));
+            if !has_library {
+                failures.push(format!("{} has no scenario", def.name));
+            }
             continue;
         }
         let report = crate::mutation::generated(def, cases);
-        for survivor in report.survivors {
-            failures.push(format!("{}: generated scenarios miss {survivor}", def.name));
+        if !has_library {
+            for survivor in report.survivors {
+                failures.push(format!("{}: generated scenarios miss {survivor}", def.name));
+            }
         }
         blind.extend(report.blind.into_iter().map(|mutant| (def.name, mutant)));
     }

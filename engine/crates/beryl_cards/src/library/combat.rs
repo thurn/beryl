@@ -253,3 +253,163 @@ pub const CANNOT_BLOCK: &[Scenario] = &[
             THEM.life(18),
         ]),
 ];
+
+pub const MUST_BLOCK: &[Scenario] = &[
+    Scenario::new("all untapped creatures able to block a Lured creature must do so")
+        .hand(P0, &[names::LURE])
+        .battlefield(
+            P0,
+            &[names::FOREST, names::FOREST, names::FOREST, FLIER, GROUND],
+        )
+        .battlefield(P1, &[FLIER, props::COLORLESS_CREATURE.card, GROUND])
+        .actions(&[
+            ME.casts(names::LURE),
+            ME.targets(FLIER),
+            Resolve,
+            advance_to(1, TurnStep::BeginningOfCombat),
+            ME.passes(),
+            ME.attacks_with(FLIER),
+            ME.attacks_with(GROUND),
+            // Done is withheld while both FLIER and the colorless flier must block P0's FLIER.
+            THEM.deciding(DecisionKind::Blocker, 3),
+            THEM.chooses(DecisionKind::Blocker, FLIER),
+            THEM.deciding(DecisionKind::Blocker, 2),
+            THEM.chooses(DecisionKind::Blocker, props::COLORLESS_CREATURE.card),
+            // Both required blocks are met; Done and optional GROUND blocker are now offered.
+            THEM.deciding(DecisionKind::Blocker, 2),
+            THEM.answers(DecisionKind::Blocker, Pick::Done),
+            ME.chooses(DecisionKind::DamageDivision, FLIER),
+            ME.chooses(DecisionKind::DamageDivision, props::COLORLESS_CREATURE.card),
+            advance_to(1, TurnStep::EndOfCombat),
+            ME.has(Zone::Graveyard, FLIER, 1),
+            ME.has(Zone::Graveyard, names::LURE, 1),
+            THEM.has(Zone::Graveyard, FLIER, 1),
+            THEM.has(Zone::Graveyard, props::COLORLESS_CREATURE.card, 1),
+            THEM.life(18),
+        ]),
+    Scenario::new("a tapped creature and a ground creature need not block a Lured flier")
+        .hand(P0, &[names::LURE])
+        .battlefield(P0, &[names::FOREST, names::FOREST, names::FOREST, FLIER])
+        .permanents(
+            P1,
+            &[Permanent::new(FLIER).tapped(), Permanent::new(GROUND)],
+        )
+        .actions(&[
+            ME.casts(names::LURE),
+            ME.targets(FLIER),
+            Resolve,
+            advance_to(1, TurnStep::BeginningOfCombat),
+            ME.passes(),
+            ME.attacks_with(FLIER),
+            advance_to(1, TurnStep::EndOfCombat),
+            THEM.life(17),
+            ME.controls(FLIER, 1),
+        ]),
+    Scenario::new("with two Lured attackers each blocker chooses which to block")
+        .hand(P0, &[names::LURE, names::LURE])
+        .battlefield(
+            P0,
+            &[
+                names::FOREST,
+                names::FOREST,
+                names::FOREST,
+                names::FOREST,
+                names::FOREST,
+                names::FOREST,
+                FLIER,
+                props::COLORLESS_CREATURE.card,
+                GROUND,
+            ],
+        )
+        .battlefield(P1, &[FLIER, GROUND])
+        .actions(&[
+            ME.casts(names::LURE),
+            ME.targets(FLIER),
+            Resolve,
+            ME.casts(names::LURE),
+            ME.targets(props::COLORLESS_CREATURE.card),
+            Resolve,
+            advance_to(1, TurnStep::BeginningOfCombat),
+            ME.passes(),
+            ME.attacks_with(FLIER),
+            ME.attacks_with(props::COLORLESS_CREATURE.card),
+            ME.attacks_with(GROUND),
+            // Done is withheld while P1's FLIER must block one of the two Lured fliers.
+            THEM.deciding(DecisionKind::Blocker, 2),
+            THEM.chooses(DecisionKind::Blocker, FLIER),
+            THEM.deciding(DecisionKind::BlockTarget, 2),
+            THEM.chooses(DecisionKind::BlockTarget, FLIER),
+            // Now Done and GROUND (optional block on GROUND) are offered.
+            THEM.deciding(DecisionKind::Blocker, 2),
+            THEM.answers(DecisionKind::Blocker, Pick::Done),
+            advance_to(1, TurnStep::EndOfCombat),
+            ME.has(Zone::Graveyard, FLIER, 1),
+            THEM.has(Zone::Graveyard, FLIER, 1),
+            ME.controls(props::COLORLESS_CREATURE.card, 1),
+            ME.controls(GROUND, 1),
+            THEM.life(18),
+        ]),
+];
+
+pub const MENACE: &[Scenario] = &[
+    Scenario::new("a single creature cannot block an attacker with menace")
+        .battlefield(P0, &[names::ALLEY_STRANGLER])
+        .battlefield(P1, &[GROUND])
+        .actions(&[
+            advance_to(1, TurnStep::BeginningOfCombat),
+            ME.passes(),
+            ME.attacks_with(names::ALLEY_STRANGLER),
+            advance_to(1, TurnStep::EndOfCombat),
+            THEM.life(18),
+            THEM.controls(GROUND, 1),
+        ]),
+    Scenario::new("blocking a menace attacker withholds Done until a second blocker is declared")
+        .battlefield(P0, &[names::ALLEY_STRANGLER])
+        .battlefield(P1, &[GROUND, FLIER, props::GREEN_CREATURE.card])
+        .actions(&[
+            advance_to(1, TurnStep::BeginningOfCombat),
+            ME.passes(),
+            ME.attacks_with(names::ALLEY_STRANGLER),
+            // Done + 3 blockers = 4 options.
+            THEM.deciding(DecisionKind::Blocker, 4),
+            THEM.chooses(DecisionKind::Blocker, GROUND),
+            // After 1 blocker on menace, Done is withheld: only FLIER and the green creature are offered.
+            THEM.deciding(DecisionKind::Blocker, 2),
+            THEM.chooses(DecisionKind::Blocker, FLIER),
+            // With 2 blockers on menace, Done and the green creature are offered.
+            THEM.deciding(DecisionKind::Blocker, 2),
+            THEM.answers(DecisionKind::Blocker, Pick::Done),
+            ME.chooses(DecisionKind::DamageDivision, GROUND),
+            ME.answers(DecisionKind::DamageDivision, Pick::Done),
+            advance_to(1, TurnStep::EndOfCombat),
+            ME.has(Zone::Graveyard, names::ALLEY_STRANGLER, 1),
+            THEM.has(Zone::Graveyard, GROUND, 1),
+            THEM.controls(FLIER, 1),
+            THEM.controls(props::GREEN_CREATURE.card, 1),
+            THEM.life(20),
+        ]),
+];
+
+pub const MUST_ATTACK: &[Scenario] = &[
+    Scenario::new("a creature that must attack withholds Done until it is declared")
+        .battlefield(P0, &[names::BLOODROCK_CYCLOPS, GROUND])
+        .actions(&[
+            advance_to(1, TurnStep::BeginningOfCombat),
+            ME.passes(),
+            // Done is withheld: only Bloodrock Cyclops and GROUND are offered.
+            ME.deciding(DecisionKind::Attacker, 2),
+            ME.attacks_with(names::BLOODROCK_CYCLOPS),
+            // Now Done and GROUND are offered.
+            ME.deciding(DecisionKind::Attacker, 2),
+            ME.done_attacking(),
+            advance_to(1, TurnStep::EndOfCombat),
+            THEM.life(17),
+        ]),
+    Scenario::new("a tapped creature that must attack need not attack")
+        .permanents(P0, &[Permanent::new(names::BLOODROCK_CYCLOPS).tapped()])
+        .actions(&[
+            advance_to(1, TurnStep::BeginningOfCombat),
+            advance_to(1, TurnStep::PostcombatMain),
+            THEM.life(20),
+        ]),
+];

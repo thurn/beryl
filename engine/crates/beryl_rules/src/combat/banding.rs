@@ -182,9 +182,35 @@ pub(super) fn spread_block<L: Layout>(
     };
     for index in 0..s.battlefield().len() {
         let member = s.battlefield()[index];
-        if member != attacker.slot() && s.combat_band(member) == Some(band) {
+        if member != attacker.slot()
+            && s.combat_band(member) == Some(band)
+            && !s.object(blocker.slot()).blocks(member)
+        {
             let member = s.permanent_at(member).expect("a band member");
             s.block(blocker, member)?;
+        }
+    }
+    Ok(())
+}
+
+/// Applies every declared block to the other members of each blocked attacker's band, used
+/// when [`crate::table::Capability::CombatRequirements`] defers band spreading until after
+/// the declaration is finalized (see [CR 702.22h]).
+///
+/// [CR 702.22h]: https://yawgatog.com/resources/magic-rules/#R70222h
+#[cold]
+#[inline(never)]
+pub(super) fn spread_blocks<L: Layout>(s: &mut State<L>) -> Result<(), Full> {
+    for index in 0..s.battlefield().len() {
+        let blocker_slot = s.battlefield()[index];
+        let blocked = s.object(blocker_slot).blocked_attackers();
+        if blocked.is_empty() {
+            continue;
+        }
+        let perm = s.permanent_at(blocker_slot).expect("a declared blocker");
+        for attacker in blocked.iter() {
+            let attacker = s.permanent_at(attacker).expect("a declared attacker");
+            spread_block(s, perm, attacker)?;
         }
     }
     Ok(())

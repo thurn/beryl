@@ -16,6 +16,11 @@ const CUSTOM: &[&str] = &[];
 /// a generated scenario exercises fails too, so the list stays current.
 const UNREACHED: &[(&str, &str)] = &[
     (
+        "Bloodrock Cyclops: ability 0 (Static)",
+        "generated scenarios stop before combat, so they never declare attackers; the rules \
+         library's combat::MUST_ATTACK scenarios exercise it",
+    ),
+    (
         "Brisela, Voice of Nightmares: ability 0 (Static)",
         "the combined back face of a meld pair is never a card in a hand or a deck, so the \
          generator has no scenario of it; the card's hand-written scenarios meld it from Gisela \
@@ -36,6 +41,11 @@ const UNREACHED: &[(&str, &str)] = &[
         "Gisela, the Broken Blade: ability 0 (Triggered)",
         "its end step trigger needs a Bruna, the Fading Light its controller owns and controls, \
          which no generated position has; the card's hand-written scenarios meld the pair",
+    ),
+    (
+        "Lure: ability 1 (Static)",
+        "generated scenarios stop before combat, so they never declare blockers; the rules \
+         library's combat::MUST_BLOCK scenarios exercise it",
     ),
     (
         "Lurrus of the Dream-Den: ability 0 (Static)",

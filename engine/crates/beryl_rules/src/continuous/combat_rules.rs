@@ -27,13 +27,6 @@ use crate::table::{Capability, GameTable};
 /// [CR 508.1d]: https://yawgatog.com/resources/magic-rules/#R5081d
 /// [CR 509.1b]: https://yawgatog.com/resources/magic-rules/#R5091b
 /// [CR 509.1c]: https://yawgatog.com/resources/magic-rules/#R5091c
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "the combat declarations' requirement search, still to be written, reads it"
-    )
-)]
 #[inline]
 pub(crate) fn combat_rules_on<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> Rules {
     if !t.can(Capability::CombatRequirements) {
@@ -50,13 +43,6 @@ pub(crate) fn combat_rules_on<L: Layout>(s: &State<L>, t: &GameTable, slot: L::S
 ///   the Aura or Equipment still has, about [`beryl_card::Objects::AttachedTo`];
 /// - a resolved effect that started it about the creature, for as long as it lasts
 ///   ([`State::effect_rules_on`]).
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "the combat declarations' requirement search, still to be written, reads it"
-    )
-)]
 #[cold]
 #[inline(never)]
 fn combat_rules_in_force<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> Rules {
@@ -95,13 +81,6 @@ fn combat_rules_in_force<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) 
 ///
 /// [CR 508.1c]: https://yawgatog.com/resources/magic-rules/#R5081c
 /// [CR 508.1h]: https://yawgatog.com/resources/magic-rules/#R5081h
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "the combat declarations' requirement search, still to be written, reads it"
-    )
-)]
 #[inline]
 pub(crate) fn combat_rules_for<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Rules {
     if !t.can(Capability::CombatRequirements) {
@@ -111,13 +90,6 @@ pub(crate) fn combat_rules_for<L: Layout>(s: &State<L>, t: &GameTable, player: S
 }
 
 /// [`combat_rules_for`] in a game whose cards have a combat rule.
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "the combat declarations' requirement search, still to be written, reads it"
-    )
-)]
 #[cold]
 #[inline(never)]
 fn combat_player_rules<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Rules {

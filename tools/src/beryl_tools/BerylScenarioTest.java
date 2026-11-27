@@ -35,6 +35,7 @@ import mage.abilities.keyword.HasteAbility;
 import mage.abilities.keyword.IndestructibleAbility;
 import mage.abilities.keyword.IslandwalkAbility;
 import mage.abilities.keyword.LifelinkAbility;
+import mage.abilities.keyword.MenaceAbility;
 import mage.abilities.keyword.MountainwalkAbility;
 import mage.abilities.keyword.PlainswalkAbility;
 import mage.abilities.keyword.ReachAbility;
@@ -704,6 +705,7 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
         SNAPSHOT_KEYWORDS.put("FIRST_STRIKE", FirstStrikeAbility.class);
         SNAPSHOT_KEYWORDS.put("DOUBLE_STRIKE", DoubleStrikeAbility.class);
         SNAPSHOT_KEYWORDS.put("BANDING", BandingAbility.class);
+        SNAPSHOT_KEYWORDS.put("MENACE", MenaceAbility.class);
         SNAPSHOT_KEYWORDS.put("FLYING", FlyingAbility.class);
         SNAPSHOT_KEYWORDS.put("REACH", ReachAbility.class);
         SNAPSHOT_KEYWORDS.put("VIGILANCE", VigilanceAbility.class);

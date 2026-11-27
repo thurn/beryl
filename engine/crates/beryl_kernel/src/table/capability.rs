@@ -315,6 +315,11 @@ impl Capability {
                 if (spec.modifications.iter()).any(|m| matches!(m, Modification::Lend(_))) {
                     found |= Capability::Grants.bit();
                 }
+                if (spec.modifications.iter()).any(|m| {
+                    matches!(m, Modification::AddKeywords(keywords) if keywords.contains(Keywords::MENACE))
+                }) {
+                    found |= Capability::CombatRequirements.bit();
+                }
             }
             if a.spend().is_some() {
                 found |= Capability::RemembersMana.bit();
@@ -460,6 +465,9 @@ fn keyword_capabilities(keywords: Keywords) -> u64 {
     if keywords.contains(Keywords::BANDING) {
         found |= Capability::Banding.bit();
     }
+    if keywords.contains(Keywords::MENACE) {
+        found |= Capability::CombatRequirements.bit();
+    }
     found
 }
 
@@ -540,6 +548,16 @@ fn body_capabilities(body: Behavior) -> u64 {
                         if matches!(rule.what, beryl_card::Governed::TakeStep(_)))
             }) {
                 found |= Capability::TurnStructure.bit();
+            }
+            if effect.any(&|instruction| {
+                matches!(instruction, Effect::ChangeRule { rule, .. }
+                    if RuleKind::of(rule).is_ok_and(RuleKind::is_combat))
+                    || matches!(instruction, Effect::Modify { modifications, .. }
+                        if modifications.iter().any(|m| {
+                            matches!(m, Modification::AddKeywords(keywords) if keywords.contains(Keywords::MENACE))
+                        }))
+            }) {
+                found |= Capability::CombatRequirements.bit();
             }
             found
         }
