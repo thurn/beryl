@@ -252,10 +252,13 @@ impl Checks {
         .collect()
     }
 
-    /// Checks without a record stay on. Index the hub's states once for the whole listing.
+    /// Checks without a record stay on. Index the hub's states once for the whole listing
+    /// without per-area counts: families with thousands of checks (such as `client-interface`)
+    /// otherwise exceed the 30 s HTTP timeout and fall back to treating switched-off checks as on.
     fn check_states(&self, family: &str) -> HashMap<CheckName, CheckState> {
+        let no_areas = [String::new()];
         self.history
-            .stats(family)
+            .stats_in(family, &no_areas)
             .map(|stats| {
                 stats
                     .checks

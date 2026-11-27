@@ -444,21 +444,18 @@ fn stats(conn: &Connection, request: &Request) -> Result<Response, Response> {
         .find(|(key, _)| key == "family")
         .map(|(_, value)| value.as_str())
         .ok_or_else(|| failure(400, "missing the family parameter"))?;
-    let mut reply = checks::stats(conn, family).map_err(|e| store_failure(&e))?;
     // Each `area` parameter names an area whose runs and failures to send; with none, every
-    // area's are sent. The gate needs only the areas its change touches, and the `rust`
-    // family's record in every area was 10 MB, which took 14 s to send.
+    // area's are sent. The gate needs only the areas its change touches, and a tip listing
+    // passes an empty `area=` when it only needs each check's state: `client-interface` has
+    // thousands of checks, and loading every area's counts exceeded the 30 s HTTP timeout.
     let areas: Vec<&str> = request
         .query
         .iter()
         .filter(|(key, _)| key == "area")
         .map(|(_, value)| value.as_str())
         .collect();
-    if !areas.is_empty() {
-        for check in &mut reply.checks {
-            check.areas.retain(|a| areas.contains(&a.area.as_str()));
-        }
-    }
+    let filter = (!areas.is_empty()).then_some(areas.as_slice());
+    let reply = checks::stats_for(conn, family, filter).map_err(|e| store_failure(&e))?;
     Ok(Response::json(200, &json!(reply)))
 }
 

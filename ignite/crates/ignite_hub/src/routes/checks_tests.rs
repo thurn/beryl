@@ -243,6 +243,15 @@ fn storing_results_counts_each_run_and_its_cost_once_however_often_it_is_sent() 
         json!([{"area": "ui", "runs": 1, "failures": 1}])
     );
     assert_eq!(only["family_rate"].as_f64(), Some(0.5));
+
+    // Passing an empty `area=` asks for states and costs with no per-area rows while keeping
+    // the family's overall rate.
+    let (_, states_only) = hub.send("GET", "/checks/stats?family=rust&area=", None, false);
+    assert_eq!(states_only["checks"][0]["check"], "rust:a");
+    assert_eq!(states_only["checks"][0]["areas"], json!([]));
+    assert_eq!(states_only["checks"][1]["check"], "rust:b");
+    assert_eq!(states_only["checks"][1]["areas"], json!([]));
+    assert_eq!(states_only["family_rate"].as_f64(), Some(0.5));
 }
 
 #[test]

@@ -1,5 +1,7 @@
 //! Checks: their state, their record of runs and failures by area, and their costs.
 
+use std::collections::HashMap;
+
 use rusqlite::{Connection, TransactionBehavior, params};
 
 use ignite_core::protocol::hub::{
@@ -240,6 +242,18 @@ pub fn regression_families(conn: &Connection) -> Result<Vec<String>> {
 /// cost of one billion instructions: two `allocations` checks that cost 3,041 billion were
 /// chosen within a budget of 470. A check `checks` does not name is on.
 pub fn stats(conn: &Connection, family: &str) -> Result<CheckStatsReply> {
+    stats_for(conn, family, None)
+}
+
+/// Like [`stats`], but keeps only per-area counts whose area is in `filter` when `filter` is
+/// `Some`. Passing an empty filter (or only empty strings) returns each check's state and cost
+/// with empty `areas`, avoiding both per-row allocations and megabytes of JSON for families with
+/// thousands of checks while still computing the family's overall `runs` and `family_rate`.
+pub fn stats_for(
+    conn: &Connection,
+    family: &str,
+    filter: Option<&[&str]>,
+) -> Result<CheckStatsReply> {
     let mut select = conn.prepare(
         "WITH names AS (
            SELECT name FROM checks WHERE family = ?1
@@ -262,25 +276,10 @@ pub fn stats(conn: &Connection, family: &str) -> Result<CheckStatsReply> {
             ))
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
-    let mut areas = conn.prepare(
-        "SELECT area, runs, failures FROM check_stats WHERE check_name = ?1 ORDER BY area",
-    )?;
-    let (mut all_runs, mut all_failures) = (0_u64, 0_u64);
+    let (all_runs, all_failures, mut areas_by_check) = family_areas(conn, family, filter)?;
     let mut checks = Vec::with_capacity(listed.len());
     for (name, state, median_cost, unit) in listed {
-        let areas = areas
-            .query_map(params![name], |row| {
-                Ok(AreaStats {
-                    area: row.get(0)?,
-                    runs: row.get(1)?,
-                    failures: row.get(2)?,
-                })
-            })?
-            .collect::<rusqlite::Result<Vec<_>>>()?;
-        for area in &areas {
-            all_runs += u64::from(area.runs);
-            all_failures += u64::from(area.failures);
-        }
+        let areas = areas_by_check.remove(&name).unwrap_or_default();
         checks.push(CheckStats {
             check: parse("check name", &name)?,
             family: family.to_owned(),
@@ -304,6 +303,51 @@ pub fn stats(conn: &Connection, family: &str) -> Result<CheckStatsReply> {
         startup_billions: startup.billions,
         startup_cpu_s: startup.cpu_s,
     })
+}
+
+/// Reads a family's `check_stats` in one range scan instead of one query per check. When `filter`
+/// matches no area name, SQLite sums the family totals directly without materializing any rows.
+fn family_areas(
+    conn: &Connection,
+    family: &str,
+    filter: Option<&[&str]>,
+) -> Result<(u64, u64, HashMap<String, Vec<AreaStats>>)> {
+    let want_none = filter.is_some_and(|areas| areas.iter().all(|a| a.is_empty()));
+    if want_none {
+        let (runs, failures): (i64, i64) = conn.query_row(
+            "SELECT COALESCE(SUM(runs), 0), COALESCE(SUM(failures), 0)
+             FROM check_stats
+             WHERE check_name > ?1 || ':' AND check_name < ?1 || ';'",
+            params![family],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+        return Ok((runs.max(0) as u64, failures.max(0) as u64, HashMap::new()));
+    }
+    let mut select = conn.prepare(
+        "SELECT check_name, area, runs, failures
+         FROM check_stats
+         WHERE check_name > ?1 || ':' AND check_name < ?1 || ';'
+         ORDER BY check_name, area",
+    )?;
+    let mut rows = select.query(params![family])?;
+    let (mut all_runs, mut all_failures) = (0_u64, 0_u64);
+    let mut by_check: HashMap<String, Vec<AreaStats>> = HashMap::new();
+    while let Some(row) = rows.next()? {
+        let runs: u32 = row.get(2)?;
+        let failures: u32 = row.get(3)?;
+        all_runs += u64::from(runs);
+        all_failures += u64::from(failures);
+        let area: String = row.get(1)?;
+        if filter.is_none_or(|wanted| wanted.contains(&area.as_str())) {
+            let check_name: String = row.get(0)?;
+            by_check.entry(check_name).or_default().push(AreaStats {
+                area,
+                runs,
+                failures,
+            });
+        }
+    }
+    Ok((all_runs, all_failures, by_check))
 }
 
 /// When this many different checks flaked in one command run, the cause is the machine, such
