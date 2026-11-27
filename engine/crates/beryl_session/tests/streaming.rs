@@ -142,8 +142,13 @@ fn each_step_and_each_agent_decision_has_a_view_and_each_event_one_view() {
                 unreachable!()
             };
             let began = view.status == Status::Playing || halt(view);
+            // CR 514.3a: if a triggered ability or state-based action occurred during cleanup,
+            // another cleanup step begins in the same turn with its own `StepBegins` event.
+            let cleanup_again = view.turn.step == TurnStep::Cleanup
+                && events.iter().any(|e| matches!(e, Event::StepBegins { .. }));
             let moved =
-                (before.turn.number, before.turn.step) != (view.turn.number, view.turn.step);
+                (before.turn.number, before.turn.step) != (view.turn.number, view.turn.step)
+                    || cleanup_again;
             if matches!(view.status, Status::Over { .. }) {
                 continue;
             }
