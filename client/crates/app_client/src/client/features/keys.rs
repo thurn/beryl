@@ -16,7 +16,7 @@ use kit_scene::{Keys, Pressed, Reach, Shortcut};
 use kit_ui::element::{Action, Chord};
 use kit_ui::input::{Key, KeyPhase};
 
-use super::{Client, REGISTRY, TESTING, TestingScreen};
+use super::{Client, REGISTRY, TestingScreen};
 use game_manual::manual::bindings::Bindings;
 
 /// What a press of one of a feature's declared shortcuts sends: an action, the key taken with
@@ -149,7 +149,7 @@ pub(super) fn start(client: &mut Client, pressed: Pressed) -> Option<KeyResponse
         in_progress,
         session: client.session,
         has_recordings: !(client.features)
-            .state_of::<TestingScreen>(TESTING)
+            .state_of::<TestingScreen>()
             .recordings
             .is_empty(),
         in_column: client.show.table().profile().screen_column().is_some(),

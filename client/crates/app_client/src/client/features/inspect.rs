@@ -1,6 +1,7 @@
 //! An inspection view of the mounted features and the parts composed directly into the HUD.
 
 use app_screens::screens::Screen;
+use beryl_protocol::prompt::shape_name;
 use game_hud::hud::phase;
 use game_hud::screens::{game, opening};
 use kit_scene::Shortcut;
@@ -23,7 +24,7 @@ pub fn registered_features() -> impl ExactSizeIterator<Item = FeatureInfo> {
         placement: match entry.placement {
             Some(Placement::Screen(screen)) => format!("screen {}", screen.name()),
             Some(Placement::Sheet(sheet)) => format!("sheet {}", sheet.name()),
-            Some(Placement::Shape(shape)) => format!("prompt shape {shape}"),
+            Some(Placement::Shape(shape)) => format!("prompt shape {}", shape_name(shape)),
             Some(Placement::GameLog) => "game log".to_owned(),
             Some(Placement::GameOver) => "game over".to_owned(),
             Some(Placement::Floating) => "HUD float".to_owned(),

@@ -7,8 +7,8 @@ mod text;
 mod view;
 
 pub use crate::protocol::ObjectId;
-/// What a prompt's pick is for, which [`PromptView::purpose`] names.
-pub use beryl_card::Purpose;
+/// What a prompt's pick is for, which [`PromptView::purpose`] names, and its [`Shape`].
+pub use beryl_card::{Purpose, Shape};
 pub use view::{
     ButtonId, Click, ClickReply, ClickRequest, Lies, Marked, Pair, PartName, Pile, PlaceName,
     PromptButton, PromptView, ShapeBody, Share, TapPreview, Words, shape_name,

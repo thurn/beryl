@@ -9,7 +9,9 @@ use game_manual::features::{
 use game_manual::manual::{ask::dock_anchor, assists::proposal_bounds, link, opening, turn};
 use kit_ui::widgets::FieldState;
 
-use super::{Client, Features, Mounted, Placement, Screen, SessionCommand, ViewInputs, update};
+use super::{
+    Client, Features, Mounted, Placement, Screen, SessionCommand, SlotOwner, ViewInputs, update,
+};
 use kit_ui::element::Element;
 
 pub(super) use game_manual::features::{
@@ -18,58 +20,49 @@ pub(super) use game_manual::features::{
     tokens::TokenSearch,
 };
 
-pub(super) const TABLE: &str = "manual-table";
-pub(super) const LOBBY: &str = "table-lobby";
-pub(super) const MENU: &str = "table-context-menu";
-pub(super) const PALETTE: &str = "table-command-list";
-pub(super) const ASK: &str = "table-ask";
-pub(super) const TOKENS: &str = "table-token-search";
-pub(super) const ORDER: &str = "table-library-order";
-pub(super) const TABLE_LOG: &str = "table-log";
-pub(super) const PROPOSALS: &str = "table-proposals";
-
 impl Features {
     pub(crate) fn table(&self) -> &table::State {
-        self.state_of::<TableScreen>(TABLE)
+        self.state_of::<TableScreen>()
     }
 
     pub(in crate::client) fn update_table<U: kit_scene::StateUpdate<TableScreen>>(
         &mut self,
         update: U,
     ) -> U::Output {
-        Self::slot::<TableScreen>(&mut self.slots, TABLE).apply(update)
+        self.slot::<TableScreen>().apply(update)
     }
 
     pub(in crate::client) fn highlight_token(&mut self, input: tokens::Highlight<'_>) {
-        Self::slot::<TokenSearch>(&mut self.slots, TOKENS).apply(input);
+        self.slot::<TokenSearch>().apply(input);
     }
 
     pub(crate) fn menu(&self) -> &context_menu::State {
-        self.state_of::<ContextMenu>(MENU)
+        self.state_of::<ContextMenu>()
     }
 
     pub(in crate::client) fn clear_menu(&mut self) {
-        Self::slot::<ContextMenu>(&mut self.slots, MENU).update(&context_menu::Message::Close);
+        self.slot::<ContextMenu>()
+            .update(&context_menu::Message::Close);
     }
 
     pub(crate) fn palette(&self) -> &palette::State {
-        self.state_of::<CommandList>(PALETTE)
+        self.state_of::<CommandList>()
     }
 
     pub(crate) fn ask(&self) -> &ask::State {
-        self.state_of::<AskPrompt>(ASK)
+        self.state_of::<AskPrompt>()
     }
 
     pub(crate) fn tokens(&self) -> &tokens::State {
-        self.state_of::<TokenSearch>(TOKENS)
+        self.state_of::<TokenSearch>()
     }
 
     pub(crate) fn order(&self) -> &library_order::State {
-        self.state_of::<OrderTray>(ORDER)
+        self.state_of::<OrderTray>()
     }
 
     pub(crate) fn lobby(&self) -> &lobby::State {
-        self.state_of::<LobbyScreen>(LOBBY)
+        self.state_of::<LobbyScreen>()
     }
 
     pub(crate) fn overlay_open(&self) -> bool {
@@ -82,70 +75,65 @@ impl Features {
     }
 
     pub(crate) fn close_overlay(&mut self) {
-        Self::slot::<CommandList>(&mut self.slots, PALETTE).update(&palette::Message::Reset);
-        Self::slot::<AskPrompt>(&mut self.slots, ASK).update(&ask::Message::Reset);
-        Self::slot::<TokenSearch>(&mut self.slots, TOKENS).update(&tokens::Message::Reset);
-        Self::slot::<OrderTray>(&mut self.slots, ORDER).update(&library_order::Message::Reset);
+        self.slot::<CommandList>().update(&palette::Message::Reset);
+        self.slot::<AskPrompt>().update(&ask::Message::Reset);
+        self.slot::<TokenSearch>().update(&tokens::Message::Reset);
+        self.slot::<OrderTray>()
+            .update(&library_order::Message::Reset);
         self.update_table(table::Change::QuitPrompt(false));
     }
 }
 
 impl Client {
     pub(in crate::client) fn update_lobby(&mut self, message: &lobby::Message) -> bool {
-        update::<LobbyScreen>(self, LOBBY, message)
+        update::<LobbyScreen>(self, message)
     }
 
     pub(in crate::client) fn update_table_log(&mut self, message: &log::Message) {
-        update::<TableLog>(self, TABLE_LOG, message);
+        update::<TableLog>(self, message);
     }
 
     pub(in crate::client) fn update_palette(&mut self, message: &palette::Message) {
-        update::<CommandList>(self, PALETTE, message);
+        update::<CommandList>(self, message);
     }
 
     pub(in crate::client) fn update_ask(&mut self, message: &ask::Message) {
-        update::<AskPrompt>(self, ASK, message);
+        update::<AskPrompt>(self, message);
     }
 
     pub(in crate::client) fn update_tokens(&mut self, message: &tokens::Message) -> bool {
-        update::<TokenSearch>(self, TOKENS, message)
+        update::<TokenSearch>(self, message)
     }
 
     pub(in crate::client) fn update_order(&mut self, message: &library_order::Message) -> bool {
-        update::<OrderTray>(self, ORDER, message)
+        update::<OrderTray>(self, message)
     }
 
     pub(in crate::client) fn update_table_menu(&mut self, message: &context_menu::Message) -> bool {
-        update::<ContextMenu>(self, MENU, message)
+        update::<ContextMenu>(self, message)
     }
 }
 
 impl Mounted for TableScreen {
-    fn mounted_view<'a>(
-        features: &'a mut Features,
-        id: &'static str,
-        inputs: ViewInputs<'_>,
-    ) -> Option<&'a Element> {
+    fn mounted_view<'a>(features: &'a mut Features, inputs: ViewInputs<'_>) -> Option<&'a Element> {
         let log = features.view(Placement::TableLog, inputs);
         let proposals = features.view(Placement::TableProposals, inputs);
         let menu = features.view(Placement::TableMenu, inputs);
         let overlay = features.view(Placement::TableOverlay, inputs);
         let overlay_open = features.overlay_open();
-        Some(
-            Features::slot::<Self>(&mut features.slots, id).view(table::Inputs {
-                drag_threshold: inputs.drag_threshold,
-                hud: *inputs.hud,
-                fields: inputs.fields,
-                bindings: inputs.bindings,
-                link_error: inputs.link_error,
-                next_slot: turn::next_slot(inputs.hud),
-                log,
-                proposals,
-                menu,
-                overlay,
-                overlay_open,
-            }),
-        )
+        Some(features.slot::<Self>().view(table::Inputs {
+            drag_threshold: inputs.drag_threshold,
+            hud: *inputs.hud,
+            fields: inputs.fields,
+            bindings: inputs.bindings,
+            link_error: inputs.link_error,
+            next_slot: turn::next_slot(inputs.hud),
+            log,
+            proposals,
+            menu,
+            overlay,
+            overlay_open,
+        }))
     }
 
     fn command(client: &mut Client, answer: Answer) {
@@ -190,20 +178,14 @@ impl Mounted for TableScreen {
 }
 
 impl Mounted for LobbyScreen {
-    fn mounted_view<'a>(
-        features: &'a mut Features,
-        id: &'static str,
-        inputs: ViewInputs<'_>,
-    ) -> Option<&'a Element> {
+    fn mounted_view<'a>(features: &'a mut Features, inputs: ViewInputs<'_>) -> Option<&'a Element> {
         let view = features.lobby_view.as_ref();
-        Some(
-            Features::slot::<Self>(&mut features.slots, id).view(lobby::Inputs {
-                window: inputs.window,
-                column: inputs.profile.screen_column(),
-                fields: inputs.fields,
-                view,
-            }),
-        )
+        Some(Self::slot_mut(&mut features.slots).view(lobby::Inputs {
+            window: inputs.window,
+            column: inputs.profile.screen_column(),
+            fields: inputs.fields,
+            view,
+        }))
     }
 
     fn command(client: &mut Client, command: lobby::Command) {
@@ -250,12 +232,8 @@ impl Mounted for LobbyScreen {
 }
 
 impl Mounted for ContextMenu {
-    fn mounted_view<'a>(
-        features: &'a mut Features,
-        id: &'static str,
-        inputs: ViewInputs<'_>,
-    ) -> Option<&'a Element> {
-        let slot = Features::slot::<Self>(&mut features.slots, id);
+    fn mounted_view<'a>(features: &'a mut Features, inputs: ViewInputs<'_>) -> Option<&'a Element> {
+        let slot = features.slot::<Self>();
         slot.state().as_ref()?;
         let face = context_menu::sheet_face(slot.state(), inputs.hud);
         Some(slot.view(context_menu::Inputs {
@@ -276,12 +254,8 @@ impl Mounted for ContextMenu {
 }
 
 impl Mounted for CommandList {
-    fn mounted_view<'a>(
-        features: &'a mut Features,
-        id: &'static str,
-        inputs: ViewInputs<'_>,
-    ) -> Option<&'a Element> {
-        let slot = Features::slot::<Self>(&mut features.slots, id);
+    fn mounted_view<'a>(features: &'a mut Features, inputs: ViewInputs<'_>) -> Option<&'a Element> {
+        let slot = features.slot::<Self>();
         slot.state().as_ref()?;
         Some(slot.view(palette::Inputs {
             metrics: inputs.hud.data.flat.manual.palette,
@@ -306,12 +280,8 @@ impl Mounted for CommandList {
 }
 
 impl Mounted for AskPrompt {
-    fn mounted_view<'a>(
-        features: &'a mut Features,
-        id: &'static str,
-        inputs: ViewInputs<'_>,
-    ) -> Option<&'a Element> {
-        let slot = Features::slot::<Self>(&mut features.slots, id);
+    fn mounted_view<'a>(features: &'a mut Features, inputs: ViewInputs<'_>) -> Option<&'a Element> {
+        let slot = features.slot::<Self>();
         let open = slot.state().as_ref()?;
         let anchor = dock_anchor(open, inputs.profile, inputs.hud.placement_scene);
         Some(slot.view(ask::Inputs {
@@ -339,12 +309,8 @@ impl Mounted for AskPrompt {
 }
 
 impl Mounted for TokenSearch {
-    fn mounted_view<'a>(
-        features: &'a mut Features,
-        id: &'static str,
-        inputs: ViewInputs<'_>,
-    ) -> Option<&'a Element> {
-        let slot = Features::slot::<Self>(&mut features.slots, id);
+    fn mounted_view<'a>(features: &'a mut Features, inputs: ViewInputs<'_>) -> Option<&'a Element> {
+        let slot = features.slot::<Self>();
         if slot.state().custom.is_none() {
             inputs.view?;
             slot.state().search.as_ref()?;
@@ -374,12 +340,8 @@ impl Mounted for TokenSearch {
 }
 
 impl Mounted for OrderTray {
-    fn mounted_view<'a>(
-        features: &'a mut Features,
-        id: &'static str,
-        inputs: ViewInputs<'_>,
-    ) -> Option<&'a Element> {
-        let slot = Features::slot::<Self>(&mut features.slots, id);
+    fn mounted_view<'a>(features: &'a mut Features, inputs: ViewInputs<'_>) -> Option<&'a Element> {
+        let slot = features.slot::<Self>();
         slot.state().as_ref()?;
         Some(slot.view(library_order::Inputs {
             view: inputs.view?,
@@ -402,11 +364,7 @@ impl Mounted for OrderTray {
 }
 
 impl Mounted for TableLog {
-    fn mounted_view<'a>(
-        features: &'a mut Features,
-        id: &'static str,
-        inputs: ViewInputs<'_>,
-    ) -> Option<&'a Element> {
+    fn mounted_view<'a>(features: &'a mut Features, inputs: ViewInputs<'_>) -> Option<&'a Element> {
         let view = inputs.view?;
         let lines = &view.table.as_ref()?.log;
         if lines.is_empty() || link::frozen(view) || opening::prompt(view).is_some() {
@@ -421,13 +379,11 @@ impl Mounted for TableLog {
                 panel: panel?.rect,
             }
         };
-        Some(
-            Features::slot::<Self>(&mut features.slots, id).view(log::Inputs {
-                lines,
-                placement,
-                metrics: inputs.hud.data.flat.manual.log,
-            }),
-        )
+        Some(features.slot::<Self>().view(log::Inputs {
+            lines,
+            placement,
+            metrics: inputs.hud.data.flat.manual.log,
+        }))
     }
 
     fn command(client: &mut Client, command: TableAction) {
@@ -440,17 +396,13 @@ impl Mounted for TableLog {
 }
 
 impl Mounted for ProposalPanel {
-    fn mounted_view<'a>(
-        features: &'a mut Features,
-        id: &'static str,
-        inputs: ViewInputs<'_>,
-    ) -> Option<&'a Element> {
+    fn mounted_view<'a>(features: &'a mut Features, inputs: ViewInputs<'_>) -> Option<&'a Element> {
         let view = inputs.view?;
         let proposals = &view.table.as_ref()?.proposals;
         if proposals.is_empty() || link::frozen(view) || opening::prompt(view).is_some() {
             return None;
         }
-        let slot = Features::slot::<Self>(&mut features.slots, id);
+        let slot = features.slot::<Self>();
         let bounds = proposal_bounds(
             proposals,
             *slot.state(),

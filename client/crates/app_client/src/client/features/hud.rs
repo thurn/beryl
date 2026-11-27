@@ -12,21 +12,13 @@ use game_hud::hud::rows::{self, RowCounts};
 use kit_scene::StateUpdate;
 use std::convert::Infallible;
 
-use super::{Client, Features, Mounted, Placement, Registration};
-
-pub(super) const LIFE_TOTALS: &str = "life-totals";
-pub(super) const PILE_COUNTS: &str = "pile-counts";
-pub(super) const ROW_COUNTS: &str = "row-counts";
-pub(super) const NOTICES: &str = "notices";
-pub(super) const STEP_BANNER: &str = "step-banner";
-pub(super) const INSPECTOR: &str = "inspector";
-pub(super) const FPS_MONITOR: &str = "fps-monitor";
+use super::{Client, Features, Mounted, Placement, Registration, SlotOwner};
 
 impl Registration {
     pub(super) const fn floating<F: Mounted + FloatFeature>(id: &'static str) -> Self {
         Self {
             owns_float: |id| F::floats().any(|float| float == id),
-            view: |_, _, inputs| {
+            view: |_, inputs| {
                 let mut floats = F::floats().filter_map(|id| inputs.layer.float_element(id));
                 let first = floats.next()?;
                 if let Some(second) = floats.next() {
@@ -47,70 +39,67 @@ impl Registration {
 
 impl Features {
     pub fn update_fps_monitor(&mut self, rates: FrameRates) -> bool {
-        Self::slot::<FpsMonitor>(&mut self.slots, FPS_MONITOR)
-            .update(&rates)
-            .0
+        self.slot::<FpsMonitor>().update(&rates).0
     }
 
     pub fn fps_monitor_view(&mut self, view: MonitorView) -> kit_ui::element::Element {
-        Self::slot::<FpsMonitor>(&mut self.slots, FPS_MONITOR)
-            .view(view)
-            .clone()
+        self.slot::<FpsMonitor>().view(view).clone()
     }
 
     pub fn totals<U: StateUpdate<CountFloats>>(&mut self, update: U) -> U::Output {
-        Self::slot::<CountFloats>(&mut self.slots, LIFE_TOTALS).apply(update)
+        self.slot::<CountFloats>().apply(update)
     }
 
     pub fn piles(&self) -> &PileCounts {
-        self.state_of::<PileCounts>(PILE_COUNTS)
+        self.state_of::<PileCounts>()
     }
 
     pub fn update_piles<U: StateUpdate<PileCounts>>(&mut self, update: U) -> U::Output {
-        Self::slot::<PileCounts>(&mut self.slots, PILE_COUNTS).apply(update)
+        self.slot::<PileCounts>().apply(update)
     }
 
     pub fn notices<U: StateUpdate<NoticeFloats>>(&mut self, update: U) -> U::Output {
-        Self::slot::<NoticeFloats>(&mut self.slots, NOTICES).apply(update)
+        self.slot::<NoticeFloats>().apply(update)
     }
 
     pub fn rows(&self) -> &RowCounts {
-        self.state_of::<RowCounts>(ROW_COUNTS)
+        self.state_of::<RowCounts>()
     }
 
     pub fn update_rows<U: StateUpdate<RowCounts>>(&mut self, update: U) -> U::Output {
-        Self::slot::<RowCounts>(&mut self.slots, ROW_COUNTS).apply(update)
+        self.slot::<RowCounts>().apply(update)
     }
 
     pub fn focus_row(&mut self, message: rows::Message) {
-        Self::slot::<RowCounts>(&mut self.slots, ROW_COUNTS).update(&message);
+        self.slot::<RowCounts>().update(&message);
     }
 
     pub fn banner<U: StateUpdate<Banner>>(&mut self, update: U) -> U::Output {
-        Self::slot::<Banner>(&mut self.slots, STEP_BANNER).apply(update)
+        self.slot::<Banner>().apply(update)
     }
 
     pub fn inspector(&self) -> &Inspector {
-        self.state_of::<Inspector>(INSPECTOR)
+        self.state_of::<Inspector>()
     }
 
     pub fn inspect(&mut self, message: &inspector::Message) {
-        Self::slot::<Inspector>(&mut self.slots, INSPECTOR).update(message);
+        self.slot::<Inspector>().update(message);
     }
 
     pub fn update_inspector<U: StateUpdate<Inspector>>(&mut self, update: U) -> U::Output {
-        Self::slot::<Inspector>(&mut self.slots, INSPECTOR).apply(update)
+        self.slot::<Inspector>().apply(update)
     }
 
     pub fn draw_inspector(&mut self, input: inspector::Draw<'_>) -> Option<kit_ui::input::FaceId> {
-        Self::slot::<Inspector>(&mut self.slots, INSPECTOR).apply(inspector::Draw {
-            prompt: self.prompts.current(),
-            ..input
-        })
+        let prompt = self.prompts.current();
+        Inspector::slot_mut(&mut self.slots).apply(inspector::Draw { prompt, ..input })
     }
 }
 
-trait PassiveFloat: FloatFeature<Command = Infallible, Request = Infallible> {}
+trait PassiveFloat:
+    super::SlotOwner + FloatFeature<Command = Infallible, Request = Infallible>
+{
+}
 
 impl PassiveFloat for PileCounts {}
 impl PassiveFloat for NoticeFloats {}
