@@ -65,7 +65,7 @@ pub fn file_streaks(
     Ok(())
 }
 
-fn tip_seen(conn: &Connection, commit: &Commit) -> Result<Option<Timestamp>> {
+pub(super) fn tip_seen(conn: &Connection, commit: &Commit) -> Result<Option<Timestamp>> {
     conn.query_row(
         "SELECT seen FROM tips WHERE commit_sha = ?1",
         params![commit.as_str()],
@@ -141,7 +141,7 @@ fn report(newest: &ignite_core::ids::Commit, streak: &Streak) -> RegressionRepor
             ),
         }),
         found_by: FoundBy::TipVerification,
-        detected_at: None,
+        detected_at: Some(newest.clone()),
     }
 }
 

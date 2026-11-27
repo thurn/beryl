@@ -35,6 +35,7 @@ use std::fmt::Write as _;
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use serde_json::{Value, json};
 
+use ignite_core::ids::Commit;
 use ignite_core::protocol::hub::{LandingRegression, RegressionReport};
 use ignite_core::protocol::tickets::{
     BatchRequest, CAUSED_BY_KEY, CULPRIT_AFFINITY_KEY, CulpritAffinity, Dependency, EdgeKind,
@@ -128,6 +129,10 @@ fn file_report(
                 tx.commit()?;
                 return Ok((ticket.clone(), outcome));
             }
+            let tip = report.detected_at.as_ref().unwrap_or(&report.first_bad);
+            if tip_predates_fix(&loaded, tip, streaks::tip_seen(&tx, tip)?) {
+                return Ok((ticket.clone(), Outcome::Unchanged));
+            }
             Some(loaded)
         }
     };
@@ -183,6 +188,31 @@ fn file_report(
         eprintln!("ignite-hub: why tip verification missed {check} was not recorded: {error}");
     }
     Ok((ticket, outcome))
+}
+
+/// Whether `commit` (first seen at `seen`) predates the fix that landed or closed `ticket`.
+/// A long-running round verifying an older tip can report a failure after a fix has already
+/// landed and closed the ticket; reopening on that older tip would re-file an already-fixed bug.
+fn tip_predates_fix(ticket: &Ticket, commit: &Commit, seen: Option<Timestamp>) -> bool {
+    let Some(seen) = seen else {
+        return false;
+    };
+    let Some(fixed_at) = ticket.landed_at.or(ticket.closed_at) else {
+        return false;
+    };
+    if seen >= fixed_at {
+        return false;
+    }
+    // If the failing tip is one of the commits that landed as the fix itself, it does not
+    // predate the fix even when the hub saw the pushed commit slightly before recording closure.
+    if ticket
+        .landed
+        .as_ref()
+        .is_some_and(|work| work.commits.iter().any(|landed| landed == commit))
+    {
+        return false;
+    }
+    true
 }
 
 fn update_open(

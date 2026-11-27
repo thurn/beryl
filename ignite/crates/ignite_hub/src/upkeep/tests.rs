@@ -436,6 +436,38 @@ fn a_fix_that_did_not_work_reopens_the_ticket_with_the_new_output() {
 }
 
 #[test]
+fn failure_from_tip_seen_before_closure_does_not_reopen_ticket() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    tips::seen(&conn, "1111", clock.now()).unwrap();
+    let (id, _) = regressions::file(
+        &mut conn,
+        UPKEEP,
+        &regression("1111", "left: 3"),
+        clock.now(),
+    )
+    .unwrap();
+
+    clock.advance(600.0);
+    tips::seen(&conn, "2222", clock.now()).unwrap();
+
+    clock.advance(3_000.0);
+    close(&mut conn, &id, clock.now());
+    assert_eq!(ticket(&conn, &id).status, Status::Closed);
+
+    clock.advance(600.0);
+    let mut stale = regression("1111", "left: 3");
+    stale.detected_at = Some(Commit::new("2222").unwrap());
+    let (again, outcome) = regressions::file(&mut conn, UPKEEP, &stale, clock.now()).unwrap();
+    assert_eq!(
+        (again.as_str(), outcome),
+        (id.as_str(), regressions::Outcome::Unchanged)
+    );
+    assert_eq!(ticket(&conn, &id).status, Status::Closed);
+    assert_eq!(comment_count(&conn, &id), 0);
+}
+
+#[test]
 fn a_pass_after_the_fix_closed_marks_the_regression_fixed() {
     let clock = start();
     let mut conn = hub::open_in_memory().unwrap();

@@ -671,8 +671,15 @@ fn a_regression_closes_once_a_later_tip_passes_and_is_marked_fixed() {
             .contains("tip 2222")
     );
 
-    // The check fails again: the ticket reopens, and says why.
-    let (again, _) = regressions::file(&mut conn, UPKEEP, &report, clock.now()).unwrap();
+    // The check fails again at a later tip: the ticket reopens, and says why.
+    clock.advance(60.0);
+    tips::seen(&conn, "3333", clock.now()).unwrap();
+    let again_report = RegressionReport {
+        first_bad: Commit::new("3333").unwrap(),
+        last_good: Commit::new("2222").unwrap(),
+        ..report
+    };
+    let (again, _) = regressions::file(&mut conn, UPKEEP, &again_report, clock.now()).unwrap();
     assert_eq!(again, id);
     let comments = tickets::comments(&conn, &id).unwrap();
     assert!(comments.last().unwrap().text.contains("fails again"));

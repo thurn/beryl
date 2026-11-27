@@ -438,7 +438,7 @@ impl TipVerifier {
             platform: check.key.platform,
             search: None,
             found_by: FoundBy::TipVerification,
-            detected_at: None,
+            detected_at: Some(tip.clone()),
         };
         ctx.hub.regression(&with_culprit(report, culprit))?;
         self.reported.insert(check.key.clone());
