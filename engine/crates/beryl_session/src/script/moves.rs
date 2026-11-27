@@ -242,6 +242,9 @@ impl Builder<'_> {
             ZoneName::Stack => !own_spell_back,
             _ => still && to == ZoneName::Library,
         };
+        // An object not yet on the table (such as a copy of a card created in exile and cast)
+        // has no prior pose to fly from, so it appears at its destination like a token.
+        let new = !self.table.objects.contains_key(&object.slot);
         let act = if goes {
             Act::Vanish {
                 subject,
@@ -250,7 +253,8 @@ impl Builder<'_> {
                 object: Some(object),
                 at,
             }
-        } else if from == ZoneName::Nowhere || to_library || (still && to != ZoneName::Stack) {
+        } else if from == ZoneName::Nowhere || new || to_library || (still && to != ZoneName::Stack)
+        {
             Act::Appear {
                 from,
                 why,
