@@ -40,9 +40,10 @@ fn co_failing_checks_share_one_probe_per_commit() {
     world.land(&tip);
     world.git.set_tip("staging", newer.clone());
     world.git.set_changed(&tip, &newer, &["src/shared/lib.rs"]);
+    let os = Os::current().unwrap_or(Os::Macos);
     world.hub.set_tip_coverage(TipCoverage {
         platforms: [(
-            Os::Macos,
+            os,
             PlatformVerification {
                 through: master.clone(),
                 deferred: Some(DeferredPlatform {
@@ -59,7 +60,7 @@ fn co_failing_checks_share_one_probe_per_commit() {
         .into_iter()
         .map(|label| {
             let mut item = in_same_family(label, "src/shared/lib.rs");
-            item.key.platform = Some(Os::Macos);
+            item.key.platform = Some(os);
             item
         })
         .collect();
@@ -168,14 +169,15 @@ fn open_hub_regression_skips_redundant_bisection_unless_revert_eligible() {
         .work
         .add_landing("tk.42", &[tip.as_str()], &["src/shared/lib.rs"]);
     let mut failing = in_same_family("a", "src/shared/lib.rs");
-    failing.key.platform = Some(Os::Macos);
+    let os = Os::current().unwrap_or(Os::Macos);
+    failing.key.platform = Some(os);
     world.hub.set_open_regressions(vec![OpenRegression {
         check: failing.check.clone(),
         ticket: ticket("tk.open"),
     }]);
     world.hub.set_tip_coverage(TipCoverage {
         platforms: [(
-            Os::Macos,
+            os,
             PlatformVerification {
                 through: master.clone(),
                 deferred: Some(DeferredPlatform {
