@@ -152,7 +152,9 @@ const fn may(title: &'static str) -> Wording {
 /// is allowed. Arena has the hand's ("Put one of them into your hand.", `3sEoP_s4DQE 56:54.0`,
 /// `qF4GF-vfc8Y 18:56.0`; "Put two of them into your hand.", `SN9QFe2kM4Y 27:05.0`), exile's
 /// ("Exile one of them.", `3sEoP_s4DQE 1:03:15.5`, `jD7VqaT8VC8 37:36.5`) and the library's
-/// ("Put one of them into your library.", `qF4GF-vfc8Y 40:12.5`), and ends a "may" with a
+/// ("Put one of them into your library.", `qF4GF-vfc8Y 40:12.5`: Beryl names the end the cards
+/// go to, "on top of your library" or "on the bottom of your library", because a look that
+/// sends one card to each end otherwise asks the same sentence twice), and ends a "may" with a
 /// question mark ("Reveal a noncreature, nonland card?", `IHPV6yRaFlk 28:19.5`,
 /// `iRr-GeSF0lI 31:13.0`; "Exile a nonland card?", `qF4GF-vfc8Y 30:13.0`). The graveyard's and
 /// the battlefield's are composed, and so is each question.
@@ -162,12 +164,10 @@ const fn of_them(to: Place, asks: bool) -> &'static str {
         (Place::Hand, true) => "Put {most:words} of them into your hand?",
         (Place::Exile, false) => "Exile {most:words} of them.",
         (Place::Exile, true) => "Exile {most:words} of them?",
-        (Place::Top | Place::OnTop | Place::Bottom, false) => {
-            "Put {most:words} of them into your library."
-        }
-        (Place::Top | Place::OnTop | Place::Bottom, true) => {
-            "Put {most:words} of them into your library?"
-        }
+        (Place::Top | Place::OnTop, false) => "Put {most:words} of them on top of your library.",
+        (Place::Top | Place::OnTop, true) => "Put {most:words} of them on top of your library?",
+        (Place::Bottom, false) => "Put {most:words} of them on the bottom of your library.",
+        (Place::Bottom, true) => "Put {most:words} of them on the bottom of your library?",
         (Place::Graveyard, false) => "Put {most:words} of them into your graveyard.",
         (Place::Graveyard, true) => "Put {most:words} of them into your graveyard?",
         (Place::Battlefield, false) => "Put {most:words} of them onto the battlefield.",
@@ -188,8 +188,10 @@ const fn of_what(to: Place, asks: bool) -> Option<&'static str> {
         (Place::Hand, true) => "Put {what} into your hand?",
         (Place::Exile, false) => "Exile {what}.",
         (Place::Exile, true) => "Exile {what}?",
-        (Place::Top | Place::OnTop | Place::Bottom, false) => "Put {what} into your library.",
-        (Place::Top | Place::OnTop | Place::Bottom, true) => "Put {what} into your library?",
+        (Place::Top | Place::OnTop, false) => "Put {what} on top of your library.",
+        (Place::Top | Place::OnTop, true) => "Put {what} on top of your library?",
+        (Place::Bottom, false) => "Put {what} on the bottom of your library.",
+        (Place::Bottom, true) => "Put {what} on the bottom of your library?",
         (Place::Graveyard, false) => "Put {what} into your graveyard.",
         (Place::Graveyard, true) => "Put {what} into your graveyard?",
         (Place::Battlefield, false) => "Put {what} onto the battlefield.",
@@ -374,7 +376,8 @@ pub(crate) const fn wording(prompt: &Prompt, zone: Option<Zone>) -> Wording {
             Place::Hand => "Put that card into your hand{from}?",
             Place::Graveyard => "Put that card into your graveyard{from}?",
             Place::Battlefield => "Put that card onto the battlefield{from}?",
-            Place::Top | Place::OnTop | Place::Bottom => "Put that card into your library{from}?",
+            Place::Top | Place::OnTop => "Put that card on top of your library{from}?",
+            Place::Bottom => "Put that card on the bottom of your library{from}?",
             Place::None => "Move that card{from}?",
         }),
         // Composed: a fateseal is not in the recordings but as an opponent's

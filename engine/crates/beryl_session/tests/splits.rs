@@ -9,7 +9,7 @@ use crate::play;
 use beryl_cards::names::{
     AANGS_ICEBERG, COUNTERSPELL, CURRENCY_CONVERTER, HALIMAR_DEPTHS, ISLAND,
     JACE_THE_MIND_SCULPTOR, MANA_CRYPT, MANA_TITHE, OUST, PLAINS, REPRIEVE, STOCK_UP,
-    TEFERI_HERO_OF_DOMINARIA, THIRST_FOR_DISCOVERY, TUNDRA,
+    TEFERI_HERO_OF_DOMINARIA, TELLING_TIME, THIRST_FOR_DISCOVERY, TUNDRA,
 };
 use beryl_engine::TurnStep;
 use beryl_engine::card::Purpose;
@@ -673,4 +673,33 @@ fn an_undo_drops_a_run_waiting_through_a_target() {
          order a0 a1 a2\n\
          confirm[Done]*\n"
     );
+}
+
+/// The human's Telling Time over an Island, a Plains, a Mana Crypt and a Tundra.
+const TELLING: Scenario = Scenario::new("telling time")
+    .at(3, P0, TurnStep::PrecombatMain)
+    .hand(P0, &[TELLING_TIME])
+    .permanents(P0, &[Permanent::new(ISLAND), Permanent::new(ISLAND)])
+    .library(P0, &[TUNDRA, MANA_CRYPT, PLAINS, ISLAND])
+    .library(P1, &[PLAINS; 6]);
+
+/// The first line of the open prompt: its title.
+fn title(play: &Play) -> String {
+    let first = play.prompt().lines().next().unwrap().to_owned();
+    first.split_once(": ").unwrap().1.to_owned()
+}
+
+/// A look that sends one card to the hand, one on top and one to the bottom asks for each
+/// in turn, and the title of the pick for the top says "on top of your library" where it
+/// had said "into your library" over a pile named "Bottom".
+#[test]
+fn a_look_that_sends_a_card_to_the_top_says_so() {
+    let mut play = Play::scenario(&TELLING);
+    play.choose(|c| matches!(c, Candidate::Cast { .. }));
+    pass(&mut play);
+    assert_eq!(title(&play), "Put one of them into your hand.");
+    let plains = in_library(&play, PLAINS);
+    play.choose(|c| *c == Candidate::Object { slot: plains });
+    let second = title(&play);
+    assert_eq!(second, "Put one of them on top of your library.");
 }
