@@ -64,7 +64,7 @@ pub(super) fn tell(
 /// Whether `event`, of the cause `by`, is shown in the beat of `previous`, of the cause
 /// `was`, though the rules did not do the two at once: what the stage shows as one.
 fn staged(previous: &GameEvent, was: Cause, event: &GameEvent, by: Cause) -> bool {
-    use GameEvent::{Reveal, Tap, ZoneChange};
+    use GameEvent::{Draw, Reveal, Tap, ZoneChange};
     let one = was.entry().is_some() && was.entry() == by.entry();
     match (previous, event) {
         // The sources of one payment turn together, each paid for apart where the player
@@ -74,6 +74,10 @@ fn staged(previous: &GameEvent, was: Cause, event: &GameEvent, by: Cause) -> boo
         // One effect's or free mulligan's revealed cards lie in the pile together (UI Conventions,
         // "Cards revealed"; Arena, `I3Te0m1bBFw 22:08.8`).
         (Reveal { player: p1, .. }, Reveal { player: p2, .. }) => was == by && (one || p1 == p2),
+        // Consecutive draws from the same resolving spell or ability (such as each player drawing
+        // seven, or alternating draws from a shared library) stagger in one beat so they deal out
+        // in a single burst (Arena, `UrGalw_f35w 17:43.5`, `XYkigNjhINU 31:39.0`).
+        (Draw { .. }, Draw { .. }) => was == by && one,
         // A countered spell leaves before the spell that countered it, which goes in the
         // same beat (UI Conventions, "A countered spell", by-kxyq; Arena,
         // `I3Te0m1bBFw 39:50.0`): the countered spell's move is the counterspell's effect,
@@ -348,5 +352,51 @@ mod tests {
         };
         let events = [blow(1, 9), blow(2, 8), burn.clone(), blow(9, 1)];
         assert_eq!(order(&events, &beats(&[2, 1, 1])), [0, 1, 2, 3]);
+    }
+
+    /// Consecutive draws from the same resolving spell or ability — including alternating draws
+    /// between players from a shared library — join one beat; draws from different causes stay
+    /// in separate beats.
+    #[test]
+    fn consecutive_draws_from_one_effect_join_one_beat() {
+        use super::super::hear::Cause;
+        use super::staged;
+        use crate::script::Subject;
+
+        let draw = |player| GameEvent::Draw {
+            player,
+            cards: 1,
+            slots: None,
+        };
+        let effect = |slot| Cause::Effect {
+            entry: Some(Subject::Object {
+                slot: ObjectId(slot),
+            }),
+        };
+
+        assert!(staged(
+            &draw(Side::You),
+            effect(1),
+            &draw(Side::Opponent),
+            effect(1),
+        ));
+        assert!(staged(
+            &draw(Side::Opponent),
+            effect(1),
+            &draw(Side::You),
+            effect(1),
+        ));
+        assert!(!staged(
+            &draw(Side::You),
+            effect(1),
+            &draw(Side::Opponent),
+            effect(2),
+        ));
+        assert!(!staged(
+            &draw(Side::You),
+            Cause::Rules,
+            &draw(Side::Opponent),
+            Cause::Rules,
+        ));
     }
 }

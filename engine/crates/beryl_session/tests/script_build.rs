@@ -556,7 +556,7 @@ fn a_face_down_permanent_flips() {
 
 /// `set` of a library: both hands go into their libraries and each library is shuffled with
 /// nothing to show, all in one beat as one instruction for each player is one event of the
-/// rules, and each player's seven are drawn in a beat.
+/// rules, and both players' draws stagger together in one beat.
 #[test]
 fn a_shuffle_sets_the_library() {
     let [first, second] = script(TIMETWISTER, 1);
@@ -571,12 +571,12 @@ fn a_shuffle_sets_the_library() {
             "& streak #9 > #1 blue 1 <- #9".to_owned(),
         ]
     };
-    let draws = |slots: [u16; 7], card: Option<&str>| -> Vec<String> {
+    let draws = |slots: [u16; 7], card: Option<&str>, continued: bool| -> Vec<String> {
         slots
             .iter()
             .enumerate()
             .map(|(i, slot)| {
-                let join = if i == 0 { "" } else { "& " };
+                let join = if i == 0 && !continued { "" } else { "& " };
                 let card = card.map_or_else(String::new, |card| format!(" ({card})"));
                 format!("{join}fly #{slot}{card} library>hand draw <- #1")
             })
@@ -593,8 +593,8 @@ fn a_shuffle_sets_the_library() {
     expected.extend(wheel.clone());
     expected.push("& set you library 8 <- #1".to_owned());
     expected.push("& set opponent library 8 <- #1".to_owned());
-    expected.extend(draws(own, Some("Plains")));
-    expected.extend(draws(theirs, None));
+    expected.extend(draws(own, Some("Plains"), false));
+    expected.extend(draws(theirs, None, true));
     expected.push("vanish #1 (Timetwister) stack>graveyard resolve <- #1".to_owned());
     assert_eq!(first, text(&expected));
     let mut expected = cast("opponent");
@@ -602,8 +602,8 @@ fn a_shuffle_sets_the_library() {
     expected.extend(wheel);
     expected.push("& set opponent library 8 <- #1".to_owned());
     expected.push("& set you library 8 <- #1".to_owned());
-    expected.extend(draws(own, None));
-    expected.extend(draws(theirs, Some("Island")));
+    expected.extend(draws(own, None, false));
+    expected.extend(draws(theirs, Some("Island"), true));
     expected.push("vanish #1 (Timetwister) stack>graveyard resolve <- #1".to_owned());
     assert_eq!(second, text(&expected));
 }
