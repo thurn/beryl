@@ -18,7 +18,7 @@ use beryl_protocol::script::{
 
 use super::record::{MoveKey, Plant, Planted, SegmentRecord, StepRecord};
 use super::relay::settle;
-use super::step::{Motion, add, numbers_of};
+use super::step::{Motion, add, numbers_of, restore_hidden};
 use crate::beat::{Laid, beat};
 use crate::hud::counts::CountChange;
 use crate::light::{MarkSpan, Span, SpanChange, StreakRun};
@@ -547,6 +547,7 @@ impl<'a> Compiling<'a> {
         let fallback = (motion.unplaced != 0).then(|| numbered(Played::of(after)));
         let numbers = numbers_of(fallback.as_ref().unwrap_or(&motion.played));
         let placement = motion.placement_of(table, after, &numbers);
+        restore_hidden(&mut out.tracks, &mut out.segments, &placement);
         out.finals = table.objects_for(after, numbers, &placement);
         fallback.unwrap_or(motion.played)
     }

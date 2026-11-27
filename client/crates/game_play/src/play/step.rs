@@ -30,7 +30,7 @@ mod still;
 mod tracks;
 
 use fade::{Regrouped, regroup_fade, retarget};
-use hidden::{hides, hides_in_place};
+pub(crate) use hidden::restore_hidden;
 use room::{only_height, room_of};
 use tracks::difference;
 pub(crate) use tracks::{add, numbers_of};
@@ -135,6 +135,8 @@ pub(crate) struct Motion<'a> {
     /// The cards a step moved to a place a row has scrolled out of view, each with when it
     /// arrived and the step's number, until a later step moves it again (`hide_on_arrival`).
     hidden: Vec<(usize, u64, usize)>,
+    /// The groups the step being played placed again and its number, while one is played.
+    playing: Option<([bool; Group::ALL.len()], usize)>,
     /// The cards the opponent is handling as the steps so far leave the table, which the table
     /// played over does not keep.
     look: Look,
@@ -206,6 +208,7 @@ impl<'a> Motion<'a> {
             closing: Vec::new(),
             stack_closing: Vec::new(),
             hidden: Vec::new(),
+            playing: None,
             look: Look::opening(
                 (before, after),
                 timings.iter().any(|timing| timing.duration > 0.0),
@@ -243,7 +246,9 @@ impl<'a> Motion<'a> {
     /// A `set` can interrupt a track even if the card's resting pose stays the same, so it
     /// also marks every slot it placed again that is on a track. One that is on none and rests
     /// as it did needs no change (`follow`), and a `set` that places a whole row again for one
-    /// card's record would otherwise follow every card of it.
+    /// card's record would otherwise follow every card of it. A card that a container that
+    /// scrolls takes out of its window or brings into it where it stands is marked too
+    /// (`show_or_hide`).
     fn mark_affected(
         &mut self,
         dirty: &[bool],
@@ -292,6 +297,7 @@ impl<'a> Motion<'a> {
             }
             if before.map(|rest| &rest.pose) != after.map(|rest| &rest.pose)
                 || (still && on_track(slot))
+                || hidden::shown_or_hidden(before, after)
             {
                 mark(slot);
             }
@@ -414,6 +420,7 @@ impl<'a> Motion<'a> {
         else {
             return;
         };
+        self.playing = Some((dirty, number));
         let verb = step.act.verb();
         // A streak may carry a new record for its target. If that changes the target's
         // resting place, it slides with the other cards the new placement moved.
@@ -458,14 +465,18 @@ impl<'a> Motion<'a> {
             let before = self.rests.rests.get(slot).and_then(Option::as_ref);
             if Some(slot) == subject {
                 let after = self.now(slot, &dirty);
-                let from = self.pose(slot, own.from);
+                let mut from = self.pose(slot, own.from);
+                // A card hidden outside its container's window is seen as its own step moves
+                // it, from where it rests (`hidden`).
+                if let Some(rest) = before.filter(|&rest| hidden::scrolled_out(Some(rest))) {
+                    from.opacity = rest.pose.opacity;
+                }
                 let to = after.map(|rest| rest.pose).or_else(|| {
                     before.map(|_| Pose {
                         opacity: 0.0,
                         ..from
                     })
                 });
-                let hidden = hides(before, after);
                 self.play(
                     number,
                     (beat, index),
@@ -475,9 +486,6 @@ impl<'a> Motion<'a> {
                     (Some(from), to),
                     (table, &dirty),
                 );
-                if hidden {
-                    self.hide_on_arrival(slot, number);
-                }
                 played = true;
                 continue;
             }
@@ -498,6 +506,7 @@ impl<'a> Motion<'a> {
         if self.follow_abilities(number, (mover, &dirty), own, room) && room.to > own.to {
             self.note_closing(None, room.to, number);
         }
+        self.playing = None;
         self.commit(table, &dirty, number);
     }
 
@@ -548,6 +557,9 @@ impl<'a> Motion<'a> {
         (room, regroup): (Interval, Option<Interval>),
         still: bool,
     ) {
+        if self.show_or_hide(slot, number, own) {
+            return;
+        }
         let before = self
             .rests
             .rests
@@ -555,8 +567,6 @@ impl<'a> Motion<'a> {
             .and_then(Option::as_ref)
             .map(|rest| &rest.pose);
         let after = self.fresh.rests.get(slot).and_then(Option::as_ref);
-        let rested = self.rests.rests.get(slot).and_then(Option::as_ref);
-        let (hidden, hidden_in_place) = (hides(rested, after), hides_in_place(rested, after));
         let regroup = regroup.filter(|_| {
             after.is_some_and(|rest| {
                 matches!(
@@ -574,9 +584,6 @@ impl<'a> Motion<'a> {
                 self.change(slot, (before.copied(), after.copied()), number, own)
             {
                 self.push(slot, segment, cause);
-                if hidden_in_place {
-                    self.hide_on_arrival(slot, number);
-                }
             }
             return;
         }
@@ -600,6 +607,7 @@ impl<'a> Motion<'a> {
                 }
                 let track = self.tracks.get_mut(slot);
                 if retarget(track, &mut self.segments, slot, room.from, &before, &after) {
+                    self.hide_on_arrival(slot);
                     return;
                 }
                 if self.settles(slot) {
@@ -637,9 +645,6 @@ impl<'a> Motion<'a> {
             _ => return,
         };
         self.push(slot, segment, cause);
-        if hidden {
-            self.hide_on_arrival(slot, number);
-        }
         if matches!(cause, Cause::Slide(_)) && segment.end() > own.to {
             self.note_closing(Some(slot), segment.end(), number);
         }
@@ -733,17 +738,12 @@ impl<'a> Motion<'a> {
     /// Adds `segment` to the track of the object in `slot`, made for `cause`. An object's first
     /// segment comes after one that holds it where it rested before the script, so that it
     /// stands there until it moves.
-    fn push(&mut self, slot: usize, segment: Segment, cause: Cause) {
+    pub(super) fn append(&mut self, slot: usize, segment: Segment, cause: Cause) {
         // Its new segment takes the place of what it was closing up along, as a new track does
         // on the web stage, whose beat then waits only for the track the card is on.
         if let Some(closing) = self.closing.get_mut(slot) {
             *closing = None;
         }
-        let segment = Segment {
-            step: cause.step_time(),
-            ..segment
-        };
-        self.reveal(slot, segment.start);
         // A segment an earlier step gave the object that has not begun when this one does is
         // out of date: this step has moved the object's resting place since. When three
         // permanents tap at once, the first tap's row waits until its card has turned, but

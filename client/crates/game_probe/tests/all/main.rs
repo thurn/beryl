@@ -31,6 +31,7 @@ mod verbs_leaving;
 mod verbs_lift;
 mod verbs_mark;
 mod verbs_point;
+mod verbs_scrolled;
 mod verbs_shown;
 mod verbs_streak;
 mod verbs_strike;
