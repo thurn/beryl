@@ -632,7 +632,6 @@ pub(crate) fn plans_accepting<L: Layout, const CHECK: bool>(
         && !sources.has_consumed()
         && !sources.has_several()
         && sources.remembered().is_empty()
-        && sources.extras.is_empty()
     {
         Some(if sources.has_memory() && sources.has_rider() {
             2

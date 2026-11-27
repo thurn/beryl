@@ -373,7 +373,6 @@ impl<L: Layout> State<L> {
             | Pending::EnterChoosing { .. }
             | Pending::ManaColor { .. }
             | Pending::ManaType { .. }
-            | Pending::ManaPrice { .. }
             | Pending::Companion { .. }
             | Pending::CompanionPayment { .. }
             | Pending::PayingToAttack { .. }

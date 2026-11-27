@@ -71,7 +71,6 @@ pub(crate) fn step_actions<L: Layout>(
         | Pending::EnterChoosing { .. }
         | Pending::ManaColor { .. }
         | Pending::ManaType { .. }
-        | Pending::ManaPrice { .. }
         | Pending::Companion { .. }
         | Pending::CompanionPayment { .. }
         | Pending::PayingToAttack { .. }

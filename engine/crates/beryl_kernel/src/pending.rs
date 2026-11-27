@@ -442,14 +442,6 @@ pub enum Pending<L: Layout = Small> {
     /// [CR 508.1h]: https://yawgatog.com/resources/magic-rules/#R5081h
     /// [CR 508.1i]: https://yawgatog.com/resources/magic-rules/#R5081i
     PayingToAttack { remaining: ManaCost },
-    /// The controller of the permanent in `slot` activates its mana-priced mana ability
-    /// `ability` at priority and pays the remaining mana cost `remaining` of its price, by a
-    /// payment plan or under manual payment one source at a time.
-    ManaPrice {
-        slot: L::Slot,
-        ability: beryl_card::ObjectAbility,
-        remaining: ManaCost,
-    },
 }
 
 // The original derived hash wrote each variant's tag as an isize. The enum now has a
@@ -510,11 +502,6 @@ impl<L: Layout> std::hash::Hash for Pending<L> {
                 remaining,
             } => (22_isize, slot, player, kinds, remaining).hash(state),
             Self::PayingToAttack { remaining } => (23_isize, remaining).hash(state),
-            Self::ManaPrice {
-                slot,
-                ability,
-                remaining,
-            } => (24_isize, slot, ability, remaining).hash(state),
         }
     }
 }
@@ -543,7 +530,6 @@ impl<L: Layout> Pending<L> {
             | Pending::EnterChoosing { .. }
             | Pending::ManaColor { .. }
             | Pending::ManaType { .. }
-            | Pending::ManaPrice { .. }
             | Pending::Companion { .. }
             | Pending::CompanionPayment { .. }
             | Pending::PayingToAttack { .. }

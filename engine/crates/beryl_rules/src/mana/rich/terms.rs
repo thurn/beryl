@@ -44,7 +44,7 @@ impl RichActivation {
         &self.terms[usize::from(self.own_term_count)..usize::from(self.term_count)]
     }
 
-    pub(in crate::mana) fn total_mana(&self) -> u32 {
+    pub(super) fn total_mana(&self) -> u32 {
         let own: u32 = self.own_terms().iter().map(|t| u32::from(t.amount)).sum();
         let extra: u32 = self.extra_terms().iter().map(|t| u32::from(t.amount)).sum();
         own + extra

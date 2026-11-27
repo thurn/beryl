@@ -42,11 +42,11 @@ pub(crate) use pay::{activate, pay};
 pub(crate) use pool::{Funds, payable};
 pub(crate) use priority::{
     activate_chosen, begin_instant, choose_mana_type, instant_options, is_instant,
-    is_standalone_activate, mana_price_decision, pay_mana_price, standalone_options,
-    waterbend_mana_options,
+    standalone_options, waterbend_mana_options,
 };
 pub(crate) use remembered::{Paying, RESTRICTED, Restricted, restricted_sources};
 pub(crate) use solver::{Plan, plans, plans_accepting};
+pub(crate) use sources::is_alternative;
 pub use sources::mana_contribution;
 #[cfg(test)]
 pub(crate) use units::Units;

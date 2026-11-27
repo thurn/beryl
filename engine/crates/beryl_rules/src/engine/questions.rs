@@ -138,9 +138,6 @@ pub(crate) fn decision<L: Layout>(
                 .about(Bitboard::single(slot)))
             }
         }
-        Pending::ManaPrice {
-            slot, remaining, ..
-        } => mana::mana_price_decision(s, t, sink, slot, remaining),
         // The question is about the land entering.
         Pending::EnterChoosing { slot, kind, .. } => {
             catalog::decision(t, s.object(slot).owner(), kind, Bitboard::single(slot))
@@ -240,10 +237,9 @@ pub(super) fn only_idle<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>)
         Candidates::Options(list) => list.iter().all(|o| match *o {
             Opt::Pass => true,
             Opt::Mana { .. } => floats,
-            // A standalone mana ability offered as `Opt::Activate` beside `Opt::Mana`:
-            // a source's sacrifice alternative, or a mana-priced / multi-term mana ability.
+            // A source's mana ability that sacrifices it, offered beside its `Opt::Mana`.
             Opt::Activate { slot, ability }
-                if floats && mana::is_standalone_activate(s, t, slot, ability) =>
+                if floats && mana::is_alternative(s, t, slot, ability) =>
             {
                 true
             }
@@ -407,23 +403,11 @@ pub(super) fn perform_machine<L: Layout>(
             x.events.leave();
             done
         }
-        Pending::ManaColor { slot, ability } => {
+        Pending::ManaColor { slot, .. } => {
             s.settle_question();
             act(s, &mut x.events, d.player, None);
             let source = s.permanent_at(slot).expect("the mana source asked about");
-            let done =
-                mana::activate_chosen(s, t, &mut x.events, source, ability, d.candidates.option(c));
-            x.events.leave();
-            done
-        }
-        Pending::ManaPrice {
-            slot,
-            ability,
-            remaining,
-        } => {
-            let option = d.candidates.option(c).expect("a payment");
-            act(s, &mut x.events, d.player, None);
-            let done = mana::pay_mana_price(s, t, &mut x.events, slot, ability, remaining, option);
+            let done = mana::activate_chosen(s, t, &mut x.events, source, d.candidates.option(c));
             x.events.leave();
             done
         }

@@ -418,15 +418,6 @@ impl<L: Layout> Relayout for Pending<L> {
                 kinds,
                 remaining,
             },
-            &Pending::ManaPrice {
-                slot: s,
-                ability,
-                remaining,
-            } => Pending::ManaPrice {
-                slot: slot(s),
-                ability,
-                remaining,
-            },
             &Pending::Companion { chooser } => Pending::Companion { chooser },
             &Pending::CompanionPayment { player, remaining } => {
                 Pending::CompanionPayment { player, remaining }

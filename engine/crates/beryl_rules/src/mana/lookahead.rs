@@ -16,7 +16,7 @@ use crate::table::{GameTable, ManaFace};
 
 use super::solver::{Plan, each_plan};
 use super::sources::{Sources, can_tap, controlled};
-use super::{CLASSES, Taps, units::Units};
+use super::{Taps, units::Units};
 
 /// A cost the player might want to pay later: a card's mana cost, or an ability's
 /// activation cost and the permanent it taps.
@@ -88,30 +88,6 @@ fn activations<'s, L: Layout>(
     })
 }
 
-/// How many activations of each `Sources::extras` class `plan` uses.
-fn plan_extra_used<L: Layout>(plan: &Plan<L>) -> [u8; CLASSES] {
-    let mut used = [0u8; CLASSES];
-    if let Some(seq) = &plan.sequence {
-        for step in &seq.steps {
-            used[usize::from(step.extra)] += 1;
-        }
-    }
-    used
-}
-
-/// Whether `plan` taps `slot` via an extra class (all members of that extra class are used).
-fn extra_taps_slot<L: Layout>(
-    sources: &Sources<L>,
-    extra_used: &[u8; CLASSES],
-    slot: L::Slot,
-) -> bool {
-    sources
-        .extras
-        .iter()
-        .enumerate()
-        .any(|(i, e)| e.members.contains(slot) && extra_used[i] >= e.count)
-}
-
 /// What `plan` keeps payable of `later`, best first: the most colored and colorless symbols
 /// of any one payable cost, then how many costs stay payable, then their symbols in all. An
 /// auto-tapper keeps colors open: {U}{U} for Mana Drain rather than {1}{W} for Get Lost and
@@ -125,30 +101,11 @@ pub(super) fn still_payable<L: Layout>(
     if later.is_empty() {
         return (0, 0, 0);
     }
-    let has_extras = !sources.extras.is_empty();
-    let extra_used = if has_extras {
-        plan_extra_used(plan)
-    } else {
-        [0; CLASSES]
-    };
     let groups = sources.units(plan.left, &plan.taps).groups();
     let payable = later.iter().filter(|l| match l.taps {
-        None => {
-            groups.pays(l.cost)
-                || (has_extras
-                    && super::rich::pays_from_state(
-                        plan.left,
-                        sources,
-                        &plan.taps,
-                        plan.remembered,
-                        &extra_used,
-                        l.cost,
-                    ))
-        }
+        None => groups.pays(l.cost),
         Some(slot) => {
-            if sources.taps_slot(&plan.taps, slot)
-                || (has_extras && extra_taps_slot(sources, &extra_used, slot))
-            {
+            if sources.taps_slot(&plan.taps, slot) {
                 return false;
             }
             // The permanent taps for the ability, so it cannot also make mana for it.
@@ -158,26 +115,7 @@ pub(super) fn still_payable<L: Layout>(
                     without[i] += 1;
                 }
             }
-            if sources.units(plan.left, &without).pays(l.cost) {
-                return true;
-            }
-            if !has_extras {
-                return false;
-            }
-            let mut without_extra = extra_used;
-            for (i, e) in sources.extras.iter().enumerate() {
-                if e.members.contains(slot) {
-                    without_extra[i] += 1;
-                }
-            }
-            super::rich::pays_from_state(
-                plan.left,
-                sources,
-                &without,
-                plan.remembered,
-                &without_extra,
-                l.cost,
-            )
+            sources.units(plan.left, &without).pays(l.cost)
         }
     });
     payable.fold((0, 0, 0), |(most, n, all), l| {
@@ -397,8 +335,6 @@ struct Lookahead<'a, L: Layout> {
     plan: &'a Plan<L>,
     later: &'a [Later<L>],
     copies: &'a [u8],
-    extra_used: [u8; CLASSES],
-    extra_max: u32,
 }
 
 impl<L: Layout> Lookahead<'_, L> {
@@ -408,10 +344,7 @@ impl<L: Layout> Lookahead<'_, L> {
         let Some(slot) = l.taps else {
             return Some(units);
         };
-        if self.sources.taps_slot(&self.plan.taps, slot)
-            || (!self.sources.extras.is_empty()
-                && extra_taps_slot(self.sources, &self.extra_used, slot))
-        {
+        if self.sources.taps_slot(&self.plan.taps, slot) {
             return None;
         }
         let mut u = units;
@@ -426,66 +359,11 @@ impl<L: Layout> Lookahead<'_, L> {
         Some(u)
     }
 
-    fn pays_cost(
-        &self,
-        units: Units,
-        tapping: Bitboard<L::Slot>,
-        bonus_land: Option<(u8, u8)>,
-        cost: ManaCost,
-    ) -> bool {
-        if units.pays(cost) {
-            return true;
-        }
-        if self.sources.extras.is_empty() {
-            return false;
-        }
-        if tapping.is_empty() {
-            return super::rich::pays_from_state_with(
-                self.plan.left,
-                self.sources,
-                &self.plan.taps,
-                self.plan.remembered,
-                &self.extra_used,
-                bonus_land,
-                cost,
-            );
-        }
-        let (without, without_extra) = tapping.fold(
-            (self.plan.taps.clone(), self.extra_used),
-            |(mut without, mut without_extra), slot| {
-                for (i, c) in self.sources.classes().iter().enumerate() {
-                    if c.members.contains(slot) && !c.is_twin() {
-                        without[i] += 1;
-                    }
-                }
-                for (i, e) in self.sources.extras.iter().enumerate() {
-                    if e.members.contains(slot) {
-                        without_extra[i] += 1;
-                    }
-                }
-                (without, without_extra)
-            },
-        );
-        super::rich::pays_from_state_with(
-            self.plan.left,
-            self.sources,
-            &without,
-            self.plan.remembered,
-            &without_extra,
-            bonus_land,
-            cost,
-        )
-    }
-
-    /// The outlook with `units` to pay with, and optional unplayed `bonus_land`.
-    fn outlook(&self, units: Units, bonus_land: Option<(u8, u8)>) -> Outlook {
+    /// The outlook with `units` to pay with.
+    fn outlook(&self, units: Units) -> Outlook {
         let mut out = Outlook::default();
         for l in self.later {
-            let tapping = l.taps.map_or(Bitboard::EMPTY, Bitboard::single);
-            if self
-                .without(units, l)
-                .is_some_and(|u| self.pays_cost(u, tapping, bonus_land, l.cost))
-            {
+            if self.without(units, l).is_some_and(|u| u.pays(l.cost)) {
                 let symbols = l.cost.symbol_count();
                 out.most = out.most.max(symbols);
                 out.payable += 1;
@@ -502,7 +380,6 @@ impl<L: Layout> Lookahead<'_, L> {
             0,
             ManaCost::NONE,
             units,
-            bonus_land,
             Bitboard::EMPTY,
             used.as_mut_slice(),
             &mut best,
@@ -521,7 +398,6 @@ impl<L: Layout> Lookahead<'_, L> {
         start: usize,
         sum: ManaCost,
         units: Units,
-        bonus_land: Option<(u8, u8)>,
         tapping: Bitboard<L::Slot>,
         used: &mut [u8],
         best: &mut (u32, u32),
@@ -547,22 +423,22 @@ impl<L: Layout> Lookahead<'_, L> {
             if !l.cost.hybrid.is_empty() {
                 next.hybrid = plus_hybrid(next.hybrid, l.cost.hybrid);
             }
-            if next.total(0) > u.total() + self.extra_max {
+            if next.total(0) > u.total() {
                 continue;
             }
             if *checks == 0 {
                 return;
             }
             *checks -= 1;
+            if !u.pays(next) {
+                continue;
+            }
             let mut tapping = tapping;
             if let Some(slot) = l.taps {
                 tapping.insert(slot);
             }
-            if !self.pays_cost(u, tapping, bonus_land, next) {
-                continue;
-            }
             used[i] += 1;
-            self.together(i, next, u, bonus_land, tapping, used, best, checks);
+            self.together(i, next, u, tapping, used, best, checks);
             used[i] -= 1;
         }
     }
@@ -582,57 +458,27 @@ fn outlook<L: Layout>(
     plan: &Plan<L>,
     ahead: &Ahead<L>,
     creatures: &Taps<L>,
-    extra_creatures: &[u8; CLASSES],
 ) -> Outlook {
-    let extra_used = if sources.extras.is_empty() {
-        [0; CLASSES]
-    } else {
-        plan_extra_used(plan)
-    };
-    let extra_max: u32 = sources
-        .extras
-        .iter()
-        .enumerate()
-        .map(|(i, e)| {
-            let avail = u32::from(e.count.saturating_sub(extra_used[i]));
-            let per = e
-                .activations
-                .iter()
-                .map(super::rich::RichActivation::total_mana)
-                .max()
-                .unwrap_or(0);
-            avail.saturating_mul(per)
-        })
-        .sum();
     let look = Lookahead {
         sources,
         plan,
         later: ahead.later.as_slice(),
         copies: ahead.copies.as_slice(),
-        extra_used,
-        extra_max,
     };
     let units = sources.units(plan.left, &plan.taps);
-    let mut best = look.outlook(units, None);
+    let mut best = look.outlook(units);
     for &(kinds, amount) in ahead.lands.iter() {
         let mut u = units;
         u.add(kinds, u16::from(amount));
-        best = best.max(look.outlook(u, Some((kinds, amount))));
+        best = best.max(look.outlook(u));
     }
     // [`pay`] taps a class's other members before its creatures.
-    let plain_creatures: u32 = sources
+    best.creatures = sources
         .classes()
         .iter()
         .zip(plan.taps.iter().zip(creatures.iter()))
         .map(|(c, (&taps, &n))| u32::from(n.min(c.count() - taps)))
         .sum();
-    let rich_creatures: u32 = sources
-        .extras
-        .iter()
-        .enumerate()
-        .map(|(i, e)| u32::from(extra_creatures[i].min(e.count.saturating_sub(extra_used[i]))))
-        .sum();
-    best.creatures = plain_creatures + rich_creatures;
     best
 }
 
@@ -660,43 +506,27 @@ pub(super) fn looking_ahead<L: Layout>(
             .filter(|m| s.derived(m).types.intersects(Types::CREATURE));
         creatures[i] = u8::try_from(creatures_of.count()).unwrap_or(u8::MAX);
     }
-    let mut extra_creatures = [0u8; CLASSES];
-    for (i, e) in sources.extras.iter().enumerate() {
-        let creatures_of = e
-            .members
-            .filter(|m| s.derived(m).types.intersects(Types::CREATURE));
-        extra_creatures[i] = u8::try_from(creatures_of.count()).unwrap_or(u8::MAX);
-    }
     let mut best: L::Queue<Outlook, 64> = Default::default();
     for k in kept.iter() {
-        best.push(outlook(sources, k, &ahead, &creatures, &extra_creatures))?;
+        best.push(outlook(sources, k, &ahead, &creatures))?;
     }
-    let mut consider = |p: &Plan<L>| {
-        let outcome = sources.outcome(p);
-        if let Some(i) =
-            (kept.iter()).position(|k| k.left == p.left && sources.outcome(k) == outcome)
-        {
-            let o = outlook(sources, p, &ahead, &creatures, &extra_creatures);
-            if o > best.as_slice()[i] && accepted(p) {
-                best.as_mut_slice()[i] = o;
-                kept[i] = p.clone();
-            }
-        }
-    };
     each_plan(
         cost,
         s.player(player).mana().amounts_u8(),
         sources,
         &mut |p| {
-            consider(p);
+            let outcome = sources.outcome(p);
+            if let Some(i) =
+                (kept.iter()).position(|k| k.left == p.left && sources.outcome(k) == outcome)
+            {
+                let o = outlook(sources, p, &ahead, &creatures);
+                if o > best.as_slice()[i] && accepted(p) {
+                    best.as_mut_slice()[i] = o;
+                    kept[i] = p.clone();
+                }
+            }
             true
         },
     );
-    if !sources.extras.is_empty() {
-        super::rich::each_plan(s, player, cost, sources, false, &mut |p| {
-            consider(&p);
-            true
-        });
-    }
     Ok(())
 }
