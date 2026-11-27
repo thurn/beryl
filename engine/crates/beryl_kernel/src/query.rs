@@ -246,24 +246,26 @@ impl<L: Layout> State<L> {
     }
 
     /// Whether the permanent in `slot` makes the mana its card table's facts say
-    /// ([`crate::table::FaceFacts::mana`]): it has every ability of its face and no intrinsic
-    /// mana ability of a basic land type but its face's (see [CR 305.7]), and it is no merged
-    /// permanent with the abilities of cards under its top card
-    /// ([`crate::query::Copiable::merged_faces`]). With no effect on the battlefield removing
-    /// abilities or changing land types and no merged permanent, as most games go, one test
-    /// of a flag the layers store.
+    /// ([`crate::table::FaceFacts::mana`]): it has every ability of its face, no intrinsic
+    /// mana ability of a basic land type but its face's (see [CR 305.7]), no granted mana
+    /// ability (see [CR 613.1f]), and it is no merged permanent with the abilities of cards
+    /// under its top card ([`crate::query::Copiable::merged_faces`]). With no effect on the
+    /// battlefield removing abilities, changing land types, or granting a mana ability, and no
+    /// merged permanent, as most games go, one test of a flag the layers store.
     ///
     /// [CR 305.7]: https://yawgatog.com/resources/magic-rules/#R3057
+    /// [CR 613.1f]: https://yawgatog.com/resources/magic-rules/#R6131f
     #[inline]
-    pub fn makes_card_mana(&self, slot: L::Slot) -> bool {
-        !self.flags.mana_changed || self.keeps_card_mana(slot)
+    pub fn makes_card_mana(&self, t: &crate::table::GameTable, slot: L::Slot) -> bool {
+        !self.flags.mana_changed || self.keeps_card_mana(t, slot)
     }
 
-    /// [`State::makes_card_mana`] when some effect changed abilities or land types, or a
-    /// merged permanent is on the battlefield. Out of line: most games never come here.
+    /// [`State::makes_card_mana`] when some effect changed abilities, land types, or granted a
+    /// mana ability, or a merged permanent is on the battlefield. Out of line: most games
+    /// never come here.
     #[cold]
     #[inline(never)]
-    fn keeps_card_mana(&self, slot: L::Slot) -> bool {
+    fn keeps_card_mana(&self, t: &crate::table::GameTable, slot: L::Slot) -> bool {
         if self.has_mana_changes() {
             return false;
         }
@@ -272,8 +274,27 @@ impl<L: Layout> State<L> {
             let d = self.derived[i];
             let merged = self.object(slot).flags.has(Flag::Copy)
                 && self.copiable(slot).merged_face(0).is_some();
-            { d.lost }.is_empty() && { d.keywords }.intrinsic_mana() == 0 && !merged
+            let granted_mana = t.can(crate::table::Capability::GrantsMana)
+                && self.has_granted_mana_row(t, d.granted);
+            { d.lost }.is_empty()
+                && { d.keywords }.intrinsic_mana() == 0
+                && !merged
+                && !granted_mana
         })
+    }
+
+    /// Whether any bit set in `bits` names a row of the table of grants whose ability is a
+    /// mana ability.
+    fn has_granted_mana_row(&self, t: &crate::table::GameTable, mut bits: L::AbilityMask) -> bool {
+        let rows = self.grant_rows();
+        while !bits.is_empty() {
+            let row = bits.lowest();
+            bits = bits.without_lowest();
+            if rows[row].ability(t).is_some_and(crate::table::is_simple) {
+                return true;
+            }
+        }
+        false
     }
 
     /// The kinds of mana the intrinsic mana abilities of the basic land types of the object

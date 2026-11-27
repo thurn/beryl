@@ -93,6 +93,13 @@ impl<L: Layout> GrantRow<L> {
             grant: self.grant,
         }
     }
+
+    /// The granted ability printed on its granting card's front face, or `None` for a lent row.
+    #[inline]
+    pub fn ability(self, t: &crate::table::GameTable) -> Option<&'static beryl_card::Ability> {
+        let grant = self.as_grant_ref()?;
+        Some(&t.def(grant.card).front().grants[grant.grant.index()])
+    }
 }
 
 const _: () = assert!(size_of::<GrantRow<Small>>() == 4);

@@ -264,13 +264,12 @@ pub fn found_where_it_works(ability: &Ability) -> bool {
 /// Whether the engine reads `ability` when another object grants it to a permanent
 /// (see [CR 613.1f]): "Layer 6: Ability-adding effects, keyword counters, ability-removing
 /// effects, and effects that say an object can't have an ability are applied." An activated
-/// ability is offered from the abilities the permanent has ([`crate::State::abilities`]), and
-/// a static ability's continuous effect is applied by the layers. Every other kind is found
-/// only through what the card table records of each face's own abilities, so a granted one
-/// would silently do nothing: a triggered ability is matched only from the listeners of the
-/// faces' own abilities ([`of`]), a replacement effect or a rule change only through the
-/// faces' replacement and rule masks, and a mana ability only through the faces' mana facts
-/// ([`crate::table::FaceFacts`]).
+/// ability or a plain mana ability (`table::is_simple`) is offered from the abilities the
+/// permanent has ([`crate::State::abilities`]), and a static ability's continuous effect is
+/// applied by the layers. Every other kind is found only through what the card table records
+/// of each face's own abilities, so a granted one would silently do nothing: a triggered
+/// ability is matched only from the listeners of the faces' own abilities ([`of`]), and a
+/// replacement effect or a rule change only through the faces' replacement and rule masks.
 ///
 /// [CR 613.1f]: https://yawgatog.com/resources/magic-rules/#R6131f
 pub fn read_when_granted(ability: &Ability) -> bool {
@@ -292,10 +291,8 @@ pub fn read_when_granted(ability: &Ability) -> bool {
         // abilities (`State::abilities`), as Animate Dead gains "enchant creature put onto the
         // battlefield with this Aura".
         AbilityKind::Spell => !ability.targets().is_empty(),
-        AbilityKind::Mana
-        | AbilityKind::Triggered
-        | AbilityKind::Replacement
-        | AbilityKind::ManaChange => false,
+        AbilityKind::Mana => crate::table::is_simple(ability),
+        AbilityKind::Triggered | AbilityKind::Replacement | AbilityKind::ManaChange => false,
     }
 }
 

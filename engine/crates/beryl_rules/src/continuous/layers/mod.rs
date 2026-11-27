@@ -334,7 +334,8 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable, trials: &mut u64) -> Re
     } else {
         Inputs::NONE
     };
-    s.finish(listening, replacing, rules, inputs, removed, land_types);
+    let mana_changed = land_types || (t.can(Capability::GrantsMana) && s.has_granted_mana(t));
+    s.finish(listening, replacing, rules, inputs, removed, mana_changed);
     listed
 }
 

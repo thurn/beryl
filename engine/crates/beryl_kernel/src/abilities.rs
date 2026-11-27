@@ -256,6 +256,19 @@ impl<L: Layout> State<L> {
     pub fn granted_ability(&self, slot: L::Slot, k: u8) -> Option<GrantRef<L>> {
         self.granted_row(slot, k).map(|(_, row)| row.grant_ref())
     }
+
+    /// The text-change words to read `ability` of `slot` through: for a granted ability from a
+    /// permanent, that granting permanent's words; otherwise `slot`'s own words.
+    #[inline]
+    pub fn ability_words(&self, slot: L::Slot, ability: ObjectAbility) -> beryl_card::Words {
+        if let ObjectAbility::Granted(k) = ability
+            && let Some((_, row)) = self.granted_row(slot, k)
+            && let crate::object::GrantSource::Permanent(grantor) = row.source
+        {
+            return self.words_of(grantor);
+        }
+        self.words_of(slot)
+    }
 }
 
 /// The [`Lent`] that a lent row of the table of grants names, by its zero-based place among

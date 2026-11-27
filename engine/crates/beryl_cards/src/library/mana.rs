@@ -461,3 +461,52 @@ pub const REFLECTING_POOL: &[Scenario] = &[
             ME.tapped(names::SKYCLOUD_EXPANSE, 0),
         ]),
 ];
+
+/// Granted mana abilities (CR 613.1f, CR 302.6, CR 113.2c): Gemhide Sliver grants all Slivers
+/// "{T}: Add one mana of any color."
+pub const GRANTED_MANA: &[Scenario] = &[
+    Scenario::new("A Sliver that entered this turn cannot tap for granted mana")
+        .battlefield(P0, &[names::FOREST, names::ISLAND])
+        .hand(P0, &[names::GEMHIDE_SLIVER, props::EQUIPMENT.card])
+        .actions(&[
+            ME.casts(names::GEMHIDE_SLIVER),
+            Resolve,
+            ME.controls(names::GEMHIDE_SLIVER, 1),
+            // Both lands are tapped and Gemhide Sliver entered this turn (CR 302.6), so only Pass
+            // is legal.
+            ME.deciding(DecisionKind::Priority, 1),
+        ]),
+    Scenario::new("An opponent's Sliver has the granted mana ability and its controller uses it")
+        .interaction(&[names::METALLIC_SLIVER])
+        .at(2, P1, TurnStep::PrecombatMain)
+        .battlefield(P0, &[names::GEMHIDE_SLIVER])
+        .battlefield(P1, &[names::METALLIC_SLIVER])
+        .hand(P1, &[props::EQUIPMENT.card])
+        .actions(&[
+            THEM.casts(props::EQUIPMENT.card),
+            THEM.tapped(names::METALLIC_SLIVER, 1),
+            THEM.controls(props::EQUIPMENT.card, 1),
+        ]),
+    Scenario::new("Two Gemhide Slivers offer one mana option for a Sliver")
+        .battlefield(P0, &[names::GEMHIDE_SLIVER, names::GEMHIDE_SLIVER])
+        .hand(P0, &[props::EQUIPMENT.card])
+        .actions(&[
+            // Both Gemhide Slivers grant the same ability; casting {1} taps one without a payment
+            // choice between duplicate granted instances.
+            ME.casts(props::EQUIPMENT.card),
+            Resolve,
+            ME.tapped(names::GEMHIDE_SLIVER, 1),
+            ME.controls(props::EQUIPMENT.card, 1),
+        ]),
+    Scenario::new("Granted mana from Gemhide Sliver pays for a spell")
+        .battlefield(P0, &[names::GEMHIDE_SLIVER, names::FOREST])
+        .hand(P0, &[props::GREEN_WHITE_CREATURE.card])
+        .actions(&[
+            // Forest pays {G} and Gemhide Sliver taps for {W} to cast a {G}{W} creature.
+            ME.casts(props::GREEN_WHITE_CREATURE.card),
+            Resolve,
+            ME.tapped(names::GEMHIDE_SLIVER, 1),
+            ME.tapped(names::FOREST, 1),
+            ME.controls(props::GREEN_WHITE_CREATURE.card, 1),
+        ]),
+];

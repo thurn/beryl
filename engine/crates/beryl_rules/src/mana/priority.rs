@@ -121,12 +121,13 @@ fn list_instant_options<L: Layout>(
     out: &mut L::Queue<Opt<L>, OPTIONS>,
 ) -> Result<(), Full> {
     let instant = |slot: L::Slot| {
-        let words = s.words_of(slot);
         s.abilities(t, slot).filter(move |&(ability, a)| {
-            matches!(ability, ObjectAbility::Own(_) | ObjectAbility::Merged(..))
-                && is_instant_mana(a)
+            matches!(
+                ability,
+                ObjectAbility::Own(_) | ObjectAbility::Merged(..) | ObjectAbility::Granted(_)
+            ) && is_instant_mana(a)
                 && (!a.cost().does(CostAction::Tap) || can_tap(s, player, slot, s.derived(slot)))
-                && allowed(s, t, a, player, &words)
+                && allowed(s, t, a, player, &s.ability_words(slot, ability))
         })
     };
     let objects: Bitboard<L::Slot> = (s.battlefield().iter().copied())

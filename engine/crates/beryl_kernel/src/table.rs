@@ -63,8 +63,8 @@ pub enum TableError {
     Zone { card: &'static str },
     /// A card of the game, or a token or emblem one makes, grants an ability the engine
     /// does not read when it is granted ([`listener::read_when_granted`]): anything but an
-    /// activated ability or a static ability the layers apply. It would silently do nothing,
-    /// so no game is played with it.
+    /// activated ability, a plain mana ability or a static ability the layers apply. It would
+    /// silently do nothing, so no game is played with it.
     Granted { card: &'static str },
     /// A card of the game, or a token or emblem one makes, has a static ability whose
     /// continuous effect the layers have no code to apply ([`static_ability::applied`]): it

@@ -171,7 +171,7 @@ fn collect_extra<L: Layout>(
         return Ok(());
     }
     let key = s.definition(slot).key();
-    let card_mana = s.makes_card_mana(slot);
+    let card_mana = s.makes_card_mana(t, slot);
     if card_mana
         && let Some(existing) = extras
             .iter_mut()

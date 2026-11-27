@@ -547,7 +547,7 @@ fn reference_units<L: Layout>(
         let mut kinds = s.intrinsic_mana(t, slot);
         let mut amount = (kinds != 0).then_some(1);
         // A permanent that lost the ability has none to tap (see CR 613.1f).
-        for (_, a) in s.abilities(t, slot) {
+        for (ability, a) in s.abilities(t, slot) {
             // {T}, or {T} and sacrificing it, and nothing else.
             let tap_only = a.cost().mana.is_zero()
                 && a.cost().does(CostAction::Tap)
@@ -561,7 +561,7 @@ fn reference_units<L: Layout>(
             if a.kind() != AbilityKind::Mana
                 || !tap_only
                 || !spendable(s, t, paying, slot, a)
-                || !controls(s, t, player, a, &s.words_of(slot))
+                || !controls(s, t, player, a, &s.ability_words(slot, ability))
             {
                 continue;
             }

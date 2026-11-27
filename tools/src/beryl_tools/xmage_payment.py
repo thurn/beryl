@@ -89,11 +89,18 @@ class Payments:
             return []
         if restricted:
             return self.as_made_taps(who, at, taps, mana)
+        grants_mana = any(
+            g["kind"] == "Mana" for _, gs in self.cards.grants for g in gs
+        )
         if (
             not self.cards.change_land_types()
             and who not in self.left_to_xmage
-            and any(
-                self.cards.mana_choice(t) or _any_type_mana(self.cards, t) for t in taps
+            and (
+                any(
+                    self.cards.mana_choice(t) or _any_type_mana(self.cards, t)
+                    for t in taps
+                )
+                or grants_mana
             )
         ):
             try:

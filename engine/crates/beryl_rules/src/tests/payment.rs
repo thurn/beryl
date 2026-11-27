@@ -2463,3 +2463,312 @@ fn mana_reflection_and_reflecting_pool_agree_with_reference_on_200_seeded_boards
     assert!(payable_count > 80, "only {payable_count} payable boards");
     assert!(manual_steps > 100, "only {manual_steps} manual steps");
 }
+
+/// On 200 seeded boards with granted mana abilities (including a noncreature permanent granted a
+/// mana ability, summoning-sick creatures, and duplicate grantors), the payment reference agrees
+/// with the solver, `Funds`, `plans`, and `Payment::Manual`, and duplicate grantors offer each
+/// color once.
+#[test]
+#[allow(clippy::too_many_lines)]
+fn reference_agrees_with_granted_mana_on_200_seeded_boards() {
+    use crate::card::{LayerSpec, ManaSet, Modification, Objects, Subtype, Subtypes};
+    use beryl_card::{Filter, SubtypeWords};
+
+    static SLIVER_GRANTOR: CardDef = CardDef {
+        name: "Test Sliver Grantor",
+        shape: beryl_card::definition::Shape::Single,
+        faces: &[Face {
+            types: Types::CREATURE,
+            subtypes: SubtypeWords::new(Subtypes::of(&[Subtype::Sliver])),
+            power: Some(1),
+            toughness: Some(1),
+            abilities: &[Ability::static_ability(&LayerSpec {
+                affected: Objects::All {
+                    zone: Zone::Battlefield,
+                    filter: Filter::Subtype(Subtype::Sliver),
+                },
+                condition: None,
+                modifications: &[Modification::grant(0)],
+            })],
+            grants: &[Ability::tap_for_mana(ManaSet::any_color(1))],
+            ..Face::EMPTY
+        }],
+        tokens: &[],
+    };
+    static ARTIFACT_GRANTOR: CardDef = CardDef {
+        name: "Test Artifact Mana Grantor",
+        shape: beryl_card::definition::Shape::Single,
+        faces: &[Face {
+            types: Types::ENCHANTMENT,
+            abilities: &[Ability::static_ability(&LayerSpec {
+                affected: Objects::All {
+                    zone: Zone::Battlefield,
+                    filter: Filter::Types(Types::ARTIFACT),
+                },
+                condition: None,
+                modifications: &[Modification::grant(0)],
+            })],
+            grants: &[Ability::tap_for_mana(ManaSet::any_color(1))],
+            ..Face::EMPTY
+        }],
+        tokens: &[],
+    };
+    static PLAIN_SLIVER: CardDef = CardDef {
+        name: "Test Plain Sliver",
+        shape: beryl_card::definition::Shape::Single,
+        faces: &[Face {
+            types: Types::CREATURE,
+            subtypes: SubtypeWords::new(Subtypes::of(&[Subtype::Sliver])),
+            power: Some(1),
+            toughness: Some(1),
+            ..Face::EMPTY
+        }],
+        tokens: &[],
+    };
+    static PLAIN_ARTIFACT: CardDef = CardDef {
+        name: "Test Plain Artifact",
+        shape: beryl_card::definition::Shape::Single,
+        faces: &[Face {
+            types: Types::ARTIFACT,
+            ..Face::EMPTY
+        }],
+        tokens: &[],
+    };
+    static CARDS: CardTable = CardTable::new(&[
+        &LAND,
+        &ISLAND,
+        &BEAR,
+        &SLIVER_GRANTOR,
+        &ARTIFACT_GRANTOR,
+        &PLAIN_SLIVER,
+        &PLAIN_ARTIFACT,
+    ]);
+    let deck: &[(u8, &str)] = &[
+        (8, "Test Land"),
+        (8, "Test Island"),
+        (8, "Test Bear"),
+        (4, "Test Sliver Grantor"),
+        (4, "Test Artifact Mana Grantor"),
+        (8, "Test Plain Sliver"),
+        (8, "Test Plain Artifact"),
+    ];
+    let t = crate::GameTable::new(
+        beryl_kernel::format::Format::CONSTRUCTED,
+        &CARDS,
+        [deck, deck],
+    )
+    .unwrap();
+    assert!(t.can(crate::table::Capability::GrantsMana));
+
+    // Verify two grantors offer one standalone mana option per color (5 total) for a Sliver.
+    {
+        let mut s = crate::State::new(&t, 1, Profile::EXACT).unwrap();
+        super::begin(&t, &mut s);
+        let p = s.turn().starting_player();
+        for _ in 0..2 {
+            let slot = s
+                .library(p)
+                .iter()
+                .copied()
+                .find(|&sl| s.definition_name(&t, sl) == "Test Sliver Grantor")
+                .unwrap();
+            s.board().place(slot, Zone::Battlefield).unwrap();
+            let perm = s.permanent_at(slot).unwrap();
+            s.set_summoning_sick(perm, false);
+        }
+        let sliver = s
+            .library(p)
+            .iter()
+            .copied()
+            .find(|&sl| s.definition_name(&t, sl) == "Test Plain Sliver")
+            .unwrap();
+        s.board().place(sliver, Zone::Battlefield).unwrap();
+        let perm = s.permanent_at(sliver).unwrap();
+        s.set_summoning_sick(perm, false);
+        crate::continuous::layers::refresh(&mut s, &t, &mut Sink::off()).unwrap();
+        assert!(!s.makes_card_mana(&t, sliver));
+        let mut opts = beryl_kernel::fixed::Fixed::new();
+        mana::standalone_options(&s, &t, p, &mut opts);
+        let sliver_opts = opts
+            .as_slice()
+            .iter()
+            .filter(|o| matches!(o, Opt::Mana { slot, .. } if *slot == sliver))
+            .count();
+        assert_eq!(sliver_opts, 5, "two grantors must offer each color once");
+    }
+
+    let permanents = [
+        "Test Land",
+        "Test Island",
+        "Test Bear",
+        "Test Plain Sliver",
+        "Test Plain Artifact",
+    ];
+    let mut rng = SplitMix64::new(0x6E47_A001);
+    let mut payable_count = 0usize;
+    let mut manual_steps = 0usize;
+    for board_ix in 0..200 {
+        let mut s = crate::State::new(&t, board_ix as u64 + 1, Profile::EXACT).unwrap();
+        super::begin(&t, &mut s);
+        let p = s.turn().starting_player();
+        let n_perms = rng.below(5) as usize + 1;
+        for _ in 0..n_perms {
+            let name = permanents[rng.below(permanents.len() as u64) as usize];
+            if let Some(&slot) = s
+                .library(p)
+                .iter()
+                .find(|&&sl| s.definition_name(&t, sl) == name)
+            {
+                s.board().place(slot, Zone::Battlefield).unwrap();
+                let sick = rng.below(2) == 0;
+                let perm = s.permanent_at(slot).unwrap();
+                s.set_summoning_sick(perm, sick);
+            }
+        }
+        // Place 0..=2 Sliver grantors and 0..=2 Artifact grantors (at least one grantor overall).
+        let n_sliver_grantors = rng.below(3) as usize;
+        let n_art_grantors = if n_sliver_grantors == 0 {
+            rng.below(2) as usize + 1
+        } else {
+            rng.below(3) as usize
+        };
+        for (name, count) in [
+            ("Test Sliver Grantor", n_sliver_grantors),
+            ("Test Artifact Mana Grantor", n_art_grantors),
+        ] {
+            for _ in 0..count {
+                if let Some(&slot) = s
+                    .library(p)
+                    .iter()
+                    .find(|&&sl| s.definition_name(&t, sl) == name)
+                {
+                    s.board().place(slot, Zone::Battlefield).unwrap();
+                    let sick = rng.below(2) == 0;
+                    let perm = s.permanent_at(slot).unwrap();
+                    s.set_summoning_sick(perm, sick);
+                }
+            }
+        }
+        // Ensure at least one noncreature artifact is present on half the boards.
+        if board_ix % 2 == 0
+            && let Some(&slot) = s
+                .library(p)
+                .iter()
+                .find(|&&sl| s.definition_name(&t, sl) == "Test Plain Artifact")
+        {
+            s.board().place(slot, Zone::Battlefield).unwrap();
+            let perm = s.permanent_at(slot).unwrap();
+            s.set_summoning_sick(perm, true);
+        }
+        let mut pool = ManaPool::default();
+        for color in [
+            ManaColor::White,
+            ManaColor::Blue,
+            ManaColor::Black,
+            ManaColor::Red,
+            ManaColor::Green,
+        ] {
+            pool[color] = rng.below(2) as u8;
+        }
+        s.board().set_mana(p, pool);
+        crate::continuous::layers::refresh(&mut s, &t, &mut Sink::off()).unwrap();
+        crate::reference::check_references(&s, &t).unwrap();
+
+        let cost = ManaCost::new(
+            rng.below(3) as u8,
+            [
+                rng.below(2) as u8,
+                rng.below(2) as u8,
+                rng.below(2) as u8,
+                rng.below(2) as u8,
+                rng.below(2) as u8,
+                0,
+            ],
+        );
+        let expected = crate::reference::reference_payable(&s, &t, p, cost).unwrap();
+        let prefilter =
+            mana::payable(&s, &t, p, cost, Bitboard::EMPTY, mana::Paying::NOTHING).unwrap();
+        assert_eq!(
+            prefilter, expected,
+            "prefilter board={board_ix} cost={cost:?}"
+        );
+        let funds = mana::Funds::of(&s, &t, p).unwrap();
+        assert_eq!(
+            funds.pays_for(&s, &t, cost, Bitboard::EMPTY, mana::Paying::NOTHING),
+            expected,
+            "funds board={board_ix} cost={cost:?}"
+        );
+        for greedy in [false, true] {
+            let plans = mana::plans(
+                &s,
+                &t,
+                &mut Sink::off(),
+                p,
+                cost,
+                Bitboard::EMPTY,
+                greedy,
+                mana::Paying::NOTHING,
+            )
+            .unwrap();
+            assert_eq!(
+                !plans.is_empty(),
+                expected,
+                "plans board={board_ix} greedy={greedy} cost={cost:?}"
+            );
+            for plan in plans.as_slice() {
+                let mut paid = s;
+                mana::pay(
+                    &mut paid,
+                    &t,
+                    &mut Sink::off(),
+                    p,
+                    cost,
+                    Bitboard::EMPTY,
+                    plan,
+                    mana::Paying::NOTHING,
+                )
+                .unwrap();
+                assert_eq!(
+                    paid.player(p).mana().amounts(),
+                    plan.left,
+                    "plan.left board={board_ix} cost={cost:?}"
+                );
+            }
+        }
+        if expected && !cost.is_zero() {
+            payable_count += 1;
+            let mut ms = s;
+            let mut rem = cost;
+            let mut guard = 0;
+            while !rem.is_zero() {
+                let opts =
+                    mana::manual_options(&ms, &t, p, rem, Bitboard::EMPTY, mana::Paying::NOTHING)
+                        .unwrap();
+                assert!(
+                    !opts.is_empty(),
+                    "manual_options empty board={board_ix} rem={rem:?}"
+                );
+                let pick_ix = rng.below(opts.len() as u64) as usize;
+                rem = mana::manual_pay(
+                    &mut ms,
+                    &t,
+                    &mut Sink::off(),
+                    p,
+                    rem,
+                    opts.as_slice()[pick_ix],
+                    mana::Paying::NOTHING,
+                )
+                .unwrap()
+                .0;
+                manual_steps += 1;
+                guard += 1;
+                assert!(
+                    guard < 40,
+                    "manual payment did not terminate board={board_ix}"
+                );
+            }
+        }
+    }
+    assert!(payable_count > 60, "only {payable_count} payable boards");
+    assert!(manual_steps > 100, "only {manual_steps} manual steps");
+}

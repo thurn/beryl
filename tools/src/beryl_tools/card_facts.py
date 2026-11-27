@@ -345,13 +345,13 @@ class Cards:
         )
 
     def made_text(self, source: str, made: Json) -> str | None:
-        """The start of the text of the mana ability of `source` that made the mana `made`
-        (an entry of the trace's `mana`): the one restricted or not as the mana is, whose only
-        cost is `{T}`, that makes one color, as `{T}: Add {C}`, or one mana of any color.
-        None where no such ability says it."""
+        """Start of the mana ability text on `source` (or granted in the scenario) that made
+        `made`: `{T}`-only, matching restriction, making one color or one mana of any color.
+        """
         color = cast(str, made["color"])
         made_amount = cast(int, made.get("amount", 1))
-        for a in self.abilities(source):
+        granted = [g for _, gs in self.grants for g in gs]
+        for a in self.abilities(source) + granted:
             if a["kind"] != "Mana" or bool(a.get("restricted")) != made["restricted"]:
                 continue
             if a.get("cost") != {"parts": [{"action": "Tap", "of": "This"}]}:

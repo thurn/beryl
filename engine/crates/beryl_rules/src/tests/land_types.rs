@@ -230,7 +230,7 @@ fn a_land_of_a_basic_land_type_has_its_mana_ability_unwritten() {
     let plains = on(&t, &mut s, "Test Land");
     assert_eq!(s.intrinsic_mana(&t, arbor), G);
     assert_eq!(s.intrinsic_mana(&t, plains), 0);
-    assert!(s.makes_card_mana(arbor));
+    assert!(s.makes_card_mana(&t, arbor));
     assert!(pays(&t, &s, ManaCost::new(0, [1, 0, 0, 0, 1, 0])));
     assert!(!pays(&t, &s, ManaCost::new(0, [0, 0, 0, 0, 2, 0])));
 }
@@ -254,7 +254,7 @@ fn setting_a_land_type_replaces_its_types_and_mana() {
     assert!(!s.has_ability(dual, AbilityIx::new(0)) && !s.has_ability(dual, AbilityIx::new(1)));
     assert_eq!(s.intrinsic_mana(&t, dual), R);
     assert!(is(&t, &s, plains, Subtype::Plains) && !is(&t, &s, plains, Subtype::Mountain));
-    assert!(s.makes_card_mana(plains));
+    assert!(s.makes_card_mana(&t, plains));
     assert!(is(&t, &s, arbor, Subtype::Dryad) && is(&t, &s, arbor, Subtype::Mountain));
     assert!(!is(&t, &s, arbor, Subtype::Forest));
     assert!(s.derived(arbor).types.intersects(Types::CREATURE));

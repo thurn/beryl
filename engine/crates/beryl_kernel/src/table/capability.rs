@@ -212,10 +212,13 @@ pub enum Capability {
     /// [CR 508.1d]: https://yawgatog.com/resources/magic-rules/#R5081d
     /// [CR 509.1c]: https://yawgatog.com/resources/magic-rules/#R5091c
     CombatRequirements,
+    /// A card grants another permanent a plain mana ability ([`crate::table::is_simple`]), so
+    /// the layers note when any such grant is in effect for [`crate::State::makes_card_mana`].
+    GrantsMana,
 }
 
 // The game keeps its capabilities in a `u64`.
-const _: () = assert!((Capability::CombatRequirements as u32) < u64::BITS);
+const _: () = assert!((Capability::GrantsMana as u32) < u64::BITS);
 
 impl Capability {
     /// The capabilities of every face and subtype the game can contain.
@@ -295,6 +298,9 @@ impl Capability {
         // An ability a permanent is granted reads what one of its own does.
         if face.grants.iter().any(|a| a.layer().is_some()) {
             found |= Capability::GrantsLayerEffect.bit();
+        }
+        if face.grants.iter().any(crate::table::is_simple) {
+            found |= Capability::GrantsMana.bit();
         }
         for a in face.abilities.iter().chain(face.grants) {
             if a.chapter_numbers().is_some() {

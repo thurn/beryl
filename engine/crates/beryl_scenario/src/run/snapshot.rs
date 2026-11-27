@@ -185,8 +185,8 @@ impl<L: Layout> Runner<L> {
                 if !intrinsic && abilities.peek().is_none() {
                     return None;
                 }
-                let plain =
-                    !s.derived(slot).types.contains(Types::CREATURE) && s.makes_card_mana(slot);
+                let plain = !s.derived(slot).types.contains(Types::CREATURE)
+                    && s.makes_card_mana(&self.t, slot);
                 Some((slot, plain && abilities.all(makes_one_mana_for_a_tap)))
             })
     }

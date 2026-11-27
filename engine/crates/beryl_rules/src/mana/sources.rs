@@ -195,7 +195,7 @@ pub(super) fn source<L: Layout>(
     // mana: they must say what reading it would. One that lost an ability, or whose land
     // types an effect changed, is read ability by ability (see CR 613.1f, see CR 305.7), as is a
     // merged permanent, which has the abilities of the cards under it too (see CR 702.140e).
-    let card_mana = || s.makes_card_mana(slot);
+    let card_mana = || s.makes_card_mana(t, slot);
     debug_assert!(
         mana != ManaFace::Not
             || !card_mana()
@@ -270,15 +270,16 @@ fn read_source<L: Layout>(
     {
         return None;
     }
-    let mut abilities = s.abilities(t, slot).map(|(_, a)| a);
-    for a in abilities.clone().filter(|a| is_simple(a)) {
+    let mut abilities = s.abilities(t, slot);
+    for (ability, a) in abilities.clone().filter(|(_, a)| is_simple(a)) {
         let dynamic = crate::table::is_could_produce(a);
         conditional |= dynamic || a.only_if_you_control().is_some();
-        if !allowed(s, t, a, player, &words) {
+        let w = s.ability_words(slot, ability);
+        if !allowed(s, t, a, player, &w) {
             continue;
         }
         let (k, n) = if dynamic {
-            let cp = super::changes::could_produce_of(s, t, player, a, &words);
+            let cp = super::changes::could_produce_of(s, t, player, a, &w);
             (cp, u8::from(cp != 0))
         } else {
             (a.produces().colors, a.produces().amount)
@@ -291,7 +292,8 @@ fn read_source<L: Layout>(
     }
     if kinds == 0 {
         // A Treasure: its one mana ability sacrifices it.
-        let a = abilities.find(|a| is_sacrificed(a) && allowed(s, t, a, player, &words))?;
+        let (_, a) =
+            abilities.find(|(_, a)| is_sacrificed(a) && allowed(s, t, a, player, &words))?;
         debug_assert!(
             a.produces().amount == 1 || a.produces().colors.is_power_of_two(),
             "a source of several mana makes one kind"
@@ -304,7 +306,7 @@ fn read_source<L: Layout>(
     );
     // A merged permanent's other cards may have other abilities: it is a class of its own.
     let face_other = facts.other().unwrap_or_else(|| has_other_ability(face));
-    let other = face_other || (!s.makes_card_mana(slot) && merged(s, t, slot));
+    let other = face_other || (!s.makes_card_mana(t, slot) && merged(s, t, slot));
     Some((kinds, amount, conditional || other, false))
 }
 
