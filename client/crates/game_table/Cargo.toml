@@ -19,6 +19,7 @@ kit_space.workspace = true
 kit_fx.workspace = true
 kit_scene.workspace = true
 kit_probe.workspace = true
+game_art.workspace = true
 
 [dev-dependencies]
 # Reads the tuning fixtures and records their paths for Ignite.

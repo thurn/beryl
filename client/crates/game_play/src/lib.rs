@@ -1,6 +1,6 @@
 //! Scripts compiled to tracks; verbs, beats, notices, sound cues, arrows and marks.
 
-pub mod art;
+pub use game_art::art;
 pub mod beat;
 pub mod hud;
 pub mod light;

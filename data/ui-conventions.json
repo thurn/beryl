@@ -194,29 +194,194 @@
     },
     {
       "kind": "settled",
-      "name": "Tokens",
-      "rule": "They appear at their slot; they do not fly out of their source.",
+      "name": "A batch exile",
+      "rule": "Cards exiled together leave one at a time, about 0.3 s apart.",
       "reports": [
-        "by-kgc",
-        "by-81h"
+        "by-5pj"
       ],
       "arena": {
-        "does": "Arena's appears whole with a short glow, about 0.1 s after its ability leaves the stack; a batch appears as one group.",
+        "does": "Delve's cards gather on the graveyard, then peel off its top one by one into a vortex. Delve is the only batch exile in the recordings, all in one recording.",
         "evidence": [
           {
-            "recording": "UrGalw_f35w",
-            "time": "17:38.4"
+            "recording": "5UHzpVvUkfI",
+            "time": "26:06.7"
           },
           {
-            "recording": "WQiYBv23buw",
-            "time": "23:57.0"
-          },
-          {
-            "recording": "iRr-GeSF0lI",
-            "time": "21:58.3"
+            "recording": "5UHzpVvUkfI",
+            "time": "47:36.2"
           }
         ]
       }
+    },
+    {
+      "kind": "settled",
+      "name": "A card a look puts in the graveyard",
+      "rule": "It appears on the graveyard at pile size once the chooser closes; it is not shown large first.",
+      "reports": [
+        "by-2ma"
+      ],
+      "arena": {
+        "does": "A surveilled card lands on the graveyard as the overlay closes; kept cards close with the overlay.",
+        "evidence": [
+          {
+            "recording": "iRr-GeSF0lI",
+            "time": "21:23.9"
+          },
+          {
+            "recording": "SN9QFe2kM4Y",
+            "time": "13:10"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "settled",
+      "name": "A card you may cast from your graveyard",
+      "rule": "While you may cast a card from your graveyard (flashback, such as Snapcaster Mage gives, escape, or a permanent that lets you), it lies at the right end of your hand's fan, after the cards really in your hand, ringed in a soft violet halo that breathes slowly, apart from the cyan outline of a card you may play. It flies from the graveyard into the fan in about half a second as it becomes castable, and back onto the graveyard when it no longer is. Cast, it flies from its place in the fan to the stack. The opponent's castable cards stay on their graveyard.",
+      "arena": {
+        "does": "When Past in Flames resolves, the cards in the graveyard that gained flashback leave the graveyard together and fan into the hand within about a quarter of a second, to the right of the cards already there, each wrapped in drifting white and violet smoke over the cyan outline of a card that may be played. One cast leaves the fan for the stack.",
+        "evidence": [
+          {
+            "recording": "tovCPHl-gOM",
+            "time": "9:07.75"
+          },
+          {
+            "recording": "tovCPHl-gOM",
+            "time": "15:02.5"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "settled",
+      "name": "A countered spell",
+      "rule": "It leaves before the spell that countered it.",
+      "reports": [
+        "by-kxyq"
+      ],
+      "arena": {
+        "does": "The countered spell crumbles in place under the counterspell, which stays until the debris is gone and then fades, 0.5 to 0.9 s later.",
+        "evidence": [
+          {
+            "recording": "I3Te0m1bBFw",
+            "time": "39:50.0"
+          },
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "51:35.0"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "settled",
+      "name": "A finished ability",
+      "rule": "It is removed at once, with no fade.",
+      "reports": [
+        "by-c8b"
+      ]
+    },
+    {
+      "kind": "settled",
+      "name": "A line from an ability to its source",
+      "rule": "It is always shown while the ability is on the stack, thin and faint as Arena draws it, and hidden during a prompt. A heavy arrow is not that line.",
+      "reports": [
+        "by-wkr",
+        "by-afh",
+        "by-110h"
+      ]
+    },
+    {
+      "kind": "settled",
+      "name": "Additional costs",
+      "rule": "A chooser that lowers the mana to pay (Delve) opens before mana taps; a sacrifice cost is chosen after the lands tap.",
+      "reports": [
+        "by-jqd"
+      ],
+      "arena": {
+        "does": "Treasure Cruise's Delve chooser opens before any land taps; Natural Order's lands send their mana, then \"Sacrifice a green creature.\" opens.",
+        "evidence": [
+          {
+            "recording": "5UHzpVvUkfI",
+            "time": "47:31.0"
+          },
+          {
+            "recording": "RwKoGGUmw2k",
+            "time": "39:26.0"
+          },
+          {
+            "recording": "RwKoGGUmw2k",
+            "time": "1:07:02.25"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "settled",
+      "name": "An arrow to the pointer",
+      "rule": "While a target is chosen, an arrow runs from the spell or ability that asks to the mouse, thin and pale. On something that may be chosen it becomes the arrow the choice will draw, in that arrow's color and along its way, and the click draws the stage's own. It follows the pointer itself, with no lag: only the swing onto a target takes time. Nothing is drawn over a target already chosen, and a touch pulls none.",
+      "reports": [
+        "by-w8gv.21.67"
+      ],
+      "arena": {
+        "does": "As the prompt opens, a cyan arrow runs from the ability that asks to the creature under the cursor, and what may be chosen is outlined.",
+        "evidence": [
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "23:13.17"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "settled",
+      "name": "An opponent's spell returned to hand",
+      "rule": "It breaks up in place on the stack over 0.5 to 1 s; it does not fly or flip toward their hand.",
+      "reports": [
+        "by-e0l"
+      ],
+      "arena": {
+        "does": "Seen for Remand on the opponent's spells.",
+        "evidence": [
+          {
+            "recording": "3sEoP_s4DQE",
+            "time": "45:32.0"
+          },
+          {
+            "recording": "3sEoP_s4DQE",
+            "time": "56:19.5"
+          },
+          {
+            "recording": "TbrYIs2juCw",
+            "time": "36:04.5"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "settled",
+      "name": "Attacking a planeswalker",
+      "rule": "No prompt: an attacker defaults to the player, and the player pulls an arrow to the planeswalker.",
+      "reports": [
+        "by-p00u"
+      ],
+      "arena": {
+        "does": "Attackers that can attack get a cyan outline; a clicked attacker turns gold, the opponent's life total and the planeswalker glow, and an arrow follows the cursor to the planeswalker.",
+        "evidence": [
+          {
+            "recording": "SswBO8aOOgc",
+            "time": "33:30.5"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "settled",
+      "name": "Button order",
+      "rule": "It follows Arena prompt by prompt; there is no blanket \"default on the right\".",
+      "reports": [
+        "by-ceo3"
+      ]
     },
     {
       "kind": "settled",
@@ -245,58 +410,45 @@
     },
     {
       "kind": "settled",
-      "name": "The kept opening hand",
-      "rule": "When the opening closes, the screen over the table goes at once, and the hand it showed drops from there into the hand at the near edge in about an eighth of a second, slowing as it lands. On the phone the cards drop from the opening's rows. Nothing appears in the hand from nowhere.",
+      "name": "Cards the opponent looks at",
+      "rule": "They come off the top of their library face down at library size and lie beside it; a top-bound card slides back onto the library and a bottom-bound one slides away from it, to either side. A pill above their avatar reads \"Scry: 1 top, 1 bottom.\" for about 3 s.",
       "reports": [
-        "by-qmbe"
+        "by-pv6p",
+        "by-yfb2",
+        "by-nva"
       ],
       "arena": {
-        "does": "Arena's opening screen vanishes in one frame, and the hand, still fanned in the middle of the screen, falls into the hand at the bottom, most of the way in two frames of 30 and at rest after four.",
+        "does": "No card is enlarged.",
         "evidence": [
           {
-            "recording": "3SEgIYXJgdQ",
-            "time": "13:33.95"
+            "recording": "IHPV6yRaFlk",
+            "time": "52:54.6"
           },
           {
-            "recording": "2VW6ZzmS8U4",
-            "time": "6:56.25"
+            "recording": "IHPV6yRaFlk",
+            "time": "53:31.2"
           },
           {
-            "recording": "2VW6ZzmS8U4",
-            "time": "14:07.75"
+            "recording": "qF4GF-vfc8Y",
+            "time": "52:59.9"
+          },
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "33:32.3"
           }
         ]
       }
     },
     {
       "kind": "settled",
-      "name": "Permanents that leave",
-      "rule": "A permanent that is not a token dissolves where it is: destroyed, it breaks into ash at its slot; exiled, it becomes a vortex there. Nothing flies to the pile. What it leaves room for closes up only once it has gone.",
-      "reports": [
-        "by-1ug"
-      ],
+      "name": "Choosing from a list",
+      "rule": "The entries stand in a column over the shaded table. A press lights an entry and \"Submit 1\" answers with it, where Arena takes a color at the press: no card asks for an entry yet, and the prompt is the one a longer list needs, a creature type or a card name.",
       "arena": {
-        "does": "A destroyed creature glows and falls to ash over about 1 s; the spell then goes to its graveyard. The row closes up after the permanent is gone.",
+        "does": "Mother of Runes' color: Choose One over Choose Color, and White, Blue, Black, Red and Green in a column, each taken at a click.",
         "evidence": [
           {
-            "recording": "RwKoGGUmw2k",
-            "time": "27:36.4"
-          },
-          {
-            "recording": "bJQDi6NIrZA",
-            "time": "51:46"
-          },
-          {
-            "recording": "TbrYIs2juCw",
-            "time": "30:37"
-          },
-          {
-            "recording": "5UHzpVvUkfI",
-            "time": "58:17.0"
-          },
-          {
-            "recording": "3sEoP_s4DQE",
-            "time": "24:49.6"
+            "recording": "UrGalw_f35w",
+            "time": "45:18.5"
           }
         ]
       }
@@ -342,116 +494,6 @@
     },
     {
       "kind": "settled",
-      "name": "A finished ability",
-      "rule": "It is removed at once, with no fade.",
-      "reports": [
-        "by-c8b"
-      ]
-    },
-    {
-      "kind": "settled",
-      "name": "Wording",
-      "rule": "Arena's exactly, case and punctuation too: \"All Attack\", \"Choose attackers.\" Every prompt's title and buttons are one table in the session (`engine/crates/beryl_session/src/prompt/wording.rs`), each entry beside the recording moments that show it. A browser's title is the line that asks: its sentence of rules text, or its heading where the line under it only says how to drag. A pick is confirmed by \"Submit\" and the number picked, an arrangement by \"Done\", a \"may\" by \"Take Action\" or \"Decline\".",
-      "reports": [
-        "by-u4g",
-        "by-a09o"
-      ]
-    },
-    {
-      "kind": "settled",
-      "name": "Button order",
-      "rule": "It follows Arena prompt by prompt; there is no blanket \"default on the right\".",
-      "reports": [
-        "by-ceo3"
-      ]
-    },
-    {
-      "kind": "settled",
-      "name": "The opponent's turn",
-      "rule": "Arena's \"Opponent's Turn\" label shows in the action button's place, and no spinner.",
-      "reports": [
-        "by-58n",
-        "by-7ih",
-        "by-oyx"
-      ]
-    },
-    {
-      "kind": "settled",
-      "name": "Attacking a planeswalker",
-      "rule": "No prompt: an attacker defaults to the player, and the player pulls an arrow to the planeswalker.",
-      "reports": [
-        "by-p00u"
-      ],
-      "arena": {
-        "does": "Attackers that can attack get a cyan outline; a clicked attacker turns gold, the opponent's life total and the planeswalker glow, and an arrow follows the cursor to the planeswalker.",
-        "evidence": [
-          {
-            "recording": "SswBO8aOOgc",
-            "time": "33:30.5"
-          }
-        ]
-      }
-    },
-    {
-      "kind": "settled",
-      "name": "Two items on the stack",
-      "rule": "The top one still gets its target arrow. Each item beneath peeks out to the left of the one over it by a quarter of its width (a fifth past five items, as far as the room left of the stack allows), so a spell leaving from under another is seen as it goes.",
-      "reports": [
-        "by-i88"
-      ],
-      "arena": {
-        "does": "A cyan arc runs from the top item to its target, even when that is the one card under it; the top card sits a little right of and below the one beneath, which shows about a third of its width beside it, and a countered spell crumbles in that strip.",
-        "evidence": [
-          {
-            "recording": "I3Te0m1bBFw",
-            "time": "39:49.4"
-          },
-          {
-            "recording": "IEXcjBn3BXk",
-            "time": "51:34.5"
-          },
-          {
-            "recording": "IEXcjBn3BXk",
-            "time": "51:35.3"
-          },
-          {
-            "recording": "MnhyzykajXw",
-            "time": "36:19.5"
-          },
-          {
-            "recording": "5UHzpVvUkfI",
-            "time": "58:15"
-          }
-        ]
-      }
-    },
-    {
-      "kind": "settled",
-      "name": "Additional costs",
-      "rule": "A chooser that lowers the mana to pay (Delve) opens before mana taps; a sacrifice cost is chosen after the lands tap.",
-      "reports": [
-        "by-jqd"
-      ],
-      "arena": {
-        "does": "Treasure Cruise's Delve chooser opens before any land taps; Natural Order's lands send their mana, then \"Sacrifice a green creature.\" opens.",
-        "evidence": [
-          {
-            "recording": "5UHzpVvUkfI",
-            "time": "47:31.0"
-          },
-          {
-            "recording": "RwKoGGUmw2k",
-            "time": "39:26.0"
-          },
-          {
-            "recording": "RwKoGGUmw2k",
-            "time": "1:07:02.25"
-          }
-        ]
-      }
-    },
-    {
-      "kind": "settled",
       "name": "Choosing X",
       "rule": "The value of X is set by a step down and a step up beside it, over the button that answers, which says the value under its label: \"Pay\" over \"X = 1\". Beside the value stands the whole cost it makes, and the permanents that would pay it are outlined as the value changes. Beryl has the single steps alone.",
       "arena": {
@@ -470,24 +512,6 @@
     },
     {
       "kind": "settled",
-      "name": "Ordering cards on a library",
-      "rule": "Cards a player puts back on their library in an order of their choice (Halimar Depths, and the cards a look leaves on top or on the bottom) lie in one row under \"Order Cards\", the library's top card at the right: \"Bottom\" is written under the row's left end and \"Top\" under its right. A card dragged along the row goes where it is let go. A scry keeps its two piles, and cards put back from the hand keep their own screen (exception 8).",
-      "arena": {
-        "does": "Ponder's \"Order Cards\", over \"Drag cards to order them on top of your library.\", has the three cards in a row with Bottom under its left end and Top under its right; Brainstorm's has the same ends.",
-        "evidence": [
-          {
-            "recording": "Qrd11-wXZrk",
-            "time": "8:04.0"
-          },
-          {
-            "recording": "AhTcvQ-lQQQ",
-            "time": "4:59.0"
-          }
-        ]
-      }
-    },
-    {
-      "kind": "settled",
       "name": "Dividing among targets",
       "rule": "Each target wears its share on its card, between a step that raises it and a step that lowers it, under the arrow to it; \"Submit\" answers once everything is given out. The prompt says after what it asks how much is still to give, as a cost paid with permanents says what is left.",
       "arena": {
@@ -500,262 +524,6 @@
           {
             "recording": "bJQDi6NIrZA",
             "time": "21:42.5"
-          }
-        ]
-      }
-    },
-    {
-      "kind": "settled",
-      "name": "Choosing from a list",
-      "rule": "The entries stand in a column over the shaded table. A press lights an entry and \"Submit 1\" answers with it, where Arena takes a color at the press: no card asks for an entry yet, and the prompt is the one a longer list needs, a creature type or a card name.",
-      "arena": {
-        "does": "Mother of Runes' color: Choose One over Choose Color, and White, Blue, Black, Red and Green in a column, each taken at a click.",
-        "evidence": [
-          {
-            "recording": "UrGalw_f35w",
-            "time": "45:18.5"
-          }
-        ]
-      }
-    },
-    {
-      "kind": "settled",
-      "name": "A countered spell",
-      "rule": "It leaves before the spell that countered it.",
-      "reports": [
-        "by-kxyq"
-      ],
-      "arena": {
-        "does": "The countered spell crumbles in place under the counterspell, which stays until the debris is gone and then fades, 0.5 to 0.9 s later.",
-        "evidence": [
-          {
-            "recording": "I3Te0m1bBFw",
-            "time": "39:50.0"
-          },
-          {
-            "recording": "IEXcjBn3BXk",
-            "time": "51:35.0"
-          }
-        ]
-      }
-    },
-    {
-      "kind": "settled",
-      "name": "Cards the opponent looks at",
-      "rule": "They come off the top of their library face down at library size and lie beside it; a top-bound card slides back onto the library and a bottom-bound one slides away from it, to either side. A pill above their avatar reads \"Scry: 1 top, 1 bottom.\" for about 3 s.",
-      "reports": [
-        "by-pv6p",
-        "by-yfb2",
-        "by-nva"
-      ],
-      "arena": {
-        "does": "No card is enlarged.",
-        "evidence": [
-          {
-            "recording": "IHPV6yRaFlk",
-            "time": "52:54.6"
-          },
-          {
-            "recording": "IHPV6yRaFlk",
-            "time": "53:31.2"
-          },
-          {
-            "recording": "qF4GF-vfc8Y",
-            "time": "52:59.9"
-          },
-          {
-            "recording": "IEXcjBn3BXk",
-            "time": "33:32.3"
-          }
-        ]
-      }
-    },
-    {
-      "kind": "settled",
-      "name": "A line from an ability to its source",
-      "rule": "It is always shown while the ability is on the stack, thin and faint as Arena draws it, and hidden during a prompt. A heavy arrow is not that line.",
-      "reports": [
-        "by-wkr",
-        "by-afh",
-        "by-110h"
-      ]
-    },
-    {
-      "kind": "settled",
-      "name": "Passing to the end step",
-      "rule": "\"End Turn\" passes until the end step, or the player's next stop where the end step is not one, through every spell and ability the opponent puts on the stack meanwhile. It stops sooner only for a decision other than priority, such as declaring blockers; \"Resolve\" beside it is the way to stop at the opponent's next spell.",
-      "reports": [
-        "by-sqo",
-        "by-xuku"
-      ],
-      "arena": {
-        "does": "The button reads \"End Turn\" over \"To End\", and goes blank while it passes.",
-        "evidence": [
-          {
-            "recording": "SswBO8aOOgc",
-            "time": "21:00"
-          },
-          {
-            "recording": "WQiYBv23buw",
-            "time": "37:52"
-          },
-          {
-            "recording": "jD7VqaT8VC8",
-            "time": "45:29"
-          }
-        ]
-      }
-    },
-    {
-      "kind": "settled",
-      "name": "Targeting a spell",
-      "rule": "With one spell on the stack, a spell that targets a spell takes it with no prompt and no Confirm. With more, a \"Choose One\" browser of the stack, \"Target a spell.\", opens with nothing preselected, Submit and Cancel.",
-      "reports": [
-        "by-2lwc",
-        "by-69ps"
-      ],
-      "arena": {
-        "does": "Counterspell and Mana Leak at a lone spell go straight onto the stack; Spell Pierce over two spells opens the browser at \"Submit 0\".",
-        "evidence": [
-          {
-            "recording": "vPdoSA5H5xU",
-            "time": "21:36.5"
-          },
-          {
-            "recording": "qF4GF-vfc8Y",
-            "time": "23:58.5"
-          },
-          {
-            "recording": "jD7VqaT8VC8",
-            "time": "17:54.5"
-          },
-          {
-            "recording": "SN9QFe2kM4Y",
-            "time": "26:54.0"
-          },
-          {
-            "recording": "pE4XSNi-nZc",
-            "time": "40:55.0"
-          }
-        ]
-      }
-    },
-    {
-      "kind": "settled",
-      "name": "Mana into what it pays for",
-      "rule": "Each tapped land glows and sends one streak of its color straight to the spell on the stack, which flashes as they land, in about 0.3 s. Mana does not stop at a pool.",
-      "reports": [
-        "by-p1j"
-      ],
-      "arena": {
-        "does": "Seen for casts paid with lands.",
-        "evidence": [
-          {
-            "recording": "TbrYIs2juCw",
-            "time": "33:32.45"
-          },
-          {
-            "recording": "3sEoP_s4DQE",
-            "time": "45:30.85"
-          }
-        ]
-      }
-    },
-    {
-      "kind": "settled",
-      "name": "The local player's scry",
-      "rule": "The table is shaded and \"Scry\" shows the cards face up over it, BOTTOM on the left and TOP on the right, and Done; surveil's has Graveyard and Library boxes instead. The cards are the library's own: they come up from it as the prompt opens, and on Done the shade lifts at once and they go back to it at its size, none shown large on its way to the top or the bottom. A pill reads \"Scry: 1 top, 1 bottom.\"",
-      "reports": [
-        "by-8qq",
-        "by-2wn7",
-        "by-kyig",
-        "by-1mrh"
-      ],
-      "arena": {
-        "does": "Seen for a scry of two and for surveil; no card changes face.",
-        "evidence": [
-          {
-            "recording": "SN9QFe2kM4Y",
-            "time": "14:50.5"
-          },
-          {
-            "recording": "SN9QFe2kM4Y",
-            "time": "14:52.7"
-          },
-          {
-            "recording": "SN9QFe2kM4Y",
-            "time": "13:08.5"
-          },
-          {
-            "recording": "iRr-GeSF0lI",
-            "time": "21:16.5"
-          }
-        ]
-      }
-    },
-    {
-      "kind": "settled",
-      "name": "A card a look puts in the graveyard",
-      "rule": "It appears on the graveyard at pile size once the chooser closes; it is not shown large first.",
-      "reports": [
-        "by-2ma"
-      ],
-      "arena": {
-        "does": "A surveilled card lands on the graveyard as the overlay closes; kept cards close with the overlay.",
-        "evidence": [
-          {
-            "recording": "iRr-GeSF0lI",
-            "time": "21:23.9"
-          },
-          {
-            "recording": "SN9QFe2kM4Y",
-            "time": "13:10"
-          }
-        ]
-      }
-    },
-    {
-      "kind": "settled",
-      "name": "A batch exile",
-      "rule": "Cards exiled together leave one at a time, about 0.3 s apart.",
-      "reports": [
-        "by-5pj"
-      ],
-      "arena": {
-        "does": "Delve's cards gather on the graveyard, then peel off its top one by one into a vortex. Delve is the only batch exile in the recordings, all in one recording.",
-        "evidence": [
-          {
-            "recording": "5UHzpVvUkfI",
-            "time": "26:06.7"
-          },
-          {
-            "recording": "5UHzpVvUkfI",
-            "time": "47:36.2"
-          }
-        ]
-      }
-    },
-    {
-      "kind": "settled",
-      "name": "An opponent's spell returned to hand",
-      "rule": "It breaks up in place on the stack over 0.5 to 1 s; it does not fly or flip toward their hand.",
-      "reports": [
-        "by-e0l"
-      ],
-      "arena": {
-        "does": "Seen for Remand on the opponent's spells.",
-        "evidence": [
-          {
-            "recording": "3sEoP_s4DQE",
-            "time": "45:32.0"
-          },
-          {
-            "recording": "3sEoP_s4DQE",
-            "time": "56:19.5"
-          },
-          {
-            "recording": "TbrYIs2juCw",
-            "time": "36:04.5"
           }
         ]
       }
@@ -812,18 +580,132 @@
     },
     {
       "kind": "settled",
-      "name": "A card you may cast from your graveyard",
-      "rule": "While you may cast a card from your graveyard (flashback, such as Snapcaster Mage gives, escape, or a permanent that lets you), it lies at the right end of your hand's fan, after the cards really in your hand, ringed in a soft violet halo that breathes slowly, apart from the cyan outline of a card you may play. It flies from the graveyard into the fan in about half a second as it becomes castable, and back onto the graveyard when it no longer is. Cast, it flies from its place in the fan to the stack. The opponent's castable cards stay on their graveyard.",
+      "name": "Mana into what it pays for",
+      "rule": "Each tapped land glows and sends one streak of its color straight to the spell on the stack, which flashes as they land, in about 0.3 s. Mana does not stop at a pool.",
+      "reports": [
+        "by-p1j"
+      ],
       "arena": {
-        "does": "When Past in Flames resolves, the cards in the graveyard that gained flashback leave the graveyard together and fan into the hand within about a quarter of a second, to the right of the cards already there, each wrapped in drifting white and violet smoke over the cyan outline of a card that may be played. One cast leaves the fan for the stack.",
+        "does": "Seen for casts paid with lands.",
         "evidence": [
           {
-            "recording": "tovCPHl-gOM",
-            "time": "9:07.75"
+            "recording": "TbrYIs2juCw",
+            "time": "33:32.45"
           },
           {
-            "recording": "tovCPHl-gOM",
-            "time": "15:02.5"
+            "recording": "3sEoP_s4DQE",
+            "time": "45:30.85"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "settled",
+      "name": "Ordering cards on a library",
+      "rule": "Cards a player puts back on their library in an order of their choice (Halimar Depths, and the cards a look leaves on top or on the bottom) lie in one row under \"Order Cards\", the library's top card at the right: \"Bottom\" is written under the row's left end and \"Top\" under its right. A card dragged along the row goes where it is let go. A scry keeps its two piles, and cards put back from the hand keep their own screen (exception 8).",
+      "arena": {
+        "does": "Ponder's \"Order Cards\", over \"Drag cards to order them on top of your library.\", has the three cards in a row with Bottom under its left end and Top under its right; Brainstorm's has the same ends.",
+        "evidence": [
+          {
+            "recording": "Qrd11-wXZrk",
+            "time": "8:04.0"
+          },
+          {
+            "recording": "AhTcvQ-lQQQ",
+            "time": "4:59.0"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "settled",
+      "name": "Passing to the end step",
+      "rule": "\"End Turn\" passes until the end step, or the player's next stop where the end step is not one, through every spell and ability the opponent puts on the stack meanwhile. It stops sooner only for a decision other than priority, such as declaring blockers; \"Resolve\" beside it is the way to stop at the opponent's next spell.",
+      "reports": [
+        "by-sqo",
+        "by-xuku"
+      ],
+      "arena": {
+        "does": "The button reads \"End Turn\" over \"To End\", and goes blank while it passes.",
+        "evidence": [
+          {
+            "recording": "SswBO8aOOgc",
+            "time": "21:00"
+          },
+          {
+            "recording": "WQiYBv23buw",
+            "time": "37:52"
+          },
+          {
+            "recording": "jD7VqaT8VC8",
+            "time": "45:29"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "settled",
+      "name": "Permanents that leave",
+      "rule": "A permanent that is not a token dissolves where it is: destroyed, it breaks into ash at its slot; exiled, it becomes a vortex there. Nothing flies to the pile. What it leaves room for closes up only once it has gone.",
+      "reports": [
+        "by-1ug"
+      ],
+      "arena": {
+        "does": "A destroyed creature glows and falls to ash over about 1 s; the spell then goes to its graveyard. The row closes up after the permanent is gone.",
+        "evidence": [
+          {
+            "recording": "RwKoGGUmw2k",
+            "time": "27:36.4"
+          },
+          {
+            "recording": "bJQDi6NIrZA",
+            "time": "51:46"
+          },
+          {
+            "recording": "TbrYIs2juCw",
+            "time": "30:37"
+          },
+          {
+            "recording": "5UHzpVvUkfI",
+            "time": "58:17.0"
+          },
+          {
+            "recording": "3sEoP_s4DQE",
+            "time": "24:49.6"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "settled",
+      "name": "Targeting a spell",
+      "rule": "With one spell on the stack, a spell that targets a spell takes it with no prompt and no Confirm. With more, a \"Choose One\" browser of the stack, \"Target a spell.\", opens with nothing preselected, Submit and Cancel.",
+      "reports": [
+        "by-2lwc",
+        "by-69ps"
+      ],
+      "arena": {
+        "does": "Counterspell and Mana Leak at a lone spell go straight onto the stack; Spell Pierce over two spells opens the browser at \"Submit 0\".",
+        "evidence": [
+          {
+            "recording": "vPdoSA5H5xU",
+            "time": "21:36.5"
+          },
+          {
+            "recording": "qF4GF-vfc8Y",
+            "time": "23:58.5"
+          },
+          {
+            "recording": "jD7VqaT8VC8",
+            "time": "17:54.5"
+          },
+          {
+            "recording": "SN9QFe2kM4Y",
+            "time": "26:54.0"
+          },
+          {
+            "recording": "pE4XSNi-nZc",
+            "time": "40:55.0"
           }
         ]
       }
@@ -868,60 +750,148 @@
     },
     {
       "kind": "settled",
-      "name": "An arrow to the pointer",
-      "rule": "While a target is chosen, an arrow runs from the spell or ability that asks to the mouse, thin and pale. On something that may be chosen it becomes the arrow the choice will draw, in that arrow's color and along its way, and the click draws the stage's own. It follows the pointer itself, with no lag: only the swing onto a target takes time. Nothing is drawn over a target already chosen, and a touch pulls none.",
+      "name": "The kept opening hand",
+      "rule": "When the opening closes, the screen over the table goes at once, and the hand it showed drops from there into the hand at the near edge in about an eighth of a second, slowing as it lands. On the phone the cards drop from the opening's rows. Nothing appears in the hand from nowhere.",
       "reports": [
-        "by-w8gv.21.67"
+        "by-qmbe"
       ],
       "arena": {
-        "does": "As the prompt opens, a cyan arrow runs from the ability that asks to the creature under the cursor, and what may be chosen is outlined.",
+        "does": "Arena's opening screen vanishes in one frame, and the hand, still fanned in the middle of the screen, falls into the hand at the bottom, most of the way in two frames of 30 and at rest after four.",
         "evidence": [
           {
-            "recording": "IEXcjBn3BXk",
-            "time": "23:13.17"
+            "recording": "3SEgIYXJgdQ",
+            "time": "13:33.95"
+          },
+          {
+            "recording": "2VW6ZzmS8U4",
+            "time": "6:56.25"
+          },
+          {
+            "recording": "2VW6ZzmS8U4",
+            "time": "14:07.75"
           }
         ]
       }
     },
     {
-      "kind": "no-equivalent",
-      "name": "Manual table: a click acts",
-      "rule": "Click to tap or untap a permanent, play a card, resolve a stack entry, draw from the library, or open a graveyard or exile viewer. Shift-click plays face down. Click a life total to edit it in the number prompt. Click a mana symbol or a player counter to add one, or right-click to remove one. On phones, the mana total beside the life orb opens a sheet. Tap a symbol or counter to add one, or its minus button to remove one. The press shows immediately. A refused action shakes what was clicked."
+      "kind": "settled",
+      "name": "The local player's scry",
+      "rule": "The table is shaded and \"Scry\" shows the cards face up over it, BOTTOM on the left and TOP on the right, and Done; surveil's has Graveyard and Library boxes instead. The cards are the library's own: they come up from it as the prompt opens, and on Done the shade lifts at once and they go back to it at its size, none shown large on its way to the top or the bottom. A pill reads \"Scry: 1 top, 1 bottom.\"",
+      "reports": [
+        "by-8qq",
+        "by-2wn7",
+        "by-kyig",
+        "by-1mrh"
+      ],
+      "arena": {
+        "does": "Seen for a scry of two and for surveil; no card changes face.",
+        "evidence": [
+          {
+            "recording": "SN9QFe2kM4Y",
+            "time": "14:50.5"
+          },
+          {
+            "recording": "SN9QFe2kM4Y",
+            "time": "14:52.7"
+          },
+          {
+            "recording": "SN9QFe2kM4Y",
+            "time": "13:08.5"
+          },
+          {
+            "recording": "iRr-GeSF0lI",
+            "time": "21:16.5"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "settled",
+      "name": "The opponent's turn",
+      "rule": "Arena's \"Opponent's Turn\" label shows in the action button's place, and no spinner.",
+      "reports": [
+        "by-58n",
+        "by-7ih",
+        "by-oyx"
+      ]
+    },
+    {
+      "kind": "settled",
+      "name": "Tokens",
+      "rule": "They appear at their slot; they do not fly out of their source.",
+      "reports": [
+        "by-kgc",
+        "by-81h"
+      ],
+      "arena": {
+        "does": "Arena's appears whole with a short glow, about 0.1 s after its ability leaves the stack; a batch appears as one group.",
+        "evidence": [
+          {
+            "recording": "UrGalw_f35w",
+            "time": "17:38.4"
+          },
+          {
+            "recording": "WQiYBv23buw",
+            "time": "23:57.0"
+          },
+          {
+            "recording": "iRr-GeSF0lI",
+            "time": "21:58.3"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "settled",
+      "name": "Two items on the stack",
+      "rule": "The top one still gets its target arrow. Each item beneath peeks out to the left of the one over it by a quarter of its width (a fifth past five items, as far as the room left of the stack allows), so a spell leaving from under another is seen as it goes.",
+      "reports": [
+        "by-i88"
+      ],
+      "arena": {
+        "does": "A cyan arc runs from the top item to its target, even when that is the one card under it; the top card sits a little right of and below the one beneath, which shows about a third of its width beside it, and a countered spell crumbles in that strip.",
+        "evidence": [
+          {
+            "recording": "I3Te0m1bBFw",
+            "time": "39:49.4"
+          },
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "51:34.5"
+          },
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "51:35.3"
+          },
+          {
+            "recording": "MnhyzykajXw",
+            "time": "36:19.5"
+          },
+          {
+            "recording": "5UHzpVvUkfI",
+            "time": "58:15"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "settled",
+      "name": "Wording",
+      "rule": "Arena's exactly, case and punctuation too: \"All Attack\", \"Choose attackers.\" Every prompt's title and buttons are one table in the session (`engine/crates/beryl_session/src/prompt/wording.rs`), each entry beside the recording moments that show it. A browser's title is the line that asks: its sentence of rules text, or its heading where the line under it only says how to drag. A pick is confirmed by \"Submit\" and the number picked, an arrangement by \"Done\", a \"may\" by \"Take Action\" or \"Decline\".",
+      "reports": [
+        "by-u4g",
+        "by-a09o"
+      ]
     },
     {
       "kind": "no-equivalent",
-      "name": "Manual table log",
-      "rule": "The log shows numbered entries with their actors. Rewinding strikes the entries after the chosen line. Cmd+Z and the undo button undo the viewer's latest action. Cmd+Shift+D undoes the viewer's latest draw. When later entries block an undo, the log opens and highlights them. Either player can undo a batch from its line or rewind from any line."
-    },
-    {
-      "kind": "no-equivalent",
-      "name": "Manual table: drawing and removing arrows",
-      "rule": "Right-drag from a card to a card or life total to draw an arrow. A selected source draws an arrow from each selected card. A hand card plays first. A command that asks for a target starts the same aim and a click chooses the target. Escape cancels the aim. Right-click a drawn arrow to remove it, or use Cmd+R to remove all the arrows you drew."
-    },
-    {
-      "kind": "no-equivalent",
-      "name": "Proposal panel",
-      "rule": "Turn upkeep and combat show the suggested changes with one checkbox per line and a mark on each affected card. Apply commits the checked lines as one undoable batch. The panel shares the log column on desktop and has its own strip on the phone."
+      "name": "Ability menus on a manual table",
+      "rule": "With Ability menus on, a permanent's context menu lists its ability costs and the start of each ability under Assists. −X opens the number prompt. Choosing an ability places a marker on the stack. The marker shows the source card and the ability text on hover and resolves with a click."
     },
     {
       "kind": "no-equivalent",
       "name": "Assist label",
       "rule": "State nudges put clickable tags on the affected cards and life total. Click a tag to apply its suggested action."
-    },
-    {
-      "kind": "no-equivalent",
-      "name": "Selection rectangle",
-      "rule": "On a manual table, dragging from empty felt selects the cards the rectangle touches. Selected cards wear the gold selection mark. A summary beside the selected permanents gives their count, total power and total toughness."
-    },
-    {
-      "kind": "no-equivalent",
-      "name": "Undo",
-      "rule": "Every answer can be undone, across turns and prompts, the cast and its payment together.",
-      "reports": [
-        "by-2ml",
-        "by-96t",
-        "by-pwe"
-      ]
     },
     {
       "kind": "no-equivalent",
@@ -934,37 +904,23 @@
     },
     {
       "kind": "no-equivalent",
-      "name": "Why a click is refused",
-      "rule": "An illegal click shows its reason at the permanent that forbids it.",
-      "reports": [
-        "by-l2ez"
-      ]
+      "name": "Command list",
+      "rule": "The manual table's command list shows what it acts on and filters commands by label as you type. Results are grouped by what they act on and show their shortcuts. Up and Down move between results, Return runs the selected command, Option+Return captures a new shortcut. The list reports when another command loses the key. Escape closes the list, and Shortcuts in the settings menu offers Reset shortcuts. On a phone, the search button opens the list full screen with a Close button and without key hints. Typed table prompts open at the top so the keyboard leaves the field visible."
     },
     {
       "kind": "no-equivalent",
-      "name": "The opponent's choice of top or bottom",
-      "rule": "When the opponent puts a card on the top or the bottom of their library by their own choice (Subtlety's \"their choice of the top or bottom\"), a pill beside that library reads \"Top\" or \"Bottom\" as the card goes there, and fades as a scry's pill does. Your own choice gets none. Arena shows no words: the card only goes to the library (iRr-GeSF0lI 1:01:07.5).",
-      "reports": [
-        "by-6dw5"
-      ]
+      "name": "Context menu",
+      "rule": "The manual table's context menu names the card or pile and whose it is. It lists commands as plain labeled rows with key hints, check marks for active switches and at most one submenu level. A command that needs a number opens a prompt when chosen. On a phone, a long press opens a bottom sheet with the full card above the actions. A short hold before moving starts a drag. Dropping on the lower half of a library puts the card on the bottom. Draw arrow waits for a tap on the destination. Submenus replace the rows and offer Back. Select opens a bar with the count, Actions and Done while taps toggle cards. Play face down is available on the card, and Bottom card makes the next drag from that pile take its bottom card."
     },
     {
       "kind": "no-equivalent",
-      "name": "Suggestions are sensible",
-      "rule": "The suggested untap targets and the auto-pay sources are the ones a player would pick.",
-      "reports": [
-        "by-svq",
-        "by-ufmq"
-      ]
+      "name": "Creating tokens on a manual table",
+      "rule": "The token chooser uses the command list layout and offers the selected card's tokens first. Typing searches the card store by name. Custom token opens a form for the token's name, type line, colors, power, toughness and note. Shift while choosing a token creates it face down."
     },
     {
       "kind": "no-equivalent",
-      "name": "Nothing overlaps",
-      "rule": "The hand, the stack and their indicators never cover a control or each other. No layer of a library, graveyard or exile pile covers a card in play, for either seat, however long a row grows. The opponent's piles keep the band above their back row to themselves.",
-      "reports": [
-        "by-biv",
-        "by-krxg"
-      ]
+      "name": "Guided manual table start",
+      "rule": "The step banner shows each player's die in the roll for first and shows another round on a tie. The winner, the named player or the previous game's loser gets Play or Draw on the opening screen. Both seats see their own opening hands and can Keep or Mulligan at the same time. They can confirm bottom cards or choose Done with none selected. The table moves to the first untap after both seats finish."
     },
     {
       "kind": "no-equivalent",
@@ -978,48 +934,8 @@
     },
     {
       "kind": "no-equivalent",
-      "name": "Guided manual table start",
-      "rule": "The step banner shows each player's die in the roll for first and shows another round on a tie. The winner, the named player or the previous game's loser gets Play or Draw on the opening screen. Both seats see their own opening hands and can Keep or Mulligan at the same time. They can confirm bottom cards or choose Done with none selected. The table moves to the first untap after both seats finish."
-    },
-    {
-      "kind": "no-equivalent",
-      "name": "Manual table connection",
-      "rule": "A dropped connection freezes input on both seats under the existing step banner, which names the other player. The guest redials automatically and the returning view appears at once. A table that the other player left offers Lobby. The start screen offers Resume table for saved hosted tables and for the last table the guest joined. Quitting keeps the guest’s join available, and leaving the table clears it. Join failures appear on the join form, and a version mismatch appears for both players."
-    },
-    {
-      "kind": "no-equivalent",
-      "name": "Manual table prompts",
-      "rule": "Numbers, text and power/toughness are entered in the lower-right action dock. The field starts selected, and numeric entries have a step down and a step up. A sign changes the current value where one exists. The button says what it will do, such as Draw 3. Return confirms and Escape cancels."
-    },
-    {
-      "kind": "no-equivalent",
-      "name": "Manual table library flows",
-      "rule": "When Library flows is on, the player's library menu offers Scry and Surveil under Assists. These and Look at top cards ask for a count, then open the shared sorting tray. A known card's Assists menu offers the library instructions on its visible face with the printed count. The other player sees the lifted cards and their destinations. A hidden card's identity stays private unless the other player already knew it or the card goes to a public zone."
-    },
-    {
-      "kind": "no-equivalent",
-      "name": "Manual table pile viewers",
-      "rule": "The existing pile browser can be searched, grouped by card type, and sorted by name or mana value. The other player sees how many cards are lifted from a library during a look. Closing a full library search offers Shuffle and Don't shuffle, with Shuffle highlighted."
-    },
-    {
-      "kind": "no-equivalent",
-      "name": "Context menu",
-      "rule": "The manual table's context menu names the card or pile and whose it is. It lists commands as plain labeled rows with key hints, check marks for active switches and at most one submenu level. A command that needs a number opens a prompt when chosen. On a phone, a long press opens a bottom sheet with the full card above the actions. A short hold before moving starts a drag. Dropping on the lower half of a library puts the card on the bottom. Draw arrow waits for a tap on the destination. Submenus replace the rows and offer Back. Select opens a bar with the count, Actions and Done while taps toggle cards. Play face down is available on the card, and Bottom card makes the next drag from that pile take its bottom card."
-    },
-    {
-      "kind": "no-equivalent",
-      "name": "Command list",
-      "rule": "The manual table's command list shows what it acts on and filters commands by label as you type. Results are grouped by what they act on and show their shortcuts. Up and Down move between results, Return runs the selected command, Option+Return captures a new shortcut. The list reports when another command loses the key. Escape closes the list, and Shortcuts in the settings menu offers Reset shortcuts. On a phone, the search button opens the list full screen with a Close button and without key hints. Typed table prompts open at the top so the keyboard leaves the field visible."
-    },
-    {
-      "kind": "no-equivalent",
-      "name": "Quitting from a manual table",
-      "rule": "On the desktop, the Quit shortcut asks whether to leave the table and quit Beryl. Cancel keeps the table open."
-    },
-    {
-      "kind": "no-equivalent",
-      "name": "Manual table turn controls",
-      "rule": "The step track lights the current step beside the active player's life total. Clicking an icon sets the phase. Clicking the lit Untap or Draw icon on your turn also performs that action. Cleanup selects End step. The Next button names the following phase and advances to it, wrapping to Untap. The Next turn command passes the turn."
+      "name": "Manual counters and untap flags",
+      "rule": "Named counters use the existing counter badges with shortened names. Add counter offers six common names above the text field. Player counters appear beside the mana pool. A permanent marked as skipping untap shows a lock in its corner."
     },
     {
       "kind": "no-equivalent",
@@ -1028,28 +944,239 @@
     },
     {
       "kind": "no-equivalent",
-      "name": "Ability menus on a manual table",
-      "rule": "With Ability menus on, a permanent's context menu lists its ability costs and the start of each ability under Assists. −X opens the number prompt. Choosing an ability places a marker on the stack. The marker shows the source card and the ability text on hover and resolves with a click."
+      "name": "Manual table connection",
+      "rule": "A dropped connection freezes input on both seats under the existing step banner, which names the other player. The guest redials automatically and the returning view appears at once. A table that the other player left offers Lobby. The start screen offers Resume table for saved hosted tables and for the last table the guest joined. Quitting keeps the guest’s join available, and leaving the table clears it. Join failures appear on the join form, and a version mismatch appears for both players."
     },
     {
       "kind": "no-equivalent",
-      "name": "Creating tokens on a manual table",
-      "rule": "The token chooser uses the command list layout and offers the selected card's tokens first. Typing searches the card store by name. Custom token opens a form for the token's name, type line, colors, power, toughness and note. Shift while choosing a token creates it face down."
+      "name": "Manual table library flows",
+      "rule": "When Library flows is on, the player's library menu offers Scry and Surveil under Assists. These and Look at top cards ask for a count, then open the shared sorting tray. A known card's Assists menu offers the library instructions on its visible face with the printed count. The other player sees the lifted cards and their destinations. A hidden card's identity stays private unless the other player already knew it or the card goes to a public zone."
+    },
+    {
+      "kind": "no-equivalent",
+      "name": "Manual table log",
+      "rule": "The log shows numbered entries with their actors. Rewinding strikes the entries after the chosen line. Cmd+Z and the undo button undo the viewer's latest action. Cmd+Shift+D undoes the viewer's latest draw. When later entries block an undo, the log opens and highlights them. Either player can undo a batch from its line or rewind from any line."
+    },
+    {
+      "kind": "no-equivalent",
+      "name": "Manual table pile viewers",
+      "rule": "The existing pile browser can be searched, grouped by card type, and sorted by name or mana value. The other player sees how many cards are lifted from a library during a look. Closing a full library search offers Shuffle and Don't shuffle, with Shuffle highlighted."
+    },
+    {
+      "kind": "no-equivalent",
+      "name": "Manual table prompts",
+      "rule": "Numbers, text and power/toughness are entered in the lower-right action dock. The field starts selected, and numeric entries have a step down and a step up. A sign changes the current value where one exists. The button says what it will do, such as Draw 3. Return confirms and Escape cancels."
+    },
+    {
+      "kind": "no-equivalent",
+      "name": "Manual table prompts",
+      "rule": "A guided choice on the manual table uses the same sorting tray or list as an engine game. The seat answering it sees the cards or choices. Across the table a library sort lifts only a packet of cards, which returns when the tray closes."
+    },
+    {
+      "kind": "no-equivalent",
+      "name": "Manual table turn controls",
+      "rule": "The step track lights the current step beside the active player's life total. Clicking an icon sets the phase. Clicking the lit Untap or Draw icon on your turn also performs that action. Cleanup selects End step. The Next button names the following phase and advances to it, wrapping to Untap. The Next turn command passes the turn."
+    },
+    {
+      "kind": "no-equivalent",
+      "name": "Manual table: a click acts",
+      "rule": "Click to tap or untap a permanent, play a card, resolve a stack entry, draw from the library, or open a graveyard or exile viewer. Shift-click plays face down. Click a life total to edit it in the number prompt. Click a mana symbol or a player counter to add one, or right-click to remove one. On phones, the mana total beside the life orb opens a sheet. Tap a symbol or counter to add one, or its minus button to remove one. The press shows immediately. A refused action shakes what was clicked."
+    },
+    {
+      "kind": "no-equivalent",
+      "name": "Manual table: drawing and removing arrows",
+      "rule": "Right-drag from a card to a card or life total to draw an arrow. A selected source draws an arrow from each selected card. A hand card plays first. A command that asks for a target starts the same aim and a click chooses the target. Escape cancels the aim. Right-click a drawn arrow to remove it, or use Cmd+R to remove all the arrows you drew."
+    },
+    {
+      "kind": "no-equivalent",
+      "name": "Nothing overlaps",
+      "rule": "The hand, the stack and their indicators never cover a control or each other. No layer of a library, graveyard or exile pile covers a card in play, for either seat, however long a row grows. The opponent's piles keep the band above their back row to themselves.",
+      "reports": [
+        "by-biv",
+        "by-krxg"
+      ]
+    },
+    {
+      "kind": "no-equivalent",
+      "name": "Proposal panel",
+      "rule": "Turn upkeep and combat show the suggested changes with one checkbox per line and a mark on each affected card. Apply commits the checked lines as one undoable batch. The panel shares the log column on desktop and has its own strip on the phone."
+    },
+    {
+      "kind": "no-equivalent",
+      "name": "Quitting from a manual table",
+      "rule": "On the desktop, the Quit shortcut asks whether to leave the table and quit Beryl. Cancel keeps the table open."
+    },
+    {
+      "kind": "no-equivalent",
+      "name": "Selection rectangle",
+      "rule": "On a manual table, dragging from empty felt selects the cards the rectangle touches. Selected cards wear the gold selection mark. A summary beside the selected permanents gives their count, total power and total toughness."
+    },
+    {
+      "kind": "no-equivalent",
+      "name": "Suggestions are sensible",
+      "rule": "The suggested untap targets and the auto-pay sources are the ones a player would pick.",
+      "reports": [
+        "by-svq",
+        "by-ufmq"
+      ]
+    },
+    {
+      "kind": "no-equivalent",
+      "name": "The opponent's choice of top or bottom",
+      "rule": "When the opponent puts a card on the top or the bottom of their library by their own choice (Subtlety's \"their choice of the top or bottom\"), a pill beside that library reads \"Top\" or \"Bottom\" as the card goes there, and fades as a scry's pill does. Your own choice gets none. Arena shows no words: the card only goes to the library (iRr-GeSF0lI 1:01:07.5).",
+      "reports": [
+        "by-6dw5"
+      ]
+    },
+    {
+      "kind": "no-equivalent",
+      "name": "Undo",
+      "rule": "Every answer can be undone, across turns and prompts, the cast and its payment together.",
+      "reports": [
+        "by-2ml",
+        "by-96t",
+        "by-pwe"
+      ]
+    },
+    {
+      "kind": "no-equivalent",
+      "name": "Why a click is refused",
+      "rule": "An illegal click shows its reason at the permanent that forbids it.",
+      "reports": [
+        "by-l2ez"
+      ]
     },
     {
       "kind": "not-seen",
-      "name": "FPS monitor",
-      "rule": "Settings can show a read-only panel at the top left of the native client. It reports current FPS, the lowest frame rate implied by a frame gap in the last minute, the app’s target, the display link’s rate when available, and the graphics tier being drawn, Enhanced or Baseline, in the settings sheet’s words."
+      "name": "A battlefield row that scrolls",
+      "rule": "A row with more cards than fit with a strip of each uncovered shows as many as fit, scrolls one group for each notch of the wheel or 48 points of a sideways drag, and shows the number of cards off each end, as \"+12\"."
     },
     {
       "kind": "not-seen",
-      "name": "Dealing a fair game",
-      "rule": "With Fair deal ticked, Start leaves the start screen up while the session judges candidate deals, which takes a few seconds. The start button is disabled and reads \"Dealing…\" until the new game's first view arrives, and then the game screen opens. Arena has no fair deal."
+      "name": "A card picked face down",
+      "rule": "While the other player still has to pick, as for Show and Tell, a card a player has picked from their hand lies apart from that hand where the cards a player handles lie: face up for its player, face down for the other. On the phone it lies beside its owner's library, toward the table, as the cards the opponent looks at do. Arena's recordings show no such pick."
     },
     {
       "kind": "not-seen",
-      "name": "Choosing the deck",
-      "rule": "The New Game screen lists the decks a game can be played with, \"WU Control\" and \"Dandân\", as radio rows above the opponents, and its subtitle names the chosen one. On a phone the two stand side by side in the row of the sound button. The Dandân deck is one library both players draw from, so Fair deal, which compares two players' opening hands, is hidden while it is chosen. Arena's play screen has no equivalent."
+      "name": "A card turning face up",
+      "rule": "A face-down permanent turning face up enlarges in place and flips; one leaving reveals its face during its flight, and one that leaves for a hand or a library, where no face shows, joins the Revealed Cards as it goes. Nothing turns face up in the recordings, and one face-down card is seen leaving.",
+      "reports": [
+        "by-5hcb",
+        "by-thod"
+      ],
+      "arena": {
+        "does": "Killed, Arena's face-down card dissolves as a card back and a \"Revealed Cards\" panel then shows its face at the top left.",
+        "evidence": [
+          {
+            "recording": "I3Te0m1bBFw",
+            "time": "29:42.9"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "not-seen",
+      "name": "A copy on the stack",
+      "rule": "It appears on the stack with no flight. None is seen."
+    },
+    {
+      "kind": "not-seen",
+      "name": "A cost paid as a spell resolves",
+      "rule": "Mana streaks from its sources into the resolving spell or ability, as into a spell being cast. No such payment is seen."
+    },
+    {
+      "kind": "not-seen",
+      "name": "A creature that enters attacking",
+      "rule": "It gets an explicit choice of what it attacks, and its line stays drawn throughout.",
+      "reports": [
+        "by-l26",
+        "by-y3sp"
+      ]
+    },
+    {
+      "kind": "not-seen",
+      "name": "A free mulligan",
+      "rule": "In a shared-deck game, when a player's opening hand qualifies before a regular mulligan, the mode mulligan prompt adds a third button, \"Free Mulligan\", stacked with \"Mulligan\" above the primary \"Keep 7\" button. Taking it reveals the hand to the opponent in the Revealed Cards pile (showcase) before the hand goes back into the shared library with the mulligan's motion and a new seven-card hand is dealt."
+    },
+    {
+      "kind": "not-seen",
+      "name": "A hand in two rows",
+      "rule": "In the client, a hand with more cards than one fan across the window holds with a strip of each uncovered, such as 60 cards, is laid in two or more fans, one behind and above the other, in hand order from the back fan to the front. Each card keeps a strip to press, and raises under the pointer as in one fan. Arena's recordings show no hand that large."
+    },
+    {
+      "kind": "not-seen",
+      "name": "A linked exile returning",
+      "rule": "The exiled card returns as its source departs, moving with it. No exiling permanent is seen leaving with its card returning.",
+      "reports": [
+        "by-esr2"
+      ]
+    },
+    {
+      "kind": "not-seen",
+      "name": "A mulligan's hand",
+      "rule": "It goes from sight where it lies, every card of it, as a permanent that leaves does; then the next hand is dealt as an opening hand is. No mulligan is filmed."
+    },
+    {
+      "kind": "not-seen",
+      "name": "A permanent changing sides",
+      "rule": "It flies across the battlefield to its new controller's row.",
+      "arena": {
+        "does": "Seen only before and after its move",
+        "evidence": [
+          {
+            "recording": "0VsYGs88NXA",
+            "time": "27:39.5"
+          },
+          {
+            "recording": "gIhJjyoJ0_M",
+            "time": "53:21.5"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "not-seen",
+      "name": "A permanent's chosen value",
+      "rule": "A value chosen as a permanent entered (a color, a creature type, a card name) shows on the permanent on one line, as a manual card's note does. Its inspection panel says \"Chosen:\" and the value."
+    },
+    {
+      "kind": "not-seen",
+      "name": "A spell that ends the turn",
+      "rule": "When a resolving spell ends the turn, play goes on to the cleanup step with no banner of its own: the turn is cut short as any turn ends, and the spell goes to its owner's pile (a shared-deck game's shared exile pile) in the move it would make at any other time. Arena's recordings show no spell that ends the turn."
+    },
+    {
+      "kind": "not-seen",
+      "name": "A target that moves",
+      "rule": "An arrow or line ends before either of its ends moves, and an arrow is not drawn again at a card that changed zones while its spell or ability stays on the stack. No target is seen leaving in response.",
+      "reports": [
+        "by-yfw",
+        "by-ad8",
+        "by-8uw",
+        "by-2wsl"
+      ]
+    },
+    {
+      "kind": "not-seen",
+      "name": "A token that leaves",
+      "rule": "It dissolves in place like any permanent. No token leaving the battlefield is seen.",
+      "reports": [
+        "by-1ug"
+      ]
+    },
+    {
+      "kind": "not-seen",
+      "name": "An ability with no source on the battlefield",
+      "rule": "It emerges from the pile its source lies in, and appears on the stack when it has no source. No trigger from a graveyard is seen."
+    },
+    {
+      "kind": "not-seen",
+      "name": "An Aura that takes control",
+      "rule": "No Aura that gains control of what it enchants is in the recordings. Control Magic resolves as any Aura does: it flies from the stack to the creature and settles behind it in the creature's row. Then the creature slides, with the Aura, straight to its new controller's creature row, as a permanent changing sides does (Coveted Jewel, 0VsYGs88NXA 27:39.5). When the Aura leaves, the creature slides back the same way, after the spell that removed the Aura has gone."
+    },
+    {
+      "kind": "not-seen",
+      "name": "Arranging a melded or merged permanent's cards",
+      "rule": "When a melded or merged permanent is put into its owner's graveyard or library, the owner picks its cards one at a time, the bottom one first, in the ordinary pick prompt: \"Choose the bottom card.\" The last card left goes on top. The recordings show no such move."
     },
     {
       "kind": "not-seen",
@@ -1058,18 +1185,27 @@
     },
     {
       "kind": "not-seen",
-      "name": "Why a creature can't attack",
-      "rule": "During Choose attackers, clicking or tapping a creature you control that cannot attack plays the refusal sound and opens the inspector with the reason under its face: \"Tapped\", \"Summoning sickness\", \"Defender needs <subtype>\" (reflecting text-changing effects), or \"Can't attack\"."
+      "name": "Cards a look returns",
+      "rule": "Cards a look puts back into a library fly straight to it. The opponent's look at the top of their library that is not a scry lifts nothing: while they choose, their library lies as it was; each card it takes drops from the library into the table, deepest half way, and rises into their hand; the rest are never seen to move (Arena's Stock Up, 3sEoP_s4DQE 46:04.0, 0VsYGs88NXA 1:13:06.3, WCknTZNbraE 1:22:28.2). Your own look's cards put back are not filmed.",
+      "reports": [
+        "by-ubgt",
+        "by-o5fn"
+      ]
     },
     {
       "kind": "not-seen",
-      "name": "Notes on manual cards",
-      "rule": "A card shows its table note on one line, with an ellipsis when it runs out of room. Its inspection panel shows the full note."
+      "name": "Cards leaving a graveyard",
+      "rule": "A card returned to the battlefield or to your hand flies there from its pile; one returned to the opponent's hand swings up to a readable apex beside the stack before gliding to their hand (jD7VqaT8VC8 46:23.2). Returning to the battlefield or to your own hand is not seen."
     },
     {
       "kind": "not-seen",
-      "name": "A card picked face down",
-      "rule": "While the other player still has to pick, as for Show and Tell, a card a player has picked from their hand lies apart from that hand where the cards a player handles lie: face up for its player, face down for the other. On the phone it lies beside its owner's library, toward the table, as the cards the opponent looks at do. Arena's recordings show no such pick."
+      "name": "Cards moving to and from the shared piles",
+      "rule": "A card drawn, milled, put back or looked at in a shared-deck game uses the `fly` and `lift` motions a per-player game uses, starting or ending at the shared pile. A draw rises off the shared library and comes down to where the drawing player's draw ends: the viewer's beside the stack, the opponent's into their hand. A milled card crosses the table from the shared library to the shared graveyard on the same rising path as a per-player mill. The cards a player looks at lie beside the shared library, toward the middle of the table and half a card toward that player."
+    },
+    {
+      "kind": "not-seen",
+      "name": "Cards under a merged permanent",
+      "rule": "The other cards of a merged permanent (mutate) peek out from under it, as cards a permanent holds in exile do. Clicking one opens them all to read."
     },
     {
       "kind": "not-seen",
@@ -1083,54 +1219,6 @@
     },
     {
       "kind": "not-seen",
-      "name": "Choosing a sideboard card during a game",
-      "rule": "The catalog shows eligible card names to the player making the choice. Done leaves every card in the sideboard. The chosen card is revealed and appears in its owner's hand."
-    },
-    {
-      "kind": "not-seen",
-      "name": "Inspecting a face-down manual card",
-      "rule": "The table shows a card back. Pointing at the card opens a face preview only if the viewer knows the card's identity."
-    },
-    {
-      "kind": "no-equivalent",
-      "name": "Manual counters and untap flags",
-      "rule": "Named counters use the existing counter badges with shortened names. Add counter offers six common names above the text field. Player counters appear beside the mana pool. A permanent marked as skipping untap shows a lock in its corner."
-    },
-    {
-      "kind": "not-seen",
-      "name": "Paying with permanents",
-      "rule": "Waterbend, convoke, crew. Start with no payment highlights. Hover over Auto Pay on desktop or long-press it on mobile to see which permanents Beryl would use. Click or tap the button to accept. To pay manually, click or tap each permanent you want to contribute. For a three-creature Convoke, pick A, B and D directly even if Auto Pay would use A, B and C. After each manual pick, recalculate the proposal for the remaining cost and keep the player's picks. Let the player finish manually or accept Auto Pay for the remainder, and stop taking picks once the cost is covered. A question whose yes pays a cost at once (pay {1}, or the spell is countered) shows what that button would tap the same way, on hover or a long press, and nothing before. Arena documents the preview and acceptance gestures in its [May 23, 2019 patch notes](https://devtrackers.gg/magic-arena/p/3e5941f1-may-23-0-15-00-00-patch-notes). A selected permanent turns and carries a tap mark, and an outline means one thing at a time: at rest every permanent that can pay wears the outline of what may be picked, and while Auto Pay shows its proposal those it would tap alone show, in their ring. Once a pick has paid part of the cost, the prompt says after what it asks how much is still to pay.",
-      "reports": [
-        "by-1y4",
-        "by-uld",
-        "by-4hjm",
-        "by-z973",
-        "by-szrn",
-        "by-uq8",
-        "by-x45",
-        "by-hmfq",
-        "by-tyf"
-      ]
-    },
-    {
-      "kind": "not-seen",
-      "name": "A creature that enters attacking",
-      "rule": "It gets an explicit choice of what it attacks, and its line stays drawn throughout.",
-      "reports": [
-        "by-l26",
-        "by-y3sp"
-      ]
-    },
-    {
-      "kind": "not-seen",
-      "name": "A token that leaves",
-      "rule": "It dissolves in place like any permanent. No token leaving the battlefield is seen.",
-      "reports": [
-        "by-1ug"
-      ]
-    },
-    {
-      "kind": "not-seen",
       "name": "Choosing a replacement effect",
       "rule": "When a draw could be replaced by dredge, the player picks the card to dredge, or declines and draws, with the pick prompt Beryl uses for choosing up to a number of cards. The title reads Choose an effect to apply, and its Decline button lets the draw happen. No card on Arena has dredge.",
       "reports": [
@@ -1139,13 +1227,42 @@
     },
     {
       "kind": "not-seen",
-      "name": "Permanents entering together",
-      "rule": "When permanents a player controls enter the battlefield at the same time and the order of their timestamps could change what their abilities do, the player picks them one at a time, earliest first, in the ordinary pick prompt: \"Choose which enters first.\" Arena orders them without asking, as far as the recordings show."
+      "name": "Choosing a sideboard card during a game",
+      "rule": "The catalog shows eligible card names to the player making the choice. Done leaves every card in the sideboard. The chosen card is revealed and appears in its owner's hand."
     },
     {
       "kind": "not-seen",
-      "name": "Arranging a melded or merged permanent's cards",
-      "rule": "When a melded or merged permanent is put into its owner's graveyard or library, the owner picks its cards one at a time, the bottom one first, in the ordinary pick prompt: \"Choose the bottom card.\" The last card left goes on top. The recordings show no such move."
+      "name": "Choosing the deck",
+      "rule": "The New Game screen lists the decks a game can be played with, \"WU Control\" and \"Dandân\", as radio rows above the opponents, and its subtitle names the chosen one. On a phone the two stand side by side in the row of the sound button. The Dandân deck is one library both players draw from, so Fair deal, which compares two players' opening hands, is hidden while it is chosen. Arena's play screen has no equivalent."
+    },
+    {
+      "kind": "not-seen",
+      "name": "Controlling another player",
+      "rule": "While the viewer controls the opponent's turn, each decision they make for the opponent says \"For opponent\" before what it asks; a priority says only that."
+    },
+    {
+      "kind": "not-seen",
+      "name": "Copies",
+      "rule": "A permanent that is a copy shows the copied card's face with a \"Copy\" label where a token shows \"Token\" (the phone, which shows neither label, shows the copied card's scan). Its inspection panel names the card it really is."
+    },
+    {
+      "kind": "not-seen",
+      "name": "Dealing a fair game",
+      "rule": "With Fair deal ticked, Start leaves the start screen up while the session judges candidate deals, which takes a few seconds. The start button is disabled and reads \"Dealing…\" until the new game's first view arrives, and then the game screen opens. Arena has no fair deal."
+    },
+    {
+      "kind": "not-seen",
+      "name": "Equipment",
+      "rule": "It flies to the creature it becomes attached to.",
+      "arena": {
+        "does": "The equip ability leaves the stack with a flash at the creature; the equipment's own move is not seen",
+        "evidence": [
+          {
+            "recording": "krskVfn2v5Q",
+            "time": "46:10.45"
+          }
+        ]
+      }
     },
     {
       "kind": "not-seen",
@@ -1168,6 +1285,30 @@
           }
         ]
       }
+    },
+    {
+      "kind": "not-seen",
+      "name": "FPS monitor",
+      "rule": "Settings can show a read-only panel at the top left of the native client. It reports current FPS, the lowest frame rate implied by a frame gap in the last minute, the app’s target, the display link’s rate when available, and the graphics tier being drawn, Enhanced or Baseline, in the settings sheet’s words."
+    },
+    {
+      "kind": "not-seen",
+      "name": "Hand cards put on the bottom",
+      "rule": "The split prompt is headed \"Put cards on the bottom.\" The player orders any cards they put on the bottom and can press Done with all their cards in hand.",
+      "arena": {
+        "does": "The opponent resolves the spell and draws cards. Their choice is hidden.",
+        "evidence": [
+          {
+            "recording": "kvVLJ_cS_KE",
+            "time": "21:54.5"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "not-seen",
+      "name": "Inspecting a face-down manual card",
+      "rule": "The table shows a card back. Pointing at the card opens a face preview only if the viewer knows the card's identity."
     },
     {
       "kind": "not-seen",
@@ -1198,46 +1339,64 @@
     },
     {
       "kind": "not-seen",
-      "name": "A card turning face up",
-      "rule": "A face-down permanent turning face up enlarges in place and flips; one leaving reveals its face during its flight, and one that leaves for a hand or a library, where no face shows, joins the Revealed Cards as it goes. Nothing turns face up in the recordings, and one face-down card is seen leaving.",
-      "reports": [
-        "by-5hcb",
-        "by-thod"
-      ],
-      "arena": {
-        "does": "Killed, Arena's face-down card dissolves as a card back and a \"Revealed Cards\" panel then shows its face at the top left.",
-        "evidence": [
-          {
-            "recording": "I3Te0m1bBFw",
-            "time": "29:42.9"
-          }
-        ]
-      }
+      "name": "Mana spent from a pool",
+      "rule": "It streaks from its player's pool into the spell or ability it pays for, as from a land. No floating mana is seen."
     },
     {
       "kind": "not-seen",
-      "name": "Cards a look returns",
-      "rule": "Cards a look puts back into a library fly straight to it. The opponent's look at the top of their library that is not a scry lifts nothing: while they choose, their library lies as it was; each card it takes drops from the library into the table, deepest half way, and rises into their hand; the rest are never seen to move (Arena's Stock Up, 3sEoP_s4DQE 46:04.0, 0VsYGs88NXA 1:13:06.3, WCknTZNbraE 1:22:28.2). Your own look's cards put back are not filmed.",
+      "name": "Milled cards",
+      "rule": "They fly from the library to the graveyard face up, one after another as draws do. None is held up large first. No mill is seen."
+    },
+    {
+      "kind": "not-seen",
+      "name": "Mutating over or under",
+      "rule": "As a mutating creature spell resolves, its controller is asked as a top-or-bottom choice is, under the spell's name: \"Over or Under?\" with OVER and UNDER. The recordings show only the opponent mutating, never the choice. A card under a merged permanent is in the merged zone and is not drawn on the table."
+    },
+    {
+      "kind": "not-seen",
+      "name": "Notes on manual cards",
+      "rule": "A card shows its table note on one line, with an ellipsis when it runs out of room. Its inspection panel shows the full note."
+    },
+    {
+      "kind": "not-seen",
+      "name": "Other numbers",
+      "rule": "A changed power and toughness, and mana left in a pool, count as a life total does. Neither is seen."
+    },
+    {
+      "kind": "not-seen",
+      "name": "Paying with permanents",
+      "rule": "Waterbend, convoke, crew. Start with no payment highlights. Hover over Auto Pay on desktop or long-press it on mobile to see which permanents Beryl would use. Click or tap the button to accept. To pay manually, click or tap each permanent you want to contribute. For a three-creature Convoke, pick A, B and D directly even if Auto Pay would use A, B and C. After each manual pick, recalculate the proposal for the remaining cost and keep the player's picks. Let the player finish manually or accept Auto Pay for the remainder, and stop taking picks once the cost is covered. A question whose yes pays a cost at once (pay {1}, or the spell is countered) shows what that button would tap the same way, on hover or a long press, and nothing before. Arena documents the preview and acceptance gestures in its [May 23, 2019 patch notes](https://devtrackers.gg/magic-arena/p/3e5941f1-may-23-0-15-00-00-patch-notes). A selected permanent turns and carries a tap mark, and an outline means one thing at a time: at rest every permanent that can pay wears the outline of what may be picked, and while Auto Pay shows its proposal those it would tap alone show, in their ring. Once a pick has paid part of the cost, the prompt says after what it asks how much is still to pay.",
       "reports": [
-        "by-ubgt",
-        "by-o5fn"
+        "by-1y4",
+        "by-uld",
+        "by-4hjm",
+        "by-z973",
+        "by-szrn",
+        "by-uq8",
+        "by-x45",
+        "by-hmfq",
+        "by-tyf"
       ]
     },
     {
       "kind": "not-seen",
-      "name": "A linked exile returning",
-      "rule": "The exiled card returns as its source departs, moving with it. No exiling permanent is seen leaving with its card returning.",
-      "reports": [
-        "by-esr2"
-      ]
+      "name": "Permanents entering together",
+      "rule": "When permanents a player controls enter the battlefield at the same time and the order of their timestamps could change what their abilities do, the player picks them one at a time, earliest first, in the ordinary pick prompt: \"Choose which enters first.\" Arena orders them without asking, as far as the recordings show."
     },
     {
       "kind": "not-seen",
-      "name": "Your own spell returned to hand",
-      "rule": "It glides from the stack to the hand, turning as it goes. Only the opponent's spells are seen returned.",
-      "reports": [
-        "by-e0l"
-      ]
+      "name": "Phased-out permanents",
+      "rule": "A phased-out permanent stays where it lay, faded. It is never offered as a candidate, and its inspection panel says \"Phased out\"."
+    },
+    {
+      "kind": "not-seen",
+      "name": "Shared piles",
+      "rule": "A shared-deck table draws one shared library, one shared graveyard and one shared exile pile with the same card look, tilt and scale as per-player piles, placed at new positions from each profile's `shared_piles` data: on desktop, the library at the middle left and the graveyard and exile at the middle right; on phone and wide-compact, the library at the left edge and the graveyard at the right edge of the seam between the two players' creature rows, with exile beneath the graveyard. The per-player pile places stay empty."
+    },
+    {
+      "kind": "not-seen",
+      "name": "Text-changed cards",
+      "rule": "A spell or permanent whose text or type line was changed by a text-changing effect shows a \"Text changed\" tag on the table, renders Beryl's card frame with its new type line and rules text on the table and in the zoom view, and renders any ability it puts on the stack with its changed text on the ability plate."
     },
     {
       "kind": "not-seen",
@@ -1246,18 +1405,8 @@
     },
     {
       "kind": "not-seen",
-      "name": "A mulligan's hand",
-      "rule": "It goes from sight where it lies, every card of it, as a permanent that leaves does; then the next hand is dealt as an opening hand is. No mulligan is filmed."
-    },
-    {
-      "kind": "not-seen",
-      "name": "A free mulligan",
-      "rule": "In a shared-deck game, when a player's opening hand qualifies before a regular mulligan, the mode mulligan prompt adds a third button, \"Free Mulligan\", stacked with \"Mulligan\" above the primary \"Keep 7\" button. Taking it reveals the hand to the opponent in the Revealed Cards pile (showcase) before the hand goes back into the shared library with the mulligan's motion and a new seven-card hand is dealt."
-    },
-    {
-      "kind": "not-seen",
-      "name": "Milled cards",
-      "rule": "They fly from the library to the graveyard face up, one after another as draws do. None is held up large first. No mill is seen."
+      "name": "The phone",
+      "rule": "It plays what the desktop plays; its layout and gestures are Beryl's own. Every motion is one of the desktop's verbs between the phone's places. A card flies between your hand's fan, the stack in the middle band and its row; the opponent's leaves and joins the card backs at the top edge. A draw leaves the library's pile in its player's strip, and a card put into a graveyard lands on that pile. An ability lifts out of its source to the stack, and a token appears in its row. The rows make room as the middle band grows for the stack, so a source glides aside while its ability lifts. An exiled card rests unseen under its owner's graveyard and is listed in that graveyard's sheet under exile's name, while one held by a permanent remains tucked under it. An emblem stands after its controller's other permanents, and its ability lifts from that card. Crowded rows overlap rather than shrinking creature cards below 56px high. A hand too large for one row takes further rows above it, to the right of its player's piles, which stay in view. Its newest cards stand in those rows. The phone centers a board at most 430px wide and scales a 375px board to fit narrower screens. Sounds follow the same steps. What the desktop shows around its table is composed for the phone from the same pieces. On the phone's start screen, the opponent list scrolls between the sound and credits controls at the top and the seed, the Fair deal checkbox and the game buttons at the bottom. The game result shows over the board with its reason and any culprit card centered, and the full-width result buttons stay above the bottom safe area when the result is shown or put aside. The opening shows the coin above two centered rows of cards, with bottom picks in slots beneath the hand and full-width actions above the bottom safe area. The menu button opens the settings with the log and the bug report in them. Undo and full control's mark stand at the end of the middle band, across from the phase. Unspent mana lies beside its player's life total, and the combat damage on its way on the total's rim. A touch on a graveyard, or on a library with a known card, lists its cards; a touch on a card shows it whole, and a touch beside it puts it away. The turn's banner crosses the middle band, a combat step's lies under the opponent's strip, and a scry's pill beside its player's lands, past the end of their row; a coin is tossed just above the middle band. A prompt picked on the table is the desktop's: the button it puts forward stands in the player's strip where the turn button is, with the one that passes on beside it; what it asks is a pill on the middle band's line, as Arena writes it across the middle of the table, or at the nearest height clear of every card where the stack lies on that line, and over the strip while the table is shaded under cards the prompt holds up; its other buttons are stacked over the turn button. A touch on a card the prompt can use uses it, and one it has no use for shows the card whole; a card in your hand is read by a touch and played by carrying it out of the hand. The Revealed Cards lie in the opponent's strip beside their graveyard, at a pile's size with no pill, and a touch opens them as it opens a pile. The bug reporter freezes the whole page and saves both that frame and the region the player selects. On a phone, the reporter opens from the menu, a touch selects the whole screen or a drag selects a region, the description stays above the keyboard, and a saved report offers Share and Done. Android's Back closes the open sheet or bug reporter and otherwise leaves a game in place. The phone keeps dark system chrome in either system appearance. The bottom actions clear the gesture bar, and the seed and game buttons rise above the numeric keyboard."
     },
     {
       "kind": "not-seen",
@@ -1279,107 +1428,8 @@
     },
     {
       "kind": "not-seen",
-      "name": "Cards leaving a graveyard",
-      "rule": "A card returned to the battlefield or to your hand flies there from its pile; one returned to the opponent's hand swings up to a readable apex beside the stack before gliding to their hand (jD7VqaT8VC8 46:23.2). Returning to the battlefield or to your own hand is not seen."
-    },
-    {
-      "kind": "not-seen",
-      "name": "An ability with no source on the battlefield",
-      "rule": "It emerges from the pile its source lies in, and appears on the stack when it has no source. No trigger from a graveyard is seen."
-    },
-    {
-      "kind": "not-seen",
-      "name": "A cost paid as a spell resolves",
-      "rule": "Mana streaks from its sources into the resolving spell or ability, as into a spell being cast. No such payment is seen."
-    },
-    {
-      "kind": "not-seen",
-      "name": "Mana spent from a pool",
-      "rule": "It streaks from its player's pool into the spell or ability it pays for, as from a land. No floating mana is seen."
-    },
-    {
-      "kind": "not-seen",
-      "name": "A target that moves",
-      "rule": "An arrow or line ends before either of its ends moves, and an arrow is not drawn again at a card that changed zones while its spell or ability stays on the stack. No target is seen leaving in response.",
-      "reports": [
-        "by-yfw",
-        "by-ad8",
-        "by-8uw",
-        "by-2wsl"
-      ]
-    },
-    {
-      "kind": "not-seen",
-      "name": "A copy on the stack",
-      "rule": "It appears on the stack with no flight. None is seen."
-    },
-    {
-      "kind": "not-seen",
-      "name": "A permanent changing sides",
-      "rule": "It flies across the battlefield to its new controller's row.",
-      "arena": {
-        "does": "Seen only before and after its move",
-        "evidence": [
-          {
-            "recording": "0VsYGs88NXA",
-            "time": "27:39.5"
-          },
-          {
-            "recording": "gIhJjyoJ0_M",
-            "time": "53:21.5"
-          }
-        ]
-      }
-    },
-    {
-      "kind": "not-seen",
-      "name": "Equipment",
-      "rule": "It flies to the creature it becomes attached to.",
-      "arena": {
-        "does": "The equip ability leaves the stack with a flash at the creature; the equipment's own move is not seen",
-        "evidence": [
-          {
-            "recording": "krskVfn2v5Q",
-            "time": "46:10.45"
-          }
-        ]
-      }
-    },
-    {
-      "kind": "not-seen",
-      "name": "Other numbers",
-      "rule": "A changed power and toughness, and mana left in a pool, count as a life total does. Neither is seen."
-    },
-    {
-      "kind": "not-seen",
-      "name": "Text-changed cards",
-      "rule": "A spell or permanent whose text or type line was changed by a text-changing effect shows a \"Text changed\" tag on the table, renders Beryl's card frame with its new type line and rules text on the table and in the zoom view, and renders any ability it puts on the stack with its changed text on the ability plate."
-    },
-    {
-      "kind": "not-seen",
-      "name": "Words: what a card's text would say",
-      "rule": "Arena words many prompts from the text of the card that asks, which a prompt's record does not carry. Beryl says what Arena says of any card, or the same sentence less the card's part: \"Choose a target.\", \"Search for a card.\", \"Search your library?\", \"Exile a card.\", \"Exile {most:words} cards.\", \"Distribute damage.\", \"Distribute counters.\", \"Choose One\" over a card chosen for an effect, and an optional effect under its asker's name (\"{source}\", or \"Take Action?\" with none). Braces are the table's holes.",
-      "arena": {
-        "does": "Arena names the card's own: Target a creature., Search for a basic land card., Exile a blue card., Draw a card?",
-        "evidence": [
-          {
-            "recording": "0VsYGs88NXA",
-            "time": "25:33.5"
-          },
-          {
-            "recording": "I3Te0m1bBFw",
-            "time": "36:34.0"
-          },
-          {
-            "recording": "TbrYIs2juCw",
-            "time": "32:00.5"
-          },
-          {
-            "recording": "XYkigNjhINU",
-            "time": "1:17:11.0"
-          }
-        ]
-      }
+      "name": "Why a creature can't attack",
+      "rule": "During Choose attackers, clicking or tapping a creature you control that cannot attack plays the refusal sound and opens the inspector with the reason under its face: \"Tapped\", \"Summoning sickness\", \"Defender needs <subtype>\" (reflecting text-changing effects), or \"Can't attack\"."
     },
     {
       "kind": "not-seen",
@@ -1435,87 +1485,37 @@
     },
     {
       "kind": "not-seen",
-      "name": "Hand cards put on the bottom",
-      "rule": "The split prompt is headed \"Put cards on the bottom.\" The player orders any cards they put on the bottom and can press Done with all their cards in hand.",
+      "name": "Words: what a card's text would say",
+      "rule": "Arena words many prompts from the text of the card that asks, which a prompt's record does not carry. Beryl says what Arena says of any card, or the same sentence less the card's part: \"Choose a target.\", \"Search for a card.\", \"Search your library?\", \"Exile a card.\", \"Exile {most:words} cards.\", \"Distribute damage.\", \"Distribute counters.\", \"Choose One\" over a card chosen for an effect, and an optional effect under its asker's name (\"{source}\", or \"Take Action?\" with none). Braces are the table's holes.",
       "arena": {
-        "does": "The opponent resolves the spell and draws cards. Their choice is hidden.",
+        "does": "Arena names the card's own: Target a creature., Search for a basic land card., Exile a blue card., Draw a card?",
         "evidence": [
           {
-            "recording": "kvVLJ_cS_KE",
-            "time": "21:54.5"
+            "recording": "0VsYGs88NXA",
+            "time": "25:33.5"
+          },
+          {
+            "recording": "I3Te0m1bBFw",
+            "time": "36:34.0"
+          },
+          {
+            "recording": "TbrYIs2juCw",
+            "time": "32:00.5"
+          },
+          {
+            "recording": "XYkigNjhINU",
+            "time": "1:17:11.0"
           }
         ]
       }
     },
     {
       "kind": "not-seen",
-      "name": "The phone",
-      "rule": "It plays what the desktop plays; its layout and gestures are Beryl's own. Every motion is one of the desktop's verbs between the phone's places. A card flies between your hand's fan, the stack in the middle band and its row; the opponent's leaves and joins the card backs at the top edge. A draw leaves the library's pile in its player's strip, and a card put into a graveyard lands on that pile. An ability lifts out of its source to the stack, and a token appears in its row. The rows make room as the middle band grows for the stack, so a source glides aside while its ability lifts. An exiled card rests unseen under its owner's graveyard and is listed in that graveyard's sheet under exile's name, while one held by a permanent remains tucked under it. An emblem stands after its controller's other permanents, and its ability lifts from that card. Crowded rows overlap rather than shrinking creature cards below 56px high. A hand too large for one row takes further rows above it, to the right of its player's piles, which stay in view. Its newest cards stand in those rows. The phone centers a board at most 430px wide and scales a 375px board to fit narrower screens. Sounds follow the same steps. What the desktop shows around its table is composed for the phone from the same pieces. On the phone's start screen, the opponent list scrolls between the sound and credits controls at the top and the seed, the Fair deal checkbox and the game buttons at the bottom. The game result shows over the board with its reason and any culprit card centered, and the full-width result buttons stay above the bottom safe area when the result is shown or put aside. The opening shows the coin above two centered rows of cards, with bottom picks in slots beneath the hand and full-width actions above the bottom safe area. The menu button opens the settings with the log and the bug report in them. Undo and full control's mark stand at the end of the middle band, across from the phase. Unspent mana lies beside its player's life total, and the combat damage on its way on the total's rim. A touch on a graveyard, or on a library with a known card, lists its cards; a touch on a card shows it whole, and a touch beside it puts it away. The turn's banner crosses the middle band, a combat step's lies under the opponent's strip, and a scry's pill beside its player's lands, past the end of their row; a coin is tossed just above the middle band. A prompt picked on the table is the desktop's: the button it puts forward stands in the player's strip where the turn button is, with the one that passes on beside it; what it asks is a pill on the middle band's line, as Arena writes it across the middle of the table, or at the nearest height clear of every card where the stack lies on that line, and over the strip while the table is shaded under cards the prompt holds up; its other buttons are stacked over the turn button. A touch on a card the prompt can use uses it, and one it has no use for shows the card whole; a card in your hand is read by a touch and played by carrying it out of the hand. The Revealed Cards lie in the opponent's strip beside their graveyard, at a pile's size with no pill, and a touch opens them as it opens a pile. The bug reporter freezes the whole page and saves both that frame and the region the player selects. On a phone, the reporter opens from the menu, a touch selects the whole screen or a drag selects a region, the description stays above the keyboard, and a saved report offers Share and Done. Android's Back closes the open sheet or bug reporter and otherwise leaves a game in place. The phone keeps dark system chrome in either system appearance. The bottom actions clear the gesture bar, and the seed and game buttons rise above the numeric keyboard."
-    },
-    {
-      "kind": "not-seen",
-      "name": "Mutating over or under",
-      "rule": "As a mutating creature spell resolves, its controller is asked as a top-or-bottom choice is, under the spell's name: \"Over or Under?\" with OVER and UNDER. The recordings show only the opponent mutating, never the choice. A card under a merged permanent is in the merged zone and is not drawn on the table."
-    },
-    {
-      "kind": "not-seen",
-      "name": "A permanent's chosen value",
-      "rule": "A value chosen as a permanent entered (a color, a creature type, a card name) shows on the permanent on one line, as a manual card's note does. Its inspection panel says \"Chosen:\" and the value."
-    },
-    {
-      "kind": "not-seen",
-      "name": "Phased-out permanents",
-      "rule": "A phased-out permanent stays where it lay, faded. It is never offered as a candidate, and its inspection panel says \"Phased out\"."
-    },
-    {
-      "kind": "not-seen",
-      "name": "Cards under a merged permanent",
-      "rule": "The other cards of a merged permanent (mutate) peek out from under it, as cards a permanent holds in exile do. Clicking one opens them all to read."
-    },
-    {
-      "kind": "not-seen",
-      "name": "Copies",
-      "rule": "A permanent that is a copy shows the copied card's face with a \"Copy\" label where a token shows \"Token\" (the phone, which shows neither label, shows the copied card's scan). Its inspection panel names the card it really is."
-    },
-    {
-      "kind": "no-equivalent",
-      "name": "Manual table prompts",
-      "rule": "A guided choice on the manual table uses the same sorting tray or list as an engine game. The seat answering it sees the cards or choices. Across the table a library sort lifts only a packet of cards, which returns when the tray closes."
-    },
-    {
-      "kind": "not-seen",
-      "name": "Controlling another player",
-      "rule": "While the viewer controls the opponent's turn, each decision they make for the opponent says \"For opponent\" before what it asks; a priority says only that."
-    },
-    {
-      "kind": "not-seen",
-      "name": "A hand in two rows",
-      "rule": "In the client, a hand with more cards than one fan across the window holds with a strip of each uncovered, such as 60 cards, is laid in two or more fans, one behind and above the other, in hand order from the back fan to the front. Each card keeps a strip to press, and raises under the pointer as in one fan. Arena's recordings show no hand that large."
-    },
-    {
-      "kind": "not-seen",
-      "name": "A battlefield row that scrolls",
-      "rule": "A row with more cards than fit with a strip of each uncovered shows as many as fit, scrolls one group for each notch of the wheel or 48 points of a sideways drag, and shows the number of cards off each end, as \"+12\"."
-    },
-    {
-      "kind": "not-seen",
-      "name": "Shared piles",
-      "rule": "A shared-deck table draws one shared library, one shared graveyard and one shared exile pile with the same card look, tilt and scale as per-player piles, placed at new positions from each profile's `shared_piles` data: on desktop, the library at the middle left and the graveyard and exile at the middle right; on phone and wide-compact, the library at the left edge and the graveyard at the right edge of the seam between the two players' creature rows, with exile beneath the graveyard. The per-player pile places stay empty."
-    },
-    {
-      "kind": "not-seen",
-      "name": "Cards moving to and from the shared piles",
-      "rule": "A card drawn, milled, put back or looked at in a shared-deck game uses the `fly` and `lift` motions a per-player game uses, starting or ending at the shared pile. A draw rises off the shared library and comes down to where the drawing player's draw ends: the viewer's beside the stack, the opponent's into their hand. A milled card crosses the table from the shared library to the shared graveyard on the same rising path as a per-player mill. The cards a player looks at lie beside the shared library, toward the middle of the table and half a card toward that player."
-    },
-    {
-      "kind": "not-seen",
-      "name": "A spell that ends the turn",
-      "rule": "When a resolving spell ends the turn, play goes on to the cleanup step with no banner of its own: the turn is cut short as any turn ends, and the spell goes to its owner's pile (a shared-deck game's shared exile pile) in the move it would make at any other time. Arena's recordings show no spell that ends the turn."
-    },
-    {
-      "kind": "not-seen",
-      "name": "An Aura that takes control",
-      "rule": "No Aura that gains control of what it enchants is in the recordings. Control Magic resolves as any Aura does: it flies from the stack to the creature and settles behind it in the creature's row. Then the creature slides, with the Aura, straight to its new controller's creature row, as a permanent changing sides does (Coveted Jewel, 0VsYGs88NXA 27:39.5). When the Aura leaves, the creature slides back the same way, after the spell that removed the Aura has gone."
+      "name": "Your own spell returned to hand",
+      "rule": "It glides from the stack to the hand, turning as it goes. Only the opponent's spells are seen returned.",
+      "reports": [
+        "by-e0l"
+      ]
     }
   ],
   "verbs": [

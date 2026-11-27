@@ -310,6 +310,30 @@ def derive(motion: dict[str, Any]) -> None:
             entry["summary"] = summarize(entry.get("instances", []))
 
 
+def entry_sort_key(entry: dict[str, Any]) -> tuple[int, int, str]:
+    """Canonical order for entries: by section kind, then exception number or name."""
+    kind = entry.get("kind", "")
+    rank = KINDS.index(kind) if kind in KINDS else len(KINDS)
+    number = (
+        entry["number"]
+        if kind == "exception" and isinstance(entry.get("number"), int)
+        else 0
+    )
+    return (rank, number, str(entry.get("name", "")).casefold())
+
+
+def sort_entries(data: dict[str, Any]) -> bool:
+    """Sort `data['entries']` canonically in place. Returns whether the order changed."""
+    entries = data.get("entries")
+    if not isinstance(entries, list):
+        return False
+    ordered = sorted(entries, key=entry_sort_key)
+    if ordered == entries:
+        return False
+    data["entries"] = ordered
+    return True
+
+
 def problems(data: dict[str, Any]) -> list[str]:
     """Why the data cannot be rendered, one line each; none when it can."""
     found: list[str] = []
@@ -338,6 +362,10 @@ def problems(data: dict[str, Any]) -> list[str]:
         found.append(
             f"exceptions: numbered {numbers}, want 1 to {len(numbers)} in order"
         )
+    if not found:
+        entries = data.get("entries", [])
+        if entries != sorted(entries, key=entry_sort_key):
+            found.append("entries: not in canonical order: run `just conventions`")
     return found + list_problems(data)
 
 
@@ -444,6 +472,7 @@ def render(data: dict[str, Any]) -> str:
             entries.sort(key=lambda e: e["number"])
             out.append("\n".join(f"{e['number']}. {item(e)}" for e in entries))
         else:
+            entries.sort(key=lambda e: str(e["name"]).casefold())
             out.append("\n".join(f"- {item(e)}" for e in entries))
     for section in data.get("lists", []):
         key = section["key"]
@@ -497,6 +526,9 @@ def run(args: argparse.Namespace) -> int:
     motion = json.loads(MOTION.read_text())
     derive(motion)
     write(MOTION, motion)
+    raw = json.loads(DATA.read_text())
+    if sort_entries(raw):
+        write(DATA, raw)
     try:
         PAGE.write_text(render(load()))
     except ValueError as e:

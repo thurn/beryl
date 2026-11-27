@@ -259,8 +259,7 @@ impl FaceList {
         self.choice_plates.get(&(self.find(name)?, nth)).copied()
     }
 
-    /// The faces of the cards `view` shows where the web interface draws a card's full frame
-    /// rather than its battlefield frame (`variant` in `ui/src/components/Card.tsx`): the
+    /// The faces of the cards `view` shows at full frame rather than battlefield frame: the
     /// spells and abilities on the stack, top first, then the face-up cards in the hands, after
     /// the card back when there are any. Each face is listed once, and at most [`READ_WHOLE`]
     /// besides the card back are. The client asks for them at full size (`Faces::want_full`),
@@ -372,11 +371,10 @@ impl FaceList {
         self.cards.get(card)?.get(usize::from(index)).copied()
     }
 
-    /// The mana value of the card named `card` outside the stack, as the web's `manaValue`
-    /// (`ui/src/table/TableViewer.tsx`) works it out from its printed cost: a split card adds
-    /// up both halves' costs and any other card counts its first face's. X counts as 0, a
-    /// hybrid symbol with a number as that number, and any other symbol as 1. `None` for a card
-    /// not in the match.
+    /// The mana value of the card named `card` outside the stack, worked out from its printed
+    /// cost: a split card adds up both halves' costs and any other card counts its first face's.
+    /// X counts as 0, a hybrid symbol with a number as that number, and any other symbol as 1.
+    /// `None` for a card not in the match.
     #[must_use]
     pub fn mana_value(&self, card: &str) -> Option<u32> {
         self.mana_values.get(card).copied()
@@ -390,7 +388,7 @@ impl FaceList {
     }
 
     /// The face the card named `card` is played with as a land: its first face whose type
-    /// line says Land, as the web's `landFace` (`ui/src/cards.ts`) finds it ([CR 712.9]):
+    /// line says Land ([CR 712.9]):
     /// "A player playing a modal double-faced card or a copy of a modal double-faced card as a
     /// land chooses one of its faces that’s a land before putting it onto the battlefield."
     /// Allocates nothing.
@@ -512,7 +510,7 @@ fn printed_text(face: &CardFace, token: bool) -> (Option<[i32; 2]>, PrintedText)
 /// A hash of a name in the manner of `FxHash`, which the Rust compiler uses for its own tables: it
 /// mixes in eight bytes at a time with a rotation and a multiplication. Equal names hash alike;
 /// different names rarely do.
-pub(crate) fn name_hash(name: &str) -> u64 {
+pub fn name_hash(name: &str) -> u64 {
     let mut hash: u64 = 0;
     let mut mix = |word: u64| {
         hash = (hash.rotate_left(5) ^ word).wrapping_mul(0x51_7c_c1_b7_27_22_0a_95);
@@ -545,9 +543,8 @@ fn cost_value(cost: &str) -> u32 {
 
 /// Whether `paragraph` of a face's rules text says a triggered ability (it begins "When",
 /// "Whenever" or "At", or its reminder text says one, as offspring's does) or an activated one
-/// (a cost and a colon before any reminder text, loyalty abilities included). The web
-/// interface finds an ability's paragraph by the same rule (`abilityParagraph` in
-/// `ui/src/game/faces.ts`), and the session counts paragraphs as both do.
+/// (a cost and a colon before any reminder text, loyalty abilities included), matching how the
+/// session counts ability paragraphs.
 #[must_use]
 pub fn says_ability(paragraph: &str, triggered: bool) -> bool {
     if !triggered {
@@ -717,17 +714,14 @@ impl Faces {
     }
 
     /// The listed face of the printing `ix` and its board-size layer, if resident.
-    pub(crate) fn listed_board_printing(
-        &self,
-        ix: PrintingIx,
-    ) -> (Option<&ListedFace>, Option<u16>) {
+    pub fn listed_board_printing(&self, ix: PrintingIx) -> (Option<&ListedFace>, Option<u16>) {
         self.listed_board_at(self.list.printing(ix))
     }
 
     /// The listed face and board-size layer that draw `shown`, whose name is `name`: its card
     /// printing's once that art is resident, else its token printing's, else its name's. A
     /// face that is listed but not yet resident still supplies its placeholder.
-    pub(crate) fn listed_board_of(
+    pub fn listed_board_of(
         &self,
         shown: &ObjectView,
         name: &str,
@@ -746,7 +740,7 @@ impl Faces {
     }
 
     /// The listed face and its board-size layer, if resident, from one name lookup.
-    pub(crate) fn listed_board(&self, name: &str) -> (Option<&ListedFace>, Option<u16>) {
+    pub fn listed_board(&self, name: &str) -> (Option<&ListedFace>, Option<u16>) {
         self.listed_board_at(self.list.find(name))
     }
 

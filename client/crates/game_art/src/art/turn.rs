@@ -11,8 +11,8 @@ use kit_base::tokens::{color, size};
 use kit_ui::element::Shadow;
 use kit_ui::widgets::icons::{IconLayer, LayeredIcon};
 
-/// The web's 220-unit view box drawn at 240 points.
-pub(crate) const SIZE: f32 = size::TURN_BANNER_RING_SIZE;
+/// The 220-unit view box drawn at 240 points.
+pub const SIZE: f32 = size::TURN_BANNER_RING_SIZE;
 const UNITS: f32 = SIZE / 220.0;
 const SWEEP: f32 = 80.0;
 
@@ -56,7 +56,7 @@ const RIMS: Circles = Circles {
 
 const GROUPS: [Circles; 3] = [OUTER, INNER, RIMS];
 
-pub(crate) const fn tint(side: Side) -> [u8; 4] {
+pub const fn tint(side: Side) -> [u8; 4] {
     match side {
         Side::You => color::CYAN,
         Side::Opponent => color::EMBER,
@@ -143,7 +143,7 @@ const fn layers(side: Side) -> [IconLayer; GROUPS.len()] {
     layers
 }
 
-pub(crate) const fn artwork(side: Side) -> LayeredIcon {
+pub const fn artwork(side: Side) -> LayeredIcon {
     const YOU: [IconLayer; GROUPS.len()] = layers(Side::You);
     const OPPONENT: [IconLayer; GROUPS.len()] = layers(Side::Opponent);
     LayeredIcon {

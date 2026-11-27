@@ -1,7 +1,8 @@
 //! Artwork for the game HUD, in its own drawing coordinates.
 
 pub mod orb;
-pub(crate) mod turn;
+mod orb_coords;
+pub mod turn;
 
 use kit_base::atlas::artwork::{CoverageLayer, LayerCell};
 use kit_base::data::profiles::Profiles;

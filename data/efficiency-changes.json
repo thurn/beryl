@@ -1095,5 +1095,10 @@
     "label": "Tip verification advances the shared `tip_candidate` past any pre-revert or pre-fix ancestor when a round pushes an automatic revert or proves a failing check already passes at a newer `staging` tip, so subsequent rounds verify the revert or fix immediately instead of spending a round on an older commit that still contains the broken landing",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Extract shared card faces and HUD coverage artwork into `game_art`, bringing `game_table` and `game_hud` under the 12,000-line cap so `data/client/levels.json` no longer requires per-PR cap-allowance bumps, and canonically sort `data/ui-conventions.json` and `docs/ui-conventions.md` entries alphabetically by name so concurrent UI tickets stop conflicting on tail appends",
+    "metric": "bead.minutes",
+    "expect": "down"
   }
 ]

@@ -20,6 +20,7 @@ members = [
     "crates/kit_fx",
     "crates/kit_scene",
     "crates/kit_probe",
+    "crates/game_art",
     "crates/game_table",
     "crates/game_play",
     "crates/game_hud",
@@ -71,6 +72,8 @@ kit_fx = { path = "crates/kit_fx" }
 kit_scene = { path = "crates/kit_scene" }
 # The tree printout, locators, actions, the interface checks, toolkit stories.
 kit_probe = { path = "crates/kit_probe" }
+# Game-level card faces and HUD coverage artwork shared by table, playback and HUD crates.
+game_art = { path = "crates/game_art" }
 # Each zone as a container, for each profile: rows, hands, the stack, piles, trays, badges.
 game_table = { path = "crates/game_table" }
 # Scripts compiled to tracks; verbs, beats, notices, sound cues, arrows and marks.

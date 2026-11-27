@@ -2298,10 +2298,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "game_art"
+version = "0.1.0"
+dependencies = [
+ "beryl_protocol",
+ "glam",
+ "kit_base",
+ "kit_frame",
+ "kit_ui",
+]
+
+[[package]]
 name = "game_hud"
 version = "0.1.0"
 dependencies = [
  "beryl_protocol",
+ "game_art",
  "game_play",
  "game_table",
  "glam",
@@ -2340,6 +2352,7 @@ name = "game_play"
 version = "0.1.0"
 dependencies = [
  "beryl_protocol",
+ "game_art",
  "game_table",
  "glam",
  "kit_base",
@@ -2386,6 +2399,7 @@ dependencies = [
  "beryl_card_records",
  "beryl_protocol",
  "beryl_test_files",
+ "game_art",
  "glam",
  "kit_base",
  "kit_frame",

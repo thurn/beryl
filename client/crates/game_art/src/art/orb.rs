@@ -1,6 +1,5 @@
-//! The art of a life orb: the web interface's `LifeOrb` (`ui/src/components/Player.tsx`, styled
-//! by `ui/src/design/components/life-orbs.css`), drawn in the same units, the mockup pixels of
-//! its 272 by 116 view box about the orb's middle.
+//! The art of a life orb, drawn in mockup pixels of its 272 by 116 view box about the orb's
+//! middle.
 //!
 //! - The core is a cushion, a superellipse `CORE_RX` by `CORE_RY` about (0, `CORE_CY`), filled
 //!   dark inside a bezel `BEZEL` wide, light along its top and dark along its foot, over a soft
@@ -24,8 +23,7 @@
 use beryl_protocol::protocol::Side;
 use glam::Vec2;
 
-use game_play::art::orb::CORE_CY;
-pub use game_play::art::orb::{ART, face_offset};
+pub use super::orb_coords::{ART, CORE_CY, face_id, face_offset, target_id, target_side};
 use kit_base::atlas::IconId;
 use kit_base::atlas::artwork::{CoverageLayer, CoveragePaint, CoverageRamp, LayerCell};
 use kit_base::{data::profiles::Profiles, tokens::size};
@@ -343,10 +341,9 @@ const MARK_STROKE: CoveragePaint = CoveragePaint {
 };
 
 /// The width and height covered by the solid rim, including its stroke.
-pub(crate) const MARK_HALF: Vec2 =
-    Vec2::new(CORE_RX + BEZEL / 2.0 + 2.0, CORE_RY + BEZEL / 2.0 + 2.0);
+pub const MARK_HALF: Vec2 = Vec2::new(CORE_RX + BEZEL / 2.0 + 2.0, CORE_RY + BEZEL / 2.0 + 2.0);
 const MARK_BLUR: f32 = 1.5;
-pub(crate) const MARK_GLOW_REACH: f32 = 3.0 * MARK_BLUR;
+pub const MARK_GLOW_REACH: f32 = 3.0 * MARK_BLUR;
 
 const fn core_view(half: Vec2) -> [[f32; 4]; 2] {
     mirrored([-half.x, CORE_CY - half.y, half.x * 2.0, half.y * 2.0])
@@ -387,7 +384,7 @@ const MARK_LAYERS: [Layer; 2] = [
 ];
 
 /// The masks centred on a life total, with their artwork size and tint strength.
-pub(crate) fn mark_layers() -> impl Iterator<Item = (LayerCell, u8)> {
+pub fn mark_layers() -> impl Iterator<Item = (LayerCell, u8)> {
     mark_atlas_layers().map(|(_, art, cell)| (cell, art.color[3]))
 }
 

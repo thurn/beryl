@@ -21,6 +21,7 @@ SCENE_CRATES: set[str] = {
     "kit_fx",
     "kit_scene",
     "kit_probe",
+    "game_art",
     "game_table",
     "game_play",
     "game_hud",

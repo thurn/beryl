@@ -63,10 +63,59 @@ removes an entry; nothing else does.
 Arena's way stands where an earlier report asked for something else, so do not
 restore the old behavior.
 
-- **Tokens.** They appear at their slot; they do not fly out of their source
-  (by-kgc, by-81h). Arena's appears whole with a short glow, about 0.1 s after
-  its ability leaves the stack; a batch appears as one group (UrGalw_f35w
-  17:38.4, WQiYBv23buw 23:57.0, iRr-GeSF0lI 21:58.3).
+- **A batch exile.** Cards exiled together leave one at a time, about 0.3 s
+  apart (by-5pj). Delve's cards gather on the graveyard, then peel off its top
+  one by one into a vortex. Delve is the only batch exile in the recordings, all
+  in one recording (5UHzpVvUkfI 26:06.7, 5UHzpVvUkfI 47:36.2).
+- **A card a look puts in the graveyard.** It appears on the graveyard at pile
+  size once the chooser closes; it is not shown large first (by-2ma). A
+  surveilled card lands on the graveyard as the overlay closes; kept cards close
+  with the overlay (iRr-GeSF0lI 21:23.9, SN9QFe2kM4Y 13:10).
+- **A card you may cast from your graveyard.** While you may cast a card from
+  your graveyard (flashback, such as Snapcaster Mage gives, escape, or a
+  permanent that lets you), it lies at the right end of your hand's fan, after
+  the cards really in your hand, ringed in a soft violet halo that breathes
+  slowly, apart from the cyan outline of a card you may play. It flies from the
+  graveyard into the fan in about half a second as it becomes castable, and back
+  onto the graveyard when it no longer is. Cast, it flies from its place in the
+  fan to the stack. The opponent's castable cards stay on their graveyard. When
+  Past in Flames resolves, the cards in the graveyard that gained flashback
+  leave the graveyard together and fan into the hand within about a quarter of a
+  second, to the right of the cards already there, each wrapped in drifting
+  white and violet smoke over the cyan outline of a card that may be played. One
+  cast leaves the fan for the stack (tovCPHl-gOM 9:07.75, tovCPHl-gOM 15:02.5).
+- **A countered spell.** It leaves before the spell that countered it (by-kxyq).
+  The countered spell crumbles in place under the counterspell, which stays
+  until the debris is gone and then fades, 0.5 to 0.9 s later (I3Te0m1bBFw
+  39:50.0, IEXcjBn3BXk 51:35.0).
+- **A finished ability.** It is removed at once, with no fade (by-c8b).
+- **A line from an ability to its source.** It is always shown while the ability
+  is on the stack, thin and faint as Arena draws it, and hidden during a prompt.
+  A heavy arrow is not that line (by-wkr, by-afh, by-110h).
+- **Additional costs.** A chooser that lowers the mana to pay (Delve) opens
+  before mana taps; a sacrifice cost is chosen after the lands tap (by-jqd).
+  Treasure Cruise's Delve chooser opens before any land taps; Natural Order's
+  lands send their mana, then "Sacrifice a green creature." opens (5UHzpVvUkfI
+  47:31.0, RwKoGGUmw2k 39:26.0, RwKoGGUmw2k 1:07:02.25).
+- **An arrow to the pointer.** While a target is chosen, an arrow runs from the
+  spell or ability that asks to the mouse, thin and pale. On something that may
+  be chosen it becomes the arrow the choice will draw, in that arrow's color and
+  along its way, and the click draws the stage's own. It follows the pointer
+  itself, with no lag: only the swing onto a target takes time. Nothing is drawn
+  over a target already chosen, and a touch pulls none (by-w8gv.21.67). As the
+  prompt opens, a cyan arrow runs from the ability that asks to the creature
+  under the cursor, and what may be chosen is outlined (IEXcjBn3BXk 23:13.17).
+- **An opponent's spell returned to hand.** It breaks up in place on the stack
+  over 0.5 to 1 s; it does not fly or flip toward their hand (by-e0l). Seen for
+  Remand on the opponent's spells (3sEoP_s4DQE 45:32.0, 3sEoP_s4DQE 56:19.5,
+  TbrYIs2juCw 36:04.5).
+- **Attacking a planeswalker.** No prompt: an attacker defaults to the player,
+  and the player pulls an arrow to the planeswalker (by-p00u). Attackers that
+  can attack get a cyan outline; a clicked attacker turns gold, the opponent's
+  life total and the planeswalker glow, and an arrow follows the cursor to the
+  planeswalker (SswBO8aOOgc 33:30.5).
+- **Button order.** It follows Arena prompt by prompt; there is no blanket
+  "default on the right" (by-ceo3).
 - **Cards put on the bottom after a mulligan.** A card clicked in the hand
   glides down into its slot under the hand in a quarter of a second, slowing as
   it arrives, and the cards left in the hand close up in about a sixth of a
@@ -77,21 +126,18 @@ restore the old behavior.
   the hand closes up as the card leaves it. Beryl keeps its slots under the
   hand, where a card clicked again comes back (2VW6ZzmS8U4 8:05.4, AhTcvQ-lQQQ
   14:16.3, 6aai5sMxV1o 11:38.5).
-- **The kept opening hand.** When the opening closes, the screen over the table
-  goes at once, and the hand it showed drops from there into the hand at the
-  near edge in about an eighth of a second, slowing as it lands. On the phone
-  the cards drop from the opening's rows. Nothing appears in the hand from
-  nowhere (by-qmbe). Arena's opening screen vanishes in one frame, and the hand,
-  still fanned in the middle of the screen, falls into the hand at the bottom,
-  most of the way in two frames of 30 and at rest after four (3SEgIYXJgdQ
-  13:33.95, 2VW6ZzmS8U4 6:56.25, 2VW6ZzmS8U4 14:07.75).
-- **Permanents that leave.** A permanent that is not a token dissolves where it
-  is: destroyed, it breaks into ash at its slot; exiled, it becomes a vortex
-  there. Nothing flies to the pile. What it leaves room for closes up only once
-  it has gone (by-1ug). A destroyed creature glows and falls to ash over about 1
-  s; the spell then goes to its graveyard. The row closes up after the permanent
-  is gone (RwKoGGUmw2k 27:36.4, bJQDi6NIrZA 51:46, TbrYIs2juCw 30:37,
-  5UHzpVvUkfI 58:17.0, 3sEoP_s4DQE 24:49.6).
+- **Cards the opponent looks at.** They come off the top of their library face
+  down at library size and lie beside it; a top-bound card slides back onto the
+  library and a bottom-bound one slides away from it, to either side. A pill
+  above their avatar reads "Scry: 1 top, 1 bottom." for about 3 s (by-pv6p,
+  by-yfb2, by-nva). No card is enlarged (IHPV6yRaFlk 52:54.6, IHPV6yRaFlk
+  53:31.2, qF4GF-vfc8Y 52:59.9, IEXcjBn3BXk 33:32.3).
+- **Choosing from a list.** The entries stand in a column over the shaded table.
+  A press lights an entry and "Submit 1" answers with it, where Arena takes a
+  color at the press: no card asks for an entry yet, and the prompt is the one a
+  longer list needs, a creature type or a card name. Mother of Runes' color:
+  Choose One over Choose Color, and White, Blue, Black, Red and Green in a
+  column, each taken at a click (UrGalw_f35w 45:18.5).
 - **Choosing how to cast.** A card or permanent with more than one way to cast
   or use it opens a modal, "Choose One", showing the card once per option, with
   Cancel: an adventure, an alternative cost, a land's abilities. A permanent
@@ -106,37 +152,6 @@ restore the old behavior.
   MnhyzykajXw 35:43, 2VW6ZzmS8U4 6:24.5, TbrYIs2juCw 1:10:20.5). The cards a
   `mode` prompt is about are the one thing on screen twice: the duplicate audit
   allows them while it is open.
-- **A finished ability.** It is removed at once, with no fade (by-c8b).
-- **Wording.** Arena's exactly, case and punctuation too: "All Attack", "Choose
-  attackers." Every prompt's title and buttons are one table in the session
-  (`engine/crates/beryl_session/src/prompt/wording.rs`), each entry beside the
-  recording moments that show it. A browser's title is the line that asks: its
-  sentence of rules text, or its heading where the line under it only says how
-  to drag. A pick is confirmed by "Submit" and the number picked, an arrangement
-  by "Done", a "may" by "Take Action" or "Decline" (by-u4g, by-a09o).
-- **Button order.** It follows Arena prompt by prompt; there is no blanket
-  "default on the right" (by-ceo3).
-- **The opponent's turn.** Arena's "Opponent's Turn" label shows in the action
-  button's place, and no spinner (by-58n, by-7ih, by-oyx).
-- **Attacking a planeswalker.** No prompt: an attacker defaults to the player,
-  and the player pulls an arrow to the planeswalker (by-p00u). Attackers that
-  can attack get a cyan outline; a clicked attacker turns gold, the opponent's
-  life total and the planeswalker glow, and an arrow follows the cursor to the
-  planeswalker (SswBO8aOOgc 33:30.5).
-- **Two items on the stack.** The top one still gets its target arrow. Each item
-  beneath peeks out to the left of the one over it by a quarter of its width (a
-  fifth past five items, as far as the room left of the stack allows), so a
-  spell leaving from under another is seen as it goes (by-i88). A cyan arc runs
-  from the top item to its target, even when that is the one card under it; the
-  top card sits a little right of and below the one beneath, which shows about a
-  third of its width beside it, and a countered spell crumbles in that strip
-  (I3Te0m1bBFw 39:49.4, IEXcjBn3BXk 51:34.5, IEXcjBn3BXk 51:35.3, MnhyzykajXw
-  36:19.5, 5UHzpVvUkfI 58:15).
-- **Additional costs.** A chooser that lowers the mana to pay (Delve) opens
-  before mana taps; a sacrifice cost is chosen after the lands tap (by-jqd).
-  Treasure Cruise's Delve chooser opens before any land taps; Natural Order's
-  lands send their mana, then "Sacrifice a green creature." opens (5UHzpVvUkfI
-  47:31.0, RwKoGGUmw2k 39:26.0, RwKoGGUmw2k 1:07:02.25).
 - **Choosing X.** The value of X is set by a step down and a step up beside it,
   over the button that answers, which says the value under its label: "Pay" over
   "X = 1". Beside the value stands the whole cost it makes, and the permanents
@@ -144,16 +159,6 @@ restore the old behavior.
   steps alone. Mind Twist's X stands under the spell between -5, - and +, +5, on
   a button that reads Pay over X = 0, with Cancel (0VsYGs88NXA 55:32.0,
   3sEoP_s4DQE 25:01.0).
-- **Ordering cards on a library.** Cards a player puts back on their library in
-  an order of their choice (Halimar Depths, and the cards a look leaves on top
-  or on the bottom) lie in one row under "Order Cards", the library's top card
-  at the right: "Bottom" is written under the row's left end and "Top" under its
-  right. A card dragged along the row goes where it is let go. A scry keeps its
-  two piles, and cards put back from the hand keep their own screen (exception
-  8). Ponder's "Order Cards", over "Drag cards to order them on top of your
-  library.", has the three cards in a row with Bottom under its left end and Top
-  under its right; Brainstorm's has the same ends (Qrd11-wXZrk 8:04.0,
-  AhTcvQ-lQQQ 4:59.0).
 - **Dividing among targets.** Each target wears its share on its card, between a
   step that raises it and a step that lowers it, under the arrow to it; "Submit"
   answers once everything is given out. The prompt says after what it asks how
@@ -161,64 +166,6 @@ restore the old behavior.
   Covenant's damage: an arrow from the spell to each target, a count on each
   between an arrow up and an arrow down, Submit and Cancel (3sEoP_s4DQE 28:32.5,
   bJQDi6NIrZA 21:42.5).
-- **Choosing from a list.** The entries stand in a column over the shaded table.
-  A press lights an entry and "Submit 1" answers with it, where Arena takes a
-  color at the press: no card asks for an entry yet, and the prompt is the one a
-  longer list needs, a creature type or a card name. Mother of Runes' color:
-  Choose One over Choose Color, and White, Blue, Black, Red and Green in a
-  column, each taken at a click (UrGalw_f35w 45:18.5).
-- **A countered spell.** It leaves before the spell that countered it (by-kxyq).
-  The countered spell crumbles in place under the counterspell, which stays
-  until the debris is gone and then fades, 0.5 to 0.9 s later (I3Te0m1bBFw
-  39:50.0, IEXcjBn3BXk 51:35.0).
-- **Cards the opponent looks at.** They come off the top of their library face
-  down at library size and lie beside it; a top-bound card slides back onto the
-  library and a bottom-bound one slides away from it, to either side. A pill
-  above their avatar reads "Scry: 1 top, 1 bottom." for about 3 s (by-pv6p,
-  by-yfb2, by-nva). No card is enlarged (IHPV6yRaFlk 52:54.6, IHPV6yRaFlk
-  53:31.2, qF4GF-vfc8Y 52:59.9, IEXcjBn3BXk 33:32.3).
-- **A line from an ability to its source.** It is always shown while the ability
-  is on the stack, thin and faint as Arena draws it, and hidden during a prompt.
-  A heavy arrow is not that line (by-wkr, by-afh, by-110h).
-- **Passing to the end step.** "End Turn" passes until the end step, or the
-  player's next stop where the end step is not one, through every spell and
-  ability the opponent puts on the stack meanwhile. It stops sooner only for a
-  decision other than priority, such as declaring blockers; "Resolve" beside it
-  is the way to stop at the opponent's next spell (by-sqo, by-xuku). The button
-  reads "End Turn" over "To End", and goes blank while it passes (SswBO8aOOgc
-  21:00, WQiYBv23buw 37:52, jD7VqaT8VC8 45:29).
-- **Targeting a spell.** With one spell on the stack, a spell that targets a
-  spell takes it with no prompt and no Confirm. With more, a "Choose One"
-  browser of the stack, "Target a spell.", opens with nothing preselected,
-  Submit and Cancel (by-2lwc, by-69ps). Counterspell and Mana Leak at a lone
-  spell go straight onto the stack; Spell Pierce over two spells opens the
-  browser at "Submit 0" (vPdoSA5H5xU 21:36.5, qF4GF-vfc8Y 23:58.5, jD7VqaT8VC8
-  17:54.5, SN9QFe2kM4Y 26:54.0, pE4XSNi-nZc 40:55.0).
-- **Mana into what it pays for.** Each tapped land glows and sends one streak of
-  its color straight to the spell on the stack, which flashes as they land, in
-  about 0.3 s. Mana does not stop at a pool (by-p1j). Seen for casts paid with
-  lands (TbrYIs2juCw 33:32.45, 3sEoP_s4DQE 45:30.85).
-- **The local player's scry.** The table is shaded and "Scry" shows the cards
-  face up over it, BOTTOM on the left and TOP on the right, and Done; surveil's
-  has Graveyard and Library boxes instead. The cards are the library's own: they
-  come up from it as the prompt opens, and on Done the shade lifts at once and
-  they go back to it at its size, none shown large on its way to the top or the
-  bottom. A pill reads "Scry: 1 top, 1 bottom." (by-8qq, by-2wn7, by-kyig,
-  by-1mrh). Seen for a scry of two and for surveil; no card changes face
-  (SN9QFe2kM4Y 14:50.5, SN9QFe2kM4Y 14:52.7, SN9QFe2kM4Y 13:08.5, iRr-GeSF0lI
-  21:16.5).
-- **A card a look puts in the graveyard.** It appears on the graveyard at pile
-  size once the chooser closes; it is not shown large first (by-2ma). A
-  surveilled card lands on the graveyard as the overlay closes; kept cards close
-  with the overlay (iRr-GeSF0lI 21:23.9, SN9QFe2kM4Y 13:10).
-- **A batch exile.** Cards exiled together leave one at a time, about 0.3 s
-  apart (by-5pj). Delve's cards gather on the graveyard, then peel off its top
-  one by one into a vortex. Delve is the only batch exile in the recordings, all
-  in one recording (5UHzpVvUkfI 26:06.7, 5UHzpVvUkfI 47:36.2).
-- **An opponent's spell returned to hand.** It breaks up in place on the stack
-  over 0.5 to 1 s; it does not fly or flip toward their hand (by-e0l). Seen for
-  Remand on the opponent's spells (3sEoP_s4DQE 45:32.0, 3sEoP_s4DQE 56:19.5,
-  TbrYIs2juCw 36:04.5).
 - **Hover inspection.** A hovered card in hand rises upright and grows in place,
   with no inspector beside it: about 0.3 of the table's height wide, its foot on
   the bottom edge, less where it would cover a card a prompt asks you to pick.
@@ -241,19 +188,41 @@ restore the old behavior.
   (jD7VqaT8VC8 45:26.77, SswBO8aOOgc 21:02.75, IEXcjBn3BXk 18:06.62, jD7VqaT8VC8
   45:27.5, SswBO8aOOgc 21:02.0, pE4XSNi-nZc 34:21.0, jD7VqaT8VC8 17:34.0,
   IT6nwh6HtYk 9:17.93, IT6nwh6HtYk 9:18.2).
-- **A card you may cast from your graveyard.** While you may cast a card from
-  your graveyard (flashback, such as Snapcaster Mage gives, escape, or a
-  permanent that lets you), it lies at the right end of your hand's fan, after
-  the cards really in your hand, ringed in a soft violet halo that breathes
-  slowly, apart from the cyan outline of a card you may play. It flies from the
-  graveyard into the fan in about half a second as it becomes castable, and back
-  onto the graveyard when it no longer is. Cast, it flies from its place in the
-  fan to the stack. The opponent's castable cards stay on their graveyard. When
-  Past in Flames resolves, the cards in the graveyard that gained flashback
-  leave the graveyard together and fan into the hand within about a quarter of a
-  second, to the right of the cards already there, each wrapped in drifting
-  white and violet smoke over the cyan outline of a card that may be played. One
-  cast leaves the fan for the stack (tovCPHl-gOM 9:07.75, tovCPHl-gOM 15:02.5).
+- **Mana into what it pays for.** Each tapped land glows and sends one streak of
+  its color straight to the spell on the stack, which flashes as they land, in
+  about 0.3 s. Mana does not stop at a pool (by-p1j). Seen for casts paid with
+  lands (TbrYIs2juCw 33:32.45, 3sEoP_s4DQE 45:30.85).
+- **Ordering cards on a library.** Cards a player puts back on their library in
+  an order of their choice (Halimar Depths, and the cards a look leaves on top
+  or on the bottom) lie in one row under "Order Cards", the library's top card
+  at the right: "Bottom" is written under the row's left end and "Top" under its
+  right. A card dragged along the row goes where it is let go. A scry keeps its
+  two piles, and cards put back from the hand keep their own screen (exception
+  8). Ponder's "Order Cards", over "Drag cards to order them on top of your
+  library.", has the three cards in a row with Bottom under its left end and Top
+  under its right; Brainstorm's has the same ends (Qrd11-wXZrk 8:04.0,
+  AhTcvQ-lQQQ 4:59.0).
+- **Passing to the end step.** "End Turn" passes until the end step, or the
+  player's next stop where the end step is not one, through every spell and
+  ability the opponent puts on the stack meanwhile. It stops sooner only for a
+  decision other than priority, such as declaring blockers; "Resolve" beside it
+  is the way to stop at the opponent's next spell (by-sqo, by-xuku). The button
+  reads "End Turn" over "To End", and goes blank while it passes (SswBO8aOOgc
+  21:00, WQiYBv23buw 37:52, jD7VqaT8VC8 45:29).
+- **Permanents that leave.** A permanent that is not a token dissolves where it
+  is: destroyed, it breaks into ash at its slot; exiled, it becomes a vortex
+  there. Nothing flies to the pile. What it leaves room for closes up only once
+  it has gone (by-1ug). A destroyed creature glows and falls to ash over about 1
+  s; the spell then goes to its graveyard. The row closes up after the permanent
+  is gone (RwKoGGUmw2k 27:36.4, bJQDi6NIrZA 51:46, TbrYIs2juCw 30:37,
+  5UHzpVvUkfI 58:17.0, 3sEoP_s4DQE 24:49.6).
+- **Targeting a spell.** With one spell on the stack, a spell that targets a
+  spell takes it with no prompt and no Confirm. With more, a "Choose One"
+  browser of the stack, "Target a spell.", opens with nothing preselected,
+  Submit and Cancel (by-2lwc, by-69ps). Counterspell and Mana Leak at a lone
+  spell go straight onto the stack; Spell Pierce over two spells opens the
+  browser at "Submit 0" (vPdoSA5H5xU 21:36.5, qF4GF-vfc8Y 23:58.5, jD7VqaT8VC8
+  17:54.5, SN9QFe2kM4Y 26:54.0, pE4XSNi-nZc 40:55.0).
 - **The hand's fan.** Your hand's cards lie along one circle over the near edge,
   about 14 card widths across, on the desktop and the phone. A card's turn and
   how far it sinks follow its distance from the fan's middle, so a crowded hand
@@ -269,63 +238,86 @@ restore the old behavior.
   cards (nBj2ikeYCtk 1:07.0, sybcO8S7x6A 24:27.0, FGsR_FGChOU 2:25.0,
   kvVLJ_cS_KE 6:24.0, uzg_P976qhc 17:20.0, \_IBqPx0gcag 12:00.0, sybcO8S7x6A
   51:04.0).
-- **An arrow to the pointer.** While a target is chosen, an arrow runs from the
-  spell or ability that asks to the mouse, thin and pale. On something that may
-  be chosen it becomes the arrow the choice will draw, in that arrow's color and
-  along its way, and the click draws the stage's own. It follows the pointer
-  itself, with no lag: only the swing onto a target takes time. Nothing is drawn
-  over a target already chosen, and a touch pulls none (by-w8gv.21.67). As the
-  prompt opens, a cyan arrow runs from the ability that asks to the creature
-  under the cursor, and what may be chosen is outlined (IEXcjBn3BXk 23:13.17).
+- **The kept opening hand.** When the opening closes, the screen over the table
+  goes at once, and the hand it showed drops from there into the hand at the
+  near edge in about an eighth of a second, slowing as it lands. On the phone
+  the cards drop from the opening's rows. Nothing appears in the hand from
+  nowhere (by-qmbe). Arena's opening screen vanishes in one frame, and the hand,
+  still fanned in the middle of the screen, falls into the hand at the bottom,
+  most of the way in two frames of 30 and at rest after four (3SEgIYXJgdQ
+  13:33.95, 2VW6ZzmS8U4 6:56.25, 2VW6ZzmS8U4 14:07.75).
+- **The local player's scry.** The table is shaded and "Scry" shows the cards
+  face up over it, BOTTOM on the left and TOP on the right, and Done; surveil's
+  has Graveyard and Library boxes instead. The cards are the library's own: they
+  come up from it as the prompt opens, and on Done the shade lifts at once and
+  they go back to it at its size, none shown large on its way to the top or the
+  bottom. A pill reads "Scry: 1 top, 1 bottom." (by-8qq, by-2wn7, by-kyig,
+  by-1mrh). Seen for a scry of two and for surveil; no card changes face
+  (SN9QFe2kM4Y 14:50.5, SN9QFe2kM4Y 14:52.7, SN9QFe2kM4Y 13:08.5, iRr-GeSF0lI
+  21:16.5).
+- **The opponent's turn.** Arena's "Opponent's Turn" label shows in the action
+  button's place, and no spinner (by-58n, by-7ih, by-oyx).
+- **Tokens.** They appear at their slot; they do not fly out of their source
+  (by-kgc, by-81h). Arena's appears whole with a short glow, about 0.1 s after
+  its ability leaves the stack; a batch appears as one group (UrGalw_f35w
+  17:38.4, WQiYBv23buw 23:57.0, iRr-GeSF0lI 21:58.3).
+- **Two items on the stack.** The top one still gets its target arrow. Each item
+  beneath peeks out to the left of the one over it by a quarter of its width (a
+  fifth past five items, as far as the room left of the stack allows), so a
+  spell leaving from under another is seen as it goes (by-i88). A cyan arc runs
+  from the top item to its target, even when that is the one card under it; the
+  top card sits a little right of and below the one beneath, which shows about a
+  third of its width beside it, and a countered spell crumbles in that strip
+  (I3Te0m1bBFw 39:49.4, IEXcjBn3BXk 51:34.5, IEXcjBn3BXk 51:35.3, MnhyzykajXw
+  36:19.5, 5UHzpVvUkfI 58:15).
+- **Wording.** Arena's exactly, case and punctuation too: "All Attack", "Choose
+  attackers." Every prompt's title and buttons are one table in the session
+  (`engine/crates/beryl_session/src/prompt/wording.rs`), each entry beside the
+  recording moments that show it. A browser's title is the line that asks: its
+  sentence of rules text, or its heading where the line under it only says how
+  to drag. A pick is confirmed by "Submit" and the number picked, an arrangement
+  by "Done", a "may" by "Take Action" or "Decline" (by-u4g, by-a09o).
 
 ## No Arena equivalent
 
-- **Manual table: a click acts.** Click to tap or untap a permanent, play a
-  card, resolve a stack entry, draw from the library, or open a graveyard or
-  exile viewer. Shift-click plays face down. Click a life total to edit it in
-  the number prompt. Click a mana symbol or a player counter to add one, or
-  right-click to remove one. On phones, the mana total beside the life orb opens
-  a sheet. Tap a symbol or counter to add one, or its minus button to remove
-  one. The press shows immediately. A refused action shakes what was clicked.
-- **Manual table log.** The log shows numbered entries with their actors.
-  Rewinding strikes the entries after the chosen line. Cmd+Z and the undo button
-  undo the viewer's latest action. Cmd+Shift+D undoes the viewer's latest draw.
-  When later entries block an undo, the log opens and highlights them. Either
-  player can undo a batch from its line or rewind from any line.
-- **Manual table: drawing and removing arrows.** Right-drag from a card to a
-  card or life total to draw an arrow. A selected source draws an arrow from
-  each selected card. A hand card plays first. A command that asks for a target
-  starts the same aim and a click chooses the target. Escape cancels the aim.
-  Right-click a drawn arrow to remove it, or use Cmd+R to remove all the arrows
-  you drew.
-- **Proposal panel.** Turn upkeep and combat show the suggested changes with one
-  checkbox per line and a mark on each affected card. Apply commits the checked
-  lines as one undoable batch. The panel shares the log column on desktop and
-  has its own strip on the phone.
+- **Ability menus on a manual table.** With Ability menus on, a permanent's
+  context menu lists its ability costs and the start of each ability under
+  Assists. −X opens the number prompt. Choosing an ability places a marker on
+  the stack. The marker shows the source card and the ability text on hover and
+  resolves with a click.
 - **Assist label.** State nudges put clickable tags on the affected cards and
   life total. Click a tag to apply its suggested action.
-- **Selection rectangle.** On a manual table, dragging from empty felt selects
-  the cards the rectangle touches. Selected cards wear the gold selection mark.
-  A summary beside the selected permanents gives their count, total power and
-  total toughness.
-- **Undo.** Every answer can be undone, across turns and prompts, the cast and
-  its payment together (by-2ml, by-96t, by-pwe).
 - **Chrome.** Round icon buttons; the log toggle top left; the bug button above
   undo with no gap kept for a missing button (by-kib, by-8g4).
-- **Why a click is refused.** An illegal click shows its reason at the permanent
-  that forbids it (by-l2ez).
-- **The opponent's choice of top or bottom.** When the opponent puts a card on
-  the top or the bottom of their library by their own choice (Subtlety's "their
-  choice of the top or bottom"), a pill beside that library reads "Top" or
-  "Bottom" as the card goes there, and fades as a scry's pill does. Your own
-  choice gets none. Arena shows no words: the card only goes to the library
-  (iRr-GeSF0lI 1:01:07.5) (by-6dw5).
-- **Suggestions are sensible.** The suggested untap targets and the auto-pay
-  sources are the ones a player would pick (by-svq, by-ufmq).
-- **Nothing overlaps.** The hand, the stack and their indicators never cover a
-  control or each other. No layer of a library, graveyard or exile pile covers a
-  card in play, for either seat, however long a row grows. The opponent's piles
-  keep the band above their back row to themselves (by-biv, by-krxg).
+- **Command list.** The manual table's command list shows what it acts on and
+  filters commands by label as you type. Results are grouped by what they act on
+  and show their shortcuts. Up and Down move between results, Return runs the
+  selected command, Option+Return captures a new shortcut. The list reports when
+  another command loses the key. Escape closes the list, and Shortcuts in the
+  settings menu offers Reset shortcuts. On a phone, the search button opens the
+  list full screen with a Close button and without key hints. Typed table
+  prompts open at the top so the keyboard leaves the field visible.
+- **Context menu.** The manual table's context menu names the card or pile and
+  whose it is. It lists commands as plain labeled rows with key hints, check
+  marks for active switches and at most one submenu level. A command that needs
+  a number opens a prompt when chosen. On a phone, a long press opens a bottom
+  sheet with the full card above the actions. A short hold before moving starts
+  a drag. Dropping on the lower half of a library puts the card on the bottom.
+  Draw arrow waits for a tap on the destination. Submenus replace the rows and
+  offer Back. Select opens a bar with the count, Actions and Done while taps
+  toggle cards. Play face down is available on the card, and Bottom card makes
+  the next drag from that pile take its bottom card.
+- **Creating tokens on a manual table.** The token chooser uses the command list
+  layout and offers the selected card's tokens first. Typing searches the card
+  store by name. Custom token opens a form for the token's name, type line,
+  colors, power, toughness and note. Shift while choosing a token creates it
+  face down.
+- **Guided manual table start.** The step banner shows each player's die in the
+  roll for first and shows another round on a tie. The winner, the named player
+  or the previous game's loser gets Play or Draw on the opening screen. Both
+  seats see their own opening hands and can Keep or Mulligan at the same time.
+  They can confirm bottom cards or choose Done with none selected. The table
+  moves to the first untap after both seats finish.
 - **Library drop halves.** While a dragged card is over a library, the pile
   shows Top and Bottom. The half under the pointer lights up. Dropping multiple
   cards opens the ordering tray before the cards are moved.
@@ -338,12 +330,14 @@ restore the old behavior.
   read-only information and lets either player record a result or confirm a
   concession. Both players return to the lobby with their decks ready for
   sideboarding.
-- **Guided manual table start.** The step banner shows each player's die in the
-  roll for first and shows another round on a tie. The winner, the named player
-  or the previous game's loser gets Play or Draw on the opening screen. Both
-  seats see their own opening hands and can Keep or Mulligan at the same time.
-  They can confirm bottom cards or choose Done with none selected. The table
-  moves to the first untap after both seats finish.
+- **Manual counters and untap flags.** Named counters use the existing counter
+  badges with shortened names. Add counter offers six common names above the
+  text field. Player counters appear beside the mana pool. A permanent marked as
+  skipping untap shows a lock in its corner.
+- **Manual table announcements.** The stage uses its existing step banner for a
+  manual shuffle, roll, phase, turn, rewind or game start. It reads Shuffled,
+  Rolled 4 (d6), Heads, the phase name, the active player's name followed by 's
+  turn, Rewound to 41, or Game 2. The banner fades on the stage's clock.
 - **Manual table connection.** A dropped connection freezes input on both seats
   under the existing step banner, which names the other player. The guest
   redials automatically and the returning view appears at once. A table that the
@@ -351,11 +345,6 @@ restore the old behavior.
   hosted tables and for the last table the guest joined. Quitting keeps the
   guest’s join available, and leaving the table clears it. Join failures appear
   on the join form, and a version mismatch appears for both players.
-- **Manual table prompts.** Numbers, text and power/toughness are entered in the
-  lower-right action dock. The field starts selected, and numeric entries have a
-  step down and a step up. A sign changes the current value where one exists.
-  The button says what it will do, such as Draw 3. Return confirms and Escape
-  cancels.
 - **Manual table library flows.** When Library flows is on, the player's library
   menu offers Scry and Surveil under Assists. These and Look at top cards ask
   for a count, then open the shared sorting tray. A known card's Assists menu
@@ -363,95 +352,173 @@ restore the old behavior.
   The other player sees the lifted cards and their destinations. A hidden card's
   identity stays private unless the other player already knew it or the card
   goes to a public zone.
+- **Manual table log.** The log shows numbered entries with their actors.
+  Rewinding strikes the entries after the chosen line. Cmd+Z and the undo button
+  undo the viewer's latest action. Cmd+Shift+D undoes the viewer's latest draw.
+  When later entries block an undo, the log opens and highlights them. Either
+  player can undo a batch from its line or rewind from any line.
 - **Manual table pile viewers.** The existing pile browser can be searched,
   grouped by card type, and sorted by name or mana value. The other player sees
   how many cards are lifted from a library during a look. Closing a full library
   search offers Shuffle and Don't shuffle, with Shuffle highlighted.
-- **Context menu.** The manual table's context menu names the card or pile and
-  whose it is. It lists commands as plain labeled rows with key hints, check
-  marks for active switches and at most one submenu level. A command that needs
-  a number opens a prompt when chosen. On a phone, a long press opens a bottom
-  sheet with the full card above the actions. A short hold before moving starts
-  a drag. Dropping on the lower half of a library puts the card on the bottom.
-  Draw arrow waits for a tap on the destination. Submenus replace the rows and
-  offer Back. Select opens a bar with the count, Actions and Done while taps
-  toggle cards. Play face down is available on the card, and Bottom card makes
-  the next drag from that pile take its bottom card.
-- **Command list.** The manual table's command list shows what it acts on and
-  filters commands by label as you type. Results are grouped by what they act on
-  and show their shortcuts. Up and Down move between results, Return runs the
-  selected command, Option+Return captures a new shortcut. The list reports when
-  another command loses the key. Escape closes the list, and Shortcuts in the
-  settings menu offers Reset shortcuts. On a phone, the search button opens the
-  list full screen with a Close button and without key hints. Typed table
-  prompts open at the top so the keyboard leaves the field visible.
-- **Quitting from a manual table.** On the desktop, the Quit shortcut asks
-  whether to leave the table and quit Beryl. Cancel keeps the table open.
+- **Manual table prompts.** Numbers, text and power/toughness are entered in the
+  lower-right action dock. The field starts selected, and numeric entries have a
+  step down and a step up. A sign changes the current value where one exists.
+  The button says what it will do, such as Draw 3. Return confirms and Escape
+  cancels.
+- **Manual table prompts.** A guided choice on the manual table uses the same
+  sorting tray or list as an engine game. The seat answering it sees the cards
+  or choices. Across the table a library sort lifts only a packet of cards,
+  which returns when the tray closes.
 - **Manual table turn controls.** The step track lights the current step beside
   the active player's life total. Clicking an icon sets the phase. Clicking the
   lit Untap or Draw icon on your turn also performs that action. Cleanup selects
   End step. The Next button names the following phase and advances to it,
   wrapping to Untap. The Next turn command passes the turn.
-- **Manual table announcements.** The stage uses its existing step banner for a
-  manual shuffle, roll, phase, turn, rewind or game start. It reads Shuffled,
-  Rolled 4 (d6), Heads, the phase name, the active player's name followed by 's
-  turn, Rewound to 41, or Game 2. The banner fades on the stage's clock.
-- **Ability menus on a manual table.** With Ability menus on, a permanent's
-  context menu lists its ability costs and the start of each ability under
-  Assists. −X opens the number prompt. Choosing an ability places a marker on
-  the stack. The marker shows the source card and the ability text on hover and
-  resolves with a click.
-- **Creating tokens on a manual table.** The token chooser uses the command list
-  layout and offers the selected card's tokens first. Typing searches the card
-  store by name. Custom token opens a form for the token's name, type line,
-  colors, power, toughness and note. Shift while choosing a token creates it
-  face down.
-- **Manual counters and untap flags.** Named counters use the existing counter
-  badges with shortened names. Add counter offers six common names above the
-  text field. Player counters appear beside the mana pool. A permanent marked as
-  skipping untap shows a lock in its corner.
-- **Manual table prompts.** A guided choice on the manual table uses the same
-  sorting tray or list as an engine game. The seat answering it sees the cards
-  or choices. Across the table a library sort lifts only a packet of cards,
-  which returns when the tray closes.
+- **Manual table: a click acts.** Click to tap or untap a permanent, play a
+  card, resolve a stack entry, draw from the library, or open a graveyard or
+  exile viewer. Shift-click plays face down. Click a life total to edit it in
+  the number prompt. Click a mana symbol or a player counter to add one, or
+  right-click to remove one. On phones, the mana total beside the life orb opens
+  a sheet. Tap a symbol or counter to add one, or its minus button to remove
+  one. The press shows immediately. A refused action shakes what was clicked.
+- **Manual table: drawing and removing arrows.** Right-drag from a card to a
+  card or life total to draw an arrow. A selected source draws an arrow from
+  each selected card. A hand card plays first. A command that asks for a target
+  starts the same aim and a click chooses the target. Escape cancels the aim.
+  Right-click a drawn arrow to remove it, or use Cmd+R to remove all the arrows
+  you drew.
+- **Nothing overlaps.** The hand, the stack and their indicators never cover a
+  control or each other. No layer of a library, graveyard or exile pile covers a
+  card in play, for either seat, however long a row grows. The opponent's piles
+  keep the band above their back row to themselves (by-biv, by-krxg).
+- **Proposal panel.** Turn upkeep and combat show the suggested changes with one
+  checkbox per line and a mark on each affected card. Apply commits the checked
+  lines as one undoable batch. The panel shares the log column on desktop and
+  has its own strip on the phone.
+- **Quitting from a manual table.** On the desktop, the Quit shortcut asks
+  whether to leave the table and quit Beryl. Cancel keeps the table open.
+- **Selection rectangle.** On a manual table, dragging from empty felt selects
+  the cards the rectangle touches. Selected cards wear the gold selection mark.
+  A summary beside the selected permanents gives their count, total power and
+  total toughness.
+- **Suggestions are sensible.** The suggested untap targets and the auto-pay
+  sources are the ones a player would pick (by-svq, by-ufmq).
+- **The opponent's choice of top or bottom.** When the opponent puts a card on
+  the top or the bottom of their library by their own choice (Subtlety's "their
+  choice of the top or bottom"), a pill beside that library reads "Top" or
+  "Bottom" as the card goes there, and fades as a scry's pill does. Your own
+  choice gets none. Arena shows no words: the card only goes to the library
+  (iRr-GeSF0lI 1:01:07.5) (by-6dw5).
+- **Undo.** Every answer can be undone, across turns and prompts, the cast and
+  its payment together (by-2ml, by-96t, by-pwe).
+- **Why a click is refused.** An illegal click shows its reason at the permanent
+  that forbids it (by-l2ez).
 
 ## Not seen in Arena
 
 Built from motions and shapes Beryl already has. Arena has these, but the
 recordings do not show them.
 
-- **FPS monitor.** Settings can show a read-only panel at the top left of the
-  native client. It reports current FPS, the lowest frame rate implied by a
-  frame gap in the last minute, the app’s target, the display link’s rate when
-  available, and the graphics tier being drawn, Enhanced or Baseline, in the
-  settings sheet’s words.
-- **Dealing a fair game.** With Fair deal ticked, Start leaves the start screen
-  up while the session judges candidate deals, which takes a few seconds. The
-  start button is disabled and reads "Dealing…" until the new game's first view
-  arrives, and then the game screen opens. Arena has no fair deal.
-- **Choosing the deck.** The New Game screen lists the decks a game can be
-  played with, "WU Control" and "Dandân", as radio rows above the opponents, and
-  its subtitle names the chosen one. On a phone the two stand side by side in
-  the row of the sound button. The Dandân deck is one library both players draw
-  from, so Fair deal, which compares two players' opening hands, is hidden while
-  it is chosen. Arena's play screen has no equivalent.
-- **Banding.** When an attacker can start or join a band, the choice uses the
-  existing option buttons. Attacking bands carry no extra mark on the table.
-  Assign Damage uses the number control to assign a share to each creature in
-  turn.
-- **Why a creature can't attack.** During Choose attackers, clicking or tapping
-  a creature you control that cannot attack plays the refusal sound and opens
-  the inspector with the reason under its face: "Tapped", "Summoning sickness",
-  "Defender needs <subtype>" (reflecting text-changing effects), or "Can't
-  attack".
-- **Notes on manual cards.** A card shows its table note on one line, with an
-  ellipsis when it runs out of room. Its inspection panel shows the full note.
+- **A battlefield row that scrolls.** A row with more cards than fit with a
+  strip of each uncovered shows as many as fit, scrolls one group for each notch
+  of the wheel or 48 points of a sideways drag, and shows the number of cards
+  off each end, as "+12".
 - **A card picked face down.** While the other player still has to pick, as for
   Show and Tell, a card a player has picked from their hand lies apart from that
   hand where the cards a player handles lie: face up for its player, face down
   for the other. On the phone it lies beside its owner's library, toward the
   table, as the cards the opponent looks at do. Arena's recordings show no such
   pick.
+- **A card turning face up.** A face-down permanent turning face up enlarges in
+  place and flips; one leaving reveals its face during its flight, and one that
+  leaves for a hand or a library, where no face shows, joins the Revealed Cards
+  as it goes. Nothing turns face up in the recordings, and one face-down card is
+  seen leaving (by-5hcb, by-thod). Killed, Arena's face-down card dissolves as a
+  card back and a "Revealed Cards" panel then shows its face at the top left
+  (I3Te0m1bBFw 29:42.9).
+- **A copy on the stack.** It appears on the stack with no flight. None is seen.
+- **A cost paid as a spell resolves.** Mana streaks from its sources into the
+  resolving spell or ability, as into a spell being cast. No such payment is
+  seen.
+- **A creature that enters attacking.** It gets an explicit choice of what it
+  attacks, and its line stays drawn throughout (by-l26, by-y3sp).
+- **A free mulligan.** In a shared-deck game, when a player's opening hand
+  qualifies before a regular mulligan, the mode mulligan prompt adds a third
+  button, "Free Mulligan", stacked with "Mulligan" above the primary "Keep 7"
+  button. Taking it reveals the hand to the opponent in the Revealed Cards pile
+  (showcase) before the hand goes back into the shared library with the
+  mulligan's motion and a new seven-card hand is dealt.
+- **A hand in two rows.** In the client, a hand with more cards than one fan
+  across the window holds with a strip of each uncovered, such as 60 cards, is
+  laid in two or more fans, one behind and above the other, in hand order from
+  the back fan to the front. Each card keeps a strip to press, and raises under
+  the pointer as in one fan. Arena's recordings show no hand that large.
+- **A linked exile returning.** The exiled card returns as its source departs,
+  moving with it. No exiling permanent is seen leaving with its card returning
+  (by-esr2).
+- **A mulligan's hand.** It goes from sight where it lies, every card of it, as
+  a permanent that leaves does; then the next hand is dealt as an opening hand
+  is. No mulligan is filmed.
+- **A permanent changing sides.** It flies across the battlefield to its new
+  controller's row. Seen only before and after its move (0VsYGs88NXA 27:39.5,
+  gIhJjyoJ0_M 53:21.5).
+- **A permanent's chosen value.** A value chosen as a permanent entered (a
+  color, a creature type, a card name) shows on the permanent on one line, as a
+  manual card's note does. Its inspection panel says "Chosen:" and the value.
+- **A spell that ends the turn.** When a resolving spell ends the turn, play
+  goes on to the cleanup step with no banner of its own: the turn is cut short
+  as any turn ends, and the spell goes to its owner's pile (a shared-deck game's
+  shared exile pile) in the move it would make at any other time. Arena's
+  recordings show no spell that ends the turn.
+- **A target that moves.** An arrow or line ends before either of its ends
+  moves, and an arrow is not drawn again at a card that changed zones while its
+  spell or ability stays on the stack. No target is seen leaving in response
+  (by-yfw, by-ad8, by-8uw, by-2wsl).
+- **A token that leaves.** It dissolves in place like any permanent. No token
+  leaving the battlefield is seen (by-1ug).
+- **An ability with no source on the battlefield.** It emerges from the pile its
+  source lies in, and appears on the stack when it has no source. No trigger
+  from a graveyard is seen.
+- **An Aura that takes control.** No Aura that gains control of what it enchants
+  is in the recordings. Control Magic resolves as any Aura does: it flies from
+  the stack to the creature and settles behind it in the creature's row. Then
+  the creature slides, with the Aura, straight to its new controller's creature
+  row, as a permanent changing sides does (Coveted Jewel, 0VsYGs88NXA 27:39.5).
+  When the Aura leaves, the creature slides back the same way, after the spell
+  that removed the Aura has gone.
+- **Arranging a melded or merged permanent's cards.** When a melded or merged
+  permanent is put into its owner's graveyard or library, the owner picks its
+  cards one at a time, the bottom one first, in the ordinary pick prompt:
+  "Choose the bottom card." The last card left goes on top. The recordings show
+  no such move.
+- **Banding.** When an attacker can start or join a band, the choice uses the
+  existing option buttons. Attacking bands carry no extra mark on the table.
+  Assign Damage uses the number control to assign a share to each creature in
+  turn.
+- **Cards a look returns.** Cards a look puts back into a library fly straight
+  to it. The opponent's look at the top of their library that is not a scry
+  lifts nothing: while they choose, their library lies as it was; each card it
+  takes drops from the library into the table, deepest half way, and rises into
+  their hand; the rest are never seen to move (Arena's Stock Up, 3sEoP_s4DQE
+  46:04.0, 0VsYGs88NXA 1:13:06.3, WCknTZNbraE 1:22:28.2). Your own look's cards
+  put back are not filmed (by-ubgt, by-o5fn).
+- **Cards leaving a graveyard.** A card returned to the battlefield or to your
+  hand flies there from its pile; one returned to the opponent's hand swings up
+  to a readable apex beside the stack before gliding to their hand (jD7VqaT8VC8
+  46:23.2). Returning to the battlefield or to your own hand is not seen.
+- **Cards moving to and from the shared piles.** A card drawn, milled, put back
+  or looked at in a shared-deck game uses the `fly` and `lift` motions a
+  per-player game uses, starting or ending at the shared pile. A draw rises off
+  the shared library and comes down to where the drawing player's draw ends: the
+  viewer's beside the stack, the opponent's into their hand. A milled card
+  crosses the table from the shared library to the shared graveyard on the same
+  rising path as a per-player mill. The cards a player looks at lie beside the
+  shared library, toward the middle of the table and half a card toward that
+  player.
+- **Cards under a merged permanent.** The other cards of a merged permanent
+  (mutate) peek out from under it, as cards a permanent holds in exile do.
+  Clicking one opens them all to read.
 - **Casting while searching a library.** When a library search offers a spell to
   cast, the candidate buttons offer the cast alongside the cards the search can
   find and Done. After the cast, the search continues.
@@ -459,11 +526,72 @@ recordings do not show them.
   a player whose deck fulfills a sideboard card's companion condition gets the
   sideboard catalog titled Choose Companion, listing each card they may reveal.
   Done reveals none. Arena reveals a companion without asking.
+- **Choosing a replacement effect.** When a draw could be replaced by dredge,
+  the player picks the card to dredge, or declines and draws, with the pick
+  prompt Beryl uses for choosing up to a number of cards. The title reads Choose
+  an effect to apply, and its Decline button lets the draw happen. No card on
+  Arena has dredge (by-bajq.3.2).
 - **Choosing a sideboard card during a game.** The catalog shows eligible card
   names to the player making the choice. Done leaves every card in the
   sideboard. The chosen card is revealed and appears in its owner's hand.
+- **Choosing the deck.** The New Game screen lists the decks a game can be
+  played with, "WU Control" and "Dandân", as radio rows above the opponents, and
+  its subtitle names the chosen one. On a phone the two stand side by side in
+  the row of the sound button. The Dandân deck is one library both players draw
+  from, so Fair deal, which compares two players' opening hands, is hidden while
+  it is chosen. Arena's play screen has no equivalent.
+- **Controlling another player.** While the viewer controls the opponent's turn,
+  each decision they make for the opponent says "For opponent" before what it
+  asks; a priority says only that.
+- **Copies.** A permanent that is a copy shows the copied card's face with a
+  "Copy" label where a token shows "Token" (the phone, which shows neither
+  label, shows the copied card's scan). Its inspection panel names the card it
+  really is.
+- **Dealing a fair game.** With Fair deal ticked, Start leaves the start screen
+  up while the session judges candidate deals, which takes a few seconds. The
+  start button is disabled and reads "Dealing…" until the new game's first view
+  arrives, and then the game screen opens. Arena has no fair deal.
+- **Equipment.** It flies to the creature it becomes attached to. The equip
+  ability leaves the stack with a flash at the creature; the equipment's own
+  move is not seen (krskVfn2v5Q 46:10.45).
+- **Evoke and cycling.** A card with evoke, or a land with cycling, opens the
+  same "Choose One" modal. No evoke is seen; Triomes cycle straight to the
+  stack, but whether a land could still be played is not shown (by-lzl, by-9fb).
+  Arena shows no chooser before these cycles (RwKoGGUmw2k 19:23.5, WQiYBv23buw
+  45:29.5).
+- **FPS monitor.** Settings can show a read-only panel at the top left of the
+  native client. It reports current FPS, the lowest frame rate implied by a
+  frame gap in the last minute, the app’s target, the display link’s rate when
+  available, and the graphics tier being drawn, Enhanced or Baseline, in the
+  settings sheet’s words.
+- **Hand cards put on the bottom.** The split prompt is headed "Put cards on the
+  bottom." The player orders any cards they put on the bottom and can press Done
+  with all their cards in hand. The opponent resolves the spell and draws cards.
+  Their choice is hidden (kvVLJ_cS_KE 21:54.5).
 - **Inspecting a face-down manual card.** The table shows a card back. Pointing
   at the card opens a face preview only if the viewer knows the card's identity.
+- **Known cards in a library.** A known top card shows face up on its library.
+  Clicking a library opens its browser, headed "Library" (or "Opponent's
+  Library") and "N Cards": every card in library order, top first, each known
+  card face up at its place and the rest as backs. No known card in the
+  opponent's library is seen (by-nva, by-9es, by-dxx4). The player's own library
+  stays a card back after their tutor puts a card on top, and after a look. Its
+  "Library" browser ("9 Cards") lists the cards top first in a row, three
+  unknown ones as backs and then the known ones face up (SN9QFe2kM4Y 38:16.5,
+  gIhJjyoJ0_M 29:48, SswBO8aOOgc 20:15).
+- **Mana spent from a pool.** It streaks from its player's pool into the spell
+  or ability it pays for, as from a land. No floating mana is seen.
+- **Milled cards.** They fly from the library to the graveyard face up, one
+  after another as draws do. None is held up large first. No mill is seen.
+- **Mutating over or under.** As a mutating creature spell resolves, its
+  controller is asked as a top-or-bottom choice is, under the spell's name:
+  "Over or Under?" with OVER and UNDER. The recordings show only the opponent
+  mutating, never the choice. A card under a merged permanent is in the merged
+  zone and is not drawn on the table.
+- **Notes on manual cards.** A card shows its table note on one line, with an
+  ellipsis when it runs out of room. Its inspection panel shows the full note.
+- **Other numbers.** A changed power and toughness, and mana left in a pool,
+  count as a life total does. Neither is seen.
 - **Paying with permanents.** Waterbend, convoke, crew. Start with no payment
   highlights. Hover over Auto Pay on desktop or long-press it on mobile to see
   which permanents Beryl would use. Click or tap the button to accept. To pay
@@ -482,165 +610,31 @@ recordings do not show them.
   alone show, in their ring. Once a pick has paid part of the cost, the prompt
   says after what it asks how much is still to pay (by-1y4, by-uld, by-4hjm,
   by-z973, by-szrn, by-uq8, by-x45, by-hmfq, by-tyf).
-- **A creature that enters attacking.** It gets an explicit choice of what it
-  attacks, and its line stays drawn throughout (by-l26, by-y3sp).
-- **A token that leaves.** It dissolves in place like any permanent. No token
-  leaving the battlefield is seen (by-1ug).
-- **Choosing a replacement effect.** When a draw could be replaced by dredge,
-  the player picks the card to dredge, or declines and draws, with the pick
-  prompt Beryl uses for choosing up to a number of cards. The title reads Choose
-  an effect to apply, and its Decline button lets the draw happen. No card on
-  Arena has dredge (by-bajq.3.2).
 - **Permanents entering together.** When permanents a player controls enter the
   battlefield at the same time and the order of their timestamps could change
   what their abilities do, the player picks them one at a time, earliest first,
   in the ordinary pick prompt: "Choose which enters first." Arena orders them
   without asking, as far as the recordings show.
-- **Arranging a melded or merged permanent's cards.** When a melded or merged
-  permanent is put into its owner's graveyard or library, the owner picks its
-  cards one at a time, the bottom one first, in the ordinary pick prompt:
-  "Choose the bottom card." The last card left goes on top. The recordings show
-  no such move.
-- **Evoke and cycling.** A card with evoke, or a land with cycling, opens the
-  same "Choose One" modal. No evoke is seen; Triomes cycle straight to the
-  stack, but whether a land could still be played is not shown (by-lzl, by-9fb).
-  Arena shows no chooser before these cycles (RwKoGGUmw2k 19:23.5, WQiYBv23buw
-  45:29.5).
-- **Known cards in a library.** A known top card shows face up on its library.
-  Clicking a library opens its browser, headed "Library" (or "Opponent's
-  Library") and "N Cards": every card in library order, top first, each known
-  card face up at its place and the rest as backs. No known card in the
-  opponent's library is seen (by-nva, by-9es, by-dxx4). The player's own library
-  stays a card back after their tutor puts a card on top, and after a look. Its
-  "Library" browser ("9 Cards") lists the cards top first in a row, three
-  unknown ones as backs and then the known ones face up (SN9QFe2kM4Y 38:16.5,
-  gIhJjyoJ0_M 29:48, SswBO8aOOgc 20:15).
-- **A card turning face up.** A face-down permanent turning face up enlarges in
-  place and flips; one leaving reveals its face during its flight, and one that
-  leaves for a hand or a library, where no face shows, joins the Revealed Cards
-  as it goes. Nothing turns face up in the recordings, and one face-down card is
-  seen leaving (by-5hcb, by-thod). Killed, Arena's face-down card dissolves as a
-  card back and a "Revealed Cards" panel then shows its face at the top left
-  (I3Te0m1bBFw 29:42.9).
-- **Cards a look returns.** Cards a look puts back into a library fly straight
-  to it. The opponent's look at the top of their library that is not a scry
-  lifts nothing: while they choose, their library lies as it was; each card it
-  takes drops from the library into the table, deepest half way, and rises into
-  their hand; the rest are never seen to move (Arena's Stock Up, 3sEoP_s4DQE
-  46:04.0, 0VsYGs88NXA 1:13:06.3, WCknTZNbraE 1:22:28.2). Your own look's cards
-  put back are not filmed (by-ubgt, by-o5fn).
-- **A linked exile returning.** The exiled card returns as its source departs,
-  moving with it. No exiling permanent is seen leaving with its card returning
-  (by-esr2).
-- **Your own spell returned to hand.** It glides from the stack to the hand,
-  turning as it goes. Only the opponent's spells are seen returned (by-e0l).
-- **The opponent's draws and discards.** A card the opponent draws flies face
-  down from their library to their hand, as long as any card flies and never
-  spinning round on the way. One they discard flies to their graveyard and turns
-  face up on the way, as their spells do. Only the player's own are seen.
-- **A mulligan's hand.** It goes from sight where it lies, every card of it, as
-  a permanent that leaves does; then the next hand is dealt as an opening hand
-  is. No mulligan is filmed.
-- **A free mulligan.** In a shared-deck game, when a player's opening hand
-  qualifies before a regular mulligan, the mode mulligan prompt adds a third
-  button, "Free Mulligan", stacked with "Mulligan" above the primary "Keep 7"
-  button. Taking it reveals the hand to the opponent in the Revealed Cards pile
-  (showcase) before the hand goes back into the shared library with the
-  mulligan's motion and a new seven-card hand is dealt.
-- **Milled cards.** They fly from the library to the graveyard face up, one
-  after another as draws do. None is held up large first. No mill is seen.
-- **The Revealed Cards between reveals.** The pile holds what one spell or
-  ability revealed, and what another reveals takes its place; a card revealed
-  and then put where its face shows (a graveyard, exile, the battlefield, the
-  stack) is not held up, since its flight shows it. The pile opens into the
-  viewer every pile opens into. The recordings show the pile with one effect's
-  cards at a time, dismissed before the next. One spell's four revealed cards
-  lie in the pile together; the next reveal seen comes after the pile was
-  dismissed (I3Te0m1bBFw 22:08.8, I3Te0m1bBFw 29:45.5).
-- **Cards leaving a graveyard.** A card returned to the battlefield or to your
-  hand flies there from its pile; one returned to the opponent's hand swings up
-  to a readable apex beside the stack before gliding to their hand (jD7VqaT8VC8
-  46:23.2). Returning to the battlefield or to your own hand is not seen.
-- **An ability with no source on the battlefield.** It emerges from the pile its
-  source lies in, and appears on the stack when it has no source. No trigger
-  from a graveyard is seen.
-- **A cost paid as a spell resolves.** Mana streaks from its sources into the
-  resolving spell or ability, as into a spell being cast. No such payment is
-  seen.
-- **Mana spent from a pool.** It streaks from its player's pool into the spell
-  or ability it pays for, as from a land. No floating mana is seen.
-- **A target that moves.** An arrow or line ends before either of its ends
-  moves, and an arrow is not drawn again at a card that changed zones while its
-  spell or ability stays on the stack. No target is seen leaving in response
-  (by-yfw, by-ad8, by-8uw, by-2wsl).
-- **A copy on the stack.** It appears on the stack with no flight. None is seen.
-- **A permanent changing sides.** It flies across the battlefield to its new
-  controller's row. Seen only before and after its move (0VsYGs88NXA 27:39.5,
-  gIhJjyoJ0_M 53:21.5).
-- **Equipment.** It flies to the creature it becomes attached to. The equip
-  ability leaves the stack with a flash at the creature; the equipment's own
-  move is not seen (krskVfn2v5Q 46:10.45).
-- **Other numbers.** A changed power and toughness, and mana left in a pool,
-  count as a life total does. Neither is seen.
+- **Phased-out permanents.** A phased-out permanent stays where it lay, faded.
+  It is never offered as a candidate, and its inspection panel says "Phased
+  out".
+- **Shared piles.** A shared-deck table draws one shared library, one shared
+  graveyard and one shared exile pile with the same card look, tilt and scale as
+  per-player piles, placed at new positions from each profile's `shared_piles`
+  data: on desktop, the library at the middle left and the graveyard and exile
+  at the middle right; on phone and wide-compact, the library at the left edge
+  and the graveyard at the right edge of the seam between the two players'
+  creature rows, with exile beneath the graveyard. The per-player pile places
+  stay empty.
 - **Text-changed cards.** A spell or permanent whose text or type line was
   changed by a text-changing effect shows a "Text changed" tag on the table,
   renders Beryl's card frame with its new type line and rules text on the table
   and in the zoom view, and renders any ability it puts on the stack with its
   changed text on the ability plate.
-- **Words: what a card's text would say.** Arena words many prompts from the
-  text of the card that asks, which a prompt's record does not carry. Beryl says
-  what Arena says of any card, or the same sentence less the card's part:
-  "Choose a target.", "Search for a card.", "Search your library?", "Exile a
-  card.", "Exile {most:words} cards.", "Distribute damage.", "Distribute
-  counters.", "Choose One" over a card chosen for an effect, and an optional
-  effect under its asker's name ("{source}", or "Take Action?" with none).
-  Braces are the table's holes. Arena names the card's own: Target a creature.,
-  Search for a basic land card., Exile a blue card., Draw a card? (0VsYGs88NXA
-  25:33.5, I3Te0m1bBFw 36:34.0, TbrYIs2juCw 32:00.5, XYkigNjhINU 1:17:11.0).
-- **Words: prompts Beryl folds.** Where Arena asks before a choice, Beryl opens
-  the choice (exception 3) and words it from both screens. One discard in place
-  of several: "Discard a basic land card or {most:words} cards." A look that may
-  take nothing is its sentence as a question, with "Decline": "Put {most:words}
-  of them into your hand?", "Exile {most:words} of them?", "Put {most:words} of
-  them into your library?", "Put {most:words} of them into your graveyard?",
-  "Put {most:words} of them onto the battlefield?". The other way about, Arena
-  opens a payment that may be declined and Beryl asks first: "Pay {cost}." is
-  answered "Pay {cost}" or "Decline". A card offered to cast is cast by its
-  button, "Cast". Arena asks Discard a basic land card? and then Discard two
-  cards.; a look that may take nothing is headed Choose One over a question,
-  with Submit and Decline; a payment that may be declined has Decline beside
-  Auto Pay (UrGalw_f35w 21:13.5, 5UHzpVvUkfI 27:36.5, IHPV6yRaFlk 28:19.5,
-  0VsYGs88NXA 56:48.5).
-- **Words: prompts the recordings lack.** Each is composed from the nearest
-  prompt Arena shows. A discard to hand size: "Discard {most} cards." A mulligan
-  of more than one card: "Return {most} Cards". Manifest dread: "Manifest one of
-  them." Cards put back from a hand: "Put a card on top.", "Put {most:words}
-  cards on top." A fateseal: "Top of Library", answered "BOTTOM" or "TOP" as a
-  scry's piles are named. A card that goes on top or bottom with no asker to
-  name: "Top or Bottom?". Looked-at cards sent to a graveyard or the
-  battlefield: "Put {most:words} of them into your graveyard.", "Put
-  {most:words} of them onto the battlefield." An optional move of a card
-  anywhere but to exile: "Put that card into your hand{from}?", "Put that card
-  into your graveyard{from}?", "Put that card onto the battlefield{from}?", "Put
-  that card into your library{from}?", "Move that card{from}?". A cost of no
-  mana: "Pay {0}." The opening choices: "Play or draw?", answered Play or Draw,
-  and "Keep or mulligan?" over Arena's own buttons. Catalogs: "Choose Creature
-  Type", "Choose Word to Replace", "Choose New Word". Waterbend: "Tap permanents
-  to Waterbend". What a declared creature is aimed at: "Choose attack target",
-  "Choose what to block". Piles of a split: "Hand", "Exile", "Battlefield". The
-  pass button's captions for where Arena shows none: "To Untap", "To Upkeep",
-  "To Main 1", "To Main 2", "To Cleanup", "Nothing to play" under a halt and "To
-  Opponent's Turn" under the player's own End Turn. The own-target warning
-  (exception 7) asks Arena's question less its end, "Do you want to target
-  {name}?", and a spell picked on the stack reads "Target {name}", or the
-  warning's question where it is the player's own. Only the opponent's manifest
-  dread, fateseal and put-back are seen, and games begin with the first player
-  chosen (pE4XSNi-nZc 28:43.5, pE4XSNi-nZc 34:55.0, pE4XSNi-nZc 27:18.0,
-  0VsYGs88NXA 16:58.0).
-- **Hand cards put on the bottom.** The split prompt is headed "Put cards on the
-  bottom." The player orders any cards they put on the bottom and can press Done
-  with all their cards in hand. The opponent resolves the spell and draws cards.
-  Their choice is hidden (kvVLJ_cS_KE 21:54.5).
+- **The opponent's draws and discards.** A card the opponent draws flies face
+  down from their library to their hand, as long as any card flies and never
+  spinning round on the way. One they discard flies to their graveyard and turns
+  face up on the way, as their spells do. Only the player's own are seen.
 - **The phone.** It plays what the desktop plays; its layout and gestures are
   Beryl's own. Every motion is one of the desktop's verbs between the phone's
   places. A card flies between your hand's fan, the stack in the middle band and
@@ -691,65 +685,71 @@ recordings do not show them.
   and otherwise leaves a game in place. The phone keeps dark system chrome in
   either system appearance. The bottom actions clear the gesture bar, and the
   seed and game buttons rise above the numeric keyboard.
-- **Mutating over or under.** As a mutating creature spell resolves, its
-  controller is asked as a top-or-bottom choice is, under the spell's name:
-  "Over or Under?" with OVER and UNDER. The recordings show only the opponent
-  mutating, never the choice. A card under a merged permanent is in the merged
-  zone and is not drawn on the table.
-- **A permanent's chosen value.** A value chosen as a permanent entered (a
-  color, a creature type, a card name) shows on the permanent on one line, as a
-  manual card's note does. Its inspection panel says "Chosen:" and the value.
-- **Phased-out permanents.** A phased-out permanent stays where it lay, faded.
-  It is never offered as a candidate, and its inspection panel says "Phased
-  out".
-- **Cards under a merged permanent.** The other cards of a merged permanent
-  (mutate) peek out from under it, as cards a permanent holds in exile do.
-  Clicking one opens them all to read.
-- **Copies.** A permanent that is a copy shows the copied card's face with a
-  "Copy" label where a token shows "Token" (the phone, which shows neither
-  label, shows the copied card's scan). Its inspection panel names the card it
-  really is.
-- **Controlling another player.** While the viewer controls the opponent's turn,
-  each decision they make for the opponent says "For opponent" before what it
-  asks; a priority says only that.
-- **A hand in two rows.** In the client, a hand with more cards than one fan
-  across the window holds with a strip of each uncovered, such as 60 cards, is
-  laid in two or more fans, one behind and above the other, in hand order from
-  the back fan to the front. Each card keeps a strip to press, and raises under
-  the pointer as in one fan. Arena's recordings show no hand that large.
-- **A battlefield row that scrolls.** A row with more cards than fit with a
-  strip of each uncovered shows as many as fit, scrolls one group for each notch
-  of the wheel or 48 points of a sideways drag, and shows the number of cards
-  off each end, as "+12".
-- **Shared piles.** A shared-deck table draws one shared library, one shared
-  graveyard and one shared exile pile with the same card look, tilt and scale as
-  per-player piles, placed at new positions from each profile's `shared_piles`
-  data: on desktop, the library at the middle left and the graveyard and exile
-  at the middle right; on phone and wide-compact, the library at the left edge
-  and the graveyard at the right edge of the seam between the two players'
-  creature rows, with exile beneath the graveyard. The per-player pile places
-  stay empty.
-- **Cards moving to and from the shared piles.** A card drawn, milled, put back
-  or looked at in a shared-deck game uses the `fly` and `lift` motions a
-  per-player game uses, starting or ending at the shared pile. A draw rises off
-  the shared library and comes down to where the drawing player's draw ends: the
-  viewer's beside the stack, the opponent's into their hand. A milled card
-  crosses the table from the shared library to the shared graveyard on the same
-  rising path as a per-player mill. The cards a player looks at lie beside the
-  shared library, toward the middle of the table and half a card toward that
-  player.
-- **A spell that ends the turn.** When a resolving spell ends the turn, play
-  goes on to the cleanup step with no banner of its own: the turn is cut short
-  as any turn ends, and the spell goes to its owner's pile (a shared-deck game's
-  shared exile pile) in the move it would make at any other time. Arena's
-  recordings show no spell that ends the turn.
-- **An Aura that takes control.** No Aura that gains control of what it enchants
-  is in the recordings. Control Magic resolves as any Aura does: it flies from
-  the stack to the creature and settles behind it in the creature's row. Then
-  the creature slides, with the Aura, straight to its new controller's creature
-  row, as a permanent changing sides does (Coveted Jewel, 0VsYGs88NXA 27:39.5).
-  When the Aura leaves, the creature slides back the same way, after the spell
-  that removed the Aura has gone.
+- **The Revealed Cards between reveals.** The pile holds what one spell or
+  ability revealed, and what another reveals takes its place; a card revealed
+  and then put where its face shows (a graveyard, exile, the battlefield, the
+  stack) is not held up, since its flight shows it. The pile opens into the
+  viewer every pile opens into. The recordings show the pile with one effect's
+  cards at a time, dismissed before the next. One spell's four revealed cards
+  lie in the pile together; the next reveal seen comes after the pile was
+  dismissed (I3Te0m1bBFw 22:08.8, I3Te0m1bBFw 29:45.5).
+- **Why a creature can't attack.** During Choose attackers, clicking or tapping
+  a creature you control that cannot attack plays the refusal sound and opens
+  the inspector with the reason under its face: "Tapped", "Summoning sickness",
+  "Defender needs <subtype>" (reflecting text-changing effects), or "Can't
+  attack".
+- **Words: prompts Beryl folds.** Where Arena asks before a choice, Beryl opens
+  the choice (exception 3) and words it from both screens. One discard in place
+  of several: "Discard a basic land card or {most:words} cards." A look that may
+  take nothing is its sentence as a question, with "Decline": "Put {most:words}
+  of them into your hand?", "Exile {most:words} of them?", "Put {most:words} of
+  them into your library?", "Put {most:words} of them into your graveyard?",
+  "Put {most:words} of them onto the battlefield?". The other way about, Arena
+  opens a payment that may be declined and Beryl asks first: "Pay {cost}." is
+  answered "Pay {cost}" or "Decline". A card offered to cast is cast by its
+  button, "Cast". Arena asks Discard a basic land card? and then Discard two
+  cards.; a look that may take nothing is headed Choose One over a question,
+  with Submit and Decline; a payment that may be declined has Decline beside
+  Auto Pay (UrGalw_f35w 21:13.5, 5UHzpVvUkfI 27:36.5, IHPV6yRaFlk 28:19.5,
+  0VsYGs88NXA 56:48.5).
+- **Words: prompts the recordings lack.** Each is composed from the nearest
+  prompt Arena shows. A discard to hand size: "Discard {most} cards." A mulligan
+  of more than one card: "Return {most} Cards". Manifest dread: "Manifest one of
+  them." Cards put back from a hand: "Put a card on top.", "Put {most:words}
+  cards on top." A fateseal: "Top of Library", answered "BOTTOM" or "TOP" as a
+  scry's piles are named. A card that goes on top or bottom with no asker to
+  name: "Top or Bottom?". Looked-at cards sent to a graveyard or the
+  battlefield: "Put {most:words} of them into your graveyard.", "Put
+  {most:words} of them onto the battlefield." An optional move of a card
+  anywhere but to exile: "Put that card into your hand{from}?", "Put that card
+  into your graveyard{from}?", "Put that card onto the battlefield{from}?", "Put
+  that card into your library{from}?", "Move that card{from}?". A cost of no
+  mana: "Pay {0}." The opening choices: "Play or draw?", answered Play or Draw,
+  and "Keep or mulligan?" over Arena's own buttons. Catalogs: "Choose Creature
+  Type", "Choose Word to Replace", "Choose New Word". Waterbend: "Tap permanents
+  to Waterbend". What a declared creature is aimed at: "Choose attack target",
+  "Choose what to block". Piles of a split: "Hand", "Exile", "Battlefield". The
+  pass button's captions for where Arena shows none: "To Untap", "To Upkeep",
+  "To Main 1", "To Main 2", "To Cleanup", "Nothing to play" under a halt and "To
+  Opponent's Turn" under the player's own End Turn. The own-target warning
+  (exception 7) asks Arena's question less its end, "Do you want to target
+  {name}?", and a spell picked on the stack reads "Target {name}", or the
+  warning's question where it is the player's own. Only the opponent's manifest
+  dread, fateseal and put-back are seen, and games begin with the first player
+  chosen (pE4XSNi-nZc 28:43.5, pE4XSNi-nZc 34:55.0, pE4XSNi-nZc 27:18.0,
+  0VsYGs88NXA 16:58.0).
+- **Words: what a card's text would say.** Arena words many prompts from the
+  text of the card that asks, which a prompt's record does not carry. Beryl says
+  what Arena says of any card, or the same sentence less the card's part:
+  "Choose a target.", "Search for a card.", "Search your library?", "Exile a
+  card.", "Exile {most:words} cards.", "Distribute damage.", "Distribute
+  counters.", "Choose One" over a card chosen for an effect, and an optional
+  effect under its asker's name ("{source}", or "Take Action?" with none).
+  Braces are the table's holes. Arena names the card's own: Target a creature.,
+  Search for a basic land card., Exile a blue card., Draw a card? (0VsYGs88NXA
+  25:33.5, I3Te0m1bBFw 36:34.0, TbrYIs2juCw 32:00.5, XYkigNjhINU 1:17:11.0).
+- **Your own spell returned to hand.** It glides from the stack to the hand,
+  turning as it goes. Only the opponent's spells are seen returned (by-e0l).
 
 ## Verbs
 

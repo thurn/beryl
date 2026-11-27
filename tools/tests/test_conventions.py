@@ -51,6 +51,20 @@ def test_the_page_cites_reports_and_evidence_under_its_kind() -> None:
     )
 
 
+def test_non_exception_entries_are_sorted_canonically_by_name() -> None:
+    zebra = {"kind": "not-seen", "name": "Zebra", "rule": "Last."}
+    alpha = {"kind": "not-seen", "name": "Alpha", "rule": "First."}
+    unsorted = data(zebra, alpha)
+    assert conventions.problems(unsorted) == [
+        "entries: not in canonical order: run `just conventions`"
+    ]
+    assert conventions.sort_entries(unsorted)
+    assert [e["name"] for e in unsorted["entries"]] == ["Alpha", "Zebra"]
+    assert conventions.problems(unsorted) == []
+    rendered = conventions.render(data(zebra, alpha))
+    assert rendered.index("**Alpha.**") < rendered.index("**Zebra.**")
+
+
 def test_the_data_says_what_shows_twice() -> None:
     chooser = {**SETTLED, "twice": "mode"}
     page = " ".join(conventions.render(data(chooser)).split())
@@ -287,7 +301,7 @@ def test_an_exempt_verb_names_its_exception() -> None:
     conventions_data, motion = measuring(
         taken("UrGalw_f35w", 600), taken("UrGalw_f35w", 500), taken("SswBO8aOOgc", 9)
     )
-    conventions_data["entries"].append(EXCEPTION)
+    conventions_data["entries"].insert(0, EXCEPTION)
     conventions_data["verbs"][0]["exempt"] = 1
     conventions.derive(motion)
     assert not conventions.problems(conventions_data)
