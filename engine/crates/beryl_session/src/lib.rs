@@ -78,8 +78,9 @@ pub struct Prepared {
     pub hand_over: Option<HandOver>,
     /// Both seats follow scripts (a spec's moment, a fixture's board), so neither has the
     /// activations that would do nothing hidden
-    /// ([`Profile::hides_pointless`](beryl_engine::Profile)): either seat's script may take
-    /// one the human could, and a moment plays the same seen from either chair.
+    /// ([`Profile::hides_pointless`](beryl_engine::Profile)) nor attackers declared in one
+    /// pick (`Profile::group_picks`): either seat's script may take a decision the human
+    /// could, and a moment plays the same seen from either chair.
     pub scripted: bool,
 }
 

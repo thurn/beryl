@@ -234,6 +234,16 @@ pub struct Profile {
     /// the exact stops offer them, as the rules do: an activation that does nothing is still
     /// legal (see [CR 602.2](https://yawgatog.com/resources/magic-rules/#R6022)).
     pub hides_pointless: PerSeat<bool>,
+    /// By seat, whether the player's attack declaration also offers one pick that declares
+    /// every eligible attacker interchangeable with a candidate (`Opt::AttackAll`), where the
+    /// single picks would ask nothing in between: everyone under the smart stops, search and
+    /// rollouts included, so a board of many identical tokens attacks in one decision rather
+    /// than one each. A human is never offered it, nor anyone under the exact stops, which
+    /// offer each attacker on its own as the rules declare them (see
+    /// [CR 508.1a](https://yawgatog.com/resources/magic-rules/#R5081a): "The active player
+    /// chooses which creatures that they control, if any, will attack"). Every declaration
+    /// stays reachable by single picks.
+    pub group_picks: PerSeat<bool>,
     /// The player, if any, offered activations that would do nothing without their stopping
     /// for them: a human under the smart stops, who may still tap Currency Converter with
     /// nothing exiled, as the rules allow (see [CR 602.2](https://yawgatog.com/resources/magic-rules/#R6022):
@@ -257,6 +267,7 @@ impl Profile {
         asks_targets: None,
         taps_mana: None,
         hides_pointless: [false; Seat::BOTH.len()],
+        group_picks: [false; Seat::BOTH.len()],
         quiet_pointless: None,
     };
     /// The smart stops, for search and, by default, for humans.
@@ -270,6 +281,7 @@ impl Profile {
         asks_targets: None,
         taps_mana: None,
         hides_pointless: [true; Seat::BOTH.len()],
+        group_picks: [true; Seat::BOTH.len()],
         quiet_pointless: None,
     };
 

@@ -520,6 +520,7 @@ fn perform_priority<L: Layout>(
         | Opt::No
         | Opt::Done
         | Opt::Attack { .. }
+        | Opt::AttackAll(_)
         | Opt::Defender(_)
         | Opt::Block(_)
         | Opt::Lethal(_)
@@ -583,6 +584,7 @@ fn take_action<L: Layout>(
         | Opt::No
         | Opt::Done
         | Opt::Attack { .. }
+        | Opt::AttackAll(_)
         | Opt::Defender(_)
         | Opt::Block(_)
         | Opt::Lethal(_)
@@ -638,6 +640,7 @@ fn perform<L: Layout>(
             | Opt::No
             | Opt::Done
             | Opt::Attack { .. }
+            | Opt::AttackAll(_)
             | Opt::Defender(_)
             | Opt::Block(_)
             | Opt::Lethal(_)

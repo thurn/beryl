@@ -78,6 +78,11 @@ pub(crate) fn pick<L: Layout>(
             first: (first != slot).then(|| s.name(t, first)),
         });
     }
+    if let Some(Opt::AttackAll(slot)) = d.candidates.option(c) {
+        return Some(Pick::AttackAll {
+            card: s.name(t, slot),
+        });
+    }
     let named = d
         .candidates
         .object(c)

@@ -427,6 +427,7 @@ pub(crate) fn pay_mana<L: Layout>(
         | Opt::No
         | Opt::Done
         | Opt::Attack { .. }
+        | Opt::AttackAll(_)
         | Opt::Defender(_)
         | Opt::Block(_)
         | Opt::Lethal(_)

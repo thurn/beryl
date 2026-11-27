@@ -716,6 +716,14 @@ The exact profile offers a choice only across **distinct consequences**:
   attacker, the permanent an Aura is on, the permanent a card is exiled with.
   The kernel answers which they are in one query (`State::named`), beside the
   fields that name them.
+- Under the smart stops, for a seat with `Profile::group_picks` (search, its
+  rollouts and an agent's seat, never a human's), a class of two or more
+  interchangeable eligible attackers is also offered as one pick,
+  `Opt::AttackAll`, which declares every member in battlefield order exactly as
+  the single picks would. It is offered only when the defending player controls
+  no planeswalker and the game has no combat requirement, restriction or attack
+  cost, so that nothing is asked between those single picks. A board of sixty
+  identical tokens then attacks in one decision, not sixty.
 - Triggers of the same ability from interchangeable sources, on the same event
   with interchangeable objects, are equivalent and ordered silently, where
   renaming one's source and object to the other's leaves the waiting triggers

@@ -364,6 +364,13 @@ pub enum Pick {
         card: &'static str,
         first: Option<&'static str>,
     },
+    /// The offered pick that declares the first offered attacker of this name and every
+    /// creature interchangeable with it as attackers at once. It is offered only to a seat
+    /// with `Profile::group_picks`, which no scenario's trace plays under, so the oracles are
+    /// never asked it; a script written from an agent's game may name it.
+    AttackAll {
+        card: &'static str,
+    },
     /// The offered cast of this card with this face and these casting options.
     Cast {
         card: &'static str,

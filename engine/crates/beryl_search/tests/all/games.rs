@@ -18,9 +18,9 @@ use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::Pending;
 use beryl_engine::{
     CardId, CardIx, CardTable, Choice, Counts, Decision, Format, GameTable, Large, LargeCardIx,
-    LargeSlot, Layout, Misfit, Observation, Outcome, Placement, Profile, Relayout, Replay, Scratch,
-    Seat, Slot, SlotId, Small, StallReason, State, Step, TurnStep, Zone, ZoneKey, apply, next,
-    observe,
+    LargeSlot, Layout, Misfit, Observation, Opt, Outcome, Placement, Profile, Relayout, Replay,
+    Scratch, Seat, Slot, SlotId, Small, StallReason, State, Step, TurnStep, Zone, ZoneKey, apply,
+    next, observe,
 };
 use beryl_search::{Agent, AgentDecision, GreedyAgent, RandomAgent};
 
@@ -835,4 +835,39 @@ fn combat_requirements_rollout_game_plays_to_end() {
         matches!(outcome, Outcome::Win(_) | Outcome::Draw),
         "expected game to finish, got {outcome:?}"
     );
+}
+
+/// Search declares a board of identical creatures in one pick (`Opt::AttackAll`, offered
+/// under the smart stops' `Profile::group_picks`): a seeded game of a deck of Memnites
+/// against one of lands alone, so that attacking is safe, played by the greedy agent, which scores the rollout policy's picks, offers and
+/// takes the pick and plays to its end, with the reference implementations checked at every
+/// decision and the debug invariants at every step.
+#[test]
+fn a_board_of_identical_creatures_attacks_in_one_pick() {
+    let memnites: &[(u8, &str)] = &[(40, names::MEMNITE), (20, names::PLAINS)];
+    let lands: &[(u8, &str)] = &[(60, names::PLAINS)];
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [memnites, lands]).unwrap();
+    let mut s = State::new(&t, 1, Profile::SMART).unwrap();
+    let mut x = Scratch::new();
+    let mut agents = [GreedyAgent::new(&t), GreedyAgent::new(&t)];
+    let mut asked = [AgentDecision(0); 2];
+    let mut taken = 0;
+    let outcome = loop {
+        match next(&mut s, &t, &mut x, &mut Replay) {
+            Step::Over(outcome) => break outcome,
+            Step::Decide(d) => {
+                if let Err(v) = beryl_engine::check_references(&s, &t) {
+                    panic!("a reference: {v:?}");
+                }
+                let i = d.decider.index();
+                let c = agents[i].choose(observe(&s, &t, &mut x, d.decider), &d, asked[i].take());
+                if matches!(d.candidates.option(c), Some(Opt::AttackAll(_))) {
+                    taken += 1;
+                }
+                apply(&mut s, &t, &mut x, &mut Replay, c);
+            }
+        }
+    };
+    assert_eq!(outcome, Outcome::Win(Seat::P0));
+    assert!(taken > 0, "no attack with every Memnite in one pick");
 }

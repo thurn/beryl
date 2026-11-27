@@ -203,6 +203,11 @@ pub enum Candidate {
     Attack {
         slot: ObjectId,
     },
+    /// Attack with the creature in `slot` and every other creature interchangeable with it.
+    /// Offered only to an agent's seat, never to a human's.
+    AttackAll {
+        slot: ObjectId,
+    },
     /// Attack the planeswalker in `planeswalker`, or the defending player.
     Defender {
         planeswalker: Option<ObjectId>,

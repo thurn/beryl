@@ -127,6 +127,12 @@ pub(super) fn pick_in<L: Layout>(
                     }))
             });
         }
+        Pick::AttackAll { card } => {
+            return option_index(
+                d,
+                |o| matches!(o, Opt::AttackAll(slot) if s.name(t, slot) == card),
+            );
+        }
         Pick::Cast { card, face, costs } => {
             return option_index(d, |o| {
                 matches!(o, Opt::Cast { slot, face: f, costs: m }

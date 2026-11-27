@@ -514,6 +514,7 @@ impl<L: Layout> Relayout for Opt<L> {
                 slot: slot(attacker),
                 band: band.map(slot),
             },
+            Opt::AttackAll(s) => Opt::AttackAll(slot(s)),
             Opt::Defender(s) => Opt::Defender(s.map(slot)),
             Opt::Block(s) => Opt::Block(slot(s)),
             Opt::Lethal(s) => Opt::Lethal(slot(s)),

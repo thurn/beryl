@@ -288,6 +288,12 @@ pub enum Opt<L: Layout = Small> {
         /// None attacks alone; the attacker's own slot starts a band.
         band: Option<L::Slot>,
     },
+    /// Declare as attackers, alone and attacking the defending player, the creature in this
+    /// slot and every other eligible attacker interchangeable with it (§7.2), in battlefield
+    /// order: the same as declaring each with [`Opt::Attack`]. Offered only to a seat with
+    /// [`crate::profile::Profile::group_picks`], and only where those single picks would ask
+    /// nothing in between.
+    AttackAll(L::Slot),
     /// Attack the planeswalker in this slot, or, for `None`, the defending player.
     Defender(Option<L::Slot>),
     /// Declare the creature in this slot as a blocker.
@@ -349,6 +355,7 @@ impl<L: Layout> Opt<L> {
         match self {
             Opt::PlayLand(slot)
             | Opt::Attack { slot, .. }
+            | Opt::AttackAll(slot)
             | Opt::Block(slot)
             | Opt::Lethal(slot)
             | Opt::Cast { slot, .. }

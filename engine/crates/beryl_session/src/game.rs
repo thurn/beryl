@@ -341,6 +341,7 @@ impl Game {
         let base = if scripted {
             Profile {
                 hides_pointless: [false; 2],
+                group_picks: [false; 2],
                 ..Profile::SMART
             }
         } else {

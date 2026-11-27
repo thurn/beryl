@@ -231,6 +231,9 @@ enum PickDef {
         card: &'static str,
         first: Option<&'static str>,
     },
+    AttackAll {
+        card: &'static str,
+    },
     Cast {
         card: &'static str,
         #[serde(serialize_with = "face_ix")]

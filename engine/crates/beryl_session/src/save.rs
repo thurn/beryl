@@ -429,6 +429,10 @@ pub enum Act {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         first: Option<Box<Obj>>,
     },
+    /// Every creature interchangeable with `creature` attacks, in one pick.
+    AttackAll {
+        creature: Obj,
+    },
     /// What an attacker attacks: a planeswalker, or for none the defending player.
     Defender {
         planeswalker: Option<Obj>,
@@ -516,6 +520,7 @@ impl Act {
             Act::PlayLand { card }
             | Act::Attack { creature: card }
             | Act::AttackInBand { creature: card, .. }
+            | Act::AttackAll { creature: card }
             | Act::Block { creature: card }
             | Act::Lethal { blocker: card }
             | Act::Cast { card, .. }
@@ -535,6 +540,7 @@ impl Act {
             Act::PlayLand { card }
             | Act::Attack { creature: card }
             | Act::AttackInBand { creature: card, .. }
+            | Act::AttackAll { creature: card }
             | Act::Block { creature: card }
             | Act::Lethal { blocker: card }
             | Act::Cast { card, .. }
@@ -571,6 +577,22 @@ impl Act {
         Self::of_named(t, s, d, c, false)
     }
 
+    /// The ability of the waiting trigger at `index`, as [`Act::Trigger`] names it: an own
+    /// ability by its place among the face's triggered ones; one a copy exception gives by 128
+    /// more than its place among the face's grants.
+    fn trigger_ability<L: Layout>(t: &GameTable, s: &State<L>, index: usize) -> Option<u8> {
+        s.triggers().get(index).map(|tr| {
+            let FaceAbility::Own(own) = tr.of.ability.get() else {
+                return tr.of.ability.get().number();
+            };
+            let triggered = t.def(tr.of.card).face(tr.of.face).abilities[..own.index()]
+                .iter()
+                .filter(|a| matches!(a.kind(), AbilityKind::Triggered))
+                .count();
+            u8::try_from(triggered).expect("a face's abilities number under 256")
+        })
+    }
+
     /// Older saves named face-down cards by the card behind them.
     fn of_named<L: Layout>(
         t: &GameTable,
@@ -598,23 +620,15 @@ impl Act {
             Opt::FreeMulligan => Act::FreeMulligan,
             Opt::Trigger(i) => Act::Trigger {
                 source: o.object_named(s).map(obj),
-                // An own ability by its place among the face's triggered ones; one a copy
-                // exception gives by 128 more than its place among the face's grants.
-                ability: s.triggers().get(Into::<usize>::into(i)).map(|tr| {
-                    let FaceAbility::Own(own) = tr.of.ability.get() else {
-                        return tr.of.ability.get().number();
-                    };
-                    let triggered = t.def(tr.of.card).face(tr.of.face).abilities[..own.index()]
-                        .iter()
-                        .filter(|a| matches!(a.kind(), AbilityKind::Triggered))
-                        .count();
-                    u8::try_from(triggered).expect("a face's abilities number under 256")
-                }),
+                ability: Self::trigger_ability(t, s, i.into()),
             },
             Opt::Yes => Act::Yes,
             Opt::No => Act::No,
             Opt::Done => Act::Done,
             Opt::Attack { slot, band: None } => Act::Attack {
+                creature: obj(slot),
+            },
+            Opt::AttackAll(slot) => Act::AttackAll {
                 creature: obj(slot),
             },
             Opt::Defender(slot) => Act::Defender {

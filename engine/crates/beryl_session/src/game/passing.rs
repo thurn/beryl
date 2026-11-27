@@ -84,6 +84,10 @@ pub fn with_stops(profile: Profile, stops: StopsSetting, human: Seat) -> Profile
     // nothing make no stop of their own (Profile::quiet_pointless).
     let mut hides_pointless = profile.hides_pointless;
     hides_pointless[human.index()] = false;
+    // The human declares each attacker on its own, as Arena asks; the agent may declare a
+    // class of interchangeable attackers in one pick (Profile::group_picks).
+    let mut group_picks = profile.group_picks;
+    group_picks[human.index()] = false;
     Profile {
         stops: stops.stops(),
         step_stops,
@@ -91,6 +95,7 @@ pub fn with_stops(profile: Profile, stops: StopsSetting, human: Seat) -> Profile
         asks_targets: Some(human),
         taps_mana: Some(human),
         hides_pointless,
+        group_picks,
         quiet_pointless: (!stops.full_control).then_some(human),
         limits: Limits::PLAYER,
         ..profile

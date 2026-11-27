@@ -746,10 +746,12 @@ fn a_hidden_pointless_activation_is_left_out() {
     assert!(offers_return(Profile::EXACT));
     assert!(offers_return(Profile {
         hides_pointless: [false, true],
+        group_picks: [false, true],
         ..Profile::SMART
     }));
     assert!(!offers_return(Profile {
         hides_pointless: [true, false],
+        group_picks: [true, false],
         ..Profile::SMART
     }));
 }
@@ -792,6 +794,7 @@ fn a_quiet_pointless_activation_makes_no_stop() {
     };
     let offered = Profile {
         hides_pointless: [false, true],
+        group_picks: [false, true],
         ..Profile::SMART
     };
     assert_eq!(

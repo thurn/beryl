@@ -252,6 +252,7 @@ pub(super) fn only_idle<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>)
             | Opt::No
             | Opt::Done
             | Opt::Attack { .. }
+            | Opt::AttackAll(_)
             | Opt::Defender(_)
             | Opt::Block(_)
             | Opt::Lethal(_)

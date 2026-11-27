@@ -56,7 +56,7 @@ mod tests {
         let c = corpus();
         let turns: Vec<u16> = c.positions.iter().map(|s| s.turn().number()).collect();
         assert_eq!(turns, CUTS.repeat(GAMES as usize));
-        assert_eq!(stable_hash(&c.positions), 16_110_897_061_405_750_592);
+        assert_eq!(stable_hash(&c.positions), 15_561_151_361_807_732_256);
     }
 
     /// Every Dandân rollout answers every question as it always has and ends the same way.
@@ -83,8 +83,8 @@ mod tests {
         let answers: Vec<&[Choice]> = scripts.iter().map(|s| s.answers.as_slice()).collect();
         assert_eq!(
             (summary.decisions, summary.inline, summary.turns),
-            (10_221, 1_172, 1_618)
+            (10_180, 1_172, 1_618)
         );
-        assert_eq!(stable_hash(&(answers, ends)), 4_826_455_952_769_885_548);
+        assert_eq!(stable_hash(&(answers, ends)), 14_790_571_293_840_855_178);
     }
 }

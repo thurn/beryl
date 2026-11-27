@@ -11,7 +11,7 @@ use crate::bitboard::Bitboard;
 use crate::card::{Keywords, Part, Prompt, Purpose, Types};
 use crate::continuous::rule_change;
 use crate::decision::{Candidates, Decision, DecisionKind, OPTIONS, Opt};
-use crate::engine::collapse;
+use crate::engine::{collapse, interchangeable};
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
@@ -161,9 +161,17 @@ pub(crate) fn attack_decision<L: Layout>(
             requirements::attack_options(s, t, &mut list)?;
         } else {
             list.push(Opt::Done)?;
-            let attackers = collapse(s, eligible_attackers::<L, false>(s, t).collect());
+            let eligible: Bitboard<L::Slot> = eligible_attackers::<L, false>(s, t).collect();
+            let attackers = collapse(s, eligible);
+            let groups = s.profile().group_picks[s.turn().active().index()]
+                && eligible.count() > attackers.count()
+                && attack_targets(s)?.len() == 1;
             Candidates::<L>::extend_options(&mut list, attackers, |out, slot| {
-                out.push(Opt::attack(slot))
+                out.push(Opt::attack(slot))?;
+                if groups && class_of(s, eligible, slot).count() > 1 {
+                    out.push(Opt::AttackAll(slot))?;
+                }
+                Ok(())
             })?;
             if t.can(Capability::Banding) {
                 banding::append_attack_options(s, t, attackers, &mut list)?;
@@ -184,6 +192,16 @@ pub(crate) fn attack_decision<L: Layout>(
         about: attacker.map_or(Bitboard::EMPTY, Bitboard::single),
         filter: None,
     })
+}
+
+/// The eligible attackers interchangeable with the one in `slot` (§7.2), `slot` included: the
+/// creatures [`Opt::AttackAll`] declares.
+fn class_of<L: Layout>(
+    s: &State<L>,
+    eligible: Bitboard<L::Slot>,
+    slot: L::Slot,
+) -> Bitboard<L::Slot> {
+    eligible.filter(|e| e == slot || interchangeable(s, slot, e))
 }
 
 /// What a creature can attack ([CR 506.2]): "that player, planeswalkers they control, and
@@ -216,6 +234,21 @@ pub(crate) fn attack<L: Layout>(
             s.ask(Pending::DeclareAttackers {
                 attacker: Some(slot),
             });
+            Ok(())
+        }
+        Opt::AttackAll(slot) => {
+            // Offered only when the defending player is the one thing to attack, so each
+            // member attacks them, as the single picks would after the target is applied
+            // silently (§7.2).
+            let class = class_of(s, eligible_attackers::<L, false>(s, t).collect(), slot);
+            // Declaring an attacker leaves the battlefield's order as it is.
+            for i in 0..s.battlefield().len() {
+                let slot = s.battlefield()[i];
+                if class.contains(slot) {
+                    declare_attacker(s, t, s.permanent_at(slot).expect("an eligible attacker"));
+                }
+            }
+            s.ask(Pending::DeclareAttackers { attacker: None });
             Ok(())
         }
         Opt::Attack {
@@ -568,6 +601,7 @@ pub(crate) fn choose_blocker<L: Layout>(
         | Opt::No
         | Opt::Done
         | Opt::Attack { .. }
+        | Opt::AttackAll(_)
         | Opt::Defender(_)
         | Opt::Lethal(_)
         | Opt::Cast { .. }

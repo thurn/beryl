@@ -336,6 +336,9 @@ impl RolloutPolicy {
             }),
             DecisionKind::Attacker => pick.choose(d, |c| match c.option() {
                 Some(Opt::Attack { slot, .. }) => p.attack_score(slot),
+                // Its members score alike, so where the policy would attack with one it
+                // attacks with all of them in one pick.
+                Some(Opt::AttackAll(slot)) => p.attack_score(slot).map(|score| score + 1),
                 Some(Opt::Done) => Some(0),
                 _ => None,
             }),

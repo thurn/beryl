@@ -100,6 +100,10 @@ pub(super) fn candidate<L: Layout>(
             attack_label(slot, band, named),
             Candidate::Attack { slot: id(slot) },
         ),
+        Opt::AttackAll(slot) => (
+            format!("Attack with every {}", named(slot)),
+            Candidate::AttackAll { slot: id(slot) },
+        ),
         Opt::Defender(None) => (
             format!("Attack {}", player(obs.turn().active().opponent())),
             Candidate::Defender { planeswalker: None },
@@ -149,12 +153,7 @@ pub(super) fn candidate<L: Layout>(
             format!("Turn {} face up", named(slot)),
             Candidate::TurnFaceUp { slot: id(slot) },
         ),
-        Opt::Companion => {
-            let viewer = obs.viewer();
-            let card = obs.shown().companion(t, viewer).map(|(_, card)| card);
-            let named = card.map_or("companion", |card| t.def(card).name);
-            (format!("Put {named} into hand"), Candidate::Companion)
-        }
+        Opt::Companion => companion(t, obs),
     };
     CandidateView {
         label,
@@ -165,6 +164,13 @@ pub(super) fn candidate<L: Layout>(
         text: ability_text(t, obs, o),
         targets: Vec::new(),
     }
+}
+
+/// The special action that puts the viewer's revealed companion into their hand.
+fn companion<L: Layout>(t: &GameTable, obs: Observation<'_, L>) -> (String, Candidate) {
+    let card = obs.shown().companion(t, obs.viewer()).map(|(_, card)| card);
+    let named = card.map_or("companion", |card| t.def(card).name);
+    (format!("Put {named} into hand"), Candidate::Companion)
 }
 
 fn attack_label<S: SlotId>(slot: S, band: Option<S>, name: impl Fn(S) -> &'static str) -> String {

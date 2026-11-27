@@ -376,6 +376,7 @@ fn option(t: &GameTable, s: &State, o: Opt) -> String {
         } => {
             format!("attack with {} in {}’s band", named(slot), named(first))
         }
+        Opt::AttackAll(slot) => format!("attack with every {}", named(slot)),
         Opt::Defender(None) => "the player".to_owned(),
         Opt::Defender(Some(slot)) | Opt::Object(slot) => named(slot),
         Opt::Block(slot) => format!("block with {}", named(slot)),
