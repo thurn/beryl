@@ -247,6 +247,28 @@ fn a_countered_spell_and_a_batch_exile_hold_up_what_follows() {
     assert!((250.0..=350.0).contains(&exiled.stagger), "{exiled:?}");
 }
 
+/// Cards that leave several zones in one beat with no event, as when a subgame begins, leave
+/// zone by zone: those of one zone together, the next zone's 0.3 s later (UI Conventions, "A
+/// whole table leaving").
+#[test]
+fn cards_leaving_several_zones_at_once_leave_zone_by_zone() {
+    let left = |slot, from| Act::Vanish {
+        subject: object(slot),
+        from,
+        why: Why::StateBased,
+        object: None,
+        at: None,
+    };
+    let timings = beat(&[
+        left(1, ZoneName::Battlefield),
+        left(2, ZoneName::Battlefield),
+        left(3, ZoneName::Hand),
+        left(4, ZoneName::Graveyard),
+    ]);
+    let staggers: Vec<f64> = timings.iter().map(|timing| timing.stagger).collect();
+    assert_eq!(staggers, [0.0, 300.0, 300.0, 0.0]);
+}
+
 /// A creature's blow bursts on what it strikes and shakes the table as it lands, and a trail
 /// follows it as it dashes.
 #[test]

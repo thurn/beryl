@@ -8,6 +8,7 @@
 //! `effects`): a verb's duration, delay and stagger and its curve, a case's own where the
 //! verb has several, and the effects each verb's steps begin.
 
+mod acts;
 mod cases;
 mod conventions;
 mod own;
@@ -23,9 +24,10 @@ use std::ptr;
 
 use serde::{Deserialize, Serialize};
 
+use self::acts::{draws, draws_to_read, meets, next_zone};
 use self::conventions::{Conventions, curve, snap};
 use super::{Act, Arrow, Fact, Notice, Script, Span, Stream, Subject, Table, Tally, Verb, replay};
-use crate::protocol::{CardHandling, ObjectId, ObjectView, Side, Why, ZoneName};
+use crate::protocol::{CardHandling, ObjectId, ObjectView, ZoneName};
 
 /// How one step is played. Times are in milliseconds.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -446,6 +448,19 @@ fn motion(
     {
         return StepTiming { stagger, ..own };
     }
+    // Cards that leave several zones in one beat leave zone by zone: those of one zone go
+    // together, and the next zone's begin a set time after (UI Conventions, "A whole table
+    // leaving"). A subgame's start or end takes every card of the game left behind at once,
+    // and 16 cards breaking up in four zones at once read as no move at all.
+    if let Some(stagger) = next_zone(act, beside)
+        .then(|| data.stagger(Verb::Vanish, "next zone"))
+        .flatten()
+    {
+        return StepTiming {
+            stagger: own.stagger.max(stagger),
+            ..own
+        };
+    }
     own
 }
 
@@ -540,32 +555,6 @@ pub fn time_script(script: &Script, before: &Table) -> Vec<StepTiming> {
         }
     }
     timings
-}
-
-/// Whether `act` is a card drawn, or a card flown as one is: the flight from a library to its
-/// player's hand that the game calls a draw, or one no one at the table can read that an
-/// effect puts there. A port of `draws` in `ui/src/stage/tracks.ts`.
-fn draws(act: &Act) -> bool {
-    matches!(act, Act::Fly { from: ZoneName::Library, why, object, .. }
-        if object.zone == ZoneName::Hand && (*why == Why::Draw || object.name.is_none()))
-}
-
-/// Whether `act` is your draw of a card you see (held up to be read; UI Conventions, `fly`).
-fn draws_to_read(act: &Act) -> bool {
-    draws(act)
-        && matches!(act, Act::Fly { object, .. }
-            if object.zone_side.unwrap_or(object.owner) == Side::You && object.name.is_some())
-}
-
-/// Whether `a` and `b` are the two blows of one fight: each creature strikes the other.
-fn meets(a: &Act, b: Option<&Act>) -> bool {
-    matches!(
-        (a, b),
-        (
-            Act::Strike { source: a_source, to: Subject::Object { slot: a_to }, .. },
-            Some(Act::Strike { source: b_source, to: Subject::Object { slot: b_to }, .. }),
-        ) if a_to == b_source && b_to == a_source
-    )
 }
 
 /// The record the act carries as its own `object` field, where it has one.
