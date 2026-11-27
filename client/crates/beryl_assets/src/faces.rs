@@ -41,9 +41,11 @@ impl MatchFace {
     ) -> Self {
         let (scan, mut key) = scan_and_key(image);
         if let Some(plate) = &plate {
-            // A plate face shares its source's scan but is a picture of its own.
+            // A plate face shares its source's scan but is a picture of its own, in the look of
+            // its source's frame family.
             let kind = if plate.triggered { 't' } else { 'a' };
-            key = format!("{key}-plate-{kind}-{:08x}", fnv(&plate.rules));
+            let family = crate::frame::family(&colors, &text);
+            key = format!("{key}-plate-{kind}{family}-{:08x}", fnv(&plate.rules));
             if plate.choice {
                 key.push_str("-choice-cutout");
             }

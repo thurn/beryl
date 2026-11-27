@@ -6,16 +6,18 @@ use tiny_skia::{FillRule, Mask, Path, PathBuilder, Shader, Transform};
 
 use super::INK;
 use super::layout::{Box2, Geometry, TextStyle, Typesetter};
-use super::paint::{Canvas, color, stops, vertical};
+use super::look::{Look, texture};
+use super::paint::{Canvas, Rgb, color, rounded, stops, vertical};
 use crate::faces::Plate;
 
-/// The plate over the lower half of a face that says one ability, as `AbilityPlate` in
-/// `Card.tsx` draws it: parchment in a dark rim, its label on a tab across its top, and the
-/// ability's words in its middle, shrunk to fit.
+/// The plate over the lower half of a face that says one ability: paper tinted like the
+/// source card's frame (`look`), in a band of the frame's color inside a dark line, its label on
+/// a tab across its top, and the ability's words in its middle, shrunk to fit.
 pub(super) fn draw_plate(
     canvas: &mut Canvas,
     text: &mut Typesetter,
     plate: &Plate,
+    look: &Look,
     size: FaceSize,
     scan: bool,
 ) {
@@ -34,44 +36,50 @@ pub(super) fn draw_plate(
         height: (1.0 - 0.56 - if curved { 0.02 } else { 0.045 }) * card.height,
     };
     let radius = 0.35 * em;
-    let border = Shader::SolidColor(color([0x1b, 0x17, 0x12], 1.0));
-    let paper = area.inset(0.08 * em, 0.08 * em, 0.08 * em, 0.08 * em);
+    let solid = |rgb: Rgb| Shader::SolidColor(color(rgb, 1.0));
+    let band = area.inset(0.08 * em, 0.08 * em, 0.08 * em, 0.08 * em);
+    let paper = band.inset(0.12 * em, 0.12 * em, 0.12 * em, 0.12 * em);
     let fill = vertical(
         paper,
-        stops(&[
-            (0.0, [0xf8, 0xf2, 0xe2], 1.0),
-            (1.0, [0xe6, 0xdc, 0xc4], 1.0),
-        ]),
+        stops(&[(0.0, look.paper[0], 1.0), (1.0, look.paper[1], 1.0)]),
     );
-    if curved {
+    let shape = if curved {
         // The scan ends where the plate begins, inside the curved foot of the web's
         // `.stack-item-scanned`. Its printed rules box and collector line are hidden.
         clip_choice(canvas, card, area.y);
-        canvas.fill(outline(area, [0.0; 2], area.height * 0.36).as_ref(), border);
         canvas.fill(
-            outline(paper, [0.0; 2], paper.height * 0.36).as_ref(),
-            Shader::SolidColor(color([0xc9, 0xb9, 0x98], 1.0)),
+            outline(area, [0.0; 2], area.height * 0.36).as_ref(),
+            solid(look.rim),
         );
-        let inside = paper.inset(0.1 * em, 0.1 * em, 0.1 * em, 0.1 * em);
         canvas.fill(
-            outline(inside, [0.0; 2], inside.height * 0.36).as_ref(),
-            fill,
+            outline(band, [0.0; 2], band.height * 0.36).as_ref(),
+            solid(look.band),
         );
+        outline(paper, [0.0; 2], paper.height * 0.36)
     } else {
-        canvas.fill_box(area, radius, border);
-        canvas.fill_box(paper, radius - 0.08 * em, fill);
-        canvas.edge_inside(
-            paper,
-            radius - 0.08 * em,
-            0.1 * em,
-            color([150, 120, 70], 0.45),
-        );
+        canvas.fill_box(area, radius, solid(look.rim));
+        canvas.fill_box(band, radius - 0.08 * em, solid(look.band));
+        rounded(paper, radius - 0.2 * em)
+    };
+    canvas.fill(shape.as_ref(), fill);
+    if let Some(shape) = &shape {
+        texture(canvas, shape, look, em);
     }
-    let top = if curved { paper.y } else { area.y };
-    let below_tab = draw_tab(canvas, text, area, (top, em), plate.triggered, curved);
+    if !curved {
+        canvas.edge_inside(paper, radius - 0.2 * em, 0.1 * em, color(look.edge, 0.45));
+    }
+    let top = if curved { band.y } else { area.y };
+    let below_tab = draw_tab(
+        canvas,
+        text,
+        area,
+        (top, em),
+        (plate.triggered, look.tab),
+        curved,
+    );
     // On a scanned choice, leave more room at the bottom for the curved plate.
     let size = 0.74 * em;
-    let rules_area = if curved { paper } else { area };
+    let rules_area = if curved { band } else { area };
     let room = Box2 {
         y: below_tab,
         height: rules_area.bottom() - below_tab,
@@ -101,7 +109,7 @@ fn draw_tab(
     text: &mut Typesetter,
     area: Box2,
     (top, em): (f32, f32),
-    triggered: bool,
+    (triggered, edge): (bool, Rgb),
     curved: bool,
 ) -> f32 {
     let label_em = 0.62 * em;
@@ -127,11 +135,7 @@ fn draw_tab(
         width: label.width + 1.2 * label_em,
         height: label.height + if curved { 0.36 } else { 0.2 } * label_em,
     };
-    canvas.fill_box(
-        tab,
-        tab.height / 2.0,
-        Shader::SolidColor(color([0xc9, 0xa3, 0x5c], 1.0)),
-    );
+    canvas.fill_box(tab, tab.height / 2.0, Shader::SolidColor(color(edge, 1.0)));
     let inner = tab.inset(
         0.08 * label_em,
         0.08 * label_em,

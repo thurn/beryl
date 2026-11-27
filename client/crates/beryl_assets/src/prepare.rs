@@ -482,10 +482,7 @@ fn cache_file(shared: &Shared, job: &Job, face: &MatchFace) -> PathBuf {
 /// that shows an ability on the stack, its plate drawn over it.
 fn from_scan(bytes: &[u8], face: &MatchFace, size: FaceSize) -> Option<Vec<u8>> {
     let pixels = decode(bytes, size).ok()?;
-    Some(match &face.plate {
-        Some(plate) => plate_over(pixels, plate, size),
-        None => pixels,
-    })
+    Some(plate_over(pixels, face, size))
 }
 
 /// The face's pixels compressed with their mipmaps and, when `file` is given, written to the

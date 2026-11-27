@@ -89,6 +89,6 @@ fn the_host_keeps_face_indices_and_cache_keys_when_preparing_a_gallery() {
     let plate = faces.get(list.plate("Preview", true, 0).unwrap()).unwrap();
     assert_eq!(plate.name, "Preview");
     assert_eq!(plate.scan, preview.scan);
-    assert_eq!(plate.key, "Preview-front-plate-t-a75b0d1b");
+    assert_eq!(plate.key, "Preview-front-plate-tu-a75b0d1b");
     assert_eq!(plate.plate.as_ref().unwrap().source, source);
 }

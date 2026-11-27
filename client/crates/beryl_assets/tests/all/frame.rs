@@ -169,7 +169,17 @@ fn a_scanned_ability_choice_preserves_the_art_and_covers_the_printed_text() {
         choice: true,
         rules: "{T}: Draw a card.".to_owned(),
     };
-    let pixels = plate_over(scan.repeat((width * height) as usize), &plate, size);
+    let mut face = made_up(
+        "Seer",
+        &["U"],
+        FaceText {
+            type_line: "Artifact".to_owned(),
+            rules: Some("{T}: Draw a card.".to_owned()),
+            ..FaceText::default()
+        },
+    );
+    face.plate = Some(plate);
+    let pixels = plate_over(scan.repeat((width * height) as usize), &face, size);
     let pixel = |x: u32, y: u32| {
         let at = ((y * width + x) * 4) as usize;
         &pixels[at..at + 4]
@@ -178,4 +188,116 @@ fn a_scanned_ability_choice_preserves_the_art_and_covers_the_printed_text() {
     assert_ne!(pixel(width / 2, height * 9 / 10), scan);
     assert_eq!(pixel(width / 8, height - 1)[3], 0);
     assert_eq!(pixel(width / 2, height - 2)[3], 255);
+}
+
+/// The plate's paper at `face`'s full size: the average color of a strip down its left side,
+/// clear of the label and the words.
+fn plate_paper(face: &MatchFace) -> [f32; 3] {
+    let size = FaceSize::Full;
+    let (width, height) = dimensions(size);
+    let pixels = plate_over(vec![128; (width * height * 4) as usize], face, size);
+    let mut sum = [0.0; 3];
+    let mut count = 0.0;
+    for y in (height * 70 / 100)..(height * 90 / 100) {
+        for x in (width * 9 / 100)..(width * 11 / 100) {
+            let at = ((y * width + x) * 4) as usize;
+            for (total, &value) in sum.iter_mut().zip(&pixels[at..at + 3]) {
+                *total += f32::from(value);
+            }
+            count += 1.0;
+        }
+    }
+    sum.map(|total| total / count)
+}
+
+/// WCAG's relative luminance of an sRGB color given in 0 to 255.
+fn luminance(rgb: [f32; 3]) -> f32 {
+    let linear = rgb.map(|c| {
+        let c = c / 255.0;
+        if c <= 0.039_28 {
+            c / 12.92
+        } else {
+            ((c + 0.055) / 1.055).powf(2.4)
+        }
+    });
+    0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+}
+
+#[test]
+fn each_frame_family_has_its_own_legible_plate() {
+    let ability = |colors: &[&str], type_line: &str, rules: &str| {
+        let mut face = made_up(
+            "Source",
+            colors,
+            FaceText {
+                type_line: type_line.to_owned(),
+                rules: Some(rules.to_owned()),
+                ..FaceText::default()
+            },
+        );
+        face.plate = Some(Plate {
+            source: FaceId(1),
+            triggered: false,
+            choice: false,
+            rules: rules.lines().last().unwrap_or_default().to_owned(),
+        });
+        face
+    };
+    let families = [
+        ("white", ability(&["W"], "Creature", "{1}: Gain 1 life.")),
+        ("blue", ability(&["U"], "Creature", "{1}: Scry 1.")),
+        ("black", ability(&["B"], "Creature", "{1}: Lose 1 life.")),
+        ("red", ability(&["R"], "Creature", "{1}: Deal 1 damage.")),
+        ("green", ability(&["G"], "Creature", "{1}: Untap it.")),
+        (
+            "multicolored",
+            ability(&["W", "U"], "Creature", "{1}: Tap it."),
+        ),
+        ("colorless", ability(&[], "Artifact", "{1}: Draw a card.")),
+        (
+            "land",
+            ability(&[], "Land", "{T}: Add {C}.\n{1}, {T}: Scry 1."),
+        ),
+        // A colorless land that adds blue mana has a blue frame, as Lonely Sandbar does. Its
+        // ability is the blue card's, so that the words cover the same pixels.
+        (
+            "blue land",
+            ability(&[], "Land", "{T}: Add {U}.\n{1}: Scry 1."),
+        ),
+    ];
+    let papers: Vec<_> = families.iter().map(|(_, face)| plate_paper(face)).collect();
+    let ink = luminance([20.0, 18.0, 16.0]);
+    for ((name, _), paper) in families.iter().zip(&papers) {
+        let contrast = (luminance(*paper) + 0.05) / (ink + 0.05);
+        assert!(
+            contrast >= 7.0,
+            "{name}: the words' contrast is {contrast:.1} on {paper:?}"
+        );
+    }
+    // Every family but the blue land is told apart from every other by its paper.
+    for (i, ((a, _), first)) in families.iter().zip(&papers).enumerate().take(8) {
+        for ((b, _), second) in families.iter().zip(&papers).take(8).skip(i + 1) {
+            let apart: f32 = first.iter().zip(second).map(|(x, y)| (x - y).abs()).sum();
+            assert!(
+                apart > 12.0,
+                "{a} and {b} plates look alike: {first:?} and {second:?}"
+            );
+        }
+    }
+    let distance = |other: &[f32; 3]| -> f32 {
+        papers[8]
+            .iter()
+            .zip(other)
+            .map(|(x, y)| (x - y).abs())
+            .sum()
+    };
+    let nearest = (0..8)
+        .min_by(|&a, &b| distance(&papers[a]).total_cmp(&distance(&papers[b])))
+        .map(|at| families[at].0);
+    assert_eq!(
+        nearest,
+        Some("blue"),
+        "the blue land's plate is {:?}",
+        papers[8]
+    );
 }

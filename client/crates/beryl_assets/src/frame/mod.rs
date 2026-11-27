@@ -21,6 +21,7 @@
 
 mod back;
 mod layout;
+mod look;
 mod paint;
 mod plate;
 
@@ -33,10 +34,12 @@ use tiny_skia::{Pixmap, Point, Shader};
 pub use back::card_back;
 
 use crate::encode::dimensions;
-use crate::faces::{FaceText, MatchFace, Plate};
+use crate::faces::{FaceText, MatchFace};
 use layout::{Box2, Geometry, LOYALTY_SHIELD, TextStyle, Typesetter, Variant};
 use paint::{Canvas, Rgb, color, hsl, linear, mix, radial, stops, vertical};
 use plate::draw_plate;
+
+pub(crate) use look::family;
 
 thread_local! {
     static FRAMES_DRAWN: Cell<u64> = const { Cell::new(0) };
@@ -202,15 +205,20 @@ pub fn frame(face: &MatchFace, size: FaceSize) -> Vec<u8> {
             face.plate.is_none(),
         );
         if let Some(plate) = &face.plate {
-            draw_plate(&mut canvas, text, plate, size, false);
+            let look = look::look(family(&face.colors, &face.text));
+            draw_plate(&mut canvas, text, plate, &look, size, false);
         }
         canvas.pixmap.take()
     })
 }
 
-/// `pixels`, a decoded scan at `size`, with `plate` drawn over its lower half.
+/// `pixels`, a decoded scan of `face` at `size`, with its plate drawn over its lower half, in
+/// the look of the face's frame family. `pixels` unchanged when the face has no plate.
 #[must_use]
-pub fn plate_over(pixels: Vec<u8>, plate: &Plate, size: FaceSize) -> Vec<u8> {
+pub fn plate_over(pixels: Vec<u8>, face: &MatchFace, size: FaceSize) -> Vec<u8> {
+    let Some(plate) = &face.plate else {
+        return pixels;
+    };
     FRAMES_DRAWN.with(|drawn| drawn.set(drawn.get() + 1));
     let (width, height) = dimensions(size);
     let Some(size_of) = tiny_skia::IntSize::from_wh(width, height) else {
@@ -222,7 +230,8 @@ pub fn plate_over(pixels: Vec<u8>, plate: &Plate, size: FaceSize) -> Vec<u8> {
     };
     with_typesetter(|text| {
         let mut canvas = Canvas::new(pixmap);
-        draw_plate(&mut canvas, text, plate, size, true);
+        let look = look::look(family(&face.colors, &face.text));
+        draw_plate(&mut canvas, text, plate, &look, size, true);
         canvas.pixmap.take()
     })
 }
