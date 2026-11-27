@@ -107,9 +107,10 @@ pub struct Scans {
 }
 
 impl Scans {
-    /// The app's own caches, in the directory Tauri gives the app: `~/Library/Caches/<app>` on
-    /// macOS, `%LOCALAPPDATA%\<app>` on Windows and `$XDG_CACHE_HOME/<app>` (or `~/.cache`)
-    /// elsewhere. `BERYL_CLIENT_SCANS` names another directory to use in their place, such as an
+    /// The app's own caches: `~/Library/Caches/<app>` on macOS and iOS, `%LOCALAPPDATA%\<app>`
+    /// on Windows and `$XDG_CACHE_HOME/<app>` (or `~/.cache`) elsewhere. On iOS, `$HOME` is the
+    /// app's sandbox container, where only `Documents`, `Library` and `tmp` can be written, so
+    /// `~/.cache` there fails every write and no downloaded scan is ever kept. `BERYL_CLIENT_SCANS` names another directory to use in their place, such as an
     /// empty one, to see every face drawn as Beryl's frame.
     #[must_use]
     pub fn app() -> Self {
@@ -120,7 +121,7 @@ impl Scans {
         let home = || var("HOME").unwrap_or_default();
         let base = if cfg!(windows) {
             var("LOCALAPPDATA").unwrap_or_default()
-        } else if cfg!(target_os = "macos") {
+        } else if cfg!(any(target_os = "macos", target_os = "ios")) {
             home().join("Library/Caches")
         } else {
             var("XDG_CACHE_HOME").unwrap_or_else(|| home().join(".cache"))
