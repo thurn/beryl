@@ -23,6 +23,7 @@ fn reference() -> &'static game_table::table::Layout {
     })
 }
 
+mod ability_printings;
 mod bug_report;
 mod checks;
 #[path = "../common/mod.rs"]

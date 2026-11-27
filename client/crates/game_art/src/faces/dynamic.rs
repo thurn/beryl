@@ -2,10 +2,12 @@
 //!
 //! A match's printed faces are built once from its card records. When a text-changing effect
 //! alters a card's rules text or type line (`ObjectView::text` / `type_line`), or an ability on
-//! the stack carries non-printed text (`StackItem::Ability::text`), these helpers append a
-//! matching [`ListedFace`] to the list and bump [`Faces::number`] so the host prepares it.
+//! the stack, or one a script puts there, carries non-printed text (`StackItem::Ability::text`),
+//! these helpers append a matching [`ListedFace`] to the list and bump [`Faces::number`] so the
+//! host prepares it.
 
 use beryl_protocol::protocol::{ObjectView, PlayerView, StackItem};
+use beryl_protocol::script::Act;
 use kit_ui::input::FaceId;
 
 use super::{FaceList, Faces, ListedFace, Plate};
@@ -72,7 +74,15 @@ impl FaceList {
             });
             added = true;
         }
-        for item in view.stack_with_resolving() {
+        // An ability that goes on the stack and resolves within one script, as a cycling
+        // ability does, is on no view's stack, so the script's `emerge` steps are read too.
+        let emerging = (view.script.iter())
+            .flat_map(|script| script.beats.iter().flatten())
+            .filter_map(|step| match &step.act {
+                Act::Emerge { item, .. } => Some(item),
+                _ => None,
+            });
+        for item in view.stack_with_resolving().chain(emerging) {
             let StackItem::Ability {
                 name,
                 triggered,
@@ -82,7 +92,7 @@ impl FaceList {
             else {
                 continue;
             };
-            let Some(source) = self.find(name) else {
+            let Some(source) = self.ability_source(name, view.ability_printing(item)) else {
                 continue;
             };
             if self.find_custom_plate(source, *triggered, rules).is_some() {

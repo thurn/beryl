@@ -60,7 +60,9 @@ impl Inputs {
                         AbilityClass::Activated => false,
                         AbilityClass::Static => return None,
                     };
-                    faces.plate(&by.name, triggered, ability.nth)
+                    // The culprit names a card, not an object, so it shows the card's ordinary
+                    // printing.
+                    faces.plate(&by.name, None, triggered, ability.nth)
                 });
                 plate.or_else(|| faces.find(&by.name))
             }

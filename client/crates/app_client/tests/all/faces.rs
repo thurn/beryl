@@ -209,16 +209,16 @@ fn an_ability_on_the_stack_has_a_plate_face_of_its_own_beside_its_source_s() {
     let list = FaceList::from_records(&records);
     let snapcaster = list.find("Snapcaster Mage").unwrap();
     let plate = list
-        .plate("Snapcaster Mage", true, 0)
+        .plate("Snapcaster Mage", None, true, 0)
         .expect("its trigger has a plate");
     assert_ne!(plate, snapcaster);
     let listed = list.get(plate).unwrap();
     assert_eq!(listed.image, list.get(snapcaster).unwrap().image);
     assert!(listed.plate.as_ref().unwrap().rules.starts_with("When"));
     // A plate is found by its kind and its place among that kind's paragraphs.
-    assert!(list.plate("Snapcaster Mage", false, 0).is_none());
-    assert!(list.plate("Teferi, Time Raveler", false, 1).is_some());
-    assert!(list.plate("Teferi, Time Raveler", false, 2).is_none());
+    assert!(list.plate("Snapcaster Mage", None, false, 0).is_none());
+    assert!(list.plate("Teferi, Time Raveler", None, false, 1).is_some());
+    assert!(list.plate("Teferi, Time Raveler", None, false, 2).is_none());
 }
 
 /// Whether each card draw record of `frame` samples the full-size array, and its layer.
@@ -327,7 +327,7 @@ fn a_trigger_with_no_plate_face_is_drawn_from_its_source_s_full_size_face() {
     client.handle(Input::Update(Box::new(update)));
     let face = client.faces().find(name).unwrap();
     assert!(
-        client.faces().plate(name, true, 0).is_none(),
+        client.faces().plate(name, None, true, 0).is_none(),
         "the trigger has no plate face"
     );
     client.frame(0);

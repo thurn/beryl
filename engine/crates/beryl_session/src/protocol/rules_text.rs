@@ -171,11 +171,22 @@ fn says_triggered(p: &str) -> bool {
 /// Whether paragraph `p` says an activated ability
 /// ([CR 602.1](https://yawgatog.com/resources/magic-rules/#R6021)): "Activated abilities have
 /// a cost and an effect. They are written as '[Cost]: [Effect.] [Activation instructions (if
-/// any).]'", a colon outside reminder text.
+/// any).]'", a colon outside reminder text. A keyword whose reminder text has a colon outside
+/// quotation marks counts too, as cycling's does
+/// ([CR 702.29a](https://yawgatog.com/resources/magic-rules/#R70229a): "Cycling is an
+/// activated ability that functions only while the card with cycling is in a player's hand.
+/// 'Cycling [cost]' means '[Cost], Discard this card: Draw a card.'"). A basic land's bare
+/// "({T}: Add {U}.)" and a Treasure's quoted ability do not. The client counts paragraphs the
+/// same way (`game_art::faces::says_ability`).
 fn says_activated(p: &str) -> bool {
-    p.split('(')
-        .next()
-        .is_some_and(|before| before.contains(':'))
+    let (before, reminder) = p.split_once('(').unwrap_or((p, ""));
+    let unquoted = || {
+        reminder
+            .split(['"', '\u{201c}', '\u{201d}'])
+            .step_by(2)
+            .any(|part| part.contains(':'))
+    };
+    before.contains(':') || (!before.trim().is_empty() && unquoted())
 }
 
 /// Whether `text` holds `word` as a whole word.
@@ -211,6 +222,18 @@ mod tests {
         assert_eq!(paragraphs(text, at(AbilityClass::Triggered)), 2);
         assert_eq!(paragraphs(text, at(AbilityClass::Activated)), 1);
         assert_eq!(paragraphs(text, at(AbilityClass::Static)), 1);
+        // Cycling's reminder text says an activated ability; a basic land's bare reminder text
+        // and a Treasure's quoted ability do not, as the client counts them.
+        let land = "This land enters tapped.\n{T}: Add {U}.\n\
+                    Cycling {U} ({U}, Discard this card: Draw a card.)";
+        assert_eq!(paragraphs(land, at(AbilityClass::Activated)), 2);
+        assert_eq!(
+            paragraphs("({T}: Add {U}.)", at(AbilityClass::Activated)),
+            0
+        );
+        let treasure = "Create a Treasure token. (It's an artifact with \"{T}, Sacrifice this \
+                        artifact: Add one mana of any color.\")";
+        assert_eq!(paragraphs(treasure, at(AbilityClass::Activated)), 0);
         // "Atop" does not start with the word "At".
         assert_eq!(
             paragraphs("Atop the library.", at(AbilityClass::Triggered)),

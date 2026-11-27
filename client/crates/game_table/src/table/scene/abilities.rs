@@ -2,6 +2,7 @@
 //! with a plate that says the ability.
 
 use crate::table::labels::ABILITY_ROLE;
+use beryl_protocol::card_records::PrintingIx;
 use beryl_protocol::protocol::{PlayerView, StackItem, ZoneName};
 use beryl_protocol::script::{Act, Subject};
 
@@ -37,13 +38,15 @@ impl Table {
         });
         for id in shown.chain(finals).chain(moved) {
             builder.visit();
-            let Some((object, item, under_way)) = self.ability_at(id, view, motion, builder) else {
+            let Some((object, (held, item), under_way)) =
+                self.ability_at(id, view, motion, builder)
+            else {
                 continue;
             };
             if object.visible {
                 self.write_ability(
                     id,
-                    (&object, item, under_way),
+                    (&object, held.ability_printing(item), item, under_way),
                     faces,
                     (back, dress),
                     builder,
@@ -53,7 +56,8 @@ impl Table {
     }
 
     /// The ability numbered `id` as this frame draws it, as `object_at` gives a card, with its
-    /// item on the stack.
+    /// item on the stack and the view that holds the item, whose objects say which printing
+    /// the ability's source shows.
     ///
     /// A triggered ability that goes on the stack and resolves within one script, such as an
     /// enters trigger that resolves at once, is on neither the stack of the view before the
@@ -65,20 +69,21 @@ impl Table {
         view: &'v PlayerView,
         motion: Option<Motion<'v>>,
         builder: &mut FrameBuilder,
-    ) -> Option<(SceneObject, &'v StackItem, bool)> {
+    ) -> Option<(SceneObject, (&'v PlayerView, &'v StackItem), bool)> {
         let resting = self.objects.ability(id);
         let track = motion.and_then(|motion| {
             let track = ability_track(motion.ability_tracks, id)?;
             (!track.segments().is_empty()).then_some((motion, track))
         });
         let Some((motion, track)) = track else {
-            return resting.and_then(|object| Some((object, item_of(view, &object)?, false)));
+            return resting
+                .and_then(|object| Some((object, (view, item_of(view, &object)?), false)));
         };
         builder.segment();
         let pose = track.pose_at(motion.t);
         let (object, item) = match (motion.finals.ability(id), resting) {
-            (Some(object), _) => (object, item_of(motion.view, &object)?),
-            (None, Some(object)) => (object, item_of(view, &object)?),
+            (Some(object), _) => (object, (motion.view, item_of(motion.view, &object)?)),
+            (None, Some(object)) => (object, (view, item_of(view, &object)?)),
             (None, None) => {
                 let item = emerging_item(motion.view, id)?;
                 let StackItem::Ability { controller, .. } = item else {
@@ -97,7 +102,7 @@ impl Table {
                     overlapped: false,
                     view_index: 0,
                 };
-                (object, item)
+                (object, (motion.view, item))
             }
         };
         let object = SceneObject {
@@ -115,11 +120,12 @@ impl Table {
     /// Writes the resolved element and the draw record of the ability numbered `id`: `object`,
     /// the stack's `item`, moving if `under_way`, drawn as a card with the board-size
     /// plate face of the ability (its source's picture wearing a plate that says it), or its
-    /// source's face while it has none, or the blank layer 0 when it has no source.
+    /// source's face while it has none, or the blank layer 0 when it has no source. The
+    /// picture is that of `printing`, the printing the source object shows, when it has one.
     fn write_ability(
         &self,
         id: u32,
-        (object, item, under_way): (&SceneObject, &StackItem, bool),
+        (object, printing, item, under_way): (&SceneObject, Option<PrintingIx>, &StackItem, bool),
         faces: &Faces,
         (back, dress): (u16, &Dress<'_>),
         builder: &mut FrameBuilder,
@@ -140,12 +146,15 @@ impl Table {
         let shown = source.and_then(|_| {
             faces
                 .list()
-                .ability_face(name, *triggered, *nth, text.as_deref())
+                .ability_face(name, printing, *triggered, *nth, text.as_deref())
         });
         // Until the plate face's board-size layer lands, the source's face stands in.
         let face = shown
             .and_then(|face| faces.board_layer_of(face))
-            .or_else(|| source.and_then(|_| faces.board_layer(name)));
+            .or_else(|| {
+                let source = source.and(faces.list().ability_source(name, printing))?;
+                faces.board_layer_of(source)
+            });
         // The phone layout draws the battlefield frame here too, as the web interface's does.
         let full = shown
             .filter(|_| self.layout.style.full_card_faces)

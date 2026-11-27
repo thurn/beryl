@@ -225,7 +225,7 @@ fn way_face(
         }
         _ => return None,
     };
-    faces.choice_plate(name, nth)
+    faces.choice_plate(name, object.printing, nth)
 }
 
 pub(super) fn details(input: &HudIn<'_>) -> Details {

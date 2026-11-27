@@ -42,7 +42,7 @@ fn each_triggered_and_activated_paragraph_of_a_card_has_a_plate_face() {
     assert_eq!(teferi.len(), 2, "{teferi:?}");
     assert!(teferi.iter().all(|(triggered, _)| !triggered));
     assert!(teferi[0].1.starts_with("+1:"));
-    let choice = list.choice_plate("Teferi, Time Raveler", 0).unwrap();
+    let choice = list.choice_plate("Teferi, Time Raveler", None, 0).unwrap();
     let choice = faces.get(choice).unwrap();
     let plate = choice.plate.as_ref().unwrap();
     assert_eq!(plate.rules, teferi[0].1);
@@ -52,7 +52,7 @@ fn each_triggered_and_activated_paragraph_of_a_card_has_a_plate_face() {
     let isle = plates("Remote Isle");
     assert_eq!(isle.len(), 2, "{isle:?}");
     assert!(isle[1].1.starts_with("Cycling"));
-    let cycle = list.choice_plate("Remote Isle", 1).unwrap();
+    let cycle = list.choice_plate("Remote Isle", None, 1).unwrap();
     assert_eq!(
         faces.get(cycle).unwrap().plate.as_ref().unwrap().rules,
         isle[1].1
@@ -86,7 +86,9 @@ fn the_host_keeps_face_indices_and_cache_keys_when_preparing_a_gallery() {
     let preview = faces.get(source).unwrap();
     assert_eq!(preview.scan, "gallery/Preview");
     assert_eq!(preview.key, "Preview-front");
-    let plate = faces.get(list.plate("Preview", true, 0).unwrap()).unwrap();
+    let plate = faces
+        .get(list.plate("Preview", None, true, 0).unwrap())
+        .unwrap();
     assert_eq!(plate.name, "Preview");
     assert_eq!(plate.scan, preview.scan);
     assert_eq!(plate.key, "Preview-front-plate-tu-a75b0d1b");

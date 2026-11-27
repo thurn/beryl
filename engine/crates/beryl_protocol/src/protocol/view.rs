@@ -101,6 +101,23 @@ impl PlayerView {
         };
         self.stack.iter().chain(resolving)
     }
+
+    /// The printing that the source object of `item`, an ability, shows in this view
+    /// (`ObjectView::printing`), so that the ability is drawn with the same picture as the card
+    /// it came from. `None` for a spell, for an ability with no source, for a source this view
+    /// no longer holds, and for a source that shows its card's ordinary printing.
+    #[must_use]
+    pub fn ability_printing(&self, item: &StackItem) -> Option<PrintingIx> {
+        let StackItem::Ability {
+            source: Some(source),
+            ..
+        } = item
+        else {
+            return None;
+        };
+        let object = self.objects.iter().find(|object| object.slot == *source)?;
+        object.printing
+    }
 }
 
 /// Where the game stands for the viewer.

@@ -103,16 +103,18 @@ fn item_face<'a>(
         Candidate::Trigger { source, .. } => source,
         _ => None,
     });
-    let source_name = source
-        .and_then(|slot| view?.objects.iter().find(|object| object.slot == slot))
-        .and_then(|object| object.name.as_deref());
+    let source_object =
+        source.and_then(|slot| view?.objects.iter().find(|object| object.slot == slot));
+    let source_name = source_object.and_then(|object| object.name.as_deref());
+    // The trigger wears the picture of the printing its source shows, as it will on the stack.
+    let printing = source_object.and_then(|object| object.printing);
     let name = source_name.or(candidate.map(|candidate| candidate.label.as_str()));
     let face = name.zip(faces).and_then(|(name, faces)| {
         let candidate = candidate?;
         let plate_face = (candidate.text.is_none())
-            .then(|| faces.plate(name, true, candidate.nth.unwrap_or(0)))
+            .then(|| faces.plate(name, printing, true, candidate.nth.unwrap_or(0)))
             .flatten();
-        plate_face.or_else(|| faces.find(name))
+        plate_face.or_else(|| faces.ability_source(name, printing))
     });
     (name.unwrap_or(""), face)
 }

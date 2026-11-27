@@ -5,6 +5,7 @@
 //! face, and each worker reports the layer a face landed in as an `AssetReady::Face`.
 
 mod dynamic;
+mod plates;
 
 use std::collections::BTreeMap;
 
@@ -139,11 +140,12 @@ impl FaceList {
             list.add_entry(asked, entry, true);
         }
         list.add_plates();
-        // Printing faces come last and get no plates: an ability on the stack shows its
-        // source card's ordinary face, as it has no printing of its own.
+        // Printing faces come last, each with a copy of its card's plates over its own
+        // picture, so that an ability is drawn with the printing its source object shows.
         for (&ix, entry) in &records.printings {
             list.add_printing(ix, entry);
         }
+        list.add_printing_plates();
         list
     }
 
@@ -163,100 +165,6 @@ impl FaceList {
     #[must_use]
     pub fn printing(&self, ix: PrintingIx) -> Option<FaceId> {
         self.printings.get(&ix).copied()
-    }
-
-    /// Lists a plate face for each paragraph of each face's rules text that says a triggered
-    /// or an activated ability.
-    pub fn add_plates(&mut self) {
-        let sources = self.faces.len();
-        for at in 0..sources {
-            let source = FaceId(u16::try_from(at).expect("a match has under 2^16 faces"));
-            let Some(rules) = self.faces[at].text.rules.clone() else {
-                continue;
-            };
-            for triggered in [true, false] {
-                let paragraphs = rules.lines().filter(|p| says_ability(p, triggered));
-                for (nth, paragraph) in paragraphs.enumerate() {
-                    let Ok(nth) = u8::try_from(nth) else {
-                        break;
-                    };
-                    let id = FaceId(
-                        u16::try_from(self.faces.len()).expect("a match has under 2^16 faces"),
-                    );
-                    let face = &self.faces[at];
-                    let ability = ListedFace {
-                        image: face.image.clone(),
-                        names: Vec::new(),
-                        colors: face.colors.clone(),
-                        printed: None,
-                        text: face.text.clone(),
-                        plate: Some(Plate {
-                            source,
-                            triggered,
-                            choice: false,
-                            rules: paragraph.to_owned(),
-                        }),
-                    };
-                    if triggered {
-                        self.faces.push(ability);
-                    } else {
-                        let mut choice = ability.clone();
-                        choice
-                            .plate
-                            .as_mut()
-                            .expect("the ability has a plate")
-                            .choice = true;
-                        let choice_id =
-                            FaceId(id.0.checked_add(1).expect("a match has under 2^16 faces"));
-                        self.choice_plates.insert((source, nth), choice_id);
-                        self.faces.extend([ability, choice]);
-                    }
-                    self.plates.insert((source, triggered, nth), id);
-                }
-            }
-        }
-    }
-
-    /// The plate face of the ability of the face named `name` that is the `nth` triggered (or
-    /// activated) ability its rules text says, as `StackItem::Ability` names it. Allocates
-    /// nothing.
-    #[must_use]
-    pub fn plate(&self, name: &str, triggered: bool, nth: u8) -> Option<FaceId> {
-        let source = self.find(name)?;
-        self.plates.get(&(source, triggered, nth)).copied()
-    }
-
-    /// The face an ability on the stack is drawn with, as `StackItem::Ability` names it: its
-    /// plate face, when its words are a paragraph of its source's printed text (it has no
-    /// `text` of its own) and the source has a plate for it, and otherwise the face of its
-    /// source, named `name`. A delayed trigger that a loyalty ability's paragraph creates has
-    /// no `text` and no plate. The table draws the ability with this face and the
-    /// client asks for the same face at full size (`read_whole`), so the two cannot disagree.
-    /// Allocates nothing.
-    #[must_use]
-    pub fn ability_face(
-        &self,
-        name: &str,
-        triggered: bool,
-        nth: u8,
-        text: Option<&str>,
-    ) -> Option<FaceId> {
-        let source = self.find(name)?;
-        if let Some(rules) = text {
-            return self
-                .find_custom_plate(source, triggered, rules)
-                .or(Some(source));
-        }
-        self.plates
-            .get(&(source, triggered, nth))
-            .copied()
-            .or(Some(source))
-    }
-
-    /// The centered plate of an activated ability read in the mode chooser.
-    #[must_use]
-    pub fn choice_plate(&self, name: &str, nth: u8) -> Option<FaceId> {
-        self.choice_plates.get(&(self.find(name)?, nth)).copied()
     }
 
     /// The faces of the cards `view` shows at full frame rather than battlefield frame: the
@@ -292,7 +200,13 @@ impl FaceList {
                     nth,
                     text,
                     ..
-                } => add(self.ability_face(name, *triggered, *nth, text.as_deref())),
+                } => add(self.ability_face(
+                    name,
+                    view.ability_printing(item),
+                    *triggered,
+                    *nth,
+                    text.as_deref(),
+                )),
             }
         }
         for object in view.objects.iter().filter(|o| o.zone == ZoneName::Hand) {
