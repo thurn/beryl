@@ -434,14 +434,6 @@ pub enum Pending<L: Layout = Small> {
         kinds: u8,
         remaining: u8,
     },
-    /// The attackers are declared and tapped, and the active player pays `remaining`, what is
-    /// left of the total cost to attack (see [CR 508.1h], see [CR 508.1i]), one plan or one
-    /// source at a time. The attack is announced once it is all paid: this is the last step
-    /// of declaring attackers.
-    ///
-    /// [CR 508.1h]: https://yawgatog.com/resources/magic-rules/#R5081h
-    /// [CR 508.1i]: https://yawgatog.com/resources/magic-rules/#R5081i
-    PayingToAttack { remaining: ManaCost },
 }
 
 // The original derived hash wrote each variant's tag as an isize. The enum now has a
@@ -501,7 +493,6 @@ impl<L: Layout> std::hash::Hash for Pending<L> {
                 kinds,
                 remaining,
             } => (22_isize, slot, player, kinds, remaining).hash(state),
-            Self::PayingToAttack { remaining } => (23_isize, remaining).hash(state),
         }
     }
 }
@@ -532,7 +523,6 @@ impl<L: Layout> Pending<L> {
             | Pending::ManaType { .. }
             | Pending::Companion { .. }
             | Pending::CompanionPayment { .. }
-            | Pending::PayingToAttack { .. }
             | Pending::ArrangePiles { .. } => None,
         }
     }

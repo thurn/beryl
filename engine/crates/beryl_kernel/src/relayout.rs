@@ -426,7 +426,6 @@ impl<L: Layout> Relayout for Pending<L> {
             &Pending::DeclareAttackers { attacker } => Pending::DeclareAttackers {
                 attacker: attacker.map(slot),
             },
-            &Pending::PayingToAttack { remaining } => Pending::PayingToAttack { remaining },
             &Pending::DeclareBlockers { blocker } => Pending::DeclareBlockers {
                 blocker: blocker.map(slot),
             },

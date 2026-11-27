@@ -113,7 +113,6 @@ fn resolve_top<L: Layout>(
         | Pending::ManaType { .. }
         | Pending::Companion { .. }
         | Pending::CompanionPayment { .. }
-        | Pending::PayingToAttack { .. }
         | Pending::ArrangePiles { .. } => Default::default(),
     };
     let may_ask = replacement::resolution_may_ask(s, t, &entry, ability);

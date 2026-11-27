@@ -15,16 +15,13 @@
 //! Implements: none. Reference enumeration for combat requirements and restrictions.
 
 use super::check;
-use super::{reference_pays, reference_units};
-use crate::card::ManaCost;
 use crate::card::{Keywords, Types};
 use crate::combat;
-use crate::continuous::combat_rules::{attack_cost, combat_rules_for, combat_rules_on, times};
+use crate::continuous::combat_rules::{combat_rules_for, combat_rules_on};
 use crate::continuous::rule_change;
 use crate::decision::{Candidates, Opt};
 use crate::invariants::{At, Violation};
 use crate::layout::{Layout, Queue};
-use crate::mana::Paying;
 use crate::state::{AttackTarget, Pending, RuleKind, State};
 use crate::table::{Capability, GameTable};
 use beryl_card::Governed;
@@ -72,9 +69,7 @@ fn check_attack_decision<L: Layout>(s: &State<L>, t: &GameTable) -> Result<(), V
         return Ok(());
     }
 
-    let Some(maximal) = enumerate_attacks(s, t, &already, &eligible) else {
-        return Ok(());
-    };
+    let maximal = enumerate_attacks(s, t, &already, &eligible);
     let Ok(decision) = combat::attack_decision(s, t, None) else {
         return Ok(());
     };
@@ -111,16 +106,13 @@ fn check_attack_decision<L: Layout>(s: &State<L>, t: &GameTable) -> Result<(), V
 }
 
 /// Enumerates all subsets of `eligible` (as bitmasks) that form a legal attack declaration
-/// obeying the maximum possible number of requirements. A declaration whose cost to attack
-/// can't be paid is illegal: creatures added attack a planeswalker for free if the defending
-/// player controls one, and the defending player otherwise, and the attackers without
-/// vigilance can't tap for mana to pay. `None` where the cost or the mana can't be said.
+/// obeying the maximum possible number of requirements.
 fn enumerate_attacks<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     already: &[L::Slot],
     eligible: &[L::Slot],
-) -> Option<Vec<u8>> {
+) -> Vec<u8> {
     let active = s.turn().active();
     let limit = combat_rules_for(s, t, active)
         .common(t.rules_of(RuleKind::CombatLimit))
@@ -139,35 +131,13 @@ fn enumerate_attacks<L: Layout>(
     let has_planeswalker = s
         .permanents_with_derived()
         .any(|(_, d)| d.types.contains(Types::PLANESWALKER) && defending.contains(d.controller));
-    let per = match s.players_in_turn_order(defending).next() {
-        Some(player) => attack_cost(s, t, player).ok()?,
-        None => ManaCost::NONE,
-    };
-    let waived = !has_planeswalker && !per.is_zero();
-    let attacking_player = already
-        .iter()
-        .filter(|&&slot| {
-            matches!(
-                s.object(slot).attack_target(),
-                Some(AttackTarget::Player(_))
-            )
-        })
-        .count();
-    let paid_for = |chosen: &[L::Slot]| -> Option<bool> {
-        let added = chosen.len() - already.len();
-        let n = attacking_player + if has_planeswalker { 0 } else { added };
-        if n == 0 || per.is_zero() {
-            return Some(true);
-        }
-        let tapping = chosen
-            .iter()
-            .copied()
-            .filter(|&slot| !s.derived(slot).keywords.contains(Keywords::VIGILANCE))
-            .collect();
-        let units = reference_units(s, t, active, Paying::NOTHING, tapping)?;
-        let total = times(per, u32::try_from(n).ok()?).ok()?;
-        Some(reference_pays(units.as_slice(), total))
-    };
+    let has_attack_cost = !t.rules_of(RuleKind::AttackCost).is_empty()
+        && s.players_in_turn_order(defending).any(|p| {
+            !combat_rules_for(s, t, p)
+                .common(t.rules_of(RuleKind::AttackCost))
+                .is_empty()
+        });
+    let waived = !has_planeswalker && has_attack_cost;
 
     let is_alone = |slot: L::Slot| {
         combat_rules_on(s, t, slot)
@@ -201,9 +171,6 @@ fn enumerate_attacks<L: Layout>(
         if chosen.len() == 1 && is_alone(chosen[0]) {
             continue;
         }
-        if !paid_for(&chosen)? {
-            continue;
-        }
         let obeyed: usize = chosen.iter().map(|&c| reqs(c)).sum();
         let mask_u8 = u8::try_from(mask).expect("at most 6 creatures");
         match best {
@@ -223,7 +190,7 @@ fn enumerate_attacks<L: Layout>(
             _ => {}
         }
     }
-    Some(maximal)
+    maximal
 }
 
 /// Checks `combat::block_decision(s, t, chosen)` against exhaustive enumeration.
@@ -568,8 +535,7 @@ pub(crate) fn verify_all_paths<L: Layout>(s: &State<L>, t: &GameTable) {
             })
             .collect();
         let classes = class_of(&eligible);
-        let maximal =
-            enumerate_attacks(s, t, &[], &eligible).expect("a cost and mana the reference says");
+        let maximal = enumerate_attacks(s, t, &[], &eligible);
         let mut expected: BTreeSet<Vec<usize>> = BTreeSet::new();
         for mask in maximal {
             let mut decl: Vec<usize> = eligible
@@ -612,19 +578,13 @@ pub(crate) fn verify_all_paths<L: Layout>(s: &State<L>, t: &GameTable) {
                     let mut next = cur.clone();
                     let mut sink = crate::replacement::event::Sink::default();
                     combat::attack(&mut next, t, &mut sink, opt).expect("apply attack");
-                    // Aims the attacker at the last target offered: a planeswalker if the
-                    // defending player controls one, which costs nothing to attack.
-                    if let Pending::DeclareAttackers {
-                        attacker: Some(aiming),
-                        ..
-                    } = *next.pending()
-                    {
-                        let aim = combat::attack_decision(&next, t, Some(aiming)).expect("aim");
-                        let Candidates::Options(targets) = aim.candidates else {
-                            panic!("expected Options");
-                        };
-                        let target = *targets.as_slice().last().expect("a target");
-                        combat::attack(&mut next, t, &mut sink, target).expect("apply defender");
+                    // Resolve target choice silently if aiming.
+                    if matches!(
+                        *next.pending(),
+                        Pending::DeclareAttackers { attacker: Some(_) }
+                    ) {
+                        combat::attack(&mut next, t, &mut sink, Opt::Defender(None))
+                            .expect("apply defender");
                     }
                     let _ = slot;
                     stack.push(next);

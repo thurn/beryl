@@ -263,7 +263,6 @@ pub fn cost_being_cast<L: Layout>(s: &State<L>, t: &GameTable, x: u8) -> Option<
         | Pending::ManaType { .. }
         | Pending::Companion { .. }
         | Pending::CompanionPayment { .. }
-        | Pending::PayingToAttack { .. }
         | Pending::ArrangePiles { .. } => None,
     }
 }

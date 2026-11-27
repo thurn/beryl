@@ -307,18 +307,6 @@
   },
   {
     "oracle": "xmage",
-    "card": "Propaganda",
-    "scenario": "under Propaganda each combat's attack is paid for",
-    "gap": "the exporter schedules declarations by turn and step name, which conflates attackers in repeated combats"
-  },
-  {
-    "oracle": "forge",
-    "card": "Propaganda",
-    "scenario": "under Propaganda each combat's attack is paid for",
-    "gap": "the harness uses standard phase order and treats the added beginning of combat as already passed during the main phase before it"
-  },
-  {
-    "oracle": "xmage",
     "card": "Gisela, the Broken Blade",
     "scenario": "Phantasmal Image copies Brisela as one object with mana value 0",
     "gap": "XMage's meld asks its controller to pick the Bruna to exile even when there is one, and its test player answers that with the choice the scenario scripts for Phantasmal Image"

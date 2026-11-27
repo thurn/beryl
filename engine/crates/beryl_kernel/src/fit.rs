@@ -375,7 +375,6 @@ impl<L: Layout> State<L> {
             | Pending::ManaType { .. }
             | Pending::Companion { .. }
             | Pending::CompanionPayment { .. }
-            | Pending::PayingToAttack { .. }
             | Pending::ArrangePiles { .. } => Ok(()),
         }
     }

@@ -250,11 +250,6 @@ def cast_targets(
     return answers
 
 
-ATTACK_COST: re.Pattern[str] = re.compile(
-    r"can't attack you unless their controller pays", re.I
-)
-
-
 class Combat:
     def __init__(self, faces: Faces) -> None:
         self.faces = faces
@@ -263,20 +258,6 @@ class Combat:
         self.members: dict[int, dict[str, list[str]]] = {}
         self.blocks: dict[int, dict[str, str]] = {}
         self.trampled: set[int] = set()
-
-    def attack_costs(self, export: Exporter, defender: str) -> int:
-        """How many permanents the defending player starts with that make attacking them cost
-        something, as "Creatures can't attack you unless their controller pays {2} for each
-        creature they control that's attacking you." does."""
-        seat = 0 if defender == "playerA" else 1
-        players = cast(list[Json], export.setup["players"])
-        return sum(
-            1
-            for permanent in cast(list[Json], players[seat]["battlefield"])
-            if ATTACK_COST.search(
-                self.faces.oracle.get(cast(str, permanent["card"]), "")
-            )
-        )
 
     def has_banding(self, card: str) -> bool:
         return bool(re.search(r"^Banding\b", self.faces.oracle.get(card, ""), re.M))
@@ -318,13 +299,7 @@ class Combat:
             defender = targets[first]
         else:
             defender = "playerB" if who == "playerA" else "playerA"
-            # The attacker's target is the next answer, after any assertions about the
-            # question.
-            following = [
-                a
-                for a in export.actions[export.index + 1 :]
-                if a.get("action") != "Assert"
-            ][:1]
+            following = export.actions[export.index + 1 : export.index + 2]
             if following and following[0].get("kind") == "AttackTarget":
                 target = cast(Json, following[0]["pick"])
                 export.taken.add(id(following[0]))
@@ -334,11 +309,6 @@ class Combat:
         export.emit(
             f"attack({export.turn(p.turn)}, {who}, {java_string(card)}, {defender});"
         )
-        if defender in ("playerA", "playerB"):
-            # XMage asks whether to pay a cost to attack a player once for each attacker and
-            # each permanent that makes one, then pays it from the sources it chooses.
-            for _ in range(self.attack_costs(export, defender)):
-                export.emit(f"setChoice({who}, true);")
 
         if any(
             later.turn == p.turn

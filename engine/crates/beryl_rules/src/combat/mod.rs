@@ -15,24 +15,21 @@ use crate::engine::{collapse, interchangeable};
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
-use crate::replacement::event::{Event, Sink};
+use crate::replacement::event::{self, Event, Sink};
 use crate::replacement::protection;
 use crate::state::{AttackTarget, CombatRole, Count, Pending, State, Tracker, TurnStep};
 use crate::table::{Capability, GameTable};
 use beryl_kernel::reference::Permanent;
 
 mod assignment;
-pub(crate) mod attack_cost;
 mod banding;
 pub mod damage;
-mod finish;
 pub(crate) mod requirements;
 
 pub use assignment::{assigner, preferred_damage};
 pub(crate) use assignment::{
     begin_damage, divide, division_decision, exact_decision, first_strike_step,
 };
-use finish::finish_attack;
 
 fn has<L: Layout>(s: &State<L>, slot: L::Slot, keyword: Keywords) -> bool {
     s.derived(slot).keywords.contains(keyword)
@@ -183,9 +180,6 @@ pub(crate) fn attack_decision<L: Layout>(
         (s.turn().active(), DecisionKind::Attacker, Part::Pick)
     } else {
         list = attack_targets(s)?;
-        if attack_cost::possible(t) {
-            attack_cost::keep_payable_targets(s, t, &mut list)?;
-        }
         (s.turn().active(), DecisionKind::AttackTarget, Part::Aim)
     };
     Ok(Decision {
@@ -320,6 +314,81 @@ fn declare_attacker<L: Layout>(s: &mut State<L>, t: &GameTable, attacker: Perman
     // for effects. Only a declaration pick records the turn's attack history.
     s.track(t, Tracker::AttackedThisTurn, attacker);
     s.count(t, Count::AttackersDeclared, s.turn().active());
+}
+
+/// Finishes the attack declaration: the attackers tap, then attack triggers trigger.
+///
+/// [CR 508.1f](https://yawgatog.com/resources/magic-rules/#R5081f): "The active player taps the
+/// chosen creatures. Tapping a creature when it's declared as an attacker isn't a cost; attacking
+/// simply causes creatures to become tapped."
+///
+/// [CR 508.3a](https://yawgatog.com/resources/magic-rules/#R5083a): "An ability that reads
+/// "Whenever [a creature] attacks, . . ." triggers if that creature is declared as an attacker. ...
+/// Such abilities won't trigger if a creature is put onto the battlefield attacking." The event
+/// names only the declared attackers (see [CR 508.4]): creatures put onto the battlefield attacking,
+/// "for the purposes of trigger events and effects, ... never 'attacked.'"
+///
+/// The taps and the attack are kept as one group: the one declaration ([CR 508.1]: "First, the
+/// active player declares attackers. This turn-based action doesn't use the stack.").
+///
+/// [CR 508.4]: https://yawgatog.com/resources/magic-rules/#R5084
+fn finish_attack<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+) -> Result<(), Full> {
+    s.settle_question();
+    sink.together();
+    let declared = declare_attack(s, t, sink);
+    sink.apart();
+    declared
+}
+
+/// [`finish_attack`], inside the group it opens.
+fn declare_attack<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+) -> Result<(), Full> {
+    let attackers: Bitboard<L::Slot> = s
+        .battlefield()
+        .iter()
+        .copied()
+        .filter(|&slot| s.object(slot).is_attacking())
+        .collect();
+    // In battlefield order, never slot order: the taps' events are seen in this order, and a
+    // slot number says nothing about a card (architecture §13). Tapping moves nothing. A
+    // sole attacker has no order, and needs no walk of the battlefield.
+    let tap = |s: &mut State<L>, sink: &mut Sink<L>, slot| {
+        if has(s, slot, Keywords::VIGILANCE) {
+            return Ok(());
+        }
+        let Some(permanent) = s.permanent_at(slot) else {
+            return Ok(());
+        };
+        event::set_tapped(s, t, sink, permanent, true)
+    };
+    let mut untapped = attackers;
+    if attackers.count() > 1 {
+        for i in 0..s.battlefield().len() {
+            let slot = s.battlefield()[i];
+            if untapped.contains(slot) {
+                untapped.remove(slot);
+                tap(s, sink, slot)?;
+                if untapped.is_empty() {
+                    break;
+                }
+            }
+        }
+    }
+    if let Some(slot) = untapped.sole() {
+        tap(s, sink, slot)?;
+    }
+    if attackers.is_empty() {
+        return Ok(());
+    }
+    let declared = s.declare_attack(s.permanents_in(attackers));
+    event::settle(s, t, sink, declared)
 }
 
 /// Whether `blocker` may block `attacker`: an attacker attacking the defending player or a

@@ -143,9 +143,6 @@ pub(crate) fn decision<L: Layout>(
             catalog::decision(t, s.object(slot).owner(), kind, Bitboard::single(slot))
         }
         Pending::DeclareAttackers { attacker } => combat::attack_decision(s, t, attacker),
-        Pending::PayingToAttack { remaining } => {
-            combat::attack_cost::decision(s, t, sink, remaining)
-        }
         Pending::DeclareBlockers { blocker } => combat::block_decision(s, t, blocker),
         Pending::CombatDamage {
             source, ref lethal, ..
@@ -384,13 +381,6 @@ pub(super) fn perform_machine<L: Layout>(
             let option = d.candidates.option(c).expect("a payment");
             act(s, &mut x.events, d.player, None);
             let done = companion::pay(s, t, &mut x.events, player, remaining, option);
-            x.events.leave();
-            done
-        }
-        Pending::PayingToAttack { remaining } => {
-            let option = d.candidates.option(c).expect("a payment");
-            act(s, &mut x.events, d.player, None);
-            let done = combat::attack_cost::pay(s, t, &mut x.events, remaining, option);
             x.events.leave();
             done
         }

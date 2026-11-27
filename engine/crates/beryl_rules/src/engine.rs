@@ -107,7 +107,6 @@ fn replay_paused<'a, L: Layout>(
         | Pending::ManaType { .. }
         | Pending::Companion { .. }
         | Pending::CompanionPayment { .. }
-        | Pending::PayingToAttack { .. }
         | Pending::ArrangePiles { .. } => None,
     }
 }

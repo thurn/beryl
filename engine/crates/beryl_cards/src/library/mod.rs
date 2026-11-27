@@ -146,7 +146,6 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
     ("combat", names::LURE, combat::MUST_BLOCK),
     ("combat", names::ALLEY_STRANGLER, combat::MENACE),
     ("combat", names::BLOODROCK_CYCLOPS, combat::MUST_ATTACK),
-    ("combat", names::PROPAGANDA, combat::ATTACK_COST),
     (
         "continuous",
         names::TEFERI_TIME_RAVELER,
