@@ -181,9 +181,14 @@ impl Badges {
         self.sizes().em()
     }
 
-    /// How far a badge's panel lies above the card's face, in millimetres.
-    fn raise(&self) -> f32 {
-        self.tuning().raise * self.em()
+    /// How far a badge's panel lies above the card's face, in millimetres of card space.
+    /// Clamped so that glyphs at `2 * raise` stay within half of `card.layer` along a tilted
+    /// card's normal, never poking through a card stacked in front of it.
+    fn raise(&self, pose: &Pose) -> f32 {
+        let base = self.tuning().raise * self.em();
+        let normal_z = (pose.rotation * glam::Vec3::Z).z.abs();
+        let limit = self.sizes().card.layer * normal_z / 2.0 / 2.0;
+        if limit > 0.0 { base.min(limit) } else { base }
     }
 
     fn style(&self) -> TypeStyle {
@@ -541,7 +546,7 @@ impl Badges {
             corner.y - lock.top * self.em(),
         );
         let at = top_left + Vec2::new(size.x, -size.y) / 2.0;
-        let raise = self.raise();
+        let raise = self.raise(&on.pose);
         builder.draw(
             on.band,
             Draw::panel(
@@ -598,7 +603,7 @@ impl Badges {
             return false;
         }
         *left -= records;
-        panel(plate, (card, on, self.raise()), builder);
+        panel(plate, (card, on, self.raise(&on.pose)), builder);
         let width = name.map_or(0.0, Name::width) + self.width(label, plate.numerals);
         let mut x = plate.at.x - width / 2.0;
         if let Some(name) = name {
@@ -643,7 +648,7 @@ impl Badges {
         builder: &mut FrameBuilder,
     ) {
         let scale = self.scale;
-        let raise = self.raise();
+        let raise = self.raise(&on.pose);
         for glyph in glyphs {
             let Some(placed) = self.glyphs.get(glyph_key(style, scale, glyph.glyph)) else {
                 continue;

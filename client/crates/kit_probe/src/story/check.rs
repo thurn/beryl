@@ -9,6 +9,7 @@ impl Player {
     pub fn check(&mut self, times: impl IntoIterator<Item = u64>, context: &Context) -> Checked {
         let mut checked = Checked::default();
         let mut context = context.clone();
+        self.look(true);
         let mut kept = Vec::new();
         for time in times {
             self.seek(time);

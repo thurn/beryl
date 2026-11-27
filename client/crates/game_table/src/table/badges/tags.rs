@@ -162,7 +162,7 @@ impl Badges {
             edge: badge::COPY_BORDER,
             numerals: text,
         };
-        panel(&plate, (card, on, self.raise()), builder);
+        panel(&plate, (card, on, self.raise(&on.pose)), builder);
         let pen = Vec2::new(
             x + border + self.tuning().copy.padding_x * self.em(),
             middle + text / 2.0,
@@ -207,7 +207,7 @@ impl Badges {
             edge: badge::NOTE,
             numerals: text,
         };
-        panel(&plate, (card, on, self.raise()), builder);
+        panel(&plate, (card, on, self.raise(&on.pose)), builder);
         let left = -size.x / 2.0 + self.tuning().note.padding_x * self.em();
         let pen = Vec2::new(left, plate.at.y + text / 2.0);
         let ink = (pen, k, color::TYPE);
