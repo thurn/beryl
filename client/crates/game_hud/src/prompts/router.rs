@@ -218,8 +218,14 @@ impl Router {
         }
         let next = match reply {
             ClickReply::Open { prompt } => {
-                // The choice among an offered card's ways may still play that same card.
-                if !prompt.is(Purpose::Act) {
+                // A prompt opened instead of playing at once, so let a dropped card return to the
+                // hand. Keep remembering which twin was chosen while Choose One is open, since
+                // picking a way may still play that card.
+                if prompt.is(Purpose::Act) {
+                    if let Some((_, slot)) = self.hand_play {
+                        show.cancel_hand_play(slot);
+                    }
+                } else {
                     self.cancel_hand_play(show);
                 }
                 open.map(|decision| (decision, *prompt))

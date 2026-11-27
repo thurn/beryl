@@ -26,7 +26,8 @@ impl Show {
         in_hand
     }
 
-    /// Lets a card go home after its click was refused or its play was cancelled.
+    /// Lets a dropped card return to the hand when its click was refused, cancelled, or opened a
+    /// prompt instead of playing it at once.
     pub fn cancel_hand_play(&mut self, slot: ObjectId) {
         self.pointer.resume_fall(usize::from(slot.0));
     }

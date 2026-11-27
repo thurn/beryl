@@ -598,3 +598,36 @@ fn a_card_dragged_out_to_cast_never_heads_back_toward_its_hand_slot() {
         );
     }
 }
+
+#[test]
+fn dropping_a_card_that_opens_choose_one_returns_it_to_the_hand() {
+    for (width, height, layout, drop_at) in [
+        (1600.0, 900.0, SizeClass::Regular, Vec2::new(1246.0, 387.0)),
+        (393.0, 759.0, SizeClass::Compact, Vec2::new(260.0, 300.0)),
+    ] {
+        let mut page = page("shape-cycle", Side::You, layout, Size { width, height })
+            .expect("shape-cycle recording");
+        page.seek(&"prompt:1".parse().expect("prompt moment"))
+            .expect("priority to play or cycle Remote Isle");
+        page.still();
+        let rest = page.find("card \"Remote Isle\" #5").rect;
+        page.run(&format!(
+            "drag card \"Remote Isle\" #5 to {},{}\nstill",
+            drop_at.x, drop_at.y
+        ));
+        let card = page.find("card \"Remote Isle\" #5");
+        assert!(
+            !card.state.has(StateBits::HELD | StateBits::MOVING),
+            "{width}x{height}: Remote Isle should be at rest in hand while Choose One is open, \
+             got state {:?} at {:?}",
+            card.state,
+            card.rect
+        );
+        assert!(
+            (card.rect.x - rest.x).abs() < 1.0 && (card.rect.y - rest.y).abs() < 1.0,
+            "{width}x{height}: Remote Isle returned to {:?}, expected hand slot {:?}",
+            card.rect,
+            rest
+        );
+    }
+}

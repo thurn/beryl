@@ -114,12 +114,33 @@ mod playback {
             let moment = Moment::At(Duration(self.story_moment?));
             self.seek(&moment).ok()?;
             let context = self.context();
+            let at_rest = self.client.wake() == kit_frame::frame::Wake::Never;
             let frame = self.frame();
             let mut judged = Judged::default();
             judged.frame(frame, &context);
             game_probe::agent::count_frame(&mut judged, frame);
+            let mut faults = game_probe::agent::check(frame, &context);
+            if at_rest {
+                for (index, element) in frame.resolved.iter().enumerate() {
+                    if element.state.has(kit_frame::frame::StateBits::MOVING) {
+                        let locator = kit_probe::agent::tree::locator_of(frame, index as u32);
+                        let rect = kit_scene::hit::bounds(element);
+                        let subject = kit_probe::agent::Subject { locator, rect };
+                        let message = format!(
+                            "{} is still marked moving while the scene is at rest",
+                            subject.describe()
+                        );
+                        faults.push(kit_probe::agent::Fault {
+                            rule: kit_probe::agent::Rule::RestPlacement,
+                            elements: vec![subject],
+                            at: context.at,
+                            message,
+                        });
+                    }
+                }
+            }
             Some(Checked {
-                faults: game_probe::agent::check(frame, &context),
+                faults,
                 frames: 1,
                 visibility_only_frames: 0,
                 line_pairs: 0,
