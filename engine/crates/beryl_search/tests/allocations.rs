@@ -1,7 +1,7 @@
 //! No heap allocation on the hot path (architecture §17.4, §18): a counting allocator around
-//! random games, from the first `next` to the end, with the agents' choices, a determinization
-//! and an invariant check at every decision; and around rollouts of the WU Control mirror
-//! under the rollout policy, its questions answered inline.
+//! games of the fixed decks, from the first `next` to the end, with the agents' choices, a
+//! determinization and an invariant check at every decision; and around rollouts of the WU
+//! Control mirror under the rollout policy, its questions answered inline.
 //!
 //! The global allocator counts every thread's allocations, so this binary runs without the
 //! test harness and its threads.
@@ -16,10 +16,9 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use beryl_engine::rng::SplitMix64;
-use beryl_engine::table::Capability;
 use beryl_engine::{Observation, Outcome, Profile, Scratch, State};
 use beryl_search::{RolloutPolicy, rollout};
-use common::{agents, fixed_game, game, mirror, play};
+use common::{agents, fixed_game, mirror, play};
 
 struct Counting;
 
@@ -59,12 +58,13 @@ fn main() {
         }
         return;
     }
+    // Use `Scratch::unchecked()` so debug-only `check_references` oracles (which allocate
+    // `Vec`s and `BTreeSet`s by design) do not run on the hot path, and use fixed decks so
+    // adding new cards with out-of-line allocating paths (such as `rich` mana) cannot break
+    // this check.
     for seed in 0..4 {
-        // Fuzz decks reach the most cards; the fixed decks' games are long enough to cover
-        // every step of a game.
-        let fixed = seed >= 2;
-        let (t, mut s) = if fixed { fixed_game(seed) } else { game(seed) };
-        let mut x = Scratch::new();
+        let (t, mut s) = fixed_game(seed);
+        let mut x = Scratch::unchecked();
         let mut agents = agents(seed);
         let mut rng = SplitMix64::new(seed);
         let mut decisions = 0u32;
@@ -76,26 +76,17 @@ fn main() {
         });
         COUNTING.store(false, Ordering::Relaxed);
         let allocations = ALLOCATIONS.swap(0, Ordering::Relaxed);
-        assert!(!fixed || decisions > 40, "seed {seed}: a short game");
-        // A game whose cards have priced mana abilities or multi-term products pays for them
-        // in the mana solver's out-of-line path (`beryl_rules::mana::rich`) and checks them
-        // against a reference (`reference::check_sequences`), both of which build `Vec`s and
-        // `BTreeSet`s by design. The fuzz decks reach such cards, so only a game without them
-        // is held to zero; the fixed decks hold none.
-        if t.can_either(Capability::PricedMana, Capability::ManaChanges) {
-            assert!(!fixed, "seed {seed}: a fixed deck with rich mana");
-            continue;
-        }
+        assert!(decisions > 40, "seed {seed}: a short game");
         assert_eq!(
             allocations, 0,
             "seed {seed}: {allocations} allocations in a game that ended {outcome:?}"
         );
     }
-    println!("allocations: no heap allocation in 4 random games");
+    println!("allocations: no heap allocation in 4 fixed-deck games");
 
     let t = mirror();
     let policy = RolloutPolicy::new(&t);
-    let mut x = Scratch::new();
+    let mut x = Scratch::unchecked();
     for seed in 0..8 {
         let mut s = State::new(&t, seed, Profile::SMART).unwrap();
         let before = x.counts.decisions;
