@@ -72,6 +72,15 @@ pub struct Objects {
     pub(crate) floors: Floors,
 }
 
+/// A card to write: its object, the view that names it, whether it is under way with its state
+/// bits, and the pose of a box that holds it with whether it rests in its slot.
+type Drawn<'a> = (
+    &'a SceneObject,
+    &'a PlayerView,
+    (bool, u32),
+    (Option<Pose>, bool),
+);
+
 impl Objects {
     /// Where the card in `slot` rests, if the scene has one there.
     #[must_use]
@@ -420,9 +429,13 @@ impl Table {
             if layout_motion && !self.in_tray(slot) && boxed.is_none() {
                 state |= StateBits::LAYOUT_MOTION;
             }
+            // A permanent's marks wait until it rests in its slot: its zone is the battlefield from
+            // the moment the spell resolves, but the script still holds it large at the stack's
+            // place and flies it over (`Track::settled`).
+            let landed = track.is_none_or(|(track, time)| track.settled(time));
             self.write_card(
                 slot,
-                (&object, drawn, (under_way, state), held_at),
+                (&object, drawn, (under_way, state), (held_at, landed)),
                 (view, faces),
                 (back, dress, self.handed_waiting(motion) || between_zones),
                 builder,
@@ -575,12 +588,7 @@ impl Table {
     fn write_card(
         &self,
         slot: usize,
-        (object, view, (under_way, mut state), held_at): (
-            &SceneObject,
-            &PlayerView,
-            (bool, u32),
-            Option<Pose>,
-        ),
+        (object, view, (under_way, mut state), (held_at, landed)): Drawn<'_>,
         (shown_view, faces): (&PlayerView, &Faces),
         (back, dress, waiting): (u16, &Dress<'_>, bool),
         builder: &mut FrameBuilder,
@@ -660,7 +668,7 @@ impl Table {
         let band = builder.node_band(at);
         if shown.zone == ZoneName::Battlefield {
             own::write(
-                (slot, shown, object.place.on_battlefield()),
+                (slot, shown, landed && object.place.on_battlefield()),
                 (&look, &self.data.own),
                 &self.fights,
                 (dress.now, band),

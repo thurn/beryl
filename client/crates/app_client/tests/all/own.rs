@@ -158,6 +158,91 @@ fn a_creature_spell_on_the_stack_has_no_sickness_badge() {
     assert_eq!(moon_backdrops(&frame).count(), 0);
 }
 
+/// A creature spell that resolves: it leaves the stack and flies to the battlefield. Its zone is
+/// the battlefield from the first frame of the flight, but it is drawn large and moving until it
+/// lands, and a sickness badge there reads as a permanent the player could attack with.
+#[test]
+fn a_resolving_creature_spell_has_no_sickness_badge_until_it_lands() {
+    use app_client::driver::Duration;
+    use beryl_protocol::GameUpdate;
+    use beryl_protocol::ipc::FixtureMessage;
+    use beryl_protocol::protocol::{StackItem, Why};
+    use beryl_protocol::script::Act;
+    use beryl_protocol::testing::timing;
+
+    let mut cast = ViewBuilder::new();
+    let spell = cast.card(ZoneName::Stack, Side::You, "Serra Angel");
+    spell.types = vec![CardType::Creature];
+    spell.summoning_sick = true;
+    let slot = spell.slot;
+    cast.script(ScriptBuilder::reset().build());
+    let before = cast.update();
+
+    let mut view = before.view.clone();
+    view.stack.retain(|item| *item != StackItem::spell(slot));
+    view.battlefield.push(slot);
+    let landed = view
+        .objects
+        .iter_mut()
+        .find(|object| object.slot == slot)
+        .expect("the spell is in the view");
+    landed.zone = ZoneName::Battlefield;
+    let object = landed.clone();
+    view.script = Some(
+        ScriptBuilder::default()
+            .beat([Act::Fly {
+                from: ZoneName::Stack,
+                why: Why::Resolve,
+                object,
+                at: None,
+                item: None,
+                origin: None,
+            }])
+            .build(),
+    );
+    view.script.as_mut().expect("a script").timing = vec![timing(420.0)];
+    let after = GameUpdate {
+        session: before.session,
+        view,
+    };
+    let messages = vec![
+        FixtureMessage::game_update(&before),
+        FixtureMessage::game_update(&after),
+    ];
+    let mut page = Page::new(
+        crate::test_data::data(),
+        Recording(messages).into(),
+        Side::You,
+        Size {
+            width: 1440.0,
+            height: 900.0,
+        },
+    )
+    .expect("the views can be read");
+    let mut moving = 0;
+    let mut badges = 0;
+    for _ in 0..300 {
+        page.step(Duration::from_millis(10));
+        let frame = page.frame().clone();
+        let resting = !frame
+            .resolved
+            .iter()
+            .any(|element| element.state.has(kit_frame::frame::StateBits::MOVING));
+        let moon = !marks(&frame, sprites::MOON).is_empty();
+        if !resting {
+            moving += 1;
+            assert!(
+                !moon,
+                "a badge is drawn at {} ms, before the card lands",
+                page.now() / MS
+            );
+        }
+        badges += usize::from(moon);
+    }
+    assert!(moving > 0, "the card flies");
+    assert!(badges > 0, "the badge appears once the card has landed");
+}
+
 #[test]
 fn a_token_wears_a_coin_and_a_stolen_permanent_no_outline() {
     let frame = show(
