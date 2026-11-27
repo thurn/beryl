@@ -81,7 +81,9 @@ impl<'a> Profile<'a> {
             phone::layout(self.data, self.window, banded)
         } else {
             let anchored = table.anchored.as_ref().expect("validated anchored table");
-            desktop::reference(self.data, anchored)
+            let mut layout = desktop::reference(self.data, anchored);
+            layout.hand.room = desktop::fitted_hand_room(self.data, self.window, layout.hand);
+            layout
         };
         layout.tray = self.fit_tray(layout.tray);
         self.region_fit.apply(self.data, self.window, &mut layout);

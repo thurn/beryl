@@ -7,6 +7,9 @@ use crate::table::{
 };
 use kit_base::data::Card;
 use kit_base::data::profiles::{Anchored, ProfileData, TrayTuning, anchored};
+use kit_base::geometry::Window;
+use kit_base::tokens::{size, space};
+use kit_ui::layout::DOCK_RIGHT;
 
 /// The profile's table before any window-specific fitting.
 pub(super) fn reference(profile: &ProfileData, data: &Anchored) -> Layout {
@@ -102,6 +105,29 @@ fn hand(data: anchored::Hand) -> HandData {
         ceiling: f32::INFINITY,
         back_left: None,
     }
+}
+
+/// Caps the desktop hand's centre span so its rightmost card clears the turn and pass-on buttons
+/// at the window's bottom right, closing up the fan on narrower aspect ratios such as 1440x900
+/// without changing wider windows.
+pub(super) fn fitted_hand_room(profile: &ProfileData, window: Window, hand: HandData) -> f32 {
+    let card = profile.table.camera.card;
+    let card_width = window.size.height * hand.height * card.width / card.height;
+    if card_width <= 0.0 {
+        return hand.room;
+    }
+    // `turn_action` places the round `pass_on` button (`BUTTON_HEIGHT`) `space::M` left of the
+    // turn button (`BUTTON_WIDTH`) at `DOCK_RIGHT` from the right safe area.
+    let dock_left = window.size.width
+        - window.safe_area.right
+        - DOCK_RIGHT
+        - size::BUTTON_WIDTH
+        - space::M
+        - size::BUTTON_HEIGHT;
+    let half_room = dock_left - space::M - window.size.width * 0.5;
+    // A tilted outer card's bounding box extends ~0.6 card widths beyond its centre.
+    let max_room = (2.0 * (half_room / card_width - 0.6)).max(0.0);
+    hand.room.min(max_room)
 }
 
 fn stack(data: anchored::Stack) -> StackData {
