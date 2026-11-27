@@ -530,7 +530,8 @@ impl<L: Layout> State<L> {
         self.memos.entries.push(Remembered { slot, memo })?;
         self.memos.kinds.0 |= memo.kinds();
         self.keyed.insert(slot);
-        if memo.layer_input() {
+        if memo.layer_input() || (matches!(memo, Memo::ExiledWith(_)) && self.layers_read_linked())
+        {
             self.flags.derived_dirty = true;
         }
         Ok(())

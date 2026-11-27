@@ -62,6 +62,18 @@ pub(super) fn apply_to_members<L: Layout>(
         };
         return grant(s, members, row);
     }
+    if let LayerChange::Lend {
+        face,
+        ability,
+        part,
+    } = change
+    {
+        let GrantSource::Permanent(lender) = granter else {
+            unreachable!("a lending effect is a static ability of a permanent");
+        };
+        let lent_ix = super::granted::lent_index::<L>(t, source, face, ability, part);
+        return grant(s, members, GrantRow::lent(source, lender, lent_ix));
+    }
     let each = reads_each::<L>(t, source, change);
     let change = settle(s, t, source, change, by);
     let mut applied = Ok(());
@@ -166,7 +178,8 @@ pub(super) fn settle<L: Layout>(
         | LayerChange::SetSubtype(_)
         | LayerChange::DefinedPt(..)
         | LayerChange::AddProtection(_)
-        | LayerChange::GrantEscape) => change,
+        | LayerChange::GrantEscape
+        | LayerChange::Lend { .. }) => change,
     }
 }
 
@@ -232,7 +245,8 @@ fn read<L: Layout>(
         | Modification::AddChosenColor
         | Modification::SwitchPt
         | Modification::AddProtection(_)
-        | Modification::GrantEscape => {
+        | Modification::GrantEscape
+        | Modification::Lend(_) => {
             unreachable!("the layers read the amounts of a part that has some")
         }
     }
@@ -413,7 +427,8 @@ pub(super) fn apply<L: Layout>(
         | LayerChange::SetSubtype(_)
         | LayerChange::DefinedPt(..)
         | LayerChange::AddProtection(_)
-        | LayerChange::GrantEscape => {}
+        | LayerChange::GrantEscape
+        | LayerChange::Lend { .. } => {}
     }
     modify(t, s.results(), i, change);
     Ok(())
@@ -492,7 +507,9 @@ fn modify<L: Layout>(t: &GameTable, derived: &mut [Derived<L>], i: usize, change
         // see CR 702.138a: escape "functions while the card with escape is in a player's
         // graveyard", so a permanent that has it gets nothing a rule reads.
         LayerChange::GrantEscape => {}
-        LayerChange::Grant(_) => unreachable!("applied by `apply_to_members`"),
+        LayerChange::Grant(_) | LayerChange::Lend { .. } => {
+            unreachable!("applied by `apply_to_members`")
+        }
         // CR 613.1e: "Layer 5: Color-changing effects are applied."
         LayerChange::SetColors(colors) => d.colors = colors,
         LayerChange::AddColors(colors) => d.colors = d.colors.union(colors),
@@ -732,7 +749,8 @@ pub(super) fn amount_reads(spec: &beryl_card::LayerSpec, change: LayerChange) ->
         | LayerChange::SetSubtype(_)
         | LayerChange::DefinedPt(..)
         | LayerChange::AddProtection(_)
-        | LayerChange::GrantEscape => return Characteristics::NONE,
+        | LayerChange::GrantEscape
+        | LayerChange::Lend { .. } => return Characteristics::NONE,
     };
     match static_ability::amounts_of(spec, part) {
         (power, None) => of(power),

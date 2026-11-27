@@ -330,7 +330,8 @@ impl Scope<'_> {
                 | Modification::SetBasePt(..)
                 | Modification::SwitchPt
                 | Modification::AddProtection(_)
-                | Modification::GrantEscape) => self.modification(modification),
+                | Modification::GrantEscape
+                | Modification::Lend(_)) => self.modification(modification),
             };
             modifications = both(modifications, checked);
             i += 1;

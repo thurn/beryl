@@ -51,7 +51,8 @@ impl Scope<'_> {
                 | Modification::SetBasePt(..)
                 | Modification::SwitchPt
                 | Modification::AddProtection(_)
-                | Modification::GrantEscape => self.modification(&modifications[i]),
+                | Modification::GrantEscape
+                | Modification::Lend(_) => self.modification(&modifications[i]),
             };
             checked = both(checked, part);
             i += 1;
@@ -71,6 +72,11 @@ impl Scope<'_> {
             // A resolving effect names an ability of its own permanent's face only of that
             // permanent (`resolved_modifications`).
             Modification::LoseAbility(_) => Err(Malformed::Lost),
+            Modification::Lend(lent) => match &lent.from {
+                crate::LentFrom::ExiledWithThis(filter) | crate::LentFrom::Graveyards(filter) => {
+                    self.filter(filter)
+                }
+            },
             Modification::Control
             | Modification::AddTypes(_)
             | Modification::RemoveTypes(_)

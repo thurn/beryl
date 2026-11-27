@@ -3,6 +3,7 @@
 
 use crate::characteristics::{BasicLandTypes, Colors, Keywords, Subtype, Subtypes, Types};
 use crate::effect::{Amount, Condition, Objects};
+use crate::filter::Filter;
 use crate::index::{AbilityIx, GrantIx};
 use crate::words::{ColorWords, LandTypeWords, SubtypeWord, Words};
 
@@ -166,6 +167,42 @@ pub enum Modification {
     ///
     /// [CR 702.138a]: https://yawgatog.com/resources/magic-rules/#R702138a
     GrantEscape,
+    /// Layer 6: "has all activated abilities of all [cards]" ([CR 613.1f]): lends abilities
+    /// from cards in another zone to the affected permanents, as Agatha's Soul Cauldron and
+    /// Necrotic Ooze do.
+    ///
+    /// [CR 613.1f]: https://yawgatog.com/resources/magic-rules/#R6131f
+    Lend(&'static Lent),
+}
+
+/// Which abilities a lending effect ([`Modification::Lend`]) gives to the affected permanents
+/// and which cards they come from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Lent {
+    /// Which cards lend their abilities.
+    pub from: LentFrom,
+    /// Which abilities of each lending card are lent.
+    pub which: Lends,
+}
+
+/// Which cards a lending effect ([`Lent`]) takes abilities from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum LentFrom {
+    /// The cards exiled with the permanent the lending static ability is on (see [CR 607.2a])
+    /// that the filter accepts.
+    ///
+    /// [CR 607.2a]: https://yawgatog.com/resources/magic-rules/#R6072a
+    ExiledWithThis(Filter),
+    /// The cards in all graveyards that the filter accepts.
+    Graveyards(Filter),
+}
+
+/// Which kinds of abilities of each lending card a lending effect ([`Lent`]) gives.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Lends {
+    /// Every activated ability, including activated mana abilities and level up, and no
+    /// static or triggered ability.
+    Activated,
 }
 
 impl Modification {
@@ -200,7 +237,8 @@ impl Modification {
             | Modification::SetBasePt(..)
             | Modification::SwitchPt
             | Modification::AddProtection(_)
-            | Modification::GrantEscape => None,
+            | Modification::GrantEscape
+            | Modification::Lend(_) => None,
         }
     }
 
@@ -229,7 +267,8 @@ impl Modification {
             | Modification::SetBasePt(..)
             | Modification::SwitchPt
             | Modification::AddProtection(_)
-            | Modification::GrantEscape => false,
+            | Modification::GrantEscape
+            | Modification::Lend(_) => false,
         }
     }
 
@@ -257,7 +296,8 @@ impl Modification {
             | Modification::AddChosenColor
             | Modification::SwitchPt
             | Modification::AddProtection(_)
-            | Modification::GrantEscape => None,
+            | Modification::GrantEscape
+            | Modification::Lend(_) => None,
         }
     }
 

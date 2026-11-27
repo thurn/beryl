@@ -49,6 +49,11 @@ impl AbilityRef {
                     merged: Some(place),
                 }
             }
+            ObjectAbility::Lent(row, k) => AbilityRef {
+                granted: true,
+                n: k,
+                merged: Some(row),
+            },
         }
     }
 }

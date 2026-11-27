@@ -128,7 +128,9 @@ impl<L: Layout> Policy<'_, L> {
             Opt::Cast { slot, face, costs } => self.cast(slot, face, costs),
             Opt::Activate { slot, ability } => match ability {
                 ObjectAbility::Own(i) => self.activate(slot, i.get()),
-                ObjectAbility::Granted(_) | ObjectAbility::Merged(..) => 0,
+                ObjectAbility::Granted(_) | ObjectAbility::Merged(..) | ObjectAbility::Lent(..) => {
+                    0
+                }
             },
             _ => 0,
         }

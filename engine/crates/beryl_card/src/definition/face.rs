@@ -484,12 +484,13 @@ impl Default for FaceAbility {
 
 /// An ability of an object, as a decision to activate it names it: one of its face up's
 /// own, by its index in [`Face::abilities`], the `k`th ability other objects grant it,
-/// counting those in the order they were granted, or, of a merged permanent, an ability of
+/// counting those in the order they were granted, of a merged permanent, an ability of
 /// a card under its top card ([CR 702.140e]): "A mutated permanent has all abilities of each
 /// card and token that represents it." That one is named by the card's place among the
 /// faces the permanent has every ability of, counting from the top of the pile down, and
-/// its index on that card's face. Both counts are the state's, indexes into no list of a
-/// definition, so they are plain numbers.
+/// its index on that card's face, or the `k`th ability lent to it by a row of the state's
+/// table of grants ([`Modification::Lend`](crate::Modification::Lend)). All counts are the
+/// state's, indexes into no list of a definition, so they are plain numbers.
 ///
 /// [CR 702.140e]: https://yawgatog.com/resources/magic-rules/#R702140e
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -497,6 +498,7 @@ pub enum ObjectAbility {
     Own(AbilityIx),
     Granted(u8),
     Merged(u8, AbilityIx),
+    Lent(u8, u8),
 }
 
 impl ObjectAbility {

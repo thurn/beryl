@@ -90,6 +90,15 @@ pub enum LayerChange {
     /// changes nothing of a permanent. Last, for the same reason as
     /// [`LayerChange::SetSubtype`].
     GrantEscape,
+    /// Layer 6: "has all activated abilities of all [cards]" ([`Modification::Lend`]): writes
+    /// one lent row of the table of grants whose source is the lending permanent, named by the
+    /// static ability's face, ability index and part index. Last, for the same reason as
+    /// [`LayerChange::SetSubtype`].
+    Lend {
+        face: FaceIx,
+        ability: AbilityIx,
+        part: u8,
+    },
 }
 
 impl LayerChange {
@@ -134,8 +143,11 @@ impl LayerChange {
             Modification::AddProtection(Protection::ChosenColor) => {
                 LayerChange::AddProtection(chosen())
             }
-            // Read as the layers apply: an amount.
-            Modification::SetPower(_) | Modification::SetPt(..) | Modification::SetBasePt(..) => {
+            // Read as the layers apply: an amount or a lending static ability.
+            Modification::SetPower(_)
+            | Modification::SetPt(..)
+            | Modification::SetBasePt(..)
+            | Modification::Lend(_) => {
                 return None;
             }
             Modification::ModifyPt(power, toughness) => LayerChange::ModifyPt(power, toughness),
@@ -165,6 +177,7 @@ impl LayerChange {
             | LayerChange::AddProtection(_)
             | LayerChange::Grant(_)
             | LayerChange::GrantEscape
+            | LayerChange::Lend { .. }
             | LayerChange::LoseAllAbilities
             | LayerChange::LoseAbility(_) => Layer::Ability,
             LayerChange::DefinedPower(_) | LayerChange::DefinedPt(..) => Layer::PtDefining,
@@ -209,6 +222,7 @@ impl LayerChange {
                     | LayerChange::AddProtection(_)
                     | LayerChange::Grant(_)
                     | LayerChange::GrantEscape
+                    | LayerChange::Lend { .. }
                     | LayerChange::AddColors(_)
                     | LayerChange::ModifyPt(..)
             )
@@ -245,7 +259,8 @@ impl LayerChange {
             LayerChange::AddKeywords(_)
             | LayerChange::AddProtection(_)
             | LayerChange::Grant(_)
-            | LayerChange::GrantEscape => Characteristics::ADDS_ABILITIES,
+            | LayerChange::GrantEscape
+            | LayerChange::Lend { .. } => Characteristics::ADDS_ABILITIES,
             LayerChange::LoseAllAbilities | LayerChange::LoseAbility(_) => {
                 Characteristics::REMOVES_ABILITIES
             }
@@ -290,7 +305,8 @@ pub fn read_layer(modification: Modification) -> Layer {
         | Modification::SetBasePt(..)
         | Modification::SwitchPt
         | Modification::AddProtection(_)
-        | Modification::GrantEscape => Layer::PtSetting,
+        | Modification::GrantEscape
+        | Modification::Lend(_) => Layer::PtSetting,
     }
 }
 

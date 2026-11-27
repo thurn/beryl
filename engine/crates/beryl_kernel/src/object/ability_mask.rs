@@ -50,6 +50,17 @@ pub trait AbilityMask: Copy + Debug + Default + Eq + Hash + Send + Sync + 'stati
     fn has_row(self, k: usize) -> bool {
         k < Self::WIDTH && self.bits() & 1 << k != 0
     }
+
+    /// The mask without bit `k`.
+    #[inline]
+    #[must_use]
+    fn without_row(self, k: usize) -> Self {
+        if k < Self::WIDTH {
+            Self::from_bits(self.bits() & !(1u128 << k))
+        } else {
+            self
+        }
+    }
 }
 
 macro_rules! ability_mask {

@@ -421,9 +421,10 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
                     Some((card, face, i, a))
                 }
                 ObjectAbility::Merged(..) if !restricted => merged_mana(s, t, slot, ability, color),
-                ObjectAbility::Own(_) | ObjectAbility::Granted(_) | ObjectAbility::Merged(..) => {
-                    None
-                }
+                ObjectAbility::Own(_)
+                | ObjectAbility::Granted(_)
+                | ObjectAbility::Merged(..)
+                | ObjectAbility::Lent(..) => None,
             })
     };
     // The ability `consume` names first, then any other: a Treasure has only the one that

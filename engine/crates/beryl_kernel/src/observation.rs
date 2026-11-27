@@ -189,6 +189,23 @@ impl<'a, L: Layout> Observation<'a, L> {
         self.state.granted_ability(slot, k)
     }
 
+    /// The card, face, index and ability that a lent ability
+    /// ([`beryl_card::ObjectAbility::Lent`]) of the permanent in `slot` names, if it has it now
+    /// ([`State::lent_ability`]): public as the battlefield, exile and graveyards are.
+    pub fn lent_ability(
+        &self,
+        t: &GameTable,
+        slot: L::Slot,
+        ability: beryl_card::ObjectAbility,
+    ) -> Option<(
+        L::Card,
+        FaceIx,
+        beryl_card::AbilityIx,
+        &'static beryl_card::Ability,
+    )> {
+        self.state.lent_ability(t, slot, ability)
+    }
+
     /// The stack, bottom first. This is a public zone (see CR 400.2). A face-down
     /// spell records its public characteristics, and its card is visible through
     /// [`Self::card`] to its controller (see CR 708.5).

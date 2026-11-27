@@ -190,8 +190,8 @@ pub(crate) fn static_condition_holds<L: Layout>(
             };
             (card, face, index)
         }
-        ObjectAbility::Granted(_) => {
-            unreachable!("the card table refuses a granted replacement or rule change")
+        ObjectAbility::Granted(_) | ObjectAbility::Lent(..) => {
+            unreachable!("the card table refuses a granted or lent replacement or rule change")
         }
     };
     let subject = ability_of(s, slot, card, face, TriggeredAbility::own(index));

@@ -4,12 +4,14 @@
 //!
 //! Implements: none. Checks the layers' table of grants against a reference calculation.
 
-use crate::card::{Modification, ObjectAbility, Objects};
+use beryl_card::{Lends, LentFrom, Zone};
+
+use crate::card::{AbilityKind, Modification, ObjectAbility, Objects};
 use crate::filter::Evaluate;
 use crate::ids::{CardId, SlotId};
 use crate::invariants::{At, Violation};
-use crate::layout::Layout;
-use crate::state::{Characteristics, Flag, GrantRef, LayerChange, Permanents, State};
+use crate::layout::{Layout, Queue};
+use crate::state::{Characteristics, Flag, GrantRef, LayerChange, LinkKind, Permanents, State};
 use crate::table::{Capability, GameTable};
 
 use super::check;
@@ -28,15 +30,26 @@ pub(super) fn check_grants<L: Layout>(s: &State<L>, t: &GameTable) -> Result<(),
         return Ok(());
     }
     for &slot in s.battlefield() {
-        let Some(mut expected) = reference_grants(s, t, slot) else {
+        let Some((mut expected, mut expected_lent)) = reference_grants(s, t, slot) else {
             continue;
         };
-        let mut found: Vec<GrantRef<L>> = (s.abilities(t, slot))
-            .filter_map(|(ability, _)| match ability {
-                ObjectAbility::Granted(k) => s.granted_ability(slot, k),
-                ObjectAbility::Own(_) | ObjectAbility::Merged(..) => None,
-            })
-            .collect();
+        let mut found: Vec<GrantRef<L>> = Vec::new();
+        let mut found_lent: Vec<(usize, u8, usize)> = Vec::new();
+        for (ability, _) in s.abilities(t, slot) {
+            match ability {
+                ObjectAbility::Granted(k) => {
+                    if let Some(g) = s.granted_ability(slot, k) {
+                        found.push(g);
+                    }
+                }
+                ObjectAbility::Lent(..) => {
+                    if let Some((card, face, index, _)) = s.lent_ability(t, slot, ability) {
+                        found_lent.push((card.index(), face.get(), index.index()));
+                    }
+                }
+                ObjectAbility::Own(_) | ObjectAbility::Merged(..) => {}
+            }
+        }
         let key = |g: &GrantRef<L>| (g.card.index(), g.grant.index());
         expected.sort_by_key(key);
         found.sort_by_key(key);
@@ -45,12 +58,22 @@ pub(super) fn check_grants<L: Layout>(s: &State<L>, t: &GameTable) -> Result<(),
             "granted abilities differ from the static abilities and effects that grant them",
             Some(At::Slot(slot.index())),
         )?;
+        expected_lent.sort_unstable();
+        found_lent.sort_unstable();
+        check(
+            found_lent == expected_lent,
+            "lent abilities differ from the static abilities that lend them",
+            Some(At::Slot(slot.index())),
+        )?;
     }
     Ok(())
 }
 
-/// The abilities granted to the permanent in `slot`, in no order: those the exceptions of a
-/// copy effect give it, those of each static ability of a permanent on the battlefield that
+/// One lent ability's identity: its lending card index, face index and ability index.
+type LentKey = (usize, u8, usize);
+
+/// The abilities granted and lent to the permanent in `slot`, in no order: those the exceptions
+/// of a copy effect give it, those of each static ability of a permanent on the battlefield that
 /// affects it, and those of each effect of a resolved spell or ability on it. `None` where
 /// the reference cannot say: a static ability with a condition, one that affects permanents
 /// in a way it does not read, or one whose filter reads power, toughness or abilities, which
@@ -59,12 +82,13 @@ fn reference_grants<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     slot: L::Slot,
-) -> Option<Vec<GrantRef<L>>> {
+) -> Option<(Vec<GrantRef<L>>, Vec<LentKey>)> {
     let mut grants: Vec<GrantRef<L>> = if s.object(slot).flags().has(Flag::Copy) {
         s.copy_grants(t, slot).collect()
     } else {
         Vec::new()
     };
+    let mut lent: Vec<LentKey> = Vec::new();
     let late = Characteristics::PT
         .union(Characteristics::ADDS_ABILITIES)
         .union(Characteristics::REMOVES_ABILITIES);
@@ -74,15 +98,11 @@ fn reference_grants<L: Layout>(
             let Some(spec) = ability.layer() else {
                 continue;
             };
-            let granted = (spec.modifications.iter()).filter_map(|m| {
-                if let Modification::Grant(grant) = *m {
-                    Some(grant)
-                } else {
-                    None
-                }
-            });
-            let mut granted = granted.peekable();
-            if granted.peek().is_none() {
+            let has_grant_or_lend = spec
+                .modifications
+                .iter()
+                .any(|m| matches!(m, Modification::Grant(_) | Modification::Lend(_)));
+            if !has_grant_or_lend {
                 continue;
             }
             if spec.condition.is_some() {
@@ -120,7 +140,13 @@ fn reference_grants<L: Layout>(
                 | Objects::Other(_) => return None,
             };
             if affects {
-                grants.extend(granted.map(|grant| GrantRef { card, grant }));
+                for &m in spec.modifications {
+                    if let Modification::Grant(grant) = m {
+                        grants.push(GrantRef { card, grant });
+                    } else if let Modification::Lend(spec) = m {
+                        collect_lent(s, t, from, you, &words, spec, &mut lent)?;
+                    }
+                }
             }
         }
     }
@@ -139,5 +165,38 @@ fn reference_grants<L: Layout>(
             });
         }
     }
-    Some(grants)
+    Some((grants, lent))
+}
+
+/// Appends each ability lent by `spec` from `from` to `out`.
+fn collect_lent<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    from: L::Slot,
+    you: crate::ids::Seat,
+    words: &beryl_card::Words,
+    spec: &beryl_card::Lent,
+    out: &mut Vec<LentKey>,
+) -> Option<()> {
+    let (pool, filter) = match spec.from {
+        LentFrom::ExiledWithThis(f) => (s.linked(LinkKind::ExiledWith, s.object_ref(from)), f),
+        LentFrom::Graveyards(f) => (s.in_zone(Zone::Graveyard), f),
+    };
+    let matching = pool.filter(|c| filter.matches(s, t, c, you, words));
+    let ordered = s.in_game_order(t, matching).ok()?;
+    for &c in ordered.as_slice() {
+        let (l_card, l_face) = s.definition(c).record(t);
+        for (ability, a) in s.abilities(t, c) {
+            let ObjectAbility::Own(i) = ability else {
+                continue;
+            };
+            let matches_kind = match spec.which {
+                Lends::Activated => matches!(a.kind(), AbilityKind::Activated | AbilityKind::Mana),
+            };
+            if matches_kind {
+                out.push((l_card.index(), l_face.get(), i.index()));
+            }
+        }
+    }
+    Some(())
 }

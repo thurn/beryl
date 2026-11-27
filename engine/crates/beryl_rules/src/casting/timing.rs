@@ -35,6 +35,7 @@ pub(super) fn activated<L: Layout>(
             Some((granter, FaceAbility::Grant(grant.grant)))
         }
         ObjectAbility::Merged(..) => merged(s, t, slot, ability),
+        ObjectAbility::Lent(..) => lent(s, t, slot, ability),
     }
 }
 
@@ -49,6 +50,21 @@ fn merged<L: Layout>(
     ability: ObjectAbility,
 ) -> Option<(Definition<L>, FaceAbility)> {
     let (card, face, index, ability) = s.merged_ability(t, slot, ability)?;
+    crate::objects::designation::available(s, slot, ability)
+        .then_some((Definition::of_face(card, face), FaceAbility::Own(index)))
+}
+
+/// [`activated`] for an ability lent from another card ([`ObjectAbility::Lent`]). Out of line:
+/// only a game with a lending card offers one.
+#[cold]
+#[inline(never)]
+fn lent<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    slot: L::Slot,
+    ability: ObjectAbility,
+) -> Option<(Definition<L>, FaceAbility)> {
+    let (card, face, index, ability) = s.lent_ability(t, slot, ability)?;
     crate::objects::designation::available(s, slot, ability)
         .then_some((Definition::of_face(card, face), FaceAbility::Own(index)))
 }

@@ -1,5 +1,5 @@
 use beryl_card::{
-    CastingKind, Comparison, Filter, Keywords, Modification, Players, SpecIx, Types, Zone,
+    CastingKind, Comparison, Face, Filter, Keywords, Modification, Players, SpecIx, Types, Zone,
 };
 
 use super::*;

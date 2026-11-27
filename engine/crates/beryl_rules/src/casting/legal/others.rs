@@ -31,7 +31,7 @@ pub(super) fn granted<'a, L: Layout>(
         .map(|(ability, _)| ability)
         .filter(move |&ability| match ability {
             ObjectAbility::Granted(k) => first_instance(s, slot, k),
-            ObjectAbility::Merged(..) => true,
+            ObjectAbility::Merged(..) | ObjectAbility::Lent(..) => true,
             ObjectAbility::Own(_) => false,
         })
 }
@@ -49,6 +49,5 @@ fn first_instance<L: Layout>(s: &State<L>, slot: L::Slot, k: u8) -> bool {
 /// ability or merges asks.
 #[inline(never)]
 pub(super) fn has_others<L: Layout>(s: &State<L>, slot: L::Slot) -> bool {
-    s.has(slot, ObjectAbility::Granted(0))
-        || s.has(slot, ObjectAbility::Merged(0, AbilityIx::new(0)))
+    s.has_any_grant(slot) || s.has(slot, ObjectAbility::Merged(0, AbilityIx::new(0)))
 }

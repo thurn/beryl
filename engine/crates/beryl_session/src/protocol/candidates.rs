@@ -269,7 +269,7 @@ fn ability_text<L: Layout>(t: &GameTable, obs: Observation<'_, L>, o: Opt<L>) ->
     let (card, face, ability, words) = match o {
         Opt::TurnFaceUp(slot) => return super::rules_text::turn_face_up(t, obs.card(slot)?),
         Opt::Activate { slot, ability } => {
-            let (card, face, ability) = face_ability(obs, slot, ability)?;
+            let (card, face, ability) = face_ability(t, obs, slot, ability)?;
             (card, face, ability, obs.words_of(slot))
         }
         Opt::Trigger(index) => {
@@ -295,6 +295,7 @@ fn ability_text<L: Layout>(t: &GameTable, obs: Observation<'_, L>, o: Opt<L>) ->
 /// ([`ObjectAbility::Granted`]), or that of a card under a merged permanent
 /// ([`ObjectAbility::Merged`]), whose cards are public as the permanent is.
 fn face_ability<L: Layout>(
+    t: &GameTable,
     obs: Observation<'_, L>,
     slot: L::Slot,
     ability: ObjectAbility,
@@ -311,6 +312,10 @@ fn face_ability<L: Layout>(
         }
         ObjectAbility::Merged(place, i) => {
             let (card, face) = obs.copiable(slot)?.merged_face(place)?;
+            (card, face, FaceAbility::Own(i))
+        }
+        ObjectAbility::Lent(..) => {
+            let (card, face, i, _) = obs.lent_ability(t, slot, ability)?;
             (card, face, FaceAbility::Own(i))
         }
     })
@@ -514,7 +519,7 @@ fn activated_cost<L: Layout>(
     slot: L::Slot,
     ability: ObjectAbility,
 ) -> Option<String> {
-    let (card, face, ability) = face_ability(obs, slot, ability)?;
+    let (card, face, ability) = face_ability(t, obs, slot, ability)?;
     Some(cost_text(t.def(card).face(face).ability(ability).cost()))
 }
 
@@ -568,6 +573,7 @@ pub(super) fn activate<S: SlotId>(slot: S, ability: ObjectAbility) -> Candidate 
         ObjectAbility::Own(i) => (i.get(), false, None),
         ObjectAbility::Granted(k) => (k, true, None),
         ObjectAbility::Merged(place, i) => (i.get(), false, Some(place)),
+        ObjectAbility::Lent(row, k) => (k, true, Some(row)),
     };
     Candidate::Activate {
         slot: ObjectId::of(slot),

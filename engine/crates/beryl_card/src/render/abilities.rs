@@ -393,6 +393,7 @@ impl Ctx {
                 "{has} escape. The escape cost is equal to the card's mana cost plus {}",
                 list(&self.cost_actions(Cost::of_parts(&ESCAPE_EXILES)), "and")
             ),
+            Modification::Lend(lent) => format!("{has} {}", self.lent(lent)),
             Modification::ModifyPt(power, toughness) => {
                 format!("{} {}", verb("gets", "get"), pt_change(power, toughness))
             }
@@ -418,6 +419,25 @@ impl Ctx {
                 )
             }
         })
+    }
+
+    /// "All activated abilities of all creature cards exiled with this artifact" or "all
+    /// activated abilities of all creature cards in all graveyards" ([`crate::Modification::Lend`]).
+    pub(super) fn lent(&mut self, lent: &crate::Lent) -> String {
+        let which = match lent.which {
+            crate::Lends::Activated => "all activated abilities",
+        };
+        let kind = Kind::Card(None);
+        match lent.from {
+            crate::LentFrom::ExiledWithThis(filter) => {
+                let cards = self.noun(filter, kind).plural(kind);
+                format!("{which} of all {cards} exiled with {}", self.this)
+            }
+            crate::LentFrom::Graveyards(filter) => {
+                let cards = self.noun(filter, kind).plural(kind);
+                format!("{which} of all {cards} in all graveyards")
+            }
+        }
     }
 
     /// "Base power and toughness 1/1", or the amounts in words when either is not a number

@@ -198,7 +198,8 @@ pub(crate) fn instruction<L: Layout>(
             | Modification::AddChosenColor
             | Modification::SwitchPt
             | Modification::AddProtection(_)
-            | Modification::GrantEscape) => {
+            | Modification::GrantEscape
+            | Modification::Lend(_)) => {
                 // The definition check refuses "the chosen color" in a resolving effect.
                 let chosen = || unreachable!("a resolving effect with the chosen color");
                 match LayerChange::resolve(modification, you, &words, chosen) {

@@ -43,6 +43,7 @@ fn chapters<'a, L: Layout>(
                 let grant = s.granted_ability(slot, index)?;
                 (grant.card, FaceIx::FRONT, FaceAbility::Grant(grant.grant))
             }
+            ObjectAbility::Lent(..) => return None,
         };
         Some((card, face, TriggeredAbility::of(index), numbers))
     });

@@ -14,10 +14,15 @@
 //! [CR 702.140e]: https://yawgatog.com/resources/magic-rules/#R702140e
 //! [CR 613.1f]: https://yawgatog.com/resources/magic-rules/#R6131f
 
-use beryl_card::{Ability, AbilityIx, FaceIx, ObjectAbility};
+use beryl_card::{
+    Ability, AbilityIx, AbilityKind, FaceIx, Lends, Lent, LentFrom, Modification, ObjectAbility,
+    Zone,
+};
 
 use crate::copiable::defines_pt;
+use crate::filter::Evaluate;
 use crate::layout::{Layout, Queue};
+use crate::memos::LinkKind;
 use crate::object::{AbilityMask, Flag, GrantRef, GrantRow};
 use crate::query::Copiable;
 use crate::state::State;
@@ -76,6 +81,7 @@ impl<L: Layout> State<L> {
             check_lost: self.flags.abilities_lost,
             granted,
             next_grant: 0,
+            next_lent: 0,
             table: t,
         }
     }
@@ -87,15 +93,56 @@ impl<L: Layout> State<L> {
     }
 
     /// Whether the object in `slot` has `ability` now ([`State::abilities`]): one of its own
-    /// it has not lost ([`State::has_ability`]), or a `k`th granted one, which it has while
-    /// more than `k` rows of the table of grants grant it an ability.
+    /// it has not lost ([`State::has_ability`]), a `k`th granted one, one of a merged face, or
+    /// one from a lent row of the table of grants.
     #[inline]
     pub fn has(&self, slot: L::Slot, ability: ObjectAbility) -> bool {
         match ability {
             ObjectAbility::Own(index) => self.has_ability(slot, index),
-            ObjectAbility::Granted(k) => self.granted_to(slot).count() > u32::from(k),
+            ObjectAbility::Granted(k) => self.granted_row(slot, k).is_some(),
             ObjectAbility::Merged(place, _) => self.has_merged(slot, place),
+            ObjectAbility::Lent(row, _) => self.has_lent_row(slot, row),
         }
+    }
+
+    /// Whether the object in `slot` has a lent row at `row` of the table of grants
+    /// ([`State::has`]). Out of line: a game with no lending card never asks.
+    #[cold]
+    #[inline(never)]
+    fn has_lent_row(&self, slot: L::Slot, row: u8) -> bool {
+        let row_ix = usize::from(row);
+        self.granted_to(slot).has_row(row_ix)
+            && self
+                .grants
+                .as_slice()
+                .get(row_ix)
+                .is_some_and(|r| r.is_lent())
+    }
+
+    /// Whether the object in `slot` has any row in the table of grants (granted or lent).
+    #[inline]
+    pub fn has_any_grant(&self, slot: L::Slot) -> bool {
+        !self.granted_to(slot).is_empty()
+    }
+
+    /// The card, face, ability index and ability that `ability`, an ability lent to the
+    /// permanent in `slot` ([`ObjectAbility::Lent`]), names, if the permanent has it now.
+    #[inline(never)]
+    pub fn lent_ability(
+        &self,
+        t: &GameTable,
+        slot: L::Slot,
+        ability: ObjectAbility,
+    ) -> Option<(L::Card, FaceIx, AbilityIx, &'static Ability)> {
+        let ObjectAbility::Lent(row, k) = ability else {
+            return None;
+        };
+        let row_ix = usize::from(row);
+        if !self.granted_to(slot).has_row(row_ix) {
+            return None;
+        }
+        let grant_row = *self.grants.as_slice().get(row_ix)?;
+        lent_in_row(self, t, grant_row, k)
     }
 
     /// Whether the object in `slot` is a merged permanent with a card at `place` under it whose
@@ -183,11 +230,24 @@ impl<L: Layout> State<L> {
 
     /// The row of the table of grants that the object in `slot`'s `k`th granted ability
     /// ([`ObjectAbility::Granted`]`(k)`) comes from, and its place in the table, if it has
-    /// one.
+    /// one. Lent rows are skipped.
     #[inline]
     pub fn granted_row(&self, slot: L::Slot, k: u8) -> Option<(usize, GrantRow<L>)> {
-        let row = nth_bit(self.granted_to(slot), k)?;
-        Some((row, self.grants.as_slice()[row]))
+        let mut bits = self.granted_to(slot);
+        let rows = self.grants.as_slice();
+        let mut left = k;
+        while !bits.is_empty() {
+            let row = bits.lowest();
+            bits = bits.without_lowest();
+            if rows[row].is_lent() {
+                continue;
+            }
+            if left == 0 {
+                return Some((row, rows[row]));
+            }
+            left -= 1;
+        }
+        None
     }
 
     /// The ability the object in `slot`'s `k`th granted ability ([`ObjectAbility::Granted`])
@@ -198,13 +258,72 @@ impl<L: Layout> State<L> {
     }
 }
 
-/// The place of the `k`th set bit of `bits`, counting from the lowest.
-#[inline]
-fn nth_bit<M: AbilityMask>(mut bits: M, k: u8) -> Option<usize> {
-    for _ in 0..k {
-        bits = bits.without_lowest();
+/// The [`Lent`] that a lent row of the table of grants names, by its zero-based place among
+/// the lending card's [`Modification::Lend`] parts across all faces.
+pub(crate) fn lent_spec<L: Layout>(t: &GameTable, row: GrantRow<L>) -> Option<&'static Lent> {
+    let target = row.lent_index()?;
+    let mut seen = 0usize;
+    for face in t.def(row.card).faces {
+        for ability in face.abilities {
+            if let Some(spec) = ability.layer() {
+                for modification in spec.modifications {
+                    if let Modification::Lend(lent) = *modification {
+                        if seen == target {
+                            return Some(lent);
+                        }
+                        seen += 1;
+                    }
+                }
+            }
+        }
     }
-    (!bits.is_empty()).then(|| bits.lowest())
+    None
+}
+
+/// The `k`th ability lent by `row`, counting the lending cards in [`State::in_game_order`]
+/// and each card's [`AbilityKind::Activated`] and [`AbilityKind::Mana`] abilities in face order.
+#[inline(never)]
+fn lent_in_row<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    row: GrantRow<L>,
+    k: u8,
+) -> Option<(L::Card, FaceIx, AbilityIx, &'static Ability)> {
+    let lender = row.lender()?;
+    let lent = lent_spec(t, row)?;
+    let you = s.controller(lender);
+    let words = s.words_of(lender);
+    let (pool, filter) = match lent.from {
+        LentFrom::ExiledWithThis(filter) => {
+            (s.linked(LinkKind::ExiledWith, s.object_ref(lender)), filter)
+        }
+        LentFrom::Graveyards(filter) => (s.in_zone(Zone::Graveyard), filter),
+    };
+    let matching = pool.filter(|card_slot| filter.matches(s, t, card_slot, you, &words));
+    if matching.is_empty() {
+        return None;
+    }
+    let ordered = s.in_game_order(t, matching).ok()?;
+    let mut remaining = usize::from(k);
+    for &card_slot in ordered.as_slice() {
+        let (card, face) = s.definition(card_slot).record(t);
+        for (i, ability) in t.def(card).face(face).abilities.iter().enumerate() {
+            let matches_kind = match lent.which {
+                Lends::Activated => {
+                    matches!(ability.kind(), AbilityKind::Activated | AbilityKind::Mana)
+                }
+            };
+            if !matches_kind {
+                continue;
+            }
+            if remaining == 0 {
+                let index = AbilityIx::new(u8::try_from(i).expect("abilities under 256"));
+                return Some((card, face, index, ability));
+            }
+            remaining -= 1;
+        }
+    }
+    None
 }
 
 /// The abilities an object has now, from [`State::abilities`].
@@ -232,6 +351,8 @@ pub struct Abilities<'s, L: Layout> {
     granted: L::AbilityMask,
     /// The `k` of [`ObjectAbility::Granted`] of the next of `granted`.
     next_grant: u8,
+    /// The `k` of [`ObjectAbility::Lent`] of the lowest remaining lent row in `granted`.
+    next_lent: u8,
     table: &'s GameTable,
 }
 
@@ -307,18 +428,47 @@ impl<L: Layout> Abilities<'_, L> {
 }
 
 impl<L: Layout> Abilities<'_, L> {
-    /// The next ability other objects granted the object, from the lowest of the rows of the
-    /// table of grants left in `granted`.
+    /// The next ability other objects granted the object, from the lowest non-lent row left in
+    /// `granted`, or, once all normal granted rows have been yielded, from the lent rows left
+    /// in `granted` ([`Self::next_lent`]).
     #[inline(never)]
-    fn next_granted(&mut self) -> (ObjectAbility, &'static Ability) {
-        let row = self.granted.lowest();
-        self.granted = self.granted.without_lowest();
-        let k = self.next_grant;
-        self.next_grant += 1;
-        let grant = self.state.grants.as_slice()[row];
-        // A granted ability is printed on its granting card's front face (§9).
-        let ability = &self.table.def(grant.card).front().grants[grant.grant.index()];
-        (ObjectAbility::Granted(k), ability)
+    fn next_granted(&mut self) -> Option<(ObjectAbility, &'static Ability)> {
+        let rows = self.state.grants.as_slice();
+        let mut scan = self.granted;
+        while !scan.is_empty() {
+            let row = scan.lowest();
+            scan = scan.without_lowest();
+            let grant = rows[row];
+            if grant.is_lent() {
+                continue;
+            }
+            self.granted = self.granted.without_row(row);
+            let k = self.next_grant;
+            self.next_grant += 1;
+            // A granted ability is printed on its granting card's front face (§9).
+            let ability = &self.table.def(grant.card).front().grants[grant.grant.index()];
+            return Some((ObjectAbility::Granted(k), ability));
+        }
+        self.next_lent()
+    }
+
+    /// The next ability lent to the object from the lent rows left in `granted`. Out of line:
+    /// only a game with a lending card comes here.
+    #[inline(never)]
+    fn next_lent(&mut self) -> Option<(ObjectAbility, &'static Ability)> {
+        let rows = self.state.grants.as_slice();
+        while !self.granted.is_empty() {
+            let row = self.granted.lowest();
+            let k = self.next_lent;
+            if let Some((_, _, _, ability)) = lent_in_row(self.state, self.table, rows[row], k) {
+                self.next_lent += 1;
+                let row = u8::try_from(row).expect("grant rows under 256");
+                return Some((ObjectAbility::Lent(row, k), ability));
+            }
+            self.granted = self.granted.without_lowest();
+            self.next_lent = 0;
+        }
+        None
     }
 }
 
@@ -344,6 +494,6 @@ impl<L: Layout> Iterator for Abilities<'_, L> {
         if self.granted.is_empty() {
             return None;
         }
-        Some(self.next_granted())
+        self.next_granted()
     }
 }

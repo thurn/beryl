@@ -504,6 +504,9 @@ pub(crate) fn ability_ix<S: Serializer>(ability: &ObjectAbility, s: S) -> Result
         ObjectAbility::Merged(place, i) => {
             s.serialize_newtype_variant("ObjectAbility", 2, "Merged", &[place, i.get()])
         }
+        ObjectAbility::Lent(row, k) => {
+            s.serialize_newtype_variant("ObjectAbility", 3, "Lent", &[row, k])
+        }
     }
 }
 

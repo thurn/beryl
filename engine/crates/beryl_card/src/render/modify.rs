@@ -96,7 +96,8 @@ impl Ctx {
                 | Modification::AddChosenColor
                 | Modification::SwitchPt
                 | Modification::AddProtection(_)
-                | Modification::GrantEscape => {}
+                | Modification::GrantEscape
+                | Modification::Lend(_) => {}
             }
         }
         for &modification in modifications {
@@ -189,6 +190,7 @@ impl Ctx {
             }
             Modification::Grant(ix) => format!("{} {}", verb("gains", "gain"), self.granted(ix)),
             Modification::GrantEscape => format!("{} escape", verb("gains", "gain")),
+            Modification::Lend(lent) => format!("{} {}", verb("has", "have"), self.lent(lent)),
             Modification::ModifyPt(power, toughness) => {
                 format!("{} {}", verb("gets", "get"), pt_change(power, toughness))
             }

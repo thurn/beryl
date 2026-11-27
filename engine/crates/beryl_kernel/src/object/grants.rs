@@ -33,16 +33,69 @@ pub struct GrantRow<L: Layout = Small> {
     pub source: GrantSource<L>,
 }
 
+/// Bit in [`GrantRow::grant`] that marks a row as lending abilities from other cards
+/// ([`beryl_card::Modification::Lend`]) rather than granting one from [`beryl_card::Face::grants`].
+const LENT_BIT: u8 = 0x80;
+
 impl<L: Layout> GrantRow<L> {
+    /// A row for a static ability of `lender`, printed on `card`, that lends abilities from
+    /// other cards: `lent_ix` is its zero-based place among `card`'s [`beryl_card::Modification::Lend`]
+    /// parts across all faces.
+    #[inline]
+    pub fn lent(card: L::Card, lender: L::Slot, lent_ix: u8) -> Self {
+        debug_assert!(lent_ix < LENT_BIT, "at most 128 lending parts per card");
+        GrantRow {
+            card,
+            grant: GrantIx::new(LENT_BIT | lent_ix),
+            source: GrantSource::Permanent(lender),
+        }
+    }
+
+    /// Whether this row lends abilities from other cards ([`beryl_card::Modification::Lend`])
+    /// rather than granting one from [`beryl_card::Face::grants`].
+    #[inline]
+    pub fn is_lent(self) -> bool {
+        self.grant.get() & LENT_BIT != 0
+    }
+
+    /// For a lent row, the zero-based place of its [`beryl_card::Modification::Lend`] part
+    /// among `self.card`'s faces.
+    #[inline]
+    pub fn lent_index(self) -> Option<usize> {
+        self.is_lent()
+            .then(|| usize::from(self.grant.get() & !LENT_BIT))
+    }
+
+    /// For a lent row, the permanent whose static ability lends the abilities.
+    #[inline]
+    pub fn lender(self) -> Option<L::Slot> {
+        match self.source {
+            GrantSource::Permanent(slot) if self.is_lent() => Some(slot),
+            GrantSource::Permanent(_) | GrantSource::Effect(_) => None,
+        }
+    }
+
+    /// The ability the row grants, if it is a normal grant and not a lent row.
+    #[inline]
+    pub fn as_grant_ref(self) -> Option<GrantRef<L>> {
+        (!self.is_lent()).then_some(GrantRef {
+            card: self.card,
+            grant: self.grant,
+        })
+    }
+
     /// The ability the row grants.
     #[inline]
     pub fn grant_ref(self) -> GrantRef<L> {
+        debug_assert!(!self.is_lent(), "lent row has no GrantRef");
         GrantRef {
             card: self.card,
             grant: self.grant,
         }
     }
 }
+
+const _: () = assert!(size_of::<GrantRow<Small>>() == 4);
 
 /// Filler for the table's unused places.
 impl<L: Layout> Default for GrantRow<L> {

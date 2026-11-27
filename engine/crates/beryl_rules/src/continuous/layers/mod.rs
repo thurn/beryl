@@ -31,7 +31,7 @@ use crate::ids::CardId;
 use crate::layout::{Layout, Queue, index};
 use crate::replacement::event::{Listens, Replaces, Sink};
 use crate::state::{
-    AbilityMask, Derived, Flag, LayerChange, LockedIn, Permanents, Rules, State, Zone, read_layer,
+    AbilityMask, Derived, Flag, LayerChange, LockedIn, Permanents, Rules, State, Zone,
 };
 use crate::static_ability::{self, Inputs};
 use crate::table::Capability;
@@ -587,12 +587,8 @@ fn list_static<L: Layout>(
             LayerChange::resolve(modification, you, &words, || s.chosen_color(slot))
                 .unwrap_or_else(|| {
                     debug_assert_eq!(on.order & GRANTED, 0);
-                    LayerChange::Read {
-                        layer: read_layer(modification),
-                        face: on.face,
-                        ability: AbilityIx::new(on.order & !merged::MERGED),
-                        part,
-                    }
+                    let ability = AbilityIx::new(on.order & !merged::MERGED);
+                    granted::unresolved_static_change(modification, on.face, ability, part)
                 });
     }
     let changes = &changes[..usize::from(parts)];

@@ -692,8 +692,13 @@ fn leave<L: Layout, const SHARED: bool>(s: &mut State<L>, slot: L::Slot, to: Zon
         }
         Zone::Stack => s.zones.stack.remove(slot),
         Zone::Hand => s.flags.derived_dirty |= s.layers_read_hands(),
-        Zone::Exile if to != Zone::Stack && o.is_token() => s.detach_prepare_copy(slot),
-        Zone::Exile | Zone::Nowhere | Zone::Merged => {}
+        Zone::Exile => {
+            if to != Zone::Stack && o.is_token() {
+                s.detach_prepare_copy(slot);
+            }
+            s.flags.derived_dirty |= s.layers_read_linked();
+        }
+        Zone::Nowhere | Zone::Merged => {}
     }
     if (o.zone.index()) < Zone::OWNED {
         s.zones.members[owner][o.zone.index()].remove(slot);

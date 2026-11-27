@@ -87,7 +87,8 @@ impl<L: Layout> State<L> {
                     | Modification::SetBasePt(..)
                     | Modification::SwitchPt
                     | Modification::AddProtection(_)
-                    | Modification::GrantEscape => {}
+                    | Modification::GrantEscape
+                    | Modification::Lend(_) => {}
                 }
             }
         }

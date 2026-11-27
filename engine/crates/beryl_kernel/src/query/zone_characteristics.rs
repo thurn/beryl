@@ -230,7 +230,8 @@ fn apply(t: &GameTable, so_far: &mut SoFar, change: LayerChange) {
         | LayerChange::Read { .. }
         | LayerChange::DefinedPt(..)
         | LayerChange::AddProtection(_)
-        | LayerChange::GrantEscape => {
+        | LayerChange::GrantEscape
+        | LayerChange::Lend { .. } => {
             unreachable!("the card table admits only changes of types and colors here")
         }
     }

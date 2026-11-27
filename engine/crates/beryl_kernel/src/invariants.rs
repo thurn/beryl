@@ -78,11 +78,25 @@ impl<L: Layout> State<L> {
         let rows = self.grants.as_slice();
         for row in rows {
             check(row.card.index() < t.len(), "a grant of no such card", None)?;
-            check(
-                row.grant.index() < t.def(row.card).front().grants.len(),
-                "a grant its card does not have",
-                None,
-            )?;
+            if row.is_lent() {
+                check(
+                    row.lender()
+                        .is_some_and(|s| self.object(s).on_battlefield()),
+                    "a lent row whose lender is not on the battlefield",
+                    None,
+                )?;
+                check(
+                    crate::abilities::lent_spec(t, *row).is_some(),
+                    "a lent row its card does not have",
+                    None,
+                )?;
+            } else {
+                check(
+                    row.grant.index() < t.def(row.card).front().grants.len(),
+                    "a grant its card does not have",
+                    None,
+                )?;
+            }
         }
         let named = u32::try_from(rows.len())
             .ok()

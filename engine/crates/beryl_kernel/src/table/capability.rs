@@ -312,6 +312,9 @@ impl Capability {
                 {
                     found |= Capability::DefinesPt.bit();
                 }
+                if (spec.modifications.iter()).any(|m| matches!(m, Modification::Lend(_))) {
+                    found |= Capability::Grants.bit();
+                }
             }
             if a.spend().is_some() {
                 found |= Capability::RemembersMana.bit();

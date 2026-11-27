@@ -72,7 +72,9 @@ pub(super) fn granted_layer_effects<L: Layout>(
         for row in
             (rows.iter().enumerate()).filter_map(|(k, row)| granted.has_row(k).then_some(row))
         {
-            let grant = row.grant_ref();
+            let Some(grant) = row.as_grant_ref() else {
+                continue;
+            };
             if granted_ability(t, grant).layer().is_some() {
                 // The layout index names every battlefield position.
                 let at = index::<L>(i).into();
@@ -127,6 +129,64 @@ pub(super) fn granted_so_far<L: Layout>(
 ) -> bool {
     let grant = GrantIx::new(a.order & !GRANTED);
     let granted = s.rows()[at].granted;
-    (s.grant_rows().iter().enumerate())
-        .any(|(k, row)| granted.has_row(k) && (row.card, row.grant) == (a.source, grant))
+    (s.grant_rows().iter().enumerate()).any(|(k, row)| {
+        granted.has_row(k) && !row.is_lent() && (row.card, row.grant) == (a.source, grant)
+    })
+}
+
+/// The unresolved layer change for a static ability part whose value is read as the layers
+/// apply (`LayerChange::Read` for an amount, `LayerChange::Lend` for `Modification::Lend`).
+pub(super) fn unresolved_static_change(
+    modification: crate::card::Modification,
+    face: crate::card::FaceIx,
+    ability: crate::card::AbilityIx,
+    part: u8,
+) -> crate::state::LayerChange {
+    if matches!(modification, crate::card::Modification::Lend(_)) {
+        crate::state::LayerChange::Lend {
+            face,
+            ability,
+            part,
+        }
+    } else {
+        crate::state::LayerChange::Read {
+            layer: beryl_kernel::effects::read_layer(modification),
+            face,
+            ability,
+            part,
+        }
+    }
+}
+
+/// The zero-based place of `(face, ability, part)` among `source`'s [`crate::card::Modification::Lend`]
+/// parts across all its faces, stored in a lent row of the table of grants.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "indexes a lending static ability on its printed card definition"
+)]
+pub(super) fn lent_index<L: Layout>(
+    t: &GameTable,
+    source: L::Card,
+    face: crate::card::FaceIx,
+    ability: crate::card::AbilityIx,
+    part: u8,
+) -> u8 {
+    let mut seen: u8 = 0;
+    for (f_ix, f) in t.def(source).faces.iter().enumerate() {
+        for (a_ix, a) in f.abilities.iter().enumerate() {
+            let Some(spec) = a.layer() else { continue };
+            for (p_ix, m) in spec.modifications.iter().enumerate() {
+                if matches!(m, crate::card::Modification::Lend(_)) {
+                    if f_ix == usize::from(face.get())
+                        && a_ix == ability.index()
+                        && p_ix == usize::from(part)
+                    {
+                        return seen;
+                    }
+                    seen += 1;
+                }
+            }
+        }
+    }
+    unreachable!("a LayerChange::Lend names a Modification::Lend on its card")
 }

@@ -607,6 +607,7 @@ fn label(action: Action, def: &CardDef) -> Option<String> {
             ObjectAbility::Merged(place, i) => {
                 format!("activate ability {} of merged card {place}", i.index())
             }
+            ObjectAbility::Lent(row, k) => format!("activate lent ability {k} of row {row}"),
         },
         Action::TurnFaceUp { card: c, .. } if card(c) => "turn face up".to_owned(),
         _ => return None,

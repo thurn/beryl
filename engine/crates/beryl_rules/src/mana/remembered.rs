@@ -158,7 +158,10 @@ fn restricted_ability<L: Layout>(
         {
             Some((index, a))
         }
-        ObjectAbility::Own(_) | ObjectAbility::Granted(_) | ObjectAbility::Merged(..) => None,
+        ObjectAbility::Own(_)
+        | ObjectAbility::Granted(_)
+        | ObjectAbility::Merged(..)
+        | ObjectAbility::Lent(..) => None,
     })
 }
 

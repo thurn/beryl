@@ -20,110 +20,18 @@
 //! Implements: none. Checks static ability definitions and reads their conditions.
 
 use beryl_card::{
-    Amount, Behavior, CardDef, Condition, CounterKind, Effect, Face, Filter, LayerSpec,
-    Modification, Objects, Players, TriggerEvent, Zone,
+    Amount, Behavior, CardDef, Condition, CounterKind, Effect, Filter, LayerSpec, Modification,
+    Objects, Players, TriggerEvent, Zone,
 };
 
 use crate::player_set::PlayerSet;
 
+mod inputs;
+pub use inputs::Inputs;
+
 use crate::layout::Layout;
 use crate::state::State;
 use crate::table::GameTable;
-
-/// What a face's static abilities read as the layers apply that no layer writes, one bit
-/// each: the layer results are stale when one of these changes while a permanent on the
-/// battlefield reads it. The battlefield's own changes (what is on it, its faces, its
-/// statuses and the effects that apply) mark the results stale whatever the permanents read.
-/// The card table holds a set for each face ([`crate::table::FaceFacts::inputs`]), and the
-/// recompute stores the union of those of the permanents on the battlefield.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub struct Inputs(u8);
-
-impl Inputs {
-    /// Nothing.
-    pub const NONE: Inputs = Inputs(0);
-    /// The counters of some kind on the permanent with the ability, which an "as long as"
-    /// compares ([`reads_counters`] says which kinds).
-    pub const COUNTERS: Inputs = Inputs(1);
-    /// The cards in graveyards, which an amount counts
-    /// ([`Amount::CardTypesAmong`]).
-    pub const GRAVEYARDS: Inputs = Inputs(2);
-    /// Whether a permanent is tapped, which a filter or an "as long as" asks
-    /// ([`Filter::Tapped`]): "untapped creatures you control get +0/+2".
-    pub const TAPPED: Inputs = Inputs(4);
-    /// A player's life total, which an "as long as" compares ([`Amount::Life`]): "as long
-    /// as an opponent has 10 or less life".
-    pub const LIFE: Inputs = Inputs(8);
-    /// The number of cards in the controller's hand.
-    pub const HAND: Inputs = Inputs(16);
-
-    /// Both sets' inputs.
-    #[inline]
-    #[must_use]
-    pub const fn union(self, other: Inputs) -> Inputs {
-        Inputs(self.0 | other.0)
-    }
-
-    /// Whether every input of `other` is in this set.
-    #[inline]
-    pub const fn contains(self, other: Inputs) -> bool {
-        self.0 & other.0 == other.0
-    }
-
-    /// What the static abilities of `face` read that no layer writes, with what the
-    /// conditions of its state triggers read ([`state_condition`]): a state trigger whose
-    /// condition is [`watched`] is matched only after the layer results were stored, so a
-    /// change in what it reads must mark them stale as a change in an "as long as" does.
-    pub fn of(face: &Face) -> Inputs {
-        let mut inputs = Inputs::NONE;
-        for spec in face.abilities.iter().filter_map(beryl_card::Ability::layer) {
-            if let Some(condition) = &spec.condition {
-                inputs = inputs.union(Inputs::read_by(condition));
-            }
-            let graveyards = spec.modifications.iter().any(|m| {
-                m.pt_amounts().is_some_and(|(power, toughness)| {
-                    reads_graveyards(power) || toughness.is_some_and(reads_graveyards)
-                })
-            });
-            if graveyards {
-                inputs = inputs.union(Inputs::GRAVEYARDS);
-            }
-            let affected_reads_tapped = matches!(
-                spec.affected,
-                Objects::All { filter, .. } | Objects::Everywhere(filter)
-                    if mentions_tapped(filter)
-            ) || matches!(
-                spec.affected,
-                Objects::Other(&Objects::All { filter, .. }) if mentions_tapped(filter)
-            );
-            if affected_reads_tapped {
-                inputs = inputs.union(Inputs::TAPPED);
-            }
-        }
-        for condition in face.abilities.iter().filter_map(state_condition) {
-            inputs = inputs.union(Inputs::read_by(condition));
-        }
-        inputs
-    }
-
-    /// What `condition`, an "as long as" or a state trigger's condition, reads that no layer
-    /// writes.
-    fn read_by(condition: &Condition) -> Inputs {
-        let compared = |read: fn(&Counted) -> bool| compares(condition, &read);
-        [
-            (
-                compared(|n| matches!(n, Counted::Counters(_))),
-                Inputs::COUNTERS,
-            ),
-            (compared(|n| matches!(n, Counted::Life(_))), Inputs::LIFE),
-            (compared(|n| matches!(n, Counted::Hand)), Inputs::HAND),
-            (condition_reads_tapped(condition), Inputs::TAPPED),
-        ]
-        .into_iter()
-        .filter(|&(reads, _)| reads)
-        .fold(Inputs::NONE, |inputs, (_, input)| inputs.union(input))
-    }
-}
 
 /// The condition of `ability`'s trigger, if it is a state trigger (see CR 603.8).
 pub fn state_condition(ability: &beryl_card::Ability) -> Option<&'static Condition> {
@@ -306,6 +214,13 @@ impl<L: Layout> State<L> {
     /// Whether a card moving into or out of a hand can change a layer result.
     pub(crate) fn layers_read_hands(&self) -> bool {
         self.layer_inputs.contains(Inputs::HAND)
+    }
+
+    /// Whether a card joining or leaving the cards exiled with a permanent can change a layer
+    /// result ([`Inputs::LINKED`]).
+    #[inline]
+    pub(crate) fn layers_read_linked(&self) -> bool {
+        self.layer_inputs.contains(Inputs::LINKED)
     }
 }
 

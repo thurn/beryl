@@ -415,6 +415,9 @@ fn option(t: &GameTable, s: &State, o: Opt) -> String {
             ObjectAbility::Merged(place, i) => {
                 format!("activate {} merged {place} #{i}", named(slot))
             }
+            ObjectAbility::Lent(row, k) => {
+                format!("activate {} lent {row} #{k}", named(slot))
+            }
         },
         Opt::Mana { slot, color } => format!("tap {} for {}", named(slot), color.index()),
         Opt::Pool(color) => format!("spend pool {}", color.index()),
