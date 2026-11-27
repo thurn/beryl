@@ -110,7 +110,9 @@ impl Scans {
     /// The app's own caches: `~/Library/Caches/<app>` on macOS and iOS, `%LOCALAPPDATA%\<app>`
     /// on Windows and `$XDG_CACHE_HOME/<app>` (or `~/.cache`) elsewhere. On iOS, `$HOME` is the
     /// app's sandbox container, where only `Documents`, `Library` and `tmp` can be written, so
-    /// `~/.cache` there fails every write and no downloaded scan is ever kept. `BERYL_CLIENT_SCANS` names another directory to use in their place, such as an
+    /// `~/.cache` there fails every write and no downloaded scan is ever kept. An Android app has
+    /// no writable home folder either, so its host sets `XDG_CACHE_HOME` to the app's cache
+    /// folder before it starts the library. `BERYL_CLIENT_SCANS` names another directory to use in their place, such as an
     /// empty one, to see every face drawn as Beryl's frame.
     #[must_use]
     pub fn app() -> Self {

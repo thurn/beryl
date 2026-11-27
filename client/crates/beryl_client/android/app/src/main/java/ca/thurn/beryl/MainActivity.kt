@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.system.Os
 import android.util.Log
 import android.view.Choreographer
 import android.view.Surface
@@ -75,6 +76,10 @@ class MainActivity : Activity(), SurfaceHolder.Callback, Choreographer.FrameCall
         val displayHz = modes.maxOfOrNull { it.refreshRate } ?: 60f
         Library.activity = this
         if (Library.app == 0L) {
+            // The library keeps downloaded card scans under $XDG_CACHE_HOME. An Android app has
+            // no writable home folder, so without this every scan fails to save and each card is
+            // drawn as Beryl's text frame. An override already in the environment is kept.
+            Os.setenv("XDG_CACHE_HOME", cacheDir.path, false)
             Library.app = Native.create(
                 fixture, filesDir.path, standIn, standInDeck, standInOpponent, standInSeed,
                 displayHz, Library.waker,
