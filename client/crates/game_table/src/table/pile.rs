@@ -506,7 +506,8 @@ impl Table {
                     let elsewhere = last
                         .is_none_or(|last| last.place != resting.place || !lies_on(&last, index));
                     motion.tracks.get(slot).is_some_and(|track| {
-                        track.begun(motion.t) && (elsewhere || !track.settled(motion.t))
+                        (track.begun(motion.t) || (elsewhere && track.acted(motion.t)))
+                            && (elsewhere || !track.settled(motion.t))
                     })
                 });
             if leaves

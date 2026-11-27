@@ -47,10 +47,27 @@ impl Segment {
         self.start.saturating_add(self.duration)
     }
 
+    /// Whether the segment's shape leaves the straight line between its two poses (a bow, a
+    /// curved spline, a fade, a flip, a growth, a throw or a sweep).
+    fn detours(&self) -> bool {
+        match self.shape {
+            Shape::Line => false,
+            Shape::Fading | Shape::TurnedOver(_) | Shape::Grown(_) => true,
+            Shape::Bowed(bow) => bow.offset != Vec3::ZERO || bow.lean != 0.0,
+            Shape::Held { bow, lean, .. } => {
+                bow.offset != Vec3::ZERO || bow.lean != 0.0 || lean != 0.0
+            }
+            Shape::Thrown { rise, .. } => rise != Vec3::ZERO,
+            Shape::Swept { bulge, grow } => bulge != Vec3::ZERO || grow != 0.0,
+            Shape::Regrouping(fade) => fade.from - fade.to != 0.0,
+            Shape::Spline(spline) => !spline.is_straight(),
+        }
+    }
+
     /// Whether it changes the pose, rather than holding the object still.
     #[must_use]
     pub fn moves(&self) -> bool {
-        self.from != self.to || self.arc != 0.0
+        self.from != self.to || self.arc != 0.0 || self.detours()
     }
 
     /// Whether it changes the pose in a way the eye can follow: as `moves`, unless it only
@@ -64,7 +81,7 @@ impl Segment {
             position: self.from.position.with_z(self.to.position.z),
             ..self.from
         };
-        self.moves() && (self.arc != 0.0 || restacked != self.to)
+        self.moves() && (self.arc != 0.0 || self.detours() || restacked != self.to)
     }
 
     /// Interior moments for full interface checks. Most segments use the midpoint, while

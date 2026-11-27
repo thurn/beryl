@@ -1,7 +1,7 @@
 //! Poses from segments and tracks of segments.
 
 use glam::{Quat, Vec3};
-use kit_base::pose::{Curve, Follows, Interval, Pose, Segment, Shape, StepTime};
+use kit_base::pose::{Bow, Curve, Follows, Interval, Pose, Segment, Shape, StepTime};
 use kit_space::motion::{Full, SEGMENTS, Track, pose_at};
 
 const MS: u64 = 1_000_000;
@@ -266,4 +266,58 @@ fn what_is_drawn_on_a_card_turns_over_with_it() {
         normal(0.25).z > 0.5 && normal(0.75).z > 0.5,
         "always the upper side"
     );
+}
+
+/// A bowed segment whose start and end differ only in height (as when a card flies from a
+/// graveyard to exile directly beneath it on the phone layout and is bowed to clear a peer)
+/// still shifts visually. A straight vertical verb segment (`Follows::Start`) is recognized by
+/// `Track::acted`, while a layer-change settle segment (`Follows::Room`) is neither.
+#[test]
+fn bowed_and_vertical_verb_segments_over_the_same_spot_are_tracked() {
+    let high = Pose {
+        position: Vec3::new(10.0, 20.0, 2.0),
+        ..Pose::default()
+    };
+    let low = Pose {
+        position: Vec3::new(10.0, 20.0, -0.5),
+        ..Pose::default()
+    };
+    let bowed = Segment {
+        shape: Shape::Bowed(Bow {
+            offset: Vec3::new(30.0, 0.0, 0.0),
+            sharpness: 1.0,
+            lean: 0.0,
+            axis: Vec3::Z,
+        }),
+        ..segment(100 * MS, 400 * MS, high, low)
+    };
+    assert!(bowed.shifts(), "a bowed path leaves the straight line");
+    let mut bowed_track = Track::default();
+    bowed_track.push(bowed, 0).unwrap();
+    assert!(!bowed_track.begun(50 * MS));
+    assert!(bowed_track.begun(100 * MS));
+    assert!(!bowed_track.settled(250 * MS));
+    assert!(bowed_track.settled(500 * MS));
+
+    let settle = Segment {
+        step: Some(StepTime {
+            number: 1,
+            follows: Follows::Room,
+        }),
+        ..segment(100 * MS, 0, high, low)
+    };
+    let verb = Segment {
+        step: Some(StepTime {
+            number: 2,
+            follows: Follows::Start,
+        }),
+        ..segment(300 * MS, 400 * MS, high, low)
+    };
+    assert!(!settle.shifts());
+    assert!(!verb.shifts());
+    let mut straight_track = Track::default();
+    straight_track.push(settle, 0).unwrap();
+    straight_track.push(verb, 0).unwrap();
+    assert!(!straight_track.acted(200 * MS), "settle is not a verb act");
+    assert!(straight_track.acted(300 * MS), "verb has begun");
 }

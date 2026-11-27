@@ -108,6 +108,21 @@ impl Track {
         (self.segments().iter()).any(|segment| segment.start <= t && segment.shifts())
     }
 
+    /// Whether a step's own verb segment that changes the object's pose has begun by `t`, even
+    /// if it only changes height above the table (for example, on the phone layout where exile
+    /// lies directly under the graveyard and a card flown from graveyard to exile drops straight
+    /// down in `z`).
+    #[must_use]
+    pub fn acted(&self, t: u64) -> bool {
+        self.segments().iter().any(|segment| {
+            segment.start <= t
+                && segment.moves()
+                && segment
+                    .step
+                    .is_some_and(|step| step.follows == Follows::Start)
+        })
+    }
+
     /// Whether every segment that changes the object's pose has ended by `t`. From then on the
     /// object holds the pose it ends the track in.
     #[must_use]

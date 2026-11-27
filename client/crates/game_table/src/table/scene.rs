@@ -513,7 +513,7 @@ impl Table {
         {
             return None;
         }
-        let begun = track.begun(motion.t);
+        let begun = track.begun(motion.t) || (moves && track.acted(motion.t));
         match (resting, last) {
             (Some(resting), _) if !begun => {
                 if !resting.visible && !uncovered {
