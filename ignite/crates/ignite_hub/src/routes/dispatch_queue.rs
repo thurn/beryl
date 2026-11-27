@@ -619,6 +619,7 @@ impl Snapshot {
         let expected_cores = expected_cores(&ticket, &resolved, history, now);
         let needs_build_slot = self.requirements.needs_build_slot(
             ticket.id.as_str(),
+            ticket.ticket_type,
             ticket.needs_os,
             expected_cores,
             &resolved,

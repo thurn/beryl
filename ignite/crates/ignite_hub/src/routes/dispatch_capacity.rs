@@ -81,7 +81,13 @@ pub(super) fn read<'a>(
                         .map(|expiry| expiry.plus_seconds(-fleet::RESERVATION_SECONDS))
                 });
             let build =
-                requirements.needs_build_slot(ticket.id.as_str(), ticket.needs_os, cores, &files);
+                requirements.needs_build_slot(
+                ticket.id.as_str(),
+                ticket.ticket_type,
+                ticket.needs_os,
+                cores,
+                &files,
+            );
             capacity.budget.hold(&ticket.id, build, since);
         }
     }

@@ -10,6 +10,7 @@ use ignite_core::dispatch::RequiredFamily;
 use ignite_core::dispatch_pressure::likely_compiles;
 use ignite_core::ids::CheckName;
 use ignite_core::inputs::path_matches;
+use ignite_core::protocol::tickets::TicketType;
 use ignite_core::manifest::{AnyPlatform, InputPattern, Kind, Manifest, Platforms, Product};
 use ignite_store::{Result, StoreError};
 
@@ -133,14 +134,22 @@ impl Requirements {
 
     /// Estimate from the reviewed landing checks before the ticket has a tree or a build record.
     /// Use declared path patterns because per-check inputs are known only after listing checks.
+    ///
+    /// A bug always counts as build work. Which files its fix touches is unknown until someone
+    /// reproduces it, so the files its text names are what to read (a report, a guide), not
+    /// what it will change. Judged by those files, a burst of thirteen bug reports passed as
+    /// light work and started on one machine within 80 seconds, past the build-ticket limit
+    /// and the pacing between build handoffs.
     pub(super) fn needs_build_slot(
         &self,
         ticket: &str,
+        ticket_type: TicketType,
         os: Option<Os>,
         cores: f64,
         files: &[String],
     ) -> bool {
-        likely_compiles(cores, files)
+        ticket_type == TicketType::Bug
+            || likely_compiles(cores, files)
             || self.regressions.get(ticket).is_some_and(|checks| {
                 checks.iter().any(|check| {
                     self.declarations

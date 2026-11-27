@@ -64,6 +64,31 @@ fn polling_reserves_an_ordinary_ticket_when_the_queue_is_long_and_the_host_has_r
 }
 
 #[test]
+fn a_bug_that_names_only_documents_still_waits_for_a_build_slot() {
+    // A bug report names the report and the guide to read, never the files its fix will
+    // change, so those names must not let it start as light work.
+    let mut conn = open();
+    let ids = file(&mut conn, &[("bug", &[], &[]), ("docs", &[], &[])]);
+    let body = "Read `reports/one/report.md` first, as `docs/guide.md` says.";
+    for id in &ids {
+        classify(&conn, id, 0.1, body);
+    }
+    conn.execute("UPDATE tickets SET type = 'bug' WHERE id = ?1", [ids[0].as_str()])
+        .unwrap();
+    let pressure = DispatchPressure {
+        build_slots: 6,
+        build_slots_free: 0,
+        ..DispatchPressure::default()
+    };
+    let reserved = ask(&mut conn, "local_a", &pressure, 0.0);
+    assert_eq!(reserved["ticket"], ids[1].as_str(), "{reserved}");
+    let waiting = ask(&mut conn, "local_b", &pressure, 1.0);
+    let reason = waiting["nothing"].as_str().unwrap();
+    assert!(reason.starts_with(ids[0].as_str()), "{waiting}");
+    assert!(reason.contains("waits for a build slot"), "{waiting}");
+}
+
+#[test]
 fn polling_explains_slot_and_queue_waits_together() {
     let mut conn = open();
     register(&mut conn);
