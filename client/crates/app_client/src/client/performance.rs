@@ -3,6 +3,7 @@
 use app_screens::performance::MonitorView;
 use app_screens::screens::{Screen, settings::GEAR_INSET};
 use glam::Vec2;
+use kit_base::data::profiles::SlotName;
 use kit_base::geometry::Window;
 use kit_base::tokens::{size, space};
 use kit_scene::SizeClass;
@@ -67,7 +68,7 @@ impl Client {
         let top = if compact { space::S } else { GEAR_INSET };
         let mut point = Vec2::new(safe.left + GEAR_INSET, safe.top + top);
         if matches!(self.features.screen, Screen::Game | Screen::Table)
-            && let Some(log) = self.show.table().profile().slot("log.toggle")
+            && let Some(log) = self.show.table().profile().slot(SlotName::LogToggle)
         {
             // Keep the log control visible in the same corner.
             point.x = point.x.max(log.rect.x + size::ICON_BUTTON + space::M);

@@ -8,6 +8,7 @@ use game_table::profiles::Profile;
 use game_table::table::Window;
 use kit_base::data::Card;
 use kit_base::data::profiles::ResultLayout;
+use kit_base::data::profiles::SlotName;
 use kit_scene::{Context, Feature};
 use kit_ui::element::Element;
 use kit_ui::input::{FaceId, Rect};
@@ -67,8 +68,8 @@ impl Inputs {
         });
         Some(Self {
             window: profile.window(),
-            area: profile.slot("result")?.rect,
-            dock: profile.slot("result.dock")?.rect,
+            area: profile.slot(SlotName::Result)?.rect,
+            dock: profile.slot(SlotName::ResultDock)?.rect,
             column: profile.screen_column(),
             layout: profile.data().hud.result,
             card: profile.card(),

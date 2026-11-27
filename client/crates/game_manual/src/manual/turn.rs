@@ -11,6 +11,7 @@
 
 use beryl_protocol::protocol::{PlayerView, Side, TableAction, TablePhase};
 use glam::Vec2;
+use kit_base::data::profiles::SlotName;
 
 use crate::features::table::Message as TableMessage;
 use game_hud::hud::HudIn;
@@ -141,7 +142,7 @@ pub fn advance(view: &PlayerView, with_action: bool) -> Vec<TableAction> {
 /// The compact slot for Next, after clearing the table's resting cards.
 #[must_use]
 pub fn next_slot(hud: &HudIn<'_>) -> Option<Rect> {
-    let preferred = hud.profile.slot("manual.next")?.rect;
+    let preferred = hud.profile.slot(SlotName::ManualNext)?.rect;
     let bands = hud.profile.bands()?;
     Some(super::profiles::next_slot(
         preferred,

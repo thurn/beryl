@@ -15,6 +15,7 @@ pub mod anchored;
 mod banded;
 mod hud;
 mod pile;
+mod slot;
 mod tray;
 pub use anchored::Anchored;
 pub use banded::Banded;
@@ -22,6 +23,7 @@ pub use hud::{
     FloatingPrompt, Hud, Incoming, Inspector, Piece, ResultLayout, SingleRow, WrappedHand,
 };
 pub use pile::PileGeometry;
+pub use slot::SlotName;
 pub use tray::{PutBack, TrayTuning};
 
 /// The space a feature has for its content.
@@ -377,7 +379,7 @@ pub struct ProfileData {
     pub play: Play,
     pub checks: Checks,
     pub hud: Hud,
-    pub slots: BTreeMap<String, SlotSpec>,
+    pub slots: BTreeMap<SlotName, SlotSpec>,
     /// Tuning for screens that use a scrolling column.
     pub screen: Option<ScreenMetrics>,
     pub gallery_arrangement: GalleryArrangement,
@@ -516,49 +518,48 @@ impl ProfileData {
     fn validate_slots(&self) -> Result<(), String> {
         let compact = self.size_class == SizeClass::Compact;
         let floating_prompt = self.hud.floating_prompt.is_some();
-        let slots = [
-            ("bug.hint", compact),
-            ("bug.sheet", compact),
-            ("bug.tools", compact),
-            ("divide.edge", false),
-            ("divide.side", false),
-            ("full_control", self.hud.table.contains(&Piece::FullControl)),
-            ("gear", self.hud.table.contains(&Piece::Gear)),
-            ("inspector", self.table.inspector.is_some()),
-            ("log", true),
-            ("log.toggle", self.hud.overlays.contains(&Piece::LogColumn)),
-            ("manual.connection", compact),
-            ("manual.log", compact),
-            ("manual.pool", compact),
-            ("manual.menu", compact),
-            ("manual.next", compact),
-            ("manual.proposals", compact),
-            ("manual.proposals.panel", false),
-            ("manual.proposals.short", false),
-            ("menu", self.hud.table.contains(&Piece::Menu)),
-            ("opening", true),
-            ("phase", self.hud.table.contains(&Piece::Phase)),
-            ("player.opponent", true),
-            ("player.you", true),
-            ("prompt.asked", floating_prompt),
-            ("prompt.bar", true),
-            ("prompt.catalog", false),
-            ("prompt.clearance", floating_prompt),
-            ("prompt.dock", floating_prompt),
-            ("prompt.stacked", floating_prompt),
-            ("prompt.ways", false),
-            ("result", true),
-            ("result.dock", true),
-            ("revealed.pile", false),
-            ("screen.column", compact),
-            ("screen.dock", compact),
-            ("settings.sheet", true),
-            ("viewer", true),
-        ];
+        // Whether this profile must place each slot. An exhaustive match, so a new slot name
+        // cannot be added without deciding when a profile needs it.
+        let required = |name: SlotName| match name {
+            SlotName::BugHint
+            | SlotName::BugSheet
+            | SlotName::BugTools
+            | SlotName::ManualConnection
+            | SlotName::ManualLog
+            | SlotName::ManualMenu
+            | SlotName::ManualNext
+            | SlotName::ManualPool
+            | SlotName::ManualProposals
+            | SlotName::ScreenColumn
+            | SlotName::ScreenDock => compact,
+            SlotName::DivideEdge
+            | SlotName::DivideSide
+            | SlotName::ManualProposalsPanel
+            | SlotName::ManualProposalsShort
+            | SlotName::PromptCatalog
+            | SlotName::PromptWays
+            | SlotName::RevealedPile => false,
+            SlotName::FullControl => self.hud.table.contains(&Piece::FullControl),
+            SlotName::Gear => self.hud.table.contains(&Piece::Gear),
+            SlotName::Inspector => self.table.inspector.is_some(),
+            SlotName::LogToggle => self.hud.overlays.contains(&Piece::LogColumn),
+            SlotName::Menu => self.hud.table.contains(&Piece::Menu),
+            SlotName::Phase => self.hud.table.contains(&Piece::Phase),
+            SlotName::PromptAsked
+            | SlotName::PromptClearance
+            | SlotName::PromptDock
+            | SlotName::PromptStacked => floating_prompt,
+            SlotName::Log
+            | SlotName::Opening
+            | SlotName::PlayerOpponent
+            | SlotName::PlayerYou
+            | SlotName::PromptBar
+            | SlotName::Result
+            | SlotName::ResultDock
+            | SlotName::SettingsSheet
+            | SlotName::Viewer => true,
+        };
         for (name, slot) in &self.slots {
-            if !slots.iter().any(|(known, _)| name == known) {
-                return Err(format!("slots.{name}: unknown field `{name}`"));
-            }
             if !matches!(
                 slot.region,
                 Region::SafeArea | Region::Window | Region::PlayerYou | Region::PlayerOpponent
@@ -573,12 +574,12 @@ impl ProfileData {
                 return Err(format!("invalid dimensions for slots.{name}"));
             }
         }
-        for (name, required) in slots {
-            if required && !self.slots.contains_key(name) {
+        for name in SlotName::ALL {
+            if required(name) && !self.slots.contains_key(&name) {
                 return Err(format!("missing slots.{name}"));
             }
         }
-        if self.slots.contains_key("manual.menu") && self.manual.is_none() {
+        if self.slots.contains_key(&SlotName::ManualMenu) && self.manual.is_none() {
             return Err("slots.manual.menu requires manual controls".to_owned());
         }
         if compact && self.screen.is_none() {

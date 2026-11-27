@@ -4,6 +4,7 @@
 use beryl_protocol::DecisionId;
 use beryl_protocol::protocol::Status;
 use glam::Vec2;
+use kit_base::data::profiles::SlotName;
 
 use super::Client;
 use super::features::{Features, Placement, ViewInputs};
@@ -464,7 +465,7 @@ impl Client {
                     .contains(&kit_base::data::profiles::Piece::Gear) =>
             {
                 profile
-                    .slot("gear")
+                    .slot(SlotName::Gear)
                     .map(|slot| Vec2::new(slot.rect.x + slot.rect.width, slot.rect.y))
             }
             Screen::Table if profile.size_class() == kit_scene::SizeClass::Regular => {

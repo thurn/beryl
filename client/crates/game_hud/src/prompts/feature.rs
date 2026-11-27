@@ -1,5 +1,6 @@
 //! The inputs to a prompt feature and the shared routing for its clicks.
 
+use kit_base::data::profiles::SlotName;
 use std::marker::PhantomData;
 
 use beryl_protocol::prompt::{Click, PromptView};
@@ -76,16 +77,16 @@ impl ViewKey {
             slots: hud
                 .profile
                 .slots([
-                    "prompt.bar",
-                    "prompt.dock",
-                    "prompt.stacked",
-                    "prompt.clearance",
-                    "prompt.asked",
-                    "phase",
-                    "prompt.ways",
-                    "prompt.catalog",
-                    "divide.edge",
-                    "divide.side",
+                    SlotName::PromptBar,
+                    SlotName::PromptDock,
+                    SlotName::PromptStacked,
+                    SlotName::PromptClearance,
+                    SlotName::PromptAsked,
+                    SlotName::Phase,
+                    SlotName::PromptWays,
+                    SlotName::PromptCatalog,
+                    SlotName::DivideEdge,
+                    SlotName::DivideSide,
                 ])
                 .map(|slot| slot.map(|slot| slot.rect)),
             floating: hud.profile.data().hud.floating_prompt,

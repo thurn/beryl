@@ -1,6 +1,7 @@
 //! The pile viewer and the prepared Revealed Cards controls.
 
 use kit_base::data::Card;
+use kit_base::data::profiles::SlotName;
 use std::convert::Infallible;
 
 use beryl_protocol::PlayerView;
@@ -114,7 +115,7 @@ impl<'a> Inputs<'a> {
         view: Option<&'a PlayerView>,
         revision: usize,
     ) -> Option<Self> {
-        let area = profile.slot("viewer")?.rect;
+        let area = profile.slot(SlotName::Viewer)?.rect;
         Some(Self {
             window,
             centre: Vec2::new(area.x + area.width / 2.0, area.y + area.height / 2.0),
@@ -210,7 +211,7 @@ impl State {
         let Some(control) = &mut self.control else {
             return;
         };
-        let slot = profile.slot("revealed.pile").map(|slot| slot.rect);
+        let slot = profile.slot(SlotName::RevealedPile).map(|slot| slot.rect);
         if control.pile_slot.map(|area| (area.width, area.height))
             != slot.map(|area| (area.width, area.height))
         {

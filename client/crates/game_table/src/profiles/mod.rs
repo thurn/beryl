@@ -3,7 +3,7 @@
 use beryl_protocol::protocol::Side;
 use glam::Vec2;
 use kit_base::data::Card;
-use kit_base::data::profiles::{ProfileData, Profiles, Region, Row};
+use kit_base::data::profiles::{ProfileData, Profiles, Region, Row, SlotName};
 use kit_base::geometry::{Rect, Window};
 use kit_scene::{SizeClass, Slot};
 use kit_ui::widgets::screen::ScreenColumn;
@@ -219,7 +219,7 @@ impl<'a> Profile<'a> {
     #[must_use]
     pub fn screen_column(self) -> Option<ScreenColumn> {
         Some(ScreenColumn {
-            bounds: self.slot("screen.column")?.rect,
+            bounds: self.slot(SlotName::ScreenColumn)?.rect,
             metrics: self.data.screen?,
             target: self.data.checks.target_points,
         })
@@ -282,21 +282,25 @@ impl<'a> Profile<'a> {
         ))
     }
 
-    /// Resolves a named slot in logical points. An unknown name has no slot.
+    /// Resolves a named slot in logical points, or `None` when this profile does not place it.
     #[must_use]
-    pub fn slot(self, name: &str) -> Option<Slot> {
+    pub fn slot(self, name: SlotName) -> Option<Slot> {
         self.resolve_slot(name, || self.bands())
     }
 
     /// Resolves a group of slots against the same fitted table.
     #[must_use]
-    pub fn slots<const N: usize>(self, names: [&str; N]) -> [Option<Slot>; N] {
+    pub fn slots<const N: usize>(self, names: [SlotName; N]) -> [Option<Slot>; N] {
         let bands = std::cell::OnceCell::new();
         names.map(|name| self.resolve_slot(name, || *bands.get_or_init(|| self.bands())))
     }
 
-    fn resolve_slot(self, name: &str, bands: impl FnOnce() -> Option<TableBands>) -> Option<Slot> {
-        let spec = *self.data.slots.get(name)?;
+    fn resolve_slot(
+        self,
+        name: SlotName,
+        bands: impl FnOnce() -> Option<TableBands>,
+    ) -> Option<Slot> {
+        let spec = *self.data.slots.get(&name)?;
         let bounds = if spec.region == Region::Window {
             Rect {
                 width: self.window.size.width,

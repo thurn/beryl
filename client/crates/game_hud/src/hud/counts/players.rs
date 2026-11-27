@@ -23,6 +23,7 @@ use crate::hud::anchors::anchor_target;
 use beryl_protocol::protocol::{Combat, PlayerView, Side, Step};
 use beryl_protocol::script::Subject;
 use glam::Vec2;
+use kit_base::data::profiles::SlotName;
 
 use super::orb;
 use crate::hud::HudIn;
@@ -108,8 +109,8 @@ pub fn face_centre(side: Side, profile: Profile) -> Vec2 {
 
 fn orb_point(side: Side, profile: Profile) -> Vec2 {
     let name = match side {
-        Side::You => "player.you",
-        Side::Opponent => "player.opponent",
+        Side::You => SlotName::PlayerYou,
+        Side::Opponent => SlotName::PlayerOpponent,
     };
     let area = profile.slot(name).expect("validated player slot").rect;
     Vec2::new(area.x + area.width / 2.0, area.y + area.height / 2.0)

@@ -13,6 +13,7 @@
 //! window's shape makes it, as the tray's is (`table::tray`), and a place on it is turned into
 //! logical points of the window.
 
+use kit_base::data::profiles::SlotName;
 use std::fmt::Write as _;
 
 use beryl_protocol::protocol::{
@@ -123,7 +124,7 @@ impl<'a> CardInputs<'a> {
             _ => None,
         };
         let data = profile.data().table.inspector?;
-        let area = profile.slot("inspector")?.rect;
+        let area = profile.slot(SlotName::Inspector)?.rect;
         let card = profile.card();
         let place = stage_place(
             area,

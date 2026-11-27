@@ -1,5 +1,6 @@
 use super::State;
 use game_table::{profiles::Profile, table::Window};
+use kit_base::data::profiles::SlotName;
 use kit_base::geometry::Rect;
 use kit_frame::frame::Role;
 use kit_ui::element::Element;
@@ -26,7 +27,10 @@ pub type ViewKey = (Window, Option<Rect>, Option<FaceId>, Option<f32>);
 pub(super) fn key(inputs: &Inputs<'_>) -> ViewKey {
     (
         inputs.window,
-        inputs.profile.slot("manual.menu").map(|slot| slot.rect),
+        inputs
+            .profile
+            .slot(SlotName::ManualMenu)
+            .map(|slot| slot.rect),
         inputs.face,
         inputs
             .profile
@@ -38,7 +42,7 @@ pub(super) fn key(inputs: &Inputs<'_>) -> ViewKey {
 
 pub(super) fn render(state: &State, inputs: Inputs<'_>) -> Element {
     let open = state.as_ref().expect("context menu is open");
-    let Some(slot) = inputs.profile.slot("manual.menu") else {
+    let Some(slot) = inputs.profile.slot(SlotName::ManualMenu) else {
         return context_menu(open.at, menu(&open.title, &open.whose, &open.groups));
     };
     let rect = slot.rect;
@@ -79,7 +83,7 @@ pub(super) fn render(state: &State, inputs: Inputs<'_>) -> Element {
 /// The visible face the phone menu previews above its items.
 pub fn sheet_face(state: &State, hud: &HudIn<'_>) -> Option<FaceId> {
     let open = state.as_ref()?;
-    hud.profile.slot("manual.menu")?;
+    hud.profile.slot(SlotName::ManualMenu)?;
     let Target::Card(slot) = open.target else {
         return None;
     };

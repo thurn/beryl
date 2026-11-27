@@ -2,6 +2,7 @@
 
 use beryl_protocol::protocol::{PlayerView, Side, Step};
 use glam::Vec2;
+use kit_base::data::profiles::SlotName;
 
 use game_table::profiles::Profile;
 use kit_base::geometry::Rect;
@@ -17,7 +18,7 @@ pub const SOURCE: &str = file!();
 /// hold the log and the bug report (`MenuButton` in `ui/src/mobile/chrome.tsx`).
 #[must_use]
 pub fn menu(profile: Profile, press: Action) -> Option<Element> {
-    let slot = profile.slot("menu")?.rect;
+    let slot = profile.slot(SlotName::Menu)?.rect;
     let mut button = icon_button(icons::MENU, "Menu");
     button.press = Some(press);
     button.anchor = Some(Anchor::Point(
@@ -83,7 +84,7 @@ pub fn icon(view: &PlayerView, bounds: Rect) -> Element {
 /// each side.
 #[must_use]
 pub fn middle_band(profile: Profile, view: &PlayerView) -> Option<Rect> {
-    let slot = profile.slot("phase")?.rect;
+    let slot = profile.slot(SlotName::Phase)?.rect;
     Some(clear_of_shared_piles(profile, slot, view.shared.is_some()))
 }
 

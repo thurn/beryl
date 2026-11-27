@@ -175,7 +175,7 @@ pub(super) fn profiles() -> Result<Vec<Entry>, String> {
         .into_iter()
         .map(|layout| {
             let profile = layout.definition;
-            let slots: Vec<_> = profile.slots.keys().map(String::as_str).collect();
+            let slots: Vec<_> = profile.slots.keys().map(|name| name.as_str()).collect();
             let windows = profile
                 .test_windows()
                 .map(|window| format!("{}@{}", size_text(window.size), window.scale))

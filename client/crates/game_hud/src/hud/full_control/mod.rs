@@ -1,5 +1,6 @@
 //! Full control's indicator in the desktop dock or the phone's middle band.
 
+use kit_base::data::profiles::SlotName;
 use std::convert::Infallible;
 
 use beryl_protocol::prompt::ButtonId;
@@ -36,7 +37,7 @@ impl Inputs {
         if !layout.table.contains(&Piece::FullControl) || !view.stops.full_control {
             return None;
         }
-        let area = input.profile.slot("full_control")?.rect;
+        let area = input.profile.slot(SlotName::FullControl)?.rect;
         let pass_on = input.prompt.is_some_and(|prompt| {
             prompt
                 .buttons

@@ -8,6 +8,7 @@ use game_table::profiles::Profile;
 use game_table::table::Window;
 use glam::Vec2;
 use kit_base::data::profiles::BugScreen;
+use kit_base::data::profiles::SlotName;
 use kit_base::tokens::size;
 use kit_frame::frame::Wake;
 use kit_scene::{Context, Feature};
@@ -218,9 +219,9 @@ impl Layout {
     pub fn new(profile: Profile<'_>) -> Self {
         Self {
             metrics: profile.data().screen.map(|screen| screen.bug),
-            hint: profile.slot("bug.hint").map(|slot| slot.rect),
-            sheet: profile.slot("bug.sheet").map(|slot| slot.rect),
-            tools: profile.slot("bug.tools").map(|slot| slot.rect),
+            hint: profile.slot(SlotName::BugHint).map(|slot| slot.rect),
+            sheet: profile.slot(SlotName::BugSheet).map(|slot| slot.rect),
+            tools: profile.slot(SlotName::BugTools).map(|slot| slot.rect),
             safe_area: profile.window().safe_area,
             target: profile.data().checks.target_points,
         }

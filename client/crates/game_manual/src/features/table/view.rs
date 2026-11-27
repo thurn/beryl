@@ -10,6 +10,7 @@ use beryl_protocol::PlayerView;
 use game_hud::hud::{HudIn, players, steps};
 use game_hud::{hud::viewer::RevealedFace, inspect::Viewed};
 use game_table::{faces::FaceList, table::Window};
+use kit_base::data::profiles::SlotName;
 use kit_base::{data::profiles::ProfileData, geometry::Rect};
 use kit_scene::SizeClass;
 use kit_ui::element::{Action, Chord, Element, column};
@@ -129,7 +130,7 @@ pub(super) fn table(state: &State, input: Inputs<'_>) -> Element {
     let covered = input.menu.is_some() || overlay_open;
     let connection = view.and_then(|view| {
         let top = profile
-            .slot("manual.connection")
+            .slot(SlotName::ManualConnection)
             .map_or_else(|| link::top(window.size, metrics.link), |slot| slot.rect.y);
         link::banner(view, window.size, top, input.link_error, metrics.link)
     });

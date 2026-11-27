@@ -9,6 +9,7 @@ use crate::settings::{ScreenSettings, Setting};
 use game_hud::hud::log::{GameLog, Message as LogMessage};
 use game_table::profiles::Profile;
 use game_table::table::Window;
+use kit_base::data::profiles::SlotName;
 use kit_scene::{Context, Feature, SizeClass, Slot};
 use kit_ui::element::{Action, Element};
 
@@ -64,7 +65,7 @@ impl Layout {
     pub fn new(profile: Profile<'_>) -> Self {
         Self {
             slot: profile
-                .slot("settings.sheet")
+                .slot(SlotName::SettingsSheet)
                 .expect("validated settings slot"),
             size_class: profile.size_class(),
             quick_action_min_width: profile

@@ -47,7 +47,7 @@ fn every_named_slot_fits_in_each_test_window() {
             let profile = Profile::for_window(&data.profiles, window);
             assert_eq!(profile.data().name, definition.name);
             let safe = Slot::safe_area(window);
-            for (name, spec) in &definition.slots {
+            for (&name, spec) in &definition.slots {
                 let bounds = if spec.region == Region::Window {
                     Rect {
                         width: window.size.width,
@@ -66,7 +66,6 @@ fn every_named_slot_fits_in_each_test_window() {
                     "{name}: {slot:?} outside {bounds:?}"
                 );
             }
-            assert!(profile.slot("unregistered").is_none());
         }
     }
 }

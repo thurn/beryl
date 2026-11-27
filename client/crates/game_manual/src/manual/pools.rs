@@ -18,6 +18,7 @@
 use beryl_protocol::PlayerView;
 use beryl_protocol::protocol::{ManaPool, PlayerState, Side};
 use glam::Vec2;
+use kit_base::data::profiles::SlotName;
 
 use crate::features::table::Message as TableMessage;
 use game_table::profiles::Profile;
@@ -136,7 +137,7 @@ fn mana_button(
 /// every screen element and would show through a sheet over the viewer's strip.
 #[must_use]
 pub fn sheet(view: &PlayerView, side: Side, profile: Profile<'_>) -> Option<Element> {
-    let rect = profile.slot("manual.pool")?.rect;
+    let rect = profile.slot(SlotName::ManualPool)?.rect;
     let metrics = profile.data().manual?;
     let adjust = adjustable(view, side);
     let heading = row()

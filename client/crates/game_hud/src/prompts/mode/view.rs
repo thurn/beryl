@@ -4,6 +4,7 @@
 use beryl_protocol::prompt::{ButtonId, Click, PromptButton, PromptView, ShapeBody};
 use beryl_protocol::protocol::{Candidate, CandidateView, ObjectView, Status};
 use glam::Vec2;
+use kit_base::data::profiles::SlotName;
 
 use super::Mode;
 use crate::hud::HudIn;
@@ -82,7 +83,10 @@ fn ways_row(prompt: &PromptView, input: &HudIn) -> Option<Element> {
         .align_items(vertical)
         .child(choices);
     let mut top = tray.y;
-    if let (Some(scene), Some(slot)) = (input.placement_scene, input.profile.slot("prompt.ways")) {
+    if let (Some(scene), Some(slot)) = (
+        input.placement_scene,
+        input.profile.slot(SlotName::PromptWays),
+    ) {
         let area = slot.rect;
         let above = area.y + area.height - tray.height;
         let candidates = [top, above]

@@ -14,6 +14,7 @@
 use beryl_protocol::PlayerView;
 use beryl_protocol::protocol::{ObjectId, Side, TablePrompt};
 use glam::Vec2;
+use kit_base::data::profiles::SlotName;
 
 use crate::features::table::Message as TableMessage;
 use crate::manual::opening::{OpeningPress, prompt};
@@ -51,7 +52,9 @@ fn pieces(view: &PlayerView, input: &HudIn) -> Option<(Element, Element)> {
     let window = input.window;
     let profile = input.profile;
     let style = input.data.hud.opening;
-    let dock_slot = profile.screen_column().zip(profile.slot("screen.dock"));
+    let dock_slot = profile
+        .screen_column()
+        .zip(profile.slot(SlotName::ScreenDock));
     let (shown, buttons, middle) = match prompt(view)? {
         TablePrompt::Choose { title, options, .. } => {
             let mut buttons: Vec<Element> = (options.iter().enumerate())

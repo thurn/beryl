@@ -12,6 +12,7 @@
 
 use super::Divide;
 use crate::hud::anchors::anchor_target;
+use kit_base::data::profiles::SlotName;
 
 use beryl_protocol::prompt::{Click, PromptView, ShapeBody, Share};
 use beryl_protocol::protocol::Side;
@@ -40,7 +41,9 @@ pub(super) fn view(prompt: &PromptView, input: &HudIn, bar: Element) -> Element 
         return bar;
     };
     let left = *left;
-    let [edge, side] = input.profile.slots(["divide.edge", "divide.side"]);
+    let [edge, side] = input
+        .profile
+        .slots([SlotName::DivideEdge, SlotName::DivideSide]);
     let mut steppers = Vec::new();
     let controls = shares.iter().filter_map(|&share| {
         if let Some(edge) = edge {

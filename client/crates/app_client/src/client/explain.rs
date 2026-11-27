@@ -5,6 +5,7 @@ use beryl_protocol::script::Subject;
 use game_probe::explain::{self, Probe};
 use game_table::table::labels::ABILITY_ROLE;
 use game_table::table::{PileShown, Place, Placement, RowDecision, Scroller};
+use kit_base::data::profiles::SlotName;
 use kit_frame::frame::{ABILITY_IDS, Place as FramePlace, Resolved, Role};
 use kit_space::arrange::Overflow;
 use serde_json::{Value, json};
@@ -79,7 +80,7 @@ impl Client {
             .find(|attempt| attempt.selected)
             .map(|attempt| attempt.slot)
             .or_else(|| {
-                (owner.contains("::prompts::bar::") && profile.slot("prompt.bar").is_some())
+                (owner.contains("::prompts::bar::") && profile.slot(SlotName::PromptBar).is_some())
                     .then_some("prompt.bar")
             });
         let shown_attempts: Vec<_> = attempts

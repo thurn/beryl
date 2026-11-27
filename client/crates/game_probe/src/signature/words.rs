@@ -5,6 +5,7 @@ use game_table::profiles::Profile;
 use game_table::table::Window;
 use game_table::table::badges::counter_label;
 use kit_base::data::profiles::Profiles;
+use kit_base::data::profiles::SlotName;
 use kit_base::tokens::{size, space, type_style};
 use kit_text::text::{Text, TypeStyle};
 
@@ -59,7 +60,7 @@ impl Words {
             }
             if let Some(inspector) = profile.data().table.inspector {
                 let height = profile
-                    .slot("inspector")
+                    .slot(SlotName::Inspector)
                     .expect("validated slot")
                     .rect
                     .height;

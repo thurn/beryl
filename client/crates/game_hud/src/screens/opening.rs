@@ -33,6 +33,7 @@ use beryl_protocol::prompt::{PromptButton, PromptView, Purpose};
 use beryl_protocol::protocol::{CardHandling, Declaration, ObjectId, Side, Status, ZoneName};
 use beryl_protocol::script::{Mark, Subject};
 use glam::Vec2;
+use kit_base::data::profiles::SlotName;
 
 use crate::hud::HudIn;
 use game_table::profiles::Profile;
@@ -528,7 +529,7 @@ impl Sizes {
     fn for_profile(shown: &Presentation, profile: Profile) -> Self {
         let opening = profile.data().hud.opening;
         let room = profile
-            .slot("opening")
+            .slot(SlotName::Opening)
             .expect("validated opening slot")
             .rect;
         if let Some(wrapped) = opening.wrapped_hand {

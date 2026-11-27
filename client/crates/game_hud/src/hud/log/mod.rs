@@ -7,6 +7,7 @@ mod view;
 pub use history::{LogEntry, Logged};
 pub use lines::{LogKind, LogLine, Names, counter_name, learn_names, listed, log_lines};
 
+use kit_base::data::profiles::SlotName;
 use std::convert::Infallible;
 
 use game_table::profiles::Profile;
@@ -54,10 +55,10 @@ impl Layout {
             .iter()
             .find_map(|piece| match piece {
                 Piece::LogColumn => Some(Self::Column {
-                    toggle: profile.slot("log.toggle")?.rect,
-                    panel: profile.slot("log")?.rect,
+                    toggle: profile.slot(SlotName::LogToggle)?.rect,
+                    panel: profile.slot(SlotName::Log)?.rect,
                 }),
-                Piece::LogSheet if open => Some(Self::Sheet(profile.slot("log")?.rect)),
+                Piece::LogSheet if open => Some(Self::Sheet(profile.slot(SlotName::Log)?.rect)),
                 _ => None,
             })
     }

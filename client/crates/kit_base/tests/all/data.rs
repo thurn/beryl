@@ -319,7 +319,7 @@ fn a_profile_rejects_an_unknown_named_slot() {
     let why =
         profiles::Profiles::parse(&[(file, &profile.to_string()), SHIPPED[1]], card()).unwrap_err();
     assert!(
-        why.starts_with(file) && why.contains("slots.unused.slot: unknown field `unused.slot`"),
+        why.starts_with(file) && why.contains("unknown slot `unused.slot`"),
         "{why}"
     );
 }

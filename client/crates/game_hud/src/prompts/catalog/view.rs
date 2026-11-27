@@ -6,6 +6,7 @@
 
 use super::Catalog;
 use crate::prompts::shade;
+use kit_base::data::profiles::SlotName;
 
 use beryl_protocol::prompt::{Click, PromptView, ShapeBody};
 use glam::Vec2;
@@ -36,7 +37,7 @@ fn entries_column(entries: &[String], chosen: Option<u16>, input: &HudIn) -> Ele
     // A phone gives the column the opponent's half of the table, down to the middle band, and
     // keeps every entry as tall as a finger, scrolling the list where they do not fit
     // (`.phone-board .stage-entries` in `ui/src/mobile/phone.css`).
-    let slot = input.profile.slot("prompt.catalog");
+    let slot = input.profile.slot(SlotName::PromptCatalog);
     let space = slot.map_or_else(
         || input.profile.tray().on_window(input.window.size).0,
         |slot| slot.rect,

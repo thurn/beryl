@@ -2,6 +2,7 @@
 //! (docs/beryl-3d.md, "Elements"). Its words, which buttons it has and whether each can be
 //! pressed are the session's.
 
+use kit_base::data::profiles::SlotName;
 use std::borrow::Cow;
 
 use beryl_protocol::prompt::{ButtonId, PromptButton, PromptView, Purpose, ShapeBody};
@@ -172,7 +173,7 @@ pub fn captioned_dock() -> Element {
 
 fn bar_column(profile: Profile) -> Element {
     let mut dock = captioned_dock();
-    if let Some(slot) = profile.slot("prompt.bar") {
+    if let Some(slot) = profile.slot(SlotName::PromptBar) {
         let bounds = slot.rect;
         let window = profile.window();
         let root_right = window.size.width - window.safe_area.right - DOCK_RIGHT;
@@ -410,12 +411,12 @@ impl<'a> PromptSlots<'a> {
         let profile = input.profile;
         let metrics = profile.data().hud.floating_prompt?;
         let [bar, dock, middle, clearance, asked, phase] = profile.slots([
-            "prompt.bar",
-            "prompt.dock",
-            "prompt.stacked",
-            "prompt.clearance",
-            "prompt.asked",
-            "phase",
+            SlotName::PromptBar,
+            SlotName::PromptDock,
+            SlotName::PromptStacked,
+            SlotName::PromptClearance,
+            SlotName::PromptAsked,
+            SlotName::Phase,
         ]);
         let shared = input.view.is_some_and(|view| view.shared.is_some());
         // The shared piles' column stands at the band's left end, and a pill moved up or down
@@ -436,7 +437,7 @@ impl<'a> PromptSlots<'a> {
         if opening
             && let (Some(wrapped), Some(room)) = (
                 profile.data().hud.opening.wrapped_hand,
-                profile.slot("opening"),
+                profile.slot(SlotName::Opening),
             )
         {
             dock.y = room.rect.y + room.rect.height - wrapped.dock_bottom - dock.height;

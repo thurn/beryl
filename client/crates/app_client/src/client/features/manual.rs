@@ -1,5 +1,6 @@
 //! Mounts the table's features and maps effects to the client and session.
 
+use kit_base::data::profiles::SlotName;
 use std::convert::Infallible;
 
 use beryl_protocol::protocol::{Answer, TableAction};
@@ -370,10 +371,10 @@ impl Mounted for TableLog {
         if lines.is_empty() || link::frozen(view) || opening::prompt(view).is_some() {
             return None;
         }
-        let placement = if let Some(slot) = inputs.profile.slot("manual.log") {
+        let placement = if let Some(slot) = inputs.profile.slot(SlotName::ManualLog) {
             log::Placement::Folded(slot.rect)
         } else {
-            let [toggle, panel] = inputs.profile.slots(["log.toggle", "log"]);
+            let [toggle, panel] = inputs.profile.slots([SlotName::LogToggle, SlotName::Log]);
             log::Placement::Column {
                 toggle: toggle?.rect,
                 panel: panel?.rect,

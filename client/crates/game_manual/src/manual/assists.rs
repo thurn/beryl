@@ -25,6 +25,7 @@ use beryl_protocol::protocol::{
 use beryl_protocol::script::Subject;
 use game_hud::hud::anchors::anchor_target;
 use game_hud::hud::placement_scene::PlacementScene;
+use kit_base::data::profiles::SlotName;
 use kit_base::{data::Card, geometry::Rect};
 
 use glam::Vec2;
@@ -62,7 +63,7 @@ pub fn proposals(
         .background(color::PANEL)
         .border((color::METAL, size::BORDER))
         .radius(size::PANEL_RADIUS);
-    let Some(slot) = profile.slot("manual.proposals") else {
+    let Some(slot) = profile.slot(SlotName::ManualProposals) else {
         panel = panel
             .children(proposals.iter().map(|each| proposal(each, None)))
             .width(metrics.log.width);
@@ -146,7 +147,10 @@ pub fn proposal_bounds(
     if opened != Some(proposals.first()?.id) {
         return None;
     }
-    let [panel, short] = profile.slots(["manual.proposals.panel", "manual.proposals.short"]);
+    let [panel, short] = profile.slots([
+        SlotName::ManualProposalsPanel,
+        SlotName::ManualProposalsShort,
+    ]);
     super::profiles::proposal_slot(
         panel?.rect,
         short.map(|slot| slot.rect.height),
