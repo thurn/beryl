@@ -289,8 +289,8 @@ restore the old behavior.
 
 - **A whole table leaving.** When a subgame begins or ends, or anything else
   takes cards from several zones at once with no event to say why, the cards
-  leave zone by zone. The cards of one zone break up together, and the next
-  zone's begin 0.3 s later.
+  leave zone by zone, and a new game's cards come to their zones the same way.
+  The cards of one zone move together, and the next zone's begin 0.3 s later.
 - **Ability menus on a manual table.** With Ability menus on, a permanent's
   context menu lists its ability costs and the start of each ability under
   Assists. −X opens the number prompt. Choosing an ability places a marker on

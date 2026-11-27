@@ -895,7 +895,7 @@
     {
       "kind": "no-equivalent",
       "name": "A whole table leaving",
-      "rule": "When a subgame begins or ends, or anything else takes cards from several zones at once with no event to say why, the cards leave zone by zone. The cards of one zone break up together, and the next zone's begin 0.3 s later."
+      "rule": "When a subgame begins or ends, or anything else takes cards from several zones at once with no event to say why, the cards leave zone by zone, and a new game's cards come to their zones the same way. The cards of one zone move together, and the next zone's begin 0.3 s later."
     },
     {
       "kind": "no-equivalent",
@@ -1763,6 +1763,9 @@
         "delay": 135,
         "stagger": 33,
         "curve": "none"
+      },
+      "stagger": {
+        "next zone": 300
       },
       "cases": {
         "token": {
