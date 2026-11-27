@@ -20,6 +20,7 @@ mod add;
 mod changes;
 mod lookahead;
 mod manual;
+mod outlet;
 mod pay;
 mod pool;
 mod priority;
@@ -38,6 +39,7 @@ use crate::layout::Small;
 pub use add::add;
 pub(crate) use add::{add_instruction, add_of_kind_instruction, add_product_instruction};
 pub(crate) use manual::{manual_options, manual_pay};
+pub(crate) use outlet::{answer_outlet, outlet_decision};
 pub(crate) use pay::{activate, pay};
 pub(crate) use pool::{Funds, payable};
 pub(crate) use priority::{

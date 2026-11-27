@@ -110,6 +110,7 @@ fn resolve_top<L: Layout>(
         | Pending::OrderEntered { .. }
         | Pending::EnterChoosing { .. }
         | Pending::ManaColor { .. }
+        | Pending::Outlet { .. }
         | Pending::ManaType { .. }
         | Pending::ManaPrice { .. }
         | Pending::Companion { .. }

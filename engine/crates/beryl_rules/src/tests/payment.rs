@@ -3252,3 +3252,187 @@ fn lookahead_keeps_later_two_color_spell_payable_through_priced_source() {
         "should keep Island untapped for {{U}} spell"
     );
 }
+
+static TEST_SACRIFICE_OUTLET: CardDef = CardDef {
+    name: "Test Sacrifice Outlet",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::ARTIFACT,
+        abilities: &[Ability::mana(
+            Cost::of_parts(&[CostPart::sacrifice(beryl_card::Filter::Types(
+                Types::ARTIFACT,
+            ))]),
+            beryl_card::ManaSet::of(ManaColor::Colorless, 2),
+        )],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+static TEST_TAP_OUTLET: CardDef = CardDef {
+    name: "Test Tap Outlet",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::ARTIFACT,
+        abilities: &[Ability::mana(
+            Cost::of_parts(&[
+                CostPart::TAP,
+                CostPart::Chosen(
+                    beryl_card::CostAction::Tap,
+                    beryl_card::Chosen {
+                        zone: Zone::Battlefield,
+                        filter: beryl_card::Filter::Types(Types::CREATURE),
+                        measure: beryl_card::Measure::Count(1),
+                        other: false,
+                    },
+                ),
+            ]),
+            beryl_card::ManaSet::any_color(1),
+        )],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+static TEST_CREATURE_A: CardDef = CardDef {
+    name: "Test Creature A",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::CREATURE,
+        power: Some(1),
+        toughness: Some(1),
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+static TEST_CREATURE_B: CardDef = CardDef {
+    name: "Test Creature B",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::CREATURE,
+        power: Some(2),
+        toughness: Some(2),
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+/// An outlet mana ability is offered at priority under `Profile::EXACT`, `Profile::SMART`, and
+/// any seat with `hides_pointless` set: it changes the board, so it is never hidden as pointless.
+#[test]
+fn outlet_offered_at_priority_under_all_profiles() {
+    static CARDS: CardTable = CardTable::new(&[&TEST_SACRIFICE_OUTLET, &TEST_WASTES]);
+    let deck: &[(u8, &str)] = &[(4, "Test Sacrifice Outlet"), (36, "Test Wastes")];
+    let t = crate::GameTable::new(
+        beryl_kernel::format::Format::CONSTRUCTED,
+        &CARDS,
+        [deck, deck],
+    )
+    .unwrap();
+    let profiles = [
+        Profile::EXACT,
+        Profile::SMART,
+        Profile {
+            hides_pointless: [true, true],
+            ..Profile::EXACT
+        },
+    ];
+    for profile in profiles {
+        let mut s = crate::State::new(&t, 7, profile).unwrap();
+        super::begin(&t, &mut s);
+        let p = s.turn().starting_player();
+        let outlet = super::chosen::to_hand(&t, &mut s, p, "Test Sacrifice Outlet");
+        s.board().place(outlet, Zone::Battlefield).unwrap();
+        crate::continuous::layers::refresh(&mut s, &t, &mut Sink::off()).unwrap();
+        let d = super::decide(&t, &mut s);
+        assert_eq!(d.player, p);
+        assert!(
+            (0..d.len()).any(|i| matches!(
+                d.candidates.option(crate::Choice(i as u16)),
+                Some(Opt::Activate { slot, .. }) if slot == outlet
+            )),
+            "outlet not offered under {profile:?}"
+        );
+    }
+}
+
+/// A tap-and-any-color outlet asks which untapped creature to tap (when two distinct creatures
+/// are available), then asks which color of mana to add, and pays both taps and adds mana.
+#[test]
+fn tap_outlet_asks_permanent_then_color() {
+    static CARDS: CardTable = CardTable::new(&[
+        &TEST_TAP_OUTLET,
+        &TEST_CREATURE_A,
+        &TEST_CREATURE_B,
+        &TEST_WASTES,
+    ]);
+    let deck: &[(u8, &str)] = &[
+        (4, "Test Tap Outlet"),
+        (4, "Test Creature A"),
+        (4, "Test Creature B"),
+        (28, "Test Wastes"),
+    ];
+    let t = crate::GameTable::new(
+        beryl_kernel::format::Format::CONSTRUCTED,
+        &CARDS,
+        [deck, deck],
+    )
+    .unwrap();
+    let mut s = crate::State::new(&t, 11, Profile::SMART).unwrap();
+    super::begin(&t, &mut s);
+    let p = s.turn().starting_player();
+    let drum = super::chosen::to_hand(&t, &mut s, p, "Test Tap Outlet");
+    let a = super::chosen::to_hand(&t, &mut s, p, "Test Creature A");
+    let b = super::chosen::to_hand(&t, &mut s, p, "Test Creature B");
+    s.board().place(drum, Zone::Battlefield).unwrap();
+    s.board().place(a, Zone::Battlefield).unwrap();
+    s.board().place(b, Zone::Battlefield).unwrap();
+    crate::continuous::layers::refresh(&mut s, &t, &mut Sink::off()).unwrap();
+    let d = super::decide(&t, &mut s);
+    let act = (0..d.len())
+        .map(|i| crate::Choice(i as u16))
+        .find(
+            |&c| matches!(d.candidates.option(c), Some(Opt::Activate { slot, .. }) if slot == drum),
+        )
+        .expect("tap outlet offered");
+    crate::apply(
+        &mut s,
+        &t,
+        &mut crate::Scratch::new(),
+        &mut crate::Replay,
+        act,
+    );
+
+    // First question: choose which creature to tap (2 distinct creatures).
+    let d = super::decide(&t, &mut s);
+    assert_eq!(d.kind, crate::DecisionKind::ChooseObject);
+    assert_eq!(d.len(), 2);
+    let pick_a = (0..d.len())
+        .map(|i| crate::Choice(i as u16))
+        .find(|&c| d.candidates.object(c) == Some(a))
+        .expect("creature A offered");
+    crate::apply(
+        &mut s,
+        &t,
+        &mut crate::Scratch::new(),
+        &mut crate::Replay,
+        pick_a,
+    );
+
+    // Second question: choose color of mana (5 colors).
+    let d = super::decide(&t, &mut s);
+    assert_eq!(d.len(), 5);
+    crate::apply(
+        &mut s,
+        &t,
+        &mut crate::Scratch::new(),
+        &mut crate::Replay,
+        crate::Choice(1),
+    ); // Blue
+
+    assert!(s.object(drum).is_tapped());
+    assert!(s.object(a).is_tapped());
+    assert!(!s.object(b).is_tapped());
+    assert_eq!(s.player(p).mana().amounts()[ManaColor::Blue.index()], 1);
+}

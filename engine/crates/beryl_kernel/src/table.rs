@@ -29,7 +29,7 @@ mod lists;
 mod mana_abilities;
 mod names;
 
-pub use crate::payable::{ANY_COLOR, is_instant_mana};
+pub use crate::payable::{ANY_COLOR, is_instant_mana, is_outlet_mana, outlet_part};
 pub use capability::Capability;
 pub use cards::CardTable;
 pub use mana_abilities::{

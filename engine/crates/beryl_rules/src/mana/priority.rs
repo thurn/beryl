@@ -14,7 +14,9 @@ use crate::layout::{Layout, Queue, index};
 use crate::profile::Payment;
 use crate::replacement::event::{self, Sink};
 use crate::state::{Pending, State};
-use crate::table::{Capability, GameTable, is_instant_mana, is_sacrificed};
+use crate::table::{
+    Capability, GameTable, is_instant_mana, is_outlet_mana, is_sacrificed, outlet_part,
+};
 use beryl_kernel::chosen::ChosenValue;
 use beryl_kernel::reference::Permanent;
 
@@ -173,13 +175,15 @@ pub(crate) fn instant_options<L: Layout>(
     player: Seat,
     out: &mut L::Queue<Opt<L>, OPTIONS>,
 ) -> Result<(), Full> {
-    if !t.can(Capability::InstantMana) {
+    if !t.can_either(Capability::InstantMana, Capability::PricedMana) {
         return Ok(());
     }
     list_instant_options(s, t, player, out)
 }
 
-/// [`instant_options`] in a game whose cards have such an ability. Out of line.
+/// [`instant_options`] in a game whose cards have an instant-only or priced mana ability.
+/// Out of line.
+#[cold]
 #[inline(never)]
 fn list_instant_options<L: Layout>(
     s: &State<L>,
@@ -187,12 +191,24 @@ fn list_instant_options<L: Layout>(
     player: Seat,
     out: &mut L::Queue<Opt<L>, OPTIONS>,
 ) -> Result<(), Full> {
+    let has_instant = t.can(Capability::InstantMana);
+    let has_priced = t.can(Capability::PricedMana);
     let instant = |slot: L::Slot| {
         // Each of its abilities: its own, a merged card's, and one granted or lent to it.
         s.abilities(t, slot).filter(move |&(ability, a)| {
-            is_instant_mana(a)
-                && (!a.cost().does(CostAction::Tap) || can_tap(s, player, slot, s.derived(slot)))
-                && allowed(s, t, a, player, &s.ability_words(slot, ability))
+            let can_pay_tap =
+                !a.cost().does(CostAction::Tap) || can_tap(s, player, slot, s.derived(slot));
+            if !can_pay_tap || !allowed(s, t, a, player, &s.ability_words(slot, ability)) {
+                return false;
+            }
+            if has_instant && is_instant_mana(a) {
+                return true;
+            }
+            has_priced
+                && outlet_part(a).is_some_and(|(action, chosen)| {
+                    !super::outlet::outlet_candidates(s, t, player, slot, a, action, &chosen)
+                        .is_empty()
+                })
         })
     };
     let objects: Bitboard<L::Slot> = (s.battlefield().iter().copied())
@@ -227,6 +243,11 @@ pub(crate) fn begin_instant<L: Layout>(
     // See CR 117.3c: "If a player has priority when they ... activate an ability ..., that player
     // receives priority afterward."
     s.reset_passes();
+    if let Some((action, chosen)) = outlet_part(printed) {
+        return super::outlet::begin_outlet(
+            s, t, sink, permanent, ability, printed, action, &chosen,
+        );
+    }
     if t.can(Capability::PricedMana) && is_mana_priced(printed) {
         return begin_priced(s, t, sink, permanent, ability, printed);
     }
@@ -593,6 +614,9 @@ pub(crate) fn is_instant<L: Layout>(
     (t.can(Capability::InstantMana)
         && s.abilities(t, slot)
             .any(|(a, printed)| a == ability && is_instant_mana(printed)))
+        || (t.can(Capability::PricedMana)
+            && s.abilities(t, slot)
+                .any(|(a, printed)| a == ability && is_outlet_mana(printed)))
         || is_standalone_activate(s, t, slot, ability)
 }
 

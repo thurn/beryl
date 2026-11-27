@@ -70,6 +70,7 @@ pub(crate) fn step_actions<L: Layout>(
         | Pending::OrderEntered { .. }
         | Pending::EnterChoosing { .. }
         | Pending::ManaColor { .. }
+        | Pending::Outlet { .. }
         | Pending::ManaType { .. }
         | Pending::ManaPrice { .. }
         | Pending::Companion { .. }

@@ -613,7 +613,7 @@ pub(crate) fn purpose(action: CostAction, chosen: &Chosen) -> Purpose {
         (CostAction::Tap, Measure::ForGeneric(_)) => Purpose::Waterbend,
         (CostAction::Exile, Measure::ForGeneric(_)) => Purpose::Delve,
         (CostAction::Exile, Measure::Count(_)) => Purpose::ExileCost,
-        (CostAction::Sacrifice, Measure::Count(_)) => Purpose::Choose,
+        (CostAction::Sacrifice | CostAction::Tap, Measure::Count(_)) => Purpose::Choose,
         (CostAction::Discard, Measure::Count(_)) => Purpose::Discard,
         _ => unreachable!("the card table refuses a cost the engine cannot pay"),
     }

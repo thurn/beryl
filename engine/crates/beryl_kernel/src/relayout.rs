@@ -407,6 +407,15 @@ impl<L: Layout> Relayout for Pending<L> {
                 slot: slot(s),
                 ability,
             },
+            &Pending::Outlet {
+                slot: s,
+                ability,
+                paid,
+            } => Pending::Outlet {
+                slot: slot(s),
+                ability,
+                paid: paid.map(slot),
+            },
             &Pending::ManaType {
                 slot: s,
                 player,

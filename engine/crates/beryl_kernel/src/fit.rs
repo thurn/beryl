@@ -372,6 +372,7 @@ impl<L: Layout> State<L> {
             | Pending::OrderEntered { .. }
             | Pending::EnterChoosing { .. }
             | Pending::ManaColor { .. }
+            | Pending::Outlet { .. }
             | Pending::ManaType { .. }
             | Pending::ManaPrice { .. }
             | Pending::Companion { .. }

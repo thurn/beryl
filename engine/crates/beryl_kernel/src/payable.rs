@@ -18,8 +18,9 @@ use crate::table::{is_sacrificed, is_tap_for_mana};
 pub enum Unpayable {
     /// A part of a cost that no code pays.
     Part(CostPart),
-    /// A mana ability whose cost is neither {T} (with optional mana, no {X}) nor {T} and
-    /// sacrificing its source: the mana solver activates no other.
+    /// A mana ability whose cost is neither {T} (with optional mana, no {X}), {T} and
+    /// sacrificing its source, nor one battlefield permanent sacrificed or tapped (with or
+    /// without {T} and no mana): the mana solver and priority activate no other.
     ManaAbility,
     /// An effect or an intervening "if" names what a cost took
     /// ([`beryl_card::Objects::Paid`]), which the engine does not keep.
@@ -91,10 +92,18 @@ pub fn pays_for_spell(part: &CostPart) -> bool {
 /// Whether the engine pays the cost of this ability. A mana ability is paid by the mana
 /// solver, which taps its source (with optional mana, hybrid included, and no {X}) or taps and
 /// sacrifices it ([`is_tap_for_mana`], restricted or not, and [`is_sacrificed`]), or is
-/// activated only at priority ([`is_instant_mana`]).
+/// activated at priority as an instant-only mana ability ([`is_instant_mana`]) or an outlet
+/// ([`is_outlet_mana`]).
 fn ability(a: &Ability) -> Result<(), Unpayable> {
     if is_instant_mana(a) {
         return Ok(());
+    }
+    if is_outlet_mana(a) {
+        return if a.names_paid() {
+            Err(Unpayable::Named)
+        } else {
+            Ok(())
+        };
     }
     let tap_and_mana =
         a.cost().mana.x == 0 && matches!(a.cost().parts(), [CostPart::This(CostAction::Tap)]);
@@ -177,6 +186,42 @@ pub fn is_instant_mana(a: &Ability) -> bool {
                 CostPart::This(CostAction::Tap | CostAction::Sacrifice) | CostPart::DiscardHand
             )
         })
+}
+
+/// The battlefield permanent cost part of an outlet mana ability: a mana ability with no mana
+/// in its cost whose cost is one [`CostPart::Chosen`] part that sacrifices or taps one
+/// permanent on the battlefield, with or without `{T}`, and that produces one kind of mana or
+/// any one color.
+#[inline]
+pub fn outlet_part(a: &Ability) -> Option<(CostAction, Chosen)> {
+    if a.kind() != AbilityKind::Mana || !a.cost().mana.is_zero() {
+        return None;
+    }
+    let chosen = match a.cost().parts() {
+        [CostPart::Chosen(action, chosen)]
+        | [
+            CostPart::This(CostAction::Tap),
+            CostPart::Chosen(action, chosen),
+        ]
+        | [
+            CostPart::Chosen(action, chosen),
+            CostPart::This(CostAction::Tap),
+        ] => (*action, *chosen),
+        _ => return None,
+    };
+    let (action, spec) = chosen;
+    let valid_part = matches!(action, CostAction::Sacrifice | CostAction::Tap)
+        && spec.zone == Zone::Battlefield
+        && spec.measure == Measure::Count(1);
+    let kinds = a.produces().colors;
+    let valid_product = kinds.is_power_of_two() || kinds == ANY_COLOR;
+    (valid_part && valid_product).then_some(chosen)
+}
+
+/// Whether `a` is an outlet mana ability ([`outlet_part`]).
+#[inline]
+pub fn is_outlet_mana(a: &Ability) -> bool {
+    outlet_part(a).is_some()
 }
 
 /// The five colors as a [`beryl_card::ManaSet`]'s bits: "any color" (no colorless).
@@ -338,13 +383,53 @@ mod tests {
         }],
         tokens: &[],
     };
-    /// "Sacrifice a creature: Add {C}.": an outlet mana ability, which no payment plans yet.
+    /// "Sacrifice a creature: Add {C}.": an outlet mana ability.
     static OUTLET: CardDef = CardDef {
         name: "Outlet",
         shape: beryl_card::definition::Shape::Single,
         faces: &[Face {
             abilities: &[Ability::mana(
                 Cost::of(ManaCost::NONE, &[SACRIFICE_A_CREATURE]),
+                ManaSet::one(ManaColor::Colorless),
+            )],
+            ..Face::EMPTY
+        }],
+        tokens: &[],
+    };
+    /// "{T}, Tap an untapped creature you control: Add one mana of any color."
+    static TAP_OUTLET: CardDef = CardDef {
+        name: "Tap Outlet",
+        shape: beryl_card::definition::Shape::Single,
+        faces: &[Face {
+            abilities: &[Ability::mana(
+                Cost::of(
+                    ManaCost::NONE,
+                    &[
+                        CostPart::TAP,
+                        CostPart::Chosen(
+                            CostAction::Tap,
+                            Chosen {
+                                zone: Zone::Battlefield,
+                                filter: CREATURE,
+                                measure: Measure::Count(1),
+                                other: false,
+                            },
+                        ),
+                    ],
+                ),
+                ManaSet::any_color(1),
+            )],
+            ..Face::EMPTY
+        }],
+        tokens: &[],
+    };
+    /// "{1}, Sacrifice a creature: Add {C}.": an outlet with a mana cost, not supported yet.
+    static PRICED_OUTLET: CardDef = CardDef {
+        name: "Priced Outlet",
+        shape: beryl_card::definition::Shape::Single,
+        faces: &[Face {
+            abilities: &[Ability::mana(
+                Cost::of(ManaCost::generic(1), &[SACRIFICE_A_CREATURE]),
                 ManaSet::one(ManaColor::Colorless),
             )],
             ..Face::EMPTY
@@ -395,6 +480,8 @@ mod tests {
         &FILTER_LAND,
         &KAROO,
         &OUTLET,
+        &TAP_OUTLET,
+        &PRICED_OUTLET,
         &REMEMBERER,
         &DELVING_CONVOKER,
         &HYBRID_CONVOKER,
@@ -415,6 +502,8 @@ mod tests {
         assert!(table("Rite").is_ok());
         assert!(table("Filter Land").is_ok());
         assert!(table("Karoo").is_ok());
+        assert!(table("Outlet").is_ok());
+        assert!(table("Tap Outlet").is_ok());
         assert!(table("Hybrid Improviser").is_ok());
     }
 
@@ -462,8 +551,8 @@ mod tests {
             refused("Twice Bent", Unpayable::Part(CostPart::waterbend(1)))
         );
         assert_eq!(
-            table("Outlet").err(),
-            refused("Outlet", Unpayable::ManaAbility)
+            table("Priced Outlet").err(),
+            refused("Priced Outlet", Unpayable::ManaAbility)
         );
     }
 

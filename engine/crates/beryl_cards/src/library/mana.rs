@@ -510,3 +510,75 @@ pub const GRANTED_MANA: &[Scenario] = &[
             ME.controls(props::GREEN_WHITE_CREATURE.card, 1),
         ]),
 ];
+
+/// Outlet mana abilities (CR 605.3b): activated at priority without using the stack, floating
+/// mana that can pay for a spell in the same step and empties when the step ends.
+pub const OUTLET_MANA: &[Scenario] = &[
+    Scenario::new("An outlet sacrifices an artifact at priority and {C}{C} floats")
+        .battlefield(
+            P0,
+            &[names::KRARK_CLAN_IRONWORKS, props::COLORLESS_CREATURE.card],
+        )
+        .actions(&[
+            ME.activates(names::KRARK_CLAN_IRONWORKS, 0),
+            ME.picks(props::COLORLESS_CREATURE.card),
+            stack(0),
+            ME.controls(props::COLORLESS_CREATURE.card, 0),
+            ME.has(Zone::Graveyard, props::COLORLESS_CREATURE.card, 1),
+            ME.mana(ManaColor::Colorless, 2),
+        ]),
+    Scenario::new("Mana floated by an outlet pays for a spell cast in the same step")
+        .battlefield(
+            P0,
+            &[names::KRARK_CLAN_IRONWORKS, props::COLORLESS_CREATURE.card],
+        )
+        .hand(P0, &[props::EQUIPMENT.card])
+        .actions(&[
+            ME.activates(names::KRARK_CLAN_IRONWORKS, 0),
+            ME.picks(props::COLORLESS_CREATURE.card),
+            ME.mana(ManaColor::Colorless, 2),
+            ME.casts(props::EQUIPMENT.card),
+            Resolve,
+            ME.controls(props::EQUIPMENT.card, 1),
+            ME.mana(ManaColor::Colorless, 1),
+        ]),
+    Scenario::new("Unspent mana from an outlet empties when the step ends")
+        .battlefield(
+            P0,
+            &[names::KRARK_CLAN_IRONWORKS, props::COLORLESS_CREATURE.card],
+        )
+        .actions(&[
+            ME.activates(names::KRARK_CLAN_IRONWORKS, 0),
+            ME.picks(props::COLORLESS_CREATURE.card),
+            ME.mana(ManaColor::Colorless, 2),
+            advance_to(1, TurnStep::BeginningOfCombat),
+            ME.mana(ManaColor::Colorless, 0),
+        ]),
+    Scenario::new("An outlet with no other artifact sacrifices itself without asking")
+        .battlefield(P0, &[names::KRARK_CLAN_IRONWORKS])
+        .hand(P0, &[props::EQUIPMENT.card])
+        .actions(&[
+            ME.activates(names::KRARK_CLAN_IRONWORKS, 0),
+            stack(0),
+            ME.controls(names::KRARK_CLAN_IRONWORKS, 0),
+            ME.has(Zone::Graveyard, names::KRARK_CLAN_IRONWORKS, 1),
+            ME.mana(ManaColor::Colorless, 2),
+        ]),
+    Scenario::new("Two identical artifacts are one candidate for an outlet")
+        .battlefield(
+            P0,
+            &[
+                names::KRARK_CLAN_IRONWORKS,
+                props::COLORLESS_CREATURE.card,
+                props::COLORLESS_CREATURE.card,
+            ],
+        )
+        .actions(&[
+            ME.activates(names::KRARK_CLAN_IRONWORKS, 0),
+            ME.deciding(DecisionKind::ChooseObject, 2),
+            ME.picks(props::COLORLESS_CREATURE.card),
+            ME.controls(props::COLORLESS_CREATURE.card, 1),
+            ME.has(Zone::Graveyard, props::COLORLESS_CREATURE.card, 1),
+            ME.mana(ManaColor::Colorless, 2),
+        ]),
+];

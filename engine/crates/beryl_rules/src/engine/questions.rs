@@ -107,6 +107,11 @@ pub(crate) fn decision<L: Layout>(
             ChosenKind::Color,
             Bitboard::single(slot),
         ),
+        Pending::Outlet {
+            slot,
+            ability,
+            paid,
+        } => mana::outlet_decision(s, t, slot, ability, paid),
         Pending::ManaType {
             slot,
             player,
@@ -427,6 +432,27 @@ pub(super) fn perform_machine<L: Layout>(
             let option = d.candidates.option(c).expect("a payment");
             act(s, &mut x.events, d.player, None);
             let done = mana::pay_mana_price(s, t, &mut x.events, slot, ability, remaining, option);
+            x.events.leave();
+            done
+        }
+        Pending::Outlet {
+            slot,
+            ability,
+            paid,
+        } => {
+            s.settle_question();
+            act(s, &mut x.events, d.player, None);
+            let source = s.permanent_at(slot).expect("the outlet asked about");
+            let done = mana::answer_outlet(
+                s,
+                t,
+                &mut x.events,
+                source,
+                ability,
+                paid,
+                d.candidates.option(c),
+                d.candidates.object(c),
+            );
             x.events.leave();
             done
         }

@@ -406,6 +406,14 @@ pub enum Pending<L: Layout = Small> {
         slot: L::Slot,
         ability: beryl_card::ObjectAbility,
     },
+    /// The controller of the permanent in `slot` activates its outlet mana ability `ability`
+    /// at priority: while `paid` is `None`, choosing which permanent pays its cost; once
+    /// `paid` is `Some`, choosing which color of mana it adds.
+    Outlet {
+        slot: L::Slot,
+        ability: beryl_card::ObjectAbility,
+        paid: Option<L::Slot>,
+    },
     /// Beginning the next turn, paused to ask about replacing that event (see CR 614.10).
     TurnStart(Resolving<L>),
     /// Combat that has banding assigns exact amounts before damage is dealt.
@@ -515,6 +523,11 @@ impl<L: Layout> std::hash::Hash for Pending<L> {
                 ability,
                 remaining,
             } => (24_isize, slot, ability, remaining).hash(state),
+            Self::Outlet {
+                slot,
+                ability,
+                paid,
+            } => (25_isize, slot, ability, paid).hash(state),
         }
     }
 }
@@ -542,6 +555,7 @@ impl<L: Layout> Pending<L> {
             | Pending::OrderEntered { .. }
             | Pending::EnterChoosing { .. }
             | Pending::ManaColor { .. }
+            | Pending::Outlet { .. }
             | Pending::ManaType { .. }
             | Pending::ManaPrice { .. }
             | Pending::Companion { .. }
