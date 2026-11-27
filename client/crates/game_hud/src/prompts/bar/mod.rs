@@ -1,5 +1,6 @@
 //! The prompt bar and the buttons the game offers outside of a shape's controls.
 
+mod heading;
 mod question;
 mod view;
 
@@ -51,6 +52,8 @@ impl Feature for PromptBar {
             opponent_acts: view.is_some_and(view::opponent_acts),
             shared: view.map(|view| view.shared.is_some()),
             turn: view.map(|view| (view.turn.active, view.turn.step)),
+            in_hand: (view.zip(inputs.hud.prompt))
+                .is_some_and(|(view, prompt)| heading::picks_in_hand(prompt, view)),
         };
         ViewKey::new(inputs, details)
     }

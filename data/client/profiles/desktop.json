@@ -195,6 +195,12 @@
     ],
     "table_under_opening": true,
     "anchored_to_window": false,
+    "heading": {
+      "line": 0.425,
+      "text": 0.024,
+      "band": 0.066,
+      "width": 0.72
+    },
     "incoming": {
       "left": 30,
       "top": 6,

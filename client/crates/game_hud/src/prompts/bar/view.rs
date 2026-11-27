@@ -83,6 +83,9 @@ pub(super) fn bar(prompt: &PromptView, input: &HudIn, controls: Option<Controls>
         }
         return bar;
     }
+    if let Some(heading) = super::heading::hand_heading(prompt, input) {
+        return super::heading::bar(prompt, &asks, input, controls, heading);
+    }
     // A discard title shares the button's width so the dock stays beside the hand.
     let fitted_dock = question || prompt.is(Purpose::Discard);
     let title = (!asks.is_empty()).then(|| {

@@ -2057,6 +2057,10 @@
         "value": "linear-gradient(180deg, #2a2522, #1d1917 55%, #262120)",
         "note": "Any other action button's near-black face: `.button-secondary` in `buttons.css`."
       },
+      "PROMPT_HEADING_BAND": {
+        "value": "radial-gradient(ellipse 50% 50% at 50% 50%, rgb(10 9 8 / 42%), rgb(10 9 8 / 36%) 60%, rgb(10 9 8 / 0%))",
+        "note": "The soft dark band behind what a prompt that picks cards in the hand asks, across the middle of the table: Arena darkens its table about a quarter under the line, fading out above, below and toward the ends (3sEoP_s4DQE 39:01.5, nBj2ikeYCtk 17:02.5)."
+      },
       "TURN_BANNER_BAND": {
         "value": "linear-gradient(90deg, rgb(10 9 8 / 0%), rgb(10 9 8 / 78%) 22%, rgb(10 9 8 / 86%) 50%, rgb(10 9 8 / 78%) 78%, rgb(10 9 8 / 0%))",
         "note": "The dark strip underneath a turn announcement fades out toward the sides, as `.turn-banner-band` does."

@@ -20,7 +20,7 @@ mod tray;
 pub use anchored::Anchored;
 pub use banded::Banded;
 pub use hud::{
-    FloatingPrompt, Hud, Incoming, Inspector, Piece, ResultLayout, SingleRow, WrappedHand,
+    FloatingPrompt, Heading, Hud, Incoming, Inspector, Piece, ResultLayout, SingleRow, WrappedHand,
 };
 pub use pile::PileGeometry;
 pub use slot::SlotName;

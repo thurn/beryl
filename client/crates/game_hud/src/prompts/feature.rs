@@ -54,6 +54,9 @@ pub(super) enum Details {
         shared: Option<bool>,
         /// Whose turn it is and its step, which the phase icon the bar draws shows.
         turn: Option<(Side, Step)>,
+        /// Whether the prompt picks only cards in the viewer's hand, which the desktop writes
+        /// across the middle of the table (`bar::heading`).
+        in_hand: bool,
     },
     Ways(Vec<Option<FaceId>>),
     Order {

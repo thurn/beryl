@@ -2,7 +2,7 @@
 
 use serde::Deserialize;
 
-use super::super::tuning::{finite, fraction, nonnegative, positive};
+use super::super::tuning::{finite, fraction, interior, nonnegative, positive, positive_fraction};
 
 /// Pieces of the screen drawn around the opening and the action bar.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
@@ -30,6 +30,10 @@ pub struct Hud {
     pub incoming: Incoming,
     /// Controls in this bar may move to keep the cards and phase icon clear.
     pub floating_prompt: Option<FloatingPrompt>,
+    /// Where a prompt that picks cards in the viewer's hand writes what it asks, across the
+    /// middle of the table, as Arena does. Without it, the prompt bar says it.
+    #[serde(default)]
+    pub heading: Option<Heading>,
     pub opening: Opening,
     pub result: ResultLayout,
 }
@@ -71,6 +75,26 @@ pub struct FloatingPrompt {
     pub pill_text: f32,
     #[serde(deserialize_with = "nonnegative")]
     pub pill_padding: f32,
+}
+
+/// The line across the middle of the table on which a prompt that picks cards in the viewer's
+/// hand writes what it asks, with a dark band behind it that fades toward its ends. Each value
+/// is a share of the window less its safe area, as read off Arena's whole-table frames.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Heading {
+    /// The height of the line's middle, from the top.
+    #[serde(deserialize_with = "interior")]
+    pub line: f32,
+    /// The size of its type, against the height.
+    #[serde(deserialize_with = "positive_fraction")]
+    pub text: f32,
+    /// The band's height, against the height.
+    #[serde(deserialize_with = "positive_fraction")]
+    pub band: f32,
+    /// The band's width, against the width, centred.
+    #[serde(deserialize_with = "positive_fraction")]
+    pub width: f32,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]

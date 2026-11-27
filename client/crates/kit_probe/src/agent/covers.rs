@@ -30,6 +30,18 @@ enum How {
     OverText,
 }
 
+/// What a pile or card on the table is, for this check: which flat-layer elements may not
+/// cover it.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Under {
+    /// A pile: no control, line of text or standalone icon.
+    Pile,
+    /// A card the open prompt lets the player pick: no control or standalone icon.
+    Eligible,
+    /// Any other card: no standalone icon.
+    Card,
+}
+
 /// What a flat-layer element is, for this check.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Kind {
@@ -50,7 +62,11 @@ enum Kind {
 /// player expects a touch there to open it. A standalone icon passes the pointer, so nothing
 /// else notices it, but it hides what is under it, or is hidden by a control drawn over it.
 /// Cards other than piles are left out for controls and text, as they are of "no overlap",
-/// because the flat layer may lie over a hand or a row on purpose. A pair is not judged when one
+/// because the flat layer may lie over a hand or a row on purpose, except that no control
+/// may cover a card the open prompt lets the player pick (`StateBits::ELIGIBLE`): it takes the
+/// click meant for the card, as a prompt's buttons once stood over the right end of the hand
+/// it picked from. A line of text, such as a hand's count, may still lie on such a card. A pair
+/// is not judged when one
 /// element holds the other, when either is no more opaque than `context.audit.transparent`, or
 /// when a third panel drawn over both covers the middle of the part where they meet, as a sheet
 /// covers the table (`hidden`). One fault names each pair once.
@@ -73,7 +89,11 @@ pub fn covers(frame: &Frame, context: &Context) -> Vec<Fault> {
         // rather than text over an icon, and which of the two is drawn over the other.
         let piles = under
             .iter()
-            .filter(|&&(_, _, pile)| pile || icon)
+            .filter(|&&(_, _, under)| match under {
+                Under::Pile => true,
+                Under::Eligible => kind != Kind::Line,
+                Under::Card => icon,
+            })
             .map(|&(index, rect, _)| (index, rect, true, first));
         let texts = lines
             .iter()
@@ -171,8 +191,8 @@ fn lines(frame: &Frame, seen: &impl Fn(u32) -> bool) -> Vec<(u32, Rect)> {
 }
 
 /// The piles and cards on the table that are `seen` and at rest, each with its visible box and
-/// whether it is a pile. A card that moves, is held or is raised to be read is not at rest.
-fn table(frame: &Frame, seen: &impl Fn(u32) -> bool) -> Vec<(u32, Rect, bool)> {
+/// what it is. A card that moves, is held or is raised to be read is not at rest.
+fn table(frame: &Frame, seen: &impl Fn(u32) -> bool) -> Vec<(u32, Rect, Under)> {
     let still = |index: u32| {
         let state = frame.resolved[index as usize].state;
         !state.has(StateBits::MOVING)
@@ -187,8 +207,15 @@ fn table(frame: &Frame, seen: &impl Fn(u32) -> bool) -> Vec<(u32, Rect, bool)> {
             let index = index as u32;
             let pile = element.role == Role::Pile;
             let card = element.role == Role::Card && element.place != Place::Layer;
+            let under = if pile {
+                Under::Pile
+            } else if element.state.has(StateBits::ELIGIBLE) {
+                Under::Eligible
+            } else {
+                Under::Card
+            };
             ((pile || card) && seen(index) && still(index))
-                .then(|| Some((index, shrunk(visible_bounds(element)?)?, pile)))
+                .then(|| Some((index, shrunk(visible_bounds(element)?)?, under)))
                 .flatten()
         })
         .collect()
