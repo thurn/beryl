@@ -404,5 +404,12 @@
     "scenario": "generated 11: cast from hand",
     "cr": "CR 701.23b (https://yawgatog.com/resources/magic-rules/#R70123b): \"If a player is searching a hidden zone for cards with a stated quality, such as a card with a certain card type or color, that player isn't required to find some or all of those cards even if they're present in that zone.\"",
     "reason": "XMage's Chord of Calling searches with a target of exactly one card (\"from 1 to 1\") whenever one qualifies, so its controller cannot fail to find one."
+  },
+  {
+    "oracle": "forge",
+    "card": "Shrapnel Blast",
+    "scenario": "generated 3: cast from hand with filter partners",
+    "cr": "CR 601.2h (https://yawgatog.com/resources/magic-rules/#R6012h): \"The player pays the total cost. First, they pay all costs that don't involve random elements or moving objects from the library to a public zone, in any order. Then they pay all remaining costs in any order. Partial payments are not allowed. Unpayable costs can't be paid.\"",
+    "reason": "Forge's AI removes the spell's own targets when choosing permanents to sacrifice for a cost (ComputerUtilCost.paymentChoicesWithoutTargets), so it refuses to play Shrapnel Blast when Ornithopter is both its target and the only artifact to sacrifice."
   }
 ]
