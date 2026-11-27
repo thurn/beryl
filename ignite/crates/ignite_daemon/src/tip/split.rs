@@ -275,7 +275,9 @@ impl TipVerifier {
                 prior: scope
                     .last_good_for(check)
                     .filter(|_| !at_master.contains(&check.check)),
-                output: verdicts.get(&check.key).and_then(|run| run.output.as_deref()),
+                output: verdicts
+                    .get(&check.key)
+                    .and_then(|run| run.output.as_deref()),
                 allow_revert: false,
             })
             .collect();

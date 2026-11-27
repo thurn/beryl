@@ -31,9 +31,11 @@ fn co_failing_checks_share_one_probe_per_commit() {
     let tip = commit("bbbb003");
     let newer = commit("cccc000");
     for (idx, sha) in [&c1, &c2, &tip].iter().enumerate() {
-        world
-            .work
-            .add_landing(&format!("tk.{idx}"), &[sha.as_str()], &["src/shared/lib.rs"]);
+        world.work.add_landing(
+            &format!("tk.{idx}"),
+            &[sha.as_str()],
+            &["src/shared/lib.rs"],
+        );
     }
     world.land(&tip);
     world.git.set_tip("staging", newer.clone());
@@ -89,7 +91,11 @@ fn co_failing_checks_share_one_probe_per_commit() {
             .filter(|(_, commit, _, _)| commit == at)
             .count()
     };
-    assert_eq!(probe_calls(&newer), 1, "newest probed once for all 4 checks");
+    assert_eq!(
+        probe_calls(&newer),
+        1,
+        "newest probed once for all 4 checks"
+    );
     assert_eq!(
         probe_calls(&master),
         1,
@@ -108,9 +114,11 @@ fn co_failing_checks_with_different_culprits_each_find_their_own() {
     let c2 = commit("bbbb002");
     let c3 = commit("bbbb003");
     for (idx, sha) in [&c1, &c2, &c3].iter().enumerate() {
-        world
-            .work
-            .add_landing(&format!("tk.{idx}"), &[sha.as_str()], &["src/shared/lib.rs"]);
+        world.work.add_landing(
+            &format!("tk.{idx}"),
+            &[sha.as_str()],
+            &["src/shared/lib.rs"],
+        );
     }
     world.land(&c3);
     let first = in_same_family("a", "src/shared/lib.rs");
@@ -200,7 +208,9 @@ fn open_hub_regression_skips_redundant_bisection_unless_revert_eligible() {
     // 2. Stalled, but check already fails at master: probes master once, then skips gap bisection.
     ctx.config.revert.stall_minutes = Some(120);
     world.clock.advance(121.0 * 60.0);
-    world.work.add_landing("tk.old", &[master.as_str()], &["src/shared/lib.rs"]);
+    world
+        .work
+        .add_landing("tk.old", &[master.as_str()], &["src/shared/lib.rs"]);
     let before_runs = world.work.runs().len();
     world
         .verifier()

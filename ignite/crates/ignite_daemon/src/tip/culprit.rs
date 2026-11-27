@@ -403,9 +403,8 @@ impl TipVerifier {
         open: &HashSet<CheckName>,
         entries: &'a [BlameEntry<'a>],
     ) -> Result<Vec<BlamePlan<'a>>> {
-        let already_reported = |check: &TipCheck| {
-            self.reported.contains(&check.key) || open.contains(&check.check)
-        };
+        let already_reported =
+            |check: &TipCheck| self.reported.contains(&check.key) || open.contains(&check.check);
         let active: Vec<&BlameEntry<'_>> = entries
             .iter()
             .filter(|entry| {
@@ -480,32 +479,39 @@ impl TipVerifier {
             landings_cache.insert(range.clone(), found);
         }
         let landings = &landings_cache[&range];
-        Ok(bisect_with_hint(landings, &check.inputs, plan.good, hint, |at| {
-            let key = (at.clone(), check.check.clone());
-            if let Some(&cached) = probe_cache.get(&key) {
-                return cached;
-            }
-            let batch: Vec<CheckName> = plans[idx..]
-                .iter()
-                .filter(|other| {
-                    other.entry.check.family == check.family
-                        && other.good == plan.good
-                        && other.search_bad == plan.search_bad
-                        && !probe_cache.contains_key(&(at.clone(), other.entry.check.check.clone()))
-                })
-                .map(|other| other.entry.check.check.clone())
-                .collect();
-            let runs = self.probe(ctx, at, &batch, false);
-            let mut by_name: HashMap<CheckName, Outcome> = runs
-                .into_iter()
-                .map(|run| (run.check, run.outcome))
-                .collect();
-            for name in batch {
-                let outcome = by_name.remove(&name);
-                probe_cache.insert((at.clone(), name), outcome);
-            }
-            probe_cache.get(&key).copied().flatten()
-        }))
+        Ok(bisect_with_hint(
+            landings,
+            &check.inputs,
+            plan.good,
+            hint,
+            |at| {
+                let key = (at.clone(), check.check.clone());
+                if let Some(&cached) = probe_cache.get(&key) {
+                    return cached;
+                }
+                let batch: Vec<CheckName> = plans[idx..]
+                    .iter()
+                    .filter(|other| {
+                        other.entry.check.family == check.family
+                            && other.good == plan.good
+                            && other.search_bad == plan.search_bad
+                            && !probe_cache
+                                .contains_key(&(at.clone(), other.entry.check.check.clone()))
+                    })
+                    .map(|other| other.entry.check.check.clone())
+                    .collect();
+                let runs = self.probe(ctx, at, &batch, false);
+                let mut by_name: HashMap<CheckName, Outcome> = runs
+                    .into_iter()
+                    .map(|run| (run.check, run.outcome))
+                    .collect();
+                for name in batch {
+                    let outcome = by_name.remove(&name);
+                    probe_cache.insert((at.clone(), name), outcome);
+                }
+                probe_cache.get(&key).copied().flatten()
+            },
+        ))
     }
 
     fn report_blamed(
