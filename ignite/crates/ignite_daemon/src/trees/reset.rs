@@ -13,6 +13,15 @@ use ignite_store::local::{handles as handle_store, rows, trees as store};
 
 use super::{Ended, GRACE, Locked, Trees, park_branch, store_error};
 
+/// Whether `row` is a ticket tree marked `leased` with neither a ticket nor a session.
+/// No lease owns such a row, so nothing will release it normally.
+pub(super) fn is_unheld_lease(row: &rows::Tree) -> bool {
+    row.kind == super::Kind::Ticket.as_str()
+        && row.state == store::State::Leased.as_str()
+        && row.ticket.is_none()
+        && row.session.is_none()
+}
+
 impl Trees {
     /// Waits for checkout or sweeping to finish and returns with the store locked so the
     /// caller can end the lease before another sweep reserves the tree.
@@ -89,7 +98,7 @@ impl Trees {
         let (ended, head, had_build) = match reset {
             Ok(reset) => reset,
             Err(error) => {
-                self.back_to_leased(tree);
+                self.back_to_leased(tree, row);
                 return Err(error);
             }
         };
@@ -102,7 +111,7 @@ impl Trees {
         );
         if let Err(error) = freed {
             // The tree is clean but the store would not say so; leave it where a retry finds it.
-            self.back_to_leased(tree);
+            self.back_to_leased(tree, row);
             return Err(store_error(&error));
         }
         self.serve_waiters();
@@ -186,13 +195,15 @@ impl Trees {
         true
     }
 
-    /// Puts a tree that a failed release left `resetting` back to `leased`.
-    fn back_to_leased(&self, tree: &TreeId) {
-        let _ = store::transition(
+    /// Puts a tree that a failed release left `resetting` back to `leased`, only if the row still
+    /// belongs to the lease that release claimed.
+    fn back_to_leased(&self, tree: &TreeId, row: &rows::Tree) {
+        let _ = store::restore_lease(
             &self.lock().db,
             tree.as_str(),
-            store::State::Resetting,
-            store::State::Leased,
+            row.ticket.as_deref(),
+            row.session.as_deref(),
+            row.leased_at.as_deref(),
             &self.now(),
         );
     }

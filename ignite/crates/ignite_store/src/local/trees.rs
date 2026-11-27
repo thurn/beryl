@@ -151,6 +151,30 @@ pub fn transition(conn: &Connection, id: &str, from: State, to: State, now: &str
     Ok(changed == 1)
 }
 
+/// Moves a tree from `Resetting` back to `Leased` only if its row still carries the same lease
+/// (`ticket`, `session`, and `leased_at`) that a failed release claimed. Returns `false`,
+/// changing nothing, when the tree is no longer resetting, when another operation replaced the
+/// row (such as a sweep taking a free tree), or when neither a ticket nor a session is named.
+pub fn restore_lease(
+    conn: &Connection,
+    id: &str,
+    ticket: Option<&str>,
+    session: Option<&str>,
+    leased_at: Option<&str>,
+    now: &str,
+) -> Result<bool> {
+    if ticket.is_none() && session.is_none() {
+        return Ok(false);
+    }
+    let changed = conn.execute(
+        "UPDATE trees SET state = 'leased', last_used = ?5 \
+         WHERE id = ?1 AND state = 'resetting' \
+           AND ticket IS ?2 AND session IS ?3 AND leased_at IS ?4",
+        params![id, ticket, session, leased_at, now],
+    )?;
+    Ok(changed == 1)
+}
+
 /// Sets the state of an existing tree whatever state it is in. Returns whether the tree exists.
 /// Use [`lease`] to take a free tree and [`transition`] to leave a state that others may also
 /// be leaving; this does not check the old state.
@@ -309,6 +333,52 @@ mod tests {
         assert!(transition(&conn, "tree-01", State::Leased, State::Resetting, "t").unwrap());
         assert!(!transition(&conn, "tree-01", State::Leased, State::Resetting, "t").unwrap());
         assert!(!transition(&conn, "missing", State::Leased, State::Resetting, "t").unwrap());
+        assert_eq!(get(&conn, "tree-01").unwrap().unwrap().state, "resetting");
+    }
+
+    #[test]
+    fn restore_lease_requires_the_same_holder_and_resetting_state() {
+        let conn = open_in_memory().unwrap();
+        upsert(&conn, &sample("tree-01")).unwrap();
+        assert!(
+            lease(
+                &conn,
+                "tree-01",
+                State::Leased,
+                Some("T.1"),
+                Some("sess-1"),
+                Some("work/T.1"),
+                "t1",
+            )
+            .unwrap()
+        );
+        assert!(transition(&conn, "tree-01", State::Leased, State::Resetting, "t2").unwrap());
+        assert!(
+            !restore_lease(&conn, "tree-01", Some("T.2"), Some("sess-1"), Some("t1"), "t3")
+                .unwrap()
+        );
+        assert!(
+            !restore_lease(&conn, "tree-01", Some("T.1"), Some("sess-2"), Some("t1"), "t3")
+                .unwrap()
+        );
+        assert!(
+            !restore_lease(&conn, "tree-01", Some("T.1"), Some("sess-1"), Some("t9"), "t3")
+                .unwrap()
+        );
+        assert!(
+            restore_lease(&conn, "tree-01", Some("T.1"), Some("sess-1"), Some("t1"), "t3")
+                .unwrap()
+        );
+        assert_eq!(get(&conn, "tree-01").unwrap().unwrap().state, "leased");
+
+        // A swept row in `resetting` with no ticket or session is never turned into `leased`.
+        assert!(release(&conn, "tree-01", None, "t4").unwrap());
+        assert!(lease(&conn, "tree-01", State::Resetting, None, None, None, "t5").unwrap());
+        assert!(
+            !restore_lease(&conn, "tree-01", Some("T.1"), Some("sess-1"), Some("t1"), "t6")
+                .unwrap()
+        );
+        assert!(!restore_lease(&conn, "tree-01", None, None, Some("t5"), "t6").unwrap());
         assert_eq!(get(&conn, "tree-01").unwrap().unwrap().state, "resetting");
     }
 

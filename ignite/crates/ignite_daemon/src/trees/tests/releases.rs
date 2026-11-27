@@ -175,3 +175,57 @@ fn a_lease_frees_the_ticket_branch_from_a_tree_a_failed_release_left_on_it() {
         "the first tree is detached"
     );
 }
+
+#[test]
+fn a_failed_release_does_not_restore_a_tree_taken_for_a_sweep() {
+    let f = Fixture::new(1, 1);
+    let lease = f.lease("T.1", false);
+    let missing = Commit::new("1234567890abcdef1234567890abcdef12345678").unwrap();
+    let verb = running_verb("test", "tree-01");
+    let (trees, tree) = (f.trees.clone(), lease.tree.clone());
+
+    let release = std::thread::spawn(move || trees.release_unsaved(&tree, &missing, None));
+    assert!(verb.wait_stop_requested(std::time::Duration::from_secs(60)));
+    assert_eq!(f.state("tree-01"), "resetting");
+
+    // While the release waits in `stop_work`, another operation frees the tree and a sweep
+    // takes it as `resetting` with no ticket or session.
+    store::release(&f.trees.lock().db, "tree-01", None, &f.trees.now()).unwrap();
+    let swept = f
+        .trees
+        .take_for_sweep("tree-01")
+        .unwrap()
+        .expect("free tree should be taken for sweep");
+    verb.finish();
+
+    let error = release.join().unwrap().unwrap_err();
+    assert!(!matches!(error, Error::Conflict(_)), "{error:?}");
+    let row = f.trees.row(&lease.tree).unwrap();
+    assert_eq!(
+        row.state, "resetting",
+        "the failed release must not turn the swept row into an unheld leased tree"
+    );
+    assert_eq!(row.ticket, None);
+    assert_eq!(row.session, None);
+
+    f.trees.put_back(&swept).unwrap();
+    assert_eq!(f.state("tree-01"), "free");
+}
+
+#[test]
+fn free_unheld_leases_frees_only_holderless_leased_ticket_trees() {
+    let f = Fixture::new(2, 1);
+    let held = f.lease("T.1", false);
+    let mut leaked = f.trees.row(&id("tree-02")).unwrap();
+    leaked.state = store::State::Leased.as_str().to_owned();
+    leaked.ticket = None;
+    leaked.session = None;
+    leaked.leased_at = Some(f.trees.now());
+    store::upsert(&f.trees.lock().db, &leaked).unwrap();
+
+    let freed = f.trees.free_unheld_leases().unwrap();
+    assert_eq!(freed, vec![id("tree-02")]);
+    assert_eq!(f.state("tree-02"), "free");
+    assert_eq!(f.trees.row(&id("tree-02")).unwrap().leased_at, None);
+    assert_eq!(f.state(held.tree.as_str()), "leased");
+}

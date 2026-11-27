@@ -394,3 +394,43 @@ fn admission_evicts_free_ticket_trees_before_older_landing_trees() {
         "warm landing tree should stay intact when a free ticket tree can be reclaimed"
     );
 }
+
+#[test]
+fn an_unheld_leased_ticket_tree_is_reclaimed_for_a_build_slot() {
+    let f = Fixture::with_landing(3, 1, 1);
+    set_slot_budget(&f, 3);
+
+    // Fill the two ordinary slots: one real lease and one leaked `leased` row with no ticket
+    // and no session, both with build outputs on disk.
+    let active = f.lease("T.1", false);
+    write(&active.path, "out/compiled", "active");
+    let leaked_id = id("tree-02");
+    let mut leaked = f.trees.row(&leaked_id).unwrap();
+    write(Path::new(&leaked.path), "out/compiled", "stale");
+    leaked.state = store::State::Leased.as_str().to_owned();
+    leaked.ticket = None;
+    leaked.session = None;
+    leaked.branch = None;
+    leaked.leased_at = Some(f.trees.now());
+    store::upsert(&f.trees.lock().db, &leaked).unwrap();
+
+    let newcomer = f.lease("T.2", false);
+    assert_ne!(newcomer.tree, active.tree);
+    assert_ne!(newcomer.tree, leaked_id);
+    assert_eq!(
+        f.trees.dispatch_pressure(0, 0, None).build_slots_free,
+        1,
+        "an unheld leased ticket tree counts as reclaimable"
+    );
+
+    let _slot = f
+        .trees
+        .take_build_slot(&newcomer.tree, &[], true)
+        .unwrap()
+        .expect("unheld leased ticket tree should be reclaimed for a build slot");
+    assert!(!Path::new(&leaked.path).join("out").exists());
+    let healed = f.trees.row(&leaked_id).unwrap();
+    assert_eq!(healed.state, "free");
+    assert_eq!(healed.leased_at, None);
+    assert!(active.path.join("out/compiled").is_file());
+}

@@ -18,6 +18,45 @@ const FREE_TREE_KEEP: usize = 2;
 const FREE_TREE_RETIRE_HOURS: u32 = 24;
 
 impl Trees {
+    /// Frees any ticket tree whose row is `leased` with neither a ticket nor a session, so a
+    /// leaked row with no holder heals itself even when no build slot eviction needs its disk
+    /// space.
+    pub fn free_unheld_leases(&self) -> Result<Vec<TreeId>> {
+        let freed = {
+            let locked = self.lock();
+            let rows = store::all(&locked.db).map_err(|e| store_error(&e))?;
+            let now = self.now();
+            let mut freed = Vec::new();
+            for row in rows.iter().filter(|row| {
+                super::reset::is_unheld_lease(row) && Self::reclaimable(&locked, row)
+            }) {
+                let id = id_of(row)?;
+                let path = Path::new(&row.path);
+                let _guard = if path.exists() {
+                    let Some(guard) = try_exclusive(path)? else {
+                        continue;
+                    };
+                    if !self.tree_processes_clear(&id, path)? {
+                        continue;
+                    }
+                    Some(guard)
+                } else {
+                    None
+                };
+                if store::release(&locked.db, id.as_str(), None, &now)
+                    .map_err(|e| store_error(&e))?
+                {
+                    freed.push(id);
+                }
+            }
+            freed
+        };
+        if !freed.is_empty() {
+            self.serve_waiters();
+        }
+        Ok(freed)
+    }
+
     /// Retires free ticket trees older than a day, keeping the newest two free. Retires
     /// unconfigured landing trees as soon as they are free.
     pub fn retire_surplus(&self) -> Result<Vec<TreeId>> {

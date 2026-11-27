@@ -346,8 +346,8 @@ impl Trees {
             .map(|&(at, _)| at)
     }
 
-    fn reclaimable(locked: &Locked, row: &rows::Tree) -> bool {
-        row.state == store::State::Free.as_str()
+    pub(super) fn reclaimable(locked: &Locked, row: &rows::Tree) -> bool {
+        (row.state == store::State::Free.as_str() || super::reset::is_unheld_lease(row))
             && !disk::id_of(row).is_ok_and(|id| locked.build_space.active.contains_key(&id))
             && !Seeding::involves(Path::new(&row.path))
             && !Self::legacy_command_in(locked, Path::new(&row.path))
@@ -444,10 +444,16 @@ impl Trees {
                     return Ok(None);
                 };
                 let id = disk::id_of(&row)?;
+                let unheld = super::reset::is_unheld_lease(&row);
+                let from = if unheld {
+                    store::State::Leased
+                } else {
+                    store::State::Free
+                };
                 if !store::transition(
                     &locked.db,
                     &row.id,
-                    store::State::Free,
+                    from,
                     store::State::Resetting,
                     &self.now(),
                 )
@@ -457,23 +463,42 @@ impl Trees {
                 }
                 locked.build_space.reclaiming = true;
                 locked.build_space.measuring.remove(&id);
-                (row.clone(), guard, id, self.directories(&locked, &row))
+                (row.clone(), guard, id, self.directories(&locked, &row), unheld)
             };
-            let (mut row, mut guard, id, directories) = candidate;
-            self.inner.builds.forget(&id);
-            let cleared = invalidate_artifacts(&mut guard).and_then(|()| {
-                directories
-                    .iter()
-                    .try_for_each(|dir| disk::remove_output(dir))
-            });
-            row.built_commit = None;
-            drop(guard);
-            let restored = self.put_back(&row);
-            self.lock().build_space.reclaiming = false;
-            restored?;
-            cleared?;
-            self.report_cleanup(format!("cleared {id}'s build directories for a build slot"));
+            let (row, guard, id, directories, unheld) = candidate;
+            self.finish_reclaim(row, guard, &id, &directories, unheld)?;
         }
+    }
+
+    fn finish_reclaim(
+        &self,
+        mut row: rows::Tree,
+        mut guard: File,
+        id: &TreeId,
+        directories: &[PathBuf],
+        unheld: bool,
+    ) -> Result<()> {
+        self.inner.builds.forget(id);
+        let cleared = invalidate_artifacts(&mut guard).and_then(|()| {
+            directories
+                .iter()
+                .try_for_each(|dir| disk::remove_output(dir))
+        });
+        if unheld {
+            store::State::Free.as_str().clone_into(&mut row.state);
+            row.leased_at = None;
+            row.branch = None;
+            row.owner = None;
+            eprintln!("ignite: reclaimed unheld leased tree {id} for a build slot");
+        }
+        row.built_commit = None;
+        drop(guard);
+        let restored = self.put_back(&row);
+        self.lock().build_space.reclaiming = false;
+        restored?;
+        cleared?;
+        self.report_cleanup(format!("cleared {id}'s build directories for a build slot"));
+        Ok(())
     }
 
     /// The measurement runs after the command, and only a later build in this tree waits for it.

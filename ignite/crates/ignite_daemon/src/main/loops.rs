@@ -348,6 +348,12 @@ impl Parts {
         self.start_loop("ignite-trees", TREES_STALLS_AFTER, move |ticker| {
             loop {
                 ticker.round(|| {
+                    if let Ok(freed) = trees.free_unheld_leases()
+                        && !freed.is_empty()
+                    {
+                        let names: Vec<String> = freed.iter().map(ToString::to_string).collect();
+                        eprintln!("ignite: freed unheld leased trees: {}", names.join(", "));
+                    }
                     crate::steps::step("retiring surplus trees");
                     let retired = trees
                         .retire_surplus()
