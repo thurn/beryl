@@ -1,6 +1,6 @@
 //! Manual payment: paying a cost one chosen mana unit at a time.
 //!
-//! Implements: CR 605.3
+//! Implements: none. Supports `pay::pay` and `pay::activate`: the manual choice of mana sources.
 
 use crate::bitboard::Bitboard;
 use crate::card::{ManaColor, ManaCost};
