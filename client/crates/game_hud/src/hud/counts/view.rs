@@ -20,12 +20,8 @@ pub(super) fn life_total(
     life: i32,
     (target, passes, style): (bool, bool, LifeText),
 ) -> Element {
-    let name = match side {
-        Side::You => "You",
-        Side::Opponent => "Opponent",
-    };
     let mut element = Element::new(Role::Player)
-        .name(&format!("{name} {life}"))
+        .name(&format!("{} {life}", whose(side)))
         .style(style.style())
         .color(color::LIFE)
         .background([0; 4])
@@ -94,11 +90,23 @@ fn entries(pool: ManaPool) -> impl Iterator<Item = (u32, char)> {
     .filter(|&(count, _)| count > 0)
 }
 
-/// By how much a life total changed, with its sign.
-pub(super) fn life_change(by: i32) -> Element {
-    text(&format!("{by:+}"))
+/// By how much `side`'s life total changed, with its sign, as "-1". Its name in the tree also
+/// says whose total it is, as "Opponent -1", so that both players' changes, which stand side
+/// by side in the tree, are told apart when both lose the same amount at once.
+pub(super) fn life_change(side: Side, by: i32) -> Element {
+    let mut element = text(&format!("{} {by:+}", whose(side)))
         .style(type_style::TITLE)
-        .passes(true)
+        .passes(true);
+    element.text = Some(format!("{by:+}"));
+    element
+}
+
+/// The word a player's life total and its changes are named by in the tree.
+fn whose(side: Side) -> &'static str {
+    match side {
+        Side::You => "You",
+        Side::Opponent => "Opponent",
+    }
 }
 
 /// Unspent mana as text, the pool's name in the tree: one mana symbol for each kind there is,

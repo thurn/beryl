@@ -59,7 +59,7 @@ pub enum Message {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Inputs {
     Total(Side, i32, bool, bool, LifeText),
-    Change(i32),
+    Change(Side, i32),
     Pool(ManaPool),
 }
 
@@ -94,7 +94,7 @@ impl Feature for CountFloats {
             Inputs::Total(side, life, target, passes, style) => {
                 life_total(side, life, (target, passes, style))
             }
-            Inputs::Change(by) => life_change(by),
+            Inputs::Change(side, by) => life_change(side, by),
             Inputs::Pool(pool) => pool_text(pool),
         }
     }
@@ -231,7 +231,9 @@ impl CountFloats {
             let id = floats::LIFE_CHANGE[at];
             layer.forget_prepared(id, |key| changes[at].iter().any(|&by| life_key(by) == key));
             for &by in &changes[at] {
-                layer.prepare(id, life_key(by), || Self::view(self, Inputs::Change(by)));
+                layer.prepare(id, life_key(by), || {
+                    Self::view(self, Inputs::Change(side, by))
+                });
             }
             let id = floats::POOL[at];
             pools[at].retain(|pool| *pool != ManaPool::default());
@@ -306,7 +308,8 @@ impl CountFloats {
             if want.change != shown.change {
                 let id = floats::LIFE_CHANGE[at];
                 show(layer, id, want.change.map(life_key), || {
-                    want.change.map(|by| Self::view(self, Inputs::Change(by)))
+                    want.change
+                        .map(|by| Self::view(self, Inputs::Change(side, by)))
                 });
             }
             self.shown[at] = want;

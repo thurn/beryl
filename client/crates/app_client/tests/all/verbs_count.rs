@@ -100,7 +100,7 @@ fn a_life_total_falls_as_its_step_begins_and_the_loss_sinks_away() {
         let frame = at(&mut client, now);
         assert_eq!(total(&frame, "You"), "20", "at {now}");
         assert_eq!(total(&frame, "Opponent"), "20");
-        assert!(element(&frame, Role::Text, "-3").is_none());
+        assert!(element(&frame, Role::Text, "You -3").is_none());
     }
     let mut last = None;
     for now in [
@@ -112,7 +112,7 @@ fn a_life_total_falls_as_its_step_begins_and_the_loss_sinks_away() {
         let frame = at(&mut client, now);
         assert_eq!(total(&frame, "You"), "17", "at {now}");
         let player = player(&frame, "You");
-        let change = element(&frame, Role::Text, "-3").expect("the loss shows -3");
+        let change = element(&frame, Role::Text, "You -3").expect("the loss shows -3");
         let (top, _) = top_and_bottom(&frame, change);
         assert_beside_total(&frame, change, player);
         if let Some(last) = last {
@@ -123,7 +123,7 @@ fn a_life_total_falls_as_its_step_begins_and_the_loss_sinks_away() {
     let frame = at(&mut client, to);
     assert_eq!(total(&frame, "You"), "17");
     assert!(
-        element(&frame, Role::Text, "-3").is_none(),
+        element(&frame, Role::Text, "You -3").is_none(),
         "the loss has ended"
     );
 }
@@ -138,7 +138,7 @@ fn a_gain_rises_beside_the_total() {
         assert_eq!(total(&frame, "Opponent"), "22");
         assert_eq!(total(&frame, "You"), "20");
         let player = player(&frame, "Opponent");
-        let change = element(&frame, Role::Text, "+2").expect("the gain shows +2");
+        let change = element(&frame, Role::Text, "Opponent +2").expect("the gain shows +2");
         let (_, bottom) = top_and_bottom(&frame, change);
         assert_beside_total(&frame, change, player);
         if let Some(last) = last {
@@ -146,7 +146,7 @@ fn a_gain_rises_beside_the_total() {
         }
         last = Some(bottom);
     }
-    assert!(element(&at(&mut client, to), Role::Text, "+2").is_none());
+    assert!(element(&at(&mut client, to), Role::Text, "Opponent +2").is_none());
 }
 
 #[test]
@@ -194,7 +194,7 @@ fn loss_draws() -> String {
     for time in [0, 100, 200, 300, 400, 500, 600, 750, 900, 999] {
         writeln!(output, "At {time}/1000").unwrap();
         let frame = client.frame(from + (to - from) * time / 1000);
-        assert!(element(frame, Role::Text, "-3").is_some(), "at {time}");
+        assert!(element(frame, Role::Text, "You -3").is_some(), "at {time}");
         let mut glyphs = 0;
         for draw in frame.draws.iter().filter(|draw| draw.tint[..3] == LOSS_RGB) {
             glyphs += usize::from(draw.material == Material::Glyph as u8);
