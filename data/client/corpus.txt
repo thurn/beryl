@@ -460,6 +460,7 @@ gurmag-angler/with-seven-cards-in-the-graveyard-costs-b
 halimar-depths/in-a-shared-game-reorders-the-top-of-the-shared-library-for-the-opponent
 hand-pair
 hand-pair-twin
+hand-pair-twin-printings
 hand-ten
 haunted-fengraf/returns-a-creature-card-from-the-shared-graveyard-whoever-cast-it
 helm-of-awakening/a-spell-costs-one-generic-less

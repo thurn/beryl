@@ -84,11 +84,15 @@ impl Game {
                 };
                 // A run waiting through this prompt goes on once this one's picks are made.
                 let waiting = self.run.take();
+                let trade = run.trade();
                 self.choose(Answer {
                     id,
                     choice,
                     continuation: run.continues(),
                 });
+                if let Some((first, second)) = trade {
+                    self.printings.trade(first, second);
+                }
                 self.run = run.over(waiting).rest();
                 ClickReply::Answered
             }

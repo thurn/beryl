@@ -11,7 +11,9 @@ use beryl_cards::CARDS;
 use beryl_cards::decks::{FORGETFUL_FISH, WU_CONTROL};
 use beryl_cards::names::{DANDAN, ISLAND};
 use beryl_engine::Seat;
-use beryl_session::protocol::{DecisionView, ObjectId, ZoneName};
+use beryl_session::prompt::{Click, ClickReply, ClickRequest};
+use beryl_session::protocol::{Candidate, DecisionView, ObjectId, Side, ZoneName};
+use beryl_session::script::Subject;
 use beryl_session::{
     CandidateIndex, Format, Game, PlayerView, SessionId, StartGame, Status, StopsSetting,
 };
@@ -237,4 +239,91 @@ fn a_deck_without_printings_shows_none() {
         }
     }
     assert!(views > 10);
+}
+
+/// Clicking a stand-in twin with a different Secret Lair art trades its printing onto the
+/// offered slot that the engine plays, so both seats see the chosen art land on the battlefield
+/// and the other art remain in hand; undoing restores both slots' original art.
+#[test]
+fn clicking_a_stand_in_twin_trades_its_printing_and_undo_restores_it() {
+    let mut game = shared_game(1);
+    let next = |game: &mut Game| {
+        let mut last = None;
+        while let Some(view) = game.next_view() {
+            last = Some(view);
+        }
+        last.expect("the game plays on from where it is")
+    };
+    let mut view = next(&mut game);
+    let (decision_id, revision, offered, stand_in, offered_art, stand_in_art) = loop {
+        let d =
+            deciding(&view).expect("game reaches a priority with two differently printed Islands");
+        if let Some(offered) = d.candidates.iter().find_map(|c| match c.option {
+            Candidate::PlayLand { slot } => {
+                let obj = view.objects.iter().find(|o| o.slot == slot)?;
+                (obj.name.as_deref() == Some(ISLAND)).then_some(slot)
+            }
+            _ => None,
+        }) {
+            let offered_art = printings(&view)[&offered];
+            if let Some(stand_in) = view.objects.iter().find(|o| {
+                o.zone == ZoneName::Hand
+                    && o.owner == Side::You
+                    && o.name.as_deref() == Some(ISLAND)
+                    && o.slot != offered
+                    && o.printing != offered_art
+            }) {
+                break (
+                    d.id,
+                    d.prompt.revision,
+                    offered,
+                    stand_in.slot,
+                    offered_art,
+                    stand_in.printing,
+                );
+            }
+        }
+        // Answer Play/Draw or Mulligan with the first candidate (Play / Keep).
+        game.choose(game.answer(d.id, CandidateIndex(0)).unwrap());
+        view = next(&mut game);
+    };
+    assert!(offered_art.is_some() && stand_in_art.is_some());
+    let reply = game
+        .click(ClickRequest {
+            decision: decision_id,
+            revision,
+            click: Click::On {
+                on: Subject::Object { slot: stand_in },
+            },
+        })
+        .unwrap();
+    assert!(matches!(reply, ClickReply::Answered));
+
+    let after = next(&mut game);
+    let played = after
+        .objects
+        .iter()
+        .find(|o| o.slot == offered)
+        .expect("offered Island is on the table");
+    let kept = after
+        .objects
+        .iter()
+        .find(|o| o.slot == stand_in)
+        .expect("stand-in Island stays in hand");
+    assert_eq!(played.zone, ZoneName::Battlefield);
+    assert_eq!(played.printing, stand_in_art);
+    assert_eq!(kept.zone, ZoneName::Hand);
+    assert_eq!(kept.printing, offered_art);
+
+    let opp = game.opponent_view();
+    let opp_played = opp
+        .objects
+        .iter()
+        .find(|o| o.slot == offered)
+        .expect("opponent sees the played Island");
+    assert_eq!(opp_played.printing, stand_in_art);
+
+    let undone = game.undo().unwrap();
+    assert_eq!(printings(&undone)[&offered], offered_art);
+    assert_eq!(printings(&undone)[&stand_in], stand_in_art);
 }

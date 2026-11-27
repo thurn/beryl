@@ -823,6 +823,14 @@
       "clicks": ["last Plains"]
     },
     {
+      "name": "hand-pair-twin-printings",
+      "seed": 1795756707230117000,
+      "decks": ["forgetful-fish", "forgetful-fish"],
+      "agents": ["greedy", "greedy"],
+      "until": "first priority decision for seat 0 from turn 4",
+      "clicks": ["last Island"]
+    },
+    {
       "name": "hand-ten",
       "board": "hand-ten",
       "until": "first priority decision for seat 0"

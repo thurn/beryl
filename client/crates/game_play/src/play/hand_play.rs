@@ -46,6 +46,11 @@ impl Show {
                 let first = usize::from(shown.view.objects[chosen].slot.0);
                 let second = usize::from(shown.view.objects[played].slot.0);
                 shown.view.objects.swap(chosen, played);
+                // Keep each hand position's art across the slot swap, matching the session's
+                // `Printings::trade` so the dragged card keeps its art in flight.
+                let printing = shown.view.objects[chosen].printing;
+                shown.view.objects[chosen].printing = shown.view.objects[played].printing;
+                shown.view.objects[played].printing = printing;
                 self.hands.trade(first, second);
                 self.pointer.trade(first, second);
                 self.table.apply(&shown.view);
@@ -97,6 +102,7 @@ fn hand_play_positions(
     }
     let mut twin = objects[played].clone();
     twin.slot = handled;
+    twin.printing = objects[chosen].printing;
     (twin.name.is_some() && objects[chosen].zone == ZoneName::Hand && twin == objects[chosen])
         .then_some((chosen, played))
 }

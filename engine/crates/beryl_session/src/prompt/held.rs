@@ -360,6 +360,9 @@ pub struct Run {
     waits: bool,
     /// The run's first pick continues the answer before it.
     continues: bool,
+    /// Two interchangeable slots whose printings should trade when this run answers: the
+    /// stand-in the player clicked and the offered slot the engine plays in its place.
+    trade: Option<(ObjectId, ObjectId)>,
     /// The run that waits for this one to end: this one answers a prompt opened between that
     /// one's picks.
     under: Option<Box<Run>>,
@@ -415,8 +418,21 @@ impl Run {
             steps: steps.into_iter().collect(),
             waits: false,
             continues: false,
+            trade: None,
             under: None,
         }
+    }
+
+    /// Records two interchangeable slots whose printings should trade when this run answers
+    /// ([`crate::printings::Printings::trade`]).
+    pub(crate) fn trading(mut self, first: ObjectId, second: ObjectId) -> Run {
+        self.trade = (first != second).then_some((first, second));
+        self
+    }
+
+    /// The interchangeable slots whose printings should trade when this run answers, if any.
+    pub(crate) fn trade(&self) -> Option<(ObjectId, ObjectId)> {
+        self.trade
     }
 
     /// The run goes on after a choice of targets asked between its picks: a triggered ability

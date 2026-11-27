@@ -24,6 +24,7 @@ mod motion_recordings;
 mod opening;
 mod pack;
 mod pointer_held;
+mod pointer_twin;
 #[path = "profiles/prompt_placement.rs"]
 mod prompt_placement;
 mod prompts;

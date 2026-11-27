@@ -167,6 +167,23 @@ impl Printings {
         }
     }
 
+    /// Exchanges the printings held by `first` and `second`, when a player chooses a twin of
+    /// the card the engine offered: the played slot then shows the art the player dragged or
+    /// clicked, and the twin left behind keeps the other's.
+    pub(crate) fn trade(&mut self, first: ObjectId, second: ObjectId) {
+        if first == second || !self.any() {
+            return;
+        }
+        let a = self.held.remove(&first.0);
+        let b = self.held.remove(&second.0);
+        if let Some(entry) = b {
+            self.held.insert(first.0, entry);
+        }
+        if let Some(entry) = a {
+            self.held.insert(second.0, entry);
+        }
+    }
+
     /// The printing the object `id` shows, if it shows one of its name's printings.
     pub(crate) fn of(&self, id: ObjectId) -> Option<PrintingIx> {
         self.held.get(&id.0).map(|&(_, printing)| printing)
