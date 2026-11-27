@@ -77,6 +77,18 @@ zone_labels! {
 }
 
 impl Place {
+    /// The place is a card's spot on the battlefield.
+    #[must_use]
+    pub fn on_battlefield(self) -> bool {
+        matches!(
+            self,
+            Self::Card {
+                zone: ZoneName::Battlefield,
+                ..
+            }
+        )
+    }
+
     /// The label printed for this place. Both players share one stack in the tree.
     #[must_use]
     pub fn label(self) -> &'static str {
