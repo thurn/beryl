@@ -26,6 +26,7 @@ const MOST_COVERING: usize = 6;
 pub fn check(frame: &Frame, context: &Context) -> Vec<Fault> {
     let mut faults = on_screen(frame, context);
     faults.extend(overlap(frame, context));
+    faults.extend(super::card_marks::card_marks(frame, context));
     faults.extend(reachable(frame, context));
     faults.extend(duplicates(frame, context));
     faults.extend(text_fits(frame, context));

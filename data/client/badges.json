@@ -1,6 +1,6 @@
 {
   "em": 0.1,
-  "raise": 0.2,
+  "raise": 0.008,
   "numeral_points": 17,
   "plaque": {
     "right": 0.68,
