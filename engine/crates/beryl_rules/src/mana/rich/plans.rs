@@ -50,7 +50,85 @@ pub(in crate::mana) fn plans<L: Layout>(
     if greedy && !out.is_empty() {
         return Ok(());
     }
-    if !pays_with_sources(s, player, cost, sources) {
+    let init_pool = s.player(player).mana().amounts_u8();
+    run_search(
+        s,
+        player,
+        cost,
+        sources,
+        &mut |plan, extra_used, full, stop| {
+            // Whether the plan is wasteful costs far more to ask than the rest, so it is asked last.
+            let outcome = sources.outcome(&plan);
+            let same = out.iter().position(|q| sources.outcome(q) == outcome);
+            if same.is_some_and(|pos| plan_taps(&plan) >= plan_taps(&out.as_slice()[pos])) {
+                return;
+            }
+            let wasteful = is_wasteful(
+                init_pool,
+                sources,
+                &plan.taps,
+                extra_used,
+                plan.remembered,
+                cost,
+            );
+            if wasteful || !accepted(&plan) {
+                return;
+            }
+            if let Some(pos) = same {
+                out.as_mut_slice()[pos] = plan;
+            } else if out.push(plan).is_err() {
+                *full = true;
+            } else if greedy {
+                *stop = true;
+            }
+        },
+    )
+}
+
+/// Calls `on_plan` with each non-wasteful rich plan paying `cost` from `player`'s pool and
+/// `sources`. Stops early if `on_plan` returns `false`.
+#[cold]
+#[inline(never)]
+pub(in crate::mana) fn each_plan<L: Layout>(
+    s: &State<L>,
+    player: Seat,
+    cost: ManaCost,
+    sources: &Sources<L>,
+    _greedy: bool,
+    on_plan: &mut impl FnMut(Plan<L>) -> bool,
+) {
+    let init_pool = s.player(player).mana().amounts_u8();
+    let _ = run_search(
+        s,
+        player,
+        cost,
+        sources,
+        &mut |plan, extra_used, _, stop| {
+            if is_wasteful(
+                init_pool,
+                sources,
+                &plan.taps,
+                extra_used,
+                plan.remembered,
+                cost,
+            ) {
+                return;
+            }
+            if !on_plan(plan) {
+                *stop = true;
+            }
+        },
+    );
+}
+
+fn run_search<L: Layout>(
+    s: &State<L>,
+    player: Seat,
+    cost: ManaCost,
+    sources: &Sources<L>,
+    on_plan: &mut impl FnMut(Plan<L>, &[u8; CLASSES], &mut bool, &mut bool),
+) -> Result<(), Full> {
+    if sources.extras.is_empty() || !pays_with_sources(s, player, cost, sources) {
         return Ok(());
     }
     let mut options = Vec::new();
@@ -74,11 +152,9 @@ pub(in crate::mana) fn plans<L: Layout>(
     let mut ctx = PlanSearch {
         init_pool: s.player(player).mana().amounts_u8(),
         cost,
-        greedy,
         sources,
         options,
-        accepted,
-        out,
+        on_plan,
         full: false,
         stop: false,
     };
@@ -96,20 +172,18 @@ struct Priced {
     made: [u8; KINDS],
 }
 
-struct PlanSearch<'a, L: Layout, F: FnMut(&Plan<L>) -> bool> {
+struct PlanSearch<'a, L: Layout, F: FnMut(Plan<L>, &[u8; CLASSES], &mut bool, &mut bool)> {
     init_pool: [u8; KINDS],
     cost: ManaCost,
-    greedy: bool,
     sources: &'a Sources<L>,
     /// Every activation of every extra with a priced ability, for each thing it can make.
     options: Vec<Priced>,
-    accepted: &'a mut F,
-    out: &'a mut L::Queue<Plan<L>, 64>,
+    on_plan: &'a mut F,
     full: bool,
     stop: bool,
 }
 
-impl<L: Layout, F: FnMut(&Plan<L>) -> bool> PlanSearch<'_, L, F> {
+impl<L: Layout, F: FnMut(Plan<L>, &[u8; CLASSES], &mut bool, &mut bool)> PlanSearch<'_, L, F> {
     fn done(&self) -> bool {
         self.stop || self.full
     }
@@ -256,39 +330,7 @@ impl<L: Layout, F: FnMut(&Plan<L>) -> bool> PlanSearch<'_, L, F> {
             })),
         };
         // The walk began from the members the priced activations use.
-        self.offer(found, &ch.extra_used);
-    }
-
-    /// Keeps `plan`, which activates `extra_used` of each extra, unless it is wasteful, a plan
-    /// with its outcome taps no more sources, or `accepted` refuses it.
-    fn offer(&mut self, plan: Plan<L>, extra_used: &[u8; CLASSES]) {
-        // Whether the plan is wasteful costs far more to ask than the rest, so it is asked last.
-        let outcome = self.sources.outcome(&plan);
-        let same = self
-            .out
-            .iter()
-            .position(|q| self.sources.outcome(q) == outcome);
-        if same.is_some_and(|pos| plan_taps(&plan) >= plan_taps(&self.out.as_slice()[pos])) {
-            return;
-        }
-        let wasteful = is_wasteful(
-            self.init_pool,
-            self.sources,
-            &plan.taps,
-            extra_used,
-            plan.remembered,
-            self.cost,
-        );
-        if wasteful || !(self.accepted)(&plan) {
-            return;
-        }
-        if let Some(pos) = same {
-            self.out.as_mut_slice()[pos] = plan;
-        } else if self.out.push(plan).is_err() {
-            self.full = true;
-        } else if self.greedy {
-            self.stop = true;
-        }
+        (self.on_plan)(found, &ch.extra_used, &mut self.full, &mut self.stop);
     }
 }
 

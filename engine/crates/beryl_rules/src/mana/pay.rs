@@ -20,7 +20,7 @@ use beryl_kernel::reference::Permanent;
 use super::KINDS;
 use super::remembered::{self, Paying};
 use super::solver::{Plan, fixed_units, lowest_kind, spent_by_class};
-use super::sources::{Class, Sources, allowed};
+use super::sources::{Sources, allowed};
 
 /// Pays `cost` by `plan`: taps its sources for the mana it needs, sacrificing those whose
 /// ability says so, and spends it.
@@ -171,7 +171,7 @@ fn pay_units<L: Layout, const MEMORY: bool>(
     let human = s.profile().taps_mana == Some(player);
     for (i, c) in sources.classes().iter().enumerate() {
         let tapped: L::Queue<L::Slot, 64> = if human {
-            human_taps(s, c, plan.taps[i])?
+            human_taps(s, c.members, c.count(), plan.taps[i])?
         } else {
             s.mana_payment_sources(c.members, plan.taps[i])?
         };
@@ -240,12 +240,17 @@ pub(super) fn tapped_source<L: Layout>(s: &State<L>, slot: L::Slot) -> Permanent
         .expect("a mana source on the battlefield")
 }
 
-/// The `n` members of class `c` the human's payment taps: its creatures last, free to attack
-/// or block as long as they can ([`Outlook`]).
+/// The `n` members of a source class (`members`, of size `count`) the human's payment taps:
+/// its creatures last, free to attack or block as long as they can ([`Outlook`]).
 #[cold]
 #[inline(never)]
-fn human_taps<L: Layout>(s: &State<L>, c: &Class<L>, n: u8) -> Result<L::Queue<L::Slot, 64>, Full> {
-    let mut v = s.mana_payment_sources(c.members, c.count())?;
+pub(super) fn human_taps<L: Layout>(
+    s: &State<L>,
+    members: Bitboard<L::Slot>,
+    count: u8,
+    n: u8,
+) -> Result<L::Queue<L::Slot, 64>, Full> {
+    let mut v = s.mana_payment_sources(members, count)?;
     v.as_mut_slice()
         .sort_by_key(|&m| s.derived(m).types.intersects(Types::CREATURE));
     while v.len() > usize::from(n) {

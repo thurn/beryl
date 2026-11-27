@@ -35,7 +35,7 @@ use crate::replacement::event::{self, Sink};
 use crate::state::{AbilityRef, Derived, ManaAmounts, PendingTrigger, State, TriggeredAbility};
 use crate::table::{Capability, GameTable, is_priced, is_sacrificed};
 
-use super::pay::{activate_consuming, activate_restricted, tapped_source};
+use super::pay::{activate_consuming, activate_restricted, human_taps, tapped_source};
 use super::pool::Funds;
 use super::remembered::{self, Paying};
 use super::solver::Plan;
@@ -44,7 +44,7 @@ use super::units::Units;
 use super::{CLASSES, KINDS, Taps, amounts_pay};
 
 pub(super) use manual::{manual_can_spend_after, manual_extra_options, manual_pay_extra};
-pub(super) use plans::plans;
+pub(super) use plans::{each_plan, plans};
 pub(super) use terms::{EvaluatedTerm, RichActivation};
 
 /// A class of interchangeable sources the plain classes cannot say: permanents with a priced mana
@@ -326,9 +326,25 @@ pub(super) fn pays_from_state<L: Layout>(
     extra_used: &[u8; CLASSES],
     cost: ManaCost,
 ) -> bool {
+    pays_from_state_with(pool, sources, taps, rem_used, extra_used, None, cost)
+}
+
+/// [`pays_from_state`] with an optional unplayed land `(kinds, amount)` the look-ahead considers.
+pub(super) fn pays_from_state_with<L: Layout>(
+    pool: [u8; KINDS],
+    sources: &Sources<L>,
+    taps: &Taps<L>,
+    rem_used: u8,
+    extra_used: &[u8; CLASSES],
+    bonus_land: Option<(u8, u8)>,
+    cost: ManaCost,
+) -> bool {
     let mut base = Units::NONE;
     for (k, &n) in pool.iter().enumerate() {
         base.add(1 << k, u16::from(n));
+    }
+    if let Some((kinds, amount)) = bonus_land {
+        base.add(kinds, u16::from(amount));
     }
     let mut restricted = Units::NONE;
     for (i, &(_, kind, _)) in sources.remembered().iter().enumerate() {
@@ -569,10 +585,15 @@ pub(super) fn pay<L: Layout>(
             }
         }
     }
+    let human = s.profile().taps_mana == Some(player);
     let mut class_used = [0usize; CLASSES];
     let mut class_slots: Vec<Vec<L::Slot>> = Vec::with_capacity(sources.classes().len());
     for (i, c) in sources.classes().iter().enumerate() {
-        let slots = s.mana_payment_sources(c.members, plan.taps[i])?;
+        let slots = if human {
+            human_taps(s, c.members, c.count(), plan.taps[i])?
+        } else {
+            s.mana_payment_sources(c.members, plan.taps[i])?
+        };
         class_slots.push(slots.as_slice().to_vec());
     }
     for &(ci, color_ix) in &seq.plain {
@@ -596,7 +617,11 @@ pub(super) fn pay<L: Layout>(
     }
     let mut extra_slots: Vec<Vec<L::Slot>> = Vec::with_capacity(sources.extras.len());
     for (i, e) in sources.extras.iter().enumerate() {
-        let slots = s.mana_payment_sources(e.members, extra_counts[i])?;
+        let slots = if human {
+            human_taps(s, e.members, e.count, extra_counts[i])?
+        } else {
+            s.mana_payment_sources(e.members, extra_counts[i])?
+        };
         extra_slots.push(slots.as_slice().to_vec());
     }
     let mut extra_used = [0usize; CLASSES];
