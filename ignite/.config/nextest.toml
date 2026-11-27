@@ -21,7 +21,14 @@ terminate-after = 4
 # takes 1 to 2 s. Overrides belong to one profile, so `express` repeats this one below.
 
 [[profile.ignite.overrides]]
-filter = "binary_id(ignite_daemon) & test(/^trees::/)"
+filter = "(binary_id(ignite_daemon) & test(/^trees::/)) | binary_id(ignite_git::trees)"
+slow-timeout = { period = "60s", terminate-after = 10 }
+
+# On Windows, `about_one_hit_in_two_hundred_is_sampled_and_audited_in_idle_time` takes ~65 s alone
+# and exceeds 120 s under parallel test load across 8,000 `idle.hit` calls. A timeout only catches
+# a hang, so give it ten minutes here and in `express` below.
+[[profile.ignite.overrides]]
+filter = "binary_id(ignite_daemon) & test(=idle::tests::about_one_hit_in_two_hundred_is_sampled_and_audited_in_idle_time)"
 slow-timeout = { period = "60s", terminate-after = 10 }
 
 # The express lane leaves out the tests that took over 3 s each. On 2026-11-19, at a load average
@@ -61,7 +68,12 @@ not (
 period = "30s"
 terminate-after = 4
 
-# The tree manager's tests get ten minutes here too, as in the `ignite` profile above.
+# The tree manager's tests and `about_one_hit_in_two_hundred_is_sampled_and_audited_in_idle_time`
+# get ten minutes here too, as in the `ignite` profile above.
 [[profile.express.overrides]]
-filter = "binary_id(ignite_daemon) & test(/^trees::/)"
+filter = "(binary_id(ignite_daemon) & test(/^trees::/)) | binary_id(ignite_git::trees)"
+slow-timeout = { period = "60s", terminate-after = 10 }
+
+[[profile.express.overrides]]
+filter = "binary_id(ignite_daemon) & test(=idle::tests::about_one_hit_in_two_hundred_is_sampled_and_audited_in_idle_time)"
 slow-timeout = { period = "60s", terminate-after = 10 }
