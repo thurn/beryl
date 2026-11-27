@@ -715,16 +715,18 @@ fn update_hud_features(
         layout: table.layout(),
         visible,
     });
-    features.update_rows(rows::Draw {
-        layer,
-        table,
-        visible: rows_counted,
-    });
-    features.banner(banner::Draw {
+    let banner_shown = features.banner(banner::Draw {
         layer,
         view: show.shown().map(|update| &update.view),
         now: table_now,
         visible,
         tuning: table.data().hud,
+    });
+    // Hide row overflow counts while the combat step banner is up so they do not draw over its
+    // title on compact layouts where the banner spans the opponent's back row.
+    features.update_rows(rows::Draw {
+        layer,
+        table,
+        visible: rows_counted && !banner_shown,
     });
 }

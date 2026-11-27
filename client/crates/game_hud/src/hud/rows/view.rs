@@ -1,13 +1,16 @@
 use beryl_protocol::protocol::{RowName, Side};
 use game_table::table::{HudAnchor, ROWS, Rows, Scroller, Table};
 use glam::Vec2;
+use kit_base::geometry::Rect;
 use kit_frame::frame::Anchor;
 use kit_ui::element::{Element, FloatId, floats, text};
 
 /// The number of battlefield row ends. The hand and stack follow these.
 const ROW_ENDS: usize = 12;
 
-/// The edge of the scroller's window that a count labels.
+/// The edge of the scroller's window that a count labels, clamped inside the window's horizontal
+/// inset (the banded side inset on phones, or the safe area on desktop) so badges at the outer
+/// ends of crowded rows do not clip off-screen.
 pub(super) fn anchor(scroller: Scroller, right: bool, table: &Table) -> Anchor {
     let gap = table.profile().data().table.row_count_gap;
     let end = if right { 1.0 } else { 0.0 };
@@ -24,7 +27,24 @@ pub(super) fn anchor(scroller: Scroller, right: bool, table: &Table) -> Anchor {
             Vec2::X * if right { gap } else { -gap },
         ),
     };
-    HudAnchor::Row(scroller).at(at, align, offset)
+    let window = table.camera().window;
+    let (left, right) = table.layout().bands.map_or(
+        (
+            window.safe_area.left,
+            window.size.width - window.safe_area.right,
+        ),
+        |bands| (bands.left, bands.right),
+    );
+    let top = window.safe_area.top;
+    let bottom = window.size.height - window.safe_area.bottom;
+    HudAnchor::Row(scroller)
+        .at(at, align, offset)
+        .clamped(Rect {
+            x: left,
+            y: top,
+            width: (right - left).max(0.0),
+            height: (bottom - top).max(0.0),
+        })
 }
 
 /// The line end at `index`: the line, and whether it is the right end. The viewer's rows come

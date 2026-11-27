@@ -28,6 +28,8 @@ pub struct Anchor {
     pub align: Vec2,
     /// An additional offset in logical points.
     pub offset: Vec2,
+    /// Optional window bounds that the placed box is clamped inside.
+    pub clamp: Option<Rect>,
 }
 
 impl Anchor {
@@ -39,16 +41,31 @@ impl Anchor {
             at,
             align,
             offset,
+            clamp: None,
         }
+    }
+
+    /// Clamps the placed box inside `bounds` so it does not reach past the window's edges.
+    #[must_use]
+    pub const fn clamped(mut self, bounds: Rect) -> Self {
+        self.clamp = Some(bounds);
+        self
     }
 
     /// The top left corner of a box of `size` placed against `target`.
     #[must_use]
     pub fn corner(&self, target: Rect, size: Vec2) -> Vec2 {
-        Vec2::new(target.x, target.y)
+        let mut corner = Vec2::new(target.x, target.y)
             + self.at * Vec2::new(target.width, target.height)
             + self.offset
-            - self.align * size
+            - self.align * size;
+        if let Some(bounds) = self.clamp {
+            let max_x = (bounds.x + bounds.width - size.x).max(bounds.x);
+            let max_y = (bounds.y + bounds.height - size.y).max(bounds.y);
+            corner.x = corner.x.clamp(bounds.x, max_x);
+            corner.y = corner.y.clamp(bounds.y, max_y);
+        }
+        corner
     }
 }
 

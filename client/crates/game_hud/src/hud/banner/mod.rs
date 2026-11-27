@@ -104,11 +104,11 @@ pub struct Draw<'a> {
 }
 
 impl StateUpdate<Banner> for Draw<'_> {
-    type Output = ();
+    type Output = bool;
 
-    fn apply(self, state: &mut Banner) -> (bool, ()) {
+    fn apply(self, state: &mut Banner) -> (bool, bool) {
         state.write(self.layer, self.view, self.now, self.visible, self.tuning);
-        (false, ())
+        (false, state.shown.is_some())
     }
 }
 

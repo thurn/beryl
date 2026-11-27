@@ -77,6 +77,7 @@ fn references_survive_rebuilding_a_mixed_scene() {
             at: Vec2::splat(0.5),
             align: Vec2::ZERO,
             offset: Vec2::Y,
+            clamp: None,
         });
         child.show = Some(Show::object(ElementId(42)));
         let index = tree.push(child);
