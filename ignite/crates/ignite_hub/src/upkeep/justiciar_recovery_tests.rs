@@ -1,14 +1,14 @@
 use ignite_core::fakes::FakeClock;
 use ignite_core::protocol::hub::{JusticiarCleared, JusticiarRecovery, JusticiarReport};
-use ignite_core::protocol::tickets::{Operation, Status};
+use ignite_core::protocol::tickets::{Operation, Status, TicketType};
 use ignite_core::time::Timestamp;
 use ignite_core::traits::Clock;
 use ignite_store::hub;
 
 use super::clearing::{HOLD_SECONDS, RETURNED_HOLD_SECONDS, close_cleared};
 use super::filing::{Change, UPKEEP};
-use super::justiciar;
-use super::tests::{apply, comment_count, ticket};
+use super::justiciar::{self, MASTER_LAG_SECONDS};
+use super::tests::{apply, comment_count, create, start, ticket};
 
 fn report(subject: &str, evidence: String) -> JusticiarReport {
     JusticiarReport {
@@ -130,4 +130,73 @@ fn recovery_does_not_close_a_persons_ticket_or_erase_a_later_sighting() {
     assert_eq!(close_cleared(&mut conn, clock.now()).unwrap(), [crash]);
     assert_eq!(ticket(&conn, &manual).status, Status::Open);
     assert_eq!(ticket(&conn, &touched).status, Status::Open);
+}
+
+#[test]
+fn a_failed_tip_after_a_regression_fix_ends_the_verification_wait() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    let landed = apply(
+        &mut conn,
+        vec![create("work", TicketType::Task, None, &[])],
+        clock.now(),
+    );
+    conn.execute(
+        "UPDATE tickets SET landed_at = ?1 WHERE id = ?2",
+        [clock.now().to_string(), landed[0].clone()],
+    )
+    .unwrap();
+    clock.advance(MASTER_LAG_SECONDS + 60.0);
+
+    // An earlier tip failed before the regression fix landed.
+    let earlier_fail = clock.now().to_string();
+    conn.execute(
+        "INSERT INTO tips (commit_sha, seen, verified, state) VALUES ('aaaa111', ?1, ?1, 'failed')",
+        [&earlier_fail],
+    )
+    .unwrap();
+    clock.advance(60.0);
+
+    let reg = apply(
+        &mut conn,
+        vec![create("pytest fails", TicketType::Bug, None, &[])],
+        clock.now(),
+    );
+    conn.execute(
+        "INSERT INTO regressions (check_name, ticket, first_bad, last_good, state)
+         VALUES ('quality:unit', ?1, 'aaaa111', '0000000', 'open')",
+        [&reg[0]],
+    )
+    .unwrap();
+    let fix_at = clock.now().to_string();
+    conn.execute(
+        "UPDATE tickets SET landed_at = ?1, status = 'closed', closed_at = ?1 WHERE id = ?2",
+        [&fix_at, &reg[0]],
+    )
+    .unwrap();
+
+    // Still awaiting verification: the earlier failure predates the fix.
+    clock.advance(60.0);
+    assert!(
+        justiciar::master_lag(&mut conn, clock.now())
+            .unwrap()
+            .is_empty()
+    );
+
+    // A tip seen after the fix landed fails, so the fix did not end the stall.
+    let later_fail = clock.now().to_string();
+    conn.execute(
+        "INSERT INTO tips (commit_sha, seen, verified, state) VALUES ('bbbb222', ?1, ?1, 'failed')",
+        [&later_fail],
+    )
+    .unwrap();
+    clock.advance(60.0);
+    let filed = justiciar::master_lag(&mut conn, clock.now()).unwrap();
+    assert_eq!(filed.len(), 1);
+    assert_eq!(filed[0].change, Change::Created);
+    assert!(
+        ticket(&conn, &filed[0].ticket)
+            .title
+            .starts_with("master has not moved")
+    );
 }

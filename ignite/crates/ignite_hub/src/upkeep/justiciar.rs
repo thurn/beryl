@@ -400,18 +400,30 @@ fn recently_closed_for(conn: &Connection, landing: &str, now: Timestamp) -> Resu
 }
 
 /// Whether a regression ticket closed less than [`MASTER_LAG_SECONDS`] before `now` with a
-/// landed fix. While the regression was open it held `master` back and explained the stall.
-/// Its fix needs a tip verification round to reach `master`, so filing a master-lag ticket in
-/// the moments after it closes would report a stall the fix is about to end. A stall that
-/// outlasts the wait gets a ticket, in case the fix did not work.
+/// landed fix that tip verification has not already rejected. While the regression was open it
+/// held `master` back and explained the stall. Its fix needs a tip verification round to reach
+/// `master`, so filing a master-lag ticket in the moments after it closes would report a stall
+/// the fix is about to end. Once a tip seen at or after `landed_at` has failed, or the stall
+/// outlasts [`MASTER_LAG_SECONDS`], the fix did not end the stall and a ticket is filed.
 fn regression_fix_awaiting_verification(conn: &Connection, now: Timestamp) -> Result<bool> {
     let mut statement = conn.prepare_cached(
-        "SELECT t.closed_at FROM regressions r JOIN tickets t ON t.id = r.ticket
+        "SELECT DISTINCT t.landed_at, t.closed_at
+         FROM regressions r JOIN tickets t ON t.id = r.ticket
          WHERE t.status = 'closed' AND t.landed_at IS NOT NULL AND t.closed_at IS NOT NULL",
     )?;
-    let closed = statement.query_map([], |row| row.get::<_, String>(0))?;
-    for closed_at in closed {
-        if now.seconds_since(parse_time(&closed_at?)?) < MASTER_LAG_SECONDS {
+    let mut failed_after =
+        conn.prepare_cached("SELECT 1 FROM tips WHERE state = 'failed' AND seen >= ?1 LIMIT 1")?;
+    let closed = statement.query_map([], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+    })?;
+    for row in closed {
+        let (landed_at, closed_at) = row?;
+        if now.seconds_since(parse_time(&closed_at)?) < MASTER_LAG_SECONDS
+            && failed_after
+                .query_row([&landed_at], |_| Ok(()))
+                .optional()?
+                .is_none()
+        {
             return Ok(true);
         }
     }
