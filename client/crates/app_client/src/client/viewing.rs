@@ -151,6 +151,8 @@ impl Client {
             game_manual::manual::viewers::SEARCH,
             kit_ui::widgets::FieldState::default(),
         );
+        self.features
+            .inspect(&game_hud::hud::inspector::Message::Pin(None));
         self.features.show_viewer(viewed, revealed);
         self.show_screen();
     }

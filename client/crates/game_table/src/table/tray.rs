@@ -167,12 +167,13 @@ impl Table {
 
     /// Whether the card in `slot` may be hovered: not behind a viewer or a modal prompt's shade
     /// (`cover_for_prompt`), and when a prompt holds cards up in its tray, only a card in the
-    /// tray (`in_tray`).
+    /// tray (`in_tray`). Cards shown inside a viewer's boxes (`in_box`) remain hoverable.
     #[must_use]
     pub fn hoverable(&self, slot: usize) -> bool {
-        !self.covered()
-            && !self.prompt_covers
-            && self.held.as_ref().is_none_or(|_| self.in_tray(slot))
+        self.in_box(slot)
+            || (!self.covered()
+                && !self.prompt_covers
+                && self.held.as_ref().is_none_or(|_| self.in_tray(slot)))
     }
 
     /// Whether a press may reach the card in `slot`, resting at `place`: one where the pointer

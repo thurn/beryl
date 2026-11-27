@@ -575,3 +575,158 @@ fn a_finger_in_a_44_point_strip_reaches_the_card_under_the_one_over_it() {
         assert_eq!(hit(&frame, Vec2::new(x, 467.0)), Some(1), "at {x}");
     }
 }
+
+fn open_viewer(client: &mut Client, now: &mut u64, side: Option<Side>, zone: ZoneName) -> Frame {
+    use game_hud::hud::viewer::Message as ViewerMessage;
+    use game_hud::inspect::Viewed;
+    use kit_ui::element::Action;
+
+    client.dispatch(&Action::new(ViewerMessage::Open(Viewed::Pile(side, zone))));
+    *now += 16 * MS;
+    client.frame(*now);
+    *now += 1_000 * MS;
+    client.frame(*now).clone()
+}
+
+#[test]
+fn a_graveyard_viewer_enlarges_cards_on_hover_and_right_click() {
+    use kit_scene::hit::{bounds, painted_over};
+
+    let mut builder = ViewBuilder::new();
+    for name in [
+        "Lonely Sandbar",
+        "Telling Time",
+        "Brainstorm",
+        "Memory Lapse",
+    ] {
+        builder.card(ZoneName::Graveyard, Side::You, name);
+    }
+    builder.script(ScriptBuilder::reset().build());
+
+    let mut client = client(builder.update());
+    let mut now = 16 * MS;
+    let frame = client.frame(now).clone();
+
+    let mouse = |phase, at, button| {
+        Input::Device(DeviceInput::Pointer(Pointer {
+            id: 0,
+            kind: PointerKind::Mouse,
+            phase,
+            position: at,
+            button,
+            wheel: Vec2::ZERO,
+            modifiers: Modifiers::default(),
+        }))
+    };
+
+    // Hovering the graveyard pile before opening the viewer does not open the inspector.
+    let (graveyard_idx, _) = card(&frame, "Memory Lapse");
+    let graveyard_rect = bounds(&frame.resolved[graveyard_idx as usize]);
+    let graveyard_pos = Vec2::new(
+        graveyard_rect.x + graveyard_rect.width / 2.0,
+        graveyard_rect.y + graveyard_rect.height / 2.0,
+    );
+    client.handle(mouse(PointerPhase::Move, graveyard_pos, Button::Primary));
+    now += 16 * MS;
+    assert_eq!(inspected(client.frame(now)), None);
+
+    // Open the Graveyard viewer and wait for the cards to settle in its boxes.
+    let opened = open_viewer(&mut client, &mut now, Some(Side::You), ZoneName::Graveyard);
+
+    // Desktop hover enlarges the card and draws the inspector on screen above the viewer.
+    client.handle(mouse(
+        PointerPhase::Move,
+        on(&opened, "Memory Lapse"),
+        Button::Primary,
+    ));
+    now += 16 * MS;
+    client.frame(now);
+    now += 16 * MS;
+    let hovered = client.frame(now).clone();
+    assert_eq!(inspected(&hovered).as_deref(), Some("Memory Lapse"));
+    let (idx, inspector_rect) = hovered
+        .resolved
+        .iter()
+        .enumerate()
+        .find_map(|(i, el)| {
+            (el.role == Role::Region && hovered.name(el.name) == "Memory Lapse, inspected")
+                .then(|| (u32::try_from(i).unwrap(), bounds(el)))
+        })
+        .expect("inspector element");
+    assert!(
+        inspector_rect.x >= 0.0
+            && inspector_rect.y >= 0.0
+            && inspector_rect.x + inspector_rect.width <= WINDOW.width
+            && inspector_rect.y + inspector_rect.height <= WINDOW.height,
+        "inspector out of bounds: {inspector_rect:?}"
+    );
+    let mid = Vec2::new(
+        inspector_rect.x + inspector_rect.width / 2.0,
+        inspector_rect.y + inspector_rect.height / 2.0,
+    );
+    assert_eq!(painted_over(&hovered, idx, mid), None);
+
+    // Desktop right-click pins the card even after moving the pointer off it; left-click clears it.
+    client.handle(mouse(
+        PointerPhase::Down,
+        on(&opened, "Brainstorm"),
+        Button::Secondary,
+    ));
+    client.handle(mouse(
+        PointerPhase::Up,
+        on(&opened, "Brainstorm"),
+        Button::Secondary,
+    ));
+    client.handle(mouse(
+        PointerPhase::Move,
+        Vec2::new(10.0, 10.0),
+        Button::Primary,
+    ));
+    now += 16 * MS;
+    client.frame(now);
+    now += 16 * MS;
+    assert_eq!(inspected(client.frame(now)).as_deref(), Some("Brainstorm"));
+    client.handle(mouse(
+        PointerPhase::Down,
+        Vec2::new(10.0, 10.0),
+        Button::Primary,
+    ));
+    client.handle(mouse(
+        PointerPhase::Up,
+        Vec2::new(10.0, 10.0),
+        Button::Primary,
+    ));
+    now += 16 * MS;
+    assert_eq!(inspected(client.frame(now)), None);
+}
+
+#[test]
+fn an_exile_viewer_enlarges_cards_on_long_press() {
+    let mut builder = ViewBuilder::new();
+    builder.card(ZoneName::Exile, Side::You, "Counterspell");
+    builder.script(ScriptBuilder::reset().build());
+
+    let mut client = client(builder.update());
+    let mut now = 16 * MS;
+    client.frame(now);
+
+    let exile = open_viewer(&mut client, &mut now, Some(Side::You), ZoneName::Exile);
+    let target = on(&exile, "Counterspell");
+    client.handle(finger(1, PointerPhase::Down, target));
+    now += 16 * MS;
+    client.frame(now);
+    now += 520 * MS;
+    assert_eq!(
+        inspected(client.frame(now)).as_deref(),
+        Some("Counterspell")
+    );
+    client.handle(finger(1, PointerPhase::Up, target));
+    now += 16 * MS;
+    assert_eq!(
+        inspected(client.frame(now)).as_deref(),
+        Some("Counterspell")
+    );
+    tap(&mut client, 1, target);
+    now += 16 * MS;
+    assert_eq!(inspected(client.frame(now)), None);
+}

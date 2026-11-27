@@ -276,12 +276,15 @@ impl Client {
                 flat = screen_target;
                 let game = screen == Screen::Game;
                 let game_hold = game
-                    && target.is_some_and(|target| {
-                        matches!(target.node, Node::Card(_))
-                            && target
-                                .container
-                                .and_then(GamePlace::in_frame)
-                                .is_some_and(game_play::pointer::takes_pointer)
+                    && target.is_some_and(|target| match target.node {
+                        Node::Card(slot) => {
+                            scene.table.in_box(slot)
+                                || target
+                                    .container
+                                    .and_then(GamePlace::in_frame)
+                                    .is_some_and(game_play::pointer::takes_pointer)
+                        }
+                        _ => false,
                     });
                 let policy = TouchPolicy {
                     double_tap: (game || at_table) && !scene.sheet && target.is_none(),
@@ -303,13 +306,15 @@ impl Client {
                 self.routes.scrolling.cancel();
                 self.features.focus_row(RowMessage::Focus(None));
             }
-            if primary_down && pointer.kind == PointerKind::Touch && pinned {
+            if primary_down && pinned {
                 self.features
                     .inspect(&game_hud::hud::inspector::Message::Pin(None));
-                self.routes.router.cancel();
-            } else {
-                self.deliver_point(&point);
+                if pointer.kind == PointerKind::Touch {
+                    self.routes.router.cancel();
+                    return;
+                }
             }
+            self.deliver_point(&point);
             if point.captured && ends_gesture(&pointer) {
                 self.end_control();
             }
@@ -434,6 +439,22 @@ impl Client {
             return;
         }
         if self.open_table_menu(point) {
+            return;
+        }
+        if self.features.screen == Screen::Game
+            && self.features.sheet.is_none()
+            && pointer.phase == PointerPhase::Down
+            && pointer.button == Button::Secondary
+            && let Some(Target {
+                node: Node::Card(slot),
+                ..
+            }) = point.target
+            && let Ok(slot) = u16::try_from(slot)
+        {
+            let slot = ObjectId(slot);
+            let next = (self.features.inspector().pinned_slot() != Some(slot)).then_some(slot);
+            self.features
+                .inspect(&game_hud::hud::inspector::Message::Pin(next));
             return;
         }
         // An established card drag keeps its source as it crosses other features.

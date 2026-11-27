@@ -192,7 +192,7 @@ pub(super) fn inspector(input: &CardInputs<'_>) -> Element {
             .color(color::TEXT_DIM)
             .max_width(inner)
     });
-    column()
+    let mut panel = column()
         .name(&format!("{name}, inspected"))
         .width(place.width)
         .padding(pad)
@@ -207,7 +207,9 @@ pub(super) fn inspector(input: &CardInputs<'_>) -> Element {
                 .refusal
                 .as_ref()
                 .map(|reason| refusal(reason, input.refused_by, inner)),
-        )
+        );
+    panel.layer_depth = kit_ui::element::LayerDepth::Foreground;
+    panel
 }
 
 /// The line under the state that says why a click on the card was refused.

@@ -210,6 +210,11 @@ impl Inspector {
     }
 
     #[must_use]
+    pub fn pinned_slot(&self) -> Option<ObjectId> {
+        self.pinned
+    }
+
+    #[must_use]
     pub fn needs_frame(&self, hovered: Option<ObjectId>) -> bool {
         self.due || self.judged != hovered
     }
@@ -287,6 +292,9 @@ impl Inspector {
             ZoneName::Battlefield | ZoneName::Stack => true,
             ZoneName::Hand => {
                 side == Side::You && (face_down || pinned.is_some() || refusal.is_some())
+            }
+            ZoneName::Graveyard | ZoneName::Exile | ZoneName::Library => {
+                element.state.has(StateBits::SHOWN) && !face_down
             }
             _ => false,
         };

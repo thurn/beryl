@@ -74,7 +74,10 @@ fn redirect(frame: &Frame, point: Vec2, index: u32) -> u32 {
         .has(StateBits::SHOWN)
         .then(|| frame.show_host(element.id))
         .flatten()
-        .filter(|&host| within(&frame.resolved[host as usize], point));
+        .filter(|&host| {
+            let host = &frame.resolved[host as usize];
+            host.interactive && within(host, point)
+        });
     host.unwrap_or(index)
 }
 
