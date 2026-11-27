@@ -122,7 +122,11 @@ mod playback {
             let mut faults = game_probe::agent::check(frame, &context);
             if at_rest {
                 for (index, element) in frame.resolved.iter().enumerate() {
-                    if element.state.has(kit_frame::frame::StateBits::MOVING) {
+                    // Aim arrows to the pointer carry `MOVING` so `lines-hold` skips them even
+                    // when no animation is running.
+                    if element.role != kit_frame::frame::Role::Arrow
+                        && element.state.has(kit_frame::frame::StateBits::MOVING)
+                    {
                         let locator = kit_probe::agent::tree::locator_of(frame, index as u32);
                         let rect = kit_scene::hit::bounds(element);
                         let subject = kit_probe::agent::Subject { locator, rect };
