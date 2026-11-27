@@ -112,6 +112,42 @@ fn only_the_land_module_outside_its_tests_affects_a_landing() {
     );
 }
 
+#[test]
+fn only_the_tip_module_outside_its_tests_affects_a_tip_round() {
+    for path in [
+        "ignite/crates/ignite_daemon/src/tip.rs",
+        "ignite/crates/ignite_daemon/src/tip/words.rs",
+    ] {
+        assert!(affects_tip(AT, path), "{path}");
+    }
+    for path in [
+        "ignite/crates/ignite_daemon/src/tip/words_tests.rs",
+        "ignite/crates/ignite_daemon/src/tip/tests/fakes.rs",
+        "ignite/crates/ignite_daemon/src/land/lease.rs",
+        "ignite/crates/ignite_daemon/src/main/selfupdate.rs",
+        "ignite/crates/ignite_core/src/config.rs",
+    ] {
+        assert!(!affects_tip(AT, path), "{path}");
+    }
+    let git = FakeGit::default();
+    let (from, to) = (
+        Commit::new("a1b2c3d").unwrap(),
+        Commit::new("e4f5a6b").unwrap(),
+    );
+    git.set_changed(
+        &from,
+        &to,
+        &[
+            "ignite/crates/ignite_daemon/src/main/loops.rs",
+            "ignite/crates/ignite_daemon/src/tip/words.rs",
+        ],
+    );
+    assert_eq!(
+        tip_changes(&git, AT, &from, &to).unwrap(),
+        ["ignite/crates/ignite_daemon/src/tip/words.rs"]
+    );
+}
+
 /// The check manifests lie under Ignite's source directory but are read from the checkout at run
 /// time, so a change to them is neither a change to Ignite's source nor to the daemon's code.
 #[test]

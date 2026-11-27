@@ -33,9 +33,13 @@
 //! on waiting and gets the new run's reply; a wait that ends first says, in a `restart` line, that
 //! the landing was restarted under the new build.
 //!
-//! Only landings are restarted. A `check` or `test` started under the old build only reports on a
-//! commit, its commands would be ended and started again, and the landing gate runs the checks
-//! again under the new build anyway; so it finishes under the build that started it.
+//! Only landings and tip rounds are stopped for an older build. A `tip-round` whose release
+//! changed the tip code (the `tip` module, see [`crate::update::scope::affects_tip`]) is asked to
+//! stop and ended after [`Processes::stop_wait`] if it does not, so a fix to a stuck tip round
+//! takes effect on the restart instead of waiting on the old build; the tip loop then starts a
+//! fresh round under the new build. A `check` or `test` started under the old build only reports
+//! on a commit, its commands would be ended and started again, and the landing gate runs the
+//! checks again under the new build anyway; so it finishes under the build that started it.
 //!
 //! Its tests are in `outdated_tests.rs`, which uses the verb processes of `process_tests.rs`.
 //!
@@ -54,10 +58,14 @@ use super::process::Shared;
 use super::{Server, Verb};
 use crate::host::Host;
 use crate::stop::EndVerbProcess;
-use crate::update::scope::{Source, landing_changes};
+use crate::update::scope::{Source, landing_changes, tip_changes};
 
 /// The verbs whose verb process a restarted daemon stops and runs again under its own build.
 pub const RESTARTED_UNDER_NEW_BUILD: &[&str] = &["land"];
+
+/// Non-resumable verbs whose verb process a restarted daemon stops when the release changed
+/// their code, so their loop starts a fresh run under the new build.
+const STOPPED_UNDER_NEW_BUILD: &[&str] = &["tip-round"];
 
 /// The version an executable outside the executable store reports, which says nothing about
 /// what code it runs.
@@ -66,15 +74,19 @@ const UNKNOWN_VERSION: &str = "unknown";
 impl Server {
     /// For a verb process the restarted daemon found alive: when it runs a landing under another
     /// build than the daemon's own and agrees to stop, asks it to stop and returns true; once the
-    /// process has ended, a new verb process runs the landing again under the same handle. False
-    /// otherwise, as when its push has begun: the caller goes on watching the process.
+    /// process has ended, a new verb process runs the landing again under the same handle. When
+    /// it runs an outdated `tip-round` whose tip code changed, asks it to stop (and ends it after
+    /// `stop_wait` if it does not) and returns false so the caller still watches it until the tip
+    /// loop starts a fresh round. False otherwise, as when its push has begun.
     pub(super) fn restart_if_outdated(
         &self,
         handle: &Handle,
         verb: &str,
         request: Option<&Request>,
     ) -> bool {
-        if !RESTARTED_UNDER_NEW_BUILD.contains(&verb) {
+        let is_restarted = RESTARTED_UNDER_NEW_BUILD.contains(&verb);
+        let is_stopped = STOPPED_UNDER_NEW_BUILD.contains(&verb);
+        if !is_restarted && !is_stopped {
             return false;
         }
         let Some(processes) = &self.processes else {
@@ -95,6 +107,10 @@ impl Server {
         else {
             return false;
         };
+        if is_stopped {
+            self.stop_outdated_tip_round(processes, &shared, handle, verb, &old, own);
+            return false;
+        }
         if !landing_code_changed(processes.git.as_deref(), &old, own) {
             eprintln!(
                 "ignite: `ignite {verb}` ({handle}) goes on under ignite {}: ignite {} changed \
@@ -147,6 +163,52 @@ impl Server {
         }
         true
     }
+
+    /// Asks an adopted `tip-round` running under `old` to stop when `own` changed tip code, and
+    /// ends its process group after `stop_wait` if it does not stop on its own.
+    fn stop_outdated_tip_round(
+        &self,
+        processes: &super::process::Processes,
+        shared: &Shared,
+        handle: &Handle,
+        verb: &str,
+        old: &str,
+        own: &str,
+    ) {
+        if !tip_code_changed(processes.git.as_deref(), old, own) {
+            eprintln!(
+                "ignite: `ignite {verb}` ({handle}) goes on under ignite {}: ignite {} changed \
+                 none of the tip code",
+                short(old),
+                short(own)
+            );
+            return;
+        }
+        let Some(activity) = self.steps.by_handle(handle) else {
+            return;
+        };
+        if let Err(reason) = activity.request_stop() {
+            eprintln!(
+                "ignite: `ignite {verb}` ({handle}) runs under ignite {old} and is left to \
+                 finish: {reason}"
+            );
+            return;
+        }
+        eprintln!(
+            "ignite: stopping `ignite {verb}` ({handle}), which runs under ignite {old}, because \
+             ignite {own} changed the tip code"
+        );
+        let ending = Ending {
+            ender: processes.ender.clone(),
+            wait: processes.stop_wait,
+        };
+        let (shared, waited, name) = (shared.clone(), handle.clone(), verb.to_owned());
+        let _ = std::thread::Builder::new()
+            .name(format!("ignite-stop-outdated-{handle}"))
+            .spawn(move || {
+                wait_and_end_if_stuck(&shared, &waited, &name, &ending);
+            });
+    }
 }
 
 /// How a verb process asked to stop is ended when it does not.
@@ -156,19 +218,9 @@ struct Ending {
     wait: Duration,
 }
 
-/// Waits until the verb process of `handle` has ended, ending it once it has run on for
-/// `ending.wait` after the stop was asked, then runs `verb` again under the same handle with
-/// `request` if it ended `stopped`, as asked, or died without a reply. A landing that finished
-/// on its own first has its reply handed on.
-fn run_again_once_ended(
-    shared: &Shared,
-    host: &Arc<Host>,
-    handle: &Handle,
-    verb: &str,
-    ending: &Ending,
-    rerun: Arc<dyn Verb>,
-    request: Request,
-) {
+/// Waits until `handle`'s verb process ends, ending it once it has run on for `ending.wait`
+/// after the stop was asked. Returns false if the server was dropped while waiting.
+fn wait_and_end_if_stuck(shared: &Shared, handle: &Handle, verb: &str, ending: &Ending) -> bool {
     let asked = Instant::now();
     let mut ender = ending.ender.as_ref();
     while crate::verbproc::alive(&shared.home, handle) {
@@ -190,8 +242,27 @@ fn run_again_once_ended(
         }
         std::thread::sleep(shared.watch);
         if shared.server.upgrade().is_none() {
-            return;
+            return false;
         }
+    }
+    true
+}
+
+/// Waits until the verb process of `handle` has ended, ending it once it has run on for
+/// `ending.wait` after the stop was asked, then runs `verb` again under the same handle with
+/// `request` if it ended `stopped`, as asked, or died without a reply. A landing that finished
+/// on its own first has its reply handed on.
+fn run_again_once_ended(
+    shared: &Shared,
+    host: &Arc<Host>,
+    handle: &Handle,
+    verb: &str,
+    ending: &Ending,
+    rerun: Arc<dyn Verb>,
+    request: Request,
+) {
+    if !wait_and_end_if_stuck(shared, handle, verb, ending) {
+        return;
     }
     let state = shared.row(handle).map(|row| row.state);
     if !matches!(state.as_deref(), Some("stopped" | "running")) {
@@ -220,6 +291,18 @@ fn landing_code_changed(git: Option<&dyn Git>, old: &str, own: &str) -> bool {
     // The landing code is the `land` module, which never lies in the check manifests' directory,
     // so this needs no directory to leave out.
     landing_changes(git, Source::ignite(""), &old, &own).map_or(true, |changes| !changes.is_empty())
+}
+
+/// Whether a tip round started under the build `old` would run other tip code under `own`
+/// (see [`crate::update::scope::affects_tip`]). True whenever that cannot be told.
+fn tip_code_changed(git: Option<&dyn Git>, old: &str, own: &str) -> bool {
+    let (Some(git), Ok(old), Ok(own)) = (git, Commit::new(old), Commit::new(own)) else {
+        return true;
+    };
+    if !git.is_ancestor(&old, &own).unwrap_or(false) {
+        return true;
+    }
+    tip_changes(git, Source::ignite(""), &old, &own).map_or(true, |changes| !changes.is_empty())
 }
 
 /// The first seven characters of a commit, as `ignite status` shows it.

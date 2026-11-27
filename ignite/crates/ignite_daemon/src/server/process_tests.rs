@@ -422,7 +422,7 @@ impl EndVerbProcess for EndsNothing {
     }
 }
 
-const VERBS: [&str; 3] = ["land", "test", "run"];
+const VERBS: [&str; 4] = ["land", "test", "run", "tip-round"];
 
 impl Machine {
     fn new(name: &str, dies: bool) -> Machine {
@@ -491,8 +491,8 @@ impl Machine {
                 name,
                 ran: ran.clone(),
             });
-            // `run` is not run again after a restart; `land` and `test` are.
-            if *name == "run" {
+            // `run` and `tip-round` are not run again after a restart; `land` and `test` are.
+            if matches!(*name, "run" | "tip-round") {
                 registry.register(verb);
             } else {
                 registry.register_resumable(verb);

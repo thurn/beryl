@@ -231,3 +231,71 @@ fn a_landing_that_does_not_stop_when_asked_is_ended_and_runs_again() {
         "the landing ran again in a new verb process, which outlives the next restart"
     );
 }
+
+/// A release that changed none of the tip code leaves an adopted `tip-round` running under its
+/// old build.
+#[test]
+fn a_tip_round_goes_on_under_its_build_when_the_release_changed_no_tip_code() {
+    let machine = Machine::new("outdated-tip-unchanged", false);
+    let git = Arc::new(FakeGit::default());
+    git.set_changed(
+        &Commit::new("87631b5").unwrap(),
+        &Commit::new(NEW_BUILD).unwrap(),
+        &["ignite/crates/ignite_daemon/src/main/loops.rs"],
+    );
+    *lock(&machine.git) = Some(git);
+    let first = machine.daemon_at(Some("87631b5"));
+    machine.switch.set(Some(first.clone()));
+    let tip = handed_off(&first.handle(&request("tip-round", 0)));
+    assert!(until(|| machine.commands.begun() == 1));
+    let second = restart(&machine, first);
+
+    machine.commands.finish_all();
+    assert_eq!(waited(&second, &tip).text, "tip-round: Some(0)");
+    assert_eq!(machine.switch.stops.load(Ordering::SeqCst), 0);
+}
+
+/// A release that changed tip code stops an adopted `tip-round` under an older build, and ends
+/// its process group after `stop_wait` when it does not stop on its own (for example, a round
+/// stuck in a CPU-bound subprocess that an older build spawned), without running it again under
+/// the same handle.
+#[test]
+fn a_tip_round_is_stopped_and_ended_when_the_release_changed_tip_code() {
+    let machine = Machine::new("outdated-tip-changed", false);
+    let git = Arc::new(FakeGit::default());
+    git.set_changed(
+        &Commit::new("87631b5").unwrap(),
+        &Commit::new(NEW_BUILD).unwrap(),
+        &["ignite/crates/ignite_daemon/src/tip/words.rs"],
+    );
+    *lock(&machine.git) = Some(git);
+    let ender = Arc::new(FinishesCommands(
+        machine.commands.clone(),
+        AtomicUsize::new(0),
+    ));
+    *lock(&machine.ender) = (ender.clone(), Duration::from_millis(100));
+    let first = machine.daemon_at(Some("87631b5"));
+    machine.switch.set(Some(first.clone()));
+    let tip = handed_off(&first.handle(&request("tip-round", 0)));
+    assert!(until(|| machine.commands.begun() == 1));
+    let second = restart(&machine, first);
+
+    assert!(until(|| machine.switch.stops.load(Ordering::SeqCst) >= 1));
+    assert!(
+        waited(&second, &tip).text.starts_with("stopped  "),
+        "expected stopped reply"
+    );
+    assert_eq!(
+        ender.1.load(Ordering::SeqCst),
+        1,
+        "the outdated tip-round verb process was ended once"
+    );
+    assert_eq!(
+        (
+            machine.ran_in_process("tip-round"),
+            machine.ran_in_daemon("tip-round")
+        ),
+        (1, 0),
+        "tip-round is not rerun under the same handle; TipLoop starts a fresh round"
+    );
+}

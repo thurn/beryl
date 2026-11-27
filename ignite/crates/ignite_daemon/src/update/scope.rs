@@ -170,6 +170,36 @@ pub fn landing_changes(
         .collect())
 }
 
+/// The daemon's tip-verification code, relative to Ignite's source directory: the `tip` module,
+/// which `ignite tip-round` runs in its verb process.
+const TIP_CODE: &[&str] = &[
+    "crates/ignite_daemon/src/tip.rs",
+    "crates/ignite_daemon/src/tip/",
+];
+
+/// Whether `path`, relative to the repository, is part of the code a tip round runs. A tip round
+/// whose verb process runs an older build than the daemon goes on under that build unless the
+/// release changed such a file (see `server/outdated.rs`).
+pub fn affects_tip(at: Source<'_>, path: &str) -> bool {
+    affects_daemon(at, path)
+        && inside(at.source, path)
+            .is_some_and(|inside| TIP_CODE.iter().any(|code| inside.starts_with(code)))
+}
+
+/// The files changed between `from` and `to` that are part of the code a tip round runs, sorted.
+/// Empty when a tip round started under `from` would run the same tip code under `to`.
+pub fn tip_changes(
+    git: &dyn Git,
+    at: Source<'_>,
+    from: &Commit,
+    to: &Commit,
+) -> Result<Vec<String>> {
+    Ok(daemon_changes(git, at, from, to)?
+        .into_iter()
+        .filter(|path| affects_tip(at, path))
+        .collect())
+}
+
 /// `changes` for a message: the first three, then how many more.
 pub fn summary(changes: &[String]) -> String {
     let shown = changes
