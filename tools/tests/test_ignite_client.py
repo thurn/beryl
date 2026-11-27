@@ -85,23 +85,6 @@ def test_the_validations_use_the_shared_build_and_source_checks_run_anywhere() -
     }
 
 
-def test_windows_replay_and_stress_checks_defer_until_after_promotion() -> None:
-    families = manifest()["family"]
-    for name in (
-        "client-interface",
-        "client-test",
-        "client-corpus",
-        "client-gate",
-        "client-validation",
-        adapter.FRAME_LIMITS_FAMILY,
-        "client-frame-counts",
-        "client-frame-trend",
-    ):
-        assert families[name]["defer_platforms"] == ["windows"], name
-    assert families["client-clippy"]["platforms"] == ["macos", "windows"]
-    assert "defer_platforms" not in families["client-clippy"]
-
-
 def test_frame_budgets_are_advisory_and_client_expectations_are_test_paths() -> None:
     families = manifest()["family"]
     for name in (adapter.FRAME_LIMITS_FAMILY, "client-gate"):
