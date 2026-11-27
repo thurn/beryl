@@ -534,17 +534,10 @@ fn list_static<L: Layout>(
     // long as" and what it affects are read each time. One on its own permanent or
     // the one that is attached to, whose condition reads only what the layers start
     // from, is settled here; any other as its layer applies.
+    let cond = spec.condition.as_ref();
     let target = match spec.affected {
-        Objects::This | Objects::AttachedTo
-            if !spec
-                .condition
-                .as_ref()
-                .is_some_and(static_ability::reads_results) =>
-        {
-            let applies = spec
-                .condition
-                .as_ref()
-                .is_none_or(|condition| apply::holds_from_base(s, slot, condition));
+        Objects::This | Objects::AttachedTo if !cond.is_some_and(static_ability::reads_results) => {
+            let applies = cond.is_none_or(|c| apply::holds_from_base(s, slot, c));
             let target = if spec.affected == Objects::This {
                 Some(i)
             } else {
