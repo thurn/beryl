@@ -31,7 +31,7 @@ from typing import Any
 
 from .. import deps, paths as repo_paths, system
 from .. import mobile_sdk as mobile
-from . import app, paths, phone_build
+from . import app, paths, phone_build, phone_ota
 from .command import Command
 from .phone_build import android_apk as android_apk, ios_app as ios_app
 from .phone_log import (
@@ -167,6 +167,11 @@ def ios_device_arguments(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="let an agent install: the user asked in chat for the app on their phone",
     )
+    parser.add_argument(
+        "--ota",
+        action="store_true",
+        help="serve an install page over Tailscale instead, for a phone off the Mac's Wi-Fi",
+    )
 
 
 def devicectl(*args: str) -> subprocess.CompletedProcess[str]:
@@ -188,6 +193,9 @@ def devicectl(*args: str) -> subprocess.CompletedProcess[str]:
 
 
 def run_ios_device(args: argparse.Namespace) -> int:
+    if args.ota:
+        bundle = ios_app("iphoneos", release=True, sign=True)
+        return phone_ota.serve(bundle, out_dir("ota"))
     install = not (args.no_install or args.no_sign)
     if install and repo_paths.is_agent() and not args.user_asked:
         print(
@@ -738,6 +746,10 @@ COMMANDS: tuple[Command, ...] = (
                 "the user asked for it: install and replay",
             ),
             ("just client ios-device", "a person's run, which needs no flag"),
+            (
+                "just client ios-device --ota",
+                "serve an install page to the iPhone over Tailscale until stopped",
+            ),
         ),
         checked(run_ios_device),
         ios_device_arguments,
