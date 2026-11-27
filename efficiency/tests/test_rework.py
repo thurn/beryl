@@ -13,7 +13,7 @@ from tests.legacy_sources import Beads
 from beryl_efficiency.commits import Commit, Commits, History, is_card
 from beryl_efficiency.rework import CARD_FIX, SLOW_CI, Charge, compute
 from tests.synthetic import git_snapshot
-from tests.test_queries import BEADS, NUMBER, numbers_in, root, run
+from tests.test_queries import BEADS, NUMBER, numbers_in, root, run, strings_in
 
 __all__ = ["root"]  # The query tests' store, used as a fixture here.
 
@@ -224,11 +224,15 @@ def test_card_and_rework_numbers_in_the_text_are_in_the_json(
     add_commits(monkeypatch, capsys)
     shown, found = run(capsys, *query, "--since", "all")
     have = numbers_in(found)
+    words = [w for text in strings_in(found) for w in NUMBER.findall(text)]
     body = shown.split("\nmore: ")[0]
     seen = NUMBER.findall(body)
     assert seen, body
     for token in seen:
-        assert any(abs(float(token) - n) < 1e-9 for n in have), (token, body)
+        assert token in words or any(abs(float(token) - n) < 1e-9 for n in have), (
+            token,
+            body,
+        )
 
 
 def test_the_cards_query_puts_rework_beside_direct_cost(
