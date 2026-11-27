@@ -39,7 +39,9 @@ fn stage_chip(stage: Stage) -> String {
         Stage::Resume => c::chip(
             "Resuming",
             Tone::Blue,
-            Some("Offered ahead of new work to finish and land a saved branch or reverted landing."),
+            Some(
+                "Offered ahead of new work to finish and land a saved branch or reverted landing.",
+            ),
         ),
         Stage::Improvement => c::chip(
             "Improvement",

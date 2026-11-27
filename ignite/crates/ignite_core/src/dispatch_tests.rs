@@ -386,9 +386,19 @@ fn saved_work_goes_before_new_tickets_across_epics_and_improvements() {
         Group::General,
         Group::Epic(id("Elow")),
     ];
-    let ready = [fresh_top_epic.clone(), improvement.clone(), saved_low_epic.clone()];
+    let ready = [
+        fresh_top_epic.clone(),
+        improvement.clone(),
+        saved_low_epic.clone(),
+    ];
     assert_eq!(
-        ticket_of(next_for(&everyone(), &ready, &order, Some(Unit::CoreHours), &[])),
+        ticket_of(next_for(
+            &everyone(),
+            &ready,
+            &order,
+            Some(Unit::CoreHours),
+            &[]
+        )),
         Some("Ts".to_owned())
     );
     // Justiciar and regression tickets still outrank saved work.
