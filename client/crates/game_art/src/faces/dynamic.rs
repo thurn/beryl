@@ -3,8 +3,8 @@
 //! A match's printed faces are built once from its card records. When a text-changing effect
 //! alters a card's rules text or type line (`ObjectView::text` / `type_line`), or an ability on
 //! the stack, or one a script puts there, carries non-printed text (`StackItem::Ability::text`),
-//! these helpers append a matching [`ListedFace`] to the list and bump [`Faces::number`] so the
-//! host prepares it.
+//! these helpers append a matching [`ListedFace`] to the list, which the host notices by its
+//! length and prepares.
 
 use beryl_protocol::protocol::{ObjectView, PlayerView, StackItem};
 use beryl_protocol::script::Act;
@@ -161,21 +161,18 @@ impl FaceList {
 }
 
 impl Faces {
-    /// Registers any text-changed card face or custom-text ability plate in `view`. When new
-    /// faces are added, resets layer state and increments [`Self::number`] so the host
-    /// prepares the updated face array.
+    /// Registers any text-changed card face or custom-text ability plate in `view`. New faces
+    /// are appended with no layer yet, and every face listed before keeps its layers: the host
+    /// sees the longer list, prepares only the new faces and grows its arrays around the faces
+    /// already uploaded. [`Self::number`] stays the same, because a new number would tell the
+    /// host to make its arrays again from placeholders, and every card on the table would show
+    /// its placeholder until its face was prepared again.
     pub fn sync_view(&mut self, view: &PlayerView) {
         if self.list.sync_view(view) {
             let count = self.list.faces.len();
-            self.board.clear();
             self.board.resize(count, None);
-            self.full.clear();
             self.full.resize(count, None);
-            self.asked.clear();
             self.asked.resize(count, false);
-            self.wanted.clear();
-            self.shown_full.clear();
-            self.number += 1;
         }
     }
 }

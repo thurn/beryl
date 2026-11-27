@@ -551,7 +551,8 @@ impl Faces {
     }
 
     /// How many lists came before this one. A host makes its face arrays again whenever it
-    /// changes, even for a list equal to the last.
+    /// changes, even for a list equal to the last. Faces added during play (`sync_view`) keep
+    /// the number: the list only grows, and the host prepares the faces past those it has.
     #[must_use]
     pub fn number(&self) -> u64 {
         self.number

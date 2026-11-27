@@ -15,7 +15,7 @@ use beryl_protocol::card_records::CardRecords;
 use beryl_render::{Limits, Renderer};
 use game_table::faces::CARD_BACK;
 use kit_ui::element::Action;
-use kit_ui::input::FaceId;
+use kit_ui::input::{FaceId, FaceSize};
 
 /// An address where nothing listens, so that a scan the empty cache lacks fails at once.
 const NOWHERE: Origins<'static> = Origins {
@@ -187,4 +187,70 @@ fn held_faces_are_uploaded_one_a_frame_before_it() {
         beryl_assets::placeholders_drawn_on_this_thread(),
         placeholders
     );
+}
+
+/// Lonely Sandbar's cycling ability on the stack, at a seated game's 30th turn, from the
+/// report "All of the card textures blinked out of existence for a second and were replaced
+/// with the diagonal lines placeholder art": the view before it and the view with it, whose
+/// text "Cycling {U}" no card prints, so the client adds a plate face for it to its list.
+const CYCLING_PLATE: &str = include_str!("../fixtures/cycling-plate.json");
+
+/// A face added to the list during play (here a plate for an ability's text) keeps every face
+/// already uploaded in its layer. The client once numbered the grown list as a new one, the
+/// host made its arrays again from placeholders, and every card on the table showed its
+/// placeholder until all its faces were prepared again, which took over a second on a loaded
+/// machine.
+#[test]
+fn a_face_added_during_play_keeps_the_faces_uploaded() {
+    let mut host = Host::new("added");
+    let messages: Vec<beryl_protocol::ipc::FixtureMessage> = serde_json::from_value(
+        serde_json::from_str::<serde_json::Value>(CYCLING_PLATE).unwrap()["messages"].take(),
+    )
+    .expect("the report's messages");
+    let records =
+        beryl_card_records::fixture_message(&messages, beryl_card_records::TokenMakers::NONE);
+    let beryl_protocol::ipc::FixtureMessage::Response { value, .. } = records else {
+        panic!("card records are a response");
+    };
+    let records: CardRecords = serde_json::from_value(value).expect("card records");
+    let views = app_client::driver::Recording(messages)
+        .views()
+        .expect("the report's views");
+    let [before, with_plate] = <[_; 2]>::try_from(views).expect("two views");
+    host.client.handle(Input::Cards(Box::new(records)));
+    host.client.handle(Input::Update(Box::new(before)));
+    let uploaded = |host: &Host, count: usize| {
+        (0..count).all(|at| {
+            let face = FaceId(at as u16);
+            host.board_layer(face).is_some()
+                && host.renderer.layer_uploaded(FaceSize::Board, face.0)
+        })
+    };
+    let count = host.client.faces().faces().len();
+    loop {
+        host.frame();
+        if uploaded(&host, count) {
+            break;
+        }
+        host.wait_for_delivery();
+        host.client.handle(Input::Nudge);
+    }
+    let generation = host.client.face_generation();
+    host.client.handle(Input::Update(Box::new(with_plate)));
+    let grown = host.client.faces().faces().len();
+    assert!(grown > count, "the plate adds a face to the {count} listed");
+    assert_eq!(host.client.face_generation(), generation);
+    loop {
+        host.frame();
+        assert!(
+            uploaded(&host, count),
+            "a face uploaded before the plate was added lost its layer"
+        );
+        if uploaded(&host, grown) {
+            break;
+        }
+        host.wait_for_delivery();
+        host.client.handle(Input::Nudge);
+    }
+    assert_eq!(host.client.last_frame().faceless_cards(), 0);
 }

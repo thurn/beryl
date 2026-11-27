@@ -14,7 +14,9 @@
 //! card never changes its picture in the middle of a flight.
 //!
 //! [`Preparer::placeholders`] asks a worker for the placeholders the board-size array shows
-//! until each face arrives, so that the frame thread only copies them.
+//! until each face arrives, so that the frame thread only copies them. Faces added during play
+//! are queued by [`Preparer::extend_match`], after [`Preparer::more_placeholders`] has drawn
+//! theirs, and the faces prepared before them are kept.
 //!
 //! The thread that calls the `Preparer` only lists faces and sends jobs down a channel; it takes
 //! no lock that a worker takes. Workers share the job queue's lock among themselves.
@@ -121,9 +123,11 @@ struct Late {
 enum Work {
     /// Prepare one face.
     Face(Job),
-    /// Draw the placeholders of faces with these names and send them on `answer`.
+    /// Draw the placeholders of the faces with the names `names[from..]` and send them on
+    /// `answer`.
     Placeholders {
         names: Vec<String>,
+        from: usize,
         format: Format,
         answer: Sender<Placeholders>,
     },
@@ -271,10 +275,60 @@ impl Preparer {
         let (answer, received) = mpsc::channel();
         self.send_work(Work::Placeholders {
             names,
+            from: 0,
             format,
             answer,
         });
         received
+    }
+
+    /// Asks a worker for the placeholders of faces added to the match being prepared: those
+    /// named `names[from..]`, where `names` names every face of the longer list. Unlike
+    /// `placeholders`, the faces still queued for the match stay queued, because the arrays
+    /// that hold its earlier faces are kept.
+    pub fn more_placeholders(
+        &mut self,
+        names: Vec<String>,
+        from: usize,
+        format: Format,
+    ) -> Receiver<Placeholders> {
+        let (answer, received) = mpsc::channel();
+        self.send_work(Work::Placeholders {
+            names,
+            from,
+            format,
+            answer,
+        });
+        received
+    }
+
+    /// Queues at board size the faces of `faces` past those the match being prepared has, as
+    /// `prepare_match` queued the first ones. `faces` lists every face of the match, in the
+    /// same order as before with the new faces at the end. The faces already prepared or still
+    /// queued, and the full-size layers, are kept. Does nothing when no match is being prepared.
+    pub fn extend_match(&mut self, faces: MatchFaces) {
+        let Some(old) = self.game.as_ref() else {
+            return;
+        };
+        let from = old.faces.faces.len();
+        if faces.faces.len() <= from {
+            return;
+        }
+        let game = Arc::new(Match {
+            number: old.number,
+            faces,
+            format: old.format,
+            results: old.results.clone(),
+        });
+        for at in from..game.faces.faces.len() {
+            self.send(Job {
+                game: Arc::clone(&game),
+                face: FaceId(at as u16),
+                size: FaceSize::Board,
+                slot: None,
+            });
+        }
+        self.game = Some(game);
     }
 
     /// The faces of the match being prepared, which give each [`FaceId`] its picture.
@@ -387,11 +441,15 @@ fn work(shared: &Shared, late: &Sender<Late>) {
             Work::Face(job) => job,
             Work::Placeholders {
                 names,
+                from,
                 format,
                 answer,
             } => {
                 // The receiver may have been dropped by a newer list; nobody else wants them.
-                if answer.send(Placeholders::draw(&names, format)).is_ok() {
+                if answer
+                    .send(Placeholders::draw_from(&names, from, format))
+                    .is_ok()
+                {
                     (shared.wake)();
                 }
                 continue;

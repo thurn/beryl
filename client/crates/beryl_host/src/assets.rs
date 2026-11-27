@@ -95,6 +95,15 @@ pub fn match_faces(list: &FaceList) -> MatchFaces {
     MatchFaces { faces }
 }
 
+/// The name each face of `list` is looked up by, in [`FaceId`] order: what the workers draw
+/// its placeholder from.
+fn face_names(list: &FaceList) -> Vec<String> {
+    list.faces()
+        .iter()
+        .map(|face| face.names.first().cloned().unwrap_or_default())
+        .collect()
+}
+
 /// The app's identifier, which names its cache directory.
 const APP: &str = "ca.thurn.beryl";
 
@@ -157,6 +166,13 @@ pub struct Assets {
     /// The placeholders asked of the workers for a newer list than `active`'s, and that list's
     /// generation. The arrays of `active` stay in use until they arrive.
     placeholders: Option<((bool, u64), Receiver<Placeholders>)>,
+    /// How many faces of `active`'s list the arrays and the workers hold, and their format.
+    /// The list grows during play (a plate for an ability whose text no card prints, or a card
+    /// whose text an effect changed), and the faces past this count are added to both.
+    listed: (usize, Format),
+    /// The placeholders asked of the workers for the faces of `active`'s list from `listed`
+    /// on, and the length of the list they were asked for.
+    added: Option<(usize, Receiver<Placeholders>)>,
     /// Owners of uploaded full-size layers. An assignment alone doesn't mean it was uploaded.
     full: [Option<FaceId>; FULL_LAYERS],
     /// The wake before a nudge or another input sets the client's wake to `Now`.
@@ -195,6 +211,8 @@ impl Assets {
             results: None,
             active: None,
             placeholders: None,
+            listed: (0, Format::Rgba8),
+            added: None,
             full: [None; FULL_LAYERS],
             after_frame: Wake::Never,
             wake,
@@ -225,7 +243,11 @@ impl Assets {
         self.sync_light(renderer, client.data());
         self.request_text(client);
         self.prepare_faces(client, renderer, None);
-        if self.active == Some(client.face_generation()) {
+        // A face the workers do not know yet would be dropped, so the client's requests wait
+        // until faces added to the list have reached them.
+        if self.active == Some(client.face_generation())
+            && client.faces().faces().len() <= self.listed.0
+        {
             self.faces.keep(client.shown_full_faces());
             let wanted = client.wanted_faces().collect::<Vec<_>>();
             for face in wanted {
@@ -400,8 +422,12 @@ impl Assets {
     ) {
         let active = client.face_generation();
         let list = client.faces();
+        if self.active == Some(active) {
+            self.prepare_added(client, renderer, wait);
+            return;
+        }
         // A match's list is empty until its card records arrive.
-        if self.active == Some(active) || list.faces().is_empty() {
+        if list.faces().is_empty() {
             return;
         }
         if self
@@ -410,12 +436,7 @@ impl Assets {
             .is_none_or(|(generation, _)| *generation != active)
         {
             let format = Format::choose(&renderer.formats());
-            let names = list
-                .faces()
-                .iter()
-                .map(|face| face.names.first().cloned().unwrap_or_default())
-                .collect();
-            let answer = self.faces.placeholders(names, format);
+            let answer = self.faces.placeholders(face_names(list), format);
             self.placeholders = Some((active, answer));
         }
         let Some((_, answer)) = &self.placeholders else {
@@ -429,6 +450,8 @@ impl Assets {
             return;
         };
         self.placeholders = None;
+        self.listed = (placeholders.layers.len(), placeholders.format);
+        self.added = None;
         renderer.set_faces(&placeholders);
         self.results = Some(
             self.faces
@@ -437,6 +460,39 @@ impl Assets {
         self.full.fill(None);
         client.face_arrays_made();
         self.active = Some(active);
+    }
+
+    /// Adds the faces that `active`'s list gained during play to the arrays and the workers,
+    /// keeping every face already uploaded. As in `prepare_faces`, the workers draw the new
+    /// faces' placeholders first, and a picture passes `wait`, how long to block for them.
+    fn prepare_added(&mut self, client: &Client, renderer: &mut Renderer, wait: Option<Duration>) {
+        let list = client.faces();
+        let count = list.faces().len();
+        let (from, format) = self.listed;
+        if count <= from {
+            return;
+        }
+        if self.added.as_ref().is_none_or(|(asked, _)| *asked != count) {
+            let answer = self.faces.more_placeholders(face_names(list), from, format);
+            self.added = Some((count, answer));
+        }
+        let Some((asked, answer)) = &self.added else {
+            return;
+        };
+        let delivered = match wait {
+            Some(wait) => answer.recv_timeout(wait).ok(),
+            None => answer.try_recv().ok(),
+        };
+        let Some(placeholders) = delivered else {
+            return;
+        };
+        let asked = *asked;
+        self.added = None;
+        renderer.extend_faces(from as u16, &placeholders);
+        let mut faces = match_faces(list);
+        faces.faces.truncate(asked);
+        self.faces.extend_match(faces);
+        self.listed.0 = asked;
     }
 
     fn request_full(&mut self, client: &mut Client, face: FaceId) -> bool {

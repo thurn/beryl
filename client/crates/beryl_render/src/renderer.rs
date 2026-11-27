@@ -309,6 +309,40 @@ impl Renderer {
         self.rebind();
     }
 
+    /// Grows the board-size array for faces added to the match during play, such as a plate
+    /// for an ability whose text no card prints: layers `0..from` keep what they hold,
+    /// uploaded faces included, and the `placeholders` of the new faces (which a worker drew,
+    /// `Preparer::more_placeholders`) fill the layers from `from` on. The full-size array is
+    /// kept. Making the arrays again with `set_faces` would show every card's placeholder
+    /// until its face was uploaded again.
+    pub fn extend_faces(&mut self, from: u16, placeholders: &Placeholders) {
+        let board = &self.faces[face_array(FaceSize::Board)];
+        if placeholders.format != board.format || placeholders.layers.is_empty() {
+            return;
+        }
+        let limit = self.device.limits().max_texture_array_layers;
+        let wanted = u32::from(from) + placeholders.layers.len() as u32;
+        if wanted > limit {
+            eprintln!(
+                "beryl_render: the match has {wanted} faces but the device allows {limit} layers; \
+                 the rest draw from layer 0"
+            );
+        }
+        let layers = wanted.min(limit);
+        if layers <= u32::from(from) {
+            return;
+        }
+        let grown = board.grown(
+            &self.device,
+            &self.queue,
+            u32::from(from),
+            layers,
+            &placeholders.layers,
+        );
+        self.faces[face_array(FaceSize::Board)] = grown;
+        self.rebind();
+    }
+
     fn rebind(&mut self) {
         let (device, layout, sampler) = (&self.device, &self.layout, &self.sampler);
         let (faces, atlas) = (&self.faces, &self.atlas);

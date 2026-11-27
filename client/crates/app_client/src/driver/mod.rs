@@ -532,11 +532,19 @@ impl Page {
 
     fn give(&mut self, input: Input) {
         let before = self.client.face_generation();
+        let listed = self.client.faces().faces().len();
         self.inputs.push(input.clone());
         self.given_at.push(self.now);
         self.client.handle(input);
-        if self.stub_atlas && self.client.face_generation() != before {
-            let ready: Vec<AssetReady> = self.client.faces().all_ready().collect();
+        // A new list has no layers. A list that grew during play keeps the layers of the faces
+        // it held, so only the faces added need stub layers.
+        let landed = if self.client.face_generation() == before {
+            listed
+        } else {
+            0
+        };
+        if self.stub_atlas && self.client.faces().faces().len() > landed {
+            let ready: Vec<AssetReady> = self.client.faces().all_ready().skip(landed).collect();
             for ready in ready {
                 self.inputs
                     .push(Input::Device(DeviceInput::Assets(ready.clone())));

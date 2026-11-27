@@ -53,6 +53,8 @@ beryl_card_records = { path = "../../../engine/crates/beryl_card_records" }
 image = { version = "0.25.10", default-features = false, features = ["jpeg"] }
 # Builds synthetic game views for offscreen host tests and supplies empty card records.
 beryl_protocol = { workspace = true, features = ["testing"] }
+# Reads a bug report's recorded views (tests/fixtures/) for the face upload tests.
+serde_json.workspace = true
 
 # The desktop window and its events, in place of hand-written platform windowing. The phones
 # have native Swift and Kotlin hosts instead (decision C7), which call `native_surface::NativeSurface`.

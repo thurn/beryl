@@ -43,9 +43,17 @@ impl Placeholders {
     /// drawn) in `format`, with at least the back's layer.
     #[must_use]
     pub fn draw<S: AsRef<str>>(names: &[S], format: Format) -> Self {
+        Self::draw_from(names, 0, format)
+    }
+
+    /// Draws the placeholders of the faces named `names[from..]`, for faces added to a match
+    /// whose earlier faces already have layers: layer `i` of the result is face `from + i`'s.
+    /// With `from` 0 this is [`Self::draw`].
+    #[must_use]
+    pub fn draw_from<S: AsRef<str>>(names: &[S], from: usize, format: Format) -> Self {
         let size = dimensions(FaceSize::Board);
         let count = names.len().max(1);
-        let layers = (0..count)
+        let layers = (from..count)
             .map(|index| {
                 let pixels = if index == 0 {
                     back(size)

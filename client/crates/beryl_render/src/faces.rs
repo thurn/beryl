@@ -92,7 +92,10 @@ impl FaceArray {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: texture_format(format),
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            // `COPY_SRC` so that `grown` can copy the layers into a larger array.
+            usage: wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
         });
         let view = texture.create_view(&wgpu::TextureViewDescriptor {
@@ -182,6 +185,57 @@ impl FaceArray {
             );
         }
         true
+    }
+
+    /// A copy of this array with `layers` layers: its first `kept` layers are copied on the
+    /// GPU, each with its filled mark, and the layers from `kept` on hold `placeholders`, in
+    /// order, unfilled. Faces added during play grow the board-size array this way, so the faces
+    /// already uploaded are never replaced by placeholders and never uploaded again.
+    pub(crate) fn grown(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        kept: u32,
+        layers: u32,
+        placeholders: &[Layer],
+    ) -> Self {
+        let mut grown = Self::new(device, self.format, self.size, layers);
+        let kept = kept.min(self.layers()).min(grown.layers());
+        if kept > 0 {
+            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("grow faces"),
+            });
+            for level in 0..self.levels {
+                let shape = Level::of(self.format, self.size, level);
+                let at = |texture| wgpu::TexelCopyTextureInfo {
+                    texture,
+                    mip_level: level,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                };
+                encoder.copy_texture_to_texture(
+                    at(&self.texture),
+                    at(&grown.texture),
+                    wgpu::Extent3d {
+                        width: shape.width,
+                        height: shape.height,
+                        depth_or_array_layers: kept,
+                    },
+                );
+            }
+            queue.submit([encoder.finish()]);
+        }
+        let kept = kept as usize;
+        grown.filled[..kept].copy_from_slice(&self.filled[..kept]);
+        for (index, layer) in (kept..grown.filled.len()).zip(placeholders) {
+            grown.placeholder(queue, index as u16, layer);
+        }
+        grown
+    }
+
+    /// How many layers the array has.
+    pub(crate) fn layers(&self) -> u32 {
+        self.texture.depth_or_array_layers()
     }
 
     /// Copies the placeholder `layer` into layer `index`, which it does not mark as filled.
