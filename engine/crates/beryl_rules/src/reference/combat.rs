@@ -3,8 +3,12 @@
 //!
 //! For boards of at most six creatures a side, enumerates every complete declaration from first
 //! principles, keeps the legal ones that obey the most requirements, and checks that the picks
-//! offered by `combat::attack_decision` and `combat::block_decision` match them. Shares no code
-//! with `combat::requirements`.
+//! offered by `combat::attack_decision` and `combat::block_decision` match them. It shares no
+//! code with `combat::requirements`, which finds the most requirements by a pruned search. It
+//! does read the same inputs as that search: the rules about each creature and player
+//! (`combat_rules_on`, `combat_rules_for`), whether one creature can block another
+//! (`combat::can_block`, `rule_change::cant_block`), and the cost to attack (`attack_cost`). A
+//! mistake in one of those readers is not caught here; `tests/rules.rs` tests them directly.
 //!
 //! [CR 508.1c]: https://yawgatog.com/resources/magic-rules/#R5081c
 //! [CR 508.1d]: https://yawgatog.com/resources/magic-rules/#R5081d

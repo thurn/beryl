@@ -259,6 +259,52 @@ fn next_rng(rng: &mut u64) -> u64 {
 
 static CARDS: CardTable = CardTable::new(POOL);
 
+/// Puts one to four random creatures on each side of `g`, and an Arbiter on one board in
+/// eight, drawing from `rng`.
+fn put_seeded_board(g: &mut Game, rng: &mut u64) {
+    let active = g.attacker;
+    let defender = g.defender();
+    let n_atk = 1 + (next_rng(rng) % 4) as usize;
+    let n_def = 1 + (next_rng(rng) % 4) as usize;
+
+    let mut atk_counts = [0u8; 16];
+    for _ in 0..n_atk {
+        let mut idx = (next_rng(rng) as usize) % CREATURES.len();
+        while atk_counts[idx] >= 3 {
+            idx = (idx + 1) % CREATURES.len();
+        }
+        atk_counts[idx] += 1;
+        g.put(active, CREATURES[idx]);
+    }
+    let mut guards = 0usize;
+    let mut def_counts = [0u8; 16];
+    for _ in 0..n_def {
+        let mut idx = (next_rng(rng) as usize) % CREATURES.len();
+        // Keep at most 2 `Guard`s so brute-force enumeration stays fast.
+        if CREATURES[idx] == "Guard" {
+            if guards >= 2 {
+                idx = 0;
+            } else {
+                guards += 1;
+            }
+        }
+        while def_counts[idx] >= 3 {
+            idx = (idx + 1) % CREATURES.len();
+        }
+        def_counts[idx] += 1;
+        g.put(defender, CREATURES[idx]);
+    }
+    // Each Arbiter joins one board in eight, and no board has two.
+    let arbiters = [
+        (active, "ArbiterAtk"),
+        (defender, "ArbiterBlk1"),
+        (defender, "ArbiterBlk2"),
+    ];
+    if let Some(&(seat, name)) = arbiters.get((next_rng(rng) % 8) as usize) {
+        g.put(seat, name);
+    }
+}
+
 #[test]
 fn requirements_match_enumerating_reference_on_300_seeded_boards() {
     let mut deck: Vec<(u8, &str)> = CREATURES.iter().map(|&name| (3, name)).collect();
@@ -272,54 +318,13 @@ fn requirements_match_enumerating_reference_on_300_seeded_boards() {
     )
     .expect("requirements test table");
 
+    // How many attack and block declarations the reference checked: a board that never
+    // reaches a declaration checks nothing, so the counts are asserted below.
+    let (mut attacks, mut blocks) = (0u32, 0u32);
     for seed in 0..300u64 {
         let mut rng = seed.wrapping_mul(0x9E37_79B9_7F4A_7C15).wrapping_add(1);
         let mut g = Game::with_table(t.clone(), seed);
-        let active = g.attacker;
-        let defender = g.defender();
-
-        let n_atk = 1 + (next_rng(&mut rng) % 4) as usize;
-        let n_def = 1 + (next_rng(&mut rng) % 4) as usize;
-
-        let mut atk_counts = [0u8; 16];
-        for _ in 0..n_atk {
-            let mut idx = (next_rng(&mut rng) as usize) % CREATURES.len();
-            while atk_counts[idx] >= 3 {
-                idx = (idx + 1) % CREATURES.len();
-            }
-            atk_counts[idx] += 1;
-            g.put(active, CREATURES[idx]);
-        }
-        let mut guards = 0usize;
-        let mut def_counts = [0u8; 16];
-        for _ in 0..n_def {
-            let mut idx = (next_rng(&mut rng) as usize) % CREATURES.len();
-            // Keep at most 2 `Guard`s so brute-force enumeration stays fast.
-            if CREATURES[idx] == "Guard" {
-                if guards >= 2 {
-                    idx = 0;
-                } else {
-                    guards += 1;
-                }
-            }
-            while def_counts[idx] >= 3 {
-                idx = (idx + 1) % CREATURES.len();
-            }
-            def_counts[idx] += 1;
-            g.put(defender, CREATURES[idx]);
-        }
-        match next_rng(&mut rng) % 8 {
-            0 => {
-                g.put(active, "ArbiterAtk");
-            }
-            1 => {
-                g.put(defender, "ArbiterBlk1");
-            }
-            2 => {
-                g.put(defender, "ArbiterBlk2");
-            }
-            _ => {}
-        }
+        put_seeded_board(&mut g, &mut rng);
 
         // Advance to DeclareAttackers.
         loop {
@@ -329,6 +334,7 @@ fn requirements_match_enumerating_reference_on_300_seeded_boards() {
                 }
                 Step::Decide(d) if d.kind == DecisionKind::Attacker => {
                     verify_all_paths(&g.s, &g.t);
+                    attacks += 1;
                     break;
                 }
                 Step::Decide(_) | Step::Over(_) => break,
@@ -362,12 +368,17 @@ fn requirements_match_enumerating_reference_on_300_seeded_boards() {
                 }
                 Step::Decide(d) if d.kind == DecisionKind::Blocker => {
                     verify_all_paths(&g.s, &g.t);
+                    blocks += 1;
                     break;
                 }
                 Step::Decide(_) | Step::Over(_) => break,
             }
         }
     }
+    assert!(
+        attacks >= 250 && blocks >= 200,
+        "{attacks} attacks, {blocks} blocks"
+    );
 }
 
 #[test]

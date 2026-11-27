@@ -23,56 +23,12 @@ use crate::engine::collapse;
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
-use crate::state::{Pending, RuleKind, State};
+use crate::state::{RuleKind, State};
 use crate::table::{Capability, GameTable};
 use beryl_card::Governed;
 
 mod blocks;
 use blocks::{best_block, can_finish_block};
-
-/// The most requirements any legal completion of the current combat declaration can obey
-/// ([CR 508.1d], [CR 509.1c]). Returns `0` if no legal completion exists.
-///
-/// [CR 508.1d]: https://yawgatog.com/resources/magic-rules/#R5081d
-/// [CR 509.1c]: https://yawgatog.com/resources/magic-rules/#R5091c
-#[cold]
-#[inline(never)]
-#[allow(dead_code, reason = "part of the requirements solver interface")]
-pub(crate) fn best<L: Layout>(s: &State<L>, t: &GameTable) -> u8 {
-    if let Pending::DeclareAttackers { .. } = *s.pending() {
-        let costs = AttackCosts::of(s, t).ok().flatten();
-        best_attack(s, t, None, costs.as_ref())
-            .ok()
-            .flatten()
-            .unwrap_or(0)
-    } else if let Pending::DeclareBlockers { blocker } = *s.pending() {
-        best_block(s, t, blocker, None, 0).unwrap_or(0)
-    } else {
-        0
-    }
-}
-
-/// Whether a legal completion of the current combat declaration exists that obeys at least
-/// `goal` requirements ([CR 508.1d], [CR 509.1c]).
-///
-/// [CR 508.1d]: https://yawgatog.com/resources/magic-rules/#R5081d
-/// [CR 509.1c]: https://yawgatog.com/resources/magic-rules/#R5091c
-#[cold]
-#[inline(never)]
-#[allow(dead_code, reason = "part of the requirements solver interface")]
-pub(crate) fn completes<L: Layout>(s: &State<L>, t: &GameTable, goal: u8) -> bool {
-    if let Pending::DeclareAttackers { .. } = *s.pending() {
-        let costs = AttackCosts::of(s, t).ok().flatten();
-        best_attack(s, t, None, costs.as_ref())
-            .ok()
-            .flatten()
-            .is_some_and(|obeyed| obeyed >= goal)
-    } else if let Pending::DeclareBlockers { blocker } = *s.pending() {
-        best_block(s, t, blocker, None, goal).is_some_and(|obeyed| obeyed >= goal)
-    } else {
-        false
-    }
-}
 
 /// Populates the legal attacker picks (including `Opt::Done` and banding options) when
 /// [`Capability::CombatRequirements`] is set ([CR 508.1c], [CR 508.1d]).
