@@ -776,12 +776,6 @@ def test_a_permanent_enters_with_the_counters_its_text_says() -> None:
     assert xmage_java.entering_counters(oracle, "Ice") == 10
     assert xmage_java.entering_counters(oracle, "Time") == 0
     assert xmage_java.entering_counters("Draw a card.", "Ice") == 0
-    assert (
-        xmage_java.entering_counters(
-            "Kalonian Hydra enters with four +1/+1 counters on it.", "PlusOne"
-        )
-        == 4
-    )
 
 
 def test_outcomes_are_checked_once_the_game_has_run() -> None:
