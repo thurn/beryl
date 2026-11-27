@@ -206,16 +206,16 @@ impl<L: Layout> Funds<L> {
     }
 
     /// Whether the player can pay `cost` for what `paying` is for, with none of `exclude`,
-    /// tapping any of `objects` rather than paying one mana each (convoke, CR 702.51a;
-    /// improvise, CR 702.126a). `kinds` gives the kinds of mana an object may pay that way, a
+    /// tapping any of `objects` rather than paying one mana each (convoke, see CR 702.51a;
+    /// improvise, see CR 702.126a). `kinds` gives the kinds of mana an object may pay that way, a
     /// bit per [`crate::card::ManaColor`]: a creature's colors for convoke, none (generic
     /// mana only) for a colorless creature or for improvise's artifacts. No object pays a {C}
     /// symbol, since none of them is colorless mana.
     ///
     /// An object that is no mana source is one more unit of its kinds. One that is a plain
     /// source of one mana is one unit of its mana's kinds or its own, since it either taps
-    /// for mana or pays in its place, never both ([CR 118.3]: "a permanent that's already
-    /// tapped can't be tapped to pay a cost"). Any other source, one that makes more than one
+    /// for mana or pays in its place, never both (see [CR 118.3]: "a permanent that's
+    /// already tapped can't be tapped to pay a cost"). Any other source, one that makes more than one
     /// mana, may sacrifice itself for a different amount, or makes restricted mana, is tried
     /// both ways. Past [`BOTH_WAYS`] of those, the rest count as mana sources only, so that
     /// the answer may say no to a cost a payment could make, never yes to one it cannot.
