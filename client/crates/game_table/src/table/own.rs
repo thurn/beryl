@@ -4,7 +4,7 @@
 //! draws the card from says so, and changes as the step that carries a new record begins.
 //!
 //! - Summoning sickness: a cyan crescent on a dark badge, like the web's `.card-sick-moon`.
-//!   The badge sits over the art to leave the card's text and stats visible.
+//!   The badge sits over the rules text box, clear of the art, and only on the battlefield.
 //! - A token: a coin at the bottom left, where the web's `.card-counters` row puts its label.
 //! - A permanent its owner does not control gets no mark. MTG Arena draws none: a Coveted Jewel
 //!   the player has taken shows nothing when tapped and only the pale "playable" outline the
@@ -118,7 +118,7 @@ impl PartialEq for Fights {
 
 /// Writes the marks of `record`, the permanent in `slot` drawn as `look`, at `now`.
 pub(super) fn write(
-    (slot, record): (usize, &ObjectView),
+    (slot, record, on_battlefield): (usize, &ObjectView, bool),
     (look, own): (&Look, &Own),
     fights: &Fights,
     (now, band): (u64, PaintBand),
@@ -131,7 +131,9 @@ pub(super) fn write(
     }
     let card = builder.card();
     let mut marks = Marks::on(look, own, band, builder);
-    if record.summoning_sick {
+    // The badge belongs to a permanent in play. A creature spell still on the stack, or leaving
+    // it as it resolves, is not yet a permanent the player can attack with.
+    if record.summoning_sick && on_battlefield {
         marks.moon(own.moon.at * card, own.moon.size * card.x);
     }
     if record.token {

@@ -3,7 +3,7 @@
   "fade_ms": 40,
   "moon": {
     "size": 0.289,
-    "at": [0, 0.08]
+    "at": [0, -0.275]
   },
   "moon_badge": {
     "border": 0.0588,

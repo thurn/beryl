@@ -97,7 +97,7 @@ fn moon_backdrops(frame: &Frame) -> impl Iterator<Item = (usize, &Draw)> {
 }
 
 #[test]
-fn the_sickness_badge_follows_the_card_and_leaves_its_text_clear() {
+fn the_sickness_badge_follows_the_card_over_its_text_box() {
     for (side, tapped) in [(Side::You, false), (Side::Opponent, true)] {
         let mut client = client();
         let sick = show(
@@ -129,7 +129,7 @@ fn the_sickness_badge_follows_the_card_and_leaves_its_text_clear() {
         let width_share = diameter / card_size.width;
         assert!((0.28..0.30).contains(&width_share), "{width_share}");
         let from_top = 0.5 - center.y / card_size.height;
-        assert!((0.40..0.44).contains(&from_top), "{from_top}");
+        assert!((0.76..0.80).contains(&from_top), "{from_top}");
         assert!(center.x.abs() < 0.01, "centered on the card: {center}");
         assert!(backdrop_on_card.matrix3.x_axis.y.abs() < 0.01);
         let moon_offset = moon_on_card.translation - center;
@@ -144,6 +144,18 @@ fn the_sickness_badge_follows_the_card_and_leaves_its_text_clear() {
         assert!(marks(&well, sprites::MOON).is_empty());
         assert_eq!(moon_backdrops(&well).count(), 0);
     }
+}
+
+#[test]
+fn a_creature_spell_on_the_stack_has_no_sickness_badge() {
+    let mut client = client();
+    let mut view = ViewBuilder::new();
+    let card = view.card(ZoneName::Stack, Side::You, "Serra Angel");
+    card.types = vec![CardType::Creature];
+    card.summoning_sick = true;
+    let frame = show(&mut client, &view, 0);
+    assert!(marks(&frame, sprites::MOON).is_empty());
+    assert_eq!(moon_backdrops(&frame).count(), 0);
 }
 
 #[test]

@@ -660,7 +660,17 @@ impl Table {
         let band = builder.node_band(at);
         if shown.zone == ZoneName::Battlefield {
             own::write(
-                (slot, shown),
+                (
+                    slot,
+                    shown,
+                    matches!(
+                        object.place,
+                        Place::Card {
+                            zone: ZoneName::Battlefield,
+                            ..
+                        }
+                    ),
+                ),
                 (&look, &self.data.own),
                 &self.fights,
                 (dress.now, band),
