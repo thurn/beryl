@@ -146,9 +146,9 @@ fn each_step_and_each_agent_decision_has_a_view_and_each_event_one_view() {
             // another cleanup step begins in the same turn with its own `StepBegins` event.
             let cleanup_again = view.turn.step == TurnStep::Cleanup
                 && events.iter().any(|e| matches!(e, Event::StepBegins { .. }));
-            let moved =
-                (before.turn.number, before.turn.step) != (view.turn.number, view.turn.step)
-                    || cleanup_again;
+            let moved = (before.turn.number, before.turn.step)
+                != (view.turn.number, view.turn.step)
+                || cleanup_again;
             if matches!(view.status, Status::Over { .. }) {
                 continue;
             }
