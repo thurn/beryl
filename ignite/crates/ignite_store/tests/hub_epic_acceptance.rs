@@ -99,3 +99,82 @@ fn an_epic_without_an_acceptance_closes_with_its_last_child() {
     assert_eq!(names(&closed.filed), [format!("{outer}.2")]);
     assert_eq!(hub.show(outer).ticket.status, Status::Open);
 }
+
+#[test]
+fn reopening_a_child_makes_an_open_verify_child_wait_on_it() {
+    let mut hub = Hub::new();
+    let ids = hub.ids(json!([
+        create(
+            "Epic",
+            None,
+            json!({"type": "epic", "acceptance": "Measured."})
+        ),
+        create("Child", Some("$0"), json!({})),
+    ]));
+    let [epic, child] = [&ids[0], &ids[1]];
+
+    let closed = close(&mut hub, child);
+    let verify = format!("{epic}.2");
+    assert_eq!(names(&closed.filed), [verify.as_str()]);
+    assert_eq!(
+        hub.list(json!({"ready": true, "ancestor": epic})),
+        [verify.as_str()]
+    );
+
+    hub.batch(json!([{"op": "reopen", "id": child}]));
+    assert_eq!(
+        hub.list(json!({"ready": true, "ancestor": epic})),
+        [child.as_str()]
+    );
+    assert!(
+        hub.blocked_by(&verify)
+            .iter()
+            .any(|(blocker, _)| blocker == child),
+        "expected {verify} to be blocked by {child}, got {:?}",
+        hub.blocked_by(&verify)
+    );
+
+    // Closing the reopened child unblocks the existing verify child without filing another.
+    let reclosed = close(&mut hub, child);
+    assert!(reclosed.filed.is_empty());
+    assert_eq!(
+        hub.list(json!({"ready": true, "ancestor": epic})),
+        [verify.as_str()]
+    );
+}
+
+#[test]
+fn filing_a_new_child_makes_an_open_verify_child_wait_on_it() {
+    let mut hub = Hub::new();
+    let ids = hub.ids(json!([
+        create(
+            "Epic",
+            None,
+            json!({"type": "epic", "acceptance": "Measured."})
+        ),
+        create("Child", Some("$0"), json!({})),
+    ]));
+    let [epic, child] = [&ids[0], &ids[1]];
+
+    close(&mut hub, child);
+    let verify = format!("{epic}.2");
+    assert_eq!(
+        hub.list(json!({"ready": true, "ancestor": epic})),
+        [verify.as_str()]
+    );
+
+    let added = hub
+        .ids(json!([create("Follow-up", Some(epic.as_str()), json!({}))]))
+        .remove(0);
+    assert_eq!(
+        hub.list(json!({"ready": true, "ancestor": epic})),
+        [added.as_str()]
+    );
+    assert!(
+        hub.blocked_by(&verify)
+            .iter()
+            .any(|(blocker, _)| blocker == &added),
+        "expected {verify} to be blocked by {added}, got {:?}",
+        hub.blocked_by(&verify)
+    );
+}

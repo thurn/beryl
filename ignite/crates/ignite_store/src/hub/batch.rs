@@ -374,16 +374,8 @@ impl<'a> Run<'a> {
                     ready,
                 })
             }
-            Operation::Reopen { .. } => {
-                self.save(&ticket, Self::opening())?;
-                Ok(plain(ticket.id.clone()))
-            }
-            Operation::Defer { until, .. } => {
-                let mut changes = Self::opening();
-                changes.insert("defer_until".to_owned(), json!(until));
-                self.save(&ticket, changes)?;
-                Ok(plain(ticket.id.clone()))
-            }
+            Operation::Reopen { .. } => self.reopen(&ticket, None),
+            Operation::Defer { until, .. } => self.reopen(&ticket, Some(until)),
             Operation::Comment { text, .. } => {
                 self.conn.execute(
                     "INSERT INTO comments (ticket, n, author, at, text) \
@@ -405,6 +397,22 @@ impl<'a> Run<'a> {
                 Ok(plain(ticket.id.clone()))
             }
         }
+    }
+
+    fn reopen(
+        &mut self,
+        ticket: &Ticket,
+        defer_until: Option<&Timestamp>,
+    ) -> Step<OperationResult> {
+        let mut changes = Self::opening();
+        if let Some(until) = defer_until {
+            changes.insert("defer_until".to_owned(), json!(until));
+        }
+        self.save(ticket, changes)?;
+        if ticket.status == Status::Closed {
+            self.wait_verify_children(ticket.id.as_str())?;
+        }
+        Ok(plain(ticket.id.clone()))
     }
 
     /// Assigns `ticket` to the actor unless someone holds it or has a live reservation.
@@ -443,7 +451,11 @@ impl<'a> Run<'a> {
         {
             changes.insert("machine".to_owned(), json!(self.machine));
         }
-        self.save(ticket, changes)
+        self.save(ticket, changes)?;
+        if ticket.status == Status::Closed {
+            self.wait_verify_children(ticket.id.as_str())?;
+        }
+        Ok(())
     }
 
     /// The ID a name in an operation refers to: `$<index>` for a ticket this batch created, or
@@ -542,6 +554,9 @@ impl<'a> Run<'a> {
         for dep in deps {
             self.dependency(&id, &dep.on, dep.kind, false)?;
         }
+        if ticket.parent.is_some() && ticket.status != Status::Closed {
+            self.wait_verify_children(&id)?;
+        }
         if let Some(key) = key {
             self.conn.execute(
                 "INSERT INTO meta (key, value) VALUES (?1, ?2) \
@@ -617,6 +632,8 @@ impl<'a> Run<'a> {
         let releasing_epic = releasing && ticket.ticket_type == TicketType::Epic;
         let was_closed = ticket.status == Status::Closed;
         let closing = !was_closed && fields.status == Some(Status::Closed);
+        let reopening = was_closed && fields.status.is_some_and(|s| s != Status::Closed);
+        let reparented = &ticket.id != original_id;
         match fields.status {
             Some(Status::Closed) if closing => {
                 changes.insert("closed_at".to_owned(), self.at.clone());
@@ -628,13 +645,16 @@ impl<'a> Run<'a> {
             _ => {}
         }
         self.save(ticket, changes)?;
-        if changes_epic || &ticket.id != original_id {
+        if changes_epic || reparented {
             self.check_epic_dependencies(ticket.id.as_str(), false)?;
         } else if releasing_epic {
             self.check_epic_dependencies(ticket.id.as_str(), true)?;
         }
         if releasing {
             self.release_descendants(&ticket.id)?;
+        }
+        if reopening || (reparented && fields.status.unwrap_or(ticket.status) != Status::Closed) {
+            self.wait_verify_children(ticket.id.as_str())?;
         }
         let (closed, filed) = if closing {
             self.close_ancestors(ticket.id.as_str(), None)?

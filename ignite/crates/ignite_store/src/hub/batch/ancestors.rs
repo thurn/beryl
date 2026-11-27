@@ -140,6 +140,27 @@ impl Run<'_> {
         }
         Ok(None)
     }
+
+    /// Makes any open verify child of an ancestor of `id` wait on `id`, so reopening or filing
+    /// work under an epic that is already being verified blocks the verify ticket until the
+    /// work closes.
+    pub(super) fn wait_verify_children(&mut self, id: &str) -> Step<()> {
+        for ancestor in self.ancestors(id)? {
+            let mut statement = self.conn.prepare(
+                "SELECT id FROM tickets \
+                 WHERE parent = ?1 AND status != 'closed' AND id != ?2 \
+                   AND json_extract(metadata, '$.verifies_acceptance') = ?1 \
+                 ORDER BY id",
+            )?;
+            let verify_ids: Vec<String> = statement
+                .query_map([ancestor.as_str(), id], |row| row.get(0))?
+                .collect::<rusqlite::Result<_>>()?;
+            for verify_id in verify_ids {
+                self.dependency(&verify_id, id, None, false)?;
+            }
+        }
+        Ok(())
+    }
 }
 
 /// Whether `ancestor`, now left with no live descendant, gets a verify child instead of
