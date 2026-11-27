@@ -6,9 +6,10 @@
 
 use crate::bitboard::Bitboard;
 use crate::fit::{Misfit, room};
+use crate::fixed::Full;
 use crate::ids::{CardId, SlotId};
 use crate::invariants::{At, Violation, check};
-use crate::layout::{Layout, Queue, Table};
+use crate::layout::{Layout, Number, Queue, Table};
 use crate::object::ObjectRef;
 use crate::relayout::{Relayout, card, queue, slot};
 use crate::rule_changes::Rules;
@@ -17,7 +18,10 @@ use crate::store::{Duration, Ended, Store};
 use crate::table::GameTable;
 
 use super::sets::Sets;
-use super::{Affects, ContinuousEffect, CostChange, EFFECTS, Effects, Kinds, Payload};
+use super::{
+    Affects, Continuous, ContinuousEffect, CostChange, EFFECTS, Effects, Kinds, LayerChange,
+    Payload,
+};
 
 impl<L: Layout> Store<L> for Effects<L> {
     fn empty() -> Self {
@@ -299,6 +303,58 @@ impl<L: Layout> Relayout for Effects<L> {
 }
 
 impl<L: Layout> State<L> {
+    /// Adds `ModifyPt(p, t)` into an existing `ModifyPt` entry from `source` on `object` with
+    /// the same `duration` when both sums fit in [`Layout::Pt`]. Layer 7c additions commute
+    /// with one another and timestamps order effects only within a layer (see
+    /// [CR 613.4c](https://yawgatog.com/resources/magic-rules/#R6134c) and see
+    /// [CR 613.7](https://yawgatog.com/resources/magic-rules/#R6137)), so merging repeated
+    /// bonuses from one source leaves layer results unchanged while keeping the Effects store
+    /// from filling up. Out of line so [`State::start_effect`] stays small for every other
+    /// effect.
+    #[inline(never)]
+    pub(super) fn merge_modify_pt(
+        &mut self,
+        source: L::Card,
+        object: ObjectRef<L>,
+        duration: Duration,
+        p: L::Pt,
+        t: L::Pt,
+    ) -> bool {
+        if self.effects.kinds.0 & Kinds::LAYER == 0 {
+            return false;
+        }
+        debug_assert!(self.is_current(object));
+        let affected = Affects::object(object);
+        for entry in self.effects.entries.as_mut_slice() {
+            if entry.source == source
+                && entry.affected == affected
+                && entry.duration == duration
+                && let Payload::Layer(LayerChange::ModifyPt(a, b)) = entry.payload
+                && let Some(np) = a.checked_add(p)
+                && let Some(nt) = b.checked_add(t)
+            {
+                entry.payload = Payload::Layer(LayerChange::ModifyPt(np, nt));
+                self.flags.derived_dirty = true;
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Starts `effect` without merging into an existing `ModifyPt` entry: for differential
+    /// tests that compare merged and unmerged Effects stores.
+    #[doc(hidden)]
+    #[inline]
+    pub fn start_effect_unmerged(
+        &mut self,
+        source: L::Card,
+        effect: Continuous<L>,
+        duration: Duration,
+    ) -> Result<(), Full> {
+        let timestamp = self.take_timestamp();
+        self.push_effect(source, effect, duration, timestamp)
+    }
+
     /// The generic mana the cost changes on the spell `object` add to its cost
     /// (see [CR 601.2f](https://yawgatog.com/resources/magic-rules/#R6012f): "plus all additional
     /// costs and cost increases"). With no cost change live on any object, one AND.

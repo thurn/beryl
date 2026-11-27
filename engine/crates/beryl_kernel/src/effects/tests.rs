@@ -720,3 +720,73 @@ fn a_full_table_of_sets_returns_full_and_a_wide_one_grows() {
         })
     );
 }
+
+#[test]
+fn repeated_modify_pt_from_one_source_merges_and_others_do_not() {
+    let (t, mut s) = dealt();
+    let [a, b] = [3, 4].map(Slot::from_index);
+    permanents(&mut s, &[3, 4]);
+    let [src0, src1] = [CardIx::FIRST, CardIx::from_index(1)];
+    let pt = |s: &State, slot, p, q| {
+        Continuous::Layer(
+            Permanent::unchecked(s.object_ref(slot)),
+            LayerChange::ModifyPt(p, q),
+        )
+    };
+
+    let last_pt = |s: &State| s.effects().last().unwrap().payload;
+    let payload = |p, q| Payload::Layer(LayerChange::ModifyPt(p, q));
+
+    // Three +1/+1 from one source on one object leave one +3/+3 entry and dirty layers.
+    for _ in 0..3 {
+        s.flags.derived_dirty = false;
+        s.start_effect(src0, pt(&s, a, 1, 1), Duration::EndOfTurn)
+            .unwrap();
+        assert!(s.flags.derived_dirty);
+    }
+    assert_eq!(s.effects().len(), 1);
+    assert_eq!(last_pt(&s), payload(3, 3));
+
+    // Two creatures with the same total bonus from one source have equal signatures.
+    s.start_effect(src0, pt(&s, b, 3, 3), Duration::EndOfTurn)
+        .unwrap();
+    derive_alike(&mut s);
+    assert_eq!(s.signature(a), s.signature(b));
+
+    // Different source, duration, or object does not merge.
+    s.start_effect(src1, pt(&s, a, 1, 1), Duration::EndOfTurn)
+        .unwrap();
+    s.start_effect(src0, pt(&s, a, 1, 1), Duration::Indefinite)
+        .unwrap();
+    assert_eq!(s.effects().len(), 4);
+
+    // A new incarnation does not merge with the old object's ended entry.
+    s.board().place(a, Zone::Graveyard).unwrap();
+    s.board().place(a, Zone::Battlefield).unwrap();
+    s.start_effect(src0, pt(&s, a, 1, 1), Duration::EndOfTurn)
+        .unwrap();
+    assert_eq!(last_pt(&s), payload(1, 1));
+
+    // A sum past i8::MAX starts a new entry instead of overflowing.
+    s.start_effect(src0, pt(&s, a, 126, 0), Duration::EndOfTurn)
+        .unwrap();
+    let n = s.effects().len();
+    assert_eq!(last_pt(&s), payload(127, 1));
+    s.start_effect(src0, pt(&s, a, 1, 0), Duration::EndOfTurn)
+        .unwrap();
+    assert_eq!(s.effects().len(), n + 1);
+    assert_eq!(last_pt(&s), payload(1, 0));
+
+    // start_effect_on_set and start_effects do not merge.
+    let n = s.effects().len();
+    let set = [a, b].into_iter().collect();
+    let one = [LayerChange::ModifyPt(1, 1)];
+    for _ in 0..2 {
+        s.start_effect_on_set(src0, s.permanents_in(set), &one, Duration::EndOfTurn)
+            .unwrap();
+    }
+    s.start_effects(src0, &[pt(&s, b, 1, 1)], Duration::EndOfTurn)
+        .unwrap();
+    assert_eq!(s.effects().len(), n + 3);
+    assert_eq!(s.check_stores(&t), Ok(()));
+}

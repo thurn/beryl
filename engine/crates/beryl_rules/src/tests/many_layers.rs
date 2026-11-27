@@ -193,3 +193,84 @@ fn equipment_attached_after_the_effect_grants_its_ability_and_before_it_only_its
     assert_eq!((d.power, d.toughness), (4, 4));
     assert!(d.keywords.contains(Keywords::VIGILANCE));
 }
+
+/// Merging repeated `ModifyPt` effects from one source on one creature leaves layer results
+/// identical to starting every effect unmerged, even when `SetBasePt` and `SwitchPt` effects
+/// are interleaved across several creatures and sources.
+#[test]
+fn merged_modify_pt_matches_unmerged_layer_results_across_200_seeds() {
+    use crate::state::Continuous;
+
+    let deck: &[(u8, &str)] = &[(3, "Test Golem"), (2, "Test Banner"), (8, "Test Land")];
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [deck, deck]).unwrap();
+    let mut base = State::new(&t, 7, Profile::EXACT).unwrap();
+    base.board().begin_at(1, Seat::P0, TurnStep::PrecombatMain);
+    let mut creatures = Vec::new();
+    for _ in 0..3 {
+        creatures.push(enters(&t, &mut base, "Test Golem"));
+    }
+    let banner = enters(&t, &mut base, "Test Banner");
+    let sources = [
+        base.copiable(creatures[0]).record(&t).0,
+        base.copiable(banner).record(&t).0,
+    ];
+    let durations = [
+        Duration::EndOfTurn,
+        Duration::Indefinite,
+        Duration::UntilYourNextTurn(Seat::P0),
+    ];
+
+    let mut total_saved = 0usize;
+    for seed in 0u64..200 {
+        let mut merged = base;
+        let mut unmerged = base;
+        let mut x = seed.wrapping_add(0x9e37_79b9_7f4a_7c15);
+        let mut next = || {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            x
+        };
+        let count = 20 + (next() as usize % 25);
+        for _ in 0..count {
+            let slot = creatures[next() as usize % creatures.len()];
+            let source = sources[next() as usize % sources.len()];
+            let duration = durations[next() as usize % durations.len()];
+            let change = match next() % 10 {
+                0..=6 => {
+                    let p = (next() as i8).rem_euclid(5) - 1;
+                    let q = (next() as i8).rem_euclid(5) - 1;
+                    LayerChange::ModifyPt(p, q)
+                }
+                7..=8 => {
+                    let p = (next() as i8).rem_euclid(7);
+                    let q = (next() as i8).rem_euclid(7);
+                    LayerChange::SetBasePt(p, q)
+                }
+                _ => LayerChange::SwitchPt,
+            };
+            let perm_m = merged.permanent_at(slot).unwrap();
+            let perm_u = unmerged.permanent_at(slot).unwrap();
+            merged
+                .start_effect(source, Continuous::Layer(perm_m, change), duration)
+                .unwrap();
+            unmerged
+                .start_effect_unmerged(source, Continuous::Layer(perm_u, change), duration)
+                .unwrap();
+        }
+        total_saved += unmerged.effects().len() - merged.effects().len();
+        refresh(&t, &mut merged);
+        refresh(&t, &mut unmerged);
+        for &slot in &creatures {
+            assert_eq!(
+                merged.derived(slot),
+                unmerged.derived(slot),
+                "seed {seed}, slot {slot:?}"
+            );
+        }
+    }
+    assert!(
+        total_saved > 0,
+        "expected repeated ModifyPt effects to merge"
+    );
+}

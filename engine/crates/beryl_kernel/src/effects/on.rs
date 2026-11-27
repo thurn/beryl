@@ -17,6 +17,11 @@ use crate::store::Duration;
 /// A permanent's layer results show what its effects make of it now and not what they
 /// will: a creature that gets +1/+1 until end of turn and one that gets it for good are
 /// the same size today and are not interchangeable.
+///
+/// Repeated `ModifyPt` effects from one source with one duration on one object merge into
+/// one entry holding their sum ([`State::start_effect`]), so two creatures with the same
+/// total bonus from the same source and duration compare equal here whether it came from
+/// one effect or several.
 #[derive(Clone, Copy, Debug)]
 pub struct EffectsOn<'a, L: Layout = Small> {
     /// The store, or none where no store has an entry about the object.

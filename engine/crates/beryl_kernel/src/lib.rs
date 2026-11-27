@@ -290,6 +290,14 @@
 //! entry stays 24 bytes, which the store's file asserts, and converts to another layout
 //! with no code of its own.
 //!
+//! An entry whose affected side is one object and whose payload is
+//! [`effects::LayerChange::ModifyPt`] may be the sum of several `ModifyPt` effects that
+//! [`State::start_effect`] began from the same source on that object with the same duration:
+//! layer 7c additions commute (see [CR 613.4c](https://yawgatog.com/resources/magic-rules/#R6134c)
+//! and see [CR 613.7](https://yawgatog.com/resources/magic-rules/#R6137)), so when both sums fit in
+//! [`layout::Layout::Pt`] the store adds them into the existing entry instead of pushing
+//! another, and starts a new entry only if either sum would overflow.
+//!
 //! ### Duration and expiry
 //!
 //! Two things end what is stored, each written once ([`store`]):
