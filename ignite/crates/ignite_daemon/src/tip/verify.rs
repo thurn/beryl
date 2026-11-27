@@ -498,48 +498,24 @@ impl TipVerifier {
             // here is blamed on its own landing.
             self.round_builds
                 .retain(|build| !failed.iter().any(|check| check.check == build.check));
-            let mut culprits = HashSet::new();
-            let mut blame_complete = true;
-            let mut hint = None;
-            for check in &failed {
-                let output = verdicts.get(&check.key).and_then(|v| v.output.clone());
-                // If this search is interrupted and the check still fails, the next round reports it.
-                let prior = prior_for(check);
-                match self.blame(
-                    ctx,
-                    last,
-                    prior,
-                    tip,
+            let entries: Vec<super::culprit::BlameEntry<'_>> = failed
+                .iter()
+                .map(|check| super::culprit::BlameEntry {
                     check,
-                    output.as_deref(),
-                    can_revert(check)
+                    prior: prior_for(check),
+                    output: verdicts.get(&check.key).and_then(|v| v.output.as_deref()),
+                    allow_revert: can_revert(check)
                         && if check.is_build() {
                             ctx.config.revert.broken_build && ctx.config.repository.green.is_some()
                         } else {
                             stalled
                         },
-                    hint.as_ref(),
-                ) {
-                    Ok((culprit, found_hint)) => {
-                        culprits.extend(culprit);
-                        if found_hint.is_some() {
-                            hint = found_hint;
-                        }
-                    }
-                    Err(error) => {
-                        blame_complete = false;
-                        eprintln!(
-                            "ignite: regression of {} not reported: {error}",
-                            check.check
-                        );
-                    }
-                }
-                require_running()?;
-                self.save(ctx);
-            }
+                })
+                .collect();
+            let blame = self.blame_failed(ctx, last, tip, &regressions, &entries, true)?;
             recorded?;
-            let promoted = if blame_complete {
-                self.promote_ancestor(ctx, last, tip, &culprits, &regressions)
+            let promoted = if blame.complete {
+                self.promote_ancestor(ctx, last, tip, &blame.culprits, &regressions)
                     .inspect_err(|error| {
                         eprintln!("ignite: tip {tip}: ancestor promotion: {error}");
                     })

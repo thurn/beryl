@@ -268,35 +268,18 @@ impl TipVerifier {
             .collect();
         // `master` is at `tip` now, so the pass that clears a check is at `last`.
         let at_master = self.passed_at_master(ctx, scope, last, tip, &failed);
-        let mut hint = None;
-        for check in failed {
-            let output = verdicts.get(&check.key).and_then(|run| run.output.clone());
-            let prior = scope
-                .last_good_for(check)
-                .filter(|_| !at_master.contains(&check.check));
-            match self.blame(
-                ctx,
-                last,
-                prior,
-                tip,
+        let entries: Vec<super::culprit::BlameEntry<'_>> = failed
+            .iter()
+            .map(|check| super::culprit::BlameEntry {
                 check,
-                output.as_deref(),
-                false,
-                hint.as_ref(),
-            ) {
-                Ok((_, found_hint)) => {
-                    if found_hint.is_some() {
-                        hint = found_hint;
-                    }
-                }
-                Err(error) => {
-                    eprintln!(
-                        "ignite: regression of {} not reported: {error}",
-                        check.check
-                    );
-                }
-            }
-        }
+                prior: scope
+                    .last_good_for(check)
+                    .filter(|_| !at_master.contains(&check.check)),
+                output: verdicts.get(&check.key).and_then(|run| run.output.as_deref()),
+                allow_revert: false,
+            })
+            .collect();
+        self.blame_failed(ctx, last, tip, &HashSet::new(), &entries, false)?;
         Ok(())
     }
 }

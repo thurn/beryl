@@ -8,6 +8,8 @@
 //! - The report says how the search ended ([`CulpritSearch`]): one candidate, narrowed to one,
 //!   ended early with a range and why, or not run and why.
 
+use std::collections::{HashMap, HashSet};
+
 use ignite_core::ids::{CheckName, Commit};
 use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::{FoundBy, RegressionReport};
@@ -27,6 +29,7 @@ pub(super) struct CulpritHint {
 }
 
 /// Outcome of probing `master` before searching across an older platform gap.
+#[derive(Clone, Copy)]
 enum MasterProbe {
     /// The check passed at `master`, so the culprit is in `master..tip` and may revert.
     Passed,
@@ -245,6 +248,28 @@ pub(crate) fn with_culprit(
     report
 }
 
+/// One failing check handed to [`TipVerifier::blame_failed`].
+pub(super) struct BlameEntry<'a> {
+    pub check: &'a TipCheck,
+    pub prior: Option<&'a Commit>,
+    pub output: Option<&'a str>,
+    pub allow_revert: bool,
+}
+
+/// Outcome of blaming a round's failing checks.
+pub(super) struct BlameSummary {
+    pub culprits: HashSet<Commit>,
+    pub complete: bool,
+}
+
+/// A check's resolved search bounds after checking `newest` and `master`.
+struct BlamePlan<'a> {
+    entry: &'a BlameEntry<'a>,
+    good: &'a Commit,
+    search_bad: &'a Commit,
+    allow_revert: bool,
+}
+
 impl TipVerifier {
     /// Runs `checks` at `at` for a culprit search, a revert or a revert's build checks, on the
     /// tip reserve (`Reserve::TipRound`). These runs happen inside the tip loop, so the
@@ -274,23 +299,12 @@ impl TipVerifier {
         good: &Commit,
         bad: &Commit,
     ) -> Result<Option<Culprit>> {
-        self.find_culprit_with_hint(ctx, check, good, bad, None)
-    }
-
-    fn find_culprit_with_hint(
-        &self,
-        ctx: &Context,
-        check: &TipCheck,
-        good: &Commit,
-        bad: &Commit,
-        hint: Option<&CulpritHint>,
-    ) -> Result<Option<Culprit>> {
         let landings = self.work.landings(ctx, good, bad)?;
         Ok(bisect_with_hint(
             &landings,
             &check.inputs,
             good,
-            hint,
+            None,
             |at| {
                 self.probe(ctx, at, std::slice::from_ref(&check.check), false)
                     .into_iter()
@@ -300,135 +314,239 @@ impl TipVerifier {
         ))
     }
 
-    fn probe_master(&self, ctx: &Context, master: &Commit, check: &TipCheck) -> MasterProbe {
-        match self
-            .probe(ctx, master, std::slice::from_ref(&check.check), false)
-            .into_iter()
-            .find(|run| run.check == check.check)
-            .map(|run| run.outcome)
-        {
-            Some(Outcome::Pass | Outcome::Flaky) => MasterProbe::Passed,
-            Some(Outcome::Fail) => MasterProbe::Failed,
-            Some(Outcome::Incomplete) | None => MasterProbe::Unknown,
-        }
-    }
-
-    /// Finds the culprit of a check that failed at `tip` and reports the regression, or reverts
-    /// a landing when the check qualifies for automatic revert (see `revert`). A failure
-    /// already reported can qualify for a revert once the stall threshold is reached. A newer
-    /// tip that changed the check's inputs gets one chance to run the check first.
-    ///
-    /// When `prior` is before `master` (a platform gap) and the check had no cached pass at
-    /// `master`, probes `master` first: a pass narrows the search to `master..tip` and allows
-    /// automatic reverts, while a failure shrinks the search's upper bound to `master`.
-    ///
-    /// A check only another platform can run is left to that platform's machines: a search here
-    /// would run this platform's version of the check, which passes at every commit, and blame
-    /// the newest candidate whatever the real culprit.
-    #[allow(clippy::too_many_arguments)]
-    pub(super) fn blame(
-        &mut self,
+    /// Probes `newest` once for all checks whose inputs changed in `tip..newest`, returning the
+    /// subset that passed there. Batching avoids checking out and rebuilding the tree once per
+    /// failing check when a regression breaks many checks in the same family.
+    fn repaired_at_newest(
+        &self,
         ctx: &Context,
-        master: &Commit,
-        prior: Option<&Commit>,
         tip: &Commit,
-        check: &TipCheck,
-        output: Option<&str>,
-        allow_revert: bool,
-        hint: Option<&CulpritHint>,
-    ) -> Result<(Option<Commit>, Option<CulpritHint>)> {
-        super::round::require_running()?;
-        let reported = self.reported.contains(&check.key);
-        if !check.runnable || (reported && (check.is_build() || !allow_revert)) {
-            return Ok((None, None));
-        }
-        // Where git cannot say, the failure is reported, which at worst repeats a report.
+        entries: &[&BlameEntry<'_>],
+    ) -> Result<HashSet<CheckName>> {
         let newest = ctx
             .git
             .tip(&ctx.config.repository.staging)
             .unwrap_or_else(|_| tip.clone());
-        // A newer tip that changed what the check reads may already hold a fix, so the check runs
-        // there before reporting (using a cached pass if one exists). Deferring blindly without
-        // checking the newer tip left a failing check unreported for hours whenever an unrelated
-        // landing moved `staging` and later tips stopped on other failing checks. Only a pass at
-        // the newer tip suppresses the report; if the check still fails there (or gives no pass),
-        // it is blamed and reported at once.
-        let repaired = newest != *tip
-            && ctx
-                .git
-                .changed(tip, &newest)
-                .is_ok_and(|changed| touches(&changed, &check.inputs))
-            && self.passes_at(ctx, &newest, check);
-        super::round::require_running()?;
-        if repaired {
-            super::candidate::advance_to_best_effort(ctx, &newest);
-            eprintln!(
-                "ignite: {} fails at {tip}, but passes at {newest}; not reporting",
-                check.check
-            );
-            return Ok((None, None));
+        if newest == *tip {
+            return Ok(HashSet::new());
         }
-        let (good, search_bad, allow_revert) = if let Some(gap_good) =
-            prior.filter(|good| *good != master)
-            && master != tip
-        {
-            match self.probe_master(ctx, master, check) {
-                MasterProbe::Passed => (master, tip, allow_revert),
-                MasterProbe::Failed => (gap_good, master, false),
-                MasterProbe::Unknown => (gap_good, tip, false),
-            }
-        } else {
-            let at_or_no_gap = prior.is_none_or(|good| good == master);
-            (prior.unwrap_or(master), tip, at_or_no_gap && allow_revert)
+        let Ok(changed) = ctx.git.changed(tip, &newest) else {
+            return Ok(HashSet::new());
         };
+        let names: Vec<CheckName> = entries
+            .iter()
+            .filter(|entry| touches(&changed, &entry.check.inputs))
+            .map(|entry| entry.check.check.clone())
+            .collect();
+        if names.is_empty() {
+            return Ok(HashSet::new());
+        }
+        let runs = self.probe(ctx, &newest, &names, false);
         super::round::require_running()?;
-        // A failing check at a tip is always reported. With no landing to blame (the hub
-        // recorded none between the commits), the report names the whole range since the last
-        // verified commit and no ticket.
-        let culprit = self.find_culprit_with_hint(ctx, check, good, search_bad, hint);
+        let repaired: HashSet<CheckName> = runs
+            .into_iter()
+            .filter(|run| matches!(run.outcome, Outcome::Pass | Outcome::Flaky))
+            .map(|run| run.check)
+            .collect();
+        if !repaired.is_empty() {
+            super::candidate::advance_to_best_effort(ctx, &newest);
+            for entry in entries {
+                if repaired.contains(&entry.check.check) {
+                    eprintln!(
+                        "ignite: {} fails at {tip}, but passes at {newest}; not reporting",
+                        entry.check.check
+                    );
+                }
+            }
+        }
+        Ok(repaired)
+    }
+
+    /// Probes `master` once for all checks whose platform-gap `prior` predates `master`.
+    fn probe_master_batch(
+        &self,
+        ctx: &Context,
+        master: &Commit,
+        tip: &Commit,
+        entries: &[&BlameEntry<'_>],
+    ) -> Result<HashMap<CheckName, MasterProbe>> {
+        if master == tip {
+            return Ok(HashMap::new());
+        }
+        let names: Vec<CheckName> = entries
+            .iter()
+            .filter(|entry| entry.prior.is_some_and(|good| good != master))
+            .map(|entry| entry.check.check.clone())
+            .collect();
+        if names.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let runs = self.probe(ctx, master, &names, false);
         super::round::require_running()?;
-        let found_hint = culprit.as_ref().ok().and_then(|found| {
-            let found = found.as_ref()?;
-            (found.suspects.len() == 1).then(|| CulpritHint {
-                first_bad: found.first_bad.clone(),
+        let mut outcomes = HashMap::with_capacity(names.len());
+        for run in runs {
+            let probe = match run.outcome {
+                Outcome::Pass | Outcome::Flaky => MasterProbe::Passed,
+                Outcome::Fail => MasterProbe::Failed,
+                Outcome::Incomplete => MasterProbe::Unknown,
+            };
+            outcomes.insert(run.check, probe);
+        }
+        Ok(outcomes)
+    }
+
+    fn plan_blame<'a>(
+        &self,
+        ctx: &Context,
+        master: &'a Commit,
+        tip: &'a Commit,
+        open: &HashSet<CheckName>,
+        entries: &'a [BlameEntry<'a>],
+    ) -> Result<Vec<BlamePlan<'a>>> {
+        let already_reported = |check: &TipCheck| {
+            self.reported.contains(&check.key) || open.contains(&check.check)
+        };
+        let active: Vec<&BlameEntry<'_>> = entries
+            .iter()
+            .filter(|entry| {
+                entry.check.runnable
+                    && !(already_reported(entry.check)
+                        && (entry.check.is_build() || !entry.allow_revert))
             })
-        });
-        // The last suspect in the narrowed range is known to fail by its end. Promotion
-        // must stop before that landing, including when the search ended with one suspect.
-        let cutoff = culprit
-            .as_ref()
-            .ok()
-            .and_then(|culprit| culprit.as_ref()?.suspects.last()?.commits.first().cloned());
-        // An eligible failure can revert a single confirmed landing.
+            .collect();
+        if active.is_empty() {
+            return Ok(Vec::new());
+        }
+        let repaired = self.repaired_at_newest(ctx, tip, &active)?;
+        let active: Vec<&BlameEntry<'_>> = active
+            .into_iter()
+            .filter(|entry| !repaired.contains(&entry.check.check))
+            .collect();
+        if active.is_empty() {
+            return Ok(Vec::new());
+        }
+        let master_probes = self.probe_master_batch(ctx, master, tip, &active)?;
+        Ok(active
+            .into_iter()
+            .filter_map(|entry| {
+                let (good, search_bad, allow_revert) = if let Some(gap_good) =
+                    entry.prior.filter(|good| *good != master)
+                    && master != tip
+                {
+                    match master_probes
+                        .get(&entry.check.check)
+                        .copied()
+                        .unwrap_or(MasterProbe::Unknown)
+                    {
+                        MasterProbe::Passed => (master, tip, entry.allow_revert),
+                        MasterProbe::Failed => (gap_good, master, false),
+                        MasterProbe::Unknown => (gap_good, tip, false),
+                    }
+                } else {
+                    let at_or_no_gap = entry.prior.is_none_or(|good| good == master);
+                    (
+                        entry.prior.unwrap_or(master),
+                        tip,
+                        at_or_no_gap && entry.allow_revert,
+                    )
+                };
+                if already_reported(entry.check) && (entry.check.is_build() || !allow_revert) {
+                    return None;
+                }
+                Some(BlamePlan {
+                    entry,
+                    good,
+                    search_bad,
+                    allow_revert,
+                })
+            })
+            .collect())
+    }
+
+    fn bisect_plan(
+        &self,
+        ctx: &Context,
+        plans: &[BlamePlan<'_>],
+        idx: usize,
+        hint: Option<&CulpritHint>,
+        probe_cache: &mut HashMap<(Commit, CheckName), Option<Outcome>>,
+        landings_cache: &mut HashMap<(Commit, Commit), Vec<TipLanding>>,
+    ) -> Result<Option<Culprit>> {
+        let plan = &plans[idx];
+        let check = plan.entry.check;
+        let range = (plan.good.clone(), plan.search_bad.clone());
+        if !landings_cache.contains_key(&range) {
+            let found = self.work.landings(ctx, plan.good, plan.search_bad)?;
+            landings_cache.insert(range.clone(), found);
+        }
+        let landings = &landings_cache[&range];
+        Ok(bisect_with_hint(landings, &check.inputs, plan.good, hint, |at| {
+            let key = (at.clone(), check.check.clone());
+            if let Some(&cached) = probe_cache.get(&key) {
+                return cached;
+            }
+            let batch: Vec<CheckName> = plans[idx..]
+                .iter()
+                .filter(|other| {
+                    other.entry.check.family == check.family
+                        && other.good == plan.good
+                        && other.search_bad == plan.search_bad
+                        && !probe_cache.contains_key(&(at.clone(), other.entry.check.check.clone()))
+                })
+                .map(|other| other.entry.check.check.clone())
+                .collect();
+            let runs = self.probe(ctx, at, &batch, false);
+            let mut by_name: HashMap<CheckName, Outcome> = runs
+                .into_iter()
+                .map(|run| (run.check, run.outcome))
+                .collect();
+            for name in batch {
+                let outcome = by_name.remove(&name);
+                probe_cache.insert((at.clone(), name), outcome);
+            }
+            probe_cache.get(&key).copied().flatten()
+        }))
+    }
+
+    fn report_blamed(
+        &mut self,
+        ctx: &Context,
+        tip: &Commit,
+        plan: &BlamePlan<'_>,
+        culprit: Result<Option<Culprit>>,
+        reported: bool,
+        open: &mut HashSet<CheckName>,
+    ) -> Result<bool> {
+        let check = plan.entry.check;
         let mut note = None;
-        if allow_revert && let Ok(Some(found)) = &culprit {
-            match self.try_revert(ctx, tip, check, found, output) {
+        if plan.allow_revert
+            && let Ok(Some(found)) = &culprit
+        {
+            match self.try_revert(ctx, tip, check, found, plan.entry.output) {
                 Handled::Reverted => {
                     self.reported.insert(check.key.clone());
-                    return Ok((cutoff, found_hint));
+                    return Ok(true);
                 }
-                // The revert gave up because the tip moved with a change to what the check
-                // reads; as above, only once per check.
                 Handled::NextRound if self.deferred.insert(check.check.clone()) => {
-                    return Ok((cutoff, found_hint));
+                    return Ok(true);
                 }
-                // The revert would not build. The failure may have been reported before, but
-                // without saying why no revert came, so it is reported again with the note.
                 Handled::Unbuildable(text) => note = Some(text),
                 Handled::NextRound | Handled::Report => {}
             }
         }
         super::round::require_running()?;
         if reported && note.is_none() {
-            return Ok((cutoff, found_hint));
+            return Ok(true);
         }
-        let output = output
+        let output = plan
+            .entry
+            .output
             .map(|o| tail(o, &self.own_outputs))
             .unwrap_or_default();
         let report = RegressionReport {
             check: check.check.clone(),
-            first_bad: search_bad.clone(),
-            last_good: good.clone(),
+            first_bad: plan.search_bad.clone(),
+            last_good: plan.good.clone(),
             caused_by: None,
             output: match note {
                 Some(note) => format!("{note}\n\n{output}"),
@@ -440,8 +558,84 @@ impl TipVerifier {
             found_by: FoundBy::TipVerification,
             detected_at: Some(tip.clone()),
         };
-        ctx.hub.regression(&with_culprit(report, culprit))?;
-        self.reported.insert(check.key.clone());
-        Ok((cutoff, found_hint))
+        match ctx.hub.regression(&with_culprit(report, culprit)) {
+            Ok(_) => {
+                self.reported.insert(check.key.clone());
+                open.insert(check.check.clone());
+                Ok(true)
+            }
+            Err(error) => {
+                eprintln!(
+                    "ignite: regression of {} not reported: {error}",
+                    check.check
+                );
+                Ok(false)
+            }
+        }
+    }
+
+    /// Finds culprits for a round's failing checks, reports regressions, and reverts eligible
+    /// landings.
+    ///
+    /// - Checks already open as regressions on the hub (or reported locally) are skipped when
+    ///   they cannot be reverted, so a second machine or a newer tip with a changed input hash
+    ///   does not re-bisect an already-filed regression.
+    /// - Probes at `newest`, `master`, and each bisection commit run all co-failing checks of
+    ///   the same family and search range together in one checkout and build, reusing the cached
+    ///   outcomes for the remaining checks in the round.
+    pub(super) fn blame_failed(
+        &mut self,
+        ctx: &Context,
+        master: &Commit,
+        tip: &Commit,
+        open_regressions: &HashSet<CheckName>,
+        entries: &[BlameEntry<'_>],
+        save_after_each: bool,
+    ) -> Result<BlameSummary> {
+        super::round::require_running()?;
+        let mut open = open_regressions.clone();
+        if let Ok(current) = ctx.hub.open_regressions() {
+            open.extend(current.into_iter().map(|regression| regression.check));
+        }
+        let plans = self.plan_blame(ctx, master, tip, &open, entries)?;
+        let mut culprits = HashSet::new();
+        let mut complete = true;
+        let mut hint = None;
+        let mut probe_cache = HashMap::new();
+        let mut landings_cache = HashMap::new();
+        for (idx, plan) in plans.iter().enumerate() {
+            let check = plan.entry.check;
+            let reported = self.reported.contains(&check.key) || open.contains(&check.check);
+            if reported && (check.is_build() || !plan.allow_revert) {
+                continue;
+            }
+            let culprit = self.bisect_plan(
+                ctx,
+                &plans,
+                idx,
+                hint.as_ref(),
+                &mut probe_cache,
+                &mut landings_cache,
+            );
+            super::round::require_running()?;
+            if let Ok(Some(found)) = &culprit {
+                if found.suspects.len() == 1 {
+                    hint = Some(CulpritHint {
+                        first_bad: found.first_bad.clone(),
+                    });
+                }
+                // The last suspect in the narrowed range is known to fail by its end. Promotion
+                // must stop before that landing, including when the search ended with one suspect.
+                if let Some(cutoff) = found.suspects.last().and_then(|s| s.commits.first()) {
+                    culprits.insert(cutoff.clone());
+                }
+            }
+            complete &= self.report_blamed(ctx, tip, plan, culprit, reported, &mut open)?;
+            super::round::require_running()?;
+            if save_after_each {
+                self.save(ctx);
+            }
+        }
+        Ok(BlameSummary { culprits, complete })
     }
 }

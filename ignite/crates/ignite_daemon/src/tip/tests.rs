@@ -757,6 +757,7 @@ mod budget;
 mod confirm;
 mod coverage;
 mod culprit;
+mod culprit_batch;
 mod elsewhere;
 mod green;
 mod memory;
