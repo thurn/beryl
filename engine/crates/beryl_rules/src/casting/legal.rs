@@ -139,8 +139,7 @@ fn in_time<L: Layout, const TARGETS: bool>(
     }
 }
 
-/// Whether `cost` is paid with restricted mana, delve (see CR 702.66a), convoke (see CR 702.51a)
-/// or improvise (see CR 702.126a).
+/// Whether `cost` is paid with restricted mana or with objects (see CR 702.66a, see CR 702.51a).
 #[cold]
 #[inline(never)]
 #[allow(clippy::too_many_arguments)]
