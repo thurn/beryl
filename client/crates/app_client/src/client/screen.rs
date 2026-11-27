@@ -310,6 +310,7 @@ impl Client {
             carried: self.carried_item(),
             spinning: self.opening_spinning(),
             placement_scene,
+            fields: self.layer.fields(),
         };
         let menu_face = context_menu::sheet_face(self.features.menu(), &hud);
         let feature_inputs = ViewInputs {

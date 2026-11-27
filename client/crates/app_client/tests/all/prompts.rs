@@ -466,6 +466,151 @@ fn no_card_takes_a_press_under_a_catalogs_shade() {
     );
 }
 
+fn card_names(chosen: Option<u16>) -> PromptView {
+    let entries = [
+        "Dandân",
+        "Island",
+        "Memory Lapse",
+        "Magical Hack",
+        "Brainstorm",
+        "Predict",
+        "Another card",
+    ];
+    prompt(
+        Purpose::CardName,
+        "Choose a card name.",
+        vec![button(
+            ButtonId::Confirm,
+            if chosen.is_some() {
+                "Submit 1"
+            } else {
+                "Submit 0"
+            },
+            chosen.is_some(),
+            chosen.is_some(),
+        )],
+        ShapeBody::Catalog {
+            entries: entries.map(str::to_owned).to_vec(),
+            chosen,
+        },
+    )
+}
+
+fn send_key(client: &mut Client, code: KeyCode) -> Option<Click> {
+    client.handle(Input::Device(DeviceInput::Key(Key {
+        code,
+        phase: KeyPhase::Down,
+        modifiers: Modifiers::default(),
+    })));
+    match client.next_command() {
+        Some(SessionCommand::Click(ClickRequest { click, .. })) => Some(click),
+        None => None,
+        Some(other) => panic!("expected click or none, got {other:?}"),
+    }
+}
+
+fn type_filter(client: &mut Client, words: &str) {
+    client.handle(Input::Device(DeviceInput::Text(
+        kit_ui::input::TextChange::Replace(words.to_owned()),
+    )));
+}
+
+#[test]
+fn card_name_catalog_filters_navigates_picks_and_falls_back_to_another_card() {
+    let mut builder = ViewBuilder::sample();
+    builder.script(ScriptBuilder::reset().build());
+    let mut client = client();
+    client.handle(deciding(&builder, card_names(None), Vec::new()));
+    let frame = client.frame(0);
+    // The search field appears and is focused when the card-name prompt opens.
+    let field = find(frame, Role::Field, "Filter...");
+    assert!(
+        frame.resolved[field].state.has(StateBits::FOCUSED),
+        "the card-name filter field takes focus on open"
+    );
+
+    // Accent-insensitive filtering matches Dandân when typing "dandan".
+    type_filter(&mut client, "dandan");
+    let frame = client.frame(MS);
+    let visible: Vec<&str> = frame
+        .resolved
+        .iter()
+        .filter(|el| el.role == Role::Button)
+        .map(|el| frame.name(el.name))
+        .filter(|name| {
+            !matches!(
+                *name,
+                "Submit 0" | "Show log" | "Settings" | "Report bug" | "Undo"
+            )
+        })
+        .collect();
+    assert_eq!(visible, vec!["Dandân"]);
+
+    // Filtering "m" matches Memory Lapse (2) and Magical Hack (3) before Brainstorm (4);
+    // ArrowDown moves highlight to Magical Hack and Return picks it.
+    type_filter(&mut client, "m");
+    client.frame(2 * MS);
+    assert_eq!(send_key(&mut client, KeyCode::ArrowDown), None);
+    assert_eq!(
+        send_key(&mut client, KeyCode::Enter),
+        Some(Click::Entry { index: 3 })
+    );
+
+    // Once Magical Hack is chosen by the session, pressing Return again confirms Submit 1.
+    client.handle(Input::Reply(app_client::command::Reply::Click(Ok(
+        beryl_protocol::prompt::ClickReply::Open {
+            prompt: Box::new(card_names(Some(3))),
+        },
+    ))));
+    client.frame(3 * MS);
+    assert_eq!(
+        send_key(&mut client, KeyCode::Enter),
+        Some(Click::Button {
+            button: ButtonId::Confirm
+        })
+    );
+
+    // Clear the pending click reply, then type a card name not in the game: it falls back to
+    // "Another card" (index 6).
+    client.handle(Input::Reply(app_client::command::Reply::Click(Ok(
+        beryl_protocol::prompt::ClickReply::Open {
+            prompt: Box::new(card_names(None)),
+        },
+    ))));
+    type_filter(&mut client, "Black Lotus");
+    let frame = client.frame(4 * MS);
+    let _ = find(frame, Role::Button, "Another card");
+    assert_eq!(
+        send_key(&mut client, KeyCode::Enter),
+        Some(Click::Entry { index: 6 })
+    );
+}
+
+#[test]
+fn magical_hack_word_catalog_has_no_search_field() {
+    let mut builder = ViewBuilder::sample();
+    builder.script(ScriptBuilder::reset().build());
+    let mut client = client();
+    let hack = prompt(
+        Purpose::ReplaceWord,
+        "Choose Word to Replace",
+        vec![button(ButtonId::Confirm, "Submit 0", false, false)],
+        ShapeBody::Catalog {
+            entries: ["Plains", "Island", "Swamp", "Mountain", "Forest"]
+                .map(str::to_owned)
+                .to_vec(),
+            chosen: None,
+        },
+    );
+    client.handle(deciding(&builder, hack, Vec::new()));
+    let frame = client.frame(0);
+    assert!(
+        !frame.resolved.iter().any(|el| el.role == Role::Field),
+        "short word catalogs like Magical Hack do not show a search field"
+    );
+    let _ = find(frame, Role::Button, "Island");
+}
+
 #[test]
 fn a_crowded_tray_scrolls_to_its_last_card_and_clips_the_first_row() {
     let mut builder = ViewBuilder::sample();

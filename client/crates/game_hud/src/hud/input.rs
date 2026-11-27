@@ -11,6 +11,7 @@ use crate::navigation::Sheet;
 use game_table::faces::FaceList;
 use game_table::profiles::Profile;
 use game_table::table::Window;
+use kit_ui::widgets::Fields;
 
 /// The game view, playback state and UI state that the HUD reads.
 #[derive(Clone, Copy, Debug)]
@@ -31,4 +32,5 @@ pub struct HudIn<'a> {
     pub carried: Option<Subject>,
     pub spinning: bool,
     pub placement_scene: Option<&'a PlacementScene>,
+    pub fields: &'a Fields,
 }

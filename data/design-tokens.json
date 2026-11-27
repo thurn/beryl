@@ -1111,6 +1111,22 @@
         "value": 260,
         "note": "The least width of a catalog entry: `.stage-entry`'s `min-width`."
       },
+      "CATALOG_SEARCH_MAX_WIDTH": {
+        "value": 360,
+        "note": "The widest the framed card-name search panel is on a wide screen."
+      },
+      "CATALOG_TIGHT_HEIGHT": {
+        "value": 160,
+        "note": "Below this height (a phone with its keyboard open) the card-name search panel drops to its compact padding and gaps."
+      },
+      "CATALOG_TIGHT_ENTRY_HEIGHT": {
+        "value": 44,
+        "note": "The least height of a name row in the compact card-name search panel, so it stays a touch target."
+      },
+      "CATALOG_TIGHT_FIELD_PADDING_Y": {
+        "value": 6,
+        "note": "The vertical padding of the search field in the compact card-name search panel."
+      },
       "ENTRY_HEIGHT": {
         "value": 52,
         "note": "The height of a catalog entry: `.stage-entry`'s `height`."

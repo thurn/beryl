@@ -4,7 +4,7 @@
 mod feature;
 pub mod bar;
 mod candidates;
-mod catalog;
+pub mod catalog;
 mod declare;
 mod divide;
 mod mode;

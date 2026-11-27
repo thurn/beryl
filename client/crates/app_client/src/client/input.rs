@@ -591,6 +591,7 @@ impl Client {
     fn focused_key(&mut self, key: Key) -> Option<KeyResponse<Action>> {
         if self.bug_key(key)
             || (self.features.sheet.is_none() && self.table_overlay_key(key))
+            || (self.features.sheet.is_none() && self.catalog_key(key))
             || (self.layer.edited_id().is_some() && self.field_key(key))
         {
             return Some(KeyResponse::Handled);
@@ -632,6 +633,68 @@ impl Client {
                 .map(KeyResponse::Action);
         }
         None
+    }
+
+    /// Up, Down and Return while a searchable catalog prompt (card name or creature type) is
+    /// open: arrows move the highlighted row among the filtered entries, and Return picks the
+    /// highlighted entry (or confirms when that entry is already chosen).
+    fn catalog_key(&mut self, key: Key) -> bool {
+        use beryl_protocol::prompt::{ButtonId, Click, ShapeBody};
+        use game_hud::prompts::catalog;
+
+        if self.features.screen != app_screens::screens::Screen::Game
+            || !self.show.settled()
+            || self.features.prompts.waiting_for_reply()
+        {
+            return false;
+        }
+        let Some(prompt) = self.features.prompts.current() else {
+            return false;
+        };
+        if !catalog::is_searchable(prompt) {
+            return false;
+        }
+        let ShapeBody::Catalog { entries, chosen } = &prompt.body else {
+            return false;
+        };
+        let query = self.layer.fields().get(catalog::FIELD).text;
+        let matched = catalog::matching(&query, entries);
+        match key.code {
+            KeyCode::ArrowUp | KeyCode::ArrowDown => {
+                let down = key.code == KeyCode::ArrowDown;
+                let count = matched.len();
+                if self.update_catalog(&catalog::Message::Highlight { down, count }) {
+                    self.show_screen();
+                }
+                true
+            }
+            KeyCode::Enter => {
+                if key.phase != KeyPhase::Down {
+                    return true;
+                }
+                let highlight = self
+                    .catalog_highlight()
+                    .min(matched.len().saturating_sub(1));
+                let Some(&entry_index) = matched.get(highlight) else {
+                    return true;
+                };
+                let index = u16::try_from(entry_index).unwrap_or(u16::MAX);
+                let confirm_ready = *chosen == Some(index)
+                    && prompt
+                        .buttons
+                        .iter()
+                        .any(|button| button.id == ButtonId::Confirm && button.enabled);
+                if confirm_ready {
+                    self.click(Click::Button {
+                        button: ButtonId::Confirm,
+                    });
+                } else {
+                    self.click(Click::Entry { index });
+                }
+                true
+            }
+            _ => false,
+        }
     }
 
     /// A key no focused element took: the declared shortcuts of the features shown, then

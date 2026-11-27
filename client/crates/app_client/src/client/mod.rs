@@ -273,6 +273,12 @@ impl Client {
             };
             if self.features.prompts.decision() != next {
                 self.cancel_interaction();
+                self.features.catalog_focused = None;
+                self.update_catalog(&game_hud::prompts::catalog::Message::Reset);
+                self.layer.set_field(
+                    game_hud::prompts::catalog::FIELD,
+                    kit_ui::widgets::FieldState::default(),
+                );
             }
         }
         self.features
@@ -404,6 +410,19 @@ impl Client {
         builder.placement_work(self.show.table().take_placed(), self.show.take_compiled());
         // The bug report is drawn whether or not the table has settled (`bug`).
         self.features.layer_open = reporting || self.show.settled();
+        if self.features.screen == Screen::Game
+            && self.features.sheet.is_none()
+            && self.show.settled()
+            && self
+                .features
+                .prompts
+                .current()
+                .is_some_and(game_hud::prompts::catalog::is_searchable)
+            && self.features.catalog_focused != self.features.prompts.decision()
+        {
+            self.features.catalog_focused = self.features.prompts.decision();
+            self.layer.focus_field(game_hud::prompts::catalog::FIELD);
+        }
         let faces = self.show.faces();
         // While scripts play only what waits for the table (`Element::waits`) is left out.
         let face_layers = |face, size| match size {
@@ -435,6 +454,7 @@ impl Client {
             },
         );
         builder.finish();
+        self.follow_entry();
         self.finish_frame(table_now, transitioning);
         self.place_story();
         &self.frame

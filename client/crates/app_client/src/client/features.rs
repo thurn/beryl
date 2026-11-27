@@ -206,6 +206,8 @@ pub(super) struct Features {
     frame_times: BTreeSet<u64>,
     /// A field to focus once an update's new layout exists.
     pub focus_after_show: Option<&'static str>,
+    /// The decision whose searchable catalog filter field has already been focused.
+    pub catalog_focused: Option<beryl_protocol::DecisionId>,
 }
 
 impl Default for Features {
@@ -224,6 +226,7 @@ impl Default for Features {
             log_history: Logged::default(),
             frame_times: BTreeSet::new(),
             focus_after_show: None,
+            catalog_focused: None,
         }
     }
 }
@@ -396,12 +399,35 @@ impl Client {
         update::<BugReport>(self, message)
     }
 
+    pub(super) fn catalog_highlight(&self) -> usize {
+        <prompts::Catalog as slots::PromptSlotOwner>::prompt_slot(&self.features.slots)
+            .borrow()
+            .state()
+            .highlight
+    }
+
+    pub(super) fn update_catalog(&mut self, message: &prompts::catalog::Message) -> bool {
+        let (changed, effects) =
+            <prompts::Catalog as slots::PromptSlotOwner>::prompt_slot(&self.features.slots)
+                .borrow_mut()
+                .update(message);
+        for effect in effects {
+            if let Effect::Command(prompts::Command::Click(click)) = effect {
+                self.click(click);
+            }
+        }
+        changed
+    }
+
     pub(super) fn feature_field_changed(&mut self, change: FieldChange) {
         match change.name.as_str() {
             start::SEED => self.update_start(&start::Message::Seed(change.text)),
             testing::FILTER => self.update_testing(&testing::Message::Filter(change.text)),
             bug_report::DESCRIPTION => {
                 self.update_bug(&bug_report::Message::Description(change.text));
+            }
+            prompts::catalog::FIELD => {
+                self.update_catalog(&prompts::catalog::Message::Query(change.text));
             }
             _ => {}
         }
