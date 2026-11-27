@@ -6,26 +6,25 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
-- **A mana ability lent by a lending card did not make its borrower a source
-  of mana.** A creature with a +1/+1 counter beside a lending artifact such as
+- **A mana ability lent by a lending card did not make its borrower a source of
+  mana.** A creature with a +1/+1 counter beside a lending artifact such as
   Agatha's Soul Cauldron, with a creature card exiled whose only activated
-  ability is "{T}: Add {G}", listed the lent ability
-  (`ObjectAbility::Lent`) among its abilities, but no payment could tap it. A
-  game with only a lending card never set `Capability::GrantsMana`, and the
-  layers' test for a mana row (`Rederive::has_granted_mana`,
-  `State::has_granted_mana_row`) read only rows granted from `Face::grants`, so
-  `State::makes_card_mana` stayed true and the solver took the borrower's own
-  face, which makes no mana. The activation in `mana/pay.rs` and the listing of
-  instant-speed mana abilities also had a `Lent` arm that did nothing. Fixed: a
-  `Modification::Lend` sets `Capability::GrantsMana`, a lent row counts as a row
-  that may grant mana, so the borrower is read ability by ability, and the
-  payment activates the lent ability as the lending card's own, as it does a
-  merged permanent's. Guard: the engine test
-  `a_lent_mana_ability_makes_the_borrower_a_mana_source`, and the payment
-  reference (`reference_units`), which walks every ability `State::abilities`
-  gives and so disagrees with the solver at any scenario position where a lent
-  mana ability is skipped. No type forces a reader of `ObjectAbility` to do
-  something in each arm.
+  ability is "{T}: Add {G}", listed the lent ability (`ObjectAbility::Lent`)
+  among its abilities, but no payment could tap it. A game with only a lending
+  card never set `Capability::GrantsMana`, and the layers' test for a mana row
+  (`Rederive::has_granted_mana`, `State::has_granted_mana_row`) read only rows
+  granted from `Face::grants`, so `State::makes_card_mana` stayed true and the
+  solver took the borrower's own face, which makes no mana. The activation in
+  `mana/pay.rs` and the listing of instant-speed mana abilities also had a
+  `Lent` arm that did nothing. Fixed: a `Modification::Lend` sets
+  `Capability::GrantsMana`, a lent row counts as a row that may grant mana, so
+  the borrower is read ability by ability, and the payment activates the lent
+  ability as the lending card's own, as it does a merged permanent's. Guard: the
+  engine test `a_lent_mana_ability_makes_the_borrower_a_mana_source`, and the
+  payment reference (`reference_units`), which walks every ability
+  `State::abilities` gives and so disagrees with the solver at any scenario
+  position where a lent mana ability is skipped. No type forces a reader of
+  `ObjectAbility` to do something in each arm.
 
 - **Listing payment plans took minutes under an opponent's Mana Flare.** With
   the opponent's Mana Flare and a dozen untapped lands beside Azorius Signet and
