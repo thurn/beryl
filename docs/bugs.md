@@ -6,6 +6,26 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Listing payment plans took minutes under an opponent's Mana Flare.** With
+  the opponent's Mana Flare and a dozen untapped lands beside Azorius Signet and
+  Skycloud Expanse, one call of `mana::plans` took up to 68 seconds in a release
+  build. The fuzz's reference checks list the plans of several costs at every
+  position, so `just fuzz` and the shrink tests ran for hours. Mana Flare makes
+  every land a source that the solver's classes cannot describe
+  (`Sources::extras`). `rich::plans` branched on each such land one at a time,
+  so it tried every subset of the lands and every way to pay each priced
+  ability's `{1}` with them, and asked of each result whether it was wasteful.
+  Fixed: the search branches only on which priced activations a payment makes.
+  For each choice, one walk picks the plain sources and the extra sources
+  without a price for the cost and the prices together, as it does for a plain
+  class, and stops adding sources once the chosen ones pay. Extra sources that
+  make the same mana form one group whose members are always tapped in order.
+  Then a short search finds the orders of the priced activations whose prices
+  the pool pays. Guard: the scenario "Plans of a cost under an opponent's Mana
+  Flare with many lands", whose reference checks now list every cost's plans in
+  well under a second. No check fails on a slow search, though: a run that hangs
+  is the only sign, and only a timeout in the scenario check would catch it.
+
 - **Cavern of Souls' colored mana did not pay beside a priced mana ability.**
   With Mountain, Mountain, Azorius Signet and Cavern of Souls naming Elemental,
   Beza, the Bounding Spring (`{2}{W}{W}`) could not be cast, although one

@@ -19,6 +19,7 @@
 mod manual;
 mod plans;
 mod terms;
+mod walk;
 
 use std::collections::BTreeSet;
 

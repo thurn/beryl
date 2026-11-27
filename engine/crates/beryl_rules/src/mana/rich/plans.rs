@@ -1,8 +1,14 @@
 //! Sequence plan search for priced and multi-term mana abilities.
 //!
+//! A sequence activates its priced mana abilities in some order, each paying its price from the
+//! pool as it then stands. The other sources it taps, the plain classes and the extras whose
+//! abilities all lack a price ([`Free`]), make the same mana whenever they are activated, so a
+//! sequence activates them all first. The search therefore branches only on which priced
+//! activations a payment makes. For each choice, one [`Walk`] chooses the other sources for the
+//! cost and the prices together, and [`PlanSearch::order`] finds the orders of the priced
+//! activations whose prices the pool pays.
+//!
 //! Implements: none. Enumerates non-wasteful payment sequences for `mana::rich`.
-
-use std::collections::BTreeSet;
 
 use crate::bitboard::Bitboard;
 use crate::card::ManaCost;
@@ -16,9 +22,9 @@ use crate::table::GameTable;
 use super::super::remembered::Paying;
 use super::super::solver::Plan;
 use super::super::sources::Sources;
-use super::super::units::Units;
 use super::super::{CLASSES, KINDS, Taps};
-use super::{Sequence, Step, pays_from_state, pays_with_sources};
+use super::walk::{Chosen, Free, Walk, after_restricted, is_free, restricted_units, unrestricted};
+use super::{Sequence, Step, each_pool_payment, pays_from_state, pays_with_sources};
 
 /// Adds to `out` the plans of a payment of `cost` by `player` with none of `exclude`, for what
 /// `paying` is for, that activate the sources the classes of `sources` cannot say
@@ -47,27 +53,47 @@ pub(in crate::mana) fn plans<L: Layout>(
     if !pays_with_sources(s, player, cost, sources) {
         return Ok(());
     }
-    let init_pool = s.player(player).mana().amounts_u8();
+    let mut options = Vec::new();
+    for (ei, extra) in sources.extras.iter().enumerate() {
+        if is_free(sources, ei) {
+            continue;
+        }
+        for (ai, act) in extra.activations.iter().enumerate() {
+            act.each_made(&mut |made| {
+                options.push(Priced {
+                    extra: u8::try_from(ei).expect("fits u8"),
+                    activation: u8::try_from(ai).expect("fits u8"),
+                    price: act.price,
+                    made,
+                });
+                true
+            });
+        }
+    }
+    let free = Free::of(sources);
     let mut ctx = PlanSearch {
-        init_pool,
+        init_pool: s.player(player).mana().amounts_u8(),
         cost,
         greedy,
         sources,
+        options,
         accepted,
         out,
-        seen: BTreeSet::new(),
         full: false,
         stop: false,
     };
-    let state = SearchState {
-        pool: init_pool,
-        taps: Table::filled(0),
-        extra_used: [0; CLASSES],
-        plain: Vec::new(),
-        steps: Vec::new(),
-    };
-    search_plans(&mut ctx, &state);
+    ctx.search(&free, 0, &mut [0; CLASSES], &mut Vec::new());
     if ctx.full { Err(Full) } else { Ok(()) }
+}
+
+/// An activation of a priced extra a plan may make, with what it makes; the payment of its
+/// price is chosen once the order of the activations is.
+#[derive(Clone, Copy)]
+struct Priced {
+    extra: u8,
+    activation: u8,
+    price: ManaCost,
+    made: [u8; KINDS],
 }
 
 struct PlanSearch<'a, L: Layout, F: FnMut(&Plan<L>) -> bool> {
@@ -75,152 +101,211 @@ struct PlanSearch<'a, L: Layout, F: FnMut(&Plan<L>) -> bool> {
     cost: ManaCost,
     greedy: bool,
     sources: &'a Sources<L>,
+    /// Every activation of every extra with a priced ability, for each thing it can make.
+    options: Vec<Priced>,
     accepted: &'a mut F,
     out: &'a mut L::Queue<Plan<L>, 64>,
-    seen: BTreeSet<([u8; CLASSES], Vec<u8>, [u8; KINDS])>,
     full: bool,
     stop: bool,
 }
 
-#[derive(Clone)]
-struct SearchState<L: Layout> {
-    pool: [u8; KINDS],
-    taps: Taps<L>,
-    extra_used: [u8; CLASSES],
-    plain: Vec<(u8, u8)>,
-    steps: Vec<Step>,
-}
+impl<L: Layout, F: FnMut(&Plan<L>) -> bool> PlanSearch<'_, L, F> {
+    fn done(&self) -> bool {
+        self.stop || self.full
+    }
 
-fn search_plans<L: Layout, F: FnMut(&Plan<L>) -> bool>(
-    ctx: &mut PlanSearch<'_, L, F>,
-    st: &SearchState<L>,
-) {
-    if ctx.stop || ctx.full {
-        return;
-    }
-    let taps_key: Vec<u8> = st.taps.as_slice()[..ctx.sources.classes().len()].to_vec();
-    if !ctx.seen.insert((st.extra_used, taps_key, st.pool)) {
-        return;
-    }
-    if !st.steps.is_empty() {
-        try_finish(ctx, st);
-        if ctx.stop || ctx.full {
-            return;
+    /// Plans for the priced activations `chosen`, indices into `options` in order, and for
+    /// each way of adding more of `options` from `from` onward. `used` counts the members of
+    /// each extra `chosen` activates.
+    fn search(
+        &mut self,
+        free: &[Free],
+        from: usize,
+        used: &mut [u8; CLASSES],
+        chosen: &mut Vec<usize>,
+    ) {
+        self.finish(free, used, chosen);
+        for i in from..self.options.len() {
+            if self.done() {
+                return;
+            }
+            let ei = usize::from(self.options[i].extra);
+            if used[ei] >= self.sources.extras[ei].count {
+                continue;
+            }
+            used[ei] += 1;
+            chosen.push(i);
+            // Activations that are already wasteful lead only to wasteful plans: more sources
+            // never make one less so.
+            let taps: Taps<L> = Table::filled(0);
+            if !is_wasteful(self.init_pool, self.sources, &taps, used, 0, self.cost) {
+                self.search(free, i, used, chosen);
+            }
+            chosen.pop();
+            used[ei] -= 1;
         }
     }
-    for (ei, extra) in ctx.sources.extras.iter().enumerate() {
-        if st.extra_used[ei] >= extra.count {
-            continue;
-        }
-        for (ai, act) in extra.activations.iter().enumerate() {
-            let mut next_states = Vec::new();
-            each_concrete_payment(
-                act.price,
-                st.pool,
-                &st.taps,
-                ctx.sources,
-                false,
-                &mut |price_spend, delta_plain, left_pool, next_taps, _rem_used| {
-                    act.each_made(&mut |made| {
-                        let mut pool_after = left_pool;
-                        for (p, &m) in pool_after.iter_mut().zip(&made) {
-                            *p = p.saturating_add(m);
-                        }
-                        let mut next_used = st.extra_used;
-                        next_used[ei] += 1;
-                        let mut plain = st.plain.clone();
-                        plain.extend_from_slice(delta_plain);
-                        let mut steps = st.steps.clone();
-                        steps.push(Step {
-                            extra: u8::try_from(ei).expect("fits u8"),
-                            activation: u8::try_from(ai).expect("fits u8"),
-                            price_spend,
-                            made,
-                        });
-                        next_states.push(SearchState {
-                            pool: pool_after,
-                            taps: next_taps.clone(),
-                            extra_used: next_used,
-                            plain,
-                            steps,
-                        });
-                        true
-                    });
-                    true
-                },
-            );
-            for next in next_states {
-                search_plans(ctx, &next);
-                if ctx.stop || ctx.full {
+
+    /// Offers the plans that make the priced activations `chosen` and tap other sources.
+    fn finish(&mut self, free: &[Free], used: &[u8; CLASSES], chosen: &[usize]) {
+        let mut need = self.cost;
+        let mut pool = self.init_pool;
+        for &i in chosen {
+            let option = self.options[i];
+            need = need.plus(option.price);
+            for (p, &m) in pool.iter_mut().zip(&option.made) {
+                // More mana of one kind than the layout holds: the game goes on in a larger one.
+                let Some(sum) = p.checked_add(m) else {
+                    self.full = true;
                     return;
+                };
+                *p = sum;
+            }
+        }
+        let walk = Walk::new(need, pool, self.sources, free);
+        walk.each(*used, &mut |ch| {
+            if chosen.is_empty() && ch.steps.is_empty() {
+                // A payment with no extra activation is the plain path's plan.
+                return Some(true);
+            }
+            let mut order = chosen.to_vec();
+            let mut paid = false;
+            loop {
+                paid |= self.order(ch, &order);
+                if self.done() || !next_permutation(&mut order) {
+                    break;
                 }
             }
+            paid.then_some(!self.done())
+        });
+    }
+
+    /// Offers the plans that tap what `ch` chose and then make the priced activations `order`
+    /// in that order, for each way of paying their prices from the pool; whether there is one.
+    fn order(&mut self, ch: &Chosen<L>, order: &[usize]) -> bool {
+        let Some(pool) = unrestricted(self.init_pool, self.sources, ch) else {
+            self.full = true;
+            return false;
+        };
+        let mut steps = ch.steps.clone();
+        let mut paid = false;
+        self.pay_prices(ch, order, pool, &mut steps, &mut paid);
+        paid
+    }
+
+    fn pay_prices(
+        &mut self,
+        ch: &Chosen<L>,
+        order: &[usize],
+        pool: [u8; KINDS],
+        steps: &mut Vec<Step>,
+        paid: &mut bool,
+    ) {
+        let Some((&first, rest)) = order.split_first() else {
+            self.pay_cost(ch, pool, steps, paid);
+            return;
+        };
+        let option = self.options[first];
+        each_pool_payment(pool, option.price, &mut |price_spend, left| {
+            let mut after = left;
+            for (p, &m) in after.iter_mut().zip(&option.made) {
+                let Some(sum) = p.checked_add(m) else {
+                    self.full = true;
+                    return false;
+                };
+                *p = sum;
+            }
+            steps.push(Step {
+                extra: option.extra,
+                activation: option.activation,
+                price_spend,
+                made: option.made,
+            });
+            self.pay_prices(ch, rest, after, steps, paid);
+            steps.pop();
+            !self.done()
+        });
+    }
+
+    fn pay_cost(&mut self, ch: &Chosen<L>, pool: [u8; KINDS], steps: &[Step], paid: &mut bool) {
+        let mut units = restricted_units(self.sources, ch);
+        for (k, &n) in pool.iter().enumerate() {
+            units.add(1 << k, u16::from(n));
+        }
+        if !units.pays(self.cost) {
+            return;
+        }
+        let rest = after_restricted(self.cost, self.sources, ch);
+        let Some(final_spend) = exact_concrete_spend(pool, rest) else {
+            return;
+        };
+        *paid = true;
+        let mut left = pool;
+        for (l, &s) in left.iter_mut().zip(&final_spend) {
+            *l -= s;
+        }
+        let found = Plan {
+            spend: [0; KINDS],
+            taps: ch.taps.clone(),
+            left,
+            remembered: ch.rem_used,
+            sequence: Some(Box::new(Sequence {
+                plain: ch.plain.clone(),
+                steps: steps.to_vec(),
+                final_spend,
+            })),
+        };
+        // The walk began from the members the priced activations use.
+        self.offer(found, &ch.extra_used);
+    }
+
+    /// Keeps `plan`, which activates `extra_used` of each extra, unless it is wasteful, a plan
+    /// with its outcome taps no more sources, or `accepted` refuses it.
+    fn offer(&mut self, plan: Plan<L>, extra_used: &[u8; CLASSES]) {
+        // Whether the plan is wasteful costs far more to ask than the rest, so it is asked last.
+        let outcome = self.sources.outcome(&plan);
+        let same = self
+            .out
+            .iter()
+            .position(|q| self.sources.outcome(q) == outcome);
+        if same.is_some_and(|pos| plan_taps(&plan) >= plan_taps(&self.out.as_slice()[pos])) {
+            return;
+        }
+        let wasteful = is_wasteful(
+            self.init_pool,
+            self.sources,
+            &plan.taps,
+            extra_used,
+            plan.remembered,
+            self.cost,
+        );
+        if wasteful || !(self.accepted)(&plan) {
+            return;
+        }
+        if let Some(pos) = same {
+            self.out.as_mut_slice()[pos] = plan;
+        } else if self.out.push(plan).is_err() {
+            self.full = true;
+        } else if self.greedy {
+            self.stop = true;
         }
     }
 }
 
-fn try_finish<L: Layout, F: FnMut(&Plan<L>) -> bool>(
-    ctx: &mut PlanSearch<'_, L, F>,
-    st: &SearchState<L>,
-) {
-    let mut candidates = Vec::new();
-    each_concrete_payment(
-        ctx.cost,
-        st.pool,
-        &st.taps,
-        ctx.sources,
-        true,
-        &mut |final_spend, delta_plain, left_pool, final_taps, rem_used| {
-            let mut plain = st.plain.clone();
-            plain.extend_from_slice(delta_plain);
-            candidates.push(Plan {
-                spend: [0; KINDS],
-                taps: final_taps.clone(),
-                left: left_pool,
-                remembered: rem_used,
-                sequence: Some(Box::new(Sequence {
-                    plain,
-                    steps: st.steps.clone(),
-                    final_spend,
-                })),
-            });
-            !ctx.greedy
-        },
-    );
-    for plan in candidates {
-        if is_wasteful(
-            ctx.init_pool,
-            ctx.sources,
-            &plan.taps,
-            &st.extra_used,
-            plan.remembered,
-            ctx.cost,
-        ) {
-            continue;
-        }
-        if !(ctx.accepted)(&plan) {
-            continue;
-        }
-        let outcome = ctx.sources.outcome(&plan);
-        if let Some(pos) = ctx
-            .out
-            .iter()
-            .position(|q| ctx.sources.outcome(q) == outcome)
-        {
-            if plan_taps(&plan) < plan_taps(&ctx.out.as_slice()[pos]) {
-                ctx.out.as_mut_slice()[pos] = plan;
-            }
-            continue;
-        }
-        if ctx.out.push(plan).is_err() {
-            ctx.full = true;
-            return;
-        }
-        if ctx.greedy {
-            ctx.stop = true;
-            return;
-        }
-    }
+/// Rearranges `order` into the next greater permutation, as C++'s `next_permutation`: false,
+/// leaving it sorted, after the greatest.
+fn next_permutation(order: &mut [usize]) -> bool {
+    let Some(i) = order.windows(2).rposition(|w| w[0] < w[1]) else {
+        order.reverse();
+        return false;
+    };
+    let j = order
+        .iter()
+        .rposition(|&x| x > order[i])
+        .expect("a greater element");
+    order.swap(i, j);
+    order[i + 1..].reverse();
+    true
 }
 
 /// Total number of sources a plan taps (plain sources plus rich steps).
@@ -244,11 +329,13 @@ fn is_wasteful<L: Layout>(
     for (i, c) in sources.classes().iter().enumerate() {
         if !c.is_twin() {
             let used_here = plan_taps[i] + c.twin().map_or(0, |tw| plan_taps[usize::from(tw)]);
+            // Remaining untapped sources in this class; saturating at 0 means none left.
             base_taps[i] = c.count().saturating_sub(used_here);
         }
     }
     let mut base_extra = [0u8; CLASSES];
     for (i, e) in sources.extras.iter().enumerate() {
+        // Remaining unused activations in this extra class; saturating at 0 means none left.
         base_extra[i] = e.count.saturating_sub(extra_used[i]);
     }
     let all_rem = if sources.remembered().is_empty() {
@@ -278,300 +365,6 @@ fn is_wasteful<L: Layout>(
         }
     }
     false
-}
-
-#[allow(clippy::too_many_arguments)]
-fn each_concrete_payment<L: Layout>(
-    cost: ManaCost,
-    pool: [u8; KINDS],
-    taps: &Taps<L>,
-    sources: &Sources<L>,
-    allow_restricted: bool,
-    f: &mut impl FnMut([u8; KINDS], &[(u8, u8)], [u8; KINDS], &Taps<L>, u8) -> bool,
-) {
-    let total = cost.total(0);
-    if total == 0 {
-        f([0; KINDS], &[], pool, taps, 0);
-        return;
-    }
-    let pool_sum: u32 = pool.iter().map(|&n| u32::from(n)).sum();
-    let rem_len = if allow_restricted {
-        sources.remembered().len()
-    } else {
-        0
-    };
-    let mut rem_max = pool_sum + u32::try_from(rem_len).expect("fits u32");
-    for (i, c) in sources.classes().iter().enumerate() {
-        if !allow_restricted && c.is_restricted() {
-            continue;
-        }
-        let avail = avail_class(sources, taps, i);
-        rem_max += u32::from(avail) * u32::from(c.amount);
-    }
-    if rem_max < total {
-        return;
-    }
-    let mut cur_taps = taps.clone();
-    let mut delta_plain = Vec::new();
-    let mut pool_spend = [0u8; KINDS];
-    walk_concrete(
-        cost,
-        total,
-        pool,
-        sources,
-        allow_restricted,
-        0,
-        0,
-        0,
-        &mut pool_spend,
-        0,
-        &mut cur_taps,
-        &mut delta_plain,
-        f,
-    );
-}
-
-fn avail_class<L: Layout>(sources: &Sources<L>, taps: &Taps<L>, i: usize) -> u8 {
-    let c = &sources.classes()[i];
-    let twin_taps = c.twin().map_or(0, |tw| taps[usize::from(tw)]);
-    c.count().saturating_sub(taps[i]).saturating_sub(twin_taps)
-}
-
-#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
-fn walk_concrete<L: Layout>(
-    cost: ManaCost,
-    total: u32,
-    pool: [u8; KINDS],
-    sources: &Sources<L>,
-    allow_restricted: bool,
-    pos: usize,
-    must: u32,
-    have_max: u32,
-    pool_spend: &mut [u8; KINDS],
-    rem_used: u8,
-    taps: &mut Taps<L>,
-    delta_plain: &mut Vec<(u8, u8)>,
-    f: &mut impl FnMut([u8; KINDS], &[(u8, u8)], [u8; KINDS], &Taps<L>, u8) -> bool,
-) -> bool {
-    let rem_len = if allow_restricted {
-        sources.remembered().len()
-    } else {
-        0
-    };
-    let classes = sources.classes();
-    if pos == KINDS + rem_len + classes.len() || must == total {
-        if have_max < total {
-            return true;
-        }
-        let mut combined = *pool_spend;
-        for &(ci, color) in delta_plain.iter() {
-            let c = &classes[usize::from(ci)];
-            if !c.is_restricted() {
-                combined[usize::from(color)] =
-                    combined[usize::from(color)].saturating_add(c.amount);
-            }
-        }
-        let mut units = Units::NONE;
-        for (k, &n) in combined.iter().enumerate() {
-            if n > 0 {
-                units.add(1 << k, u16::from(n));
-            }
-        }
-        for (ri, &(_, kind, _)) in sources.remembered().iter().enumerate() {
-            if rem_used & (1 << ri) != 0 {
-                units.add(1 << kind, 1);
-            }
-        }
-        for &(ci, color) in delta_plain.iter() {
-            let c = &classes[usize::from(ci)];
-            if c.is_restricted() {
-                units.add(1 << color, u16::from(c.amount));
-            }
-        }
-        if !units.pays(cost) {
-            return true;
-        }
-        let mut after_restricted = cost;
-        for (ri, &(_, kind, _)) in sources.remembered().iter().enumerate() {
-            if rem_used & (1 << ri) != 0 {
-                super::super::pool::pay_unit(&mut after_restricted, usize::from(kind));
-            }
-        }
-        for &(ci, color) in delta_plain.iter() {
-            let c = &classes[usize::from(ci)];
-            if c.is_restricted() {
-                for _ in 0..c.amount {
-                    super::super::pool::pay_unit(&mut after_restricted, usize::from(color));
-                }
-            }
-        }
-        let Some(spend_for_cost) = exact_concrete_spend(combined, after_restricted) else {
-            return true;
-        };
-        let mut left = pool;
-        for (l, &s) in left.iter_mut().zip(pool_spend.iter()) {
-            *l -= s;
-        }
-        for (k, (&c, &s)) in combined.iter().zip(spend_for_cost.iter()).enumerate() {
-            left[k] = left[k].saturating_add(c - s);
-        }
-        return f(spend_for_cost, delta_plain, left, taps, rem_used);
-    }
-    if pos < KINDS {
-        for n in (0..=pool[pos]).rev() {
-            if must + u32::from(n) > total {
-                continue;
-            }
-            pool_spend[pos] = n;
-            if !walk_concrete(
-                cost,
-                total,
-                pool,
-                sources,
-                allow_restricted,
-                pos + 1,
-                must + u32::from(n),
-                have_max + u32::from(n),
-                pool_spend,
-                rem_used,
-                taps,
-                delta_plain,
-                f,
-            ) {
-                pool_spend[pos] = 0;
-                return false;
-            }
-        }
-        pool_spend[pos] = 0;
-        return true;
-    }
-    if pos < KINDS + rem_len {
-        let ri = pos - KINDS;
-        let bit = 1u8 << ri;
-        if must < total
-            && !walk_concrete(
-                cost,
-                total,
-                pool,
-                sources,
-                allow_restricted,
-                pos + 1,
-                must + 1,
-                have_max + 1,
-                pool_spend,
-                rem_used | bit,
-                taps,
-                delta_plain,
-                f,
-            )
-        {
-            return false;
-        }
-        return walk_concrete(
-            cost,
-            total,
-            pool,
-            sources,
-            allow_restricted,
-            pos + 1,
-            must,
-            have_max,
-            pool_spend,
-            rem_used,
-            taps,
-            delta_plain,
-            f,
-        );
-    }
-    let ci = pos - KINDS - rem_len;
-    let c = &classes[ci];
-    if !allow_restricted && c.is_restricted() {
-        return walk_concrete(
-            cost,
-            total,
-            pool,
-            sources,
-            allow_restricted,
-            pos + 1,
-            must,
-            have_max,
-            pool_spend,
-            rem_used,
-            taps,
-            delta_plain,
-            f,
-        );
-    }
-    let avail = avail_class(sources, taps, ci);
-    let max_taps = u32::from(avail).min(total - must);
-    let base_len = delta_plain.len();
-    for n in 0..=max_taps {
-        let n_u8 = u8::try_from(n).expect("fits u8");
-        taps[ci] += n_u8;
-        let keep_going = choose_class_colors(
-            u8::try_from(ci).expect("fits u8"),
-            c.kinds,
-            0,
-            n_u8,
-            delta_plain,
-            &mut |dp| {
-                walk_concrete(
-                    cost,
-                    total,
-                    pool,
-                    sources,
-                    allow_restricted,
-                    pos + 1,
-                    must + n,
-                    have_max + n * u32::from(c.amount),
-                    pool_spend,
-                    rem_used,
-                    taps,
-                    dp,
-                    f,
-                )
-            },
-        );
-        delta_plain.truncate(base_len);
-        taps[ci] -= n_u8;
-        if !keep_going {
-            return false;
-        }
-    }
-    true
-}
-
-fn choose_class_colors(
-    ci: u8,
-    kinds: u8,
-    from: usize,
-    left: u8,
-    delta_plain: &mut Vec<(u8, u8)>,
-    f: &mut impl FnMut(&mut Vec<(u8, u8)>) -> bool,
-) -> bool {
-    if left == 0 {
-        return f(delta_plain);
-    }
-    let base = delta_plain.len();
-    for k in from..KINDS {
-        if kinds & (1 << k) == 0 {
-            continue;
-        }
-        let rest_mask = kinds & !((1u8 << (k + 1)).wrapping_sub(1));
-        let min_n = if rest_mask == 0 { left } else { 0 };
-        for n in (min_n..=left).rev() {
-            for _ in 0..n {
-                delta_plain.push((ci, u8::try_from(k).expect("fits u8")));
-            }
-            let cont = choose_class_colors(ci, kinds, k + 1, left - n, delta_plain, f);
-            delta_plain.truncate(base);
-            if !cont {
-                return false;
-            }
-        }
-        return true;
-    }
-    true
 }
 
 fn exact_concrete_spend(avail: [u8; KINDS], cost: ManaCost) -> Option<[u8; KINDS]> {

@@ -35,5 +35,41 @@ pub mod scenarios {
                 ME.casts(Card::ChartACourse),
                 ME.has(Zone::Graveyard, Card::ChartACourse, 1),
             ]),
+        // Under the opponent's Mana Flare every land is a source the mana solver's classes
+        // cannot say, and the reference checks list the plans of each cost at every position.
+        // A search that tried every subset of the lands before reaching the Mountain took
+        // a minute to list the plans of {R} on this board.
+        Scenario::new("Plans of a cost under an opponent's Mana Flare with many lands")
+            .interaction(&[
+                Card::PanglacialWurm,
+                Card::AzoriusSignet,
+                Card::CavernOfSouls,
+                Card::FloodfarmVerge,
+                Card::SkycloudExpanse,
+                Card::UrborgTombOfYawgmoth,
+            ])
+            .battlefield(
+                P0,
+                &[
+                    Card::Plains,
+                    Card::Forest,
+                    Card::UrborgTombOfYawgmoth,
+                    Card::SnowCoveredIsland,
+                    Card::SkycloudExpanse,
+                    Card::Island,
+                    Card::Mountain,
+                    Card::FloodfarmVerge,
+                    Card::Forest,
+                    Card::Plains,
+                    Card::Island,
+                    Card::Swamp,
+                    Card::AzoriusSignet,
+                ],
+            )
+            .battlefield(P1, &[Card::ManaFlare])
+            .hand(P0, &[Card::PanglacialWurm, Card::Island])
+            .library(P0, &[Card::Island; 7])
+            .library(P1, &[Card::CavernOfSouls, Card::Island, Card::Island])
+            .actions(&[ME.plays(Card::Island), ME.tapped(Card::Island, 0)]),
     ];
 }
