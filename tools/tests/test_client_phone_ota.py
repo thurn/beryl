@@ -31,7 +31,9 @@ def test_the_page_links_to_a_manifest_that_names_the_served_ipa(
     page = phone_ota.stage(app(tmp_path), served, BASE)
     assert page == f"{BASE}/"
     index = (served / "index.html").read_text()
-    link = re.search(r"itms-services://\?action=download-manifest&amp;url=(\S+?)'", index)
+    link = re.search(
+        r"itms-services://\?action=download-manifest&amp;url=(\S+?)'", index
+    )
     assert link is not None and link[1].startswith(f"{BASE}/manifest-")
     manifest = plistlib.loads((served / link[1].removeprefix(f"{BASE}/")).read_bytes())
     item = manifest["items"][0]
