@@ -1,15 +1,15 @@
-//! The macOS call the desktop host makes that winit does not: a display link that paces frames
-//! at the display's highest rate. Each `unsafe` block here is the one platform call that needs
-//! it.
+//! The macOS calls the desktop host makes that winit does not: a display link that paces frames
+//! at the display's highest rate, and the time macOS stamped each mouse event. Each `unsafe`
+//! block here is the one platform call that needs it.
 
 use std::cell::Cell;
 use std::ptr::NonNull;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use objc2::rc::Retained;
 use objc2::runtime::AnyObject;
 use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
-use objc2_app_kit::NSView;
+use objc2_app_kit::{NSApplication, NSEvent, NSEventType, NSView};
 use objc2_foundation::{NSObject, NSRunLoop, NSRunLoopCommonModes};
 use objc2_quartz_core::{CACurrentMediaTime, CADisplayLink, CAFrameRateRange};
 use winit::event_loop::EventLoopProxy;
@@ -178,5 +178,46 @@ fn range(hz: f32) -> CAFrameRateRange {
 impl Drop for DisplayLink {
     fn drop(&mut self) {
         self.link.invalidate();
+    }
+}
+
+/// Asks `AppKit` for every mouse event macOS makes. By default it merges the mouse moves and
+/// drags waiting in the app's queue into the latest one, which carries the latest one's time
+/// stamp. Then a run of events the app took late would look like one event the system sent
+/// late, and `pointer_stamp` could not tell the two apart.
+pub fn deliver_every_mouse_event() {
+    NSEvent::setMouseCoalescingEnabled(false);
+}
+
+/// When macOS stamped the mouse event `AppKit` is dispatching, as an `Instant`, or `None`
+/// outside a mouse event or off the main thread. winit turns the event into a window event while
+/// `AppKit` dispatches it, so a host calls this from the window event to learn how long the event
+/// took to reach the app.
+pub fn pointer_stamp() -> Option<Instant> {
+    let mtm = MainThreadMarker::new()?;
+    let event = NSApplication::sharedApplication(mtm).currentEvent()?;
+    let mouse = [
+        NSEventType::MouseMoved,
+        NSEventType::LeftMouseDown,
+        NSEventType::LeftMouseUp,
+        NSEventType::LeftMouseDragged,
+        NSEventType::RightMouseDown,
+        NSEventType::RightMouseUp,
+        NSEventType::RightMouseDragged,
+        NSEventType::OtherMouseDown,
+        NSEventType::OtherMouseUp,
+        NSEventType::OtherMouseDragged,
+    ];
+    if !mouse.contains(&event.r#type()) {
+        return None;
+    }
+    // An event's time stamp and `CACurrentMediaTime` are both seconds since the machine
+    // started, not counting sleep.
+    let age = CACurrentMediaTime() - event.timestamp();
+    let now = Instant::now();
+    if age.is_finite() && age >= 0.0 {
+        now.checked_sub(Duration::from_secs_f64(age))
+    } else {
+        Some(now)
     }
 }

@@ -277,6 +277,8 @@ impl<S: FnOnce(&mut Renderer, Opening) -> Chosen> App<S> {
         });
         let (client, mut feed) = self.client.take().ok_or("the window opened twice")?;
         let translator = Translator::new(size, window.scale_factor());
+        #[cfg(target_os = "macos")]
+        crate::macos::deliver_every_mouse_event();
         crate::threads::interactive_thread();
         feed.opened(&Opened {
             display_hz,
@@ -537,7 +539,7 @@ impl<S: FnOnce(&mut Renderer, Opening) -> Chosen> ApplicationHandler<UserEvent> 
                     size.height,
                 );
             }
-            running.frames.handle(input);
+            running.frames.handle_stamped(input, pointer_stamp(&event));
         }
     }
 
@@ -579,6 +581,26 @@ impl<S: FnOnce(&mut Renderer, Opening) -> Chosen> ApplicationHandler<UserEvent> 
             (None, None) => ControlFlow::Wait,
         };
         event_loop.set_control_flow(flow);
+    }
+}
+
+/// When the operating system stamped the mouse event behind `event`, where the host can learn
+/// it: on macOS, for a pointer move or button. The frame log keeps it beside the time the client
+/// took the event.
+fn pointer_stamp(event: &WindowEvent) -> Option<Instant> {
+    if !matches!(
+        event,
+        WindowEvent::CursorMoved { .. } | WindowEvent::MouseInput { .. }
+    ) {
+        return None;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        crate::macos::pointer_stamp()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        None
     }
 }
 

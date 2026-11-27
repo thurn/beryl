@@ -162,6 +162,46 @@ impl AppFeed {
         self.input(&input);
         client.handle(input);
     }
+
+    /// Every input before the client sees it, with when the operating system stamped it where
+    /// the host knows.
+    fn seen_input(&mut self, input: &Input, stamped: Option<std::time::Instant>) {
+        match input {
+            Input::Data(_) => println!("{DATA_RELOADED}"),
+            Input::DataError(error) => eprintln!("beryl: data reload failed: {error}"),
+            _ => {}
+        }
+        if let Some(Ok(log)) = self.log.borrow_mut().as_mut() {
+            log.input_stamped(input, stamped);
+        }
+        self.bugs.seen(input);
+        let mut summarize = false;
+        if let Input::Update(update) = input {
+            self.searching = matches!(update.view.status, Status::Thinking);
+            // A replayed recording ends when its last script has played, not at its game's end.
+            let live = matches!(self.source, Some(Source::Live(_)));
+            if live
+                && !self.ended
+                && let Status::Over { outcome } = &update.view.status
+            {
+                self.ended = true;
+                summarize = self.finish == Finish::AtSuspend;
+                if let Some(Ok(log)) = self.log.borrow_mut().as_mut() {
+                    log.result(
+                        game::outcome_text(outcome),
+                        u32::from(update.view.turn.number),
+                    );
+                }
+                println!("{GAME_OVER}");
+            }
+        }
+        if let Input::Device(DeviceInput::Lifecycle(Lifecycle::Suspended)) = input {
+            summarize = self.finish == Finish::AtSuspend;
+        }
+        if summarize && let Some(Ok(log)) = self.log.borrow_mut().as_mut() {
+            log.summarize();
+        }
+    }
 }
 
 impl Drop for AppFeed {
@@ -200,41 +240,11 @@ impl Feed for AppFeed {
     }
 
     fn input(&mut self, input: &Input) {
-        match input {
-            Input::Data(_) => println!("{DATA_RELOADED}"),
-            Input::DataError(error) => eprintln!("beryl: data reload failed: {error}"),
-            _ => {}
-        }
-        if let Some(Ok(log)) = self.log.borrow_mut().as_mut() {
-            log.input(input);
-        }
-        self.bugs.seen(input);
-        let mut summarize = false;
-        if let Input::Update(update) = input {
-            self.searching = matches!(update.view.status, Status::Thinking);
-            // A replayed recording ends when its last script has played, not at its game's end.
-            let live = matches!(self.source, Some(Source::Live(_)));
-            if live
-                && !self.ended
-                && let Status::Over { outcome } = &update.view.status
-            {
-                self.ended = true;
-                summarize = self.finish == Finish::AtSuspend;
-                if let Some(Ok(log)) = self.log.borrow_mut().as_mut() {
-                    log.result(
-                        game::outcome_text(outcome),
-                        u32::from(update.view.turn.number),
-                    );
-                }
-                println!("{GAME_OVER}");
-            }
-        }
-        if let Input::Device(DeviceInput::Lifecycle(Lifecycle::Suspended)) = input {
-            summarize = self.finish == Finish::AtSuspend;
-        }
-        if summarize && let Some(Ok(log)) = self.log.borrow_mut().as_mut() {
-            log.summarize();
-        }
+        self.seen_input(input, None);
+    }
+
+    fn stamped_input(&mut self, input: &Input, stamped: std::time::Instant) {
+        self.seen_input(input, Some(stamped));
     }
 
     fn before(&mut self, client: &mut Client, clock: u64) {

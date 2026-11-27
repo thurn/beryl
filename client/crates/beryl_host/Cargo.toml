@@ -64,10 +64,11 @@ arboard = { version = "3.4.1", default-features = false }
 
 # The display link that asks macOS for the display's highest refresh rate (src/macos.rs): winit
 # and wgpu offer none, and without one the prototype's window ran at 60 Hz on a 120 Hz display.
-# These replace hand-written Objective-C message sends.
+# The same crates read each mouse event's time stamp, which winit drops. These replace
+# hand-written Objective-C message sends.
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6.5"
-objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSResponder", "NSView", "objc2-quartz-core"] }
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSApplication", "NSEvent", "NSResponder", "NSView", "objc2-quartz-core"] }
 objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSObject", "NSRunLoop"] }
 objc2-quartz-core = { version = "0.3.2", default-features = false, features = ["std", "CABase", "CADisplayLink", "CAFrameRateRange"] }
 

@@ -479,7 +479,11 @@ The frame log's summary counts the frames drawn while a pointer button is held
 (`dragging`), and on the macOS display link the frames that finished after the
 display time their tick was for (`missed_target`). Those frames are shown a
 refresh late without counting as late. The `drag-hand` drive script is the
-benchmark for dragging cards in hand. Its header gives the commands.
+benchmark for dragging cards in hand (see
+[Benchmarking](benchmarking.md#the-drag-benchmark)). On macOS the desktop host
+turns off `AppKit`'s merging of queued mouse moves and writes, on each pointer
+input line, when the system stamped the event (`os_ms`). `just client frames`
+uses it to say whether a stall in a drag came from the system or the app.
 
 ## Interface checks
 

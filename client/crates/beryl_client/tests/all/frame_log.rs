@@ -523,3 +523,32 @@ fn frames_drawn_during_a_drag_and_frames_that_missed_their_target_are_counted() 
     assert!(times[0] <= times[1], "{times:?}");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A dragged card froze while frames kept coming because no pointer moves reached the app.
+/// Whether macOS sent none or the app took them late shows only beside the time the system
+/// stamped each event, so a stamped input's line carries it as `os_ms` on `at_ms`'s clock.
+#[test]
+fn a_stamped_input_line_carries_the_system_stamp_on_its_own_clock() {
+    use kit_ui::input::PointerPhase;
+    let dir = dir("stamped");
+    let mut log = FrameLog::create(&dir, &plain_run(50)).expect("the log is made");
+    std::thread::sleep(std::time::Duration::from_millis(30));
+    let stamped = (std::time::Instant::now())
+        .checked_sub(std::time::Duration::from_millis(20))
+        .expect("the clock has run 20 ms");
+    log.input_stamped(&mouse(PointerPhase::Down, 500.0), Some(stamped));
+    log.input(&mouse(PointerPhase::Up, 500.0));
+    let path = log.path().to_owned();
+    log.finish().expect("the log is finished");
+    let inputs: Vec<serde_json::Value> = (lines(&path).into_iter())
+        .filter_map(|line| line.get("input").cloned())
+        .collect();
+    let at = inputs[0]["at_ms"].as_f64().expect("an input has its time");
+    let os = inputs[0]["os_ms"]
+        .as_f64()
+        .expect("a stamped input has the system's");
+    // The input was taken at least 20 ms after its stamp; a loaded machine can add more.
+    assert!(at - os >= 19.9, "at {at} ms, stamped {os} ms");
+    assert!(inputs[1].get("os_ms").is_none(), "{}", inputs[1]);
+    let _ = std::fs::remove_dir_all(&dir);
+}

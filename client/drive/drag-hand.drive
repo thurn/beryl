@@ -5,8 +5,11 @@
 # where the hand spans x 412 to 1190 at y 736 to 960 in verbs-zones.
 #
 # The frame log's summary counts the frames drawn while the button was held and how many of
-# them were late (`dragging`). Run it under the machine's load as it is, and with busy
-# threads added, and compare the late share during drags with the share over the run:
+# them were late (`dragging`), and `just client frames` prints beside them the longest gap
+# between pointer events while the button was held and how many gaps over 50 ms ended in a
+# jump of more than 60 points (docs/benchmarking.md, "The drag benchmark"). Run it under the
+# machine's load as it is, and with busy threads added, and compare those numbers and the late
+# share during drags with the share over the run:
 #
 # just client app --drive drag-hand --fixture verbs-zones --for 22s
 # just client app --drive drag-hand --fixture verbs-zones --for 22s --load 18

@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from .. import audio, bugs, deps, paths as repo_paths, system
-from . import cargo, frame_trace, live, paths
+from . import cargo, frame_trace, live, paths, pointer_gaps
 from .command import Command
 
 TARGET: Path = paths.WORKSPACE / "target"
@@ -504,8 +504,11 @@ def report(path: Path, *, latest: bool = False) -> str:
     latest_window: dict[str, Any] | None = None
     # Every timing record the log holds, for the run's median callback offset.
     records: list[dict[str, Any]] = []
+    inputs: list[dict[str, Any]] = []
     for line in with_rows:
-        if "late" in line:
+        if "input" in line:
+            inputs.append(line["input"])
+        elif "late" in line:
             late.append(line["late"])
         elif "summary" in line:
             summary = line["summary"]
@@ -573,6 +576,7 @@ def report(path: Path, *, latest: bool = False) -> str:
                 f" {dragging['frames']} frames, {dragging['late']} late,"
                 f" {dragging['missed_target']} finished after their display time"
             )
+        out += pointer_gaps.describe(pointer_gaps.measure(inputs))
         if run.get("pause_at_ms") is not None:
             out.append(
                 f"paused at {run['pause_at_ms']} ms:"

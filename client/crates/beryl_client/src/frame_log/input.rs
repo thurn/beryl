@@ -21,6 +21,11 @@ pub struct Inputted {
     /// `at_ms`, give or take the time the host took to open. Logs before this field have none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub at_ms: Option<f64>,
+    /// When the operating system stamped the event, on `at_ms`'s clock, where the host knows it
+    /// (a pointer event on macOS). A gap in `at_ms` with no gap here means the app took the
+    /// events late; a gap here too means the system sent none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub os_ms: Option<f64>,
 }
 
 /// An input a host handed the client, as a line `{"input": {"<kind>": {...}}}`. The phone

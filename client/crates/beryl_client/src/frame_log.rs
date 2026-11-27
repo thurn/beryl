@@ -574,6 +574,11 @@ impl FrameLog {
     /// Records an input the host handed the client when it is one the log keeps, with how
     /// long ago the last frame was drawn.
     pub fn input(&mut self, input: &Input) {
+        self.input_stamped(input, None);
+    }
+
+    /// `input` for an event the operating system stamped at `stamped`, where the host knows.
+    pub fn input_stamped(&mut self, input: &Input, stamped: Option<Instant>) {
         if let Input::Device(DeviceInput::Lifecycle(
             event @ (Lifecycle::Suspended | Lifecycle::Resumed),
         )) = input
@@ -599,6 +604,7 @@ impl FrameLog {
                 input: line,
                 since_frame_ms,
                 at_ms: Some(self.created.elapsed().as_secs_f64() * 1e3),
+                os_ms: stamped.map(|at| since(self.created, at)),
             }));
         }
     }
@@ -720,4 +726,12 @@ pub(crate) use read::read_run;
 /// Converts nanoseconds to milliseconds for the legacy log.
 fn ms(nanoseconds: u64) -> f64 {
     nanoseconds as f64 / 1e6
+}
+
+/// Milliseconds from `epoch` to `at`, negative when `at` came first.
+fn since(epoch: Instant, at: Instant) -> f64 {
+    match at.checked_duration_since(epoch) {
+        Some(after) => after.as_secs_f64() * 1e3,
+        None => -epoch.duration_since(at).as_secs_f64() * 1e3,
+    }
 }

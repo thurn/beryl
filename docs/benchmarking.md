@@ -504,6 +504,24 @@ They are shared by worktrees on the same machine, including on Windows.
 Criterion honors `CRITERION_HOME` if you set it. Point it at an earlier
 checkout's `engine/target/criterion` directory to use baselines saved there.
 
+## The drag benchmark
+
+The client's `drag-hand` drive script (`client/drive/drag-hand.drive`) drags
+cards back and forth in the hand for 20 seconds. Its header gives the commands.
+`just client frames` then prints, beside the late frames, two numbers for the
+pointer events while the button was held: the longest gap between two of them,
+and how many gaps over 50 ms ended in a jump of more than 60 points. A jump
+after a gap is a stall the player saw: the dragged card stood still and then
+leapt to the pointer, while frames kept coming on time. Compare both numbers,
+and the late share during drags, under the machine's normal load and with busy
+threads added (`--load 18`).
+
+A drive script makes its own events, so a headless run shows only stalls inside
+the app. In a real window on macOS each pointer line also carries the time the
+system stamped the event (`os_ms`), and the report says how many stalls had the
+same gap between those stamps (the system sent no events) and how many did not
+(the app took them late). A player's bug report holds that window's frame log.
+
 ## Optimizing something, step by step
 
 1. Write the benchmark against the current code, with deterministic inputs, and

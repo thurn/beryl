@@ -161,6 +161,12 @@ pub trait Feed {
     /// Sees every input before the client does.
     fn input(&mut self, _input: &Input) {}
 
+    /// Sees an input before the client does, with when the operating system stamped the event
+    /// that made it (`FrameLoop::handle_stamped`). By default the same as `input`.
+    fn stamped_input(&mut self, input: &Input, _stamped: Instant) {
+        self.input(input);
+    }
+
     /// Called on a tick before the frame is made, with the client's clock.
     fn before(&mut self, _client: &mut Client, _clock: u64) {}
 
@@ -405,6 +411,13 @@ impl<T: Ticks> FrameLoop<T> {
 
     /// Hands `input` to the client. Nothing is drawn until the next tick.
     pub fn handle(&mut self, input: Input) {
+        self.handle_stamped(input, None);
+    }
+
+    /// `handle` for an input the operating system stamped at `stamped`, where the host knows
+    /// when: the feed sees both, so the frame log can tell an event the system sent late from
+    /// one the app took late.
+    pub fn handle_stamped(&mut self, input: Input, stamped: Option<Instant>) {
         let session = matches!(input, Input::Update(_) | Input::Cards(_) | Input::Reply(_));
         let started = (self.timing_epoch.is_some() && session).then(Instant::now);
         match input {
@@ -417,7 +430,10 @@ impl<T: Ticks> FrameLoop<T> {
             }
             _ => {}
         }
-        self.feed.input(&input);
+        match stamped {
+            Some(stamped) => self.feed.stamped_input(&input, stamped),
+            None => self.feed.input(&input),
+        }
         self.client.handle(input);
         self.cpu.session_input_ns += started.map_or(0, elapsed);
         self.input_since = true;
