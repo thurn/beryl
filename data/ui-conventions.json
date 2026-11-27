@@ -894,11 +894,6 @@
     },
     {
       "kind": "no-equivalent",
-      "name": "A whole table leaving",
-      "rule": "When a subgame begins or ends, or anything else takes cards from several zones at once with no event to say why, the cards leave zone by zone. The cards of one zone break up together, and the next zone's begin 0.3 s later."
-    },
-    {
-      "kind": "no-equivalent",
       "name": "Ability menus on a manual table",
       "rule": "With Ability menus on, a permanent's context menu lists its ability costs and the start of each ability under Assists. −X opens the number prompt. Choosing an ability places a marker on the stack. The marker shows the source card and the ability text on hover and resolves with a click."
     },
@@ -1667,12 +1662,6 @@
           "stagger": 420,
           "curve": null
         },
-        "opponent discard": {
-          "duration": 475,
-          "delay": null,
-          "stagger": 420,
-          "curve": null
-        },
         "own spell cast": {
           "duration": 500,
           "delay": null,
@@ -1905,8 +1894,7 @@
         "ability finished": 225
       },
       "stagger": {
-        "exiled": 300,
-        "next zone": 300
+        "exiled": 300
       }
     },
     {

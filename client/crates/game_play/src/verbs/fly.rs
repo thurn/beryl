@@ -124,9 +124,7 @@ fn path_of(act: &Act, case: Option<&str>, fly: &Fly) -> Path {
         (ZoneName::Graveyard, ZoneName::Hand) if !mine && object.name.is_some() => Path::FetchFar,
         // The opponent's hand lies at the top of the frame. A discard drops from the
         // hand to the graveyard, so it should not rise farther above the table first.
-        (ZoneName::Hand, ZoneName::Graveyard)
-            if (case == Some("opponent discard") || !mine) && *why == Why::Discard =>
-        {
+        (ZoneName::Hand, ZoneName::Graveyard) if !mine && *why == Why::Discard => {
             Path::Straight { rises: false }
         }
         _ => Path::Straight { rises: true },

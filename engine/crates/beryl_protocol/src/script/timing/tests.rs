@@ -249,16 +249,6 @@ fn each_case_of_the_data_is_found_on_one_act() {
             vec![],
         ),
         (
-            "opponent discard",
-            fly(
-                ZoneName::Hand,
-                Why::Discard,
-                card(1, ZoneName::Graveyard, them),
-            ),
-            &table,
-            vec![],
-        ),
-        (
             "own spell cast",
             fly(ZoneName::Hand, Why::Cast, card(1, ZoneName::Stack, you)),
             &table,

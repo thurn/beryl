@@ -247,28 +247,6 @@ fn a_countered_spell_and_a_batch_exile_hold_up_what_follows() {
     assert!((250.0..=350.0).contains(&exiled.stagger), "{exiled:?}");
 }
 
-/// Cards that leave several zones in one beat with no event, as when a subgame begins, leave
-/// zone by zone: those of one zone together, the next zone's 0.3 s later (UI Conventions, "A
-/// whole table leaving").
-#[test]
-fn cards_leaving_several_zones_at_once_leave_zone_by_zone() {
-    let left = |slot, from| Act::Vanish {
-        subject: object(slot),
-        from,
-        why: Why::StateBased,
-        object: None,
-        at: None,
-    };
-    let timings = beat(&[
-        left(1, ZoneName::Battlefield),
-        left(2, ZoneName::Battlefield),
-        left(3, ZoneName::Hand),
-        left(4, ZoneName::Graveyard),
-    ]);
-    let staggers: Vec<f64> = timings.iter().map(|timing| timing.stagger).collect();
-    assert_eq!(staggers, [0.0, 300.0, 300.0, 0.0]);
-}
-
 /// A creature's blow bursts on what it strikes and shakes the table as it lands, and a trail
 /// follows it as it dashes.
 #[test]
@@ -454,40 +432,4 @@ fn draw_timing_splits_by_phase_and_compresses_large_batch_stagger() {
         timing_of(&batch_ten[0], &main, None, &refs_ten).stagger,
         150.0
     );
-}
-
-/// An opponent's discard takes longer than the player's own quick hop to their adjacent
-/// graveyard, including in a shared-deck game where the graveyard card carries a fixed side.
-#[test]
-fn opponent_discard_uses_its_own_duration_including_in_shared_games() {
-    let own = fly(
-        ZoneName::Hand,
-        Why::Discard,
-        card(1, ZoneName::Graveyard, Side::You),
-    );
-    let opp = fly(
-        ZoneName::Hand,
-        Why::Discard,
-        card(2, ZoneName::Graveyard, Side::Opponent),
-    );
-    assert_eq!(alone(&own).case.as_deref(), Some("discard"));
-    assert_eq!(alone(&own).duration, 165.0);
-    assert_eq!(alone(&opp).case.as_deref(), Some("opponent discard"));
-    assert_eq!(alone(&opp).duration, 475.0);
-
-    // In a shared-deck game, a card in the opponent's hand loses its owner on entering the
-    // shared graveyard (`owner == Side::You`), so timing reads the hand it left from `found`.
-    let mut shared = Table::empty(20);
-    shared.objects.insert(
-        ObjectId(3),
-        ObjectView::hidden(ObjectId(3), ZoneName::Hand, Side::Opponent, Side::Opponent),
-    );
-    let shared_discard = fly(
-        ZoneName::Hand,
-        Why::Discard,
-        card(3, ZoneName::Graveyard, Side::You),
-    );
-    let timing = timing_of(&shared_discard, &shared, None, &[&shared_discard]);
-    assert_eq!(timing.case.as_deref(), Some("opponent discard"));
-    assert_eq!(timing.duration, 475.0);
 }
