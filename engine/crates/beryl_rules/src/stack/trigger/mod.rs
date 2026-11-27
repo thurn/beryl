@@ -168,12 +168,17 @@ pub(crate) fn match_event<L: Layout>(
                 }
             }
         }
-        // The table counts the kinds that copy exceptions' triggered abilities listen to among
-        // those that work away from a face of the battlefield's definitions.
+        // The table counts the kinds that copy exceptions' triggered abilities and granted
+        // triggered abilities listen to among those that work away from a face of the
+        // battlefield's definitions. The granted ones are not among what the layer results say
+        // the battlefield listens to, which the layers would pay for in every game.
         if t.listens_away().intersects(mask) {
             other_zones::match_away(s, t, k, e)?;
             if t.can(Capability::GivesTriggers) || t.can(Capability::Merges) {
                 other_zones::match_given(s, t, k, e)?;
+            }
+            if t.listens_granted().intersects(mask) && !s.grant_rows().is_empty() {
+                other_zones::match_granted(s, t, k, e)?;
             }
         }
         // Triggers wait in the order found, which the queue of them keeps: by seat.

@@ -328,5 +328,11 @@
     "card": "Gisela, the Broken Blade",
     "scenario": "Phantasmal Image copies Brisela as one object with mana value 0",
     "gap": "Forge's Phantasmal Image does not become a copy of the melded permanent the scenario names; Brisela's own scenarios, which choose nothing by name after the meld, pass in Forge"
+  },
+  {
+    "oracle": "xmage",
+    "card": "Harmonic Sliver",
+    "scenario": "Two granting Slivers make a third Sliver's enters trigger fire twice",
+    "gap": "XMage asks its player to order two instances of the same triggered ability from one source, which Beryl puts on the stack without asking, so the exporter has no decision to answer it with."
   }
 ]

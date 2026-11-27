@@ -152,11 +152,15 @@ pub struct GameTable {
     /// battlefield.
     zones_away: ZoneSet,
     /// Every kind of event the abilities of `away_listeners` listen to, and those the triggered
-    /// abilities copy exceptions give listen to ([`Capability::GivesTriggers`]): both are
-    /// matched apart from the faces of the battlefield's definitions.
+    /// abilities copy exceptions give listen to ([`Capability::GivesTriggers`]), and those the
+    /// triggered abilities continuous effects grant listen to ([`Capability::GrantsTriggers`]):
+    /// all are matched apart from the faces of the battlefield's definitions.
     listens_away: Listens,
     /// `listens_any` and `listens_away` together: whether to match an event at all, in one AND.
     listens_anywhere: Listens,
+    /// Each card's triggered abilities that a continuous effect grants other permanents, as
+    /// [`GameTable::granted_trigger`] reads them ([`Capability::GrantsTriggers`]).
+    granted: Indexed,
     /// Per game index, the facts of its first two faces.
     faces: Vec<[FaceFacts; 2]>,
     /// Per game index, the rule changes the static abilities of its first two faces make.
@@ -295,7 +299,9 @@ impl GameTable {
         let mut replaces = Vec::with_capacity(defs.len());
         let mut rule_changes = RuleChanges::default();
         let mut given = Listens::NONE;
+        let mut granted = Indexed::default();
         for def in &defs {
+            granted.push(listeners::granted(def).iter());
             let of = listener::of(def).map_err(|unmatched| TableError::Trigger {
                 card: def.name,
                 unmatched,
@@ -319,10 +325,11 @@ impl GameTable {
                     .filter(|l| !l.zones.without(ZoneSet::BATTLEFIELD).is_empty()),
             );
         }
-        let (here, away) = (here.finish(), away.finish());
+        let (here, away, granted) = (here.finish(), away.finish(), granted.finish());
+        let listens_granted = granted.all;
         let zones_away = away.zones.iter().fold(ZoneSet::NONE, |a, &b| a.union(b));
-        let listens_away = away.kinds.iter().fold(given, |a, &b| a | b);
-        let listens_any = here.kinds.iter().fold(Listens::NONE, |a, &b| a | b);
+        let listens_away = away.all | given | granted.all;
+        let listens_any = here.all;
         let listens_anywhere = listens_any | listens_away;
         let replaces_any = replaces.iter().fold(Replaces::NONE, |a, &b| a | b);
         let needy = defs.iter().any(|d| {
@@ -352,7 +359,7 @@ impl GameTable {
             decks: indices,
             sideboards: outside,
             listens: here.kinds,
-            listens_any,
+            listens_any: listens_any | listens_granted,
             replaces,
             replaces_any,
             listeners: here.listeners,
@@ -363,6 +370,7 @@ impl GameTable {
             zones_away,
             listens_away: capability::merged_listen_away(capabilities, listens_away, listens_any),
             listens_anywhere,
+            granted,
             faces,
             face_rules,
             rules,

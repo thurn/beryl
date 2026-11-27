@@ -221,10 +221,15 @@ pub enum Capability {
     ///
     /// [CR 702.51a]: https://yawgatog.com/resources/magic-rules/#R70251a
     ReadsConvokers,
+    /// A card grants another permanent a triggered ability
+    /// ([`crate::listener::granted_kind`]), so trigger matching also reads, for each
+    /// permanent, the rows of the table of grants it has (`beryl_rules`' `trigger`), for the
+    /// kinds those abilities listen to ([`super::GameTable::listens_granted`]).
+    GrantsTriggers,
 }
 
 // The game keeps its capabilities in a `u64`.
-const _: () = assert!((Capability::ReadsConvokers as u32) < u64::BITS);
+const _: () = assert!((Capability::GrantsTriggers as u32) < u64::BITS);
 
 impl Capability {
     /// The capabilities of every face and subtype the game can contain.
@@ -273,6 +278,9 @@ impl Capability {
         });
         if gives_triggers {
             found |= Capability::GivesTriggers.bit();
+        }
+        if (0..face.grants.len()).any(|i| granted_trigger(face, i)) {
+            found |= Capability::GrantsTriggers.bit();
         }
         if face.subtypes.read(&Words::NONE).contains(Subtype::Aura) {
             found |= Capability::ChoosesAsEnters.bit();
@@ -624,6 +632,15 @@ fn copies_itself(effect: &Effect) -> bool {
             }
         )
     })
+}
+
+/// Whether the `i`th grant of `face` is a triggered ability a continuous effect grants and
+/// the engine matches from the table of grants ([`crate::listener::granted_kind`]). One that
+/// only a copy exception gives is matched from the copy's copiable values instead
+/// ([`Capability::GivesTriggers`]).
+pub(super) fn granted_trigger(face: &Face, i: usize) -> bool {
+    crate::listener::granted_kind(&face.grants[i]).is_some()
+        && !crate::listener::given_by_exception(face, i)
 }
 
 /// The event kinds trigger matching looks for away from the faces of the battlefield's

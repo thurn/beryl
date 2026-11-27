@@ -204,8 +204,8 @@ static TOLL: CardDef = CardDef {
     }],
     tokens: &[],
 };
-/// "Creatures you control have 'When this creature enters, ...'": a triggered ability granted
-/// to other permanents, which no listener of the table matches.
+/// "Creatures you control have 'When this creature dies, ...'": a granted triggered ability
+/// that looks back at a permanent that left, which the engine does not match as a granted one.
 static HERALDRY: CardDef = CardDef {
     name: "Heraldry",
     shape: beryl_card::definition::Shape::Single,
@@ -221,7 +221,7 @@ static HERALDRY: CardDef = CardDef {
             condition: None,
             modifications: &[Modification::grant(0)],
         })],
-        grants: &[Ability::triggered(&Trigger::ENTERS).effect(&Effect::NOTHING)],
+        grants: &[Ability::triggered(&Trigger::DIES).effect(&Effect::NOTHING)],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -229,7 +229,7 @@ static HERALDRY: CardDef = CardDef {
 static UNREAD: CardTable = CardTable::new(&[&ALPHA, &ANTHEM, &TOLL, &HERALDRY]);
 
 /// A static ability the layers cannot apply would change nothing, a filter for players the
-/// engine cannot read there would accept nothing, and a granted triggered ability would never
+/// engine cannot read there would accept nothing, and a granted "dies" trigger would never
 /// trigger: no table is built.
 #[test]
 fn a_table_refuses_what_the_engine_has_no_code_to_read() {

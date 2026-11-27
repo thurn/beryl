@@ -7,8 +7,8 @@ use super::begin;
 use super::events::{put, resolve_all};
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, CardDef, Castings, Face, Players, Subject, Subtype, Subtypes, Trigger, TriggerEvent,
-    Types,
+    Ability, CardDef, Castings, Face, LayerSpec, Modification, Objects, Players, Subject, Subtype,
+    Subtypes, Trigger, TriggerEvent, Types,
 };
 use crate::filter::Filter;
 use crate::fixed::Fixed;
@@ -347,4 +347,131 @@ fn a_leaves_trigger_fires_for_every_zone() {
                 .unwrap();
         }
     }
+}
+
+/// "Creatures have 'Whenever this creature attacks, you gain 1 life.'"
+static WARCRY: CardDef = CardDef {
+    name: "Test Warcry",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::ENCHANTMENT,
+        abilities: &[Ability::static_ability(&LayerSpec {
+            affected: Objects::All {
+                zone: Zone::Battlefield,
+                filter: Filter::Types(Types::CREATURE),
+            },
+            condition: None,
+            modifications: &[Modification::grant(0)],
+        })],
+        grants: &[Ability::triggered(&Trigger::ATTACKS).effect(&gain_life(you(), 1))],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+/// "Creatures lose all abilities."
+static HUSH: CardDef = CardDef {
+    name: "Test Hush",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::ENCHANTMENT,
+        abilities: &[Ability::static_ability(&LayerSpec {
+            affected: Objects::All {
+                zone: Zone::Battlefield,
+                filter: Filter::Types(Types::CREATURE),
+            },
+            condition: None,
+            modifications: &[Modification::LoseAllAbilities],
+        })],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+/// "Creatures have 'When this creature dies, you gain 1 life.'"
+static WAKE: CardDef = CardDef {
+    name: "Test Wake",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        grants: &[Ability::triggered(&Trigger::DIES).effect(&gain_life(you(), 1))],
+        ..WARCRY.faces[0]
+    }],
+    tokens: &[],
+};
+static GRANTING: CardTable = CardTable::new(&[&LAND, &BEAR, &WARCRY, &HUSH, &WAKE]);
+const GRANTING_DECK: &Decklist = &[
+    (2, "Test Bear"),
+    (2, "Test Warcry"),
+    (1, "Test Hush"),
+    (20, "Test Land"),
+];
+
+/// A game of [`GRANTING_DECK`] at its first turn, and the starting player.
+fn granting_game() -> (GameTable, State, Seat) {
+    let t = GameTable::new(Format::CONSTRUCTED, &GRANTING, [GRANTING_DECK; 2]).unwrap();
+    let mut s = State::new(&t, 7, Profile::EXACT).unwrap();
+    begin(&t, &mut s);
+    let p = s.turn().starting_player();
+    (t, s, p)
+}
+
+/// `bear` attacking alone, as `p` declares it, matched against the triggers: how many trigger.
+fn attacks(t: &GameTable, s: &mut State, x: &mut Scratch, p: Seat, bear: Slot) -> usize {
+    let attack = Event::Attack {
+        player: p,
+        attackers: Bitboard::single(bear),
+    };
+    event::settle(s, t, &mut x.events, attack).unwrap();
+    s.triggers().len()
+}
+
+/// Each row of the table of grants that grants a creature a triggered ability is one instance
+/// of it (CR 113.2c), so two Warcries make the creature's attack trigger twice. The creature is
+/// each trigger's source and the granted ability resolves from the granting card's grants.
+#[test]
+fn a_granted_attack_trigger_fires_once_for_each_row() {
+    let (t, mut s, p) = granting_game();
+    let mut x = Scratch::new();
+    let bear = put(&t, &mut s, &mut x, p, "Test Bear");
+    put(&t, &mut s, &mut x, p, "Test Warcry");
+    put(&t, &mut s, &mut x, p, "Test Warcry");
+    assert_eq!(attacks(&t, &mut s, &mut x, p, bear), 2);
+    for tr in s.triggers() {
+        assert_eq!(tr.of.source.map(|r| r.slot), Some(bear));
+        assert_eq!(tr.of.controller.seat(), p);
+    }
+    let life = s.player(p).life();
+    resolve_all(&t, &mut s, &mut x);
+    assert_eq!(s.player(p).life(), life + 2);
+}
+
+/// An effect that removes all abilities removes a granted trigger whose grant came before it,
+/// and not one whose grant came after it (see CR 613.7).
+#[test]
+fn losing_all_abilities_removes_a_granted_trigger_only_from_before() {
+    for (first, second, triggers) in [
+        ("Test Warcry", "Test Hush", 0),
+        ("Test Hush", "Test Warcry", 1),
+    ] {
+        let (t, mut s, p) = granting_game();
+        let mut x = Scratch::new();
+        let bear = put(&t, &mut s, &mut x, p, "Test Bear");
+        put(&t, &mut s, &mut x, p, first);
+        put(&t, &mut s, &mut x, p, second);
+        assert_eq!(
+            attacks(&t, &mut s, &mut x, p, bear),
+            triggers,
+            "{first}, then {second}"
+        );
+    }
+}
+
+/// A granted "dies" trigger would have to be matched against the permanent as it last
+/// existed, which the table of grants does not keep, so no table is built with one.
+#[test]
+fn a_granted_dies_trigger_is_refused() {
+    let deck: &Decklist = &[(1, "Test Wake"), (20, "Test Land")];
+    let refused = GameTable::new(Format::CONSTRUCTED, &GRANTING, [deck; 2]).err();
+    assert_eq!(
+        refused,
+        Some(beryl_kernel::table::TableError::Granted { card: "Test Wake" })
+    );
 }

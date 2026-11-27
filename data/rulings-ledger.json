@@ -1370,6 +1370,34 @@
       "covered": "Replacement::counters_put"
     }
   ],
+  "Harmonic Sliver": [
+    {
+      "published_at": "2013-07-01",
+      "hash": "4c5c9cebfd46",
+      "scenario": [
+        "Two granting Slivers make a third Sliver's enters trigger fire twice"
+      ]
+    },
+    {
+      "published_at": "2013-07-01",
+      "hash": "1eda39fd19f4",
+      "covered": "Filter::Subtype"
+    },
+    {
+      "published_at": "2021-03-19",
+      "hash": "e3e64ffee3b0",
+      "scenario": [
+        "An opponent's Sliver entering triggers for the opponent"
+      ]
+    },
+    {
+      "published_at": "2021-03-19",
+      "hash": "76df5a4dca08",
+      "scenario": [
+        "A granted enters trigger fires for the granting Sliver itself"
+      ]
+    }
+  ],
   "Haunted Fengraf": [
     {
       "published_at": "2018-03-16",

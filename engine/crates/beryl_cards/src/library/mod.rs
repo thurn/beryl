@@ -305,6 +305,7 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
         triggers::CONTROLLERS_END_STEP,
     ),
     ("triggers", names::DRESS_DOWN, triggers::OPPONENTS_STEP),
+    ("triggers", names::HARMONIC_SLIVER, triggers::GRANTED_ENTERS),
     ("turn", names::MINDSLAVER, turn::CONTROLLED_TURN),
     ("turn", names::ISLAND, turn::FIRST_DRAW),
     ("turn", names::ISLAND, turn::LAND_PLAY),

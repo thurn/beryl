@@ -99,3 +99,77 @@ pub const CONTROLLERS_END_STEP: &[Scenario] =
             Resolve,
             ME.counters(OVERLORD, CounterKind::Time, 2),
         ])];
+
+const HARMONIC: &str = names::HARMONIC_SLIVER;
+const SLIVER: &str = names::MUSCLE_SLIVER;
+
+/// "All Slivers have 'When this permanent enters, destroy target artifact or enchantment.'": a
+/// triggered ability that a static ability grants. Each Sliver that enters has it as it enters,
+/// Harmonic Sliver among them (CR 603.6a), and each Harmonic Sliver grants one instance of it
+/// (CR 113.2c). Its controller is the controller of the Sliver that entered.
+pub const GRANTED_ENTERS: &[Scenario] = &[
+    Scenario::new("A granted enters trigger fires for the granting Sliver itself")
+        .battlefield(P0, &[names::FOREST, names::FOREST, names::PLAINS])
+        .hand(P0, &[HARMONIC])
+        .battlefield(P1, &[SMALL_ARTIFACT])
+        .actions(&[
+            ME.casts(HARMONIC),
+            Resolve,
+            stack(1),
+            Resolve,
+            THEM.controls(SMALL_ARTIFACT, 0),
+            THEM.has(Zone::Graveyard, SMALL_ARTIFACT, 1),
+        ]),
+    Scenario::new("A granted enters trigger fires for a Sliver that enters later")
+        .interaction(&[SLIVER])
+        .battlefield(P0, &[HARMONIC, names::FOREST, names::FOREST])
+        .hand(P0, &[SLIVER])
+        .battlefield(P1, &[SMALL_ARTIFACT])
+        .actions(&[
+            ME.casts(SLIVER),
+            Resolve,
+            stack(1),
+            Resolve,
+            THEM.controls(SMALL_ARTIFACT, 0),
+        ]),
+    Scenario::new("Two granting Slivers make a third Sliver's enters trigger fire twice")
+        .interaction(&[SLIVER])
+        .battlefield(P0, &[HARMONIC, HARMONIC, names::FOREST, names::FOREST])
+        .hand(P0, &[SLIVER])
+        .battlefield(P1, &[SMALL_ARTIFACT, names::ORNITHOPTER])
+        .actions(&[
+            ME.casts(SLIVER),
+            Resolve,
+            ME.targets(SMALL_ARTIFACT),
+            ME.targets(names::ORNITHOPTER),
+            stack(2),
+            Resolve,
+            Resolve,
+            THEM.controls(SMALL_ARTIFACT, 0),
+            THEM.controls(names::ORNITHOPTER, 0),
+        ]),
+    Scenario::new("A non-Sliver entering has no granted enters trigger")
+        .battlefield(P0, &[HARMONIC, names::ISLAND, names::ISLAND])
+        .hand(P0, &[props::VANILLA.card])
+        .battlefield(P1, &[SMALL_ARTIFACT])
+        .actions(&[
+            ME.casts(props::VANILLA.card),
+            Resolve,
+            stack(0),
+            THEM.controls(SMALL_ARTIFACT, 1),
+        ]),
+    Scenario::new("An opponent's Sliver entering triggers for the opponent")
+        .interaction(&[SLIVER])
+        .at(2, P1, TurnStep::PrecombatMain)
+        .battlefield(P0, &[HARMONIC, SMALL_ARTIFACT])
+        .battlefield(P1, &[names::FOREST, names::FOREST, names::ORNITHOPTER])
+        .hand(P1, &[SLIVER])
+        .actions(&[
+            THEM.casts(SLIVER),
+            Resolve,
+            THEM.targets(SMALL_ARTIFACT),
+            Resolve,
+            ME.controls(SMALL_ARTIFACT, 0),
+            THEM.controls(names::ORNITHOPTER, 1),
+        ]),
+];

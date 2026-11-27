@@ -1,18 +1,19 @@
 //! Trigger matching off the main path of [`super::match_event`], out of line: the abilities
 //! of objects outside the battlefield that work where they are, as events happen and as
 //! permanents leave, the triggered abilities that copy exceptions give the permanents that
-//! are copies, and those of the cards under a merged permanent.
+//! are copies, those that continuous effects grant permanents, and those of the cards under a
+//! merged permanent.
 //!
 //! Implements: none. Matches triggers under the rules declared by its parent module.
 
 use super::{
     ability, away, away_controllers, fire, keep_last_known, look_back, look_back_kinds, of_object,
 };
-use crate::card::FaceAbility;
+use crate::card::{FaceAbility, FaceIx};
 use crate::fixed::Full;
 use crate::layout::{Layout, Queue};
 use crate::replacement::event::{Event, EventKind};
-use crate::state::{AbilityRef, Flag, State, TriggeredAbility, Zone};
+use crate::state::{AbilityMask, AbilityRef, Flag, State, TriggeredAbility, Zone};
 use crate::table::GameTable;
 use beryl_kernel::listener;
 
@@ -74,6 +75,53 @@ pub(super) fn match_given<L: Layout>(
                     fire(s, t, l.trigger, AbilityRef { ability, ..of }, e)?;
                 }
             }
+        }
+    }
+    Ok(())
+}
+
+/// Matches `e`, an event of kind `k`, against the triggered abilities that continuous effects
+/// grant the permanents on the battlefield, in the order of the battlefield and, for each
+/// permanent, of the rows of the table of grants it has ([`State::grant_rows`]). A permanent
+/// "has" each such ability (see [CR 613.1f]): "Layer 6: Ability-adding effects, keyword
+/// counters, ability-removing effects, and effects that say an object can't have an ability
+/// are applied." So the permanent is the ability's source and its controller controls it. Two
+/// rows of one grant, as two Harmonic Slivers make, are two instances of the ability (see
+/// [CR 113.2c]): "If an object has multiple instances of the same ability, each instance
+/// functions independently." Each triggers on its own. An effect that removes abilities after
+/// a grant clears the permanent's bit for that row, so the permanent has no trigger to match.
+///
+/// Out of line: only a game with a card that grants a triggered ability looks
+/// ([`Capability::GrantsTriggers`]).
+///
+/// [CR 613.1f]: https://yawgatog.com/resources/magic-rules/#R6131f
+/// [CR 113.2c]: https://yawgatog.com/resources/magic-rules/#R1132c
+#[cold]
+#[inline(never)]
+pub(super) fn match_granted<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    k: EventKind,
+    e: &Event<L>,
+) -> Result<(), Full> {
+    for i in 0..s.battlefield().len() {
+        let slot = s.battlefield()[i];
+        let mut rows = s.derived(slot).granted;
+        while !rows.is_empty() {
+            let row = s.grant_rows()[rows.lowest()];
+            rows = rows.without_lowest();
+            if row.is_lent() {
+                continue;
+            }
+            let Some(l) = t.granted_trigger(row.card, row.grant) else {
+                continue;
+            };
+            if l.kind != k {
+                continue;
+            }
+            let ability = TriggeredAbility::of(FaceAbility::Grant(row.grant));
+            let of = of_object(s, slot, row.card, FaceIx::FRONT, ability);
+            fire(s, t, l.trigger, of, e)?;
         }
     }
     Ok(())
