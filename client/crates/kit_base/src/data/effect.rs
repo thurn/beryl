@@ -19,6 +19,153 @@ pub const SHIPPED: &[&str] = include!(concat!(env!("OUT_DIR"), "/effect_names.rs
 pub struct Effects {
     definitions: BTreeMap<Arc<str>, Arc<Definition>>,
     lift: f32,
+    palette: EffectPalette,
+}
+
+/// Arena-matched color ramp palette (`data/client/effects/palette.json`) used when an effect
+/// layer resolves `"tint": "subject_colors"` against a card's colors.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct EffectPalette {
+    pub white: [u8; 4],
+    pub blue: [u8; 4],
+    pub black: [u8; 4],
+    pub red: [u8; 4],
+    pub green: [u8; 4],
+    pub colorless: [u8; 4],
+    pub multicolor: [u8; 4],
+}
+
+impl Default for EffectPalette {
+    fn default() -> Self {
+        Self {
+            white: [255, 246, 214, 255],
+            blue: [64, 168, 255, 255],
+            black: [154, 92, 214, 255],
+            red: [255, 88, 46, 255],
+            green: [74, 206, 98, 255],
+            colorless: [206, 216, 228, 255],
+            multicolor: [248, 198, 72, 255],
+        }
+    }
+}
+
+impl EffectPalette {
+    /// Parses a palette JSON file (`data/client/effects/palette.json`).
+    ///
+    /// # Errors
+    ///
+    /// The JSON is malformed or missing any required color ramp entry.
+    pub fn parse(text: &str) -> Result<Self, String> {
+        read("effects/palette.json", text)
+    }
+
+    /// Resolves a subject's color bitmask to one RGBA tint: colorless when empty, the matching
+    /// single-color ramp entry for one color, or multicolor gold for two or more colors.
+    #[must_use]
+    pub const fn resolve(&self, colors: SubjectColors) -> [u8; 4] {
+        match colors.0.count_ones() {
+            0 => self.colorless,
+            1 => match colors.0 {
+                SubjectColors::WHITE_BIT => self.white,
+                SubjectColors::BLUE_BIT => self.blue,
+                SubjectColors::BLACK_BIT => self.black,
+                SubjectColors::RED_BIT => self.red,
+                SubjectColors::GREEN_BIT => self.green,
+                _ => self.colorless,
+            },
+            _ => self.multicolor,
+        }
+    }
+}
+
+/// Compact 5-bit mask of a subject's colors (W, U, B, R, G) carried through effect playback
+/// without allocating.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SubjectColors(u8);
+
+impl SubjectColors {
+    const WHITE_BIT: u8 = 1 << 0;
+    const BLUE_BIT: u8 = 1 << 1;
+    const BLACK_BIT: u8 = 1 << 2;
+    const RED_BIT: u8 = 1 << 3;
+    const GREEN_BIT: u8 = 1 << 4;
+
+    pub const NONE: Self = Self(0);
+    pub const WHITE: Self = Self(Self::WHITE_BIT);
+    pub const BLUE: Self = Self(Self::BLUE_BIT);
+    pub const BLACK: Self = Self(Self::BLACK_BIT);
+    pub const RED: Self = Self(Self::RED_BIT);
+    pub const GREEN: Self = Self(Self::GREEN_BIT);
+
+    /// Combines two color masks.
+    #[must_use]
+    pub const fn union(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+
+    /// Parses single-letter color codes (`"W"`, `"U"`, `"B"`, `"R"`, `"G"`). Unknown codes are
+    /// ignored.
+    #[must_use]
+    pub fn from_codes<'a>(codes: impl IntoIterator<Item = &'a str>) -> Self {
+        let mut mask = 0_u8;
+        for code in codes {
+            mask |= match code {
+                "W" => Self::WHITE_BIT,
+                "U" => Self::BLUE_BIT,
+                "B" => Self::BLACK_BIT,
+                "R" => Self::RED_BIT,
+                "G" => Self::GREEN_BIT,
+                _ => 0,
+            };
+        }
+        Self(mask)
+    }
+}
+
+/// Which procedural effect `Material::Vfx` draws, stored in `Draw::uv[0]`.
+#[repr(u16)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Vfx {
+    /// Unblocked attacking chevron: crimson-ember plasma body with luminous V-rim.
+    Chevron = 0,
+    /// Blocked attacking chevron: amber-to-gold plasma body with warm ivory V-rim.
+    ChevronBlocked = 1,
+    /// Blocking shield dome: polar-swirling golden forcefield curtain and crest ridge.
+    ShieldDome = 2,
+    /// One tapered, mitred segment of a luminous curved or straight line ribbon.
+    LineRibbon = 3,
+    /// Faceted glowing spearhead seated at the end of a luminous line.
+    LineHead = 4,
+    /// Test-only soft expanding ring whose radius follows normalized progress.
+    Probe = 5,
+}
+
+/// Either a fixed RGBA tint or a dynamic tint source resolved from the subject at draw time.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum Tint {
+    Rgba([u8; 4]),
+    Source(TintSource),
+}
+
+impl Tint {
+    /// Resolves this tint against `palette` and the subject's `colors`.
+    #[must_use]
+    pub const fn resolve(self, palette: &EffectPalette, colors: SubjectColors) -> [u8; 4] {
+        match self {
+            Self::Rgba(rgba) => rgba,
+            Self::Source(TintSource::SubjectColors) => palette.resolve(colors),
+        }
+    }
+}
+
+/// Dynamic tint source names accepted by effect layers.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TintSource {
+    SubjectColors,
 }
 
 impl Effects {
@@ -59,6 +206,7 @@ impl Effects {
         Ok(Self {
             definitions,
             lift: 0.0,
+            palette: EffectPalette::default(),
         })
     }
 
@@ -86,6 +234,19 @@ impl Effects {
     #[must_use]
     pub fn lift(&self) -> f32 {
         self.lift
+    }
+
+    /// Sets the color-ramp palette used by `"tint": "subject_colors"` layers.
+    #[must_use]
+    pub fn with_palette(mut self, palette: EffectPalette) -> Self {
+        self.palette = palette;
+        self
+    }
+
+    /// The color-ramp palette for resolving `"subject_colors"` tints.
+    #[must_use]
+    pub fn palette(&self) -> &EffectPalette {
+        &self.palette
     }
 }
 
@@ -231,6 +392,20 @@ primitives! {
         drift: Scalar,
         opacity: Scalar,
     },
+    Vfx = "vfx" {
+        vfx: Vfx,
+        /// Quad width in card widths over the layer's local progress.
+        size: Scalar,
+        tint: Tint,
+        /// How much the layer fades out, from 0 (whole) to 1 (gone).
+        fade: Scalar,
+        /// Optional offset in card widths in the subject's plane.
+        #[serde(default, deserialize_with = "optional_vector")]
+        offset: Option<Vec2>,
+        /// Quad height-to-width ratio; defaults to a square quad (`1.0`).
+        #[serde(default = "one", deserialize_with = "super::tuning::positive")]
+        aspect: f32,
+    },
 }
 
 impl Primitive {
@@ -281,6 +456,7 @@ impl Primitive {
             Self::Number { drift, opacity, .. } => {
                 validate_ramps(&[("drift", drift), ("opacity", opacity)])
             }
+            Self::Vfx { size, fade, .. } => validate_ramps(&[("size", size), ("fade", fade)]),
         }
     }
 }
@@ -432,4 +608,17 @@ fn one() -> f32 {
 
 fn whole() -> Scalar {
     Scalar::Constant(1.0)
+}
+
+fn optional_vector<'de, D>(deserializer: D) -> Result<Option<Vec2>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let Some([x, y]) = Option::<[f32; 2]>::deserialize(deserializer)? else {
+        return Ok(None);
+    };
+    if !x.is_finite() || !y.is_finite() {
+        return Err(serde::de::Error::custom("must be finite"));
+    }
+    Ok(Some(Vec2::new(x, y)))
 }

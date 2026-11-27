@@ -4,7 +4,7 @@ use glam::{Quat, Vec2};
 use serde::de::{DeserializeOwned, Error};
 use serde::{Deserialize, Deserializer};
 
-use super::effect::{Effects, SHIPPED};
+use super::effect::{EffectPalette, Effects, SHIPPED};
 use super::flat::Flat;
 use super::hud::Hud;
 use super::light::{Light, Own};
@@ -74,6 +74,7 @@ tuning_files! {
     REVEALED: Revealed = "revealed.json";
     SHOWN: Shown = "shown.json";
     LIGHTING: Lighting = "lighting.json";
+    EFFECT_PALETTE: EffectPalette = "effects/palette.json";
 }
 
 /// The tuning data supplied by a host. The client uses the typed values directly.
@@ -113,7 +114,10 @@ impl Data {
         let VerbFile { verbs } = VERBS.decode(&mut load, read)?;
         validate(&verbs).map_err(|(key, why)| format!("verbs.json: verbs.{key}: {why}"))?;
         let light = LIGHT.decode(&mut load, |_, text| Light::parse(text))?;
-        let effects = Effects::parse(effects)?.with_lift(light.lift);
+        let palette = EFFECT_PALETTE.decode(&mut load, read)?;
+        let effects = Effects::parse(effects)?
+            .with_lift(light.lift)
+            .with_palette(palette);
         for &required in SHIPPED {
             if effects.get(required).is_none() {
                 return Err(format!("effects/{required}.json: missing definition"));

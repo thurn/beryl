@@ -43,6 +43,7 @@ fn embedded_tuning(name: &str) -> Result<String, String> {
         "light.json" => include_str!("../../../../data/client/light.json"),
         "own.json" => include_str!("../../../../data/client/own.json"),
         "pointer.json" => include_str!("../../../../data/client/pointer.json"),
+        "effects/palette.json" => include_str!("../../../../data/client/effects/palette.json"),
         _ => return Err(format!("{name}: missing embedded tuning")),
     };
     Ok(text.to_owned())

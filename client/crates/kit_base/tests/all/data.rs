@@ -108,6 +108,9 @@ fn parse_with_effects(
                 "light.json" => include_str!("../../../../../data/client/light.json"),
                 "own.json" => include_str!("../../../../../data/client/own.json"),
                 "pointer.json" => include_str!("../../../../../data/client/pointer.json"),
+                "effects/palette.json" => {
+                    include_str!("../../../../../data/client/effects/palette.json")
+                }
                 _ => return Err(format!("{name}: missing test tuning")),
             };
             Ok(text.to_owned())

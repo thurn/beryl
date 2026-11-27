@@ -232,15 +232,18 @@ impl Show {
     /// (`Table::player_pose`).
     #[must_use]
     pub fn reach(&self, subject: Subject, now: u64) -> Option<Reach> {
+        let colors = kit_base::data::effect::SubjectColors::NONE;
         let card = |pose: Pose| Reach {
             pose,
             half: self.table.camera().data.card.size() * 0.5 * pose.scale,
+            colors,
         };
         match subject {
             Subject::Object { slot } => self.drawn_pose(usize::from(slot.0), now).map(card),
             Subject::Player { player } => Some(Reach {
                 pose: self.table.player_pose(player),
                 half: Vec2::ZERO,
+                colors,
             }),
             Subject::Ability { id } => self.ability_pose(id, now).map(card),
         }
@@ -647,23 +650,12 @@ impl Show {
         light::marks::write(&self.lit, now, &scene, builder);
         builder.clear_owner();
         light::streaks::write(&self.lit, now, &scene, builder);
-        let light_target = |target, ago| {
-            let subject = game_table::effect::subject(target)?;
-            let mut reach = scene.reach_before(subject, ago)?;
-            if ago == 0 && matches!(subject, Subject::Player { .. }) {
-                let table = scene.table();
-                let card = table.camera().data.card;
-                let window = reach.pose.scale * card.height / table.layout().hand.height;
-                reach.half = table.data().light.player_half_pixels * (window / 900.0);
-            }
-            Some(reach)
-        };
         let camera = self.table.camera();
         effects::write(
             &self.table.data().effects,
             &self.active_effects,
             now,
-            light_target,
+            |target, ago| scene.effect_reach(target, ago),
             (camera.eye, camera.window.scale),
             builder,
         );

@@ -2,9 +2,10 @@
 
 use glam::{Quat, Vec2, Vec3};
 use kit_base::data::effect::{
-    Clock, DirectedSprite, Direction, LightRecord, NumberOrigin, Primitive, Quad, Shape, Surface,
+    Clock, DirectedSprite, Direction, EffectPalette, LightRecord, NumberOrigin, Primitive, Quad,
+    Scalar, Shape, Surface, Tint, Vfx,
 };
-use kit_frame::frame::{Band, FrameBuilder, Sprite, sprites};
+use kit_frame::frame::{Band, Draw, FrameBuilder, Sprite, sprites};
 use kit_ui::{input::Tier, layout::FloatLook};
 
 use super::{EffectRun, Reach, light};
@@ -56,7 +57,7 @@ pub(super) fn write_light(
     run: &EffectRun,
     now: u64,
     reach_at: impl Fn(u64) -> Option<Reach>,
-    (eye, lift): (Vec3, f32),
+    (eye, lift, palette): (Vec3, f32, &EffectPalette),
     builder: &mut FrameBuilder<'_>,
 ) {
     for (primitive, p) in layers(run, now, builder.tier()) {
@@ -70,6 +71,7 @@ pub(super) fn write_light(
                 }
                 | Primitive::Directed { .. }
                 | Primitive::Streak { .. }
+                | Primitive::Vfx { .. }
         ) {
             continue;
         }
@@ -120,9 +122,64 @@ pub(super) fn write_light(
                     builder.draw(Band::Glows, draw);
                 }
             }
+            Primitive::Vfx {
+                vfx,
+                size,
+                tint,
+                fade,
+                offset,
+                aspect,
+            } => {
+                if builder.tier() != Tier::Enhanced {
+                    continue;
+                }
+                write_vfx(
+                    (*vfx, size, *tint, fade, *offset, *aspect),
+                    (p, lift, palette),
+                    run,
+                    reach,
+                    builder,
+                );
+            }
             _ => {}
         }
     }
+}
+
+fn write_vfx(
+    (kind, size, tint, fade, offset, aspect): (Vfx, &Scalar, Tint, &Scalar, Option<Vec2>, f32),
+    (progress, lift, palette): (f32, f32, &EffectPalette),
+    run: &EffectRun,
+    reach: Reach,
+    builder: &mut FrameBuilder<'_>,
+) {
+    let opacity = (1.0 - fade.at(progress)).clamp(0.0, 1.0);
+    if opacity <= 0.0 {
+        return;
+    }
+    let card_width = if builder.card().x > 0.0 {
+        builder.card().x * reach.pose.scale
+    } else {
+        reach.half.x * 2.0
+    };
+    let width = card_width * size.at(progress).max(0.0);
+    if width <= 0.0 {
+        return;
+    }
+    let height = width * aspect;
+    let shift = (offset.unwrap_or(Vec2::ZERO) * card_width).extend(0.0);
+    let position = light::above(&reach.pose, lift) + reach.pose.rotation * shift;
+    let transform = glam::Affine3A::from_scale_rotation_translation(
+        Vec3::new(width, height, 1.0),
+        reach.pose.rotation,
+        position,
+    );
+    let seed = super::vfx::unit_hash(run.particle_seed.unwrap_or(0) as usize, 0);
+    let rgba = tint.resolve(palette, reach.colors);
+    builder.draw(
+        Band::Glows,
+        Draw::vfx(transform, rgba, kind, [progress, opacity, seed, aspect]),
+    );
 }
 
 /// Writes a burst in surface paint order, using the surface's own pose and scale.

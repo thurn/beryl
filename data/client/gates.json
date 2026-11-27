@@ -66,19 +66,23 @@
     },
     "vfx_chevron": {
       "samples": 0,
-      "expressions": 467
+      "expressions": 474
     },
     "vfx_shield": {
       "samples": 0,
-      "expressions": 435
+      "expressions": 442
     },
     "vfx_line_ribbon": {
       "samples": 0,
-      "expressions": 396
+      "expressions": 403
     },
     "vfx_line_head": {
       "samples": 0,
-      "expressions": 387
+      "expressions": 394
+    },
+    "vfx_probe": {
+      "samples": 0,
+      "expressions": 139
     }
   },
   "tests": {

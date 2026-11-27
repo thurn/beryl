@@ -79,7 +79,9 @@ impl Snapshot {
                     .file_stem()
                     .and_then(|stem| stem.to_str())
                     .ok_or_else(|| format!("{}: expected a UTF-8 effect name", path.display()))?;
-                effects.insert(name.to_owned(), read(&path)?);
+                if name != "palette" {
+                    effects.insert(name.to_owned(), read(&path)?);
+                }
             }
         }
         Ok(Self {

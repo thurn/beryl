@@ -30,6 +30,7 @@ fn records(effect: &str, data: &Effects) -> String {
         } else {
             Vec2::new(32.0, 44.5)
         },
+        colors: kit_base::data::effect::SubjectColors::NONE,
     };
     let runs = [EffectRun {
         definition: data.get(effect).unwrap().clone(),
@@ -157,7 +158,11 @@ fn remaining_records(effect: &str, on: Subject, moving: bool, data: &Effects) ->
                     if moving && ago != 0 {
                         pose.position -= Vec3::new(23.0, 12.0, 0.5);
                     }
-                    Some(Reach { pose, half })
+                    Some(Reach {
+                        pose,
+                        half,
+                        colors: kit_base::data::effect::SubjectColors::NONE,
+                    })
                 },
                 (Vec3::Z, 2.0),
                 &mut builder,

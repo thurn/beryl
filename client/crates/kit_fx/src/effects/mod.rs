@@ -18,15 +18,17 @@ use std::sync::Arc;
 use glam::{Vec2, Vec3};
 use kit_frame::frame::{EffectTarget, ElementId, FrameBuilder};
 
-use kit_base::data::effect::{Definition, Effects};
+use kit_base::data::effect::{Definition, Effects, SubjectColors};
 use kit_base::pose::{Curve, Pose};
 
-/// Where something is and how large, for the light drawn to or on it.
+/// Where something is, how large, and what colors it has, for the light and VFX drawn to or on it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Reach {
     pub pose: Pose,
     /// Half its width and height, in millimetres. A player's anchor is a point.
     pub half: Vec2,
+    /// Subject card colors for `"tint": "subject_colors"` layers.
+    pub colors: SubjectColors,
 }
 
 /// Writes the effects that draw in table space, using the subject's current or earlier pose.

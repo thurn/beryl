@@ -5,24 +5,9 @@
 //! quad border.
 
 use glam::{Affine3A, Vec2};
+pub use kit_base::data::effect::Vfx;
 
 use super::draw::{Draw, Material, Mesh, TextureArray};
-
-/// Which procedural effect `Material::Vfx` draws, stored in `Draw::uv[0]`.
-#[repr(u16)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Vfx {
-    /// Unblocked attacking chevron: crimson-ember plasma body with luminous V-rim.
-    Chevron = 0,
-    /// Blocked attacking chevron: amber-to-gold plasma body with warm ivory V-rim.
-    ChevronBlocked = 1,
-    /// Blocking shield dome: polar-swirling golden forcefield curtain and crest ridge.
-    ShieldDome = 2,
-    /// One tapered, mitred segment of a luminous curved or straight line ribbon.
-    LineRibbon = 3,
-    /// Faceted glowing spearhead seated at the end of a luminous line.
-    LineHead = 4,
-}
 
 /// Visual palette and motion style for procedural Enhanced lines (`Vfx::LineRibbon` and
 /// `Vfx::LineHead`), stored in the low byte of `Draw::uv[3]`.

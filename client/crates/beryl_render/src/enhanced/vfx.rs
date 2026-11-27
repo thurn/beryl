@@ -16,8 +16,10 @@ use super::bloom::ADD;
 /// Each effect is shaded by a function named `shade_<effect>`, which `shader_cost` measures.
 pub const SHADER: &str = concat!(
     include_str!("vfx.wgsl"),
+    include_str!("fx/common.wgsl"),
     include_str!("combat_fx.wgsl"),
     include_str!("line_fx.wgsl"),
+    include_str!("fx/probe.wgsl"),
 );
 
 /// Pipelines for `Material::Vfx` records, all built once at startup.

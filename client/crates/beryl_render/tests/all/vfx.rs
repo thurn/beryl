@@ -255,3 +255,78 @@ fn enhanced_line_ribbons_and_spearheads_render_distinct_arena_palettes_in_layer_
         );
     }
 }
+
+fn mean_radius(picture: &Picture) -> f64 {
+    let width = picture.width;
+    let height = u32::try_from(picture.pixels.len() / 4).expect("pixel count") / width;
+    let cx = (f64::from(width) - 1.0) * 0.5;
+    let cy = (f64::from(height) - 1.0) * 0.5;
+    let mut weighted = 0.0_f64;
+    let mut total = 0.0_f64;
+    for y in 0..height {
+        for x in 0..width {
+            let [r, g, b] = picture.at(x, y);
+            let lum = f64::from(r) + f64::from(g) + f64::from(b);
+            if lum > 0.0 {
+                let dx = f64::from(x) - cx;
+                let dy = f64::from(y) - cy;
+                weighted += lum * dx.hypot(dy);
+                total += lum;
+            }
+        }
+    }
+    if total == 0.0 { 0.0 } else { weighted / total }
+}
+
+#[test]
+fn probe_vfx_expands_ring_with_progress_and_respects_tint_and_fade() {
+    let mut renderer = enhanced();
+    let tf = Affine3A::from_scale_rotation_translation(
+        Vec3::new(140.0, 140.0, 1.0),
+        Quat::IDENTITY,
+        Vec3::new(0.0, 0.0, 1.0),
+    );
+    let tint = [255, 88, 46, 255];
+    let early = render_vfx(
+        &mut renderer,
+        Draw::vfx(tf, tint, Vfx::Probe, [0.1, 1.0, 0.2, 1.0]),
+    );
+    let mid = render_vfx(
+        &mut renderer,
+        Draw::vfx(tf, tint, Vfx::Probe, [0.5, 1.0, 0.2, 1.0]),
+    );
+    let late = render_vfx(
+        &mut renderer,
+        Draw::vfx(tf, tint, Vfx::Probe, [0.9, 1.0, 0.2, 1.0]),
+    );
+
+    for (label, pic) in [("early", &early), ("mid", &mid), ("late", &late)] {
+        let [r, g, b] = channel_sums(pic);
+        assert!(
+            r > 20_000 && r > g && g > b,
+            "{label} probe lights up in warm red-orange tint: {:?}",
+            [r, g, b]
+        );
+        for (x, y) in [(0, 0), (199, 0), (0, 199), (199, 199)] {
+            assert_eq!(
+                pic.at(x, y),
+                [0, 0, 0],
+                "{label} corner ({x}, {y}) stays dark"
+            );
+        }
+    }
+
+    let r_early = mean_radius(&early);
+    let r_mid = mean_radius(&mid);
+    let r_late = mean_radius(&late);
+    assert!(
+        r_early + 8.0 < r_mid && r_mid + 8.0 < r_late,
+        "ring radius expands with progress: early={r_early:.1}, mid={r_mid:.1}, late={r_late:.1}"
+    );
+
+    let faded = render_vfx(
+        &mut renderer,
+        Draw::vfx(tf, tint, Vfx::Probe, [0.5, 0.0, 0.2, 1.0]),
+    );
+    assert_eq!(channel_sums(&faded), [0, 0, 0], "zero fade draws nothing");
+}

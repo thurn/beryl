@@ -22,7 +22,10 @@ def data_names(root: Path) -> list[str]:
         if key not in verb_names
     ]
     effect_names = {effect["name"] for effect in conventions["effects"]}
-    effect_files = {file.stem for file in (directory / "effects").glob("*.json")}
+    # `effects/palette.json` is the shared color-ramp table loaded via TUNING_FILES.
+    effect_files = {file.stem for file in (directory / "effects").glob("*.json")} - {
+        "palette"
+    }
     extra_effects = effect_files - effect_names
     for name in sorted(extra_effects):
         file = directory / "effects" / f"{name}.json"

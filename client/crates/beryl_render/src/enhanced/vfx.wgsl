@@ -73,12 +73,12 @@ fn vs_vfx(v: VfxVertexIn) -> VfxOut {
     return out;
 }
 
-@fragment
-fn fs_vfx(in: VfxOut) -> @location(0) vec4<f32> {
+fn dispatch_vfx(in: VfxOut) -> vec4<f32> {
     let time_s = in.params.x;
     let fade = in.params.y * in.tint.a;
     let seed = in.params.z;
     let aspect = in.params.w;
+    let tint = vec4<f32>(in.tint.rgb, fade);
     switch in.kind {
         case VFX_CHEVRON: {
             return shade_attacker_chevron(in.mesh_uv, fade, time_s, seed, aspect, false);
@@ -95,41 +95,42 @@ fn fs_vfx(in: VfxOut) -> @location(0) vec4<f32> {
         case VFX_LINE_HEAD: {
             return shade_line_head(in.mesh_uv, fade, in.style, in.params);
         }
+        case VFX_PROBE: {
+            return shade_probe(in.mesh_uv, time_s, seed, aspect, tint);
+        }
         default: {
             return vec4<f32>(0.0);
         }
     }
 }
 
-@fragment
-fn fs_vfx_bloom(in: VfxOut) -> @location(0) vec4<f32> {
-    let time_s = in.params.x;
-    let fade = in.params.y * in.tint.a;
-    let seed = in.params.z;
-    let aspect = in.params.w;
-    switch in.kind {
+fn vfx_bloom_gain(kind: u32, style: u32) -> f32 {
+    switch kind {
         case VFX_CHEVRON: {
-            let color = shade_attacker_chevron(in.mesh_uv, fade, time_s, seed, aspect, false);
-            return vec4<f32>(color.rgb * BLOOM_GAIN_UNBLOCKED, 0.0);
+            return BLOOM_GAIN_UNBLOCKED;
         }
-        case VFX_CHEVRON_BLOCKED: {
-            let color = shade_attacker_chevron(in.mesh_uv, fade, time_s, seed, aspect, true);
-            return vec4<f32>(color.rgb * BLOOM_GAIN_GOLDEN, 0.0);
+        case VFX_CHEVRON_BLOCKED, VFX_SHIELD_DOME: {
+            return BLOOM_GAIN_GOLDEN;
         }
-        case VFX_SHIELD_DOME: {
-            let color = shade_blocker_shield(in.mesh_uv, fade, time_s, seed, aspect);
-            return vec4<f32>(color.rgb * BLOOM_GAIN_GOLDEN, 0.0);
+        case VFX_LINE_RIBBON, VFX_LINE_HEAD: {
+            return line_bloom_gain(style);
         }
-        case VFX_LINE_RIBBON: {
-            let color = shade_line_ribbon(in.mesh_uv, in.tint.a, in.style, in.params);
-            return vec4<f32>(color.rgb * line_bloom_gain(in.style), 0.0);
-        }
-        case VFX_LINE_HEAD: {
-            let color = shade_line_head(in.mesh_uv, fade, in.style, in.params);
-            return vec4<f32>(color.rgb * line_bloom_gain(in.style), 0.0);
+        case VFX_PROBE: {
+            return BLOOM_GAIN_PROBE;
         }
         default: {
-            return vec4<f32>(0.0);
+            return 0.0;
         }
     }
+}
+
+@fragment
+fn fs_vfx(in: VfxOut) -> @location(0) vec4<f32> {
+    return dispatch_vfx(in);
+}
+
+@fragment
+fn fs_vfx_bloom(in: VfxOut) -> @location(0) vec4<f32> {
+    let color = dispatch_vfx(in);
+    return vec4<f32>(color.rgb * vfx_bloom_gain(in.kind, in.style), 0.0);
 }

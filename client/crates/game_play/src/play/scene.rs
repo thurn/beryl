@@ -42,6 +42,46 @@ impl Scene<'_> {
     pub fn table(&self) -> &Table {
         self.show.table()
     }
+
+    /// Where an effect's target is `ago` nanoseconds before the frame's time, with subject
+    /// colors and player-anchor sizing resolved at `ago == 0`.
+    #[must_use]
+    pub fn effect_reach(&self, target: kit_frame::frame::EffectTarget, ago: u64) -> Option<Reach> {
+        let subject = game_table::effect::subject(target)?;
+        let mut reach = self.reach_before(subject, ago)?;
+        if ago == 0 {
+            reach.colors = self.subject_colors(subject);
+            if matches!(subject, Subject::Player { .. }) {
+                let table = self.table();
+                let card = table.camera().data.card;
+                let window = reach.pose.scale * card.height / table.layout().hand.height;
+                reach.half = table.data().light.player_half_pixels * (window / 900.0);
+            }
+        }
+        Some(reach)
+    }
+
+    /// The subject card's colors as a compact bitmask for `"tint": "subject_colors"` VFX layers.
+    #[must_use]
+    pub fn subject_colors(&self, subject: Subject) -> kit_base::data::effect::SubjectColors {
+        let Subject::Object { slot } = subject else {
+            return kit_base::data::effect::SubjectColors::NONE;
+        };
+        let Some(object) = self
+            .show
+            .shown
+            .as_ref()
+            .and_then(|shown| shown.view.objects.get(usize::from(slot.0)))
+        else {
+            return kit_base::data::effect::SubjectColors::NONE;
+        };
+        let name = object.name.as_deref().unwrap_or("");
+        let (listed, _) = self.show.faces.listed_board_of(object, name);
+        let Some(face) = listed else {
+            return kit_base::data::effect::SubjectColors::NONE;
+        };
+        kit_base::data::effect::SubjectColors::from_codes(face.colors.iter().map(String::as_str))
+    }
 }
 
 impl Scene<'_> {
@@ -82,7 +122,11 @@ impl Scene<'_> {
             return Some(LightTarget {
                 id,
                 bounds,
-                reach: Reach { pose, half },
+                reach: Reach {
+                    pose,
+                    half,
+                    colors: kit_base::data::effect::SubjectColors::NONE,
+                },
                 element: None,
                 band: PaintBand::Table,
                 moving: false,
@@ -96,6 +140,7 @@ impl Scene<'_> {
             reach: Reach {
                 pose,
                 half: camera.data.card.half() * pose.scale,
+                colors: kit_base::data::effect::SubjectColors::NONE,
             },
             element: Some((index, node)),
             band: builder.node_band(index),

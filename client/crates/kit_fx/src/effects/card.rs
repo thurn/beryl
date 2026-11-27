@@ -151,6 +151,7 @@ pub fn write(
                 let reach = Reach {
                     pose: look.pose,
                     half: builder.card() * (0.5 * look.pose.scale),
+                    colors: kit_base::data::effect::SubjectColors::NONE,
                 };
                 player::write_surface_burst(quad, (progress, effects.lift()), run, reach, builder);
             }

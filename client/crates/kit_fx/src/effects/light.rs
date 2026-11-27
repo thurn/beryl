@@ -22,7 +22,7 @@ pub fn write(
             run,
             now,
             |ago| reach_at(run.on, ago),
-            (eye, effects.lift()),
+            (eye, effects.lift(), effects.palette()),
             builder,
         );
     }

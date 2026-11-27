@@ -171,6 +171,7 @@ fn source(run: &StreakRun, scene: &Scene<'_>, builder: &FrameBuilder<'_>) -> Opt
         Subject::Player { player } => Some(Reach {
             pose: scene.table().pool_pose(player),
             half: Vec2::ZERO,
+            colors: kit_base::data::effect::SubjectColors::NONE,
         }),
         from => Some(scene.light_target(from, builder)?.reach),
     }

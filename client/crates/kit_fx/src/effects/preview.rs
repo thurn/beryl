@@ -67,6 +67,7 @@ pub fn write(
                 ..Pose::default()
             },
             half: Vec2::new(rect.width, rect.height) / 2.0,
+            colors: kit_base::data::effect::SubjectColors::NONE,
         }
     };
     let mut look = card::Look {

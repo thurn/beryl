@@ -75,6 +75,7 @@ fn embed_effects() {
         .filter(|path| {
             path.extension()
                 .is_some_and(|extension| extension == "json")
+                && path.file_stem().and_then(|stem| stem.to_str()) != Some("palette")
         })
         .collect();
     paths.sort_unstable();

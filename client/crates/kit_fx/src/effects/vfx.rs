@@ -4,6 +4,7 @@
 use std::f32::consts::TAU;
 
 use glam::{Affine3A, Vec2, Vec3};
+use kit_base::atlas::Tier;
 use kit_base::data::light::{CombatSparks, Own};
 use kit_base::tokens::color;
 use kit_frame::frame::{Band, Draw, FrameBuilder, Vfx, sprites, vfx};
@@ -11,6 +12,64 @@ use kit_frame::frame::{Band, Draw, FrameBuilder, Vfx, sprites, vfx};
 /// IEEE-754 representation of `2^-24` (`1 / 16_777_216`), used to map a 24-bit integer hash
 /// uniformly into `[0, 1)`.
 const UNIT_24_BITS: u32 = 0x3380_0000;
+
+/// Period over which continuous ambient VFX clocks wrap, in nanoseconds (1000 seconds),
+/// keeping `f32` phase precision crisp across long games.
+const LOOP_WRAP_NS: u64 = 1_000_000_000_000;
+
+/// Inputs for emitting a state-driven looping procedural VFX on a card face or anchor.
+#[derive(Clone, Copy, Debug)]
+pub struct StateLoop {
+    /// Procedural VFX kind to draw.
+    pub kind: Vfx,
+    /// Render band to draw into (typically `Band::Glows`).
+    pub band: Band,
+    /// Per-slot or per-anchor phase seed in `[0, 1)` (for example `unit_hash(slot, 0)`).
+    pub seed: f32,
+    /// Frame clock in nanoseconds, wrapped internally into seconds.
+    pub now: u64,
+    /// Quad height-to-width ratio (`size.y / size.x`).
+    pub aspect: f32,
+    /// RGBA tint passed to the shader.
+    pub tint: [u8; 4],
+    /// Combined opacity in `[0, 1]`.
+    pub opacity: f32,
+    /// When true, reduced motion is active: nothing is drawn and ambient wake is not requested.
+    pub reduced_motion: bool,
+}
+
+/// Converts a nanosecond frame clock into a wrapped looping time in seconds (`[0, 1000)`).
+#[must_use]
+pub fn loop_time_s(now: u64) -> f32 {
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "wrapped to 1000 seconds so f32 retains sub-millisecond precision"
+    )]
+    let time_s = (now % LOOP_WRAP_NS) as f32 / 1e9;
+    time_s
+}
+
+/// Writes a state-driven looping procedural VFX quad on a card face or anchor as a pure function
+/// of `(seed, now)`.
+///
+/// Draws only in the Enhanced tier and does nothing under `reduced_motion` or zero opacity.
+/// Pushing a `Material::Vfx` draw sets `Frame::ambient_motion`, which keeps live hosts ticking
+/// through `display_wake` while finite scripts and `--do still` still settle (`Wake::Never`).
+pub fn write_state_loop(builder: &mut FrameBuilder<'_>, transform: Affine3A, fx: &StateLoop) {
+    if builder.tier() != Tier::Enhanced || fx.reduced_motion || fx.opacity <= 0.0 {
+        return;
+    }
+    let time_s = loop_time_s(fx.now);
+    builder.draw(
+        fx.band,
+        Draw::vfx(
+            transform,
+            fx.tint,
+            fx.kind,
+            [time_s, fx.opacity.clamp(0.0, 1.0), fx.seed, fx.aspect],
+        ),
+    );
+}
 
 /// Which combat visual a fighting subject wears in the Enhanced tier.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
