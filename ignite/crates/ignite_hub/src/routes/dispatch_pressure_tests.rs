@@ -201,7 +201,7 @@ fn a_daemon_without_slot_fields_can_only_receive_light_work() {
 
 #[test]
 fn build_handoffs_start_in_threes_then_wait_for_recovery_and_ramp_one_at_a_time() {
-    for admit_cores in [None, Some(10.0)] {
+    for admit_cores in [None, Some(13.0)] {
         check_ramp(admit_cores);
     }
 }
@@ -260,7 +260,7 @@ fn check_ramp(admit_cores: Option<f64>) {
 }
 
 #[test]
-fn six_shared_cores_admit_three_builds_even_after_the_ramp_wait() {
+fn six_shared_cores_admit_two_builds_even_after_the_ramp_wait() {
     let mut conn = open();
     let ids = file(
         &mut conn,
@@ -268,14 +268,13 @@ fn six_shared_cores_admit_three_builds_even_after_the_ramp_wait() {
             ("one", &[], &[]),
             ("two", &[], &[]),
             ("three", &[], &[]),
-            ("four", &[], &[]),
             ("docs", &[], &[]),
         ],
     );
-    for id in &ids[..4] {
+    for id in &ids[..3] {
         classify(&conn, id, 0.25, "Edit `app/src/main.rs`");
     }
-    classify(&conn, &ids[4], 0.1, "Edit `docs/guide.md`");
+    classify(&conn, &ids[3], 0.1, "Edit `docs/guide.md`");
     let mut pressure = DispatchPressure {
         build_slots: 9,
         build_slots_free: 9,
@@ -298,22 +297,20 @@ fn six_shared_cores_admit_three_builds_even_after_the_ramp_wait() {
     );
     pressure.slot_holders.insert(ids[0].clone());
     pressure.build_slots_free -= 1;
-    for (session, id) in [("local_b", &ids[1]), ("local_c", &ids[2])] {
-        assert_eq!(
-            ask(&mut conn, session, &pressure, 2.0)["ticket"],
-            id.as_str()
-        );
-    }
+    assert_eq!(
+        ask(&mut conn, "local_b", &pressure, 2.0)["ticket"],
+        ids[1].as_str()
+    );
     assert_eq!(
         ask(&mut conn, "local_d", &pressure, 120.0)["ticket"],
-        ids[4].as_str()
+        ids[3].as_str()
     );
     let waiting = ask(&mut conn, "local_e", &pressure, 120.0);
     assert!(
         waiting["nothing"]
             .as_str()
             .unwrap()
-            .contains("3 build tickets held, limit 3"),
+            .contains("2 build tickets held, limit 2"),
         "{waiting}"
     );
     let mut gave_back = release(ids[0].as_str(), "local_a");
@@ -321,7 +318,7 @@ fn six_shared_cores_admit_three_builds_even_after_the_ramp_wait() {
     assert_eq!(post(&mut conn, "/release", &gave_back, at(121.0)).0, 200);
     assert_eq!(
         ask(&mut conn, "local_e", &pressure, 122.0)["ticket"],
-        ids[3].as_str()
+        ids[2].as_str()
     );
 }
 
@@ -411,7 +408,7 @@ fn a_build_reservation_from_polling_limits_a_lane_successor_and_vice_versa() {
         }
 
         let pressure = DispatchPressure {
-            shared_cores: Some(6),
+            shared_cores: Some(8),
             build_slots: 6,
             build_slots_free: 5,
             slot_holders: [rust].into(),
@@ -525,7 +522,7 @@ fn a_lane_successor_can_use_the_build_capacity_its_predecessor_releases() {
             200
         );
         let pressure = DispatchPressure {
-            shared_cores: Some(6),
+            shared_cores: Some(8),
             build_slots: 9,
             build_slots_free: 9,
             ..DispatchPressure::default()

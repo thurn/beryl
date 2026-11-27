@@ -9,8 +9,8 @@
 //!   a product bug in one of the change's areas, runs outside the budget.
 //! - A check with an open regression ticket is left out and reported as known to fail, unless
 //!   the ticket being landed is that regression's, in which case it must run, outside the
-//!   budget. This holds in the always set too, unless the change edits the check's own file or
-//!   deletes an input. The landing passes a check it found failing at the tip it was rebased
+//!   budget. This holds in the always set and for deleted inputs too, unless the change edits
+//!   the check's own file. The landing passes a check it found failing at the tip it was rebased
 //!   onto here as one with an open regression ticket.
 //! - A check that needs a build product the tree has never built is left to tip verification
 //!   unless it must run anyway: the gate runs checks on what the tree has already compiled, and
@@ -223,7 +223,7 @@ pub fn plan(input: &GateInput<'_>, budget: &Budget) -> GatePlan {
             .regression
             .as_ref()
             .is_some_and(|ticket| input.landing != Some(ticket));
-        if input.deleted_inputs.contains(&check.check) {
+        if input.deleted_inputs.contains(&check.check) && !known {
             must_run.push((check, Why::DeletedInput));
         } else if check.always && !known {
             always.push(check);

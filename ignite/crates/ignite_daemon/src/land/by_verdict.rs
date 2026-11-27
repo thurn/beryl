@@ -48,9 +48,11 @@ use ignite_core::protocol::tickets::LandedWork;
 use ignite_core::traits::{Error, Push, Rebase};
 
 use super::args::LandArgs;
+use super::base::{MovedTip, confirmed_failures, partial_passed, without_failed_families};
 use super::env::{GateTree, TicketTree};
 use super::express::section_in;
 use super::lease::HeldLease;
+use super::passes::Passed;
 use super::records::{LandingRecord, RecordState};
 use super::replies::{failed_gate, stopped};
 use super::timeline::Timeline;
@@ -254,6 +256,8 @@ impl Landing {
         // the tip for real and the gate runs there once more (see
         // `GateRun::fails_at_older_base`).
         let mut gate_rebases = 0;
+        let mut last_passed: Option<Passed> = None;
+        let mut excused = Excused::new();
         let judged = loop {
             let key = VerdictKey {
                 tree: ctx.git.tree_id(&held.path).map_err(io)?,
@@ -282,6 +286,10 @@ impl Landing {
                 session: Some(session.clone()),
                 reserve: None,
             };
+            let carried = match &last_passed {
+                Some(earlier) => earlier.carried(ctx, &at.head, &changed).map_err(io)?,
+                None => None,
+            };
             steps::step(format!("running the gate in {}", held.tree));
             let pass = super::base::Pass {
                 holder: &holder,
@@ -289,11 +297,11 @@ impl Landing {
                 borrowable: false,
                 rebased: &at,
                 options: &options,
-                carried: None,
-                earlier: None,
+                carried: carried.as_ref(),
+                earlier: last_passed.as_ref(),
                 onto_tip: at.onto == tip,
             };
-            let result = self.gate_pass(ctx, &pass, &mut Excused::new());
+            let result = self.gate_pass(ctx, &pass, &mut excused);
             if steps::stop_requested() {
                 return Err(stopped());
             }
@@ -310,14 +318,29 @@ impl Landing {
                         ));
                     }
                     gate_rebases += 1;
-                    if let Err(current_tip) = moved {
-                        tip = current_tip;
+                    let partial = match moved {
+                        Err(MovedTip {
+                            tip: current_tip,
+                            partial,
+                        }) => {
+                            tip = current_tip;
+                            *partial
+                        }
+                        Ok(gated) => {
+                            let failed = confirmed_failures(&gated).unwrap_or_default();
+                            without_failed_families(gated, &failed)
+                        }
+                    };
+                    if let Some(passed) = partial_passed(&at.head, &changed, partial) {
+                        last_passed = Some(passed);
                     }
+                    excused.clear();
                     steps::step(format!("rebasing onto {staging} {}", short(&tip)));
                     at = Self::rebase(ctx, held, &tip)?;
                     if at.head == at.onto {
                         return Err(nothing_to_land(&staging));
                     }
+                    changed = ctx.git.changed(&at.onto, &at.head).map_err(io)?;
                     continue;
                 }
             };

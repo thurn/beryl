@@ -259,8 +259,10 @@ impl Checks {
         }
     }
 
-    /// Checks whose declared inputs match deleted paths. Match the old path directly so a
-    /// glob can name a file even after it has disappeared from the tracked files.
+    /// Checks whose own declared inputs or literal family inputs match deleted paths. A
+    /// family-wide glob or crate pattern (such as `client/**`) keeps the family in scope via
+    /// `deleted_input_families` and busts its glob hash without forcing every check in the family
+    /// outside the gate budget.
     pub(super) fn checks_with_deleted_inputs<'a>(
         &self,
         tree: &OpenTree,
@@ -272,8 +274,14 @@ impl Checks {
             return BTreeSet::new();
         }
         let observes = family.adapter == Adapter::Nextest && self.target_dir(family).is_some();
-        let mut common = self.check_patterns(family, observes);
-        common.extend(family.digest_inputs.iter().cloned());
+        let mut common: Vec<InputPattern> = self
+            .check_patterns(family, observes)
+            .into_iter()
+            .chain(family.digest_inputs.iter().cloned())
+            .filter(is_literal_path)
+            .collect();
+        common.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
+        common.dedup();
         let mut packages = HashMap::new();
         let mut found = BTreeSet::new();
         for listed in checks {
@@ -281,7 +289,12 @@ impl Checks {
             let package_match = *packages.entry(package).or_insert_with(|| {
                 let patterns = common
                     .iter()
-                    .chain(family.package_patterns(package))
+                    .chain(
+                        family
+                            .package_patterns(package)
+                            .iter()
+                            .filter(|p| is_literal_path(p)),
+                    )
                     .cloned();
                 matches_check_patterns(patterns, package, &tree.graph, deleted)
             });
@@ -358,6 +371,11 @@ fn reads_deleted(paths: &[String], deleted: &[String]) -> bool {
     paths
         .iter()
         .any(|path| deleted.iter().any(|file| inputs::path_matches(path, file)))
+}
+
+/// Whether `pattern` names a literal path rather than a glob or crate closure.
+fn is_literal_path(pattern: &InputPattern) -> bool {
+    matches!(pattern, InputPattern::Path(path) if !path.contains(['*', '?', '[']))
 }
 
 fn matches_deleted(patterns: &[InputPattern], graph: &CrateGraph, deleted: &[String]) -> bool {

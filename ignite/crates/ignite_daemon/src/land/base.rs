@@ -19,6 +19,8 @@
 //! says something else, such as more findings: the adapters report no list of findings that
 //! could be compared.
 
+use std::collections::BTreeSet;
+
 use ignite_core::ids::{CheckName, Commit, TicketId};
 use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::{FoundBy, LandingRegression, RegressionReport};
@@ -31,6 +33,14 @@ use super::{Landing, Rebased, short};
 use crate::checks::{Carried, Excused, GateRun, RunOptions};
 use crate::server::Context;
 use crate::steps;
+
+/// Returned by [`Landing::gate_pass`] when `staging` advanced and touched an input of a check
+/// that failed at `pass.rebased.onto`. `partial` keeps every unaffected passing family from the
+/// gate run so the next pass carries them over instead of restarting from scratch.
+pub(super) struct MovedTip {
+    pub tip: Commit,
+    pub partial: Box<GateRun>,
+}
 
 /// What one pass of a landing gates, and where.
 pub(super) struct Pass<'a> {
@@ -55,14 +65,15 @@ pub(super) struct Pass<'a> {
 impl Landing {
     /// Runs the gate, leaving out the checks in `excused` as known to fail. When every fault is
     /// a confirmed failure of a check that fails at the tip too, adds those checks to
-    /// `excused` and runs the gate again. If staging advances during the comparison, returns
-    /// the new tip for the caller to rebase onto before filing any regression.
+    /// `excused` and runs the gate again. If staging advances during the gate or baseline check
+    /// and touches an input of a confirmed failing check, returns the new tip and the partial
+    /// passing families for the caller to rebase and carry over before filing any regression.
     pub(super) fn gate_pass(
         &self,
         ctx: &Context,
         pass: &Pass<'_>,
         excused: &mut Excused,
-    ) -> Result<GateRun, Commit> {
+    ) -> Result<GateRun, MovedTip> {
         loop {
             let gated = self
                 .gate
@@ -106,27 +117,25 @@ impl Landing {
                     return Ok(gated);
                 }
             }
-            let confirmed = verdicts
+            let confirmed: Vec<&CheckVerdict> = verdicts
                 .iter()
-                .filter(|verdict| verdict.outcome == Outcome::Fail);
-            if pass.onto_tip && confirmed.clone().next().is_some() {
+                .filter(|verdict| verdict.outcome == Outcome::Fail)
+                .collect();
+            if pass.onto_tip && !confirmed.is_empty() {
                 if steps::stop_requested() {
                     return Ok(gated);
                 }
-                // A fix may have landed while the baseline checks ran.
-                match ctx.git.tip(&ctx.config.repository.staging) {
-                    Ok(current) if current != pass.rebased.onto => return Err(current),
-                    Ok(_) => {}
-                    Err(error) => {
+                match file_confirmed_failures(ctx, &pass.rebased.onto, &confirmed, excused) {
+                    Ok(()) => {}
+                    Err(ConfirmError::Moved(current)) => {
+                        return Err(MovedTip {
+                            tip: current,
+                            partial: Box::new(without_failed_families(gated, &failed)),
+                        });
+                    }
+                    Err(ConfirmError::TipError(error)) => {
                         gated.base = Some(format!("could not confirm the staging tip: {error}"));
                         return Ok(gated);
-                    }
-                }
-                let tip = &pass.rebased.onto;
-                let verified = verified_ancestor(ctx, tip);
-                for verdict in confirmed {
-                    if let Some(ticket) = file(ctx, tip, &verified, verdict) {
-                        excused.insert(verdict.check.clone(), ticket);
                     }
                 }
             }
@@ -229,9 +238,94 @@ fn verified_ancestor(ctx: &Context, tip: &Commit) -> Result<Commit, Error> {
     Ok(verified)
 }
 
+enum ConfirmError {
+    Moved(Commit),
+    TipError(Error),
+}
+
+/// Checks whether staging advanced in a way that could have fixed a confirmed failure, and
+/// otherwise files each confirmed failure with the hub and records it in `excused`.
+fn file_confirmed_failures(
+    ctx: &Context,
+    onto: &Commit,
+    confirmed: &[&CheckVerdict],
+    excused: &mut Excused,
+) -> Result<(), ConfirmError> {
+    match ctx.git.tip(&ctx.config.repository.staging) {
+        Ok(current) if current != *onto && may_have_fixed(ctx, onto, &current, confirmed) => {
+            return Err(ConfirmError::Moved(current));
+        }
+        Ok(_) => {}
+        Err(error) => return Err(ConfirmError::TipError(error)),
+    }
+    let verified = verified_ancestor(ctx, onto);
+    for verdict in confirmed {
+        if let Some(ticket) = file(ctx, onto, &verified, verdict) {
+            excused.insert(verdict.check.clone(), ticket);
+        }
+    }
+    Ok(())
+}
+
+/// Whether the commits landed between `onto` and `current` could have fixed any check in
+/// `confirmed`. Returns `true` conservatively if the diff fails or any failing check has no
+/// recorded input paths.
+fn may_have_fixed(
+    ctx: &Context,
+    onto: &Commit,
+    current: &Commit,
+    confirmed: &[&CheckVerdict],
+) -> bool {
+    let Ok(moved) = ctx.git.changed(onto, current) else {
+        return true;
+    };
+    if moved.is_empty() {
+        return false;
+    }
+    confirmed.iter().any(|verdict| {
+        verdict.inputs.is_empty()
+            || verdict
+                .inputs
+                .iter()
+                .any(|input| moved.iter().any(|path| path == input))
+    })
+}
+
+/// Drops every family that had a check in `failed` from `gated`, keeping all unaffected passing
+/// families so the next pass after a rebase can carry them over.
+pub(super) fn without_failed_families(mut gated: GateRun, failed: &[CheckName]) -> GateRun {
+    let bad: BTreeSet<&str> = failed.iter().map(CheckName::family).collect();
+    gated.scoped.retain(|family| !bad.contains(family.as_str()));
+    gated
+        .run
+        .outcomes
+        .retain(|(check, _)| !bad.contains(check.family()));
+    gated
+        .known_failing
+        .retain(|(check, _)| !bad.contains(check.family()));
+    gated
+        .left_by_family
+        .retain(|family, _| !bad.contains(family.as_str()));
+    gated
+        .run
+        .cold_families
+        .retain(|family| !bad.contains(family.as_str()));
+    gated.run.failures.clear();
+    gated
+}
+
+/// Builds a [`Passed`] from `partial` when at least one unaffected family passed.
+pub(super) fn partial_passed(
+    head: &Commit,
+    changed: &[String],
+    partial: GateRun,
+) -> Option<Passed> {
+    (!partial.scoped.is_empty()).then(|| Passed::new(head.clone(), changed.to_vec(), partial))
+}
+
 /// The checks whose failures the gate's rerun confirmed, when they are its only faults; `None`
 /// for a gate that passed or that a build, a listing or an incomplete check refused.
-fn confirmed_failures(gated: &GateRun) -> Option<Vec<CheckName>> {
+pub(super) fn confirmed_failures(gated: &GateRun) -> Option<Vec<CheckName>> {
     let run = &gated.run;
     let only_failures = run.build_failures.is_empty()
         && run.incomplete_families.is_empty()

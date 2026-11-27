@@ -499,11 +499,16 @@ impl Landing {
                     earlier: last_passed.as_ref(),
                     onto_tip: true,
                 };
-                let Ok(gated) = self.gate_pass(ctx, &pass, &mut excused) else {
-                    "staging advanced during the baseline check".clone_into(&mut last_cause);
-                    excused.clear();
-                    lease = None;
-                    continue;
+                let gated = match self.gate_pass(ctx, &pass, &mut excused) {
+                    Ok(gated) => gated,
+                    Err(moved) => {
+                        "staging advanced during the baseline check".clone_into(&mut last_cause);
+                        last_passed = base::partial_passed(&rebased.head, &changed, *moved.partial)
+                            .or(last_passed);
+                        excused.clear();
+                        lease = None;
+                        continue;
+                    }
                 };
                 (gated, None)
             };
@@ -775,11 +780,8 @@ struct Rebased {
 
 /// What step 7 did, for the landing's output.
 struct Settled {
-    /// What became of the ticket at the hub.
     closed: String,
-    /// What became of the ticket tree.
     released: String,
-    /// Warnings about what could not be done.
     problems: Vec<(String, String)>,
 }
 
@@ -789,12 +791,8 @@ struct Summary {
     landed_since: u32,
     passes: u32,
     gated: GateRun,
-    /// The `release` line, when the landing called for a move of the release branch.
     release: Option<(String, String)>,
-    /// The express run that took the gate's place, if the landing took the express lane.
     express: Option<ExpressRun>,
-    /// What the formatters did, if the machine has any.
     formatted: Option<Formatted>,
-    /// Where the landing's time went, across passes and restarts.
     timeline: Timeline,
 }

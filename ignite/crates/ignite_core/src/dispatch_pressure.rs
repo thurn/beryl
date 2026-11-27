@@ -26,9 +26,11 @@ pub const BUILD_QUEUE_RECOVERY_WAIT: &str = "waits for a healthy build queue";
 /// reached two minutes with much more headroom, while grants were still counted in full.
 const BACKLOG_BUSY_PERCENT: u32 = 90;
 const INITIAL_BUILD_TICKETS: u32 = 3;
-// Build commands overlap in bursts. Their historical average use let seven build tickets
-// accumulate on a six-shared-core host while 51 cores of commands waited.
-const SHARED_CORES_PER_BUILD_TICKET: f64 = 2.0;
+// Build commands overlap in bursts. At 2.0 shared cores per ticket, three concurrent heavy
+// client builds on a six-shared-core host drove 13+ queued cores and 3+ GiB of swap, stretching
+// single landings past the interval between staging commits. At 2.5, a 6-core host caps at 2
+// build tickets and a 10-core host caps at 4.
+const SHARED_CORES_PER_BUILD_TICKET: f64 = 2.5;
 const RAMP_SECONDS: u32 = 90;
 const BUILD_WAIT_SECONDS: f64 = 30.0;
 const RECOVERY_SECONDS: f64 = 90.0;

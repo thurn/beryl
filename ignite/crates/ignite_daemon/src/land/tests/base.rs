@@ -186,6 +186,66 @@ fn a_fix_landed_during_the_gate_prevents_a_report_against_the_old_tip() {
 }
 
 #[test]
+fn an_unrelated_landing_during_the_gate_still_files_and_excuses_the_baseline_failure() {
+    for mode in [LandMode::Strict, LandMode::Verdict] {
+        let mut world = broken("b.txt", "broken");
+        world.ctx.config.land.mode = mode;
+        world.git.land_other(&[("b.txt", "broken")]);
+        world.hold("tree-01", "t.1", "local_a", &[("a.txt", "mine")]);
+
+        let git = world.git.clone();
+        world.queue_hook(move || git.land_other(&[("c.txt", "unrelated")]));
+
+        let reply = world.land_as("tree-01", "local_a");
+
+        assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+        assert_eq!(world.hub.hub.regressions().len(), 1);
+        assert_eq!(world.hub.hub.regressions()[0].check.as_str(), "unit:both");
+        assert_eq!(world.git.pushes().len(), 1);
+    }
+}
+
+#[test]
+fn a_moved_tip_that_touches_a_failing_input_carries_unaffected_passing_families() {
+    for mode in [LandMode::Strict, LandMode::Verdict] {
+        let mut world = world_with_checks(vec![
+            ("unit:both", vec!["a.txt", "b.txt"]),
+            ("other:ok", vec!["d.txt"]),
+        ]);
+        world
+            .gate
+            .broken_by
+            .lock()
+            .unwrap()
+            .push(("unit:both", "b.txt", "broken"));
+        world.ctx.config.land.mode = mode;
+        world.git.land_other(&[("b.txt", "broken")]);
+        world.hold(
+            "tree-01",
+            "t.1",
+            "local_a",
+            &[("a.txt", "mine"), ("d.txt", "mine")],
+        );
+
+        let git = world.git.clone();
+        world.queue_hook(move || git.land_other(&[("b.txt", "fixed")]));
+
+        let reply = world.land_as("tree-01", "local_a");
+
+        assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+        assert!(world.hub.hub.regressions().is_empty());
+        assert_eq!(world.git.pushes().len(), 1);
+        // After rebasing over the fix to `b.txt`, the unaffected `other` family is carried over
+        // instead of re-running from scratch.
+        assert!(
+            reply.text.contains("carried  1 family"),
+            "expected `other` to be carried across the baseline rebase:\n{}",
+            reply.text
+        );
+    }
+}
+
+#[test]
 fn a_failure_cached_at_the_tip_makes_the_check_known_failing_without_running_it_there() {
     let world = broken("b.txt", "broken");
     world.git.land_other(&[("b.txt", "broken")]);

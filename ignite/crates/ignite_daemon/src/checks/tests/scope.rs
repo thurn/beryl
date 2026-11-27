@@ -534,11 +534,43 @@ fn a_family_with_declared_digest_inputs_is_left_out_when_none_changed() {
 }
 
 #[test]
-fn deleting_a_declared_input_brings_a_cold_family_into_the_gate() {
+fn deleting_a_family_glob_input_keeps_it_in_scope_without_forcing_past_budget() {
     let mut world = repository();
     world.ctx.config.gate.seconds = 0.01;
     let tree = TreeId::new("tree-01").unwrap();
     listed_at_the_tip(&world);
+    world
+        .git
+        .set_object("data/client/layout.json", Oid::new("a".repeat(40)).unwrap());
+    world
+        .git
+        .set_object("data/client", Oid::new("b".repeat(40)).unwrap());
+    world.builds.never_built(&tree, "client");
+    let mut trees = tree_with(&world, &["data/client/old-layout.json"]);
+    trees.deleted = trees.changed.clone();
+    assert!(!trees.tracked.contains(&trees.deleted[0]));
+    let checks = daemon(&world, memory(), trees);
+
+    let gated = checks.gate(&world.ctx, &tree, &landing());
+
+    assert!(gated.run.passed(), "{gated:?}");
+    assert_eq!(gated.scoped, ["client-interface"]);
+    assert_eq!(gated.budget.unwrap().forced.0, 0);
+}
+
+#[test]
+fn deleting_a_checks_own_input_forces_it_even_on_a_cold_build() {
+    let mut world = repository();
+    world.ctx.config.gate.seconds = 0.01;
+    let tree = TreeId::new("tree-01").unwrap();
+    *world.launcher.listing.lock().unwrap() = format!(
+        "{{\"check\": \"client-interface:hover\", \"inputs\": [\"data/client/*.json\"]}}\n\
+         {{\"check\": \"markdown:format\", \"inputs\": [\"docs/**\"]}}\n{NEXTEST_LISTING}\n"
+    );
+    listed_at_the_tip(&world);
+    world
+        .git
+        .set_object("data/client/layout.json", Oid::new("a".repeat(40)).unwrap());
     world
         .git
         .set_object("data/client", Oid::new("b".repeat(40)).unwrap());

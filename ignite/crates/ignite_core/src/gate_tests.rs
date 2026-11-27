@@ -115,6 +115,30 @@ fn a_deleted_input_forces_a_fresh_run_even_with_a_cold_product() {
     assert_eq!(left_names(&plan.past_budget), ["unit:ordinary"]);
 }
 
+#[test]
+fn a_deleted_input_does_not_force_a_check_with_an_open_regression() {
+    let mut broken = check("unit:deleted", 0, 50, 0.0, 100.0);
+    broken.regression = Some(TicketId::new("reg.1").unwrap());
+    let deleted_inputs = BTreeSet::from([broken.check.clone()]);
+    let plan = plan(
+        &GateInput {
+            areas: &[AREA.to_owned()],
+            checks: &[broken],
+            unbuilt: &none(),
+            landing: Some(&TicketId::new("other.1").unwrap()),
+            deleted_inputs: &deleted_inputs,
+            recent_product_catches: &BTreeSet::new(),
+            paid: &BTreeSet::new(),
+            billions_per_cpu_second: BILLIONS_PER_CPU_SECOND,
+        },
+        &gate(0.001, 10.0),
+    );
+
+    assert!(plan.run.is_empty());
+    assert_eq!(plan.known_failing.len(), 1);
+    assert_eq!(plan.known_failing[0].0.as_str(), "unit:deleted");
+}
+
 /// The two checks of the worked example under "Scores" in `docs/ignite.md`.
 #[test]
 fn worked_example() {
