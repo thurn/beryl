@@ -1059,14 +1059,6 @@
         "value": 14,
         "note": "A loss starts this far above the orb art's bottom: `.life-change` in `ui/src/screens/styles/table.css`."
       },
-      "LIFE_CHANGE_WIDE_LEFT": {
-        "value": 64,
-        "note": "A wide desktop life loss's right edge is this far left of the orb centre, clearing the step banner's 'Combat' title."
-      },
-      "LIFE_CHANGE_WIDE_TOP": {
-        "value": 27,
-        "note": "A wide desktop life loss starts this far below the orb's face centre, clearing the step stops above and the step banner's detail line below after drifting."
-      },
       "ORB_WIDTH": {
         "value": 98,
         "note": "The width of a life orb's core: twice `CORE.rx` in `ui/src/components/Player.tsx`, at `--orb` 1px."

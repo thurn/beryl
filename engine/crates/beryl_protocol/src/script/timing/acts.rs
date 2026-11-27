@@ -32,33 +32,26 @@ pub(super) fn meets(a: &Act, b: Option<&Act>) -> bool {
     )
 }
 
-/// Whether `act` is a card's vanish or appearance that the step after it in `beside` follows
-/// with a card's vanish or appearance of the same verb that goes from, or to, another zone.
+/// Whether `act` is a card's vanish that the step after it in `beside` follows with a card's
+/// vanish from another zone.
 pub(super) fn next_zone(act: &Act, beside: &[&Act]) -> bool {
+    let Act::Vanish {
+        subject: Subject::Object { .. },
+        from,
+        ..
+    } = act
+    else {
+        return false;
+    };
     let Some(at) = beside.iter().position(|other| ptr::eq(*other, act)) else {
         return false;
     };
-    match (act, beside.get(at + 1)) {
-        (
-            Act::Vanish {
-                subject: Subject::Object { .. },
-                from,
-                ..
-            },
-            Some(Act::Vanish {
-                subject: Subject::Object { .. },
-                from: next,
-                ..
-            }),
-        ) => next != from,
-        (
-            Act::Appear { from, object, .. },
-            Some(Act::Appear {
-                from: next_from,
-                object: next,
-                ..
-            }),
-        ) => (next_from, next.zone) != (from, object.zone),
-        _ => false,
-    }
+    matches!(
+        beside.get(at + 1),
+        Some(Act::Vanish {
+            subject: Subject::Object { .. },
+            from: next,
+            ..
+        }) if next != from
+    )
 }
