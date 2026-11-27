@@ -86,7 +86,7 @@ def test_client_state_keeps_transient_settings_in_the_registry(
     client = f"{CRATES}/app_client/src/client/mod.rs"
     shared = (
         "pub struct Client {\n"
-        "    features: features::Features,\n"
+        "    features: Box<features::Features>,\n"
         "    routes: input::Routes,\n"
     )
     check = purity.SOURCE_RULES["client-state"]
