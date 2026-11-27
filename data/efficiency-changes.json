@@ -1067,7 +1067,7 @@
     "expect": "down"
   },
   {
-    "label": "A `checks-only` or `off` machine state set by a session ends after four hours by default and hub upkeep returns the machine to `active`, so a justiciar's mitigation cannot keep a machine out of the worker pool after its reason has passed (cygnus's 20 cores took no tickets for eight hours on 2026-11-26 while 15 tickets waited for build slots on the Macs)",
+    "label": "A `checks-only` or `off` machine state set by a session ends after four hours by default and hub upkeep returns the machine to `active`, so a justiciar's mitigation cannot keep a machine out of the worker pool after its reason has passed (the Windows machine took no tickets for eight hours while tickets waited for build slots on the Macs)",
     "metric": "bead.lead-minutes",
     "expect": "down"
   },
