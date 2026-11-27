@@ -49,17 +49,25 @@ fn ways_row(prompt: &PromptView, input: &HudIn) -> Option<Element> {
     #[expect(clippy::cast_precision_loss, reason = "a card has a few ways")]
     let count = ways.len() as f32;
     let tray_wide = tray.width / per_stage;
-    let width =
-        ((tray_wide - space.gap) / count - space.gap).clamp(space.least, space.most) * per_stage;
+    let gap = space.gap * per_stage;
+    // Each way's caption may use the way's whole share of the tray, so that a long one such
+    // as "Remote Isle: {2}, Discard this card" wraps to two lines rather than four under a
+    // narrow face.
+    let share = (tray.width - gap * (count - 1.0)) / count;
+    // The face, the gap under it and two lines of caption fit the tray's height, so that a
+    // short tray (a phone's) does not push the captions down over the prompt's title.
+    let captions = 2.0 * type_style::WAY_CAPTION.size * type_style::WAY_CAPTION.line_height;
+    let face_tall = tray.height - (space::M + captions) * per_stage;
+    let width = (((tray_wide - space.gap) / count - space.gap).clamp(space.least, space.most)
+        * per_stage)
+        .min(face_tall * space.card.width / space.card.height)
+        .max(0.0);
     let drawn = ways
         .into_iter()
         .zip(way_faces(prompt, input).map(|face| shown_face(face, input.faces)))
-        .map(|(way, face)| way_element(way, face, (width, space.card), per_stage));
+        .map(|(way, face)| way_element(way, face, (width, share, space.card), per_stage));
     // Align the choices at their tops so a caption that wraps cannot lift its card.
-    let choices = row()
-        .gap(space.gap * per_stage)
-        .align_items(Align::Start)
-        .children(drawn);
+    let choices = row().gap(gap).align_items(Align::Start).children(drawn);
     // The phone starts below the menu even when captions make the row taller than its tray.
     let vertical = if input.profile.data().table.banded.is_some() {
         Align::Start
@@ -127,12 +135,13 @@ pub(in crate::prompts) fn way_faces<'a>(
     })
 }
 
-/// One way to use the card: its face `width` wide, where the face is known, over its label.
-/// A press sends the way's button; a way that cannot be chosen is dimmed and takes no press.
+/// One way to use the card: its face `width` wide, where the face is known, over its label at
+/// most `share` wide. A press sends the way's button; a way that cannot be chosen is dimmed and
+/// takes no press.
 fn way_element(
     way: &PromptButton,
     face: Option<Showing>,
-    (width, card): (f32, kit_base::data::Card),
+    (width, share, card): (f32, f32, kit_base::data::Card),
     per_stage: f32,
 ) -> Element {
     let faces = face.map(|face| {
@@ -166,7 +175,7 @@ fn way_element(
         })
         .text_align(TextAlign::Center)
         .drop_shadow(caption_shadows)
-        .max_width(width)
+        .max_width(share.max(width))
         .color(if way.enabled {
             color::TEXT
         } else {
