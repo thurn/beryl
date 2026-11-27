@@ -105,7 +105,8 @@ impl<L: Layout> State<L> {
         }
     }
 
-    /// Deals damage to a permanent, by its types as the layers have them.
+    /// Deals damage to a permanent, by its types as the layers have them. [`Full`] if the
+    /// creature's marked damage would overflow [`Layout::Count`].
     ///
     /// See [CR 120.3c](https://yawgatog.com/resources/magic-rules/#R1203c): "Damage dealt to a
     /// planeswalker causes that many loyalty counters to be removed from that planeswalker."
@@ -114,36 +115,41 @@ impl<L: Layout> State<L> {
     /// by a source with neither wither nor infect causes that much damage to be marked on that
     /// creature."
     #[inline]
-    #[must_use]
     pub fn mark_damage(
         &mut self,
         source: ObjectRef<L>,
         to: Permanent<L>,
         amount: u8,
         combat: bool,
-    ) -> Event<L> {
+    ) -> Result<Event<L>, Full> {
         let types = self.derived(to.slot()).types;
         let o = self.object_mut(to.slot());
         let amount_count = L::Count::from(amount);
+        let next_damage = if types.contains(Types::CREATURE) {
+            Some(o.damage.checked_add(amount_count).ok_or(Full)?)
+        } else {
+            None
+        };
         let lost_loyalty = if types.contains(Types::PLANESWALKER) {
             let before = o.counters.loyalty;
-            o.counters.loyalty = before.saturating_sub(amount_count);
+            // Damage exceeding loyalty removes all remaining loyalty counters (see CR 120.3c).
+            o.counters.loyalty = before.checked_sub(amount_count).unwrap_or(L::Count::ZERO);
             o.counters.loyalty != before
         } else {
             false
         };
-        if types.contains(Types::CREATURE) {
-            o.damage = o.damage.saturating_add(amount_count);
+        if let Some(damage) = next_damage {
+            o.damage = damage;
         }
         if lost_loyalty && self.layer_inputs.contains(Inputs::ANY_COUNTERS) {
             self.flags.derived_dirty = true;
         }
-        Event::Damage {
+        Ok(Event::Damage {
             source,
             to: Recipient::Permanent(to.into()),
             amount,
             combat,
-        }
+        })
     }
 
     /// Removes the damage marked on every permanent, as the cleanup step does (see [CR 514.2]): "all

@@ -212,7 +212,7 @@ fn fire<L: Layout>(
     e: &Event<L>,
 ) -> Result<(), Full> {
     let this = of.source.map(|source| source.slot);
-    if let Some(info) = fires(s, t, trigger, this, of.controller.seat(), e) {
+    if let Some(info) = fires(s, t, trigger, this, of.controller.seat(), e)? {
         for _ in 0..times(e) {
             enqueue(s, t, PendingTrigger { of, info })?;
         }
@@ -280,6 +280,7 @@ fn counted(count: u32) -> u8 {
 /// Each kind of event says what it is about, and the subject and the players are read the
 /// same way for every one ([`about`], [`how_many`], [`is_for`]). The card table has refused
 /// every trigger this would not match ([`beryl_kernel::listener::listens_to`]).
+#[allow(clippy::too_many_lines)]
 fn fires<L: Layout>(
     s: &State<L>,
     t: &GameTable,
@@ -287,7 +288,7 @@ fn fires<L: Layout>(
     this: Option<L::Slot>,
     you: Seat,
     e: &Event<L>,
-) -> Option<TriggerInfo<L>> {
+) -> Result<Option<TriggerInfo<L>>, Full> {
     let info = |object: Option<ObjectRef<L>>, player: Seat, amount: u8| TriggerInfo {
         object,
         player,
@@ -296,7 +297,7 @@ fn fires<L: Layout>(
     let whose = |player: Seat| is_for(&trigger.whose, player, you);
     let words = this.map_or(Words::NONE, |slot| s.words_of(slot));
     let about = |object: ObjectRef<L>| about(s, t, trigger.subject, this, you, &words, object);
-    match (trigger.event, e) {
+    Ok(match (trigger.event, e) {
         (TriggerEvent::ClassLevel(wanted), &Event::ClassLevel { object, level })
             if wanted == level && about(object) =>
         {
@@ -315,7 +316,11 @@ fn fires<L: Layout>(
         (TriggerEvent::Attacks, Event::Attack { attackers, .. })
             if this.is_some_and(|slot| attackers.contains(slot)) =>
         {
-            Some(info(Some(s.object_ref(this?)), you, 0))
+            Some(info(
+                Some(s.object_ref(this.expect("guarded above"))),
+                you,
+                0,
+            ))
         }
         (TriggerEvent::PlayerAttacks, &Event::Attack { player, attackers }) if whose(player) => {
             let attacking = how_many(s, t, trigger.subject, attackers, you, &words);
@@ -362,8 +367,15 @@ fn fires<L: Layout>(
                 ..
             },
         ) if event.matches_cast_from(from) && whose(controller) && about(spell) => {
-            cast_number::matches(s, controller, trigger.cast_number)
-                .then(|| info(Some(spell), controller, crate::casting::cast_before(s)))
+            if cast_number::matches(s, controller, trigger.cast_number) {
+                Some(info(
+                    Some(spell),
+                    controller,
+                    crate::casting::cast_before(s)?,
+                ))
+            } else {
+                None
+            }
         }
         (TriggerEvent::Discards, &Event::ZoneChange { object, .. }) => {
             let discarder = s.object(object.slot).owner();
@@ -381,7 +393,10 @@ fn fires<L: Layout>(
             },
         ) if whose(controller) && about(object) => {
             let subject = if matches!(event, TriggerEvent::BecomesTargetOfSpell) {
-                spell?
+                let Some(spell) = spell else {
+                    return Ok(None);
+                };
+                spell
             } else {
                 object
             };
@@ -393,7 +408,7 @@ fn fires<L: Layout>(
             Some(info(Some(object), controller, 0))
         }
         _ => None,
-    }
+    })
 }
 
 /// Whether an entering event, the move of `object` onto the battlefield, is what `event`

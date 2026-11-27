@@ -415,7 +415,7 @@ pub(crate) fn additional_step<L: Layout>(
         return Ok(Instructed::NOTHING);
     }
     game.insert_step(current, Placement::After, step)?;
-    Ok(Instructed::of(Bitboard::EMPTY, 1))
+    Instructed::of(Bitboard::EMPTY, 1)
 }
 
 /// Adds the named phases after the current phase (see [CR 500.8]): "They do this by adding
@@ -441,10 +441,10 @@ pub(crate) fn additional_phases<L: Layout>(
         game.sink
             .note(Event::TurnPlanChanged(TurnChange::InsertPhase(phase)));
     }
-    Ok(Instructed::of(
+    Instructed::of(
         Bitboard::EMPTY,
         u32::try_from(phases.len()).expect("the turn plan fits in a u32"),
-    ))
+    )
 }
 
 /// Continues after a cleanup that needed no priority (see CR 514.3a).
@@ -480,6 +480,7 @@ fn cleanup<L: Layout>(s: &mut State<L>, t: &GameTable) {
 /// cards in their hand over their maximum hand size.
 pub(crate) fn cleanup_discards<L: Layout>(s: &State<L>, t: &GameTable) -> u32 {
     let active = s.turn().active();
+    // Excess cards to discard in cleanup; a hand at or below the maximum discards 0.
     s.hand_size(active)
         .saturating_sub(rule_change::maximum_hand(s, t, active))
 }

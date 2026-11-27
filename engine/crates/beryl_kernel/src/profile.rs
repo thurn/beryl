@@ -137,6 +137,7 @@ impl Limits {
     pub const fn search(turn: u16, decisions: u16) -> Limits {
         let d = Limits::DEFAULT;
         Limits {
+            // Budgets saturate at `u16::MAX` rather than wrapping past the limit.
             decisions_per_turn: if decisions < d.decisions_per_turn {
                 d.decisions_per_turn
             } else {

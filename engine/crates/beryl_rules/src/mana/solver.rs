@@ -51,7 +51,7 @@ pub(super) fn each_plan<L: Layout>(
     pool: [u8; KINDS],
     sources: &Sources<L>,
     f: &mut dyn FnMut(&Plan<L>) -> bool,
-) {
+) -> Result<(), Full> {
     let total = cost.total(0);
     let pool_sum: u32 = pool.iter().map(|&n| u32::from(n)).sum();
     let mut rem = pool_sum;
@@ -62,15 +62,17 @@ pub(super) fn each_plan<L: Layout>(
         rem += u32::from(c.count()) * u32::from(c.amount);
     }
     if rem < total {
-        return;
+        return Ok(());
     }
     let start = if pool_sum == 0 { KINDS } else { 0 };
     let mut plan = Plan::default();
-    if sources.has_memory() {
-        walk::<L, true>(cost, total, pool, sources, start, 0, 0, rem, &mut plan, f);
+    let w = if sources.has_memory() {
+        walk::<L, true>
     } else {
-        walk::<L, false>(cost, total, pool, sources, start, 0, 0, rem, &mut plan, f);
-    }
+        walk::<L, false>
+    };
+    w(cost, total, pool, sources, start, 0, 0, rem, &mut plan, f)?;
+    Ok(())
 }
 
 /// The plan search: positions `0..KINDS` choose floating mana to spend, the next whether to
@@ -91,7 +93,7 @@ fn walk<L: Layout, const MEMORY: bool>(
     rem: u32,
     plan: &mut Plan<L>,
     f: &mut dyn FnMut(&Plan<L>) -> bool,
-) -> bool {
+) -> Result<bool, Full> {
     let classes = sources.classes();
     let remembered = if MEMORY {
         sources.remembered().len()
@@ -106,18 +108,18 @@ fn walk<L: Layout, const MEMORY: bool>(
                     *l -= spent;
                 }
                 plan.left = left;
-                return f(plan);
+                return Ok(f(plan));
             }
-            return true;
+            return Ok(true);
         }
-        return match complete::<L, MEMORY>(cost, total, pool, sources, plan) {
+        return match complete::<L, MEMORY>(cost, total, pool, sources, plan)? {
             Some((left, has_several))
-                if !has_several || !wasteful::<L, MEMORY>(cost, total, pool, sources, plan) =>
+                if !has_several || !wasteful::<L, MEMORY>(cost, total, pool, sources, plan)? =>
             {
                 plan.left = left;
-                f(plan)
+                Ok(f(plan))
             }
-            _ => true,
+            _ => Ok(true),
         };
     }
     if position < KINDS {
@@ -141,12 +143,12 @@ fn walk<L: Layout, const MEMORY: bool>(
                 next_rem,
                 plan,
                 f,
-            ) {
-                return false;
+            )? {
+                return Ok(false);
             }
         }
         plan.spend[position] = 0;
-        return true;
+        return Ok(true);
     }
     if MEMORY && position < KINDS + remembered {
         let bit = 1 << (position - KINDS);
@@ -175,12 +177,12 @@ fn walk<L: Layout, const MEMORY: bool>(
                 next_rem,
                 plan,
                 f,
-            ) {
-                return false;
+            )? {
+                return Ok(false);
             }
         }
         plan.remembered &= !bit;
-        return true;
+        return Ok(true);
     }
     let i = position - KINDS - remembered;
     let class = classes[i];
@@ -212,12 +214,12 @@ fn walk<L: Layout, const MEMORY: bool>(
             next_rem,
             plan,
             f,
-        ) {
-            return false;
+        )? {
+            return Ok(false);
         }
     }
     plan.taps[i] = 0;
-    true
+    Ok(true)
 }
 
 /// The units `plan` spends that leave no choice: its floating mana, the mana that remembers it
@@ -364,7 +366,7 @@ fn complete<L: Layout, const MEMORY: bool>(
     pool: [u8; KINDS],
     sources: &Sources<L>,
     plan: &Plan<L>,
-) -> Option<([u8; KINDS], bool)> {
+) -> Result<Option<([u8; KINDS], bool)>, Full> {
     let classes = sources.classes();
     let mut must: u32 = plan.spend.iter().map(|&n| u32::from(n)).sum::<u32>();
     if MEMORY {
@@ -381,39 +383,36 @@ fn complete<L: Layout, const MEMORY: bool>(
             several_make += taps * u32::from(c.amount);
         }
     }
-    let need = total.checked_sub(must)?;
-    if several_taps > need || need > several_make || (several_taps == 0 && need > 0) {
-        return None;
-    }
-    if several_taps == 0 {
-        if !super::units::exact_pays::<L, MEMORY>(cost, sources, plan) {
-            return None;
-        }
+    let need = match total.checked_sub(must) {
+        Some(n) if several_taps <= n && n <= several_make && (several_taps > 0 || n == 0) => n,
+        _ => return Ok(None),
+    };
+    let subtract_spend = || {
         let mut left = pool;
         for (l, &spent) in left.iter_mut().zip(&plan.spend) {
             *l -= spent;
         }
-        return Some((left, false));
+        left
+    };
+    if several_taps == 0 {
+        return Ok(super::units::exact_pays::<L, MEMORY>(cost, sources, plan)
+            .then(|| (subtract_spend(), false)));
     }
     let fixed = fixed_units::<L, MEMORY>(sources, plan);
     let (spent, pays) = spent_by_class(sources, plan, need, cost, fixed);
     if !pays {
-        return None;
+        return Ok(None);
     }
-    let mut left = pool;
-    for (l, &spent) in left.iter_mut().zip(&plan.spend) {
-        *l -= spent;
-    }
+    let mut left = subtract_spend();
     for (i, c) in classes.iter().enumerate() {
         let made = u32::from(plan.taps[i]) * u32::from(c.amount);
         if made > spent[i] {
-            // Each kind of floating mana is capped at 255, as in State::add_mana.
-            let remainder = u8::try_from(made - spent[i]).unwrap_or(u8::MAX);
-            let floating = &mut left[lowest_kind(c.kinds)];
-            *floating = floating.saturating_add(remainder);
+            let rem = u8::try_from(made - spent[i]).map_err(|_| Full)?;
+            let fl = &mut left[lowest_kind(c.kinds)];
+            *fl = fl.checked_add(rem).ok_or(Full)?;
         }
     }
-    Some((left, true))
+    Ok(Some((left, true)))
 }
 
 /// Whether a paying plan taps a source it could leave untapped, spending the same floating
@@ -431,14 +430,15 @@ fn wasteful<L: Layout, const MEMORY: bool>(
     pool: [u8; KINDS],
     sources: &Sources<L>,
     plan: &mut Plan<L>,
-) -> bool {
-    (0..sources.classes().len()).any(|i| {
-        plan.taps[i] > 0 && {
-            plan.taps[i] -= 1;
-            let fewer = complete::<L, MEMORY>(cost, total, pool, sources, plan).is_some();
-            plan.taps[i] += 1;
-            fewer
+) -> Result<bool, Full> {
+    (0..sources.classes().len()).try_fold(false, |found, i| {
+        if found || plan.taps[i] == 0 {
+            return Ok(found);
         }
+        plan.taps[i] -= 1;
+        let fewer = complete::<L, MEMORY>(cost, total, pool, sources, plan)?.is_some();
+        plan.taps[i] += 1;
+        Ok(fewer)
     })
 }
 
@@ -608,7 +608,7 @@ pub(crate) fn plans_accepting<L: Layout, const CHECK: bool>(
                 best = Some((sacrificed, p.clone()));
             }
             sacrificed > 0
-        });
+        })?;
         if failed.get() {
             return Err(Full);
         }
@@ -648,6 +648,7 @@ pub(crate) fn plans_accepting<L: Layout, const CHECK: bool>(
             .filter(|c| !c.is_twin())
             .map(|c| u32::from(c.count()))
             .sum();
+        // Heuristic upper bound on remaining single-mana sources; floors at 0.
         unique.saturating_sub(cost.total(0))
     });
     // Scores decide only between plans of one remainder and number sacrificed.
@@ -692,7 +693,7 @@ pub(crate) fn plans_accepting<L: Layout, const CHECK: bool>(
                 }
             }
             !full
-        });
+        })?;
     } else {
         each_plan(cost, pool, &sources, &mut |p| {
             if accepted(p) {
@@ -718,7 +719,7 @@ pub(crate) fn plans_accepting<L: Layout, const CHECK: bool>(
                 }
             }
             !full
-        });
+        })?;
     }
     if full || failed.get() {
         return Err(Full);

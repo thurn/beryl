@@ -18,6 +18,7 @@ use std::hash::{Hash, Hasher};
 
 use crate::bitboard::Bitboard;
 use crate::fit::{Misfit, fits_number};
+use crate::fixed::Full;
 use crate::ids::{Seat, SlotId};
 use crate::invariants::{At, Violation, check};
 use crate::layout::{Layout, Number, Small, Table};
@@ -403,14 +404,15 @@ impl<L: Layout> State<L> {
 impl<L: Layout> State<L> {
     /// Adds one to `player`'s `count` for the rest of the turn: the rules call it as the
     /// thing happens. In a game no card of which reads the count it writes nothing, at the
-    /// cost of one AND. No event: it is part of what the rules were doing. A count stops at
-    /// 255, more than a turn reaches.
+    /// cost of one AND. No event: it is part of what the rules were doing. [`Full`] if the
+    /// count would overflow [`Layout::Count`].
     #[inline]
-    pub fn count(&mut self, t: &GameTable, count: Count, player: Seat) {
+    pub fn count(&mut self, t: &GameTable, count: Count, player: Seat) -> Result<(), Full> {
         if t.can(count.capability()) {
             let n = &mut self.trackers.counts[player.index()][count.index()];
-            *n = n.saturating_add(L::Count::ONE);
+            *n = n.checked_add(L::Count::ONE).ok_or(Full)?;
         }
+        Ok(())
     }
 
     /// How many times `player`'s `count` happened this turn. Zero, in a game no card of

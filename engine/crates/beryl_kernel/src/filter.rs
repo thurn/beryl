@@ -279,6 +279,7 @@ fn matches_printed(
         front
             .cost
             .with_x(x_paid)
+            // Printed split-card mana values are small vocabulary bounds and cannot overflow `u8`.
             .mana_value()
             .saturating_add(back.map_or(0, |f| f.cost.mana_value()))
     };

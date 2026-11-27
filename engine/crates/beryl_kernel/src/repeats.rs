@@ -62,6 +62,7 @@ impl<L: Layout> State<L> {
     /// ends as a draw.
     #[inline]
     pub fn note_resolution(&mut self) -> bool {
+        // Repeat detection only checks `> Repeats::QUIET`, so saturating at `u8::MAX` is exact.
         self.repeats.quiet = self.repeats.quiet.saturating_add(1);
         self.repeats.quiet > Repeats::QUIET && self.compare_repeat()
     }

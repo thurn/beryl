@@ -121,34 +121,49 @@ fn search_plans<L: Layout, F: FnMut(&Plan<L>) -> bool>(
                 ctx.sources,
                 false,
                 &mut |price_spend, delta_plain, left_pool, next_taps, _rem_used| {
-                    act.each_made(&mut |made| {
-                        let mut pool_after = left_pool;
-                        for (p, &m) in pool_after.iter_mut().zip(&made) {
-                            *p = p.saturating_add(m);
-                        }
-                        let mut next_used = st.extra_used;
-                        next_used[ei] += 1;
-                        let mut plain = st.plain.clone();
-                        plain.extend_from_slice(delta_plain);
-                        let mut steps = st.steps.clone();
-                        steps.push(Step {
-                            extra: u8::try_from(ei).expect("fits u8"),
-                            activation: u8::try_from(ai).expect("fits u8"),
-                            price_spend,
-                            made,
-                        });
-                        next_states.push(SearchState {
-                            pool: pool_after,
-                            taps: next_taps.clone(),
-                            extra_used: next_used,
-                            plain,
-                            steps,
-                        });
-                        true
-                    });
+                    let mut overflow = false;
+                    if act
+                        .each_made(&mut |made| {
+                            let mut pool_after = left_pool;
+                            for (p, &m) in pool_after.iter_mut().zip(&made) {
+                                let Some(sum) = p.checked_add(m) else {
+                                    overflow = true;
+                                    return false;
+                                };
+                                *p = sum;
+                            }
+                            let mut next_used = st.extra_used;
+                            next_used[ei] += 1;
+                            let mut plain = st.plain.clone();
+                            plain.extend_from_slice(delta_plain);
+                            let mut steps = st.steps.clone();
+                            steps.push(Step {
+                                extra: u8::try_from(ei).expect("fits u8"),
+                                activation: u8::try_from(ai).expect("fits u8"),
+                                price_spend,
+                                made,
+                            });
+                            next_states.push(SearchState {
+                                pool: pool_after,
+                                taps: next_taps.clone(),
+                                extra_used: next_used,
+                                plain,
+                                steps,
+                            });
+                            true
+                        })
+                        .is_err()
+                        || overflow
+                    {
+                        ctx.full = true;
+                        return false;
+                    }
                     true
                 },
             );
+            if ctx.full {
+                return;
+            }
             for next in next_states {
                 search_plans(ctx, &next);
                 if ctx.stop || ctx.full {
@@ -244,11 +259,13 @@ fn is_wasteful<L: Layout>(
     for (i, c) in sources.classes().iter().enumerate() {
         if !c.is_twin() {
             let used_here = plan_taps[i] + c.twin().map_or(0, |tw| plan_taps[usize::from(tw)]);
+            // Remaining untapped sources in this class; saturating at 0 means none left.
             base_taps[i] = c.count().saturating_sub(used_here);
         }
     }
     let mut base_extra = [0u8; CLASSES];
     for (i, e) in sources.extras.iter().enumerate() {
+        // Remaining unused activations in this extra class; saturating at 0 means none left.
         base_extra[i] = e.count.saturating_sub(extra_used[i]);
     }
     let all_rem = if sources.remembered().is_empty() {
@@ -334,6 +351,7 @@ fn each_concrete_payment<L: Layout>(
 fn avail_class<L: Layout>(sources: &Sources<L>, taps: &Taps<L>, i: usize) -> u8 {
     let c = &sources.classes()[i];
     let twin_taps = c.twin().map_or(0, |tw| taps[usize::from(tw)]);
+    // Remaining untapped sources in this class; saturating at 0 means none left.
     c.count().saturating_sub(taps[i]).saturating_sub(twin_taps)
 }
 
@@ -367,8 +385,10 @@ fn walk_concrete<L: Layout>(
         for &(ci, color) in delta_plain.iter() {
             let c = &classes[usize::from(ci)];
             if !c.is_restricted() {
-                combined[usize::from(color)] =
-                    combined[usize::from(color)].saturating_add(c.amount);
+                let Some(sum) = combined[usize::from(color)].checked_add(c.amount) else {
+                    return true;
+                };
+                combined[usize::from(color)] = sum;
             }
         }
         let mut units = Units::NONE;
@@ -413,7 +433,10 @@ fn walk_concrete<L: Layout>(
             *l -= s;
         }
         for (k, (&c, &s)) in combined.iter().zip(spend_for_cost.iter()).enumerate() {
-            left[k] = left[k].saturating_add(c - s);
+            let Some(sum) = left[k].checked_add(c - s) else {
+                return true;
+            };
+            left[k] = sum;
         }
         return f(spend_for_cost, delta_plain, left, taps, rem_used);
     }

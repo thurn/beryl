@@ -455,7 +455,7 @@ pub(crate) fn put_back_instruction<L: Layout>(
     players: Players,
     count: Amount,
 ) -> Result<Outcome<L>, Stop> {
-    let count = run.scene().amount(count);
+    let count = run.scene().amount(count)?;
     let mut put = Bitboard::EMPTY;
     for player in run.in_turn_order(players) {
         let (game, resolution) = run.resolving();
@@ -475,7 +475,7 @@ pub(crate) fn put_any_on_bottom_instruction<L: Layout>(
     for player in run.in_turn_order(players) {
         let (game, resolution) = run.resolving();
         let put = put_any_on_bottom(game, resolution, player)?;
-        outcome = outcome.with(run.now_in(put, Zone::Library));
+        outcome = outcome.with(run.now_in(put, Zone::Library))?;
     }
     Ok(outcome)
 }
@@ -491,7 +491,7 @@ pub(crate) fn dig_instruction<L: Layout>(
     top: u8,
     rest: LibraryRest,
 ) -> Result<Outcome<L>, Stop> {
-    let look = run.scene().amount(look);
+    let look = run.scene().amount(look)?;
     let mut taken = Bitboard::EMPTY;
     for player in run.in_turn_order(players) {
         let (game, resolution) = run.resolving();

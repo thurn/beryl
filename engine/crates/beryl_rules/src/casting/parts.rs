@@ -771,6 +771,7 @@ pub(super) fn perform<L: Layout>(
             let slot = object.expect("an object to pay with");
             let power = power_of(s, slot);
             pay_with(s, t, sink, action, slot)?;
+            // Remaining power requirement (crew/saddle) floors at 0 once met.
             paying.left = paying.left.saturating_sub(power);
         }
         Measure::Count(_) => {

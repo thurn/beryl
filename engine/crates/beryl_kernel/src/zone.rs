@@ -749,6 +749,7 @@ fn library_index(len: usize, place: Place) -> usize {
     match place {
         Place::Top => len,
         Place::Bottom => 0,
+        // Putting a card under more cards than the zone holds places it at the bottom (index 0).
         Place::UnderTop(n) => len.saturating_sub(usize::from(n)),
     }
 }

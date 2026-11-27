@@ -208,6 +208,7 @@ impl<L: Layout> Scopes<L> {
 
     pub(crate) fn apart(&mut self) {
         debug_assert!(self.groups > 0, "no group to close");
+        // Nesting depth is balanced and debug-asserted positive; saturating guards release builds.
         self.groups = self.groups.saturating_sub(1);
     }
 

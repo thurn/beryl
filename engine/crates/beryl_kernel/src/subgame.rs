@@ -118,6 +118,7 @@ impl<L: Layout> State<L> {
     /// budget with their suspended games.
     #[inline]
     pub fn turns_for_limit(&self) -> u16 {
+        // Turn counts saturate at `u16::MAX` rather than wrapping the turn limit.
         self.turn
             .number()
             .saturating_add(self.subgame_turns.get())
@@ -128,6 +129,7 @@ impl<L: Layout> State<L> {
     /// games. Used where time must advance across game boundaries.
     #[inline]
     pub fn elapsed_turns(&self) -> u16 {
+        // Turn counts saturate at `u16::MAX` rather than wrapping elapsed turns.
         self.turn
             .number()
             .saturating_add(self.restarted_turns)
@@ -228,6 +230,7 @@ impl<L: Layout> State<L> {
     /// the effect that suspended it.
     pub fn leave_subgame(&mut self) {
         let mut outer = self.outer.take().expect("a game to resume");
+        // Turn counts saturate at `u16::MAX` rather than wrapping the turn limit.
         let turns = self.turn.number().saturating_add(self.subgame_turns.get());
         outer.subgame_turns =
             L::SubgameTurns::from_turns(outer.subgame_turns.get().saturating_add(turns));

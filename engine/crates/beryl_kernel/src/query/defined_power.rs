@@ -102,12 +102,9 @@ impl<L: Layout> State<L> {
     fn defined(&self, t: &GameTable, amount: &Amount, you: Option<Seat>, words: &Words) -> usize {
         match *amount {
             Amount::Fixed(n) => usize::from(n),
-            Amount::Times(n, amount) => {
-                usize::from(n).saturating_mul(self.defined(t, amount, you, words))
-            }
-            Amount::Plus(n, amount) => self
-                .defined(t, amount, you, words)
-                .saturating_add(usize::from(n)),
+            // Card factors are `u8` and battlefield counts fit in `u16`, so `usize` cannot overflow.
+            Amount::Times(n, amount) => usize::from(n) * self.defined(t, amount, you, words),
+            Amount::Plus(n, amount) => self.defined(t, amount, you, words) + usize::from(n),
             Amount::Half { of, round_up } => {
                 let whole = self.defined(t, of, you, words);
                 if round_up {

@@ -183,7 +183,7 @@ pub(crate) fn create_instruction<L: Layout>(
     token: &'static CardDef,
     count: Amount,
 ) -> Result<Outcome<L>, Full> {
-    let count = run.scene().amount(count);
+    let count = run.scene().amount(count)?;
     if count == 0 {
         return Ok(Outcome::NOTHING);
     }
@@ -224,7 +224,7 @@ pub(crate) fn create_copies_instruction<L: Layout>(
         Some(addition) => what.with_addition_read(addition, table, &words),
         None => Ok(what),
     };
-    let count = run.scene().amount(count);
+    let count = run.scene().amount(count)?;
     if count == 0 {
         return Ok(Outcome::NOTHING);
     }
@@ -268,7 +268,7 @@ pub(crate) fn create_attacking_instruction<L: Layout>(
     count: Amount,
     attacking: Players,
 ) -> Result<Outcome<L>, Stop> {
-    let count = run.scene().amount(count);
+    let count = run.scene().amount(count)?;
     if count == 0 {
         return Ok(Outcome::NOTHING);
     }

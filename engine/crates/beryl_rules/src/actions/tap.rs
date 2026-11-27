@@ -101,7 +101,7 @@ pub(crate) fn untap_up_to_instruction<L: Layout>(
     count: Amount,
     permanents: Objects,
 ) -> Result<Outcome<L>, Stop> {
-    let count = run.scene().amount(count);
+    let count = run.scene().amount(count)?;
     let mut untapped = Bitboard::EMPTY;
     for player in run.in_turn_order(players) {
         let permanents = run.permanents(permanents);

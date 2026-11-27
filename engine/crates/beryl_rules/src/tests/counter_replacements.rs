@@ -237,14 +237,38 @@ fn doubling_counters_gives_as_many_more_and_is_itself_replaced() {
 }
 
 /// A number of counters that does not fit in a byte is [`Full`] in `Small`, never 255:
-/// doubling 200 counters, and a replacement doubling 200 counters put.
+/// doubling 200 lore counters (which do not alter power/toughness), and a replacement doubling
+/// 200 counters put.
 #[test]
 fn two_hundred_counters_doubled_is_full_in_small() {
+    static DOUBLE_LORE: beryl_card::Effect =
+        double_counters(beryl_card::Objects::This, CounterKind::Lore);
+    static NO_ABILITY: Ability = Ability::spell();
     let (t, mut s, mut x, slots) = game(&["Test Bear"]);
     let bear = slots[0];
     let mut doubled = s;
-    add(&t, &mut doubled, &mut x, bear, 200).unwrap();
-    assert_eq!(double(&t, &mut doubled, &mut x, bear), Err(Stop::Full));
+    let mut added = Ok(());
+    with_game(&t, &mut doubled, &mut x, bear, |game, _| {
+        let permanent = game
+            .state()
+            .permanent(game.state().object_ref(bear))
+            .unwrap();
+        added = counters::add(game, permanent, CounterKind::Lore, 200, true);
+    });
+    added.unwrap();
+    let ability = PendingTrigger {
+        of: AbilityRef {
+            source: Some(doubled.object_ref(bear)),
+            card: doubled.copiable(bear).record(&t).0,
+            controller: doubled.controller(bear).into(),
+            ..AbilityRef::default()
+        },
+        ..PendingTrigger::default()
+    };
+    let mut resolution = Resolution::of_trigger(&ability, &NO_ABILITY);
+    let mut g = Game::new(&mut doubled, &t, &mut x.events);
+    let result = Run::new(&mut g, &mut resolution).carry_out(&DOUBLE_LORE);
+    assert_eq!(result, Err(Stop::Full));
 
     put(&t, &mut s, &mut x, Seat::P0, "Test Counter Doubler");
     assert_eq!(add(&t, &mut s, &mut x, bear, 200), Err(Full));

@@ -216,7 +216,7 @@ fn eval_activation<L: Layout>(
         let amount = if let Amount::Fixed(n) = term.amount {
             n
         } else {
-            crate::interpret::amount_of(s, t, slot, term.amount)
+            crate::interpret::amount_of(s, t, slot, term.amount)?
         };
         if amount == 0 {
             continue;
@@ -341,6 +341,7 @@ pub(super) fn pays_from_state<L: Layout>(
         if c.is_twin() {
             continue;
         }
+        // Remaining untapped sources in this class; saturating at 0 means none left.
         let avail = c
             .count()
             .saturating_sub(taps[i])
@@ -379,6 +380,7 @@ pub(super) fn pays_from_state<L: Layout>(
     let mut used = *extra_used;
     let mut starts = BTreeSet::from([base]);
     for (i, extra) in sources.extras.iter().enumerate() {
+        // Remaining unused activations in this extra class; saturating at 0 means none left.
         let left = extra.count.saturating_sub(used[i]);
         if left == 0 || extra.activations.iter().any(|a| !a.price.is_zero()) {
             continue;
@@ -564,7 +566,7 @@ pub(super) fn pay<L: Layout>(
         for (i, &(at, kind, _)) in sources.remembered().iter().enumerate().rev() {
             if plan.remembered & (1 << i) != 0 {
                 remembered::spend(s, t, player, usize::from(at), paying)?;
-                spent[usize::from(kind)] = spent[usize::from(kind)].saturating_add(1);
+                spent[usize::from(kind)] = spent[usize::from(kind)].checked_add(1).ok_or(Full)?;
             }
         }
     }
@@ -584,7 +586,9 @@ pub(super) fn pay<L: Layout>(
             activate_restricted(s, t, sink, tapped_source(s, slot), color)?;
             let last = s.player(player).remembered_mana().len() - 1;
             remembered::spend(s, t, player, last, paying)?;
-            spent[usize::from(color_ix)] = spent[usize::from(color_ix)].saturating_add(c.amount);
+            spent[usize::from(color_ix)] = spent[usize::from(color_ix)]
+                .checked_add(c.amount)
+                .ok_or(Full)?;
         } else {
             activate_consuming(s, t, sink, tapped_source(s, slot), color, c.is_consumed())?;
         }
@@ -680,7 +684,7 @@ pub(super) fn activate_extra_step<L: Layout>(
                 crate::interpret::mana_ability(s, t, sink, activation, intrinsic, color)?;
             }
             if has_changes {
-                super::changes::add_extra(s, sink, permanent, player, extra);
+                super::changes::add_extra(s, sink, permanent, player, extra)?;
             }
             Ok(())
         }
@@ -693,7 +697,7 @@ pub(super) fn activate_extra_step<L: Layout>(
             crate::coverage::hit(ability);
             for (k, &n) in made.iter().enumerate() {
                 if n > 0 {
-                    let added = s.add_mana(player, Some(source), ManaColor::ALL[k], n);
+                    let added = s.add_mana(player, Some(source), ManaColor::ALL[k], n)?;
                     sink.note_from(Some(source), added);
                 }
             }

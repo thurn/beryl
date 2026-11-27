@@ -44,7 +44,7 @@ pub(crate) fn instruction<L: Layout>(
     let value = choices::catalog(game, resolution, player, kind, Bitboard::EMPTY)?;
     game.sink.note(Event::ValueChosen { player, value });
     run.remember_chosen(value);
-    Ok(Outcome::of(Bitboard::EMPTY, 1))
+    Ok(Outcome::of(Bitboard::EMPTY, 1)?)
 }
 
 impl<L: Layout> Scene<'_, L> {

@@ -243,6 +243,7 @@ impl<L: Layout> State<L> {
                 .sort_unstable_by_key(|slot| objects[slot.index()].card);
             next.shuffle_library(player)?;
         }
+        // Turn counts saturate at `u16::MAX` rather than wrapping elapsed turns.
         next.restarted_turns = self
             .restarted_turns
             .saturating_add(self.turn.number())

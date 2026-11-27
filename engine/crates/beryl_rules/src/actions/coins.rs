@@ -51,5 +51,5 @@ pub(crate) fn instruction<L: Layout>(
     for player in run.in_turn_order(players) {
         won += u32::from(flip(run.game(), player, source)?);
     }
-    Ok(Outcome::of(Bitboard::EMPTY, won))
+    Outcome::of(Bitboard::EMPTY, won)
 }

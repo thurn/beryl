@@ -76,7 +76,7 @@ const DECK: &Decklist = &[
 fn prepare(card: &CardDef) -> (Game, crate::ids::Slot) {
     let mut g = Game::with(&CARDS, DECK, Profile::EXACT);
     let source = g.give(g.me, card.name, Zone::Hand);
-    let added = g.s.add_mana(g.me, None, ManaColor::White, 4);
+    let added = g.s.add_mana(g.me, None, ManaColor::White, 4).unwrap();
     g.x.events.push(added);
     (g, source)
 }
