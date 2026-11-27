@@ -526,11 +526,28 @@ fn full_controls_sign_stands_left_of_the_turn_button_and_moves_over_for_pass_on(
     );
 }
 
+/// The placement of the spinner's dim arc in `frame`, which is the only icon drawn in its color
+/// and strength.
+fn tail(frame: &Frame) -> Vec<[f32; 12]> {
+    let [r, g, b, _] = kit_base::tokens::color::THINKING;
+    (frame.draws.iter())
+        .filter(|draw| draw.tint == [r, g, b, 110])
+        .map(|draw| draw.model)
+        .collect()
+}
+
 #[test]
 fn ai_thinking_indicator_shows_while_thinking_and_hides_otherwise() {
     let mut client = client();
+    let cells = game_hud::art::atlas_cells(&client.data().profiles)
+        .enumerate()
+        .map(|(index, layer)| layer.cell([u16::try_from(index).unwrap(), 0, 1, 1]))
+        .collect();
+    client.handle(Input::Device(kit_ui::input::Input::Assets(
+        kit_ui::input::AssetReady::Icons { page: 1, cells },
+    )));
 
-    // While the AI opponent is thinking, the pulsing gold ring shows under the opponent's orb.
+    // While the AI opponent is thinking, a spinner shows under the opponent's orb.
     let mut thinking = ViewBuilder::sample().update();
     thinking.view.status = Status::Thinking;
     thinking.view.turn.active = Side::Opponent;
@@ -541,23 +558,28 @@ fn ai_thinking_indicator_shows_while_thinking_and_hides_otherwise() {
     let orb = find(frame, Role::Region, "opponent's orb");
     assert!(
         centre(frame, ring).y > centre(frame, orb).y,
-        "thinking ring should sit below opponent's orb"
+        "thinking spinner should sit below opponent's orb"
     );
-    let start_opacity = frame.resolved[ring].opacity;
+    let start = tail(frame);
+    assert!(!start.is_empty(), "the spinner's arc should be drawn");
     assert!(
         matches!(client.display_wake(), kit_frame::frame::Wake::Now),
-        "live display should keep pulsing while thinking"
+        "live display should keep turning while thinking"
     );
     assert!(
         !matches!(client.wake(), kit_frame::frame::Wake::Now),
-        "thinking pulse must not delay play"
+        "the spinner must not delay play"
     );
-    let mid_frame = client.frame(1_000_000 + 700_000_000);
-    let mid_ring = find(mid_frame, Role::Region, "Opponent thinking");
-    assert!(
-        mid_frame.resolved[mid_ring].opacity < start_opacity,
-        "thinking ring should pulse in opacity over time"
-    );
+    // A quarter of a turn later the arc has turned, and a whole turn later it is back.
+    let quarter = tail(client.frame(1_000_000 + 200_000_000));
+    assert_ne!(start, quarter, "the spinner's arc should turn over time");
+    let whole = tail(client.frame(1_000_000 + 800_000_000));
+    assert_eq!(start.len(), whole.len());
+    for (a, b) in start.iter().zip(&whole) {
+        for (x, y) in a.iter().zip(b) {
+            assert!((x - y).abs() < 1e-2, "one turn takes 0.8 s: {a:?} vs {b:?}");
+        }
+    }
 
     // When the AI acts (Status::Playing), the indicator disappears immediately.
     client.handle(waiting());
@@ -592,6 +614,6 @@ fn ai_thinking_indicator_shows_while_thinking_and_hides_otherwise() {
     let compact_width = compact_edges.2 - compact_edges.0;
     assert!(
         compact_width < 25.0,
-        "compact thinking ring should scale with orb_scale, got width {compact_width}"
+        "compact thinking spinner should scale with orb_scale, got width {compact_width}"
     );
 }

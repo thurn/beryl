@@ -56,6 +56,9 @@ const RIMS: Circles = Circles {
 
 const GROUPS: [Circles; 3] = [OUTER, INNER, RIMS];
 
+/// How many icons the turn banner reserves from `orb::END_ICON`.
+pub(super) const ICONS: u16 = GROUPS.len() as u16;
+
 pub const fn tint(side: Side) -> [u8; 4] {
     match side {
         Side::You => color::CYAN,

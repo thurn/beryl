@@ -21,18 +21,16 @@ pub struct Hud {
 pub struct ThinkingStyle {
     #[serde(deserialize_with = "nonnegative")]
     pub gap: f32,
-    pub pulse_ms: u32,
-    #[serde(deserialize_with = "fraction")]
-    pub min_opacity: f32,
-    #[serde(deserialize_with = "fraction")]
-    pub min_scale: f32,
+    /// How long the spinner takes to turn once.
+    #[serde(deserialize_with = "positive")]
+    pub turn_ms: f32,
 }
 
 impl ThinkingStyle {
-    /// One full pulse cycle of the thinking indicator, in nanoseconds.
+    /// One full turn of the thinking spinner, in nanoseconds.
     #[must_use]
-    pub const fn pulse_ns(self) -> f32 {
-        (self.pulse_ms as u64 * 1_000_000) as f32
+    pub const fn turn_ns(self) -> f32 {
+        self.turn_ms * 1_000_000.0
     }
 }
 

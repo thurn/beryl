@@ -12,9 +12,7 @@
   "banner_ms": 2500,
   "thinking": {
     "gap": 8,
-    "pulse_ms": 1400,
-    "min_opacity": 0.45,
-    "min_scale": 0.92
+    "turn_ms": 800
   },
   "opening": {
     "waiting_gap": 40,

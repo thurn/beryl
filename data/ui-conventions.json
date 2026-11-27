@@ -196,7 +196,7 @@
       "kind": "exception",
       "number": 9,
       "name": "AI thinking indicator",
-      "rule": "While the AI opponent is deciding, a pulsing gold ring shows beneath the opponent's life orb on desktop and phone, and hides as soon as the opponent acts. It does not show during a combat step banner, during the opening, while the player is deciding, or at a manual table. Approved by the user on 2026-11-26.",
+      "rule": "While the AI opponent is deciding, a spinner shows beneath the opponent's life orb on desktop and phone: a faint ring with a bright arc that turns once every 0.8 seconds. It hides as soon as the opponent acts. It does not show during a combat step banner, during the opening, while the player is deciding, or at a manual table. Approved by the user on 2026-11-26.",
       "arena": {
         "does": "Arena has no AI opponent and shows only a disabled \"Opponent's Turn\" button."
       }

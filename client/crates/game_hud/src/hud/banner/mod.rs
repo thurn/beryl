@@ -8,10 +8,11 @@
 //!   as in the web's `useBannerUp`.
 //! - The banner is a float (`floats::STEP_BANNER`), laid out ahead (`Prepare`), so that
 //!   the frame that shows or hides it lays nothing out and allocates nothing.
-//! - The gold ring under the opponent's orb while the AI decides (`floats::THINKING`) lies where
+//! - The spinner under the opponent's orb while the AI decides (`floats::THINKING`) lies where
 //!   the banner does, so it hides while the banner is up, during the opening, and at a manual
-//!   table. It is also laid out ahead (`Prepare`) and pulses via `FloatLook` without allocating.
+//!   table. It is also laid out ahead (`Prepare`) and turns via `FloatLook::icon_progress` without allocating.
 
+use crate::art::spinner;
 use beryl_protocol::protocol::{Combat, Kind, PlayerView, Side, Status, Step};
 use glam::Vec2;
 
@@ -20,7 +21,6 @@ use kit_base::{data::hud::Hud, tokens::size};
 use kit_scene::{Context, Feature, StateUpdate};
 use kit_ui::element::{Element, FloatId, floats};
 use std::convert::Infallible;
-use std::f32::consts::TAU;
 
 mod view;
 use kit_ui::layout::{FloatLook, Layer};
@@ -167,7 +167,7 @@ pub fn words(detail: usize) -> (&'static str, &'static str) {
 }
 
 impl Banner {
-    /// Whether the thinking ring is currently shown and pulsing.
+    /// Whether the thinking ring is currently shown and turning.
     #[must_use]
     pub fn thinking(&self) -> bool {
         self.thinking
@@ -236,11 +236,9 @@ impl Banner {
         if thinking {
             let style = tuning.thinking;
             let elapsed = now.saturating_sub(self.thinking_since.unwrap_or(now)) as f32;
-            let wave = 0.5 + 0.5 * (elapsed / style.pulse_ns() * TAU).cos();
-            let opacity = style.min_opacity + (1.0 - style.min_opacity) * wave;
-            let scale = orb_scale * (style.min_scale + (1.0 - style.min_scale) * wave);
+            let turns = (elapsed / style.turn_ns()).fract();
             let offset_y =
-                (size::ORB_HEIGHT / 2.0 + size::ORB_BEZEL + style.gap + size::THINKING / 2.0)
+                (size::ORB_HEIGHT / 2.0 + size::ORB_BEZEL + style.gap + spinner::SIZE / 2.0)
                     * orb_scale;
             layer.anchor_float(
                 floats::THINKING,
@@ -250,8 +248,8 @@ impl Banner {
                     Vec2::Y * offset_y,
                 ),
                 FloatLook {
-                    opacity,
-                    scale,
+                    scale: orb_scale,
+                    icon_progress: turns,
                     ..FloatLook::default()
                 },
             );

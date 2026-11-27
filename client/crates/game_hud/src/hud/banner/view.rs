@@ -1,7 +1,8 @@
 use super::words;
+use crate::art::spinner;
 use kit_base::tokens::{color, gradient, shadow, size, type_style};
 use kit_frame::frame::Role;
-use kit_ui::element::{Align, Element, Justify, column, text};
+use kit_ui::element::{Align, Element, Justify, Shown, column, text};
 
 /// The banner with the detail at `detail`: the gold title in capitals over the detail, on a
 /// smoky shade that fades out toward its edges (`.step-banner`'s radial gradient).
@@ -34,14 +35,15 @@ pub(super) fn banner(detail: usize) -> Element {
     element
 }
 
-/// The gold ring under the opponent's orb while the AI opponent decides.
+/// The spinner under the opponent's orb while the AI opponent decides. Its arcs turn with the
+/// float's `icon_progress`.
 pub(super) fn thinking_ring() -> Element {
-    Element::new(Role::Region)
+    let mut element = Element::new(Role::Region)
         .name("Opponent thinking")
-        .width(size::THINKING)
-        .height(size::THINKING)
+        .width(spinner::SIZE)
+        .height(spinner::SIZE)
         .background([0; 4])
-        .border((color::THINKING, size::THINKING_TRACK))
-        .radius(size::THINKING / 2.0)
-        .passes(true)
+        .passes(true);
+    element.shows = Some(Shown::Layers(spinner::artwork()));
+    element
 }

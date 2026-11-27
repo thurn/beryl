@@ -12,7 +12,7 @@
 //!   middle of a script, and a float can show a total laid out ahead without a frame laying
 //!   anything out. The screen is rebuilt only when an update arrives, which would show the
 //!   change late. The mana pool is a float for the same reason.
-//! - While the opponent is deciding, a gold ring stands under their orb: a float of its own,
+//! - While the opponent is deciding, a turning spinner stands under their orb: a float of its own,
 //!   hidden while the step banner is up (`hud::banner`).
 //! - From the declaration of attackers until combat damage is dealt, the combat damage a
 //!   player stands to take is a badge on the rim of their orb toward the table, solid red when

@@ -57,12 +57,13 @@ removes an entry; nothing else does.
    your library. (ordering will be done in next step)" with Submit, then orders
    them in an "Order Cards" screen between Bottom and Top (AhTcvQ-lQQQ 4:52,
    IT6nwh6HtYk 10:35).
-9. **AI thinking indicator.** While the AI opponent is deciding, a pulsing gold
-   ring shows beneath the opponent's life orb on desktop and phone, and hides as
-   soon as the opponent acts. It does not show during a combat step banner,
-   during the opening, while the player is deciding, or at a manual table.
-   Approved by the user on 2026-11-26. Arena has no AI opponent and shows only a
-   disabled "Opponent's Turn" button.
+9. **AI thinking indicator.** While the AI opponent is deciding, a spinner shows
+   beneath the opponent's life orb on desktop and phone: a faint ring with a
+   bright arc that turns once every 0.8 seconds. It hides as soon as the
+   opponent acts. It does not show during a combat step banner, during the
+   opening, while the player is deciding, or at a manual table. Approved by the
+   user on 2026-11-26. Arena has no AI opponent and shows only a disabled
+   "Opponent's Turn" button.
 
 ## Settled as Arena
 
