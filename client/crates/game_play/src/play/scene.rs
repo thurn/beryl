@@ -150,20 +150,31 @@ impl Scene<'_> {
 
     /// Which way across the table `subject`'s controller faces, on the screen: -1 up it for the
     /// viewer's, 1 down it for the opponent's, as the web stage's `Reach::toward` has it. An
-    /// ability is the viewer's way, as there; a player faces neither way.
+    /// ability is the viewer's way, as there; a player or a card in a pile (graveyard, exile,
+    /// library) faces neither way, so arrows to it arch over the table instead of approaching from
+    /// in front of a battlefield row.
     #[must_use]
     pub fn toward(&self, subject: Subject) -> f32 {
         match subject {
             Subject::Object { slot } => {
-                let controller = self.show.shown.as_ref().and_then(|update| {
+                let object = self.show.shown.as_ref().and_then(|update| {
                     update
                         .view
                         .objects
                         .iter()
                         .find(|object| object.slot == slot)
-                        .map(|object| object.controller)
                 });
-                if controller == Some(Side::Opponent) {
+                if object.is_some_and(|object| {
+                    matches!(
+                        object.zone,
+                        beryl_protocol::protocol::ZoneName::Graveyard
+                            | beryl_protocol::protocol::ZoneName::Exile
+                            | beryl_protocol::protocol::ZoneName::Library
+                    )
+                }) {
+                    return 0.0;
+                }
+                if object.map(|object| object.controller) == Some(Side::Opponent) {
                     1.0
                 } else {
                     -1.0

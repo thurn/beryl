@@ -228,7 +228,7 @@ fn arc(light: &Light, from: End, to: End) -> Option<[Vec2; 3]> {
     } else {
         (light.bow.share * far)
             .max(light.bow.least * unit)
-            .min(light.bow.most * unit)
+            .min(light.bow.most * from.half.y.max(to.half.y))
     };
     let over = from.middle.lerp(to.middle, 0.5) + up * bowed;
     // Out of each end toward that point, or straight toward the other end where the point is
@@ -380,6 +380,42 @@ mod tests {
         assert!(
             b.distance(Vec2::new(1200.62, 193.84)) < 0.01,
             "meets at {b}"
+        );
+    }
+
+    /// A target arrow from a stack ability at the right to a small graveyard pile at the far left
+    /// (which has `toward == 0.0`, like a player) arches smoothly over the table rather than
+    /// flattening to the pile's small half-height or hooking straight down at the pile.
+    #[test]
+    fn a_target_arrow_to_a_graveyard_pile_arches_over_the_table() {
+        let ability = End {
+            middle: Vec2::new(1462.5, 526.0),
+            half: Vec2::new(126.5, 177.0),
+            round: false,
+            toward: -1.0,
+        };
+        let graveyard = End {
+            middle: Vec2::new(81.0, 425.5),
+            half: Vec2::new(39.0, 39.5),
+            round: false,
+            toward: 0.0,
+        };
+        let light = Light::parse(include_str!("../../../../../data/client/light.json")).unwrap();
+        let [a, c, b] = way_of(&light, Arrow::FriendlyTarget, ability, graveyard, None).unwrap();
+        // Control point sits near the horizontal midpoint and well above the straight chord.
+        assert!(
+            (c.x - 772.0).abs() < 60.0,
+            "control point {c} should sit near the horizontal midpoint, not over the graveyard"
+        );
+        assert!(
+            c.y < a.y.min(b.y) - 180.0,
+            "control point {c} should arch high over the table"
+        );
+        // Terminal direction points smoothly down-left into the graveyard, not straight down.
+        let tip_dir = (b - c).normalize();
+        assert!(
+            tip_dir.x < -0.7 && tip_dir.y > 0.1 && tip_dir.y < 0.7,
+            "terminal direction {tip_dir} should enter the graveyard along the arch"
         );
     }
 }

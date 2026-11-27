@@ -533,3 +533,72 @@ fn enhanced_arrows_emit_vfx_ribbons_and_spearheads_in_layer_cover() {
         );
     }
 }
+
+/// Focused check on Enhanced-tier spearhead orientation against the last ribbon segment.
+/// No generic `kit_probe` check can express this property because generic checks inspect
+/// `Frame::resolved` (`Role::Arrow` Bezier control points), whereas the procedural ribbon segments
+/// (`Vfx::LineRibbon`) and spearhead (`Vfx::LineHead`) are GPU `Draw` records in
+/// `Band::LayerCover` whose screen-space orientations live only in `Draw::model`.
+#[test]
+fn graveyard_target_arrow_spearhead_points_along_last_ribbon_segment() {
+    let (mut played, start, cards) = Played::new();
+    let (discarded, timings) = discard(&start, cards);
+    played.play((discarded.clone(), timings), |_, _| {});
+
+    let act = point(
+        Span::Begin,
+        Arrow::FriendlyTarget,
+        card(cards.angel),
+        card(cards.discard),
+    );
+    played.play(
+        pointed(&discarded, vec![(act, point_timing("target arrow"))]),
+        |_, _| {},
+    );
+
+    let mut enhanced_buf = empty_frame();
+    let mut builder = FrameBuilder::new(
+        &mut enhanced_buf,
+        Tier::Enhanced,
+        crate::test_data::data().card.size(),
+    );
+    played.show.frame(played.now, &mut builder);
+    let enhanced = builder.finish();
+    let camera = played.show.table().camera();
+
+    let band = Band::LayerCover as usize;
+    let cover_draws =
+        &enhanced.draws[enhanced.bands[band] as usize..enhanced.bands[band + 1] as usize];
+    let last_ribbon = cover_draws
+        .iter()
+        .rfind(|draw| {
+            draw.material == Material::Vfx as u8
+                && draw.uv[0] == Vfx::LineRibbon as u16
+                && draw.tint[3] > 0
+                && draw.uv[3] == u16::from(LineStyle::FriendlyTarget as u8)
+        })
+        .expect("graveyard target arrow should emit Vfx::LineRibbon segments");
+    let head = cover_draws
+        .iter()
+        .find(|draw| {
+            draw.material == Material::Vfx as u8
+                && draw.uv[0] == Vfx::LineHead as u16
+                && draw.tint[3] > 0
+                && draw.uv[3] == u16::from(LineStyle::FriendlyTarget as u8)
+        })
+        .expect("graveyard target arrow should emit one Vfx::LineHead spearhead");
+
+    let forward_screen = |model: [f32; 12]| {
+        let column = |index: usize| Vec3::new(model[index], model[index + 4], model[index + 8]);
+        let start = camera.to_screen(column(3) - column(0) * 0.5);
+        let end = camera.to_screen(column(3) + column(0) * 0.5);
+        (end - start).normalize()
+    };
+    let ribbon_dir = forward_screen(last_ribbon.model);
+    let head_dir = forward_screen(head.model);
+    let alignment = ribbon_dir.dot(head_dir);
+    assert!(
+        alignment > 0.99,
+        "spearhead direction {head_dir} must align with last ribbon segment {ribbon_dir} (dot = {alignment:.4})"
+    );
+}

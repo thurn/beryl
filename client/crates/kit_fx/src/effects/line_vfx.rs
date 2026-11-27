@@ -108,11 +108,12 @@ pub fn write(camera: &Camera, line: &LineDraw, builder: &mut FrameBuilder<'_>) {
         );
     }
 
-    // Seat the faceted spearhead right at the curve endpoint along the terminal tangent.
+    // Seat the faceted spearhead right at the curve endpoint along the last ribbon segment so the
+    // head never diverges from the approaching line on tight curves.
     let tip = line.points[3];
-    let tangent = (line.points[3] - line.points[2])
+    let tangent = (tip - cuts[RIBBON - 1].0)
         .try_normalize()
-        .or_else(|| (tip - cuts[RIBBON - 1].0).try_normalize())
+        .or_else(|| (line.points[3] - line.points[2]).try_normalize())
         .or_else(|| (tip - line.points[0]).try_normalize());
     if let Some(tip_dir) = tangent {
         let head_centre = tip - tip_dir * (0.5 * head_len);

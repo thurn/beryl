@@ -76,7 +76,10 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
         // as the web's does (`from.toward || -1` in `cometOf`).
         let faces = match run.from {
             Some(Subject::Player { .. }) | None => 1.0,
-            Some(source) => -scene.toward(source),
+            Some(source) => {
+                let toward = scene.toward(source);
+                if toward == 0.0 { 1.0 } else { -toward }
+            }
         };
         let comet = Comet::new(from, to, through, run.amount, nth, faces, tuning);
         let eye = scene.table().camera().eye;
