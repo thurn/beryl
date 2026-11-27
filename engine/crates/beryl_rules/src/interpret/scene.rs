@@ -19,7 +19,6 @@ use crate::bitboard::Bitboard;
 use crate::card::Castings;
 use crate::casting;
 use crate::filter::{Evaluate, Filter};
-use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, PerPlayer, Table};
 use crate::query::Copiable;
@@ -36,7 +35,7 @@ use crate::table::GameTable;
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct Outcome<L: Layout> {
     pub(crate) objects: Bitboard<L::Slot>,
-    pub(crate) number: L::Count,
+    pub(crate) number: u8,
     pub(crate) did: bool,
     pub(crate) subgame_nonwinners: PlayerSet,
 }
@@ -45,35 +44,35 @@ impl<L: Layout> Outcome<L> {
     /// The outcome of an instruction that did nothing.
     pub(crate) const NOTHING: Outcome<L> = Outcome {
         objects: Bitboard::EMPTY,
-        number: L::Count::ZERO,
+        number: 0,
         did: false,
         subgame_nonwinners: PlayerSet::NOBODY,
     };
 
-    /// The outcome of an instruction that acted on `objects` (every layout's slot count fits in `Count`).
+    /// The outcome of an instruction that acted on `objects`.
     pub(crate) fn acted_on(objects: Bitboard<L::Slot>) -> Outcome<L> {
-        Outcome::of(objects, objects.count()).expect("a layout's slot count fits in its Count")
+        Outcome::of(objects, objects.count())
     }
 
     /// The outcome of an instruction that did `number` of something to `objects`.
-    pub(crate) fn of(objects: Bitboard<L::Slot>, number: u32) -> Result<Outcome<L>, Full> {
-        Ok(Outcome {
+    pub(crate) fn of(objects: Bitboard<L::Slot>, number: u32) -> Outcome<L> {
+        Outcome {
             objects,
-            number: L::Count::try_from_i64(i64::from(number)).ok_or(Full)?,
+            number: u8::try_from(number).unwrap_or(u8::MAX),
             did: number > 0,
             ..Self::NOTHING
-        })
+        }
     }
 
     /// This outcome and `other`'s together, as those of each player an instruction was done
     /// for.
-    pub(crate) fn with(self, other: Outcome<L>) -> Result<Outcome<L>, Full> {
-        Ok(Outcome {
+    pub(crate) fn with(self, other: Outcome<L>) -> Outcome<L> {
+        Outcome {
             objects: self.objects | other.objects,
-            number: self.number.checked_add(other.number).ok_or(Full)?,
+            number: self.number.saturating_add(other.number),
             did: self.did || other.did,
             subgame_nonwinners: self.subgame_nonwinners.union(other.subgame_nonwinners),
-        })
+        }
     }
 }
 
@@ -583,7 +582,7 @@ impl<L: Layout> Scene<'_, L> {
         match amount {
             Amount::Fixed(n) => i32::from(n),
             Amount::X => i32::from(self.x),
-            Amount::ThatMany => self.registers.outcome.number.to_i32_saturating(),
+            Amount::ThatMany => i32::from(self.registers.outcome.number),
             // CR 608.2h: settled once, as the effect that made the delayed ability was
             // applied.
             // What a delayed trigger carries, or what a "when you cast" ability kept as it
@@ -676,8 +675,8 @@ impl<L: Layout> Scene<'_, L> {
     /// ([CR 107.1b](https://yawgatog.com/resources/magic-rules/#R1071b)): "If a calculation
     /// that would determine the result of an effect yields a negative number, zero is used
     /// instead".
-    pub(crate) fn amount(&self, amount: Amount) -> Result<u8, Full> {
-        u8::try_from(self.value(amount).max(0)).map_err(|_| Full)
+    pub(crate) fn amount(&self, amount: Amount) -> u8 {
+        u8::try_from(self.value(amount).max(0)).unwrap_or(u8::MAX)
     }
 
     /// Whether `condition` holds.

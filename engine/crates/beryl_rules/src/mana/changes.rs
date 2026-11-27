@@ -326,7 +326,7 @@ pub(super) fn could_produce<L: Layout>(
                 let amount = if let Amount::Fixed(n) = term.amount {
                     n
                 } else {
-                    crate::interpret::amount_of(s, t, slot, term.amount).unwrap_or(1)
+                    crate::interpret::amount_of(s, t, slot, term.amount)
                 };
                 if amount == 0 {
                     continue;
@@ -357,7 +357,7 @@ pub(super) fn could_produce<L: Layout>(
                         let amount = if let Amount::Fixed(n) = term.amount {
                             n
                         } else {
-                            crate::interpret::amount_of(s, t, slot, term.amount).unwrap_or(1)
+                            crate::interpret::amount_of(s, t, slot, term.amount)
                         };
                         if amount == 0 {
                             continue;
@@ -438,13 +438,12 @@ pub(super) fn add_extra<L: Layout>(
     permanent: Permanent<L>,
     player: Seat,
     extra: [u8; KINDS],
-) -> Result<(), Full> {
+) {
     let source = Some(permanent.into());
     for (k, &n) in extra.iter().enumerate() {
         if n > 0 {
-            let added = s.add_mana(player, source, ManaColor::ALL[k], n)?;
+            let added = s.add_mana(player, source, ManaColor::ALL[k], n);
             sink.note_from(source, added);
         }
     }
-    Ok(())
 }

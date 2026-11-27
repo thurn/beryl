@@ -409,7 +409,6 @@ impl<L: Layout> BlockEnv<L> {
     fn enumerate(&self, must_add_for: Option<L::Slot>) -> Option<Vec<Vec<u8>>> {
         let mut total_combos = 1usize;
         for b in &self.blockers {
-            // Combination budget for the debug enumerator; saturating triggers the cap below.
             total_combos = total_combos.saturating_mul(b.options.len());
             if total_combos > MAX_ENUMERATED {
                 return None;

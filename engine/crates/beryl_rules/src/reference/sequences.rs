@@ -207,7 +207,6 @@ fn live_mana_changes<L: Layout>(
     let tapped_controller = s.controller(slot);
     let mut record = |added: Added| match added {
         Added::Of(mana) => terms.push((mana.colors, mana.amount, false)),
-        // Bounded by the number of live mana-changing effects in the debug reference checker.
         Added::TypeProduced => type_produced = type_produced.saturating_add(1),
     };
     for entry in s.effects() {
@@ -291,7 +290,7 @@ fn reference_could_produce<L: Layout>(
                 let n = if let Amount::Fixed(n) = term.amount {
                     n
                 } else {
-                    crate::interpret::amount_of(s, t, slot, term.amount).unwrap_or(1)
+                    crate::interpret::amount_of(s, t, slot, term.amount)
                 };
                 if n > 0
                     && let beryl_card::Kinds::Fixed(bits) = term.kinds
@@ -319,7 +318,7 @@ fn reference_could_produce<L: Layout>(
                     let n = if let Amount::Fixed(n) = term.amount {
                         n
                     } else {
-                        crate::interpret::amount_of(s, t, slot, term.amount).unwrap_or(1)
+                        crate::interpret::amount_of(s, t, slot, term.amount)
                     };
                     if n == 0 {
                         continue;
@@ -374,7 +373,7 @@ fn activation_on<L: Layout>(
         let n = if let Amount::Fixed(n) = term.amount {
             n
         } else {
-            crate::interpret::amount_of(s, t, slot, term.amount).ok()?
+            crate::interpret::amount_of(s, t, slot, term.amount)
         };
         if n == 0 {
             continue;

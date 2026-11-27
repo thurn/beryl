@@ -259,7 +259,7 @@ fn a_count_is_kept_only_in_a_game_with_a_card_that_reads_it() {
     let active = s.turn().active();
     for count in Count::ALL {
         assert!(!t.can(count.capability()));
-        s.count(&t, count, active).unwrap();
+        s.count(&t, count, active);
         assert_eq!(s.counted(count, active), 0);
     }
     assert_eq!(s.trackers, Trackers::empty());
@@ -273,13 +273,13 @@ fn a_count_is_kept_only_in_a_game_with_a_card_that_reads_it() {
     let other = s.next_player(active);
     for count in Count::ALL {
         assert!(t.can(count.capability()));
-        s.count(&t, count, active).unwrap();
-        s.count(&t, count, active).unwrap();
+        s.count(&t, count, active);
+        s.count(&t, count, active);
         assert_eq!(s.counted(count, active), 2);
         assert_eq!(s.counted(count, other), 0);
         assert_eq!(Observation::new(&s, other).counted(count, active), 2);
     }
-    s.count(&t, Count::SpellsCast, other).unwrap();
+    s.count(&t, Count::SpellsCast, other);
     assert_eq!(s.counted(Count::SpellsCast, other), 1);
     assert_eq!(s.check_stores(&t), Ok(()));
     // A player draws in their own draw step only, on their own turn (CR 504.1).
@@ -291,9 +291,8 @@ fn a_count_is_kept_only_in_a_game_with_a_card_that_reads_it() {
 fn a_count_ends_with_the_turn_and_survives_small_to_large_and_back() {
     let (t, mut s) = counting(true);
     let active = s.turn().active();
-    s.count(&t, Count::CardsDrawn, active).unwrap();
-    s.count(&t, Count::SpellsCast, s.next_player(active))
-        .unwrap();
+    s.count(&t, Count::CardsDrawn, active);
+    s.count(&t, Count::SpellsCast, s.next_player(active));
     // A checkpoint of the board would lose what the turn has counted.
     assert!(s.stores_lingering(&t).is_some());
 

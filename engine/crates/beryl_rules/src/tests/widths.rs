@@ -225,153 +225,21 @@ fn a_trigger_counting_three_hundred_objects_reads_no_wrapped_count() {
 }
 
 #[test]
-fn power_reaching_128_through_counters_stalls_in_small_and_is_exact_in_large() {
-    let (t, mut small, p) = game();
-    let bear = put(&mut small, &t, p, "Test Bear");
-    let object = small.current(small.object_ref(bear)).unwrap();
-    let _ = small
-        .add_counters(object, CounterKind::PlusOne, 126, true)
+fn large_counter_totals_saturate_power_and_toughness_with_the_right_sign() {
+    let (t, mut s, p) = game();
+    let bear = put(&mut s, &t, p, "Test Bear");
+    let object = s.current(s.object_ref(bear)).unwrap();
+    let _ = s
+        .add_counters(object, CounterKind::PlusOne, 200, true)
         .unwrap();
-    let mut large: State<Large> = small.widen();
-    assert_eq!(
-        next(&mut small, &t, &mut Scratch::new(), &mut Replay),
-        Step::Over(Outcome::Stalled(StallReason::Capacity))
-    );
-    let step = next(&mut large, &t, &mut Scratch::new(), &mut Replay);
-    assert!(matches!(step, Step::Decide(_)), "the game goes on");
-    assert_eq!(power_and_toughness(&large, bear.to().unwrap()), (128, 128));
-
-    // Negative overflow past `i8::MIN` (-128) widens the same way.
-    let (t, mut small, p) = game();
-    let bear = put(&mut small, &t, p, "Test Bear");
-    let object = small.current(small.object_ref(bear)).unwrap();
-    let _ = small
-        .add_counters(object, CounterKind::MinusOne, 131, true)
+    refresh(&mut s, &t);
+    assert_eq!(power_and_toughness(&s, bear), (i8::MAX, i8::MAX));
+    let _ = s.remove_counters(object, CounterKind::PlusOne, 200, true);
+    let _ = s
+        .add_counters(object, CounterKind::MinusOne, 200, true)
         .unwrap();
-    let mut large: State<Large> = small.widen();
-    assert_eq!(
-        layers::refresh(&mut small, &t, &mut Scratch::new().events),
-        Err(crate::fixed::Full)
-    );
-    refresh(&mut large, &t);
-    assert_eq!(
-        power_and_toughness(&large, bear.to().unwrap()),
-        (-129, -129)
-    );
-}
-
-#[test]
-fn power_reaching_128_through_a_pump_stalls_in_small_and_is_exact_in_large() {
-    let (t, mut small, p) = game();
-    let bear = put(&mut small, &t, p, "Test Bear");
-    let card = card_of(&small, &t, bear);
-    let perm = small.permanent_at(bear).unwrap();
-    for _ in 0..2 {
-        let change = Continuous::Layer(perm, LayerChange::ModifyPt(63, 0));
-        small
-            .start_effect(card, change, Duration::EndOfTurn)
-            .unwrap();
-    }
-    let mut large: State<Large> = small.widen();
-    assert_eq!(
-        next(&mut small, &t, &mut Scratch::new(), &mut Replay),
-        Step::Over(Outcome::Stalled(StallReason::Capacity))
-    );
-    let step = next(&mut large, &t, &mut Scratch::new(), &mut Replay);
-    assert!(matches!(step, Step::Decide(_)), "the game goes on");
-    assert_eq!(power_and_toughness(&large, bear.to().unwrap()), (128, 2));
-}
-
-#[test]
-fn counters_reaching_256_stall_in_small_and_are_exact_in_large() {
-    let (t, mut small, p) = game();
-    let bear = put(&mut small, &t, p, "Test Bear");
-    let object = small.current(small.object_ref(bear)).unwrap();
-    let _ = small
-        .add_counters(object, CounterKind::Lore, 200, false)
-        .unwrap();
-    let mut large: State<Large> = small.widen();
-
-    assert_eq!(
-        small.add_counters(object, CounterKind::Lore, 56, false),
-        Err(crate::fixed::Full)
-    );
-    let large_bear = bear.to().unwrap();
-    let large_obj = large.current(large.object_ref(large_bear)).unwrap();
-    let _ = large
-        .add_counters(large_obj, CounterKind::Lore, 56, false)
-        .unwrap();
-    assert_eq!(large.counters_of(large_bear, CounterKind::Lore), 256);
-}
-
-#[test]
-fn marked_damage_reaching_256_stalls_in_small_and_is_exact_in_large() {
-    let (t, mut small, p) = game();
-    let bear = put(&mut small, &t, p, "Test Bear");
-    let perm = small.permanent_at(bear).unwrap();
-    let source = small.object_ref(bear);
-    let _ = small.mark_damage(source, perm, 200, false).unwrap();
-    let mut large: State<Large> = small.widen();
-
-    assert_eq!(
-        small.mark_damage(source, perm, 56, false),
-        Err(crate::fixed::Full)
-    );
-
-    // Give the creature 300 toughness in `Large` so 256 marked damage is nonlethal.
-    let large_bear = bear.to().unwrap();
-    let card = card_of(&large, &t, large_bear);
-    let large_perm = large.permanent_at(large_bear).unwrap();
-    let change = Continuous::Layer(large_perm, LayerChange::ModifyPt(0, 298));
-    large
-        .start_effect(card, change, Duration::EndOfTurn)
-        .unwrap();
-    refresh(&mut large, &t);
-    assert_eq!(power_and_toughness(&large, large_bear), (2, 300));
-    let large_perm = large.permanent_at(large_bear).unwrap();
-    let _ = large
-        .mark_damage(large.object_ref(large_bear), large_perm, 56, false)
-        .unwrap();
-    assert_eq!(large.object(large_bear).damage(), 256);
-    let step = next(&mut large, &t, &mut Scratch::new(), &mut Replay);
-    assert!(matches!(step, Step::Decide(_)), "the game goes on");
-    assert!(large.object(large_bear).on_battlefield());
-    assert_eq!(large.object(large_bear).damage(), 256);
-}
-
-#[test]
-fn mana_pool_reaching_256_stalls_in_small_and_is_exact_in_large() {
-    let (t, mut small, p) = game();
-    let _ = small
-        .add_mana(p, None, crate::card::ManaColor::Blue, 200)
-        .unwrap();
-    let mut large: State<Large> = small.widen();
-
-    assert_eq!(
-        small.add_mana(p, None, crate::card::ManaColor::Blue, 56),
-        Err(crate::fixed::Full)
-    );
-    let _ = large
-        .add_mana(p, None, crate::card::ManaColor::Blue, 56)
-        .unwrap();
-    assert_eq!(large.player(p).mana()[crate::card::ManaColor::Blue], 256);
-    let _ = t;
-}
-
-#[test]
-fn life_past_i16_max_gained_in_steps_stalls_in_small_and_is_exact_in_large() {
-    let (_, mut small, p) = game();
-    // Starting life is 20; gain 200 life 163 times to reach 32,620, then 140 to reach 32,760.
-    for _ in 0..163 {
-        let _ = small.gain_life(p, 200).unwrap();
-    }
-    let _ = small.gain_life(p, 140).unwrap();
-    assert_eq!(small.player(p).life(), 32_760);
-    let mut large: State<Large> = small.widen();
-
-    assert_eq!(small.gain_life(p, 10), Err(crate::fixed::Full));
-    let _ = large.gain_life(p, 10).unwrap();
-    assert_eq!(large.player(p).life(), 32_770);
+    refresh(&mut s, &t);
+    assert_eq!(power_and_toughness(&s, bear), (i8::MIN, i8::MIN));
 }
 
 /// A `Small` game whose permanents were granted abilities, widened, is the game its `Large`
@@ -406,12 +274,10 @@ fn a_small_state_with_quantities_widens_to_the_large_one() {
         let _ = s.add_counters(object, CounterKind::Lore, 3, false).unwrap();
         refresh(&mut s, t);
         let perm = s.permanent_at(bear).unwrap();
-        let _ = s.mark_damage(s.object_ref(bear), perm, 1, false).unwrap();
-        let _ = s
-            .add_mana(p, None, crate::card::ManaColor::Blue, 4)
-            .unwrap();
-        let _ = s.gain_life(p, 5).unwrap();
-        let _ = s.lose_life(s.next_player(p), 3).unwrap();
+        let _ = s.mark_damage(s.object_ref(bear), perm, 1, false);
+        let _ = s.add_mana(p, None, crate::card::ManaColor::Blue, 4);
+        let _ = s.gain_life(p, 5);
+        let _ = s.lose_life(s.next_player(p), 3);
         refresh(&mut s, t);
         s
     }

@@ -162,12 +162,10 @@ pub(crate) fn instruction<L: Layout>(
             // the battlefield), the answer is determined only once, when the effect is
             // applied."
             Modification::SetBasePt(power, toughness) => {
-                use beryl_kernel::Number as _;
+                use beryl_kernel::SignedNumber as _;
                 let scene = run.scene();
-                let number = |amount: &Amount| {
-                    L::Pt::try_from_i64(i64::from(scene.amount(*amount)?)).ok_or(Full)
-                };
-                LayerChange::SetBasePt(number(power)?, number(toughness)?)
+                let number = |amount: &Amount| L::Pt::from_u8_saturating(scene.amount(*amount));
+                LayerChange::SetBasePt(number(power), number(toughness))
             }
             // "The color of your choice" is chosen as the effect begins, by the controller
             // of what is resolving (see CR 608.2d), and the effect gives protection from that
@@ -314,7 +312,7 @@ pub(crate) fn control_player_instruction<L: Layout>(
         start(game, resolution, control, Duration::Indefinite)?;
         count += 1;
     }
-    Outcome::of(Bitboard::EMPTY, count)
+    Ok(Outcome::of(Bitboard::EMPTY, count))
 }
 
 /// [`Effect::ExtraTurn`](beryl_card::Effect::ExtraTurn): "[Player] takes an extra turn after
@@ -344,7 +342,7 @@ pub(crate) fn extra_turn_instruction<L: Layout>(
         )?;
         count += 1;
     }
-    Outcome::of(Bitboard::EMPTY, count)
+    Ok(Outcome::of(Bitboard::EMPTY, count))
 }
 
 /// [`Effect::ChangeRule`](beryl_card::Effect::ChangeRule): "[Rule change] [duration]"
@@ -371,7 +369,7 @@ pub(crate) fn change_rule_instruction<L: Layout>(
     }
     let (game, resolution) = run.resolving();
     change_rule(game, resolution, rule, duration)?;
-    Outcome::of(Bitboard::EMPTY, 1)
+    Ok(Outcome::of(Bitboard::EMPTY, 1))
 }
 
 /// [`Effect::ChangeMana`](beryl_card::Effect::ChangeMana): starts a mana-changing continuous
@@ -422,7 +420,7 @@ pub(crate) fn change_mana_instruction<L: Layout>(
         lands: words.land_changes(),
     });
     start(game, resolution, effect, duration)?;
-    Outcome::of(Bitboard::EMPTY, 1)
+    Ok(Outcome::of(Bitboard::EMPTY, 1))
 }
 
 /// Starts the rule change `rule` about `permanent` for `duration`, as "Target creature must

@@ -59,7 +59,7 @@ pub(crate) fn instruction<L: Layout>(
     except: Option<ExceptIx>,
     new_targets: bool,
 ) -> Result<Outcome<L>, Stop> {
-    let count = run.scene().amount(count)?;
+    let count = run.scene().amount(count);
     let chosen = run.scene().objects(spells);
     let entry = &run.resolution().entry;
     let controller = entry.controller();

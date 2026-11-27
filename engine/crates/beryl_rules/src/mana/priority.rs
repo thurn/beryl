@@ -203,7 +203,7 @@ fn activate_multi_mana<L: Layout>(
         let amount = if let Amount::Fixed(n) = term.amount {
             n
         } else {
-            crate::interpret::amount_of(s, t, slot, term.amount)?
+            crate::interpret::amount_of(s, t, slot, term.amount)
         };
         if amount == 0 {
             continue;
@@ -220,15 +220,15 @@ fn activate_multi_mana<L: Layout>(
         let scaled = amount.checked_mul(changes.multiplier).ok_or(Full)?;
         let kind = ManaColor::ALL[lowest_kind(kinds)];
         produced_mask |= 1 << kind.index();
-        let added = s.add_mana(player, source, kind, scaled)?;
+        let added = s.add_mana(player, source, kind, scaled);
         sink.note_from(source, added);
     }
     if has_changes {
-        super::changes::add_extra(s, sink, permanent, player, changes.fixed)?;
+        super::changes::add_extra(s, sink, permanent, player, changes.fixed);
         if changes.type_produced > 0 && produced_mask != 0 {
             if produced_mask.is_power_of_two() {
                 let kind = ManaColor::ALL[lowest_kind(produced_mask)];
-                let added = s.add_mana(player, source, kind, changes.type_produced)?;
+                let added = s.add_mana(player, source, kind, changes.type_produced);
                 sink.note_from(source, added);
             } else {
                 s.ask(Pending::ManaType {
@@ -253,7 +253,7 @@ pub(crate) fn choose_mana_type<L: Layout>(
     kinds: u8,
     remaining: u8,
     opt: Option<Opt<L>>,
-) -> Result<(), Full> {
+) {
     let color = match opt {
         Some(Opt::Mana { color, .. }) => color,
         other => {
@@ -266,7 +266,7 @@ pub(crate) fn choose_mana_type<L: Layout>(
         }
     };
     let source = s.permanent_at(slot).map(Into::into);
-    let added = s.add_mana(player, source, color, 1)?;
+    let added = s.add_mana(player, source, color, 1);
     sink.note_from(source, added);
     if remaining > 1 {
         s.ask(Pending::ManaType {
@@ -276,7 +276,6 @@ pub(crate) fn choose_mana_type<L: Layout>(
             remaining: remaining - 1,
         });
     }
-    Ok(())
 }
 
 /// Activates the mana ability [`Pending::ManaColor`] asked about, of `permanent`, for the

@@ -212,13 +212,13 @@ impl<L: Layout> State<L> {
 
     /// A player gains life (see [CR 119.3](https://yawgatog.com/resources/magic-rules/#R1193)):
     /// "If an effect causes a player to gain life or lose life, that player's life total is
-    /// adjusted accordingly." [`Full`] if the life total would overflow [`Layout::Life`].
+    /// adjusted accordingly."
     #[inline]
-    pub fn gain_life(&mut self, player: Seat, amount: u8) -> Result<Event<L>, Full> {
-        let life = &mut self.player_mut(player).life;
-        *life = life.checked_add(L::Life::from(amount)).ok_or(Full)?;
+    #[must_use]
+    pub fn gain_life(&mut self, player: Seat, amount: u8) -> Event<L> {
+        self.player_mut(player).life += L::Life::from(amount);
         self.life_changed();
-        Ok(Event::LifeGain { player, amount })
+        Event::LifeGain { player, amount }
     }
 
     /// Marks the layer results stale while a static ability on the battlefield compares a
@@ -246,15 +246,15 @@ impl<L: Layout> State<L> {
     }
 
     /// A player loses life (see CR 119.3), as one who pays life does
-    /// (see [CR 119.4](https://yawgatog.com/resources/magic-rules/#R1194)). [`Full`] if the life
-    /// total would underflow [`Layout::Life`].
+    /// (see [CR 119.4](https://yawgatog.com/resources/magic-rules/#R1194)).
     #[inline]
-    pub fn lose_life(&mut self, player: Seat, amount: i16) -> Result<Event<L>, Full> {
+    #[must_use]
+    pub fn lose_life(&mut self, player: Seat, amount: i16) -> Event<L> {
         debug_assert!(amount >= 0);
         let life = &mut self.player_mut(player).life;
-        *life = life.checked_sub(L::Life::from(amount)).ok_or(Full)?;
+        *life = life.saturating_sub(L::Life::from(amount));
         self.life_changed();
-        Ok(Event::LifeLoss { player, amount })
+        Event::LifeLoss { player, amount }
     }
 
     /// Deals damage to a player
@@ -262,9 +262,9 @@ impl<L: Layout> State<L> {
     /// player by a source without infect causes that player to lose that much life."
     /// [`State::mark_damage`] is the same for a permanent. With `loses_life` false the damage is
     /// dealt and the life total stays, as for a player whose life total can't change: the damage
-    /// still has its other results, such as lifelink's gain. [`Full`] if the life total would
-    /// underflow [`Layout::Life`].
+    /// still has its other results, such as lifelink's gain.
     #[inline]
+    #[must_use]
     pub fn damage_player(
         &mut self,
         source: ObjectRef<L>,
@@ -272,41 +272,40 @@ impl<L: Layout> State<L> {
         amount: u8,
         combat: bool,
         loses_life: bool,
-    ) -> Result<Event<L>, Full> {
+    ) -> Event<L> {
         if loses_life {
-            let life = &mut self.player_mut(player).life;
-            *life = life.checked_sub(L::Life::from(amount)).ok_or(Full)?;
+            self.player_mut(player).life -= L::Life::from(amount);
             self.life_changed();
         }
-        Ok(Event::Damage {
+        Event::Damage {
             source,
             to: Recipient::Player(player),
             amount,
             combat,
-        })
+        }
     }
 
     /// Adds mana to a player's mana pool, from `source` if an object produced it
     /// (see [CR 106.4](https://yawgatog.com/resources/magic-rules/#R1064)): "When an effect
-    /// instructs a player to add mana, that mana goes into a player's mana pool." [`Full`] if
-    /// the pool's amount for `color` would overflow [`Layout::Mana`].
+    /// instructs a player to add mana, that mana goes into a player's mana pool."
     #[inline]
+    #[must_use]
     pub fn add_mana(
         &mut self,
         player: Seat,
         source: Option<ObjectRef<L>>,
         color: ManaColor,
         amount: u8,
-    ) -> Result<Event<L>, Full> {
+    ) -> Event<L> {
         let pool = &mut self.player_mut(player).mana[color];
-        *pool = pool.checked_add(L::Mana::from(amount)).ok_or(Full)?;
-        Ok(Event::Mana {
+        *pool = pool.saturating_add(L::Mana::from(amount));
+        Event::Mana {
             player,
             source,
             color,
             amount,
             restricted: false,
-        })
+        }
     }
 
     /// Spends mana a player's pool holds

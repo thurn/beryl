@@ -457,7 +457,7 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
             remembered::add(s, t, sink, permanent, ability, color)?;
         }
         if has_changes {
-            super::changes::add_extra(s, sink, permanent, controller, extra)?;
+            super::changes::add_extra(s, sink, permanent, controller, extra);
         }
         return Ok(());
     }
@@ -525,7 +525,7 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
         crate::interpret::mana_ability(s, t, sink, activation, ability, color)?;
     }
     if has_changes {
-        super::changes::add_extra(s, sink, permanent, controller, extra)?;
+        super::changes::add_extra(s, sink, permanent, controller, extra);
     }
     Ok(())
 }
@@ -652,11 +652,11 @@ pub(crate) fn manual_options<L: Layout>(
             if c.is_restricted() && classes_make(&sources, c, kind) {
                 continue;
             }
-            let spend_ok = if helps(remaining, kind) {
+            let spend_ok = helps(remaining, kind) && {
                 let mut rest = remaining;
                 pay_unit(&mut rest, kind);
                 let mut after = pool;
-                after[kind] = after[kind].checked_add(c.amount - 1).ok_or(Full)?;
+                after[kind] = after[kind].saturating_add(c.amount - 1);
                 sources.units(after, &taps).pays(rest)
                     || (rich
                         && super::rich::pays_from_state(
@@ -667,15 +667,11 @@ pub(crate) fn manual_options<L: Layout>(
                             &[0; CLASSES],
                             rest,
                         ))
-            } else {
-                false
             };
-            let float_ok = if !spend_ok && rich && !c.is_restricted() {
+            let float_ok = !spend_ok && rich && !c.is_restricted() && {
                 let mut after = pool;
-                after[kind] = after[kind].checked_add(c.amount).ok_or(Full)?;
+                after[kind] = after[kind].saturating_add(c.amount);
                 super::rich::pays_from_state(after, &sources, &taps, 0, &[0; CLASSES], remaining)
-            } else {
-                false
             };
             if !spend_ok && !float_ok {
                 continue;

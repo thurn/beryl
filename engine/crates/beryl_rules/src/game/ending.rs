@@ -88,5 +88,4 @@ pub(crate) fn lose_instruction<L: Layout>(
 /// The outcome of an instruction that may have ended the game.
 fn ended<L: Layout>(run: &Run<'_, '_, L>) -> Outcome<L> {
     Outcome::of(Bitboard::EMPTY, u32::from(run.state().outcome().is_some()))
-        .expect("0 or 1 fits in Count")
 }

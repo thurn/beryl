@@ -84,13 +84,13 @@ pub fn deal<L: Layout>(
         Recipient::Player(p) => {
             let loses_life = rule_change::life_can_change(game.state, game.table, p);
             game.state
-                .damage_player(source, p, amount, combat, loses_life)?
+                .damage_player(source, p, amount, combat, loses_life)
         }
         Recipient::Permanent(r) => {
             let Some(permanent) = game.state.permanent(r) else {
                 return Ok(0);
             };
-            game.state.mark_damage(source, permanent, amount, combat)?
+            game.state.mark_damage(source, permanent, amount, combat)
         }
     };
     game.settle(e)?;
@@ -143,7 +143,7 @@ pub(crate) fn instruction<L: Layout>(
         return divided_two(run, spec);
     }
     let (players, permanents) = parts(to);
-    let amount = run.scene().amount(amount)?;
+    let amount = run.scene().amount(amount);
     let source = run.resolution().source();
     let (mut damaged, mut dealt) = (Bitboard::EMPTY, 0);
     if let Some(players) = players {
@@ -165,7 +165,7 @@ pub(crate) fn instruction<L: Layout>(
             dealt += u32::from(deal(run.game(), source, to, amount, false)?);
         }
     }
-    Outcome::of(damaged, dealt)
+    Ok(Outcome::of(damaged, dealt))
 }
 
 /// The players and the permanents among `to`. A division of damage is dealt by
@@ -216,7 +216,7 @@ fn divided_two<L: Layout>(
         };
         dealt += u32::from(deal(run.game(), source, to, amount, false)?);
     }
-    Outcome::of(damaged, dealt)
+    Ok(Outcome::of(damaged, dealt))
 }
 
 /// [`Effect::PreventDamage`](beryl_card::Effect::PreventDamage): a prevention shield on each

@@ -435,13 +435,13 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             } => counters::remove_instruction(self, objects, kind, count)?,
             Effect::RemoveAllCounters(objects) => counters::remove_all_instruction(self, objects)?,
             Effect::DoubleCounters { objects, kind } => counters::double(self, objects, kind)?,
-            Effect::AddMana { player, mana } => mana::add_instruction(self, player, mana)?,
-            Effect::AddProduct { player } => mana::add_product_instruction(self, player)?,
+            Effect::AddMana { player, mana } => mana::add_instruction(self, player, mana),
+            Effect::AddProduct { player } => mana::add_product_instruction(self, player),
             Effect::AddManaOfKind {
                 player,
                 kind,
                 amount,
-            } => mana::add_of_kind_instruction(self, player, kind, amount)?,
+            } => mana::add_of_kind_instruction(self, player, kind, amount),
             Effect::Modify {
                 objects,
                 modifications,
@@ -547,7 +547,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             self.registers.that_player = Some(player);
             self.registers.outcome = before;
             self.carry_out(effect)?;
-            together = together.with(self.registers.outcome)?;
+            together = together.with(self.registers.outcome);
             let theirs = &self.registers.controlled;
             controlled = Table::from_fn(|player| controlled[player] | theirs[player]);
         }
@@ -601,7 +601,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
         let mut original = None;
         let (cards, found) = match matching {
             ExileMatch::ManaValueBelow { filter, below } => {
-                let below = self.scene().amount(below)?;
+                let below = self.scene().amount(below);
                 let words = self.resolving.words(self.game);
                 let you = self.resolving.entry.controller();
                 let x = self.resolving.entry.x;

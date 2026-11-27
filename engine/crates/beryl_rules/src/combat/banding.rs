@@ -141,7 +141,7 @@ pub(super) fn attack<L: Layout>(
     first: L::Slot,
 ) -> Result<(), Full> {
     s.remember(attacker.slot(), Memo::CombatBand(first))?;
-    declare_attacker(s, t, attacker)?;
+    declare_attacker(s, t, attacker);
     let aiming = if first == attacker.slot() {
         Some(first)
     } else {

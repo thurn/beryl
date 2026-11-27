@@ -33,7 +33,6 @@ impl Units {
 
     pub(crate) fn add(&mut self, kinds: u8, n: u16) {
         let k = &mut self.by_kinds[usize::from(kinds)];
-        // A `ManaCost` sums to at most a few hundred, so saturating at `u16::MAX` never changes payability.
         *k = k.saturating_add(n);
         if *k > 0 {
             self.some |= 1 << kinds;

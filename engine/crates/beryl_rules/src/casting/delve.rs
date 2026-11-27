@@ -118,6 +118,5 @@ pub(super) fn delve_most<S: SlotId>(face: &Face, costs: Castings, cards: Bitboar
             | CostPart::DiscardHand => 0,
         })
         .sum();
-    // Graveyard cards available for delve after reserving held cards; floors at 0.
     u8::try_from(cards.count().saturating_sub(held)).unwrap_or(u8::MAX)
 }

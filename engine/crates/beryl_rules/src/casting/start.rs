@@ -352,9 +352,7 @@ pub(crate) fn may_cast_instruction<L: Layout>(
     within_x: bool,
 ) -> Result<Outcome<L>, Stop> {
     let mut cards = run.scene().objects(card);
-    let below = free_below
-        .map(|amount| run.scene().amount(amount))
-        .transpose()?;
+    let below = free_below.map(|amount| run.scene().amount(amount));
     let Some(player) = run.one(player) else {
         return Ok(Outcome::NOTHING);
     };

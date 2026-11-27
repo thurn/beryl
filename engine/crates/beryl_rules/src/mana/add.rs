@@ -6,7 +6,6 @@ use beryl_card::{Amount, Players};
 
 use crate::bitboard::Bitboard;
 use crate::card::{ManaColor, ManaSet};
-use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::interpret::{Outcome, Run};
@@ -24,10 +23,9 @@ pub fn add<L: Layout>(
     source: Option<ObjectRef<L>>,
     color: ManaColor,
     amount: u8,
-) -> Result<(), Full> {
-    let added = game.state.add_mana(player, source, color, amount)?;
+) {
+    let added = game.state.add_mana(player, source, color, amount);
     game.sink.note(added);
-    Ok(())
 }
 
 /// [`Effect::AddMana`](beryl_card::Effect::AddMana): "[Player] adds [mana]" ([CR 106.3]): "A
@@ -39,12 +37,12 @@ pub(crate) fn add_instruction<L: Layout>(
     run: &mut Run<'_, '_, L>,
     players: Players,
     mana: ManaSet,
-) -> Result<Outcome<L>, Full> {
+) -> Outcome<L> {
     let (source, color) = (run.resolution().entry.object(), run.resolution().mana);
     debug_assert!(mana.includes(color));
     let mut added = 0;
     for player in run.in_turn_order(players) {
-        add(run.game(), player, source, color, mana.amount)?;
+        add(run.game(), player, source, color, mana.amount);
         added += u32::from(mana.amount);
     }
     Outcome::of(Bitboard::EMPTY, added)
@@ -58,7 +56,7 @@ pub(crate) fn add_instruction<L: Layout>(
 pub(crate) fn add_product_instruction<L: Layout>(
     run: &mut Run<'_, '_, L>,
     players: Players,
-) -> Result<Outcome<L>, Full> {
+) -> Outcome<L> {
     let resolution = run.resolution();
     let (source, chosen) = (resolution.entry.object(), resolution.mana);
     let terms = resolution.ability.product();
@@ -89,9 +87,9 @@ pub(crate) fn add_product_instruction<L: Layout>(
                 chosen
             }
         };
-        let amount = run.scene().amount(term.amount)?;
+        let amount = run.scene().amount(term.amount);
         for player in run.in_turn_order(players) {
-            add(run.game(), player, source, kind, amount)?;
+            add(run.game(), player, source, kind, amount);
             added += u32::from(amount);
         }
     }
@@ -106,11 +104,11 @@ pub(crate) fn add_of_kind_instruction<L: Layout>(
     players: Players,
     kind: ManaColor,
     amount: Amount,
-) -> Result<Outcome<L>, Full> {
-    let (source, amount) = (run.resolution().entry.object(), run.scene().amount(amount)?);
+) -> Outcome<L> {
+    let (source, amount) = (run.resolution().entry.object(), run.scene().amount(amount));
     let mut added = 0;
     for player in run.in_turn_order(players) {
-        add(run.game(), player, source, kind, amount)?;
+        add(run.game(), player, source, kind, amount);
         added += u32::from(amount);
     }
     Outcome::of(Bitboard::EMPTY, added)

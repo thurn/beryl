@@ -37,7 +37,6 @@ pub trait Number:
     fn checked_add(self, rhs: Self) -> Option<Self>;
     fn checked_sub(self, rhs: Self) -> Option<Self>;
     fn checked_mul(self, rhs: Self) -> Option<Self>;
-    // Saturating helpers are for display/UI/heuristic conversions, never for rules quantities.
     #[must_use]
     fn saturating_add(self, rhs: Self) -> Self;
     #[must_use]

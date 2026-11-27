@@ -457,9 +457,9 @@ fn apply_layers<L: Layout>(
             let (to_7c, after) = list.as_slice().split_at(split);
             let mut begun = None;
             let first = apply_in_order(s, t, to_7c, &mut begun, trials);
-            let counters_res = apply::counters(s);
+            apply::counters(s);
             let second = apply_in_order(s, t, after, &mut begun, trials);
-            listed = listed.and(first).and(counters_res).and(second);
+            listed = listed.and(first).and(second);
             for a in list.iter() {
                 applied.removed |= a.change.removes_abilities();
                 applied.land_types |= matches!(
@@ -469,7 +469,7 @@ fn apply_layers<L: Layout>(
                 applied.protection |= matches!(a.change, LayerChange::AddProtection(_));
             }
         }
-        None => listed = listed.and(apply::counters(s)),
+        None => apply::counters(s),
     }
     let applying = list.as_ref().map_or(&[][..], |l| l.as_slice());
     listed = listed.and(other_zones::reach(s, t, applying));

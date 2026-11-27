@@ -209,7 +209,7 @@ fn unless_discards<L: Layout>(
     player: Seat,
     filter: crate::filter::Filter,
 ) -> Result<bool, Stop> {
-    let instead_of = discards_of(run, effect, player)?;
+    let instead_of = discards_of(run, effect, player);
     let (game, resolution) = run.resolving();
     let hand = game.state.zone(ZoneKey::Of(player, Zone::Hand));
     if instead_of.is_some_and(|cards| cards > 0) && hand.count() == 1 {
@@ -228,10 +228,10 @@ fn discards_of<L: Layout>(
     run: &Run<'_, '_, L>,
     effect: &'static Effect,
     player: Seat,
-) -> Result<Option<u8>, crate::fixed::Full> {
-    Ok(match *effect {
+) -> Option<u8> {
+    match *effect {
         Effect::Discard { player: who, count } if run.one(who) == Some(player) => {
-            Some(run.scene().amount(count)?)
+            Some(run.scene().amount(count))
         }
         Effect::Sequence(_)
         | Effect::If { .. }
@@ -318,5 +318,5 @@ fn discards_of<L: Layout>(
         | Effect::AdditionalStep(_)
         | Effect::AdditionalPhases { .. }
         | Effect::ExtraTurn(..) => None,
-    })
+    }
 }

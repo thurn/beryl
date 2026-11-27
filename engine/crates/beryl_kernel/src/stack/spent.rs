@@ -83,7 +83,7 @@ impl<L: Layout> State<L> {
             .last_mut()
             .expect("the ability being activated");
         let mut amounts = entry.spent.amounts();
-        amounts[color.index()] = amounts[color.index()].checked_add(amount).ok_or(Full)?;
+        amounts[color.index()] = amounts[color.index()].saturating_add(amount);
         entry.spent = L::Spent::of(amounts).ok_or(Full)?;
         Ok(())
     }

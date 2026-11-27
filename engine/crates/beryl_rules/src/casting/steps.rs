@@ -364,7 +364,7 @@ pub(super) fn finish<L: Layout>(
     // The spell is counted as it becomes cast, before its cast triggers anything (CR 601.2i),
     // so an ability that triggers on the cast and counts the spells cast this turn counts it.
     if let StackItem::Spell { controller, .. } = top(s).item {
-        s.count(t, Count::SpellsCast, controller)?;
+        s.count(t, Count::SpellsCast, controller);
     }
     if c.from_graveyard_permission
         && let StackItem::Spell { card, face, .. } = top(s).item
@@ -465,14 +465,11 @@ pub(crate) fn targeted<L: Layout>(s: &mut State<L>, t: &GameTable) -> Result<(),
 /// cast, before its Cast event. Zero in a game that keeps no count of spells cast.
 ///
 /// [CR 702.40a]: https://yawgatog.com/resources/magic-rules/#R70240a
-pub(crate) fn cast_before<L: Layout>(s: &State<L>) -> Result<u8, Full> {
+pub(crate) fn cast_before<L: Layout>(s: &State<L>) -> u8 {
     use beryl_kernel::UnsignedNumber as _;
-    let mut total: u8 = 0;
-    for p in s.players().in_seat_order() {
-        let count = u8::try_from(s.counted(Count::SpellsCast, p).to_u32()).map_err(|_| Full)?;
-        total = total.checked_add(count).ok_or(Full)?;
-    }
-    Ok(if total == 0 { 0 } else { total - 1 })
+    let players = s.players().in_seat_order();
+    let counted = players.map(|p| s.counted(Count::SpellsCast, p).to_u8_saturating());
+    counted.fold(0u8, u8::saturating_add).saturating_sub(1)
 }
 
 /// The [`Event::Ability`] that says `entry`, an ability on the stack. It goes straight to the
@@ -511,7 +508,6 @@ fn x_options<L: Layout>(
     let paying = mana::Paying::entry(s, t, entry);
     let other = SacrificeCost::of_entry(t, entry);
     let mut out: L::Queue<Opt<L>, OPTIONS> = Default::default();
-    // At most 64 candidate X values are offered per decision, capped at `u8::MAX`.
     for x in least..(least.saturating_add(64)) {
         if c.from_graveyard_permission
             && let StackItem::Spell { card, face, .. } = entry.item

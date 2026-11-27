@@ -230,7 +230,7 @@ pub(crate) fn attack<L: Layout>(
 ) -> Result<(), Full> {
     match opt {
         Opt::Attack { slot, band: None } => {
-            declare_attacker(s, t, s.permanent_at(slot).expect("a declared attacker"))?;
+            declare_attacker(s, t, s.permanent_at(slot).expect("a declared attacker"));
             s.ask(Pending::DeclareAttackers {
                 attacker: Some(slot),
             });
@@ -245,7 +245,7 @@ pub(crate) fn attack<L: Layout>(
             for i in 0..s.battlefield().len() {
                 let slot = s.battlefield()[i];
                 if class.contains(slot) {
-                    declare_attacker(s, t, s.permanent_at(slot).expect("an eligible attacker"))?;
+                    declare_attacker(s, t, s.permanent_at(slot).expect("an eligible attacker"));
                 }
             }
             s.ask(Pending::DeclareAttackers { attacker: None });
@@ -306,18 +306,14 @@ pub(crate) fn attack<L: Layout>(
 ///
 /// [CR 508.1k]: https://yawgatog.com/resources/magic-rules/#R5081k
 #[inline]
-fn declare_attacker<L: Layout>(
-    s: &mut State<L>,
-    t: &GameTable,
-    attacker: Permanent<L>,
-) -> Result<(), Full> {
+fn declare_attacker<L: Layout>(s: &mut State<L>, t: &GameTable, attacker: Permanent<L>) {
     let mut defending = s.players_in_turn_order(s.defending_players());
     let player = defending.next().expect("combat has a defending player");
     s.declare_attacker(attacker, player);
     // See CR 508.4: creatures put onto the battlefield attacking never "attacked"
     // for effects. Only a declaration pick records the turn's attack history.
     s.track(t, Tracker::AttackedThisTurn, attacker);
-    s.count(t, Count::AttackersDeclared, s.turn().active())
+    s.count(t, Count::AttackersDeclared, s.turn().active());
 }
 
 /// Finishes the attack declaration: the attackers tap, then attack triggers trigger.

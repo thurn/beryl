@@ -409,7 +409,7 @@ impl<L: Layout> State<L> {
     /// [`Current`] from [`State::current`]. `layered` says whether the
     /// layers read them, which is the rules' to say, with the card in hand: the layer
     /// results are stale if so. [`Full`] if the kind is the first of its kind on the object
-    /// and the table has no room for the row, or if the new count overflows [`Layout::Count`].
+    /// and the table has no room for the row.
     #[inline]
     pub fn add_counters(
         &mut self,
@@ -421,8 +421,7 @@ impl<L: Layout> State<L> {
         let object = object.reference();
         let n = self
             .counters_of(object.slot, kind)
-            .checked_add(L::Count::from(amount))
-            .ok_or(Full)?;
+            .saturating_add(L::Count::from(amount));
         self.set_counters(object.slot, kind, n)?;
         if layered
             || self

@@ -152,7 +152,6 @@ impl<L: Layout> State<L> {
             && o.zone != Zone::Stack
             && o.face != FaceIx::DOWN
         {
-            // Printed split-card mana values are small vocabulary bounds and cannot overflow `u8`.
             return definition
                 .front()
                 .cost
@@ -181,7 +180,6 @@ impl<L: Layout> State<L> {
     #[inline(never)]
     fn melded_mana_value(&self, t: &GameTable, slot: L::Slot) -> u8 {
         let front = |card: L::Card| t.def(card).front().cost.mana_value();
-        // Mutated pile mana values are bounded by printed card costs and cannot overflow `u8`.
         self.pile(slot)
             .fold(front(self.card_really_is(slot)), |sum, card| {
                 sum.saturating_add(front(self.object(card).card))
@@ -657,7 +655,6 @@ impl<L: Layout> State<L> {
 #[inline]
 pub fn spell_mana_value<L: Layout>(table: &GameTable, entry: &StackEntry<L>) -> u8 {
     let cost = table.def(entry.card()).face(entry.face()).cost;
-    // Mana value arithmetic is bounded by the vocabulary's `u8` cost fields.
     cost.mana_value()
         .saturating_add(cost.x.saturating_mul(entry.x))
 }

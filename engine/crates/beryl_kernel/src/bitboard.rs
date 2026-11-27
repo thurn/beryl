@@ -308,7 +308,6 @@ impl<S: SlotId> Not for Bitboard<S> {
     #[inline]
     fn not(mut self) -> Self {
         for (i, w) in self.0.as_mut().iter_mut().enumerate() {
-            // Remaining slots in this 64-bit word; saturating at 0 masks unused trailing words.
             let slots = S::COUNT.saturating_sub(i * 64).min(64);
             let mask = if slots == 64 { !0 } else { (1 << slots) - 1 };
             *w = !*w & mask;

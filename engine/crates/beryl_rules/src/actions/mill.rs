@@ -37,7 +37,7 @@ pub(crate) fn instruction<L: Layout>(
     players: Players,
     count: Amount,
 ) -> Result<Outcome<L>, Full> {
-    let count = run.scene().amount(count)?;
+    let count = run.scene().amount(count);
     let mut milled = Bitboard::EMPTY;
     for player in run.in_turn_order(players) {
         let game = run.game();

@@ -126,7 +126,6 @@ impl SpellCosts {
 
 #[inline]
 fn add_cost_change(change: SpellCost, more: &mut u8, less: &mut u8, floor: &mut u8) {
-    // Spell cost adjustments are bounded by `ManaCost`'s `u8` generic field.
     match change {
         SpellCost::More(n) => *more = more.saturating_add(n),
         SpellCost::Less(n) => *less = less.saturating_add(n),
@@ -136,7 +135,6 @@ fn add_cost_change(change: SpellCost, more: &mut u8, less: &mut u8, floor: &mut 
 
 #[inline]
 fn apply_cost_changes(mut cost: ManaCost, more: u8, less: u8, floor: u8) -> ManaCost {
-    // Generic cost floors at 0 and stays within `ManaCost`'s `u8` vocabulary bound.
     cost.generic = cost.generic.saturating_add(more).saturating_sub(less);
     let short = u32::from(floor).saturating_sub(cost.total(0));
     cost.generic = cost

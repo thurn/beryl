@@ -34,40 +34,21 @@ pub(in crate::mana) fn manual_extra_options<L: Layout>(
         extra_used[ei] = 1;
         for act in &extra.activations {
             let mut ok = false;
-            let mut overflow = false;
             each_pool_payment(pool, act.price, &mut |_, pool_after_price| {
-                if act
-                    .each_made(&mut |made| {
-                        let mut after = pool_after_price;
-                        for (a, &m) in after.iter_mut().zip(&made) {
-                            let Some(sum) = a.checked_add(m) else {
-                                overflow = true;
-                                return false;
-                            };
-                            *a = sum;
-                        }
-                        if pays_from_state(
-                            after,
-                            sources,
-                            &Table::filled(0),
-                            0,
-                            &extra_used,
-                            remaining,
-                        ) {
-                            ok = true;
-                            return false;
-                        }
-                        true
-                    })
-                    .is_err()
-                {
-                    overflow = true;
-                }
-                !ok && !overflow
+                act.each_made(&mut |made| {
+                    let mut after = pool_after_price;
+                    for (a, &m) in after.iter_mut().zip(&made) {
+                        *a = a.saturating_add(m);
+                    }
+                    if pays_from_state(after, sources, &Table::filled(0), 0, &extra_used, remaining)
+                    {
+                        ok = true;
+                        return false;
+                    }
+                    true
+                });
+                !ok
             });
-            if overflow {
-                return Err(Full);
-            }
             if !ok {
                 continue;
             }
@@ -145,40 +126,27 @@ pub(in crate::mana) fn manual_pay_extra<L: Layout>(
     let mut extra_used = [0u8; CLASSES];
     extra_used[ei] = 1;
     let mut chosen = None;
-    let mut overflow = false;
     each_pool_payment(pool, act.price, &mut |price_spend, pool_after_price| {
-        if act
-            .each_made(&mut |made| {
-                let mut after = pool_after_price;
-                for (a, &m) in after.iter_mut().zip(&made) {
-                    let Some(sum) = a.checked_add(m) else {
-                        overflow = true;
-                        return false;
-                    };
-                    *a = sum;
-                }
-                if pays_from_state(
-                    after,
-                    &sources,
-                    &Table::filled(0),
-                    0,
-                    &extra_used,
-                    remaining,
-                ) {
-                    chosen = Some((price_spend, made));
-                    return false;
-                }
-                true
-            })
-            .is_err()
-        {
-            overflow = true;
-        }
-        chosen.is_none() && !overflow
+        act.each_made(&mut |made| {
+            let mut after = pool_after_price;
+            for (a, &m) in after.iter_mut().zip(&made) {
+                *a = a.saturating_add(m);
+            }
+            if pays_from_state(
+                after,
+                &sources,
+                &Table::filled(0),
+                0,
+                &extra_used,
+                remaining,
+            ) {
+                chosen = Some((price_spend, made));
+                return false;
+            }
+            true
+        });
+        chosen.is_none()
     });
-    if overflow {
-        return Err(Full);
-    }
     let (price_spend, made) = chosen.expect("a pool payment that leaves the cost payable");
     sink.together();
     let activated = activate_extra_step(s, t, sink, player, slot, &act, price_spend, made);

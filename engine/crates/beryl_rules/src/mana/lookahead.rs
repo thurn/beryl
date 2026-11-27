@@ -144,7 +144,6 @@ impl<L: Layout> Ahead<L> {
         };
         if let Some(i) = self.later.iter().position(|&x| x == l) {
             let n = &mut self.copies.as_mut_slice()[i];
-            // Lookahead heuristic copy count; saturating at `u8::MAX` only caps the tiebreaker.
             *n = n.saturating_add(1);
         } else if self.later.push_if_room(l) {
             // Past a fixed layout's capacity, the rest are not considered: a heuristic.
@@ -286,7 +285,6 @@ fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
             if p.terms.allows_face(face_index) && castable(face) {
                 let cost = face.cost;
                 ahead.add(
-                    // Heuristic future cost bounded by `ManaCost`'s `u8` generic field.
                     ManaCost {
                         generic: cost.generic.saturating_add(p.terms.increase),
                         ..cost
@@ -417,7 +415,6 @@ impl<L: Layout> Lookahead<'_, L> {
             let Some(u) = self.without(units, l) else {
                 continue;
             };
-            // Heuristic combined future cost bounded by `ManaCost`'s `u8` fields.
             let mut next = sum;
             next.generic = next.generic.saturating_add(l.cost.generic);
             for (n, &k) in next.symbols.iter_mut().zip(&l.cost.symbols) {
@@ -530,6 +527,6 @@ pub(super) fn looking_ahead<L: Layout>(
             }
             true
         },
-    )?;
+    );
     Ok(())
 }

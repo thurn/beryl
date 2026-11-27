@@ -27,7 +27,7 @@ pub fn gain<L: Layout>(game: &mut Game<'_, L>, player: Seat, amount: u8) -> Resu
     if !rule_change::life_can_change(game.state, game.table, player) {
         return Ok(());
     }
-    let e = game.state.gain_life(player, amount)?;
+    let e = game.state.gain_life(player, amount);
     game.settle(e)
 }
 
@@ -41,7 +41,7 @@ pub fn lose<L: Layout>(game: &mut Game<'_, L>, player: Seat, amount: i16) -> Res
     if !rule_change::life_can_change(game.state, game.table, player) {
         return Ok(());
     }
-    let e = game.state.lose_life(player, amount)?;
+    let e = game.state.lose_life(player, amount);
     game.settle(e)
 }
 
@@ -63,7 +63,7 @@ pub(crate) fn gain_instruction<L: Layout>(
     players: Players,
     amount: Amount,
 ) -> Result<Outcome<L>, Full> {
-    let amount = run.scene().amount(amount)?;
+    let amount = run.scene().amount(amount);
     change(
         run,
         players,
@@ -108,5 +108,5 @@ fn change<L: Layout>(
             .abs_diff(beryl_kernel::Number::to_i64(before));
         total += u32::try_from(diff).unwrap_or(u32::MAX);
     }
-    Outcome::of(Bitboard::EMPTY, total)
+    Ok(Outcome::of(Bitboard::EMPTY, total))
 }

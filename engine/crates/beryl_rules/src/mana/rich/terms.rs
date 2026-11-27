@@ -56,10 +56,7 @@ impl RichActivation {
     }
 
     /// Calls `f` with each concrete `[u8; KINDS]` color assignment this activation can produce.
-    pub(super) fn each_made(
-        &self,
-        f: &mut impl FnMut([u8; KINDS]) -> bool,
-    ) -> Result<bool, crate::fixed::Full> {
+    pub(super) fn each_made(&self, f: &mut impl FnMut([u8; KINDS]) -> bool) -> bool {
         let mut made = [0u8; KINDS];
         if self.type_produced == 0 {
             return assign_terms(self.terms(), 0, &mut made, f);
@@ -74,18 +71,14 @@ impl RichActivation {
             let mut total = own_made;
             for term in self.extra_terms() {
                 let k = term.kinds.trailing_zeros() as usize;
-                let Some(sum) = total[k].checked_add(term.amount) else {
-                    return false;
-                };
-                total[k] = sum;
+                total[k] = total[k].saturating_add(term.amount);
             }
             if produced_mask == 0 {
                 return f(total);
             }
             assign_each_of(produced_mask, 0, self.type_produced, &mut total, &mut |m| {
-                Ok(f(*m))
+                f(*m)
             })
-            .unwrap_or(false)
         })
     }
 
@@ -104,7 +97,6 @@ impl RichActivation {
             }
             f(units)
         })
-        .unwrap_or(false)
     }
 }
 
@@ -113,13 +105,13 @@ fn assign_terms(
     ix: usize,
     made: &mut [u8; KINDS],
     f: &mut impl FnMut([u8; KINDS]) -> bool,
-) -> Result<bool, crate::fixed::Full> {
+) -> bool {
     let Some(&term) = terms.get(ix) else {
-        return Ok(f(*made));
+        return f(*made);
     };
     if term.kinds.is_power_of_two() {
         let k = term.kinds.trailing_zeros() as usize;
-        made[k] = made[k].checked_add(term.amount).ok_or(crate::fixed::Full)?;
+        made[k] = made[k].saturating_add(term.amount);
         let cont = assign_terms(terms, ix + 1, made, f);
         made[k] -= term.amount;
         return cont;
@@ -127,15 +119,15 @@ fn assign_terms(
     if term.uniform {
         for k in 0..KINDS {
             if term.kinds & (1 << k) != 0 {
-                made[k] = made[k].checked_add(term.amount).ok_or(crate::fixed::Full)?;
+                made[k] = made[k].saturating_add(term.amount);
                 let cont = assign_terms(terms, ix + 1, made, f);
                 made[k] -= term.amount;
-                if !cont? {
-                    return Ok(false);
+                if !cont {
+                    return false;
                 }
             }
         }
-        return Ok(true);
+        return true;
     }
     assign_each_of(term.kinds, 0, term.amount, made, &mut |m| {
         assign_terms(terms, ix + 1, m, f)
@@ -147,8 +139,8 @@ fn assign_each_of(
     from: usize,
     left: u8,
     made: &mut [u8; KINDS],
-    f: &mut impl FnMut(&mut [u8; KINDS]) -> Result<bool, crate::fixed::Full>,
-) -> Result<bool, crate::fixed::Full> {
+    f: &mut impl FnMut(&mut [u8; KINDS]) -> bool,
+) -> bool {
     if left == 0 {
         return f(made);
     }
@@ -159,16 +151,16 @@ fn assign_each_of(
         let rest_mask = kinds & !((1u8 << (k + 1)).wrapping_sub(1));
         let min_n = if rest_mask == 0 { left } else { 0 };
         for n in (min_n..=left).rev() {
-            made[k] = made[k].checked_add(n).ok_or(crate::fixed::Full)?;
+            made[k] = made[k].saturating_add(n);
             let cont = assign_each_of(kinds, k + 1, left - n, made, f);
             made[k] -= n;
-            if !cont? {
-                return Ok(false);
+            if !cont {
+                return false;
             }
         }
-        return Ok(true);
+        return true;
     }
-    Ok(true)
+    true
 }
 
 fn assign_term_units(
