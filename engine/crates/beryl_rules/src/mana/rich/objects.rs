@@ -30,7 +30,7 @@ const BOTH_WAYS: usize = 6;
 /// same of artifacts and generic mana (see CR 702.126a).
 ///
 /// The objects pay part of the total cost as it is paid, after the mana abilities are
-/// activated (see [CR 601.2g] and [CR 601.2h]), so what one pays may pay no mana ability's
+/// activated (see [CR 601.2g]; see [CR 601.2h]), so what one pays may pay no mana ability's
 /// price. An object that makes no mana is always tapped, since that only adds to what pays. One
 /// that makes mana cannot also be tapped for convoke (see [CR 118.3]: "a permanent that's
 /// already tapped can't be tapped to pay a cost"), so it is tried both ways. Past
