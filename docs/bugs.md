@@ -6,6 +6,40 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Cavern of Souls' colored mana did not pay beside a priced mana ability.**
+  With Mountain, Mountain, Azorius Signet and Cavern of Souls naming Elemental,
+  Beza, the Bounding Spring (`{2}{W}{W}`) could not be cast, although one
+  Mountain pays the Signet's `{1}` for `{W}{U}`, the other makes `{R}` and the
+  Cavern makes `{W}` for an Elemental. The priced-mana path had two faults.
+  `rich::pays_from_state` counted a source with an unrestricted and a restricted
+  mana ability (the Cavern's `{C}` and its colored mana) as its unrestricted
+  mana only, and `casting::legal::refused` asked that path with
+  `Paying::NOTHING`, which reads no restriction. Fixed: `pays_from_state` tries
+  every division of such sources between mana that may pay a price and mana that
+  pays only the cost, and `refused` passes the spell's payment. Guard: the
+  scenario "Azorius Signet and Cavern of Souls together pay for an Elemental",
+  and the reference checks, which now compare spells against the sequence
+  reference in these games (entry below).
+
+- **The fuzz reported a false payment disagreement for spells beside Azorius
+  Signet or Mana Flare.** In a game that also held a card making restricted mana
+  (Cavern of Souls), `just fuzz` stopped with "the payability prefilter
+  disagrees with the reference for a spell" once a player could pay for a spell
+  only through Azorius Signet's `{1}, {T}` ability or Mana Flare's extra mana.
+  The engine was right. `reference::check_payments` already switched to the
+  sequence reference (`reference_sequences`, which activates mana abilities in
+  every order) in games with priced or changed mana, but the per-spell check for
+  restricted mana (`check_spell_payments`) and the spend-as-any-color check
+  (`check_ability_payments`) still used the units reference, which counts one
+  tap of each source and skips priced mana abilities. Fixed: both checks use the
+  sequence reference in such games, and `reference_sequences_for` adds the
+  restricted mana that the spell accepts. Guard: the scenarios "Azorius Signet's
+  mana pays for a spell in a game with restricted mana" and "Mana Flare's mana
+  pays for a spell in a game with restricted mana". No type ties the reference's
+  choice of method to the capabilities that the solver branches on; one function
+  that picks the reference for a cost and a payment, called by every check,
+  would cover the class.
+
 - **A cycling land could not be clicked once the turn's land was played.** In a
   Dandân game, Remote Isle in hand could be cycled only while a land play was
   left. The engine offered its cycling ability, but each priority view lists the

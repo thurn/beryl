@@ -301,6 +301,7 @@ pub(super) fn pays_from_state<L: Layout>(
             restricted.add(1 << kind, 1);
         }
     }
+    let mut splits = Vec::new();
     let classes = sources.classes();
     for (i, c) in classes.iter().enumerate() {
         if c.is_twin() {
@@ -318,7 +319,16 @@ pub(super) fn pays_from_state<L: Layout>(
         } else if let Some(tw) = c.twin() {
             let other = &classes[usize::from(tw)];
             if other.is_restricted() {
-                base.add(c.kinds, u16::from(c.amount) * u16::from(avail));
+                // A permanent with both unrestricted and restricted mana abilities, as Cavern
+                // of Souls: tapped for the first, its mana may pay a price; tapped for the
+                // second, only the cost, which either's mana pays (see CR 106.6).
+                let (kinds, amount) =
+                    super::sources::capacity(c.kinds, c.amount, Some((other.kinds, other.amount)));
+                splits.push(Split {
+                    plain: (c.kinds, c.amount),
+                    either: (kinds, amount),
+                    avail,
+                });
             } else {
                 let (kinds, amount) =
                     super::sources::capacity(c.kinds, c.amount, Some((other.kinds, other.amount)));
@@ -328,30 +338,70 @@ pub(super) fn pays_from_state<L: Layout>(
             base.add(c.kinds, u16::from(c.amount) * u16::from(avail));
         }
     }
+    // A permanent whose mana abilities all lack a price is tapped up front: more mana never
+    // makes a cost unpayable, and what it makes may pay a price. Only the order of priced
+    // activations matters, so the search below tries orders of those alone. Each starting
+    // pool is one way of choosing what those permanents make, kept once.
     let mut used = *extra_used;
+    let mut starts = BTreeSet::from([base]);
     for (i, extra) in sources.extras.iter().enumerate() {
         let left = extra.count.saturating_sub(used[i]);
-        if left == 0 {
+        if left == 0 || extra.activations.iter().any(|a| !a.price.is_zero()) {
             continue;
         }
-        if extra.activations.len() == 1 {
-            let act = &extra.activations[0];
-            if act.price.is_zero()
-                && act.type_produced == 0
-                && act
-                    .terms()
-                    .iter()
-                    .all(|t| !t.uniform || t.kinds.is_power_of_two())
-            {
-                for term in act.terms() {
-                    base.add(term.kinds, u16::from(term.amount) * u16::from(left));
-                }
-                used[i] = extra.count;
-            }
+        let mut outcomes = BTreeSet::new();
+        for act in &extra.activations {
+            act.each_units(Units::NONE, &mut |made| {
+                outcomes.insert(made);
+                true
+            });
         }
+        for _ in 0..left {
+            starts = starts
+                .iter()
+                .flat_map(|&start| outcomes.iter().map(move |&made| add_units(start, made)))
+                .collect();
+        }
+        used[i] = extra.count;
     }
-    let mut seen: BTreeSet<([u8; CLASSES], Units)> = BTreeSet::new();
-    pays_dfs(base, restricted, used, &sources.extras, cost, &mut seen)
+    starts
+        .into_iter()
+        .any(|start| split_pays(start, restricted, &splits, used, &sources.extras, cost))
+}
+
+/// The members of a class with a restricted twin class ([`super::sources::Class::twin`]): how
+/// many are untapped, and the kinds and amount of mana one makes tapped for its unrestricted
+/// mana, which may pay a price, and for either, which pays only the cost.
+struct Split {
+    plain: (u8, u8),
+    either: (u8, u8),
+    avail: u8,
+}
+
+/// [`pays_dfs`] for each way of dividing the members of each of `splits` between mana that may
+/// pay a price, added to `base`, and mana that pays the cost, added to `restricted`.
+fn split_pays<L: Layout>(
+    base: Units,
+    restricted: Units,
+    splits: &[Split],
+    used: [u8; CLASSES],
+    extras: &[Extra<L>],
+    cost: ManaCost,
+) -> bool {
+    let Some((split, rest)) = splits.split_first() else {
+        let mut seen: BTreeSet<([u8; CLASSES], Units)> = BTreeSet::new();
+        return pays_dfs(base, restricted, used, extras, cost, &mut seen);
+    };
+    (0..=split.avail).any(|n| {
+        let mut base = base;
+        let mut restricted = restricted;
+        base.add(split.plain.0, u16::from(split.plain.1) * u16::from(n));
+        restricted.add(
+            split.either.0,
+            u16::from(split.either.1) * u16::from(split.avail - n),
+        );
+        split_pays(base, restricted, rest, used, extras, cost)
+    })
 }
 
 fn add_units(mut a: Units, b: Units) -> Units {

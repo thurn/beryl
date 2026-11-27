@@ -238,7 +238,7 @@ fn refused<L: Layout, const TARGETS: bool>(
             || (t.can_either(Capability::RemembersMana, Capability::PaysWithObjects)
                 && pays_otherwise(s, t, now, f, cost, player, slot, face_index, face, costs))
             || (t.can_either(Capability::PricedMana, Capability::ManaChanges)
-                && f.pays_for(s, t, cost, Bitboard::EMPTY, mana::Paying::NOTHING))
+                && f.pays_casting(s, t, cost, slot, face_index))
     }) {
         return Some(Refusal::Mana);
     }

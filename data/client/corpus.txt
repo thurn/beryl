@@ -150,10 +150,9 @@ aura-finesse/moves-holy-strength-and-draws-a-card
 aura-finesse/moves-holy-strength-and-draws-a-card-2
 azorius-signet/a-priced-mana-source-alone-cannot-pay-for-a-one-mana-spell
 azorius-signet/a-signet-and-an-island-pay-wu
-azorius-signet/generated-1-cast-from-hand
-azorius-signet/generated-2-cast-wetland-sambar-paying-beside-island
-azorius-signet/generated-3-cast-wetland-sambar-paying-beside-plains
+azorius-signet/and-cavern-of-souls-together-pay-for-an-elemental
 azorius-signet/mana-left-floating-by-a-priced-payment-stays-in-the-pool
+azorius-signet/s-mana-pays-for-a-spell-in-a-game-with-restricted-mana
 azorius-signet/two-signets-and-one-land-pay-1ww-only-by-spending-u-into-the-second
 battlewise-valor/s-bonus-ends-with-the-turn
 battlewise-valor/s-bonus-ends-with-the-turn-0
@@ -990,10 +989,9 @@ mana-drain/mana-a-triggered-ability-adds-is-gone-once-its-phase-has-ended
 mana-drain/on-the-casters-own-turn-mana-at-that-turns-postcombat-main
 mana-drain/on-the-casters-own-turn-mana-at-that-turns-postcombat-main-2
 mana-drain/the-countered-spells-mana-value-at-the-casters-next-main-phase
-mana-flare/generated-1-cast-from-hand
-mana-flare/generated-2-cast-from-hand-with-filter-partners
 mana-flare/makes-an-island-produce-uu-for-its-controller
 mana-flare/makes-an-island-produce-uu-for-the-opponent
+mana-flare/s-mana-pays-for-a-spell-in-a-game-with-restricted-mana
 mana-flare/under-mana-flare-a-land-tapped-for-two-types-adds-one-of-the-chosen-type
 mana-floating
 mana-floating-spent

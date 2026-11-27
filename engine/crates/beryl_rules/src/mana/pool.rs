@@ -128,6 +128,22 @@ impl<L: Layout> Funds<L> {
                 && super::rich::pays(self, s, t, cost, exclude, paying))
     }
 
+    /// [`Funds::pays_for`] for casting `face` of the card in `slot`, with nothing excluded:
+    /// restricted mana that the spell accepts pays too, beside priced mana abilities.
+    #[cold]
+    #[inline(never)]
+    pub(crate) fn pays_casting(
+        &self,
+        s: &State<L>,
+        t: &GameTable,
+        cost: ManaCost,
+        slot: L::Slot,
+        face: crate::card::FaceIx,
+    ) -> bool {
+        let paying = Paying::casting(s, t, slot, face);
+        self.pays_for(s, t, cost, Bitboard::EMPTY, paying)
+    }
+
     /// [`Funds::pays`] for a spell, in a game whose cards make restricted mana: a source of
     /// restricted mana the spell's restriction accepts is one unit of the kinds of either of
     /// its mana abilities, and the mana that remembers in the pool that it accepts adds its

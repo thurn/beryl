@@ -285,12 +285,10 @@ pub(crate) fn reference_payable<L: Layout>(
 /// Whether `player` can pay the mana cost of each card in their hand for casting it, as the
 /// prefilter, the cached funds and the solver say, against [`reference_pays`] with the
 /// restricted mana that spell accepts among the units (see [CR 106.6]): "Some spells or
-/// abilities that produce mana restrict how that mana can be spent". Only in a game whose
-/// cards make restricted mana: in any other, a payment for a spell is one for nothing, which
-/// [`check_payments`] checks. Not in a game with priced mana abilities or mana changes either:
-/// [`reference_units`] counts one tap of each source and cannot pay a source's own cost, so it
-/// would refuse a payment that pays a mana ability's {1} with a land's mana, and only
-/// [`reference_sequences`] models those, for no spell.
+/// abilities that produce mana restrict how that mana can be spent", or against
+/// [`sequences::reference_sequences_for`] in a game whose cards have priced mana abilities or
+/// change mana abilities. Only in a game whose cards make restricted mana: in any other, a
+/// payment for a spell is one for nothing, which [`check_payments`] checks.
 ///
 /// [CR 106.6]: https://yawgatog.com/resources/magic-rules/#R1066
 #[allow(
@@ -303,28 +301,35 @@ fn check_spell_payments<L: Layout>(
     player: Seat,
     funds: &Funds<L>,
 ) -> Result<(), Violation> {
-    if !t.can(Capability::RemembersMana)
-        || t.can_either(Capability::PricedMana, Capability::ManaChanges)
-    {
+    if !t.can(Capability::RemembersMana) {
         return Ok(());
     }
     let at = Some(At::Player(player));
     let none = Bitboard::EMPTY;
+    let rich = t.can_either(Capability::PricedMana, Capability::ManaChanges);
     for &slot in s.hand_by_definition(player).iter() {
         let Some(def) = s.card_def(t, slot) else {
             continue;
         };
         for face in def.face_ixs() {
             let paying = Paying::casting(s, t, slot, face);
-            let Some(units) = reference_units(s, t, player, paying, Bitboard::EMPTY) else {
-                continue;
-            };
             // X is announced before payment, as 0 here.
             let cost = ManaCost {
                 x: 0,
                 ..def.face(face).cost
             };
-            let expected = reference_pays(units.as_slice(), cost);
+            // In a game with priced mana abilities or products of several terms, only a
+            // payment that activates them in order can use them, which the units of one tap
+            // of each source cannot say.
+            let expected = if rich {
+                sequences::reference_sequences_for(s, t, player, cost, paying)
+            } else {
+                reference_units(s, t, player, paying, Bitboard::EMPTY)
+                    .map(|units| reference_pays(units.as_slice(), cost))
+            };
+            let Some(expected) = expected else {
+                continue;
+            };
             // More sources of restricted mana than a small payment holds: the game goes on in
             // a larger layout, and the funds answer yes until it does.
             let Ok(prefilter) = mana::payable(s, t, player, cost, none, paying) else {
@@ -366,8 +371,10 @@ fn check_spell_payments<L: Layout>(
 
 /// Whether `player` can pay the mana cost of each activated ability on a permanent they control,
 /// as the prefilter, the cached funds and the solver say, against [`reference_pays`] when a
-/// spend-as-any-color rule covers the permanent. Only in a game whose cards have such a rule: in
-/// any other, every activation's cost is unchanged and [`check_payments`] checks it.
+/// spend-as-any-color rule covers the permanent, or against [`reference_sequences`] in a game
+/// whose cards have priced mana abilities or change mana abilities. Only in a game whose cards
+/// have such a rule: in any other, every activation's cost is unchanged and [`check_payments`]
+/// checks it.
 fn check_ability_payments<L: Layout>(
     s: &State<L>,
     t: &GameTable,
@@ -382,6 +389,7 @@ fn check_ability_payments<L: Layout>(
     }
     let at = Some(At::Player(player));
     let none = Bitboard::EMPTY;
+    let rich = t.can_either(Capability::PricedMana, Capability::ManaChanges);
     for &slot in s.battlefield() {
         if s.controller(slot) != player {
             continue;
@@ -402,7 +410,15 @@ fn check_ability_payments<L: Layout>(
                 ..a.cost().mana
             };
             let cost = if ref_any { base.as_any_color() } else { base };
-            let expected = reference_pays(units, cost);
+            // Priced mana abilities pay only in sequence, as for a spell above.
+            let expected = if rich {
+                match reference_sequences(s, t, player, cost) {
+                    Some(expected) => expected,
+                    None => continue,
+                }
+            } else {
+                reference_pays(units, cost)
+            };
             let Ok(prefilter) = mana::payable(s, t, player, cost, none, Paying::NOTHING) else {
                 continue;
             };

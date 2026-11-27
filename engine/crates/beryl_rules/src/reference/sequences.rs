@@ -18,7 +18,8 @@ use crate::state::{Payload, State};
 use crate::table::GameTable;
 use beryl_card::{Added, Behavior, ManaChange, Tapped, Words};
 
-use super::{UNITS, controls, reference_pays};
+use super::{UNITS, controls, reference_pays, spendable};
+use crate::mana::Paying;
 
 /// The most mana abilities with a price a position may have for the brute force to try every
 /// order of them: past it, the position is skipped and counted in [`SKIPPED`].
@@ -87,17 +88,40 @@ pub(crate) fn reference_sequences<L: Layout>(
     player: Seat,
     cost: ManaCost,
 ) -> Option<bool> {
+    reference_sequences_for(s, t, player, cost, Paying::NOTHING)
+}
+
+/// [`reference_sequences`] for what `paying` is for, as a spell: the restricted mana that its
+/// restriction accepts pays too, both the mana that remembers in the pool and the mana of a
+/// source whose mana ability makes restricted mana (see [CR 106.6]): "Some spells or abilities
+/// that produce mana restrict how that mana can be spent".
+///
+/// [CR 106.6]: https://yawgatog.com/resources/magic-rules/#R1066
+pub(crate) fn reference_sequences_for<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+    cost: ManaCost,
+    paying: Paying<L>,
+) -> Option<bool> {
     let mut pool = Vec::new();
     for (k, &n) in s.player(player).mana().amounts().iter().enumerate() {
         pool.extend(std::iter::repeat_n(1u8 << k, usize::from(n)));
     }
-    sequences_pay(&pool, &activations(s, t, player)?, cost)
+    if paying.reads_restrictions(t) {
+        for mana in s.player(player).remembered_mana() {
+            if paying.accepts(t, mana.restriction, mana.chosen_type) {
+                pool.push(crate::card::ManaSet::one(mana.color).colors);
+            }
+        }
+    }
+    sequences_pay(&pool, &activations(s, t, player, paying)?, cost)
 }
 
 /// The mana abilities each untapped permanent `player` controls could be tapped for now, read
 /// from the abilities it has, with the intrinsic ones of its basic land types (see CR 305.6).
-/// Restricted mana is left out, as it pays for no cost of no spell (see CR 106.6), and so is a
-/// mana ability activated only as an instant, which no payment activates.
+/// Restricted mana is left out unless `paying` accepts it (see CR 106.6), and so is a mana
+/// ability activated only as an instant, which no payment activates.
 ///
 /// See [CR 302.6](https://yawgatog.com/resources/magic-rules/#R3026): "A creature's activated
 /// ability with the tap symbol or the untap symbol in its activation cost can't be activated
@@ -107,6 +131,7 @@ fn activations<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     player: Seat,
+    paying: Paying<L>,
 ) -> Option<Vec<Vec<Activation>>> {
     let mut permanents = Vec::new();
     for &slot in s.battlefield() {
@@ -139,7 +164,7 @@ fn activations<L: Layout>(
         for (_, a) in s.abilities(t, slot) {
             if a.kind() != AbilityKind::Mana
                 || a.timing() == Timing::AsInstant
-                || a.spend().is_some()
+                || !spendable(s, t, paying, slot, a)
                 || !controls(s, t, player, a, &words)
             {
                 continue;
