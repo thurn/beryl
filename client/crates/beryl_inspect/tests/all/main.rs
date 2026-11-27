@@ -40,5 +40,6 @@ mod screens;
 mod specs;
 mod stress;
 mod tiers;
+mod viewer_zoom;
 
 mod stories;

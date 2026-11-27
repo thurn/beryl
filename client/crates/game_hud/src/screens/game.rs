@@ -39,10 +39,14 @@ pub fn game(
     let layout = &input.profile.data().hud;
     let opening = opening::opening(input);
     let is_opening = opening.is_some();
-    let prompt = views.prompt.filter(|_| !opening::choosing_start(input));
+    let viewing = views.viewer.is_some();
+    // A pile viewer is modal: a press cannot reach the prompt beneath it, so it is left out
+    // with the rest of the furniture, as Arena fades its pass button under its card browser.
+    let prompt = views
+        .prompt
+        .filter(|_| !opening::choosing_start(input) && !viewing);
     let shade = prompt.as_ref().and_then(|_| prompts::question_shade(input));
     let covers = input.prompt.is_some_and(prompts::covers_table);
-    let viewing = views.viewer.is_some();
     let overlays = overlays(input, log, result, views.viewer);
     let mut menu = Some(menu);
     let mut game = holder().name("game");

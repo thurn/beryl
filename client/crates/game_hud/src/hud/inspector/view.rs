@@ -42,6 +42,9 @@ pub struct Inspected {
     /// The boxes of the cards the open prompt marks, which the player may be about to pick and
     /// which the inspector keeps clear of where it can (the web's `keptClear`).
     pub targets: Vec<Rect>,
+    /// The boxes of the controls of the screen element that shows the card, such as a pile
+    /// viewer's close button, which the inspector also keeps clear of where it can.
+    pub controls: Vec<Rect>,
     /// Why the open decision refused the click on it, while the pointer has stayed on it
     /// since (`Client::refuse_click`).
     pub refusal: Option<RefusalView>,
@@ -131,7 +134,7 @@ impl<'a> CardInputs<'a> {
             (data, card),
             (inspected.x, inspected.origin),
             !view.stack.is_empty() || !inspected.targets.is_empty(),
-            &inspected.targets,
+            &[inspected.targets.as_slice(), inspected.controls.as_slice()].concat(),
         );
         Some(Self {
             inspected,

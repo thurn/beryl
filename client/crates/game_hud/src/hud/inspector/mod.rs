@@ -283,15 +283,19 @@ impl Inspector {
         let id = ElementId(u32::from(slot.0));
         let element = (frame.resolved.iter())
             .find(|element| element.role == Role::Card && element.id == id)?;
-        let Some(Place::Card { zone, side, .. }) = Place::in_frame(element.place) else {
-            return None;
+        // A shared-deck table (Dandân) keeps one library, graveyard and exile for both
+        // players, whose cards have a pile's place and no side.
+        let (zone, side) = match Place::in_frame(element.place)? {
+            Place::Card { zone, side, .. } => (zone, Some(side)),
+            Place::SharedPile(zone) => (zone, None),
+            Place::Layer | Place::Revealed => return None,
         };
         let face_down = element.state.has(StateBits::FACE_DOWN);
         let refusal = self.refusal_of(slot, decision).cloned();
         let read = match zone {
             ZoneName::Battlefield | ZoneName::Stack => true,
             ZoneName::Hand => {
-                side == Side::You && (face_down || pinned.is_some() || refusal.is_some())
+                side == Some(Side::You) && (face_down || pinned.is_some() || refusal.is_some())
             }
             ZoneName::Graveyard | ZoneName::Exile | ZoneName::Library => {
                 element.state.has(StateBits::SHOWN) && !face_down
@@ -315,9 +319,44 @@ impl Inspector {
             x,
             origin: glam::Vec2::new(bounds.x, bounds.y),
             targets: marked(prompt, frame),
+            controls: if element.state.has(StateBits::SHOWN) {
+                controls_around(frame, id)
+            } else {
+                Vec::new()
+            },
             refusal,
         })
     }
+}
+
+/// The boxes of the controls of the screen that shows the card `id` in one of its own
+/// elements, such as a pile viewer's close button. An inspector that covered one would hide it
+/// while a press still went through to it, so the inspector keeps clear of them where it can.
+fn controls_around(frame: &Frame, id: ElementId) -> Vec<Rect> {
+    let Some(host) = (0..frame.resolved.len())
+        .filter_map(|index| u32::try_from(index).ok())
+        .find(|&index| frame.shown_by(index) == Some(id))
+    else {
+        return Vec::new();
+    };
+    let mut screen = host;
+    loop {
+        let parent = frame.resolved[screen as usize].parent;
+        if parent == u32::MAX {
+            break;
+        }
+        screen = parent;
+    }
+    (frame.resolved.iter().enumerate())
+        .filter(|(index, element)| {
+            element.interactive
+                && element.role != Role::Card
+                && element.place == kit_frame::frame::Place::Layer
+                && u32::try_from(*index)
+                    .is_ok_and(|index| kit_scene::hit::is_within(frame, index, screen))
+        })
+        .map(|(_, element)| kit_scene::hit::bounds(element))
+        .collect()
 }
 
 /// Priority marks actions the player can take. Those marks need no space

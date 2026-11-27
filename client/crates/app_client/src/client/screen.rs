@@ -477,8 +477,19 @@ impl Client {
             _ => None,
         }
         .filter(|_| self.table_shown());
-        self.layer
-            .float(floats::GEAR, at.map(|_| screens::corner(bug, undo)));
+        // The inspector is drawn in the foreground, above a pile viewer's cards, and reaches
+        // the corner's column at the window's right edge. The corner is drawn in the same band,
+        // after it, so its buttons stay on top, as Arena keeps its gear above its card browser.
+        // Under a sheet, the corner stays beneath the sheet.
+        let sheet = self.features.sheet.is_some();
+        let corner = at.map(|_| {
+            let mut corner = screens::corner(bug, undo);
+            if !sheet {
+                corner.layer_depth = kit_ui::element::LayerDepth::Foreground;
+            }
+            corner
+        });
+        self.layer.float(floats::GEAR, corner);
         if let Some(point) = at {
             self.layer.set_float_look(
                 floats::GEAR,
