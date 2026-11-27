@@ -588,6 +588,34 @@ impl Ability {
         self.body
     }
 
+    /// For a triggered ability whose whole effect is "you may [do something with its
+    /// target]", the effect without the "may": the player says no when the ability's target
+    /// is chosen, by choosing none, instead of being asked a yes or no about the target they
+    /// just chose (UI Conventions, "No question before a choice"). `None` for any other
+    /// ability, which asks its "may" as it resolves
+    /// ([CR 608.2d](https://yawgatog.com/resources/magic-rules/#R6082d): "If an effect of a
+    /// spell or ability offers any choices ..., the player announces these while applying the
+    /// effect.").
+    #[must_use]
+    pub const fn declined_at_targets(&self) -> Option<&'static Effect> {
+        let Behavior::Data(Effect::May {
+            player: Players::You,
+            effect,
+        }) = self.body
+        else {
+            return None;
+        };
+        let one_required = match self.targets() {
+            [spec] => spec.count == 1 && !spec.optional,
+            _ => false,
+        };
+        if matches!(self.kind, AbilityKind::Triggered) && one_required {
+            Some(effect)
+        } else {
+            None
+        }
+    }
+
     /// Its intervening "if" or "as long as" ([`Ability::only_if`]).
     #[inline]
     pub const fn condition(&self) -> Option<&'static Condition> {

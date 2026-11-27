@@ -1,6 +1,6 @@
 //! Taking back the human's answers: undo points, and the cast in progress that can be cancelled.
 
-use beryl_engine::state::{ObjectRef, StackEntry};
+use beryl_engine::state::{ObjectRef, StackEntry, StackItem};
 use beryl_engine::{Large, Relayout, paused_events};
 use beryl_search::AgentDecision;
 
@@ -44,6 +44,7 @@ pub(super) struct UndoPoint {
     pub(super) at: At,
     pub(super) seen: beryl_engine::StepPosition,
     pub(super) answered: Option<Vec<StackEntry<Large>>>,
+    pub(super) may_answers: Vec<(usize, StackItem<Large>, bool)>,
     pub(super) before_cast: Option<BeforeCast>,
     /// The index among the agent's own of its next decision then, which the game goes back
     /// to: the agent is asked that decision again.
@@ -152,6 +153,7 @@ impl Game {
         // A run of picks waiting to go on belongs to the game taken back.
         self.run = None;
         self.answered = point.answered;
+        self.may_answers = point.may_answers;
         self.seen = point.seen;
         self.before_cast = point.before_cast;
         self.hurt_by = point.hurt_by;
@@ -198,6 +200,7 @@ impl Game {
             at: self.at.clone(),
             seen: self.seen,
             answered: self.answered.clone(),
+            may_answers: self.may_answers.clone(),
             before_cast: self.before_cast.clone(),
             agent: self.agent_next,
             hurt_by: self.hurt_by,

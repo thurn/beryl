@@ -366,6 +366,9 @@ pub struct Run {
     /// The run that waits for this one to end: this one answers a prompt opened between that
     /// one's picks.
     under: Option<Box<Run>>,
+    /// For a triggered "you may" ability whose target was chosen or declined at target time:
+    /// `Some(true)` if a target was chosen, `Some(false)` if the player clicked Decline.
+    may_answer: Option<bool>,
 }
 
 /// One step of a run.
@@ -420,7 +423,20 @@ impl Run {
             continues: false,
             trade: None,
             under: None,
+            may_answer: None,
         }
+    }
+
+    /// Records whether the player accepted (`true`) or declined (`false`) an optional
+    /// targeted triggered ability at its target prompt.
+    pub(crate) fn with_may_answer(mut self, accepted: bool) -> Run {
+        self.may_answer = Some(accepted);
+        self
+    }
+
+    /// Whether this run answers an optional targeted triggered ability at its target prompt.
+    pub(crate) fn may_answer(&self) -> Option<bool> {
+        self.may_answer
     }
 
     /// Records two interchangeable slots whose printings should trade when this run answers

@@ -85,6 +85,11 @@ impl Game {
                 // A run waiting through this prompt goes on once this one's picks are made.
                 let waiting = self.run.take();
                 let trade = run.trade();
+                if let Some(accepted) = run.may_answer()
+                    && let Some((index, entry)) = self.board.stack().iter().enumerate().next_back()
+                {
+                    self.may_answers.push((index, entry.item, accepted));
+                }
                 self.choose(Answer {
                     id,
                     choice,

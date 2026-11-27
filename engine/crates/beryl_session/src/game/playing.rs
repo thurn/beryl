@@ -174,8 +174,25 @@ impl Game {
             DecisionKind::YesNo if Self::searches_unasked(d) => (0..d.len() as u16)
                 .map(Choice)
                 .find(|&c| d.candidates.option(c) == Some(Opt::Yes)),
+            DecisionKind::YesNo => self.may_at_targets_answer(d),
             _ => None,
         }
+    }
+
+    /// Auto-answers the `YesNo` on resolution of an optional triggered ability whose "you may"
+    /// was already answered at its target prompt (UI Conventions, exception 3).
+    fn may_at_targets_answer(&self, d: &Decision<Large>) -> Option<Choice> {
+        let stack = self.board.stack();
+        let (index, entry) = stack.iter().enumerate().next_back()?;
+        let item = entry.item;
+        let &(_, _, accepted) = self
+            .may_answers
+            .iter()
+            .rfind(|&&(i, it, _)| i == index && it == item)?;
+        let want = if accepted { Opt::Yes } else { Opt::No };
+        (0..d.len() as u16)
+            .map(Choice)
+            .find(|&c| d.candidates.option(c) == Some(want))
     }
 
     /// Whether `d` asks whether to search the human's library (Trinket Mage's "you may

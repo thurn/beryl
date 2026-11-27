@@ -142,6 +142,9 @@ pub(crate) struct Objects {
     confirm: String,
     several: String,
     decline: String,
+    /// Triggered "you may ... target ..." ability: Decline picks a legal target to put the
+    /// ability on the stack and records `No` for its resolution `May`.
+    may_target: bool,
 }
 
 /// What a pick's run opens with, before the picks of its objects.
@@ -244,6 +247,12 @@ impl Objects {
         let tray = (eligible.iter())
             .filter_map(|&on| of(on).filter(|o| piled(o.zone)).map(|o| o.slot))
             .collect();
+        let may_target = !counted
+            && least == 1
+            && most == 1
+            && (table.s.stack().last())
+                .and_then(|e| e.ability_in(table.t))
+                .is_some_and(|a| a.declined_at_targets().is_some());
         Objects {
             purpose: Purpose::Target,
             title,
@@ -261,7 +270,12 @@ impl Objects {
             aimed,
             confirm: prompt.words.confirm.clone(),
             several: prompt.words.counted.clone(),
-            decline: prompt.words.decline.clone(),
+            decline: if may_target {
+                "Decline".to_owned()
+            } else {
+                prompt.words.decline.clone()
+            },
+            may_target,
         }
     }
 
@@ -320,6 +334,7 @@ impl Objects {
             confirm: prompt.words.confirm.clone(),
             several: prompt.words.counted.clone(),
             decline: prompt.words.decline.clone(),
+            may_target: false,
         }
     }
 
@@ -360,7 +375,7 @@ impl Objects {
         match self.opens {
             Opens::Whether => true,
             Opens::Count => self.ends || self.least == 0,
-            Opens::Picks | Opens::Instead(_) => self.ends,
+            Opens::Picks | Opens::Instead(_) => self.ends || self.may_target,
         }
     }
 
@@ -381,7 +396,10 @@ impl Objects {
     /// Arena has the one button, "Submit 0", enabled with nothing picked ("Untap up to two
     /// lands.", `gIhJjyoJ0_M 20:07.0`), so two that read alike are never shown.
     fn submits_none(&self) -> bool {
-        self.declines() && !self.answers_by_click() && self.confirm_label(0) == self.decline
+        !self.may_target
+            && self.declines()
+            && !self.answers_by_click()
+            && self.confirm_label(0) == self.decline
     }
 
     /// Whether what is picked answers the prompt.
@@ -433,6 +451,16 @@ impl Objects {
             }
             Click::Button {
                 button: ButtonId::Decline,
+            } if self.may_target => {
+                // Magic rules require choosing a legal target to put the trigger on the stack;
+                // the session remembers the player declined and answers `No` on resolution.
+                if let Some(&first) = self.eligible.first() {
+                    self.picked = vec![first];
+                }
+                Clicked::Answers(self.run().with_may_answer(false))
+            }
+            Click::Button {
+                button: ButtonId::Decline,
             } if self.declines() && !self.submits_none() => {
                 self.picked.clear();
                 Clicked::Answers(self.run())
@@ -464,7 +492,12 @@ impl Objects {
             (self.ends && self.picked.len() < usize::from(self.most))
                 .then_some(Step::One(Part::Pick, Want::Done)),
         ];
-        Run::new(self.purpose, steps.into_iter().flatten())
+        let run = Run::new(self.purpose, steps.into_iter().flatten());
+        if self.may_target {
+            run.with_may_answer(true)
+        } else {
+            run
+        }
     }
 
     fn show(&self, view: &mut PromptView) {

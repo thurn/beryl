@@ -393,3 +393,75 @@ fn a_graveyard_pick_uses_a_tray_while_a_battlefield_pick_stays_on_the_table() {
         bf_held.view().buttons
     );
 }
+
+/// Replaying the turn-10 Mystic Sanctuary capture opens the target choice directly with a
+/// Decline button, with no "Take Action" yes/no prompt before or after it.
+#[test]
+fn triggered_may_target_opens_target_choice_with_decline() {
+    let relative = "engine/crates/beryl_session/tests/replays/mystic_sanctuary_may_target.json";
+    let _ = beryl_test_files::read_to_string(relative).expect("the replay fixture");
+    let path = beryl_test_files::root().expect("a checkout").join(relative);
+    let file = beryl_session::ReplayFile::load(&path, &beryl_cards::CARDS).unwrap();
+
+    let (game, view) =
+        beryl_session::Game::from_replay(&beryl_cards::CARDS, &file, beryl_session::SessionId(1))
+            .unwrap();
+    let mut play = Play { game, view };
+    let decision = play.decision();
+    assert_eq!(decision.kind, Kind::Target);
+    assert_eq!(decision.prompt.purpose, Purpose::Target);
+    assert_eq!(decision.prompt.title, "Choose a target.");
+    assert!(
+        decision
+            .prompt
+            .buttons
+            .iter()
+            .any(|b| b.id == ButtonId::Decline && b.label == "Decline"),
+        "expected Decline button on target prompt: {:?}",
+        decision.prompt.buttons
+    );
+
+    assert_eq!(
+        play.click(Click::Button {
+            button: ButtonId::Decline,
+        }),
+        None,
+        "Decline should answer the optional target prompt immediately"
+    );
+    while !play.view.stack.is_empty() {
+        assert_ne!(
+            play.decision().kind,
+            Kind::YesNo,
+            "declining at targets must not ask a Take Action / Decline question"
+        );
+        play.choose(|c| *c == Candidate::Pass);
+    }
+    assert_ne!(play.decision().kind, Kind::YesNo);
+
+    // Choosing a target also resolves without asking a yes/no "Take Action" question.
+    let (game2, view2) =
+        beryl_session::Game::from_replay(&beryl_cards::CARDS, &file, beryl_session::SessionId(1))
+            .unwrap();
+    let mut play2 = Play {
+        game: game2,
+        view: view2,
+    };
+    let target_slot = match play2.decision().prompt.body {
+        ShapeBody::Pick { ref tray, .. } => *tray.first().expect("instant/sorcery in tray"),
+        _ => panic!("expected Pick body"),
+    };
+    assert_eq!(
+        play2.on(target_slot),
+        None,
+        "clicking a single target should answer immediately"
+    );
+    while !play2.view.stack.is_empty() {
+        assert_ne!(
+            play2.decision().kind,
+            Kind::YesNo,
+            "choosing a target must not ask a Take Action / Decline question"
+        );
+        play2.choose(|c| *c == Candidate::Pass);
+    }
+    assert_ne!(play2.decision().kind, Kind::YesNo);
+}

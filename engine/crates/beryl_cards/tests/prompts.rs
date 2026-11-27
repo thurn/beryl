@@ -45,6 +45,7 @@ fn every_decision_says_a_prompt_its_shape_and_part_allow() {
             let mut check = CheckPrompt {
                 card,
                 scenario: scenario.name,
+                prev_yes_no: false,
             };
             visit_with_layout(&CARDS, scenario, &mut check).unwrap_or_else(|e| panic!("{e}"));
         }
@@ -54,13 +55,29 @@ fn every_decision_says_a_prompt_its_shape_and_part_allow() {
 struct CheckPrompt<'a> {
     card: &'a str,
     scenario: &'a str,
+    prev_yes_no: bool,
 }
 
 impl DecisionVisitor for CheckPrompt<'_> {
     fn decision<L: Layout>(&mut self, _: &GameTable, _: &State<L>, d: &Decision<L>) {
-        let Self { card, scenario } = self;
+        let Self {
+            card,
+            scenario,
+            prev_yes_no,
+        } = self;
         let at = format!("{card} / {scenario}: {d:?}");
         let (shape, part) = (d.prompt.shape(), d.prompt.part);
+        // UI Conventions, exception 3 ("No question before a choice"): a standalone yes/no
+        // ("may") must not be followed directly by a choice that the same ability makes
+        // (`Search` is excluded here because declining to search skips the shuffle).
+        if *prev_yes_no
+            && d.prompt.purpose != Purpose::Mulligan
+            && d.prompt.purpose != Purpose::Search
+            && !matches!(d.kind, DecisionKind::Priority | DecisionKind::YesNo)
+        {
+            panic!("yes/no question followed directly by a choice: {at}");
+        }
+        *prev_yes_no = d.kind == DecisionKind::YesNo && shape == Shape::YesNo;
         // Each part belongs to the shapes whose runs have it.
         let fits = match part {
             Part::Pick => !matches!(shape, Shape::Split),

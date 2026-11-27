@@ -15,7 +15,7 @@ use beryl_engine::card::Purpose;
 use beryl_engine::chance::Chance;
 use beryl_engine::event::{Event, LossCause, Tagged};
 use beryl_engine::rng::SplitMix64;
-use beryl_engine::state::{ObjectRef, Pending, StackEntry};
+use beryl_engine::state::{ObjectRef, Pending, StackEntry, StackItem};
 use beryl_engine::{
     CardTable, Choice, Decision, DecisionKind, GameTable, Large, Outcome, Profile, Relayout, Seat,
     Small, State, observe, two_player::TwoPlayerSeat as _,
@@ -240,6 +240,9 @@ pub struct Game {
     /// which players receive priority ends when the stack is empty and all players pass in
     /// succession").
     answered: Option<Vec<StackEntry<Large>>>,
+    /// Optional triggered ability "you may" answers already decided at target time: each
+    /// entry's stack index, item, and whether the player accepted (`true`) or declined (`false`).
+    may_answers: Vec<(usize, StackItem<Large>, bool)>,
     seq: u32,
     stops: StopsSetting,
     replay: ReplayFile,
@@ -436,6 +439,7 @@ impl Game {
         Game {
             seen: state.step_position(),
             answered: None,
+            may_answers: Vec::new(),
             stops: replay.stops,
             table,
             board: Boards::new(state),

@@ -123,6 +123,7 @@ impl Objects {
             confirm: prompt.words.confirm.clone(),
             several: prompt.words.counted.clone(),
             decline: prompt.words.decline.clone(),
+            may_target: false,
         })
     }
 }
