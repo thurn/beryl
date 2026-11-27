@@ -94,7 +94,7 @@ fn a_search_lays_out_what_it_finds_and_may_find_nothing() {
     let converter = mine(&play, CURRENCY_CONVERTER, ZoneName::Library)[0];
     let (first, second) = (crypts[0], crypts[1]);
     let open = format!(
-        "pick search: Search for an artifact card with mana value 1 or less.\n\
+        "pick search: Search for a card.\n\
          tray #{converter} #{first} #{second}\n\
          picked 0 of 0..1\n\
          eligible {}\n\
@@ -108,7 +108,7 @@ fn a_search_lays_out_what_it_finds_and_may_find_nothing() {
     assert_eq!(
         play.on(second).unwrap(),
         format!(
-            "pick search: Search for an artifact card with mana value 1 or less.\n\
+            "pick search: Search for a card.\n\
              tray #{converter} #{first} #{second}\n\
              picked 1 of 0..1: #{second}\n\
              eligible {}\n\
@@ -121,7 +121,7 @@ fn a_search_lays_out_what_it_finds_and_may_find_nothing() {
     assert_eq!(
         play.on(converter).unwrap(),
         format!(
-            "pick search: Search for an artifact card with mana value 1 or less.\n\
+            "pick search: Search for a card.\n\
              tray #{converter} #{first} #{second}\n\
              picked 1 of 0..1: #{converter}\n\
              eligible {}\n\
@@ -157,7 +157,7 @@ fn a_search_lays_out_what_it_finds_and_may_find_nothing() {
     assert_eq!(
         one.prompt(),
         format!(
-            "pick search: Search for an artifact card with mana value 1 or less.\n\
+            "pick search: Search for a card.\n\
              tray #{crypt}\n\
              picked 1 of 0..1: #{crypt}\n\
              selected #{crypt}\n\
@@ -189,7 +189,7 @@ fn a_look_takes_a_card_or_nothing_in_one_prompt() {
         [PLAINS, COUNTERSPELL, ISLAND, REPRIEVE].map(|name| library(&play, name));
     let tray = format!("tray #{plains} #{counterspell} #{island} #{reprieve}");
     let open = format!(
-        "pick look: Put a noncreature, nonland card into your hand?\n\
+        "pick look: Put one of them into your hand?\n\
          {tray}\n\
          picked 0 of 0..1\n\
          eligible {}\n\
@@ -203,7 +203,7 @@ fn a_look_takes_a_card_or_nothing_in_one_prompt() {
     assert_eq!(
         play.on(counterspell).unwrap(),
         format!(
-            "pick look: Put a noncreature, nonland card into your hand?\n\
+            "pick look: Put one of them into your hand?\n\
              {tray}\n\
              picked 1 of 0..1: #{counterspell}\n\
              eligible #{reprieve}\n\
@@ -241,7 +241,7 @@ fn a_look_takes_a_card_or_nothing_in_one_prompt() {
     assert_eq!(
         later.prompt(),
         format!(
-            "pick look: Put a noncreature, nonland card into your hand.\n\
+            "pick look: Put one of them into your hand.\n\
              {tray}\n\
              picked 0 of 1\n\
              eligible {}\n\
@@ -297,7 +297,7 @@ fn a_look_at_a_hand_opens_with_its_one_card_picked() {
     assert_eq!(
         play.prompt(),
         format!(
-            "pick look: Exile a nonland card?\n\
+            "pick look: Exile one of them?\n\
              tray{}\n\
              picked 1 of 0..1: #{counterspell}\n\
              selected #{counterspell}\n\

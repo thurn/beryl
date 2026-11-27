@@ -139,7 +139,6 @@ fn decision_difference(left: &Decision<Large>, right: &Decision<Large>) -> &'sta
         candidates,
         prompt,
         about,
-        filter,
     } = left;
     [
         (player != &right.player, "player"),
@@ -148,7 +147,6 @@ fn decision_difference(left: &Decision<Large>, right: &Decision<Large>) -> &'sta
         (candidates != &right.candidates, "candidates"),
         (prompt != &right.prompt, "prompt"),
         (about != &right.about, "about"),
-        (filter != &right.filter, "filter"),
     ]
     .into_iter()
     .find_map(|(differs, field)| differs.then_some(field))

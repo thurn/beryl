@@ -63,7 +63,6 @@ impl<L: Layout> Resolution<'_, L> {
             candidates: Candidates::Options(Default::default()),
             prompt: Prompt::new(Purpose::May),
             about: Bitboard::EMPTY,
-            filter: None,
         });
         debug_assert!(
             game.sink.asking.is_open(),

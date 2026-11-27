@@ -14,7 +14,7 @@ use crate::layout::{Layout, Queue, Small};
 use crate::observation::Observation;
 use crate::reference::Permanent;
 use crate::state::{StackEntry, State};
-use beryl_card::{Castings, FaceIx, FilterIx, ManaColor, ObjectAbility, Prompt, Subtype};
+use beryl_card::{Castings, FaceIx, ManaColor, ObjectAbility, Prompt, Subtype};
 
 // The kinds are vocabulary: a scenario names the kind of question it answers, and a card's
 // scenarios compile against `beryl_card` alone.
@@ -63,19 +63,13 @@ pub struct Decision<L: Layout = Small> {
     /// no slots, cannot hold. What they are is fixed by the prompt's shape and part
     /// ([`beryl_card::prompt`], "The object set").
     pub about: Bitboard<L::Slot>,
-    /// Which filter of the resolving spell or ability the candidates passed, where the
-    /// prompt takes cards a filter describes (a search, a look, a card put from a hand), so
-    /// that the prompt can name them as the card does: "Search for an artifact card with
-    /// mana value 1 or less." `None` where no filter narrower than "a card" chose them.
-    pub filter: Option<FilterIx>,
 }
 
 impl Copy for Decision<Small> {}
 
 /// Every field, but the decider only where it is not the player: a decision its own player
 /// answers hashes as it did before decisions had a decider, so the states the benchmark
-/// corpora pin by their hashes still hash the same. The filter is left out for the same
-/// reason: it names a part of the resolving spell or ability, which the state already holds.
+/// corpora pin by their hashes still hash the same.
 impl<L: Layout> std::hash::Hash for Decision<L> {
     fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
         let Decision {
@@ -85,7 +79,6 @@ impl<L: Layout> std::hash::Hash for Decision<L> {
             candidates,
             prompt,
             about,
-            filter: _,
         } = self;
         player.hash(h);
         if decider != player {
@@ -100,10 +93,9 @@ impl<L: Layout> std::hash::Hash for Decision<L> {
 ///
 /// Why 63 and not 64: a decision is copied with the state and moved on every engine step, so
 /// its size is paid on every step. Its fields outside the candidates (the object set, the
-/// prompt, the player, the decider, the kind and the filter) take 51 bytes. With 64 options of
-/// 4 bytes the candidates are 264 bytes: the 256 of the options, the list's length and the
-/// enum's tag, padded to the 8-byte alignment of their object set. That makes 315 bytes,
-/// padded to 320.
+/// prompt, the player, the decider and the kind) take 49 bytes. With 64 options of 4 bytes the
+/// candidates are 264 bytes: the 256 of the options, the list's length and the enum's tag,
+/// padded to the 8-byte alignment of their object set. That makes 313 bytes, padded to 320.
 /// With 63 the candidates are 256 and the decision 312, as it was before decisions named the
 /// player who answers them.
 pub const OPTIONS: usize = 63;
@@ -127,7 +119,6 @@ impl<L: Layout> Decision<L> {
             candidates: Candidates::Objects(candidates),
             prompt,
             about: Bitboard::EMPTY,
-            filter: None,
         }
     }
 
@@ -145,7 +136,6 @@ impl<L: Layout> Decision<L> {
             candidates: Candidates::Options(list),
             prompt,
             about: Bitboard::EMPTY,
-            filter: None,
         }
     }
 
@@ -169,14 +159,6 @@ impl<L: Layout> Decision<L> {
     #[must_use]
     pub fn about(mut self, about: Bitboard<L::Slot>) -> Decision<L> {
         self.about = about;
-        self
-    }
-
-    /// This decision, its candidates described by the filter at `filter` of the resolving
-    /// spell or ability ([`Decision::filter`]).
-    #[must_use]
-    pub fn described_by(mut self, filter: Option<FilterIx>) -> Decision<L> {
-        self.filter = filter;
         self
     }
 

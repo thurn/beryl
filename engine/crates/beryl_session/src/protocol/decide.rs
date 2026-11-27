@@ -1,6 +1,5 @@
 //! Building the open decision, its refusals and what passing leads to.
 
-use beryl_card::render::render_card_filter;
 use beryl_engine::card::Purpose;
 use beryl_engine::layout::Queue;
 use beryl_engine::state::{StackEntry, TurnStep};
@@ -55,16 +54,11 @@ pub(super) fn decision_view<L: Layout>(
         (Some(StackItem::Spell { .. }), Some(e)) => e.object().and_then(|r| name(t, obs, r.slot)),
         _ => None,
     };
-    // What the asker's filter says its candidates are, for the prompt to name them.
-    let what = d.filter.zip(resolving).and_then(|(ix, e)| {
-        let filter = e.ability_in(t)?.filter_at(ix)?;
-        Some(render_card_filter(filter, &obs.shown().entry_words(e)))
-    });
     DecisionView {
         id,
         kind: d.kind.into(),
         candidates,
-        prompt: Box::new(prompt_view(t, obs, d, asker, what.as_deref())),
+        prompt: Box::new(prompt_view(t, obs, d, asker)),
         resolving: item,
         pass_to: (d.kind == DecisionKind::Priority).then(|| wire_pass_to(pass_to(t, obs, stops))),
         pass_on: if d.kind == DecisionKind::Priority {

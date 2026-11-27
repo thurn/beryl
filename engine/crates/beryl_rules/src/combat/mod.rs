@@ -177,7 +177,6 @@ pub(crate) fn attack_decision<L: Layout>(
         // The creature just chosen is the one being aimed.
         prompt: Prompt::new(Purpose::Attack).part(part),
         about: attacker.map_or(Bitboard::EMPTY, Bitboard::single),
-        filter: None,
     })
 }
 
@@ -498,7 +497,6 @@ pub(crate) fn block_decision<L: Layout>(
             // The creature just chosen is the one being aimed.
             prompt: Prompt::new(Purpose::Block).part(Part::Aim),
             about: Bitboard::single(blocker),
-            filter: None,
         });
     }
     let player = s
@@ -518,7 +516,6 @@ pub(crate) fn block_decision<L: Layout>(
         candidates: Candidates::Options(list),
         prompt: Prompt::new(Purpose::Block),
         about: Bitboard::EMPTY,
-        filter: None,
     })
 }
 

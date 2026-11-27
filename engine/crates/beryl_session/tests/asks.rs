@@ -284,11 +284,8 @@ fn thundertrap_trainer_looks_at_the_top_four_for_a_card_to_take() {
     assert_eq!(
         asks(&[THUNDERTRAP_TRAINER], &[Purpose::Look]),
         [
-            // The card's filter names what it takes.
-            "yesNo pick look whether: \"Put a noncreature, nonland card into your hand?\" 4/1 \
-             >hand you's library about 2",
-            "chooseObject pick look pick: \"Put a noncreature, nonland card into your hand.\" 4/1 \
-             >hand you's library about 2",
+            "yesNo pick look whether: \"Put one of them into your hand?\" 4/1 >hand you's library about 2",
+            "chooseObject pick look pick: \"Put one of them into your hand.\" 4/1 >hand you's library about 2",
         ]
     );
     let look = decisions(&[THUNDERTRAP_TRAINER])
@@ -304,11 +301,10 @@ fn elite_spellbinder_looks_at_the_opponents_hand_for_a_card_to_exile() {
     let asked = asks(&[*SPELLBINDER], &[Purpose::Look]);
     assert!(!asked.is_empty());
     for look in &asked {
-        // A hand is looked at whole: the prompt counts no cards. Arena's words name the
-        // card's filter, "Exile a nonland card?" (`qF4GF-vfc8Y 30:13.0`).
+        // A hand is looked at whole: the prompt counts no cards.
         let rest = look
-            .strip_prefix("yesNo pick look whether: \"Exile a nonland card?\"")
-            .or_else(|| look.strip_prefix("chooseObject pick look pick: \"Exile a nonland card.\""))
+            .strip_prefix("yesNo pick look whether: \"Exile one of them?\"")
+            .or_else(|| look.strip_prefix("chooseObject pick look pick: \"Exile one of them.\""))
             .unwrap_or_else(|| panic!("{look}"));
         let about = rest
             .strip_prefix(" 0/1 >exile opponent's hand about ")
@@ -391,10 +387,8 @@ fn trinket_mage_may_search_for_up_to_one_card() {
             &[Purpose::MaySearch, Purpose::Search, Purpose::Fateseal]
         ),
         [
-            "yesNo yesNo may-search pick: \"Search your library for an artifact card with mana \
-             value 1 or less?\" 0/0",
-            "chooseUpTo pick search pick: \"Search for an artifact card with mana value 1 or \
-             less.\" 0/1 you's library",
+            "yesNo yesNo may-search pick: \"Search your library?\" 0/0",
+            "chooseUpTo pick search pick: \"Search for a card.\" 0/1 you's library",
             // The known-top search scenario first uses Jace to look at that card.
             "yesNo yesNo fateseal pick: \"Top of Library\" 1/0 >bottom >top \
              you's library about 1",
@@ -408,8 +402,8 @@ fn winds_of_abandon_searches_for_a_land_per_creature_exiled() {
         asks(&[WINDS_SINGLE, WINDS_OVERLOAD], &[Purpose::Search]),
         [
             // Each creature's controller searches their own library.
-            "chooseUpTo pick search pick: \"Search for a basic land card.\" 0/1 you's library",
-            "chooseUpTo pick search pick: \"Search for a basic land card.\" 0/2 you's library",
+            "chooseUpTo pick search pick: \"Search for a card.\" 0/1 you's library",
+            "chooseUpTo pick search pick: \"Search for a card.\" 0/2 you's library",
         ]
     );
 }
@@ -608,8 +602,6 @@ fn a_look_that_may_take_nothing_is_titled_as_a_question() {
         .collect();
     assert_eq!(
         titles,
-        BTreeSet::from([
-            "Put an artifact, creature, enchantment, or land card onto the battlefield?".to_owned()
-        ])
+        BTreeSet::from(["Put one of them onto the battlefield?".to_owned()])
     );
 }

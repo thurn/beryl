@@ -125,43 +125,6 @@ impl CardDef {
     }
 }
 
-/// Which of an ability's filters a question asks with: the place of the first filter equal to
-/// it among those [`Ability::filters`] meets. A decision carries it so that whoever shows the
-/// question can say what it takes ("Search for an artifact card with mana value 1 or less.")
-/// in one byte, where the filter itself would not fit.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct FilterIx(pub u8);
-
-impl Ability {
-    /// The place of `filter` among the ability's filters, if the ability has it and it says
-    /// more than "a card" ([`Filter::Any`]).
-    pub fn filter_index(&self, filter: Filter) -> Option<FilterIx> {
-        if filter == Filter::Any {
-            return None;
-        }
-        let (mut at, mut found) = (0u8, None);
-        self.filters(&mut |each| {
-            if found.is_none() && *each == filter {
-                found = Some(FilterIx(at));
-            }
-            at = at.saturating_add(1);
-        });
-        found.filter(|ix| ix.0 < u8::MAX)
-    }
-
-    /// The filter at `ix` among the ability's filters ([`Ability::filter_index`]).
-    pub fn filter_at(&self, ix: FilterIx) -> Option<Filter> {
-        let (mut at, mut found) = (0u8, None);
-        self.filters(&mut |each| {
-            if at == ix.0 && found.is_none() {
-                found = Some(*each);
-            }
-            at = at.saturating_add(1);
-        });
-        found
-    }
-}
-
 impl Ability {
     /// Calls `visit` with every filter of the ability ([`Ability::walk`]).
     pub fn filters(&self, visit: &mut dyn FnMut(&Filter)) {

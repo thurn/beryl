@@ -10,8 +10,7 @@ use crate::protocol::ObjectId;
 use crate::protocol::{mana_text, name, shown, side, slots};
 
 /// The prompt the pick `d` asks belongs to, as the seat `obs` sees for is sent it; `asker`
-/// names the spell or ability whose resolution asks, and `what` says one card its filter
-/// describes where the decision names that filter ([`Decision::filter`]).
+/// names the spell or ability whose resolution asks.
 ///
 /// It says the record and its words. The prompt's state (its marks, its buttons and what is
 /// picked) is not the session's yet ([`ShapeBody::Candidates`]): [`Held`](super::Held) adds
@@ -21,7 +20,6 @@ pub(crate) fn prompt_view<L: Layout>(
     obs: Observation<'_, L>,
     d: &Decision<L>,
     asker: Option<&str>,
-    what: Option<&str>,
 ) -> PromptView {
     // The card the question is about, and the first of the cards the prompt shows.
     let about = d.about.min(|slot| slot);
@@ -34,7 +32,6 @@ pub(crate) fn prompt_view<L: Layout>(
         cost: cost.as_deref(),
         source: asker,
         name: about.and_then(|slot| name(t, obs, slot)),
-        what,
         from: about.map(|slot| obs.object(slot).zone()),
     };
     // A look that may take nothing is its sentence as a question, whether the run opens by

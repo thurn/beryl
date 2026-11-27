@@ -45,17 +45,14 @@ pub fn search_library<L: Layout>(
 ) -> Result<Bitboard<L::Slot>, Stop> {
     let prompt = Prompt::new(Purpose::Search).most(n);
     let min = if filter == Filter::Any { n } else { 0 };
-    // The prompt names what the search finds, as the card says it.
-    resolution.described_by(filter, |resolution| {
-        if game.table.can(Capability::CastWhileSearching) && player == owner && n != 0 {
-            return search_with_casts(game, resolution, player, filter, min, n, prompt);
-        }
-        let library = game.state.zone(ZoneKey::Of(owner, Zone::Library));
-        zones::look_at(game, player, library);
-        let words = resolution.words(game);
-        let found = filter.select(game.state, game.table, library, player, &words);
-        choices::pick_up_to(game, resolution, player, found, min, n, prompt)
-    })
+    if game.table.can(Capability::CastWhileSearching) && player == owner && n != 0 {
+        return search_with_casts(game, resolution, player, filter, min, n, prompt);
+    }
+    let library = game.state.zone(ZoneKey::Of(owner, Zone::Library));
+    zones::look_at(game, player, library);
+    let words = resolution.words(game);
+    let found = filter.select(game.state, game.table, library, player, &words);
+    choices::pick_up_to(game, resolution, player, found, min, n, prompt)
 }
 
 /// A card in the player's own library can permit a cast before any card has been found.

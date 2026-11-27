@@ -77,7 +77,6 @@ use beryl_kernel::chosen::ChosenValue;
 use crate::bitboard::Bitboard;
 use crate::card::{Flow, Part, Players, Prompt, Purpose, Shape, Stop};
 use crate::decision::{Candidates, Decision, DecisionKind, OPTIONS, Opt};
-use crate::filter::Filter;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
@@ -467,9 +466,6 @@ pub(crate) fn may_instruction<L: Layout>(
     player: Players,
     effect: &'static Effect,
 ) -> Flow {
-    // A search's question names what it finds ("Search your library for an artifact card
-    // with mana value 1 or less?").
-    let mut described = Filter::Any;
     let (prompt, about) = match *effect {
         Effect::Exile(cards) | Effect::ExileLinked(cards) => {
             let cards = run.elsewhere_than(cards, Zone::Exile);
@@ -478,10 +474,7 @@ pub(crate) fn may_instruction<L: Layout>(
             }
             (MAY_EXILE, cards)
         }
-        Effect::Search { filter, .. } => {
-            described = filter;
-            (MAY_SEARCH, Bitboard::EMPTY)
-        }
+        Effect::Search { .. } => (MAY_SEARCH, Bitboard::EMPTY),
         Effect::Reveal(cards) => {
             let cards = run.scene().objects(cards);
             if cards.is_empty() {
@@ -572,9 +565,7 @@ pub(crate) fn may_instruction<L: Layout>(
     let agreed = match run.one(player) {
         Some(player) => {
             let (game, resolution) = run.resolving();
-            resolution.described_by(described, |resolution| {
-                yes_no(game, resolution, player, prompt, about)
-            })?
+            yes_no(game, resolution, player, prompt, about)?
         }
         None => false,
     };
@@ -616,32 +607,9 @@ pub(crate) fn choose_instruction<L: Layout>(
     let Some(player) = run.one(player) else {
         return Ok(Outcome::NOTHING);
     };
-    // Cards a filter chooses in a zone are named by it ("Put an artifact, creature,
-    // enchantment, or land card onto the battlefield?").
-    let described = match among {
-        Objects::InZoneOf { filter, .. } => filter,
-        Objects::This
-        | Objects::Target(_)
-        | Objects::AttachedTo
-        | Objects::Those
-        | Objects::TriggeredOn
-        | Objects::TriggeredOnIn(_)
-        | Objects::ExiledWithThis
-        | Objects::LibraryTop { .. }
-        | Objects::ExceptThose(_)
-        | Objects::PutOntoBattlefieldWithThis
-        | Objects::Carried
-        | Objects::All { .. }
-        | Objects::CardsIn { .. }
-        | Objects::Everywhere(_)
-        | Objects::Paid(_)
-        | Objects::Other(_) => Filter::Any,
-    };
     if hidden {
         let (game, resolution) = run.resolving();
-        let chosen = resolution.described_by(described, |resolution| {
-            hidden_pick(game, resolution, player, candidates, prompt)
-        })?;
+        let chosen = hidden_pick(game, resolution, player, candidates, prompt)?;
         return Ok(chosen.map_or(Outcome::NOTHING, |slot| {
             Outcome::acted_on(Bitboard::single(slot))
         }));
@@ -650,13 +618,11 @@ pub(crate) fn choose_instruction<L: Layout>(
         return Ok(Outcome::NOTHING);
     }
     let (game, resolution) = run.resolving();
-    let chosen = resolution.described_by(described, |resolution| {
-        if optional {
-            may_pick(game, resolution, player, candidates, prompt)
-        } else {
-            pick(game, resolution, player, candidates, prompt).map(Some)
-        }
-    })?;
+    let chosen = if optional {
+        may_pick(game, resolution, player, candidates, prompt)?
+    } else {
+        Some(pick(game, resolution, player, candidates, prompt)?)
+    };
     Ok(chosen.map_or(Outcome::NOTHING, |slot| {
         Outcome::acted_on(Bitboard::single(slot))
     }))

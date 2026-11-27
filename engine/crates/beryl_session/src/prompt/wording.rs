@@ -20,10 +20,8 @@
 //!   arranges by "Done", a "may" by "Take Action" or "Decline"; what a cast asks is taken back
 //!   by "Cancel" ([`cancel_word`]).
 //! - Arena words many prompts from the text of the card that asks ("Target a creature.",
-//!   "Search for a basic land card."). The record carries no such text. Where the decision
-//!   names the filter its candidates passed, a look or a search says it (`{what}`);
-//!   otherwise the entry says what Arena says of any card ("Search for a card.") or is
-//!   composed from it.
+//!   "Search for a basic land card."). The record carries no such text, so those entries say
+//!   what Arena says of any card ("Search for a card.") or are composed from it.
 //!
 //! An entry marked *composed* is not in the recordings: it is put together from the nearest
 //! one that is, and `data/ui-conventions.json` lists it under "Not seen in Arena"
@@ -38,8 +36,6 @@
 //! - `{cost}`, the record's mana cost as Oracle text writes it;
 //! - `{source}`, the name of the spell or ability that asks;
 //! - `{name}`, the name of the card asked about;
-//! - `{what}`, one card the filter of the spell or ability that asks describes, with its
-//!   article ("an artifact card with mana value 1 or less"), where the decision names one;
 //! - `{from}`, where the card asked about lies when not on the battlefield (" from your
 //!   graveyard"), or nothing;
 //! - `{picked}` and `{of}`, how many are picked and how many the prompt takes, and `{s}`, the
@@ -172,40 +168,6 @@ const fn of_them(to: Place, asks: bool) -> &'static str {
     }
 }
 
-/// What a look at cards asks when the decision names the filter its one card passes, as
-/// [`of_them`] does with that card in place of "one of them": Arena's "Put an artifact,
-/// creature, enchantment, or land card onto the battlefield?" (`sybcO8S7x6A 26:33.5`,
-/// `nBj2ikeYCtk 17:02.5`) and "Exile a nonland card?" (`qF4GF-vfc8Y 30:13.0`). The others
-/// are composed on them. None where the look sends its cards nowhere.
-const fn of_what(to: Place, asks: bool) -> Option<&'static str> {
-    Some(match (to, asks) {
-        (Place::Hand, false) => "Put {what} into your hand.",
-        (Place::Hand, true) => "Put {what} into your hand?",
-        (Place::Exile, false) => "Exile {what}.",
-        (Place::Exile, true) => "Exile {what}?",
-        (Place::Top | Place::OnTop | Place::Bottom, false) => "Put {what} into your library.",
-        (Place::Top | Place::OnTop | Place::Bottom, true) => "Put {what} into your library?",
-        (Place::Graveyard, false) => "Put {what} into your graveyard.",
-        (Place::Graveyard, true) => "Put {what} into your graveyard?",
-        (Place::Battlefield, false) => "Put {what} onto the battlefield.",
-        (Place::Battlefield, true) => "Put {what} onto the battlefield?",
-        (Place::None, _) => return None,
-    })
-}
-
-/// A prompt that picks, titled `named` where the decision names what it takes and `plain`
-/// where it does not.
-const fn picks_named(named: Option<&'static str>, plain: &'static str) -> Wording {
-    match named {
-        Some(title) => Wording {
-            title,
-            unnamed: plain,
-            ..picks("")
-        },
-        None => picks(plain),
-    }
-}
-
 /// The words of the prompt `prompt` belongs to, whose cards lie in `zone`.
 #[allow(clippy::too_many_lines)]
 pub(crate) const fn wording(prompt: &Prompt, zone: Option<Zone>) -> Wording {
@@ -285,23 +247,18 @@ pub(crate) const fn wording(prompt: &Prompt, zone: Option<Zone>) -> Wording {
             ..picks("Choose an effect to apply.")
         },
         // Taking none is asked first (Part::Whether) and folded into the look, whose Decline
-        // then stands beside Submit (`IHPV6yRaFlk 28:19.5`, `qF4GF-vfc8Y 30:13.0`). A look
-        // that takes one card the filter describes names it.
-        Purpose::Look => {
-            let asks = matches!(part, Part::Whether);
-            let named = if most <= 1 { of_what(to, asks) } else { None };
-            Wording {
-                decline: DECLINE,
-                ..picks_named(named, of_them(to, asks))
-            }
-        }
+        // then stands beside Submit (`IHPV6yRaFlk 28:19.5`, `qF4GF-vfc8Y 30:13.0`).
+        Purpose::Look => Wording {
+            decline: DECLINE,
+            ..picks(of_them(to, matches!(part, Part::Whether)))
+        },
         // "Search for a card." (`0VsYGs88NXA 26:43.0`, `TbrYIs2juCw 33:40.5`) is Arena's for
         // a search that finds any card; it names what a narrower one finds ("Search for an
         // artifact card with mana value 1 or less.", `SswBO8aOOgc 42:37.0`,
         // `pE4XSNi-nZc 34:00.5`).
         Purpose::Search => Wording {
             decline: DECLINE,
-            ..picks_named(Some("Search for {what}."), "Search for a card.")
+            ..picks("Search for a card.")
         },
         // "Untap up to two lands." (`gIhJjyoJ0_M 20:07.0`, `iRr-GeSF0lI 25:17.5`), "Untap up
         // to six lands." (`yvNZVakbnrQ 21:53.5`). The purpose's one asker untaps lands.
@@ -355,13 +312,9 @@ pub(crate) const fn wording(prompt: &Prompt, zone: Option<Zone>) -> Wording {
             unnamed: "Take Action?",
             ..may("")
         },
-        // "Search your library for a basic land card?" (`MnhyzykajXw 28:13.5`,
-        // `I3Te0m1bBFw 19:13.0`); without what the card finds, composed.
-        Purpose::MaySearch => Wording {
-            title: "Search your library for {what}?",
-            unnamed: "Search your library?",
-            ..may("")
-        },
+        // Composed from "Search your library for a basic land card?" (`MnhyzykajXw 28:13.5`,
+        // `I3Te0m1bBFw 19:13.0`), less what the card finds.
+        Purpose::MaySearch => may("Search your library?"),
         // "Exile that card from your graveyard?" (`3sEoP_s4DQE 17:44.0`,
         // `5UHzpVvUkfI 25:00.5`); the other places are composed on it.
         Purpose::Move => may(match to {
@@ -695,8 +648,6 @@ pub(crate) struct Holes<'a> {
     pub cost: Option<&'a str>,
     pub source: Option<&'a str>,
     pub name: Option<&'a str>,
-    /// One card the filter of the asking spell or ability describes, with its article.
-    pub what: Option<&'a str>,
     /// The zone the card asked about lies in.
     pub from: Option<Zone>,
 }
@@ -727,7 +678,6 @@ impl Holes<'_> {
                 "cost" => out.push_str(self.cost?),
                 "source" => out.push_str(self.source?),
                 "name" => out.push_str(self.name?),
-                "what" => out.push_str(self.what?),
                 "from" => {
                     let zone = match self.from {
                         Some(Zone::Graveyard) => " from your graveyard",
