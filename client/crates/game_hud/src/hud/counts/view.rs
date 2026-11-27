@@ -96,6 +96,11 @@ fn entries(pool: ManaPool) -> impl Iterator<Item = (u32, char)> {
 pub(super) fn life_change(side: Side, by: i32) -> Element {
     let mut element = text(&format!("{} {by:+}", whose(side)))
         .style(type_style::TITLE)
+        // A float is a top-level element, which gets a panel unless its fill and border are
+        // clear, as the life total's are. Without this the pop-up counts as painted over the
+        // phase toggles it overlaps when the number is wide.
+        .background([0; 4])
+        .border(([0; 4], 0.0))
         .passes(true);
     element.text = Some(format!("{by:+}"));
     element
