@@ -166,12 +166,44 @@ def test_file_and_done(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # Filed once only.
     assert cli.main(["bugs", "file"]) == 0 and len(calls) == 1
 
-    assert cli.main(["bugs", "done", "by-x1", "--commit", "deadbeef"]) == 0
+    assert (
+        cli.main(
+            [
+                "bugs",
+                "done",
+                "by-x1",
+                "--commit",
+                "deadbeef",
+                "--evidence",
+                "before/after at decision 40",
+            ]
+        )
+        == 0
+    )
     moved = bugs.load(tmp_path / "done" / folder.name)
     assert moved is not None and moved.status == "done"
     assert moved.fields["fix"] == "deadbeef"
+    assert moved.fields["evidence"] == "before/after at decision 40"
     assert bugs.reports(tmp_path) == []
     assert len(bugs.reports(tmp_path, done=True)) == 1
+
+
+def test_done_requires_commit_and_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("BERYL_BUGS", str(tmp_path))
+    folder = report(tmp_path)
+    for argv in (
+        ["bugs", "done", folder.name],
+        ["bugs", "done", folder.name, "--commit", "deadbeef"],
+        ["bugs", "done", folder.name, "--evidence", "before/after"],
+        ["bugs", "done", folder.name, "--commit", "deadbeef", "--evidence", "   "],
+    ):
+        assert cli.main(argv) == 1
+        assert "requires --commit and --evidence" in capsys.readouterr().err
+        saved = bugs.load(folder)
+        assert saved is not None and saved.status == "open"
+        assert not (tmp_path / "done" / folder.name).exists()
 
 
 def test_client_reports_from_a_run_share_one_epic(
@@ -192,7 +224,20 @@ def test_client_reports_from_a_run_share_one_epic(
         assert ignite.tickets[-1]["parent"] == epic["id"]
 
         # Later reports must still find this epic after the first report is archived.
-        assert cli.main(["bugs", "done", folder.name]) == 0
+        assert (
+            cli.main(
+                [
+                    "bugs",
+                    "done",
+                    folder.name,
+                    "--commit",
+                    "deadbeef",
+                    "--evidence",
+                    "verified",
+                ]
+            )
+            == 0
+        )
 
     assert len(ignite.issues) == 2
     assert [ticket["parent"] for ticket in ignite.tickets] == ["E1", "E1", "E2"]
@@ -337,7 +382,12 @@ def test_import_resets_sender_status_and_preserves_evidence(
     saved = bugs.load(folder)
     assert saved is not None and saved.status == "open" and not saved.bead
     assert (folder / "replay.json").read_text() == "{}"
-    assert cli.main(["bugs", "done", key]) == 0
+    assert (
+        cli.main(
+            ["bugs", "done", key, "--commit", "deadbeef", "--evidence", "verified"]
+        )
+        == 0
+    )
     assert cli.main(["bugs", "import", str(bundle)]) == 0
     assert not folder.exists()
 

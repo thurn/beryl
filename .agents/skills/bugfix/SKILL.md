@@ -63,6 +63,10 @@ each report.
 - **Write acceptance before release.** For each original report, state the
   visible or behavioral outcome, how to reach the original failure, what
   evidence shows it passed, and a neighboring case for shared behavior.
+  If a report repeats an earlier one (the player says "still", "again", or
+  "previous", or it matches an archived report), name the earlier ticket and
+  commits, and state why the earlier fix missed, before writing its
+  acceptance; include the earlier report's moment in the acceptance too.
   Require before/after verification and a regression guard that exercises the
   failure. Describe the observable result if the worker still needs to choose
   a command or write a fixture. For UI, capture the rendered frame or
@@ -72,9 +76,12 @@ each report.
   Capture the reference the report calls for and compare the affected behavior.
   Follow [UI Conventions](../../../docs/ui-conventions.md) and the root
   `AGENTS.md` for Arena, Beryl's visual style, and UI regression coverage.
-- **Give the epic an acceptance criterion.** It should be possible to audit the
-  final result by following each original report to its recorded evidence and
-  landing. Link each lead to [the worker handoff](#worker-fixing-one-report).
+- **Give the epic an acceptance criterion.** Require the verify session to
+  re-render every closed report's moment on the staging tip and compare it
+  with the report's screenshot and the player's words; checking that commits
+  are ancestors is not enough. It should be possible to audit the final result
+  by following each original report to its recorded evidence and landing. Link
+  each lead to [the worker handoff](#worker-fixing-one-report).
 
 ## Release the prepared work
 
@@ -97,10 +104,13 @@ each report.
 ## Worker: fixing one report
 
 Read the lead's acceptance and each linked report before editing. Reproduce
-each case on the current tree, or record why the capture no longer replays and
-reconstruct the failure in a deterministic case. If a specific landed commit
-already resolves a report, verify the original expectation on a build
-containing it and record the evidence and commit.
+each case on the report's own capture first, or record why the capture no longer
+replays and reconstruct the failure in a deterministic case. The regression
+guard must replay that capture (a story, fixture, or spec moment made from it);
+hand-built views may be added for coverage, but they do not count as the
+report's guard. If a specific landed commit already resolves a report, verify
+the original expectation on a build containing it and record the evidence and
+commit.
 
 - For the client use [client](../client/SKILL.md), including native rendered captures for
   visual claims. A live capture may require replaying from before the reported
@@ -118,11 +128,14 @@ containing it and record the evidence and commit.
   the reported decision.
 
 Record the reproduction, regression check, and observed pass for each
-report. Land the fix through Ignite. Close each verified follower with
-`ignite ticket close <id> --reason "<evidence and landing SHA>"` and archive
-verified local reports with `just bugs done <ticket> --commit <sha>`. If a
+report. Land the fix through Ignite. Close each verified report and follower
+with `ignite ticket close <id> --reason "<reason>"`, where the close reason
+names the landing SHA, the before/after evidence at the report's moment, seat,
+layout, and scale, and the regression guard. Archive verified local reports
+with `just bugs done <ticket> --commit <sha> --evidence "<evidence>"`. If a
 follower needs independent work, record what the lead covered, update the
 remaining acceptance, and give it a tier and estimate before landing. The
-follower's dependency clears when the lead lands. For a case with inconclusive
-evidence, record the gap and the next reproduction step. Keep the report filed
-until its own criteria are verified.
+follower's dependency clears when the lead lands. An outcome with only
+instruments, a diagnosis, or no reproduction leaves the report open with the
+gap and next reproduction step recorded. Keep the report filed until its own
+criteria are verified.

@@ -598,6 +598,11 @@ def done_cmd(args: argparse.Namespace) -> int:
 
 
 def finish_reports(args: argparse.Namespace, root: Path) -> int:
+    commit = (args.commit or "").strip()
+    evidence = " ".join((args.evidence or "").split())
+    if not commit or not evidence:
+        print("bugs: done requires --commit and --evidence", file=sys.stderr)
+        return 1
     code = 0
     for key in args.reports:
         r = find(root, key)
@@ -605,10 +610,13 @@ def finish_reports(args: argparse.Namespace, root: Path) -> int:
             print(f"bugs: no report {key}", file=sys.stderr)
             code = 1
             continue
-        changes = {"status": "done", "fixed": time.strftime("%Y-%m-%d")}
-        if args.commit:
-            changes["fix"] = args.commit
-        update(r, **changes)
+        update(
+            r,
+            status="done",
+            fixed=time.strftime("%Y-%m-%d"),
+            fix=commit,
+            evidence=evidence,
+        )
         if r.folder.parent.name != DONE:
             (root / DONE).mkdir(parents=True, exist_ok=True)
             r.folder.rename(root / DONE / r.folder.name)
@@ -644,5 +652,9 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     v.set_defaults(func=import_cmd)
     v = verbs.add_parser("done", help="mark reports fixed and move them to done/")
     v.add_argument("reports", nargs="+", help="report ids or their tickets")
-    v.add_argument("--commit", help="the fixing commit")
+    v.add_argument("--commit", help="the fixing commit (required)")
+    v.add_argument(
+        "--evidence",
+        help="before/after evidence at the report's moment and guard (required)",
+    )
     v.set_defaults(func=done_cmd)
