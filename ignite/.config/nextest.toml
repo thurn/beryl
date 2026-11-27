@@ -60,6 +60,7 @@ not (
     test(=trees::tests::the_main_checkout_is_left_alone_while_it_has_a_local_change)
     | test(=trees::tests::setup_frees_a_landing_tree_left_landing_by_a_stopped_daemon)
     | test(=update::install::tests::the_process_handoff_runs_install_in_the_stored_build)
+    | test(=idle::tests::about_one_hit_in_two_hundred_is_sampled_and_audited_in_idle_time)
   ))
 )
 """

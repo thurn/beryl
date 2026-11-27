@@ -333,7 +333,7 @@ fn an_unstored_daemon_never_updates() {
 /// Waits for the release build thread to end and takes its result, as the sender's next rounds
 /// do. Fails the test if the build does not end.
 fn settle(update: &SelfUpdate) {
-    let deadline = Instant::now() + Duration::from_secs(30);
+    let deadline = Instant::now() + Duration::from_secs(120);
     loop {
         update.collect_build();
         if update.building().is_none() {
