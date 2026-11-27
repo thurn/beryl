@@ -1,24 +1,21 @@
-//! Whether a player may begin to cast a spell (CR 601.3) or activate an ability (CR 602.5), and
-//! so which casts and activations a priority decision offers.
+//! Whether a player may begin to cast a spell (CR 601.3), and so which casts a priority
+//! decision offers. `activation` does the same for activated abilities (CR 602.5), and
+//! `refusal` says why a card the player clicked may not be cast.
 //!
-//! Implements: CR 305.9, CR 606.3, CR 606.6, CR 702.37a
+//! Implements: CR 305.9, CR 702.37a
 
 use std::cell::{Cell, OnceCell};
 
 use crate::bitboard::Bitboard;
-use crate::card::{
-    Ability, AbilityKind, CastingOption, Castings, CostAction, CostPart, Face, FaceIx, Keywords,
-    ManaCost, ObjectAbility, Timing, Types,
-};
+use crate::card::{CastingOption, Castings, Face, FaceIx, ManaCost, Types};
 use crate::continuous::rule_change;
 use crate::decision::{Candidates, OPTIONS, Opt, Refusal};
 use crate::engine::collapse;
 use crate::fixed::Full;
-use crate::game::life;
-use crate::ids::{Seat, SlotId};
+use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small};
 use crate::mana::{self, Funds};
-use crate::state::{RuleKind, State, Tracker, Zone, ZoneKey};
+use crate::state::{RuleKind, State};
 use crate::table::{Capability, GameTable};
 
 use super::convoke;
@@ -27,15 +24,21 @@ use super::delve;
 use super::mana_payment;
 use super::parts;
 use super::targets::{Itself, targetable};
-use super::timing::{activated, instant_speed, sorcery_timing};
+use super::timing::{instant_speed, sorcery_timing};
 
+mod activation;
 mod copies;
 mod others;
 mod preparation;
+mod refusal;
 pub(super) mod special;
 mod ways;
 
-use others::{granted, has_others};
+use activation::activation_options;
+pub use activation::pointless;
+pub(super) use activation::spent_by_cost;
+use refusal::keep_furthest;
+pub(crate) use refusal::refusal;
 pub use ways::castable_from_graveyard;
 use ways::{Ways, cast_sources};
 
@@ -269,121 +272,6 @@ fn refused<L: Layout, const TARGETS: bool>(
     .then_some(Refusal::Target)
 }
 
-/// Keeps in `most` whichever of it and `r` got further through [`refused`]'s checks, which
-/// run in the order of `progress`.
-fn keep_furthest<L: Layout>(most: &mut Option<Refusal<L>>, r: Refusal<L>) {
-    let progress = |r| match r {
-        Refusal::Timing { .. }
-        | Refusal::LandPlayed
-        | Refusal::Tapped
-        | Refusal::SummoningSickness
-        | Refusal::CantAttack
-        | Refusal::DefenderNeeds(_) => 0,
-        Refusal::Mana => 1,
-        Refusal::Cost => 2,
-        Refusal::Target => 3,
-    };
-    if most.is_none_or(|m| progress(r) > progress(m)) {
-        *most = Some(r);
-    }
-}
-
-/// Why `player` may not cast the card in `slot` at priority now: the refusal of the way of
-/// casting it, by face and casting options, that passes the most checks, or `land`, why they
-/// may not play it as a land, if that passes as many. None if one way is legal, if they may
-/// activate one of its abilities where it lies (cycling from a hand), or if the card has no
-/// face to cast and `land` is none.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "reads each face the card may be cast as"
-)]
-pub(crate) fn refusal<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    player: Seat,
-    slot: L::Slot,
-    land: Option<Refusal<L>>,
-) -> Result<Option<Refusal<L>>, Full> {
-    let now = Situation::of(player);
-    if activates_now(s, t, &now, slot) {
-        return Ok(None);
-    }
-    let Some(def) = s.card_def(t, slot) else {
-        return if s.prepare_spells_for(player).contains(slot) {
-            preparation::refusal(s, t, &now, slot)
-        } else {
-            Ok(land)
-        };
-    };
-    let ways = Ways::of(s, t, player, slot, From::Priority);
-    let mut most = land;
-    for f in def.face_ixs() {
-        let face = def.face(f);
-        if !face.playable() || face.types.intersects(Types::LAND) {
-            continue;
-        }
-        let ways = if ways.on_adventure && f == FaceIx::BACK {
-            ways.back(s, player, slot)
-        } else {
-            ways
-        };
-        for costs in ways.option_sets(face) {
-            // A cast for escape is under no permission's terms.
-            let increase = if costs.escapes() { 0 } else { ways.increase };
-            let Some(r) = refused(s, t, &now, slot, f, costs, From::Priority, increase) else {
-                return Ok(None);
-            };
-            keep_furthest(&mut most, r);
-        }
-    }
-    for (face, costs) in special::casts(s, t, player, slot, def, ways) {
-        let Some(r) = refused(s, t, &now, slot, face, costs, From::Priority, ways.increase) else {
-            return Ok(None);
-        };
-        keep_furthest(&mut most, r);
-    }
-    // Only sorcery speed, where a face could be cast at instant speed but for the limit.
-    if most == Some(Refusal::Timing { by: None }) {
-        let instant = (def.face_ixs().map(|f| def.face(f)))
-            .find(|face| face.playable() && instant_speed(s, t, face, player));
-        if let Some(face) = instant {
-            let limit = RuleKind::CastOnlyAsSorcery;
-            most = Some(Refusal::Timing {
-                by: rule_change::maker(s, t, limit, player, face)
-                    .and_then(|slot| s.permanent_at(slot)),
-            });
-        }
-    }
-    now.complete()?;
-    Ok(most)
-}
-
-/// Whether the priority holder may activate one of the abilities of the object in `slot` now,
-/// as [`activation_options`] would offer it: a card refused every way of being cast or played
-/// may still be clicked for this. see CR 117.1b: "A player may activate an activated ability
-/// any time they have priority."
-fn activates_now<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    now: &Situation<L>,
-    slot: L::Slot,
-) -> bool {
-    let facts = s.definition(slot).facts(t);
-    if !facts.activates() {
-        return false;
-    }
-    let prohibited = rule_change::prohibitions(s, t, now.player);
-    if !prohibited.is_empty()
-        && rule_change::unprohibited(s, t, prohibited, now.player, Bitboard::single(slot))
-            .is_empty()
-    {
-        return false;
-    }
-    let lost = !s.has_every_ability(slot);
-    (facts.activated().map(ObjectAbility::Own))
-        .any(|ability| (!lost || s.has(slot, ability)) && activatable(s, t, now, slot, ability))
-}
-
 /// Appends the spells `player` can cast now, by card, face and casting options.
 #[allow(
     clippy::disallowed_methods,
@@ -490,230 +378,6 @@ fn escape_options<L: Layout, const TARGETS: bool>(
     Ok(())
 }
 
-/// The permanents that pay for an ability with themselves, and so cannot also tap for its
-/// mana.
-pub(super) fn spent_by_cost<S: SlotId>(slot: S, a: &Ability) -> Bitboard<S> {
-    let mut b = Bitboard::EMPTY;
-    if a.cost().does(CostAction::Tap) || a.cost().does(CostAction::Sacrifice) {
-        b.insert(slot);
-    }
-    b
-}
-
-/// A level bar can only be activated from the preceding level (see CR 717.2a).
-#[cold]
-fn at_previous_level<L: Layout>(s: &State<L>, slot: L::Slot, a: &Ability) -> bool {
-    if let beryl_card::Designation::LevelUp(level) = a.designation() {
-        s.class_level(slot) == level - 1
-    } else {
-        true
-    }
-}
-
-/// Whether `player` may activate `ability` now, after selecting sources they can activate.
-///
-/// [CR 602.5](https://yawgatog.com/resources/magic-rules/#R6025): "A player can't begin to
-/// activate an ability that's prohibited from being activated."
-#[allow(
-    clippy::disallowed_methods,
-    reason = "reads an activated ability by its place on the face `activated` names"
-)]
-fn activatable<L: Layout, const TARGETS: bool>(
-    s: &State<L>,
-    t: &GameTable,
-    now: &Situation<L, TARGETS>,
-    slot: L::Slot,
-    ability: ObjectAbility,
-) -> bool {
-    let player = now.player;
-    let o = s.object(slot);
-    let Some((source, index)) = activated(s, t, slot, ability) else {
-        return false;
-    };
-    let a = source.face(t).ability(index);
-    if a.kind() != AbilityKind::Activated {
-        return false;
-    }
-    // See CR 113.6b: "An ability that states which zones it functions in functions only from
-    // those zones."
-    if !a.zones().contains(o.zone()) {
-        return false;
-    }
-    if a.cost().does(CostAction::Tap) {
-        // CR 118.3: "a permanent that's already tapped can't be tapped to pay a cost". CR
-        // 602.5a: "A creature's activated ability with the tap symbol ... in its activation
-        // cost can't be activated unless the creature has been under its controller's control
-        // since the start of their most recent turn."
-        if o.is_tapped()
-            || (s.derived(slot).types.intersects(Types::CREATURE)
-                && o.is_summoning_sick()
-                && !s.derived(slot).keywords.contains(Keywords::HASTE))
-        {
-            return false;
-        }
-    }
-    // CR 118.3: "A player can't pay a cost without having the necessary resources to pay it
-    // fully."
-    if a.cost().chooses() && !ability_payable(s, t, player, slot, a.cost().parts()) {
-        return false;
-    }
-    if a.cost().pays_life_or_chooses() && !life_payable(s, t, player, a.cost().parts()) {
-        return false;
-    }
-    if matches!(a.cost().removes(), Some(kind) if s.counters_of(slot, kind) == 0) {
-        return false;
-    }
-    let timely = if let Some(loyalty) = a.cost().loyalty_change() {
-        // CR 606.6: "A loyalty ability with a negative loyalty cost ... can't be activated
-        // unless the permanent has at least that many loyalty counters on it."
-        let payable = i16::from(o.counters().loyalty) + i16::from(loyalty) >= 0;
-        // CR 606.3: "A player may activate a loyalty ability of a permanent they control any
-        // time they have priority and the stack is empty during a main phase of their turn,
-        // but only if no player has previously activated a loyalty ability of that permanent
-        // that turn." The timing first, so that most decisions read no tracker. A rule
-        // change may put "any time they could cast an instant" where the rule has the main
-        // phase.
-        payable
-            && (sorcery_timing(s, player) || rule_change::loyalty_as_instant(s, t, slot))
-            && !s.tracked(Tracker::LoyaltyActivated, slot)
-    } else {
-        // CR 602.5d: "Activated abilities that read 'Activate only as a sorcery' mean the
-        // player must follow the timing rules for casting a sorcery spell".
-        match a.timing() {
-            Timing::Sorcery => {
-                sorcery_timing(s, player)
-                    && (!t.can(Capability::DesignatedAbilities) || at_previous_level(s, slot, a))
-            }
-            // CR 602.5: "A player can't begin to activate an ability that's prohibited
-            // from being activated." The restriction follows the player taking the turn.
-            Timing::YourTurn => s.turn().active() == player,
-            Timing::Instant | Timing::AsInstant => true,
-        }
-    };
-    if !timely {
-        return false;
-    }
-    // The mana before the targets, which read the battlefield: both checks are pure.
-    let mut cost = a.cost().mana.with_x(0);
-    if rule_change::spends_as_any_color(s, t, player, slot) && o.on_battlefield() {
-        cost = cost.as_any_color();
-    }
-    let spent = spent_by_cost(slot, a);
-    let substitute = if a.cost().chooses() {
-        parts::substitute(a.cost().parts())
-    } else {
-        None
-    };
-    let paid = now.funds(s, t).is_some_and(|funds| match substitute {
-        Some((_, action, chosen, most)) => {
-            let objects = parts::candidates(s, t, player, slot, action, chosen);
-            let nothing = mana::Paying::NOTHING;
-            parts::payable_with_substitutes(s, t, funds, cost, most, objects, spent, nothing)
-        }
-        None => funds.pays_for(s, t, cost, spent, mana::Paying::NOTHING),
-    });
-    paid && (!TARGETS || targetable(s, t, Some(a), player, Itself::default(), 0, Some(slot)))
-}
-
-/// Whether activating `ability` of the object in `slot` now would do nothing, as its effect
-/// says ([`Ability::needs`]): its cost would be paid and its effect find nothing to act on.
-/// The activation is still legal (CR 602.2);
-/// [`Profile::hides_pointless`](crate::profile::Profile) says who isn't offered it.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "reads an activated ability by its place on the face `activated` names"
-)]
-pub fn pointless<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    slot: L::Slot,
-    ability: ObjectAbility,
-) -> bool {
-    let Some((source, index)) = activated(s, t, slot, ability) else {
-        return false;
-    };
-    (source.face(t).ability(index).needs())
-        .is_some_and(|objects| crate::interpret::names_nothing(s, t, slot, objects))
-}
-
-/// Appends the abilities `player` can activate now. see CR 117.1b: "A player may activate an
-/// activated ability any time they have priority."
-#[expect(
-    clippy::inline_always,
-    reason = "keeps the activation scan in the priority decision's hot path"
-)]
-#[inline(always)]
-fn activation_options<L: Layout, const TARGETS: bool>(
-    s: &State<L>,
-    t: &GameTable,
-    now: &Situation<L, TARGETS>,
-    out: &mut L::Queue<Opt<L>, OPTIONS>,
-) -> Result<(), Full> {
-    let player = now.player;
-    // Activations that would do nothing, left out for the player the profile hides them from,
-    // where a card of the game has one.
-    let prunes = TARGETS && s.profile().hides_pointless[player.index()] && t.needy();
-    // CR 602.2: "Only an object's controller (or its owner, if it doesn't have a controller)
-    // can activate its activated ability unless the object specifically says otherwise."
-    let mut objects = s
-        .in_zone(Zone::Battlefield)
-        .filter(|slot| s.controller(slot) == player)
-        | s.zone(ZoneKey::Of(player, Zone::Hand));
-    if t.can(Capability::ActivatesFromGraveyardOrExile) {
-        objects |= graveyard_and_exile(s, player);
-    }
-    // Most objects have no activated ability; leaving them out before collapsing saves
-    // comparing them. Whether one has is part of what collapsing compares (its card, face
-    // and granted abilities), so the result is the same.
-    let facts = |slot: L::Slot| s.definition(slot).facts(t);
-    // Abilities that are not those of the face up: granted ones, and those of the cards under
-    // a merged permanent, in a game with a card that grants one or merges.
-    let others = t.can_either(Capability::Grants, Capability::Merges);
-    let objects = objects.filter(|slot| facts(slot).activates() || (others && has_others(s, slot)));
-    // CR 602.5: "A player can't begin to activate an ability that's prohibited from being
-    // activated." Asked once of the player, and of the objects only while such a rule change
-    // is in force for them.
-    let prohibited = rule_change::prohibitions(s, t, player);
-    let objects = if prohibited.is_empty() {
-        objects
-    } else {
-        rule_change::unprohibited(s, t, prohibited, player, objects)
-    };
-    Candidates::<L>::extend_options(out, collapse(s, objects), |out, slot| {
-        // Of its own abilities, only the activated ones can be activated (see CR 602.1), so the
-        // rest are not checked; granted ones and those of the cards under a merged permanent
-        // are checked whatever they are. One it has lost
-        // can't be activated (see CR 613.1f): asked once of a permanent that has them all, as
-        // most have.
-        let lost = !s.has_every_ability(slot);
-        let abilities = facts(slot)
-            .activated()
-            .map(ObjectAbility::Own)
-            .chain(granted(s, t, slot, others));
-        for ability in abilities {
-            if lost && !s.has(slot, ability) {
-                continue;
-            }
-            if activatable(s, t, now, slot, ability) && !(prunes && pointless(s, t, slot, ability))
-            {
-                out.push(Opt::Activate { slot, ability })?;
-            }
-        }
-        Ok(())
-    })
-}
-
-/// The cards `player` owns in the graveyard and exile. Only a game with an ability
-/// that works in one of these zones needs to look there (see [CR 113.6b]):
-/// "An ability that states which zones it functions in functions only from those zones."
-///
-/// [CR 113.6b]: https://yawgatog.com/resources/magic-rules/#R1136b
-#[cold]
-#[inline(never)]
-fn graveyard_and_exile<L: Layout>(s: &State<L>, player: Seat) -> Bitboard<L::Slot> {
-    s.zone(ZoneKey::Of(player, Zone::Graveyard)) | s.zone(ZoneKey::Of(player, Zone::Exile))
-}
-
 /// Appends the priority actions casting and activation add: spells and abilities.
 pub(crate) fn priority_options<L: Layout>(
     s: &State<L>,
@@ -763,38 +427,4 @@ pub fn payable_responses<L: Layout>(
     }
     now.complete()?;
     Ok(out)
-}
-
-/// Whether `player` has the objects to pay every part of the cost of an ability of the object
-/// in `slot` that is paid with objects.
-fn ability_payable<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    player: Seat,
-    slot: L::Slot,
-    parts: &'static [CostPart],
-) -> bool {
-    parts.iter().all(|part| match part {
-        CostPart::Chosen(action, chosen) => parts::payable(s, t, player, slot, *action, chosen),
-        CostPart::This(_)
-        | CostPart::Loyalty(_)
-        | CostPart::Life(_)
-        | CostPart::OneOf(_)
-        | CostPart::DiscardHand => true,
-    })
-}
-
-/// Whether `player` can pay every payment of life among `parts`, as [`life::can_pay`]
-/// answers for each (see [CR 119.4](https://yawgatog.com/resources/magic-rules/#R1194)): "If a
-/// cost or effect allows a player to pay an amount of life greater than 0, the player may do
-/// so only if their life total is greater than or equal to the amount of the payment."
-fn life_payable<L: Layout>(s: &State<L>, t: &GameTable, player: Seat, parts: &[CostPart]) -> bool {
-    parts.iter().all(|part| match part {
-        CostPart::Life(n) => life::can_pay(s, t, player, *n),
-        CostPart::This(_)
-        | CostPart::Chosen(..)
-        | CostPart::Loyalty(_)
-        | CostPart::OneOf(_)
-        | CostPart::DiscardHand => true,
-    })
 }
