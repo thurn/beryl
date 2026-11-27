@@ -561,6 +561,18 @@ def report(path: Path, *, latest: bool = False) -> str:
                 f" worst client {searching['worst_client_ms']:.2f} ms,"
                 f" worst encode {searching['worst_encoded_ms']:.2f} ms"
             )
+        if summary.get("missed_target"):
+            out.append(
+                f"finished after the display time their tick was for, so shown a refresh late"
+                f" though not late above: {summary['missed_target']}"
+            )
+        dragging = summary.get("dragging", {})
+        if dragging.get("frames"):
+            out.append(
+                f"while a pointer button was held ({dragging['presses']} presses):"
+                f" {dragging['frames']} frames, {dragging['late']} late,"
+                f" {dragging['missed_target']} finished after their display time"
+            )
         if run.get("pause_at_ms") is not None:
             out.append(
                 f"paused at {run['pause_at_ms']} ms:"

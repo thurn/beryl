@@ -15,6 +15,14 @@
 //! showed it at 60 Hz without being asked, a fault and not a step down. The host's steps down
 //! and up (`beryl_host::rate`) are listed in the summary.
 //!
+//! Late frames count only the time between display ticks, so a frame that came on time but
+//! finished its work after the display time its tick was for (`missed_target`) is not late,
+//! although it is shown a refresh later than the frame before it was. A bug report of lag that
+//! the late count did not show had 18% of its frames at 120 Hz miss their target this way. The
+//! summary counts those where the host reports a target (the macOS display link), and counts
+//! frames drawn while a pointer button is held apart (`dragging`), and each input line carries
+//! its time, so that what a drag did can be lined up with the frames it drew.
+//!
 //! The frame thread does no file I/O (docs/beryl-3d.md, "Threads"): it counts frames itself
 //! and sends each line to a thread of the log's own, which writes it.
 
@@ -35,7 +43,7 @@ use beryl_host::rate::Step;
 use beryl_host::timing::{FrameTiming, PacingChange, Timing};
 use game_play::sound::NAMES;
 use kit_frame::frame::SoundId;
-use kit_ui::input::{Lifecycle, Modifiers, TextChange};
+use kit_ui::input::{Lifecycle, PointerPhase};
 use serde::{Deserialize, Serialize};
 
 pub use crate::tier::Tiered;
@@ -200,6 +208,14 @@ pub struct Summary {
     /// The frames drawn while the latest view said the AI was searching.
     #[serde(default)]
     pub searching: Searching,
+    /// Frames whose work finished after the display time their tick was for, so that each was
+    /// shown at least one refresh later than its tick asked for. Counted only where the host
+    /// reports that time, which the macOS display link does.
+    #[serde(default)]
+    pub missed_target: u64,
+    /// The frames drawn while a pointer button was held, as during a drag.
+    #[serde(default)]
+    pub dragging: Dragging,
     /// How many times each sound was sent to the audio thread, by its name in
     /// `data/audio/manifest.json`. A run with no window sends them to a silent output.
     #[serde(default)]
@@ -223,6 +239,17 @@ pub struct Searching {
     pub worst_encoded_ms: f64,
 }
 
+/// The frames drawn while a pointer button was held: whether dragging a card made frames late.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Dragging {
+    /// How many times a button was pressed.
+    pub presses: u64,
+    pub frames: u64,
+    pub late: u64,
+    /// As `Summary::missed_target`, for these frames.
+    pub missed_target: u64,
+}
+
 /// One line of the log.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -238,137 +265,6 @@ pub enum Line {
     Tier(Tiered),
     TimingWindow(Window),
     PacingChange(PacingChange),
-}
-
-/// An input line as written: the input, and how long before it the last frame was drawn.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Inputted {
-    #[serde(flatten)]
-    pub input: InputLine,
-    /// Milliseconds since the frame before this input was drawn, or none when no frame had
-    /// been. A phone smoke test reads it on the last input to prove the host stopped asking for
-    /// frames while nothing moved.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub since_frame_ms: Option<f64>,
-}
-
-/// An input a host handed the client, as a line `{"input": {"<kind>": {...}}}`. The phone
-/// hosts' smoke tests read these to prove their events arrived. Enumerated values are written
-/// as their Rust names.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum InputLine {
-    /// Runtime data was read and validated after an edit.
-    DataReloaded {},
-    /// Runtime data failed to load. The client keeps the last valid tuning.
-    DataReloadFailed {
-        error: String,
-    },
-    Pointer {
-        id: u8,
-        kind: String,
-        phase: String,
-        /// Logical points from the surface's top left.
-        x: f32,
-        y: f32,
-        button: String,
-        wheel_x: f32,
-        wheel_y: f32,
-        modifiers: Vec<String>,
-    },
-    Key {
-        code: String,
-        phase: String,
-        modifiers: Vec<String>,
-    },
-    /// Text typed into the edited field, or its new contents, as its length in characters:
-    /// the text itself may be private.
-    Text {
-        length: usize,
-    },
-    /// The surface's size and safe-area insets in logical points, and its pixels per point.
-    Surface {
-        width: f32,
-        height: f32,
-        scale: f32,
-        #[serde(default)]
-        top: f32,
-        #[serde(default)]
-        right: f32,
-        #[serde(default)]
-        bottom: f32,
-        #[serde(default)]
-        left: f32,
-    },
-    Lifecycle {
-        event: String,
-    },
-}
-
-impl InputLine {
-    /// The line for `input`, or `None` for an input the log does not record (views, assets,
-    /// replies).
-    #[must_use]
-    pub fn of(input: &Input) -> Option<Self> {
-        Some(match input {
-            Input::Data(_) => Self::DataReloaded {},
-            Input::DataError(error) => Self::DataReloadFailed {
-                error: error.clone(),
-            },
-            Input::Device(DeviceInput::Pointer(pointer)) => Self::Pointer {
-                id: pointer.id,
-                kind: format!("{:?}", pointer.kind),
-                phase: format!("{:?}", pointer.phase),
-                x: pointer.position.x,
-                y: pointer.position.y,
-                button: format!("{:?}", pointer.button),
-                wheel_x: pointer.wheel.x,
-                wheel_y: pointer.wheel.y,
-                modifiers: modifier_names(pointer.modifiers),
-            },
-            Input::Device(DeviceInput::Key(key)) => Self::Key {
-                code: format!("{:?}", key.code),
-                phase: format!("{:?}", key.phase),
-                modifiers: modifier_names(key.modifiers),
-            },
-            Input::Device(DeviceInput::Text(
-                TextChange::Replace(text) | TextChange::Insert(text) | TextChange::Preedit(text),
-            )) => Self::Text {
-                length: text.chars().count(),
-            },
-            Input::Device(DeviceInput::Surface {
-                size,
-                scale,
-                safe_area,
-            }) => Self::Surface {
-                width: size.width,
-                height: size.height,
-                scale: *scale,
-                top: safe_area.top,
-                right: safe_area.right,
-                bottom: safe_area.bottom,
-                left: safe_area.left,
-            },
-            Input::Device(DeviceInput::Lifecycle(lifecycle)) => Self::Lifecycle {
-                event: format!("{lifecycle:?}"),
-            },
-            _ => return None,
-        })
-    }
-}
-
-/// The names of the modifier keys held.
-fn modifier_names(modifiers: Modifiers) -> Vec<String> {
-    [
-        (modifiers.shift, "Shift"),
-        (modifiers.control, "Control"),
-        (modifiers.alt, "Alt"),
-        (modifiers.command, "Command"),
-    ]
-    .into_iter()
-    .filter(|(held, _)| *held)
-    .map(|(_, name)| name.to_owned())
-    .collect()
 }
 
 /// A log as `read` found it.
@@ -403,6 +299,8 @@ pub struct FrameLog {
     presentation_lifecycle: Option<Lifecycle>,
     /// When the last frame was drawn.
     last_frame: Option<Instant>,
+    /// Whether a pointer button is held, as during a drag.
+    held: bool,
     /// How long after `created` the next summary is due.
     next_summary: Duration,
     /// A late frame waiting for its timing record, which the host notes after the frame.
@@ -444,6 +342,7 @@ impl FrameLog {
             reached_pause: false,
             presentation_lifecycle: None,
             last_frame: None,
+            held: false,
             next_summary: SUMMARY_EVERY,
             pending: None,
             exited: None,
@@ -472,6 +371,18 @@ impl FrameLog {
     pub fn timing(&mut self, event: &Timing) {
         if let Timing::Change(change) = event {
             self.send(Line::PacingChange(*change));
+        }
+        if let Timing::Frame(frame) = event
+            && frame.cpu.is_some()
+            && frame
+                .tick
+                .target_ns
+                .is_some_and(|target| i64::try_from(frame.finished_ns).unwrap_or(i64::MAX) > target)
+        {
+            self.summary.missed_target += 1;
+            if self.held {
+                self.summary.dragging.missed_target += 1;
+            }
         }
         let Some(trace) = &mut self.trace else {
             return;
@@ -538,6 +449,7 @@ impl FrameLog {
         }
         let late = Self::is_late(ticked);
         self.count_rate(ticked, late);
+        self.count_drag(late);
         let summary = &mut self.summary;
         summary.frames += 1;
         summary.hz = ticked.hz;
@@ -629,6 +541,14 @@ impl FrameLog {
         }
     }
 
+    /// Counts a frame drawn while a pointer button was held.
+    fn count_drag(&mut self, late: bool) {
+        if self.held {
+            self.summary.dragging.frames += 1;
+            self.summary.dragging.late += u64::from(late);
+        }
+    }
+
     /// Counts a frame against the rate the host asked for when it came. A rate seen for the
     /// first time allocates, which happens only at a step.
     fn count_rate(&mut self, ticked: &Ticked, late: bool) {
@@ -660,6 +580,16 @@ impl FrameLog {
         {
             self.presentation_lifecycle = Some(*event);
         }
+        if let Input::Device(DeviceInput::Pointer(pointer)) = input {
+            match pointer.phase {
+                PointerPhase::Down => {
+                    self.held = true;
+                    self.summary.dragging.presses += 1;
+                }
+                PointerPhase::Up | PointerPhase::Cancel => self.held = false,
+                _ => {}
+            }
+        }
         if let Some(line) = InputLine::of(input) {
             let since_frame_ms = self
                 .last_frame
@@ -668,6 +598,7 @@ impl FrameLog {
             self.send(Line::Input(Inputted {
                 input: line,
                 since_frame_ms,
+                at_ms: Some(self.created.elapsed().as_secs_f64() * 1e3),
             }));
         }
     }
@@ -780,6 +711,8 @@ fn percentile(waits: &[u32], q: f64) -> f64 {
     ms(waits.len() as u64 * WAIT_BUCKET)
 }
 
+mod input;
+pub use input::{InputLine, Inputted};
 mod read;
 pub use read::read;
 pub(crate) use read::read_run;

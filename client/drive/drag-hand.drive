@@ -1,0 +1,232 @@
+# drag-hand: the pointer drags cards in your hand back and forth for 20 seconds while a
+# recording plays, each drag a press, eight moves 16 ms apart and a release, and each drop
+# inside the hand so that nothing is played. A bug report of lag while dragging hand cards
+# came from the desktop app under the fleet's normal load. Written for a 1600 by 900 window,
+# where the hand spans x 412 to 1190 at y 736 to 960 in verbs-zones.
+#
+# The frame log's summary counts the frames drawn while the button was held and how many of
+# them were late (`dragging`). Run it under the machine's load as it is, and with busy
+# threads added, and compare the late share during drags with the share over the run:
+#
+# just client app --drive drag-hand --fixture verbs-zones --for 22s
+# just client app --drive drag-hand --fixture verbs-zones --for 22s --load 18
+#
+# A run with no window measures everything up to presentation. Whether a frame missed the
+# display time its tick was for (`missed_target`) needs the desktop window's display link.
+step 1500ms
+drag 440,850 to 1160,780
+step 60ms
+drag 1160,780 to 440,850
+step 60ms
+drag 600,900 to 1000,760
+step 60ms
+drag 1000,760 to 600,900
+step 60ms
+drag 440,850 to 1160,780
+step 60ms
+drag 1160,780 to 440,850
+step 60ms
+drag 600,900 to 1000,760
+step 60ms
+drag 1000,760 to 600,900
+step 60ms
+drag 440,850 to 1160,780
+step 60ms
+drag 1160,780 to 440,850
+step 60ms
+drag 600,900 to 1000,760
+step 60ms
+drag 1000,760 to 600,900
+step 60ms
+drag 440,850 to 1160,780
+step 60ms
+drag 1160,780 to 440,850
+step 60ms
+drag 600,900 to 1000,760
+step 60ms
+drag 1000,760 to 600,900
+step 60ms
+drag 440,850 to 1160,780
+step 60ms
+drag 1160,780 to 440,850
+step 60ms
+drag 600,900 to 1000,760
+step 60ms
+drag 1000,760 to 600,900
+step 60ms
+drag 440,850 to 1160,780
+step 60ms
+drag 1160,780 to 440,850
+step 60ms
+drag 600,900 to 1000,760
+step 60ms
+drag 1000,760 to 600,900
+step 60ms
+drag 440,850 to 1160,780
+step 60ms
+drag 1160,780 to 440,850
+step 60ms
+drag 600,900 to 1000,760
+step 60ms
+drag 1000,760 to 600,900
+step 60ms
+drag 440,850 to 1160,780
+step 60ms
+drag 1160,780 to 440,850
+step 60ms
+drag 600,900 to 1000,760
+step 60ms
+drag 1000,760 to 600,900
+step 60ms
+drag 440,850 to 1160,780
+step 60ms
+drag 1160,780 to 440,850
+step 60ms
+drag 600,900 to 1000,760
+step 60ms
+drag 1000,760 to 600,900
+step 60ms
+drag 440,850 to 1160,780
+step 60ms
+drag 1160,780 to 440,850
+step 60ms
+drag 600,900 to 1000,760
+step 60ms
+drag 1000,760 to 600,900
+step 60ms
+drag 440,850 to 1160,780
+step 60ms
+drag 1160,780 to 440,850
+step 60ms
+drag 600,900 to 1000,760
+step 60ms
+drag 1000,760 to 600,900
+step 60ms
+drag 440,850 to 1160,780
+step 60ms
+drag 1160,780 to 440,850
+step 60ms
+drag 600,900 to 1000,760
+step 60ms
+drag 1000,760 to 600,900
+step 60ms
+drag 440,850 to 1160,780
+step 60ms
+drag 1160,780 to 440,850
+step 60ms
+drag 600,900 to 1000,760
+step 60ms
+drag 1000,760 to 600,900
+step 60ms
+drag 440,850 to 1160,780
+step 60ms
+drag 1160,780 to 440,850
+step 60ms
+drag 600,900 to 1000,760
+step 60ms
+drag 1000,760 to 600,900
+step 60ms
+drag 440,850 to 1160,780
+step 60ms
+drag 1160,780 to 440,850
+step 60ms
+drag 600,900 to 1000,760
+step 60ms
+drag 1000,760 to 600,900
+step 60ms
+drag 440,850 to 1160,780
+step 60ms
+drag 1160,780 to 440,850
+step 60ms
+drag 600,900 to 1000,760
+step 60ms
+drag 1000,760 to 600,900
+step 60ms
+drag 440,850 to 1160,780
+step 60ms
+drag 1160,780 to 440,850
+step 60ms
+drag 600,900 to 1000,760
+step 60ms
+drag 1000,760 to 600,900
+step 60ms
+drag 440,850 to 1160,780
+step 60ms
+drag 1160,780 to 440,850
+step 60ms
+drag 600,900 to 1000,760
+step 60ms
+drag 1000,760 to 600,900
+step 60ms
+drag 440,850 to 1160,780
+step 60ms
+drag 1160,780 to 440,850
+step 60ms
+drag 600,900 to 1000,760
+step 60ms
+drag 1000,760 to 600,900
+step 60ms
+drag 440,850 to 1160,780
+step 60ms
+drag 1160,780 to 440,850
+step 60ms
+drag 600,900 to 1000,760
+step 60ms
+drag 1000,760 to 600,900
+step 60ms
+drag 440,850 to 1160,780
+step 60ms
+drag 1160,780 to 440,850
+step 60ms
+drag 600,900 to 1000,760
+step 60ms
+drag 1000,760 to 600,900
+step 60ms
+drag 440,850 to 1160,780
+step 60ms
+drag 1160,780 to 440,850
+step 60ms
+drag 600,900 to 1000,760
+step 60ms
+drag 1000,760 to 600,900
+step 60ms
+drag 440,850 to 1160,780
+step 60ms
+drag 1160,780 to 440,850
+step 60ms
+drag 600,900 to 1000,760
+step 60ms
+drag 1000,760 to 600,900
+step 60ms
+drag 440,850 to 1160,780
+step 60ms
+drag 1160,780 to 440,850
+step 60ms
+drag 600,900 to 1000,760
+step 60ms
+drag 1000,760 to 600,900
+step 60ms
+drag 440,850 to 1160,780
+step 60ms
+drag 1160,780 to 440,850
+step 60ms
+drag 600,900 to 1000,760
+step 60ms
+drag 1000,760 to 600,900
+step 60ms
+drag 440,850 to 1160,780
+step 60ms
+drag 1160,780 to 440,850
+step 60ms
+drag 600,900 to 1000,760
+step 60ms
+drag 1000,760 to 600,900
+step 60ms
+drag 440,850 to 1160,780
+step 60ms
+drag 1160,780 to 440,850
+step 60ms
+drag 600,900 to 1000,760
+step 60ms
+drag 1000,760 to 600,900
+step 60ms

@@ -167,6 +167,21 @@ impl Summary {
                 searching.worst_encoded_ms
             ));
         }
+        if self.missed_target > 0 {
+            lines.push(format!(
+                "finished after the display time their tick was for, so shown a refresh late \
+                 though not late above: {}",
+                self.missed_target
+            ));
+        }
+        let dragging = &self.dragging;
+        if dragging.frames > 0 {
+            lines.push(format!(
+                "while a pointer button was held ({} presses): {} frames, {} late, {} finished \
+                 after their display time",
+                dragging.presses, dragging.frames, dragging.late, dragging.missed_target
+            ));
+        }
         if let Some(pause) = run.pause_at_ms {
             lines.push(format!(
                 "paused at {pause} ms: {} frames drawn after the pause",

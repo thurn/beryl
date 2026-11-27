@@ -16,11 +16,15 @@ ENGINE: Path = REPO / "engine"
 TOOLS: Path = REPO / "tools"
 
 # Environment variables that mark a run as an agent's: it must stay windowless and silent.
+# The Ignite daemon runs `ignite run` commands without the caller's environment, so a command an
+# agent ran that way carried none of the others and `just client app` opened a fullscreen
+# window. `IGNITE_HANDLE` names the run and is set in every one.
 AGENT_ENV = (
     "CLAUDECODE",
     "CLAUDE_CODE_SESSION_ID",
     "CODEX_THREAD_ID",
     "IGNITE_SESSION",
+    "IGNITE_HANDLE",
     "CI",
 )
 

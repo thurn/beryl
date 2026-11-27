@@ -454,3 +454,72 @@ fn bursts_of_late_frames_and_steps_capture_windows() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// The pointer press and release that begin and end a drag at `x`, 900.
+fn mouse(phase: kit_ui::input::PointerPhase, x: f32) -> Input {
+    Input::Device(DeviceInput::Pointer(kit_ui::input::Pointer {
+        id: 0,
+        kind: kit_ui::input::PointerKind::Mouse,
+        phase,
+        position: glam::Vec2::new(x, 900.0),
+        button: kit_ui::input::Button::Primary,
+        wheel: glam::Vec2::ZERO,
+        modifiers: kit_ui::input::Modifiers::default(),
+    }))
+}
+
+/// A bug report of lag while dragging a card had no late frame to show: its frames came on
+/// time but finished after the display time their tick was for. The summary counts those, and
+/// counts frames drawn while a button is held apart, and each input line has its time so that
+/// a drag can be lined up with the frames it drew.
+#[test]
+fn frames_drawn_during_a_drag_and_frames_that_missed_their_target_are_counted() {
+    use kit_ui::input::PointerPhase;
+    let dir = dir("dragging");
+    let mut log = FrameLog::create(&dir, &plain_run(49)).expect("the log is made");
+    let drawn = |sequence: u64, at_ms: u64, finished_ms: u64| {
+        let Timing::Frame(mut frame) = record(sequence, at_ms) else {
+            unreachable!("`record` makes a frame's record");
+        };
+        frame.finished_ns = finished_ms * MS;
+        frame.cpu = Some(beryl_host::timing::CpuTiming::default());
+        Timing::Frame(frame)
+    };
+    // Before the drag: one frame on time that made its target, one that missed it.
+    log.frame(&ticked(10, None, true), &[], false);
+    log.timing(&drawn(1, 10, 11));
+    log.frame(&ticked(18, Some(8), true), &[], false);
+    log.timing(&drawn(2, 18, 27));
+    log.input(&mouse(PointerPhase::Down, 500.0));
+    // During it: one late frame, and one on time that missed its target.
+    log.frame(&ticked(38, Some(20), true), &[], false);
+    log.timing(&drawn(3, 38, 39));
+    log.frame(&ticked(46, Some(8), true), &[], false);
+    log.timing(&drawn(4, 46, 55));
+    log.input(&mouse(PointerPhase::Up, 900.0));
+    log.frame(&ticked(54, Some(8), true), &[], false);
+    log.timing(&drawn(5, 54, 55));
+    let path = log.path().to_owned();
+    let summary = log.finish().expect("the log is finished");
+    assert_eq!(
+        (summary.frames, summary.late, summary.missed_target),
+        (5, 1, 2)
+    );
+    let dragging = &summary.dragging;
+    assert_eq!(
+        (
+            dragging.presses,
+            dragging.frames,
+            dragging.late,
+            dragging.missed_target
+        ),
+        (1, 2, 1, 1)
+    );
+    let times: Vec<f64> = lines(&path)
+        .iter()
+        .filter_map(|line| line.get("input")?.get("at_ms")?.as_f64())
+        .collect();
+    assert_eq!(times.len(), 2, "{times:?}");
+    assert!(times[0] <= times[1], "{times:?}");
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -475,6 +475,12 @@ examine pacing and render work at the moment of interest. A windowless replay is
 suitable for inspecting the client. Actual presentation timing requires a host
 with a display or mobile surface.
 
+The frame log's summary counts the frames drawn while a pointer button is held
+(`dragging`), and on the macOS display link the frames that finished after the
+display time their tick was for (`missed_target`). Those frames are shown a
+refresh late without counting as late. The `drag-hand` drive script is the
+benchmark for dragging cards in hand. Its header gives the commands.
+
 ## Interface checks
 
 `just b3d map checks` lists the rules the runner applies to frames.
