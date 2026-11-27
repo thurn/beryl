@@ -2873,9 +2873,9 @@
     {
       "name": "eligible",
       "means": "The player may pick or use it now: a card to play, a permanent with an ability, a legal target, an attacker or blocker to declare, an option.",
-      "look": "A cyan outline.",
+      "look": "A cyan outline that shimmers with a slow scrolling flare and pops outward once over 0.4 s when it first appears (Enhanced procedural shimmer and pop; Baseline animated outline tint).",
       "arena": {
-        "does": "Arena outlines all of these in one cyan, and neither dims nor outlines what cannot be picked.",
+        "does": "Arena outlines all of these in one shimmering cyan-mint outline with a one-shot 0.4 s outward pop on appear, and neither dims nor outlines what cannot be picked.",
         "evidence": [
           {
             "recording": "IEXcjBn3BXk",

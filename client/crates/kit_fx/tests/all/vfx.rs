@@ -228,3 +228,75 @@ fn settle_effect_encodes_mana_tier_and_flying_in_enhanced_and_sprites_in_baselin
         "Baseline draws cloud and ring sprites without procedural Vfx"
     );
 }
+
+#[test]
+fn highlight_emits_shimmer_and_400ms_pop_in_enhanced_and_animates_tint_in_baseline() {
+    use glam::Affine3A;
+    use kit_frame::frame::vfx::{HIGHLIGHT_POP_NS, HighlightStyle};
+    use kit_fx::effects::vfx::{HighlightVfx, baseline_highlight_tint, write_highlight};
+
+    let draw_hl = |tier: Tier, now: u64, age_ns: u64, reduced_motion: bool| {
+        let mut frame = Frame::with_capacity(8, 16, 64);
+        let mut builder = FrameBuilder::new(&mut frame, tier, Vec2::new(63.0, 88.0));
+        let drawn = write_highlight(
+            &mut builder,
+            &HighlightVfx {
+                style: HighlightStyle::Eligible,
+                band: Band::TableMarks,
+                pop_band: Band::Glows,
+                clip: 0,
+                seed: 0.25,
+                now,
+                age_ns,
+                base_size: Vec2::new(63.0, 88.0),
+                tint: [51, 220, 254, 255],
+                reduced_motion,
+            },
+            |size| Affine3A::from_scale(size.extend(1.0)),
+        );
+        builder.finish();
+        (drawn, frame)
+    };
+
+    let (drawn_pop, pop_frame) = draw_hl(Tier::Enhanced, 500_000_000, 100_000_000, false);
+    assert!(drawn_pop);
+    assert!(pop_frame.ambient_motion);
+    assert_eq!(pop_frame.draws.len(), 2, "shimmer + pop during first 400ms");
+    assert!(
+        pop_frame
+            .draws
+            .iter()
+            .any(|d| d.uv[0] == Vfx::HighlightShimmer as u16)
+    );
+    assert!(
+        pop_frame
+            .draws
+            .iter()
+            .any(|d| d.uv[0] == Vfx::HighlightPop as u16)
+    );
+
+    let (drawn_steady, steady_frame) =
+        draw_hl(Tier::Enhanced, 1_500_000_000, HIGHLIGHT_POP_NS, false);
+    assert!(drawn_steady);
+    assert!(steady_frame.ambient_motion);
+    assert_eq!(steady_frame.draws.len(), 1, "only shimmer after 400ms pop");
+    assert_eq!(steady_frame.draws[0].uv[0], Vfx::HighlightShimmer as u16);
+
+    let (drawn_reduced, reduced_frame) = draw_hl(Tier::Enhanced, 500_000_000, 100_000_000, true);
+    assert!(!drawn_reduced);
+    assert!(reduced_frame.draws.is_empty());
+    assert!(!reduced_frame.ambient_motion);
+
+    let (drawn_base, base_frame) = draw_hl(Tier::Baseline, 500_000_000, 100_000_000, false);
+    assert!(!drawn_base);
+    assert!(base_frame.draws.is_empty());
+    assert!(!base_frame.ambient_motion);
+
+    let base_tint = [51, 220, 254, 255];
+    let pop_tint = baseline_highlight_tint(base_tint, 0, 20_000_000, 0.0);
+    let steady_tint = baseline_highlight_tint(base_tint, 0, HIGHLIGHT_POP_NS, 0.0);
+    assert!(
+        pop_tint[0] > steady_tint[0],
+        "Baseline tint lifts brighter during the 400ms appear pop: {pop_tint:?} vs {steady_tint:?}"
+    );
+}

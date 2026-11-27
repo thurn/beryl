@@ -116,6 +116,12 @@ fn dispatch_vfx(in: VfxOut) -> vec4<f32> {
         case VFX_SETTLE: {
             return shade_settle(in.mesh_uv, time_s, seed, aspect, tint, in.style);
         }
+        case VFX_HIGHLIGHT_SHIMMER: {
+            return shade_highlight_shimmer(in.mesh_uv, time_s, seed, aspect, tint, in.style);
+        }
+        case VFX_HIGHLIGHT_POP: {
+            return shade_highlight_pop(in.mesh_uv, time_s, seed, aspect, tint, in.style);
+        }
         default: {
             return vec4<f32>(0.0);
         }
@@ -153,6 +159,12 @@ fn vfx_bloom_gain(kind: u32, style: u32) -> f32 {
         }
         case VFX_SETTLE: {
             return BLOOM_GAIN_SETTLE;
+        }
+        case VFX_HIGHLIGHT_SHIMMER: {
+            return BLOOM_GAIN_HIGHLIGHT_SHIMMER;
+        }
+        case VFX_HIGHLIGHT_POP: {
+            return BLOOM_GAIN_HIGHLIGHT_POP;
         }
         default: {
             return 0.0;

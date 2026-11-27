@@ -152,6 +152,24 @@ pub enum Vfx {
     ShieldRemove = 10,
     /// Permanent landing dust, collision flash, shockwave, and ground shadow (`vfx_card_dust_*`).
     Settle = 11,
+    /// Looping rounded-outline highlight with scrolling flare panner and thin additive rim.
+    HighlightShimmer = 12,
+    /// One-shot outward-expanding highlight appear pop burst.
+    HighlightPop = 13,
+}
+
+/// Visual palette and shimmer style for outline highlight VFX (`Vfx::HighlightShimmer` and
+/// `Vfx::HighlightPop`), encoded into `Draw::uv[3]` (`style` in `vfx.wgsl`).
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum HighlightStyle {
+    /// Playable or pickable cyan-mint shimmer and appear pop.
+    #[default]
+    Eligible = 0,
+    /// Picked orange-gold shimmer and appear pop.
+    Selected = 1,
+    /// Pointer hover cyan-blue shimmer and appear pop.
+    Hover = 2,
 }
 
 /// Size and air/ground variant for permanent-landing dust (`Vfx::Settle`), encoded into

@@ -366,3 +366,65 @@ fn settle_vfx_renders_mana_tiers_and_flying_wind() {
         "flying variant adds cooler wind wisps: {fb} > {sb}"
     );
 }
+
+#[test]
+fn highlight_shimmer_and_pop_render_cyan_outlines_with_clean_edges() {
+    let mut renderer = enhanced();
+    let shimmer_tf = Affine3A::from_scale_rotation_translation(
+        Vec3::new(100.0, 132.0, 1.0),
+        Quat::IDENTITY,
+        Vec3::new(0.0, 0.0, 1.0),
+    );
+    let pop_tf = Affine3A::from_scale_rotation_translation(
+        Vec3::new(112.0, 144.0, 1.0),
+        Quat::IDENTITY,
+        Vec3::new(0.0, 0.0, 1.0),
+    );
+    let cyan = [51, 220, 254, 255];
+    let t0 = render_vfx(
+        &mut renderer,
+        Draw::vfx_styled(
+            shimmer_tf,
+            cyan,
+            Vfx::HighlightShimmer,
+            0,
+            [0.0, 1.0, 0.2, 1.32],
+        ),
+    );
+    let t1 = render_vfx(
+        &mut renderer,
+        Draw::vfx_styled(
+            shimmer_tf,
+            cyan,
+            Vfx::HighlightShimmer,
+            0,
+            [1.4, 1.0, 0.2, 1.32],
+        ),
+    );
+    let pop = render_vfx(
+        &mut renderer,
+        Draw::vfx_styled(pop_tf, cyan, Vfx::HighlightPop, 0, [0.22, 1.0, 0.2, 1.29]),
+    );
+
+    for (label, pic) in [("shimmer", &t0), ("pop", &pop)] {
+        let [r, g, b] = channel_sums(pic);
+        assert!(
+            g > 40_000 && b > 40_000 && g > r && b > r,
+            "{label} renders saturated cyan-mint: {:?}",
+            [r, g, b]
+        );
+        assert_eq!(
+            pic.at(100, 100),
+            [0, 0, 0],
+            "{label} keeps card center clear"
+        );
+        for (x, y) in [(0, 0), (199, 0), (0, 199), (199, 199)] {
+            assert_eq!(
+                pic.at(x, y),
+                [0, 0, 0],
+                "{label} corner ({x},{y}) stays dark"
+            );
+        }
+    }
+    assert_ne!(t0.pixels, t1.pixels, "shimmer animates smoothly over time");
+}

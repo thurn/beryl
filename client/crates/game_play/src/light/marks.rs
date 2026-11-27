@@ -28,10 +28,12 @@ use kit_base::data::light::Light;
 use kit_base::pose::{Curve, Pose};
 use kit_base::tokens::color;
 use kit_frame::frame::text::faded;
+use kit_frame::frame::vfx::HighlightStyle;
 use kit_frame::frame::{
     Band, Draw, ElementId, FrameBuilder, MARK_IDS, NameRef, Place, Resolved, Ring, Role,
     ShapeAnchor, StateBits, box_shadow_reach, outline_corners, rows, sprites,
 };
+use kit_fx::effects::vfx::{HighlightVfx, baseline_highlight_tint, unit_hash, write_highlight};
 use kit_ui::element::Shadow;
 use kit_ui::layout::shape_radius;
 
@@ -190,30 +192,18 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
             })
             .unwrap_or(0);
         if mark == Mark::Paying {
-            let size = light.tap_size * pose.scale;
-            // The symbol keeps its orientation while the paying card turns under it.
-            let was_tapped = target
-                .element
-                .is_some_and(|(_, node)| node.state.has(TAPPED));
-            let rotation = if was_tapped {
-                pose.rotation
-            } else {
-                pose.rotation * Quat::from_rotation_z(FRAC_PI_2 * shown)
-            };
-            let transform = pose.sheared(Affine3A::from_scale_rotation_translation(
-                Vec3::new(size, size, 1.0),
-                rotation,
-                position,
-            ));
-            let draw = Draw::glow(transform, tint, sprites::TAP, 0.0).with_clip(clip);
-            node.register(draw.model, [0.5, 0.5], builder);
-            builder.draw(band, draw);
+            write_paying(light, &pose, (band, clip), position, tint, &node, builder);
             continue;
         }
         if let (Some(outline), Subject::Object { .. } | Subject::Ability { .. }) =
             (Outline::of(mark), on)
         {
-            outline.write((band, clip), position, tint, &node, builder);
+            let timing = (
+                now,
+                now.saturating_sub(mark_open.begins.from),
+                subject_seed(on),
+            );
+            outline.write((band, clip), position, tint, timing, &node, builder);
             continue;
         }
         // Each outline begun earlier on the same thing, and still open, lies inside this one.
@@ -278,6 +268,69 @@ const TARGET: [Shadow; 4] = [
 /// inside its box.
 const SUGGESTED: [Shadow; 1] = [layer(0.0, 0.016, 255).inset()];
 
+/// Draws the tap symbol for `Mark::Paying`, keeping its orientation while the card turns under it.
+fn write_paying(
+    light: &Light,
+    pose: &Pose,
+    (band, clip): (Band, u8),
+    position: Vec3,
+    tint: [u8; 4],
+    node: &MarkNode<'_>,
+    builder: &mut FrameBuilder<'_>,
+) {
+    let size = light.tap_size * pose.scale;
+    let was_tapped = node
+        .target
+        .element
+        .is_some_and(|(_, elem)| elem.state.has(TAPPED));
+    let rotation = if was_tapped {
+        pose.rotation
+    } else {
+        pose.rotation * Quat::from_rotation_z(FRAC_PI_2 * node.shown)
+    };
+    let transform = pose.sheared(Affine3A::from_scale_rotation_translation(
+        Vec3::new(size, size, 1.0),
+        rotation,
+        position,
+    ));
+    let draw = Draw::glow(transform, tint, sprites::TAP, 0.0).with_clip(clip);
+    node.register(draw.model, [0.5, 0.5], builder);
+    builder.draw(band, draw);
+}
+
+/// Deterministic per-subject phase seed so adjacent cards shimmer out of lockstep.
+fn subject_seed(on: Subject) -> f32 {
+    let slot = match on {
+        Subject::Object { slot } => usize::from(slot.0),
+        Subject::Ability { id } => (id as usize).wrapping_mul(31),
+        Subject::Player { player } => usize::from(player == Side::Opponent) + 10_000,
+    };
+    unit_hash(slot, 0)
+}
+
+/// Which marks draw the procedural Enhanced highlight shimmer and appear pop (and Baseline
+/// animated tint). Selected and hover highlights plug into this match directly.
+const fn highlight_style(mark: Mark) -> Option<HighlightStyle> {
+    match mark {
+        Mark::Eligible => Some(HighlightStyle::Eligible),
+        Mark::Selected
+        | Mark::Suggested
+        | Mark::Paying
+        | Mark::FriendlyTarget
+        | Mark::HostileTarget => None,
+    }
+}
+
+/// Band for the one-shot highlight appear pop: table and hand marks route their pop to
+/// `Band::Glows` for calibrated bloom while keeping depth testing; flat-layer marks stay in
+/// their own layer band.
+const fn pop_band(band: Band) -> Band {
+    match band {
+        Band::TableMarks | Band::RaisedMarks => Band::Glows,
+        other => other,
+    }
+}
+
 /// A mark's outline as the web interface's `.stage-mark` element draws it: a box over the card
 /// or ability, `grow` frames larger on every side (the element's negative `inset`), with
 /// corners of `radius` frames, and its CSS box shadows.
@@ -305,11 +358,14 @@ impl Outline {
 
     /// Writes one record per shadow in the card's own plane and units, with the same clip
     /// as the card. The outer shadows come first, then the inset ones, as CSS paints them.
+    /// Marks with a `HighlightStyle` draw the procedural shimmer and appear pop in the Enhanced
+    /// tier, and an animated tint on the Baseline outline.
     fn write(
         &self,
         (band, clip): (Band, u8),
         position: Vec3,
         tint: [u8; 4],
+        (now, age_ns, seed): (u64, u64, f32),
         node: &MarkNode<'_>,
         builder: &mut FrameBuilder<'_>,
     ) {
@@ -322,6 +378,30 @@ impl Outline {
         let model = rows(placed(size));
         let line = [0.5, 0.5];
         let element = node.register(model, line, builder);
+        let style = highlight_style(node.mark);
+        let enhanced = style.is_some_and(|style| {
+            write_highlight(
+                builder,
+                &HighlightVfx {
+                    style,
+                    band,
+                    pop_band: pop_band(band),
+                    clip,
+                    seed,
+                    now,
+                    age_ns,
+                    base_size: size,
+                    tint,
+                    reduced_motion: false,
+                },
+                placed,
+            )
+        });
+        let draw_tint = if style.is_some() && !enhanced {
+            baseline_highlight_tint(tint, now, age_ns, seed)
+        } else {
+            tint
+        };
         let mut farthest = 0.0_f32;
         for inset in [false, true] {
             for layer in self
@@ -330,8 +410,8 @@ impl Outline {
                 .rev()
                 .filter(|layer| layer.inset == inset)
             {
-                let [red, green, blue, _] = tint;
-                let opacity = u16::from(layer.color[3]) * u16::from(tint[3]) / 255;
+                let [red, green, blue, _] = draw_tint;
+                let opacity = u16::from(layer.color[3]) * u16::from(draw_tint[3]) / 255;
                 let shadow = Shadow {
                     blur: layer.blur * frame,
                     spread: layer.spread * frame,
@@ -340,19 +420,21 @@ impl Outline {
                 };
                 let reach = box_shadow_reach(&shadow);
                 farthest = farthest.max(reach);
-                let spread = if inset { -shadow.spread } else { shadow.spread };
-                builder.draw(
-                    band,
-                    Draw::box_shadow(
-                        placed(size + Vec2::splat(2.0 * reach)),
-                        shadow.color,
-                        size,
-                        radius,
-                        &shadow,
-                        shape_radius(size, radius, spread),
-                    )
-                    .with_clip(clip),
-                );
+                if !enhanced {
+                    let spread = if inset { -shadow.spread } else { shadow.spread };
+                    builder.draw(
+                        band,
+                        Draw::box_shadow(
+                            placed(size + Vec2::splat(2.0 * reach)),
+                            shadow.color,
+                            size,
+                            radius,
+                            &shadow,
+                            shape_radius(size, radius, spread),
+                        )
+                        .with_clip(clip),
+                    );
+                }
             }
         }
         let outer = Vec2::splat(0.5) + Vec2::splat(farthest) / size.max(Vec2::splat(f32::EPSILON));
@@ -362,7 +444,7 @@ impl Outline {
             model,
             line,
             outer: outer.to_array(),
-            tint,
+            tint: draw_tint,
             shadows: self.shadows,
             frames: size.x / frame,
             radius: self.radius,

@@ -5,7 +5,7 @@
 //! quad border.
 
 use glam::{Affine3A, Vec2};
-pub use kit_base::data::effect::Vfx;
+pub use kit_base::data::effect::{HighlightStyle, Vfx};
 
 use super::draw::{Draw, Material, Mesh, TextureArray};
 
@@ -37,6 +37,14 @@ pub const LINE_HEAD_ASPECT: f32 = 2.16;
 /// `[length_pad, width_pad]` quad padding around a spearhead's half-extents so its outer glow
 /// fades cleanly before reaching the quad boundary. Must match `line_fx.wgsl`.
 pub const LINE_HEAD_PAD: [f32; 2] = [0.55, 0.95];
+/// Quad padding ratio (fraction of base width added to each side) around a highlight shimmer
+/// (`Vfx::HighlightShimmer`). Must match `fx/highlight.wgsl`.
+pub const HIGHLIGHT_SHIMMER_PAD: f32 = 0.14;
+/// Quad padding ratio (fraction of base width added to each side) around a highlight appear pop
+/// (`Vfx::HighlightPop`). Must match `fx/highlight.wgsl`.
+pub const HIGHLIGHT_POP_PAD: f32 = 0.19;
+/// Duration of the one-shot highlight appear pop, in nanoseconds (400 ms).
+pub const HIGHLIGHT_POP_NS: u64 = 400_000_000;
 
 /// Packs start and end ribbon width tapers (each in `(0, 1]`) into one `u16` (`start` in the low
 /// byte, `end` in the high byte) for `vs_vfx`.

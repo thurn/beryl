@@ -7,6 +7,7 @@ use glam::{Affine3A, Vec2, Vec3};
 use kit_base::atlas::Tier;
 use kit_base::data::light::{CombatSparks, Own};
 use kit_base::tokens::color;
+use kit_frame::frame::vfx::HighlightStyle;
 use kit_frame::frame::{Band, Draw, FrameBuilder, Vfx, sprites, vfx};
 
 /// IEEE-754 representation of `2^-24` (`1 / 16_777_216`), used to map a 24-bit integer hash
@@ -69,6 +70,128 @@ pub fn write_state_loop(builder: &mut FrameBuilder<'_>, transform: Affine3A, fx:
             [time_s, fx.opacity.clamp(0.0, 1.0), fx.seed, fx.aspect],
         ),
     );
+}
+
+/// Inputs for emitting an Enhanced-tier procedural highlight shimmer loop and one-shot appear pop
+/// around a rectangular subject.
+#[derive(Clone, Copy, Debug)]
+pub struct HighlightVfx {
+    /// Highlight palette and motion style (`Eligible`, `Selected`, or `Hover`).
+    pub style: HighlightStyle,
+    /// Render band for the looping outline shimmer (matches the subject's mark band).
+    pub band: Band,
+    /// Render band for the one-shot 400 ms appear pop (typically `Band::Glows` on the table so it
+    /// receives calibrated bloom, or `band` inside flat layers).
+    pub pop_band: Band,
+    /// Scissor clip index inherited from the subject.
+    pub clip: u8,
+    /// Per-subject phase seed in `[0, 1)`.
+    pub seed: f32,
+    /// Frame clock in nanoseconds.
+    pub now: u64,
+    /// Nanoseconds elapsed since the highlight began appearing.
+    pub age_ns: u64,
+    /// Subject box width and height in local units before scaling.
+    pub base_size: Vec2,
+    /// RGBA tint including any entrance or exit fade in its alpha channel.
+    pub tint: [u8; 4],
+    /// When true, reduced motion is active: procedural motion is skipped so the caller can fall
+    /// back to a static outline without requesting ambient wake.
+    pub reduced_motion: bool,
+}
+
+/// Writes an Enhanced-tier looping highlight shimmer and, during the first 400 ms after appear, a
+/// one-shot outward appear pop.
+///
+/// Returns `true` when the Enhanced procedural highlight was drawn, or `false` in the Baseline
+/// tier or under `reduced_motion` so the caller can draw the Baseline outline instead.
+pub fn write_highlight(
+    builder: &mut FrameBuilder<'_>,
+    fx: &HighlightVfx,
+    place: impl Fn(Vec2) -> Affine3A,
+) -> bool {
+    if builder.tier() != Tier::Enhanced || fx.reduced_motion {
+        return false;
+    }
+    if fx.tint[3] == 0 {
+        return true;
+    }
+    let shimmer_size =
+        fx.base_size + Vec2::splat(2.0 * vfx::HIGHLIGHT_SHIMMER_PAD * fx.base_size.x);
+    let shimmer_aspect = shimmer_size.y / shimmer_size.x.max(f32::EPSILON);
+    builder.draw(
+        fx.band,
+        Draw::vfx_styled(
+            place(shimmer_size),
+            fx.tint,
+            Vfx::HighlightShimmer,
+            fx.style as u8,
+            [loop_time_s(fx.now), 1.0, fx.seed, shimmer_aspect],
+        )
+        .with_clip(fx.clip),
+    );
+    if fx.age_ns < vfx::HIGHLIGHT_POP_NS {
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "age_ns is strictly below 400_000_000 ns"
+        )]
+        let pop_t = fx.age_ns as f32 / vfx::HIGHLIGHT_POP_NS as f32;
+        let pop_size = fx.base_size + Vec2::splat(2.0 * vfx::HIGHLIGHT_POP_PAD * fx.base_size.x);
+        let pop_aspect = pop_size.y / pop_size.x.max(f32::EPSILON);
+        builder.draw(
+            fx.pop_band,
+            Draw::vfx_styled(
+                place(pop_size),
+                fx.tint,
+                Vfx::HighlightPop,
+                fx.style as u8,
+                [pop_t, 1.0, fx.seed, pop_aspect],
+            )
+            .with_clip(fx.clip),
+        );
+    }
+    true
+}
+
+/// Computes a cheap Baseline-tier animated tint for an outline highlight: a slow 3.5 s shimmer
+/// plus a brief 400 ms brightness lift when the highlight first appears.
+#[must_use]
+pub fn baseline_highlight_tint(tint: [u8; 4], now: u64, age_ns: u64, seed: f32) -> [u8; 4] {
+    let time_s = loop_time_s(now);
+    let wave = 0.5 + 0.5 * (time_s * (TAU / 3.5) + seed * TAU).sin();
+    let pop = if age_ns < vfx::HIGHLIGHT_POP_NS {
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "age_ns is strictly below 400_000_000 ns"
+        )]
+        let u = 1.0 - age_ns as f32 / vfx::HIGHLIGHT_POP_NS as f32;
+        u * u
+    } else {
+        0.0
+    };
+    let lift = 0.14 * wave + 0.30 * pop;
+    let alpha_scale = (0.90 + 0.10 * wave + 0.08 * pop).min(1.0);
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "clamped to [0, 255] before casting"
+    )]
+    let lift_channel = |channel: u8, target: f32| -> u8 {
+        let c = f32::from(channel);
+        (c + (target - c) * lift).clamp(0.0, 255.0).round() as u8
+    };
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "clamped to [0, 255] before casting"
+    )]
+    let alpha = (f32::from(tint[3]) * alpha_scale).clamp(0.0, 255.0).round() as u8;
+    [
+        lift_channel(tint[0], 195.0),
+        lift_channel(tint[1], 255.0),
+        lift_channel(tint[2], 242.0),
+        alpha,
+    ]
 }
 
 /// Which combat visual a fighting subject wears in the Enhanced tier.

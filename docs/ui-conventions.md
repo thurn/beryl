@@ -1127,9 +1127,12 @@ not a mark.
 
 - **eligible.** The player may pick or use it now: a card to play, a permanent
   with an ability, a legal target, an attacker or blocker to declare, an option.
-  A cyan outline. Arena outlines all of these in one cyan, and neither dims nor
-  outlines what cannot be picked (IEXcjBn3BXk 17:59.5, IEXcjBn3BXk 19:43.5,
-  UrGalw_f35w 26:55.0, IEXcjBn3BXk 22:20.5, UrGalw_f35w 19:51.0).
+  A cyan outline that shimmers with a slow scrolling flare and pops outward once
+  over 0.4 s when it first appears (Enhanced procedural shimmer and pop;
+  Baseline animated outline tint). Arena outlines all of these in one shimmering
+  cyan-mint outline with a one-shot 0.4 s outward pop on appear, and neither
+  dims nor outlines what cannot be picked (IEXcjBn3BXk 17:59.5, IEXcjBn3BXk
+  19:43.5, UrGalw_f35w 26:55.0, IEXcjBn3BXk 22:20.5, UrGalw_f35w 19:51.0).
 - **selected.** The player has picked it in the open prompt. A gold outline. A
   clicked attacker and a chosen blocker turn gold (SswBO8aOOgc 33:30.5,
   UrGalw_f35w 42:50.0).

@@ -41,7 +41,7 @@ const ENHANCED_MATERIALS: [(&str, &str); 3] = [
     ("shade_particle", "particle"),
 ];
 /// The procedural Enhanced VFX functions, each with the name its counts go under.
-const VFX_MATERIALS: [(&str, &str); 11] = [
+const VFX_MATERIALS: [(&str, &str); 13] = [
     ("shade_attacker_chevron", "vfx_chevron"),
     ("shade_blocker_shield", "vfx_shield"),
     ("shade_line_ribbon", "vfx_line_ribbon"),
@@ -53,6 +53,8 @@ const VFX_MATERIALS: [(&str, &str); 11] = [
     ("shade_shield_add", "vfx_shield_add"),
     ("shade_shield_remove", "vfx_shield_remove"),
     ("shade_settle", "vfx_settle"),
+    ("shade_highlight_shimmer", "vfx_highlight_shimmer"),
+    ("shade_highlight_pop", "vfx_highlight_pop"),
 ];
 /// The FNV-1a hash of `src/shader.wgsl`'s bytes. The Baseline shader is frozen by the Enhanced
 /// tier, which reuses its functions and repeats its entry points; a deliberate change to it
