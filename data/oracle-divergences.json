@@ -425,5 +425,19 @@
     "scenario": "Doubling Season doubles the counters a permanent enters with",
     "cr": "CR 122.6 (https://yawgatog.com/resources/magic-rules/#R1226): \"Some spells and abilities refer to counters being put on an object. This refers to putting counters on that object while it's on the battlefield and also to an object that's given counters as it enters the battlefield.\"",
     "reason": "XMage leaves Dark Depths with ten ice counters under Doubling Season: it does not count the counters a permanent enters with as counters put on it, which CR 122.6 and the card's ruling (Doubling Season affects permanents that enter with counters) say it is"
+  },
+  {
+    "oracle": "forge",
+    "card": "Chromatic Lantern",
+    "scenario": "a Forest taps for white mana under Chromatic Lantern",
+    "cr": "CR 613.1f (https://yawgatog.com/resources/magic-rules/#R6131f): \"Layer 6: Ability-adding effects, keyword counters, ability-removing effects, and effects that say an object can't have an ability are applied.\"",
+    "reason": "Forge's ComputerUtilMana fails to pay {1}{W}{W} using Chromatic Lantern and two Forests, even though Chromatic Lantern grants each Forest '{T}: Add one mana of any color.' (XMage and Beryl both cast Geist of the Moors)."
+  },
+  {
+    "oracle": "forge",
+    "card": "Chromatic Lantern",
+    "scenario": "generated 3: cast Wetland Sambar paying beside Plains",
+    "cr": "CR 613.1f (https://yawgatog.com/resources/magic-rules/#R6131f): \"Layer 6: Ability-adding effects, keyword counters, ability-removing effects, and effects that say an object can't have an ability are applied.\"",
+    "reason": "Forge's ComputerUtilMana fails to pay {1}{U} using Chromatic Lantern and a Plains, even though Chromatic Lantern grants the Plains '{T}: Add one mana of any color.' (XMage and Beryl both cast Wetland Sambar)."
   }
 ]
