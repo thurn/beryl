@@ -489,6 +489,13 @@
       "until": "first priority decision for seat 0"
     },
     {
+      "name": "opening-opponent-free-mulligan-first",
+      "seed": 13311631893818503597,
+      "decks": ["forgetful-fish", "forgetful-fish"],
+      "agents": ["greedy", "greedy"],
+      "until": "first keepOrMulligan decision for seat 0"
+    },
+    {
       "name": "first-target",
       "seed": 1,
       "decks": ["wu-control", "wu-control"],

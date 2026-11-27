@@ -433,10 +433,14 @@ impl Table {
                 (bottom, Vec2::new(0.5, 0.0), Vec2::new(0.0, gap))
             }
             None if self.layout().fitted_piles.is_none() => {
-                // Banded layouts put shared piles on the left/right edges; align inward.
-                let (x, ax) = match zone {
-                    ZoneName::Library => (low.x, 0.0),
-                    _ => (high.x, 1.0),
+                // Banded layouts put shared piles on the left and right edges of the window, so
+                // the count stands over the pile's inner edge and reaches toward the middle. Which
+                // edge a pile is on is read from where it is, not from its zone: the desktop puts
+                // the graveyard on the right and the phone puts it on the left.
+                let (x, ax) = if centre.x < self.camera().window.size.width / 2.0 {
+                    (low.x, 0.0)
+                } else {
+                    (high.x, 1.0)
                 };
                 (Vec2::new(x, centre.y), Vec2::new(ax, 0.5), Vec2::ZERO)
             }

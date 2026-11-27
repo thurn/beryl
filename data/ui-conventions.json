@@ -1110,7 +1110,7 @@
     {
       "kind": "not-seen",
       "name": "A free mulligan",
-      "rule": "In a shared-deck game, when a player's opening hand qualifies before a regular mulligan, the mode mulligan prompt shows \"Free Mulligan\" in place of \"Mulligan\" above the primary \"Keep 7\" button. Taking it reveals the hand to the opponent in the Revealed Cards pile (showcase) before the hand goes back into the shared library with the mulligan's motion and a new seven-card hand is dealt."
+      "rule": "In a shared-deck game, when a player's opening hand qualifies before a regular mulligan, the mode mulligan prompt shows \"Free Mulligan\" in place of \"Mulligan\" above the primary \"Keep 7\" button. Taking it reveals the hand to the opponent in the Revealed Cards pile (showcase) before the hand goes back into the shared library with the mulligan's motion and a new seven-card hand is dealt. While the player who took it waits for the other player to declare, the other player's opening shows \"Your opponent has taken a free mulligan\" under the title, where Arena's opening says \"Your opponent has taken 1 mulligan and may take another\", so the revealed hand reads as the mulligan's reveal and not as hidden information shown by mistake."
     },
     {
       "kind": "not-seen",

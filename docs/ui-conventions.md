@@ -459,7 +459,11 @@ recordings do not show them.
   Mulligan" in place of "Mulligan" above the primary "Keep 7" button. Taking it
   reveals the hand to the opponent in the Revealed Cards pile (showcase) before
   the hand goes back into the shared library with the mulligan's motion and a
-  new seven-card hand is dealt.
+  new seven-card hand is dealt. While the player who took it waits for the other
+  player to declare, the other player's opening shows "Your opponent has taken a
+  free mulligan" under the title, where Arena's opening says "Your opponent has
+  taken 1 mulligan and may take another", so the revealed hand reads as the
+  mulligan's reveal and not as hidden information shown by mistake.
 - **A hand in two rows.** In the client, a hand with more cards than one fan
   across the window holds with a strip of each uncovered, such as 60 cards, is
   laid in two or more fans, one behind and above the other, in hand order from

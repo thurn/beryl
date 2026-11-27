@@ -356,25 +356,44 @@ pub fn duplicates(frame: &Frame, context: &Context) -> Vec<Fault> {
 }
 
 /// Text fits: no laid-out line of text reaches outside its element's box, as a line wider than
-/// the box, or lines that together are taller than it, would.
+/// the box, or lines that together are taller than it, would. Nor does the part of a line its
+/// clip shows reach past the window's edge: a box sized to its text fits the text however wide it
+/// is, so a line too wide for a phone otherwise passes while the window cuts off its ends.
+/// Half a point of slack allows for rounding where a line meets the edge exactly.
 #[must_use]
 pub fn text_fits(frame: &Frame, context: &Context) -> Vec<Fault> {
+    let window = Rect {
+        x: -0.5,
+        y: -0.5,
+        width: context.size.width + 1.0,
+        height: context.size.height + 1.0,
+    };
     frame
         .lines
         .iter()
-        .filter(|line| !contains(bounds(&frame.resolved[line.element as usize]), line.rect))
-        .map(|line| {
+        .filter_map(|line| {
+            let element = &frame.resolved[line.element as usize];
+            let shown = element
+                .clip
+                .map_or(Some(line.rect), |clip| intersection(line.rect, clip));
+            let place = if !contains(bounds(element), line.rect) {
+                "its box"
+            } else if shown.is_some_and(|shown| !contains(window, shown)) {
+                "the window"
+            } else {
+                return None;
+            };
             let subject = subject(frame, line.element);
-            fault(
+            Some(fault(
                 Rule::TextFits,
                 context,
                 format!(
-                    "a line of {}'s text ({}) reaches outside its box",
+                    "a line of {}'s text ({}) reaches outside {place}",
                     subject.describe(),
                     super::fault::rect_text(line.rect)
                 ),
                 vec![subject],
-            )
+            ))
         })
         .collect()
 }

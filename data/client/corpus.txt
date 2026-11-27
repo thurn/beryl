@@ -1155,6 +1155,7 @@ opening-free-mulligan
 opening-hover
 opening-keep
 opening-opponent-free-mulligan
+opening-opponent-free-mulligan-first
 opening-opponent-play
 opening-play
 opponent-turn

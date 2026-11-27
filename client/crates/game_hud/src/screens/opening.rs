@@ -68,6 +68,10 @@ const STARTING_HAND: usize = 7;
 /// The title, `.opening-title`: 56 points of the serif face, bold.
 const TITLE: TypeStyle = type_style::OPENING_TITLE;
 
+/// The line under the title that says what the opponent declared, as Arena's opening says
+/// "Your opponent has taken 1 mulligan and may take another after you have made your choice."
+const NOTE: TypeStyle = type_style::OVERLAY_INSTRUCTION;
+
 /// Whether the viewer is on the play, `.opening-coin`: 22 points of the serif face.
 const COIN: TypeStyle = type_style::OPENING_COIN;
 
@@ -274,7 +278,9 @@ pub fn present(shown: &Presentation, profile: Profile, style: OpeningStyle) -> E
             .color(color::OPENING_TITLE)
             .drop_shadow(scaled_shadows(&shadow::OPENING_TITLE, scale));
     }
-    heading.style.margin = [0.0, 0.0, sizes.title_gap, 0.0];
+    let note = note_line(view, &sizes);
+    let title_gap = if note.is_some() { 0.0 } else { sizes.title_gap };
+    heading.style.margin = [0.0, 0.0, title_gap, 0.0];
     let hand_row = hand_grid(shown, &sizes, profile.card(), card);
     let dots = (shown.waiting && profile.data().hud.opening.waiting_dots).then(|| waiting(style));
     let slots_row = (slots > 0).then(|| {
@@ -298,6 +304,7 @@ pub fn present(shown: &Presentation, profile: Profile, style: OpeningStyle) -> E
         .align_items(Align::Center)
         .child(coin_row)
         .child(heading)
+        .children(note)
         .child(hand_row)
         .children(slots_row)
         .children(dots)
@@ -317,6 +324,19 @@ pub fn present(shown: &Presentation, profile: Profile, style: OpeningStyle) -> E
                 .background_image(vec![gradient::OPENING_BACKDROP]),
         )
         .child(screen)
+}
+
+/// The line under the title about the opponent's declaration ([`note`]), which takes the gap
+/// under the title in its place.
+fn note_line(view: &PlayerView, sizes: &Sizes) -> Option<Element> {
+    note(view).map(|words| {
+        let mut line = text(words)
+            .style(sizes.note)
+            .color(color::TEXT)
+            .passes(true);
+        line.style.margin = [0.0, 0.0, sizes.title_gap, 0.0];
+        line
+    })
 }
 
 /// Converts a desktop opening shadow's stage lengths to window points.
@@ -467,6 +487,16 @@ fn title(view: &PlayerView, starting: Option<Side>, picking: bool) -> String {
     }
 }
 
+/// The line under the title about the opponent's declaration, if it has one to say. Arena's
+/// opening has such a line for the opponent's mulligans. Arena has no free mulligan, so the
+/// line for it is Beryl's own (UI Conventions, "A free mulligan"): without it, the opponent's
+/// hand, which taking a free mulligan reveals, looked like hidden information shown by
+/// mistake.
+fn note(view: &PlayerView) -> Option<&'static str> {
+    (view.players.opponent.mulligan == Declaration::WillFreeMulligan)
+        .then_some("Your opponent has taken a free mulligan")
+}
+
 /// Whether the session marks the card in `slot` picked in `prompt`.
 fn selected(prompt: &PromptView, slot: ObjectId) -> bool {
     (prompt.marks.iter())
@@ -514,6 +544,8 @@ struct Sizes {
     coin: TypeStyle,
     title: TypeStyle,
     title_gap: f32,
+    /// The line under the title about the opponent's declaration ([`note`]).
+    note: TypeStyle,
     /// The width of each card of the hand, and of each card on its way to the bottom.
     card: f32,
     slot: f32,
@@ -572,6 +604,7 @@ impl Sizes {
             coin: text_style(COIN),
             title: text_style(TITLE),
             title_gap: metrics.title_gap * scale,
+            note: text_style(NOTE),
             card: metrics.card * scale,
             slot: metrics.slot * scale,
             card_gap: metrics.card_gap * scale,
@@ -608,8 +641,18 @@ impl Sizes {
             wrapped.coin
         };
         let per_row = wrapped.per_row.get() as f32;
-        let header =
-            coin / 2.0 + wrapped.coin_line + wrapped.coin_gap + wrapped.title + wrapped.title_gap;
+        // The note's line, when there is one, stands between the title and its gap.
+        let note_style = TypeStyle {
+            size: wrapped.coin_line,
+            ..NOTE
+        };
+        let note_line = note(shown.view).map_or(0.0, |_| note_style.size * note_style.line_height);
+        let header = coin / 2.0
+            + wrapped.coin_line
+            + wrapped.coin_gap
+            + wrapped.title
+            + note_line
+            + wrapped.title_gap;
         let footer = wrapped.dock_bottom
             + if actions > 0 {
                 actions as f32 * screen.action_height + (actions - 1) as f32 * screen.action_gap
@@ -659,6 +702,7 @@ impl Sizes {
                 ..TITLE
             },
             title_gap: wrapped.title_gap,
+            note: note_style,
             card,
             slot,
             card_gap: wrapped.gap,
