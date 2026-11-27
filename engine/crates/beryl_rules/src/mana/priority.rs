@@ -188,11 +188,9 @@ fn list_instant_options<L: Layout>(
     out: &mut L::Queue<Opt<L>, OPTIONS>,
 ) -> Result<(), Full> {
     let instant = |slot: L::Slot| {
+        // Each of its abilities: its own, a merged card's, and one granted or lent to it.
         s.abilities(t, slot).filter(move |&(ability, a)| {
-            matches!(
-                ability,
-                ObjectAbility::Own(_) | ObjectAbility::Merged(..) | ObjectAbility::Granted(_)
-            ) && is_instant_mana(a)
+            is_instant_mana(a)
                 && (!a.cost().does(CostAction::Tap) || can_tap(s, player, slot, s.derived(slot)))
                 && allowed(s, t, a, player, &s.ability_words(slot, ability))
         })

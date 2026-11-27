@@ -212,8 +212,10 @@ pub enum Capability {
     /// [CR 508.1d]: https://yawgatog.com/resources/magic-rules/#R5081d
     /// [CR 509.1c]: https://yawgatog.com/resources/magic-rules/#R5091c
     CombatRequirements,
-    /// A card grants another permanent a plain mana ability ([`crate::table::is_simple`]), so
-    /// the layers note when any such grant is in effect for [`crate::State::makes_card_mana`].
+    /// A card grants another permanent a plain mana ability ([`crate::table::is_simple`]), or
+    /// lends it the activated abilities of other cards ([`beryl_card::Modification::Lend`]),
+    /// which may be mana abilities, so the layers note when any such row of the table of
+    /// grants is in effect for [`crate::State::makes_card_mana`].
     GrantsMana,
     /// A card reads [`beryl_card::Objects::Convoked`], the creatures that convoked a spell
     /// (see [CR 702.51a]). Without it, tapping a creature for convoke writes no memo and
@@ -333,7 +335,7 @@ impl Capability {
                     found |= Capability::DefinesPt.bit();
                 }
                 if (spec.modifications.iter()).any(|m| matches!(m, Modification::Lend(_))) {
-                    found |= Capability::Grants.bit();
+                    found |= Capability::Grants.bit() | Capability::GrantsMana.bit();
                 }
                 if (spec.modifications.iter()).any(|m| {
                     matches!(m, Modification::AddKeywords(keywords) if keywords.contains(Keywords::MENACE))

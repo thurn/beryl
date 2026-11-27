@@ -286,13 +286,14 @@ impl<L: Layout> State<L> {
     }
 
     /// Whether any bit set in `bits` names a row of the table of grants whose ability is a
-    /// mana ability.
+    /// mana ability, or a lent row, whose abilities may be mana abilities: the cards it lends
+    /// from change without the layers running, so the permanent is read ability by ability.
     fn has_granted_mana_row(&self, t: &crate::table::GameTable, mut bits: L::AbilityMask) -> bool {
         let rows = self.grant_rows();
         while !bits.is_empty() {
             let row = bits.lowest();
             bits = bits.without_lowest();
-            if rows[row].ability(t).is_some_and(crate::table::is_simple) {
+            if rows[row].is_lent() || rows[row].ability(t).is_some_and(crate::table::is_simple) {
                 return true;
             }
         }

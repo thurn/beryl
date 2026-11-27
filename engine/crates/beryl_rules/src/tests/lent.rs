@@ -8,8 +8,8 @@ use beryl_card::filter::Filter;
 use beryl_card::phrases::{creature_you_control, when_enters};
 use beryl_card::target::{TargetKind, TargetSpec};
 use beryl_card::{
-    Ability, CardDef, Cost, CounterKind, Face, FaceIx, LayerSpec, Lends, Lent, LentFrom,
-    Modification, ObjectAbility, Objects, Types, Zone,
+    Ability, CardDef, Cost, CounterKind, Face, FaceIx, LayerSpec, Lends, Lent, LentFrom, ManaColor,
+    ManaCost, ManaSet, Modification, ObjectAbility, Objects, Types, Zone,
 };
 
 use super::LAND;
@@ -114,6 +114,34 @@ static DONOR_B: CardDef = CardDef {
     tokens: &[],
 };
 
+/// A creature with a plain mana ability ("{T}: Add {G}.").
+static MANA_DONOR: CardDef = CardDef {
+    name: "Test Mana Donor",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::CREATURE,
+        power: Some(1),
+        toughness: Some(1),
+        abilities: &[Ability::tap_for_mana(ManaSet::one(ManaColor::Green))],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+/// An artifact with "{1}: You gain 2 life."
+static FONT: CardDef = CardDef {
+    name: "Test Font",
+    shape: beryl_card::definition::Shape::Single,
+    faces: &[Face {
+        types: Types::ARTIFACT,
+        abilities: &[
+            Ability::activated(Cost::mana(ManaCost::generic(1))).effect(&gain_life(you(), 2))
+        ],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
 /// A vanilla 1/1 creature.
 static BORROWER: CardDef = CardDef {
     name: "Test Borrower",
@@ -147,7 +175,15 @@ static PLAIN: CardDef = CardDef {
 };
 
 static CARDS: CardTable = CardTable::new(&[
-    &LAND, &CAULDRON, &OOZE, &DONOR_A, &DONOR_B, &BORROWER, &PLAIN,
+    &LAND,
+    &CAULDRON,
+    &OOZE,
+    &DONOR_A,
+    &DONOR_B,
+    &BORROWER,
+    &PLAIN,
+    &MANA_DONOR,
+    &FONT,
 ]);
 
 const DECK: &Decklist = &[
@@ -157,6 +193,8 @@ const DECK: &Decklist = &[
     (2, "Test Donor B"),
     (4, "Test Borrower"),
     (2, "Test Plain"),
+    (2, "Test Mana Donor"),
+    (2, "Test Font"),
     (10, "Test Land"),
 ];
 
@@ -287,6 +325,35 @@ fn ability_on_stack_resolves_after_card_leaves_exile_and_borrower_loses_it() {
     assert!(lent(&g, borrower).is_empty());
 
     // The ability on the stack still resolves and gains 2 life.
+    g.pass_both();
+    assert_eq!(g.s.player(g.me).life(), life_before + 2);
+}
+
+/// A lent plain mana ability makes the borrower a source of mana (see CR 613.1f): with no
+/// land, an ability that costs {1} is offered only once the borrower has "{T}: Add {G}", and
+/// paying for it taps the borrower.
+#[test]
+fn a_lent_mana_ability_makes_the_borrower_a_mana_source() {
+    let mut g = Game::with(&CARDS, DECK, Profile::EXACT);
+    let cauldron = g.give(g.me, "Test Cauldron", StateZone::Battlefield);
+    let borrower = g.give(g.me, "Test Borrower", StateZone::Battlefield);
+    let font = g.give(g.me, "Test Font", StateZone::Battlefield);
+    let donor = g.give(g.me, "Test Mana Donor", StateZone::Graveyard);
+    refresh(&mut g);
+    assert!(offered(&g.decide(), font).is_empty());
+
+    exile_with_cauldron(&mut g, cauldron, donor);
+    refresh(&mut g);
+    assert_eq!(lent(&g, borrower), [ObjectAbility::Lent(0, 0)]);
+    assert!(!g.s.makes_card_mana(&g.t, borrower));
+    assert_eq!(offered(&g.decide(), font), [ObjectAbility::own(0)]);
+
+    let life_before = g.s.player(g.me).life();
+    g.pick(Opt::Activate {
+        slot: font,
+        ability: ObjectAbility::own(0),
+    });
+    assert!(g.s.object(borrower).is_tapped());
     g.pass_both();
     assert_eq!(g.s.player(g.me).life(), life_before + 2);
 }

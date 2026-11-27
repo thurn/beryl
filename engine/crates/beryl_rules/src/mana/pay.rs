@@ -415,7 +415,7 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
     let slot = permanent.slot();
     let (card, face) = s.definition(slot).record(t);
     // The ability found is the permanent's own, one of a card under a merged permanent (see
-    // CR 702.140e), or a plain mana ability granted to it in layer 6 (see CR 613.1f).
+    // CR 702.140e), or a plain mana ability granted or lent to it in layer 6 (see CR 613.1f).
     let find = |preferred: bool| {
         s.abilities(t, slot)
             .filter(move |&(_, a)| !preferred || is_sacrificed(a) == consume)
@@ -429,6 +429,7 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
                 ObjectAbility::Granted(k) if !restricted => {
                     granted_mana(s, t, slot, ability, k, a, color)
                 }
+                ObjectAbility::Lent(..) if !restricted => lent_mana(s, t, slot, ability, color),
                 ObjectAbility::Own(_)
                 | ObjectAbility::Granted(_)
                 | ObjectAbility::Merged(..)
@@ -570,6 +571,22 @@ fn granted_mana<L: Layout>(
             a,
         ))
     })?
+}
+
+/// The card, face, ability reference and ability of a mana ability lent to the permanent in
+/// `slot` from another card ([`ObjectAbility::Lent`]) that makes `color`. Its activation names
+/// the lending card's own ability, as a merged permanent's does.
+#[cold]
+#[inline(never)]
+fn lent_mana<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    slot: L::Slot,
+    ability: ObjectAbility,
+    color: ManaColor,
+) -> Option<(L::Card, FaceIx, TriggeredAbility, &'static Ability)> {
+    let (card, face, i, a) = s.lent_ability(t, slot, ability)?;
+    makes_now(s, t, slot, ability, a, color).then_some((card, face, TriggeredAbility::own(i), a))
 }
 
 /// Whether `a`, an unrestricted mana ability of the permanent in `slot`, makes `color` and its

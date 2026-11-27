@@ -117,14 +117,15 @@ impl<L: Layout> Rederive<'_, L> {
         }
     }
 
-    /// Whether any row written to the table of grants so far grants a plain mana ability.
+    /// Whether any row written to the table of grants so far grants a plain mana ability, or
+    /// lends abilities from other cards, any of which may be a mana ability.
     #[inline]
     pub fn has_granted_mana(&self, t: &crate::table::GameTable) -> bool {
         self.0
             .grants
             .as_slice()
             .iter()
-            .any(|row| row.ability(t).is_some_and(crate::table::is_simple))
+            .any(|row| row.is_lent() || row.ability(t).is_some_and(crate::table::is_simple))
     }
 
     /// The layer results to write, one for each permanent, in battlefield order.
