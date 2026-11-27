@@ -10,8 +10,11 @@ pub use lines::{LogKind, LogLine, Names, counter_name, learn_names, listed, log_
 use std::convert::Infallible;
 
 use game_table::profiles::Profile;
+use game_table::table::Window;
+use glam::Vec3;
 use kit_base::data::profiles::Piece;
 use kit_base::geometry::Rect;
+use kit_base::tokens::space;
 use kit_scene::{Context, Feature};
 use kit_ui::element::Element;
 
@@ -58,6 +61,24 @@ impl Layout {
                 Piece::LogSheet if open => Some(Self::Sheet(profile.slot("log")?.rect)),
                 _ => None,
             })
+    }
+
+    /// The log presentation for a table in `window`, shifting the desktop column right of the
+    /// shared library pile when `shared` piles are active so the log does not cover it.
+    #[must_use]
+    pub fn for_table(profile: Profile, window: Window, open: bool, shared: bool) -> Option<Self> {
+        let mut layout = Self::for_profile(profile, open)?;
+        if shared && let Self::Column { panel, .. } = &mut layout {
+            let table = profile.layout();
+            let camera = table.fit(window);
+            let base = camera.on_table(table.shared_piles[0]);
+            let half_width = table.camera.card.width * table.shared_pile_scale * 0.5;
+            let right = camera
+                .to_screen(Vec3::new(base.x + half_width, base.y, 0.0))
+                .x;
+            panel.x = panel.x.max(right + space::M);
+        }
+        Some(layout)
     }
 }
 

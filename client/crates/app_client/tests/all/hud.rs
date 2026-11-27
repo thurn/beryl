@@ -313,6 +313,62 @@ fn the_log_is_a_button_until_it_is_opened() {
     assert!(has(frame, Role::Text, "You gained 2 life"));
 }
 
+// Generic story checks do not toggle the game log open or assert non-overlap between the log list
+// and the shared library across every desktop window size (K20).
+#[test]
+fn column_log_panel_clears_the_shared_library_across_window_sizes() {
+    use beryl_protocol::GameUpdate;
+    use beryl_protocol::protocol::{Facing, SharedPiles};
+    use kit_ui::input::{Input as DeviceInput, Insets, Size};
+
+    let mut builder = ViewBuilder::new();
+    let hidden = builder.card(ZoneName::Library, Side::You, "Dandan").slot;
+    let top = builder.card(ZoneName::Library, Side::You, "Island").slot;
+    let mut view = builder.build();
+    for object in &mut view.objects {
+        object.facing = Facing::Down;
+        object.name = None;
+        object.zone_side = None;
+    }
+    view.players.you.library.clear();
+    view.players.opponent.library.clear();
+    view.shared = Some(SharedPiles {
+        library: vec![hidden, top],
+        graveyard: Vec::new(),
+    });
+    view.events = vec![GameEvent::LifeGain {
+        player: Side::You,
+        amount: 2,
+    }];
+
+    for (width, height) in [(1440.0, 900.0), (1600.0, 900.0), (1920.0, 1080.0)] {
+        let mut client = client();
+        client.handle(Input::Device(DeviceInput::Surface {
+            size: Size { width, height },
+            scale: 1.0,
+            safe_area: Insets::default(),
+        }));
+        client.handle(Input::Update(Box::new(GameUpdate {
+            session: SessionId(1),
+            view: view.clone(),
+        })));
+        let frame = client.frame(0);
+        let at = centre(frame, find(frame, Role::Button, "Show log"));
+        client.handle(pointer(PointerPhase::Down, at));
+        client.handle(pointer(PointerPhase::Up, at));
+
+        let frame = client.frame(100_000_000);
+        let log = edges(frame, find(frame, Role::List, "Game log"));
+        let library = edges(frame, find(frame, Role::Pile, "Library"));
+        let overlaps =
+            log.0 < library.2 && log.2 > library.0 && log.1 < library.3 && log.3 > library.1;
+        assert!(
+            !overlaps,
+            "at {width}x{height}: log {log:?} overlapped library {library:?}"
+        );
+    }
+}
+
 #[test]
 fn the_recording_driver_reports_a_features_live_state() {
     use app_client::driver::{Page, Recording};

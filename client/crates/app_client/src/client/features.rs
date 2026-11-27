@@ -524,9 +524,14 @@ impl Mounted for GameLog {
         id: &'static str,
         inputs: ViewInputs<'_>,
     ) -> Option<&'a Element> {
-        inputs.view?;
+        let view = inputs.view?;
         let slot = Features::slot::<Self>(&mut features.slots, id);
-        let layout = log::Layout::for_profile(inputs.profile, slot.state().open)?;
+        let layout = log::Layout::for_table(
+            inputs.profile,
+            inputs.window,
+            slot.state().open,
+            view.shared.is_some(),
+        )?;
         Some(slot.view(log::Inputs {
             layout,
             history: &features.log_history,
