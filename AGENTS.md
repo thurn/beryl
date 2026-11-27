@@ -3,7 +3,8 @@
 Project Beryl is a research project to build a Magic: The Gathering AI that
 plays as well as a strong human player, with a native Rust 3D client for macOS,
 Windows, iOS and Android. Games are two-player, best of three with sideboards,
-between fixed decklists. There is no drafting.
+between fixed decklists, or one game of the shared-deck format (Dandân), in
+which both players draw from one library and share one graveyard.
 
 The goal is 50,000+ card definitions. The rules engine and the AI are both
 expected to handle every card that is implemented. The WU Control mirror

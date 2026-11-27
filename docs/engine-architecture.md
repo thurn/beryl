@@ -333,8 +333,16 @@ object in a slot:
 - **Membership** is a bitboard per zone per player: library, hand, battlefield,
   graveyard, exile, command, plus the shared stack. Each object also carries its
   zone, and a debug invariant keeps the two in agreement.
-- **Order** is kept for `library` and `graveyard`, as `Fixed<u8, 60>` per
-  player, and for the stack. Hand, battlefield and exile are unordered.
+- **Order** is kept for `library` and `graveyard`, and for the stack. Hand,
+  battlefield and exile are unordered. The two libraries are one `Layout::Piles`
+  value, and so are the two graveyards: two lists of at most `DECK_SLOTS` (60)
+  slots, or, in a shared-deck game (§12.4), one list of up to
+  `SHARED_DECK_SLOTS` (80). `State::library(player)` and
+  `State::graveyard(player)` pick list `player & mask`, where `Zones::mask` is 1
+  in a per-player game and 0 in a shared one, so a read has no branch. In a
+  shared game the library and graveyard bitboards of both players hold the same
+  set, so a read of `ZoneKey::Of(player, Zone::Library)` is right for either
+  player.
 - **Linked information** is a memo of the card (`beryl_kernel`'s contract,
   "Stores"): a card in exile remembers the slot of the object that exiled,
   imprinted or hid it, so Skyclave Apparition, Chrome Mox, Memory Jar, Shelldock
@@ -1266,16 +1274,82 @@ the rules on shortcuts, executed as that many real activations; it is noted in
 (`beryl_kernel/src/format.rs`, **P10**): the seats and teams, starting life and
 opening hand, the mulligan, who skips the first draw, the turn's steps, land
 plays, the hand limit, which zones each player has, the roles of a player's
-decklists (library, sideboard) and the losses. `Format::CONSTRUCTED`, two-player
-constructed, is its one value. `Format` is zero-sized, so every getter is a
-constant and a rollout reads nothing for it; the WU mirror's count did not move
-when it was built. A second value therefore needs `Format` to carry data first.
-A getter whose answer is the same for every value stays a constant, and a getter
-whose answer differs becomes a load from the table, so what a rollout needs of
-the format is copied into the state at the deal. The rules read the starting
-life, opening hand, mulligan, first draw, hand limit, land plays, losses and
-seats. Nothing reads the turn's steps (the plan fills from `TurnStep::ALL`) or
-the zones, and the poison threshold in the losses is recorded but not checked.
+decklists (library, sideboard) and the losses. It has two values:
+`Format::CONSTRUCTED`, two-player constructed, and `Format::SHARED_DECK`, in
+which both players draw from one library and share one graveyard. A `Format` is
+one private byte. A getter whose answer is the same for both values (`seats`,
+`teams`, `starting_life`, `opening_hand`, `maximum_hand`, `lands_each_turn`,
+`starting_player`, `first_draw`, `turn`, `losses`) returns a constant and never
+reads the byte, so the WU mirror's count did not move when it held one. The
+getters that differ are read at setup, at a mulligan or when each player draws:
+`zones()` (`ZoneRule::PerPlayer` or `SharedLibraryAndGraveyard`),
+`simultaneous_draws()` (`Together`, or `OneAtATimeFromActivePlayer` for cards
+dealt from one library), `mulligan()` (`London`, or `LondonWithFreeRedraw`) and
+`decks()` (`[Library, Sideboard]`, or `[SharedLibrary]` with no sideboard). What
+a rollout needs of the format is copied into the state at the deal: whether the
+zones are shared is `Zones::mask` (§4.3), and no hot path reads the format. The
+rules read the starting life, opening hand, mulligan, first draw, hand limit,
+land plays, losses and seats. Nothing reads the turn's steps (the plan fills
+from `TurnStep::ALL`), and the poison threshold in the losses is recorded but
+not checked.
+
+The shared-deck format follows the rules Wizards of the Coast published with the
+Secret Lair Dandân deck (magic.wizards.com, 2026-03-15): 20 life, seven-card
+hands, a library and graveyard that "your" means for both players, the caster as
+the owner of a spell or permanent, simultaneous draws dealt one at a time from
+the active player, and a free mulligan for a hand with fewer than two land cards
+or fewer than two nonland cards, until the player's first regular mulligan. Its
+game has no sideboard and its deck is `decks::FORGETFUL_FISH`. The sections
+below say how the engine carries it.
+
+- **Storage and membership** are in §4.3. A shared game's cards take slots
+  `0..n` in order, so `GameTable::deck(P0)` is the shared list and `deck(P1)` is
+  empty, and a slot's range says nothing about an owner. A restarted game and a
+  subgame of a shared game are shared games. Every place that walks each
+  player's library walks the shared one once: the deal, `restart`,
+  `deal_subgame`, `chance::settle_all` and `chance::adopt_unknown`.
+- **Ownership.** A card at rest in a shared zone has no owner: `owner` and
+  `base_controller` hold `Seat::P0`, so equal positions hash equal, and
+  `State::has_owner` is false for it. `State::claim(slot, player)` gives a card
+  to the player who is about to take it, `State::disown` undoes a claim for a
+  move that did not happen, and `State::draw` claims what it draws.
+  `State::move_object` resets both fields as a card enters a shared zone, after
+  everything that depends on the old owner. Code that needs the player a card
+  came from reads it before the move: the "whenever a player discards a card"
+  trigger (`TriggerEvent::Discards`) takes the discarder from the event, not
+  from the card.
+- **The taker.** The player who takes a card out of a shared zone is the
+  *taker*: the player an instruction names as doing it, otherwise the controller
+  of the spell or ability; the payer for a cost; the caster or player for a cast
+  or land play. The zone-change pipeline (`move_ordered` in
+  `beryl_rules/src/replacement/event.rs`, in a `SHARED` instance that only a
+  shared game runs) claims each card for `Entry::controller`, or else for
+  `Sink::taker`, before it prepares the move, so everything that reads
+  `entry.controller.unwrap_or(owner)` reads the taker. A card whose move a
+  replacement prevents is disowned again. `zones::move_to_by` and `move_all_by`
+  set `Sink::taker`; a batch that takes a card from a shared zone with no taker
+  panics in a debug build and goes to the active player in a release build. "Its
+  owner" of a card in a shared zone is the player who performs the instruction.
+- **A shared zone is each player's zone.** `State::holds(player, slot)` answers
+  whether a card is in a zone of that player's, from the membership sets, in
+  both formats; rules ask it, never `owner() == player`.
+  `State::zone_owners(zone)` gives the seats that hold distinct zones of a kind,
+  `Seat::P0` alone for a shared library or graveyard, so a shared library is
+  shuffled once and a shared graveyard is counted once. Either player may use an
+  activated ability or a permission to cast that works from a shared graveyard,
+  and is its "you". A triggered ability that works there (`trigger::away`) is
+  matched once for each player. `Filter::Owned` matches a card in a shared zone
+  for every player, and the active player arranges the cards of a merged
+  permanent that go to a shared zone together.
+- **The free mulligan** is a third candidate of the keep-or-mulligan decision,
+  offered only when `may_free_mulligan` (`beryl_rules/src/game/start.rs`) holds
+  for the hand. It draws seven again and puts nothing on the bottom.
+- **What a WU Control game pays.** The masked list reads and the one test of the
+  mask in each zone move cost it between 0.01% and 0.03% of its instruction
+  count, and `size_of::<State<Small>>()` is unchanged. A compile-time parameter
+  of `Layout` would have compiled the rules and the search twice more to save
+  that, so the zone rule is a byte of the state. A rule that only a shared game
+  needs sits behind the mask or in a `#[cold]` function.
 
 `Seat`, `PerSeat` and `SlotId::PLAYERS` hold two players, and the kernel uses
 `Seat::BOTH` where it walks the players. Rules code and card code never assume
@@ -1284,13 +1358,13 @@ opponents, the defending players or the next player in turn order. What each
 other mode would still need, checked against the code on 2026-11-25 ("value"
 means a value an existing getter of `Format` would return):
 
-| Mode             | Values of `Format`                     | Still to build                                                                                                                                                                                                                                                                   |
-| ---------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Commander        | 40 life                                | 100-card decks (`DECK_SLOTS` is 60 in `Small`); a `Zone::Command` variant; a third and fourth seat; a player leaving the game; attacking several players; the commander tax, damage and color identity rules                                                                     |
-| Two-Headed Giant | Teams of two (`Teams` needs a variant) | Life shared by a team (life is per player); four seats; a shared turn; team blocks                                                                                                                                                                                               |
-| Planechase       | None                                   | A planar `DeckRole` variant; the planar die as a special action; plane and phenomenon cards as objects in the command zone                                                                                                                                                       |
-| Archenemy        | None                                   | `Teams` and `DeckRole` variants for one against many and a scheme deck; more seats; scheme cards                                                                                                                                                                                 |
-| DanDân           | A second value, `Format::SHARED_DECK`  | The shared library and graveyard, designed in §20 ("Shared zones"): the two per-player lists become one list type that a shared game uses whole, the zone moves write both players' membership, and a card that leaves a shared zone gets its owner from the player who takes it |
+| Mode             | Values of `Format`                     | Still to build                                                                                                                                                                                               |
+| ---------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Commander        | 40 life                                | 100-card decks (`DECK_SLOTS` is 60 in `Small`); a `Zone::Command` variant; a third and fourth seat; a player leaving the game; attacking several players; the commander tax, damage and color identity rules |
+| Two-Headed Giant | Teams of two (`Teams` needs a variant) | Life shared by a team (life is per player); four seats; a shared turn; team blocks                                                                                                                           |
+| Planechase       | None                                   | A planar `DeckRole` variant; the planar die as a special action; plane and phenomenon cards as objects in the command zone                                                                                   |
+| Archenemy        | None                                   | `Teams` and `DeckRole` variants for one against many and a scheme deck; more seats; scheme cards                                                                                                             |
+| DanDân           | `Format::SHARED_DECK`                  | Nothing: built, as described above                                                                                                                                                                           |
 
 Every mode with more than two players also needs `Seat`, `PerSeat` and
 `SlotId::PLAYERS` to grow past two. A subgame and a restart each take one
@@ -1336,7 +1410,15 @@ slot.
 - **Determinization** takes an Observation and an RNG and deals the unknown
   remainder of each decklist into that player's unknown slots, keeping
   everything the viewer knows. With public decklists the candidate multiset per
-  hidden group is exact, so no belief model over the cube is needed.
+  hidden group is exact, so no belief model over the cube is needed. In a shared
+  game seat 0's list is the one shared list and seat 1's is empty, so the same
+  loop deals the shared list, minus the cards the viewer knows, into every slot
+  the viewer does not know, across the shared library and the opponent's hand in
+  one pass. Knowledge stays a bitboard for each player: a player who put a card
+  on top of the shared library knows it there, and still knows it in the
+  opponent's hand after they draw it. A `chance::Random::Reveal` names the taker
+  as `owner` when a card is revealed by leaving the library (it is claimed
+  first), and `Seat::P0` when it is revealed in place, as a look or a scry is.
 - **Hidden picks** (CR 101.4a, **R12**). When each player picks a card from a
   zone the other cannot see, as Show and Tell asks, the question is asked of
   every player and never answered silently, since which cards pass the filter is
@@ -1965,7 +2047,37 @@ by the client and recorder. See
 
 The human plays under the smart stops of §15 by default. A setting switches to
 the exact profile, which offers every priority. Milestone 1 offers a game
-against any one agent; the human and the AI both play the WU Control mirror.
+against any one agent.
+
+**The deck choice.** A `StartRequest` names a deck by key
+(`beryl_protocol::DECKS`, which the New Game screen lists): `wu-control`, the
+default, or `forgetful-fish`. Both players play it. `forgetful-fish` starts a
+game of `Format::SHARED_DECK` with `decks[0]` the 80-card shared list and
+`decks[1]` and both sideboards empty; a fair deal, which compares two opening
+hands, is not offered for it. In a shared game `PlayerView::shared` holds the
+two shared piles (`library` and `graveyard`, bottom first) and both players' own
+`library` and `graveyard` are empty; the client never reads the owner or side of
+an object in a shared pile, and a locator that names a side (a shuffle, a scry)
+names the player who acted. `script::Table::shared` holds the same piles for a
+script. The AI champion plays a deck the overlay tunes no card of
+(`overlay::tunes`, which ignores basic lands) with the derived values of
+`Knowledge::Estimate` at every tier and no override, so it needs no entry for
+the shared deck.
+
+**Printings.** An `ObjectView` carries `printing`, an index into the printing
+records of `beryl_card_records` built from `data/deck-printings.csv`, or `None`
+for a card's ordinary printing. The engine cannot say which physical copy a card
+is, because a shuffle deals identities anew among slots, so the session assigns
+them (`beryl_session/src/printings.rs`). At the start of a game it makes, for
+each card name with more than one printing, a queue of that name's printings,
+each repeated by its copies, in an order drawn from a stream seeded by the
+game's seed and apart from the game's own. A slot takes the next printing once
+some player knows its identity, and gives it back to the end of the queue once
+no player does, which is when a shuffle or a random order dealt the slot anew.
+Both players' views show the same printing for a slot, a replay and an undo
+assign the same ones, and no more copies of an art are visible than the deck
+has. The AI never sees a printing, so two copies of a card stay interchangeable
+to it.
 
 As a practice tool, the human may take back their answers one at a time, from
 any decision of theirs, across the agent's decisions and turns. The session
@@ -1999,47 +2111,6 @@ and an `Undo` entry, so a replay goes back too. The engine is untouched.
 - **The repeat shortcut** (CR 733.2). The session replays a recorded run of
   choices N times, matching each by what it does, as a save does, and search
   proposes the count (§12.3). The engine needs nothing.
-- **Shared zones** (§12.4, DanDân: both players draw from one library and share
-  one graveyard). `Format::zones` is where a format asks for them, and the deal
-  copies the answer into the state, so no hot path reads the format.
-  - Storage. The library and graveyard lists of the two players become one list
-    type of the layout. In `Small` it is one array of `2 * DECK_SLOTS` slots
-    with two lengths, the bytes the two lists take today. A per-player game uses
-    a half for each player. A shared game uses the whole array for its one list,
-    so an 80-card library fits and the state does not grow.
-    `State::library(player)` returns the shared list for either player by
-    masking the player's index, with no branch.
-  - Membership. `ZoneKey` gets no shared variant. In a shared game the library
-    and graveyard bitboards of both players hold the same set, which the zone
-    chokepoints write under one test of the state's mask byte for each zone
-    move. A read of `ZoneKey::Of(player, Zone::Library)` is then right for
-    either player and costs a per-player game nothing. A prototype measured the
-    masked list reads and the test on each zone move at 0.01% to 0.03% of the WU
-    Control rollout's instruction count, with the state's size unchanged, so the
-    zone rule is a byte of the state and not a parameter of the layout.
-  - Ownership. A card in a shared zone has no owner: its owner field holds seat
-    0, which nothing may read as a player. A card that leaves one is owned by
-    the player who takes it: who draws it, whose effect puts it into a hand or
-    exiles it, who casts it, or under whose control it enters the battlefield.
-    The zone-change pipeline claims the card for that player before it prepares
-    the move, so everything that reads the owner while the card moves reads the
-    taker, and a move with no taker is a bug. The taker of a batch travels in
-    the sink, as the values its permanents chose do. "Its owner" of a card in a
-    shared zone is the player who performs the instruction. Once a card has
-    entered a shared zone nothing can ask whose it was, so a rule that needs
-    that player reads it before the move.
-  - Each player's zone. A card in a shared zone is in each player's zone of that
-    kind. `State::holds(player, slot)` answers whether a card is in a player's
-    zone from the membership sets, in both formats. An activated ability or a
-    permission to cast that works from a graveyard is either player's to use,
-    and a triggered ability that works there is matched once for each player.
-  - Acting once. Rules that act on or count each player's library or graveyard
-    walk the seats that hold distinct zones, so a shared library is shuffled
-    once and a shared graveyard is counted once.
-  - Hidden information. Slots stay public handles and knowledge stays a bitboard
-    for each player. A determinization deals the one deck list, minus the cards
-    the viewer knows, into every slot the viewer does not know, in the shared
-    library and the opponent's hand alike (§13).
 - **Ante.** A zone per player that `Format::zones` would list; `Zone` has no
   variant for it, and cards that mention ante are not written.
 - **A third seat.** `two_player.rs` says what breaks (§12.4).
@@ -2203,7 +2274,7 @@ with its numbers; and each rules question ("does this object have this ability",
 | R13 | A loop of mandatory actions is a draw (CR 104.4b), found by a repeated canonical hash (§12.2). The "repeat N times" shortcut for optional loops is designed and not built (§20).                                                                          | The draw is a rule. The shortcut is a search feature, and the longest line among the keystones is about 60 decisions against a budget of 500.                                            |
 | R14 | Every keystone is playable in the app from both seats with the prompt shapes and animation verbs that exist, and agents answer every new decision legally.                                                                                                | The protocol changes of R12 are proven only by a session, a save and a UI that use them. Polish for cards in no supported deck is not worth its cost.                                    |
 | R15 | Three foundation groups (events and listeners, layers, replacement) landed first and in order; five groups of keystones followed in parallel, with a review of each and an audit after the foundations.                                                   | The foundations edit the same kernel and rules files.                                                                                                                                    |
-| R16 | Nothing may assume a library or graveyard has one owner, so that a shared zone can join (§20). Subgames, restarts, banding and casting during a search were designed here and built by Part II.                                                           | A shared zone is a constraint on every change, not a feature of one.                                                                                                                     |
+| R16 | Nothing may assume a library or graveyard has one owner, so that a shared zone can join (§12.4). Subgames, restarts, banding and casting during a search were designed here and built by Part II.                                                         | A shared zone is a constraint on every change, not a feature of one.                                                                                                                     |
 
 ### Part II (P)
 
@@ -2218,7 +2289,7 @@ with its numbers; and each rules question ("does this object have this ability",
 | P7  | The compiler refuses the bug classes it can: `clippy::wildcard_enum_match_arm` and the four cast lints are denied in `beryl_kernel`, `beryl_rules` and `beryl_card`; only the kernel walks a set in slot order; object references are typed by what they point at (§5); every scenario plays in both state layouts (§17.1). A memo that names an object which can leave while the memo lasts holds a link, its slot and incarnation byte. | The guard table below.                                                                                                                                                                                  |
 | P8  | Each engine module declares the Comprehensive Rules it implements, and the `rule-ownership` check holds a file's citations to that range (§16.1). The engine was reorganised once to match. The 800-line limit stays.                                                                                                                                                                                                                     | About 30 files had been cut at the limit instead of at a boundary. The same data is a coverage map of the rules.                                                                                        |
 | P9  | Shared card helpers are prelude functions that compose vocabulary (§6.3). The brief drafts definitions, and `just set plan` sorts a set's unwritten cards by what they need.                                                                                                                                                                                                                                                              | A named composition can cover many cards with one function.                                                                                                                                             |
-| P10 | The engine reads the shape of a game from one `Format` (§12.4). Only two-player constructed exists, as a zero-sized type whose getters are constants, so a second format needs it to carry data first.                                                                                                                                                                                                                                    | Subgames and restarts needed it, and the zero-sized form costs rollouts nothing.                                                                                                                        |
+| P10 | The engine reads the shape of a game from one `Format` (§12.4). Two-player constructed and the shared-deck format exist, as one byte whose getters are constants wherever the two agree.                                                                                                                                                                                                                                                  | Subgames, restarts and the shared deck needed it, and a byte that no hot path reads costs rollouts nothing.                                                                                             |
 | P11 | The engine's files moved to their rule-owned places first, in a chain of changes that moved nothing but paths. Each module then had one pass that converted it to typed references and simplified it. No line count was a gate.                                                                                                                                                                                                           | Learning a module is most of what a session costs, so two trips would cost twice. A keystone conflicts with a move and not with the rest of a pass, so only the moves came before the keystones.        |
 | P12 | Compile cost is measured by Ignite's rebuild counts, and Ignite's `slow-crate` rule files the work for the crate agents spend most on rebuilding. Every card's tests run on an engine change while the pool is small; they become a check family with one check a card once it is in the thousands.                                                                                                                                       | Per-card tests cost about 0.1 CPU-seconds a card: seconds at 189 cards and over an hour at 50,000. Ignite reruns a check only when its inputs change.                                                   |
 | P13 | New keystones have no UI bar. The session's views and animation scripts cover a new object state with existing prompt shapes and verbs, so the script checks keep passing.                                                                                                                                                                                                                                                                | The UI was moving to Beryl 3D.                                                                                                                                                                          |

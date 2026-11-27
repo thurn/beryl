@@ -1,6 +1,6 @@
 # Beryl 3D architecture
 
-Beryl 3D is Beryl's native client (`rust/beryl3d`). This document describes the
+Beryl 3D is Beryl's native client (`client/`). This document describes the
 client core's organization and the constraints its tools check. See
 [Beryl 3D](beryl-3d.md) for the frame contract, determinism, hosts, rendering,
 card faces, threads, sound and bug reports.
@@ -30,7 +30,7 @@ to be repaired one case at a time.
 | A card could not be pressed, or a card in flight was hidden, on a crowded hand, row, stack or pile | About 39 fixes; the same press-square fix was made 11 times     | Each zone computed its own poses, overlap and scrolling. Nothing guaranteed a pressable card for all of them.                               |
 | A phone prompt, panel or button sat on the cards, or was too small                                 | About 20 fixes, and about 163 `phone` branches through the code | The phone layout was the desktop layout with exceptions, written wherever one was needed.                                                   |
 | A mark, count or label did not follow the thing it belonged to, or sat on other text               | About 11 fixes                                                  | Things on the table and things in the flat layer were two systems. Each feature worked out for itself where the other system's things were. |
-| A limit in `data/beryl3d/gates.json` had to be measured again                                      | About 24 fixes, and 45 fix commits touched the file             | Limits were pinned to exact measured counts, so every change that added work, and every pair of changes landing together, moved them.       |
+| A limit in `data/client/gates.json` had to be measured again                                       | About 24 fixes, and 45 fix commits touched the file             | Limits were pinned to exact measured counts, so every change that added work, and every pair of changes landing together, moved them.       |
 | A screen read wrongly in the app but passed every tool                                             | 5 fixes                                                         | Only the picture tool's host loaded glyphs and card faces the way the checks assumed.                                                       |
 | A change to `beryl_protocol` broke Beryl 3D's test builders                                        | 6 fixes                                                         | Beryl 3D built protocol values by hand in its own workspace.                                                                                |
 
@@ -58,9 +58,10 @@ Later sections refer to these by number.
   and no card. A check holds the levels apart.
 - **A3. The division into crates preserved behavior.** The split landed before
   changes to arrangement, layout profiles and features.
-- **A4. Layout profiles: any number, and two are shipped.** A profile describes
-  the table and the screen for one class of window. Desktop and phone portrait
-  are the two shipped. Features use the profile's slots and size class.
+- **A4. Layout profiles: any number, and three are shipped.** A profile
+  describes the table and the screen for one class of window. Desktop and phone
+  portrait are chosen by window size, and `wide-compact` is a preview that tools
+  select. Features use the profile's slots and size class.
 - **A5. Frame cost is held to budgets, and its trend is recorded.** A board's
   work counters must stay under a fixed budget. The measured counts are not
   committed. A job at the tip of `staging` records them and files a ticket when
@@ -121,7 +122,7 @@ The supporting crates are `beryl_render`, `beryl_assets`, `beryl_host`,
 and `beryl_assets` depend on toolkit crates only, so an edit to a prompt no
 longer rebuilds the renderer.
 
-Rules, each held by the `levels` check from `data/beryl3d/levels.json`:
+Rules, each held by the `levels` check from `data/client/levels.json`:
 
 - **A toolkit crate does not depend on `beryl_protocol`**, on a game crate or on
   an app crate, and its source names no Magic zone, step or card type. A game
@@ -137,7 +138,7 @@ Rules, each held by the `levels` check from `data/beryl3d/levels.json`:
   modules with a narrow interface to the rest of the crate. Divide the crate
   only where such a seam exists. Otherwise, when the crate exceeds the default
   `cap_lines`, keep it together and record its current `lines` under its name in
-  `cap_allowances` in `data/beryl3d/levels.json`. The entry's `reason` names the
+  `cap_allowances` in `data/client/levels.json`. The entry's `reason` names the
   seams considered and explains why each was rejected. The cap applies only to
   the Beryl 3D client core. Crates under `rust/crates/` are outside its scope.
   The line count approximates rebuild cost. Ignite's reported rebuild counts
@@ -237,11 +238,13 @@ zone and both profiles get it.
 A **profile** describes one class of window: when it applies, the camera, the
 table's containers and their regions, the named **slots** of the screen where
 features stand, the sizes of touch targets and text, and the windows its tests
-run in. A profile is a data file, `data/beryl3d/profiles/<name>.json`, and one
+run in. A profile is a data file, `data/client/profiles/<name>.json`, and one
 module in `game_table` for what data cannot say.
 
-- **Two profiles are shipped**: `desktop`, and `phone` for a window whose
-  shorter side is under 500 points. One function chooses.
+- **Three profiles are shipped**: `desktop`, `phone` for a window whose shorter
+  side is under 500 points, and `wide-compact`, the explicit preview of a short,
+  wide touch window that a tool selects by name. One function chooses between
+  the first two.
 - **A feature asks for a slot by name**, as `slot("prompt.dock")`, and for the
   profile's **size class**, compact or regular, when its content differs by
   size. It never asks which profile is in use.
@@ -250,6 +253,20 @@ module in `game_table` for what data cannot say.
 - **Adding a profile** is adding a data file, a module and a row of the test
   matrix. The wide-compact preview exercises the same features with different
   slots.
+- **The table has one of two shapes**, `TableShape::PerPlayerPiles` or
+  `SharedPiles`, taken from whether the view has `shared` (the shared-deck
+  format, `engine-architecture.md` §12.4). A per-player table has six piles, a
+  library, graveyard and exile for each player, placed by the profile's `piles`
+  data. A shared table has three: the library, the graveyard and the exile pile,
+  placed by the profile's `shared_piles` data, and the places the per-player
+  piles had stay empty. Hands, rows, the stack, life totals and the prompt tray
+  do not change. On the desktop `shared_piles` holds positions (`left`, `middle`
+  and `right`, for the library, graveyard and exile) and a scale. The phone and
+  `wide-compact` profiles hold a `width` and the insets `left` and `right`, so
+  the library sits at the left edge and the graveyard at the right edge of the
+  seam between the two players' creature rows, with exile beneath the graveyard.
+  A card moves between a shared pile and a hand, the stack or the battlefield
+  with the same verbs as any other, from the pile's position.
 
 ## Features
 
@@ -279,7 +296,7 @@ list of features, and routes. `Client` holds no feature's state by name and no
 ## Data and reload
 
 Values that are tuned are data: the camera, regions, sizes, durations, curves
-and the definitions of effects. They live in `data/beryl3d/` as JSON, one file
+and the definitions of effects. They live in `data/client/` as JSON, one file
 per subject, and `kit_base` reads each into a typed struct once.
 
 - **The client core still reads no file.** A host hands it the data as an input,
@@ -294,7 +311,7 @@ per subject, and `kit_base` reads each into a typed struct once.
 - **A frame looks nothing up by name.** Values are resolved into structs when
   the data arrives.
 
-`just b3d app --watch` loads runtime tuning from `data/beryl3d/` or
+`just b3d app --watch` loads runtime tuning from `data/client/` or
 `BERYL3D_DATA`. To watch with no window, run
 `just b3d app --window none --for 3000 --watch`. A valid edit is recorded in the
 frame log and places the table again, recompiling unfinished scripts. If an edit
@@ -317,7 +334,7 @@ marked for the Enhanced tier only.
 The 14 effects are defined in JSON. An effect's drawing needs a data entry and a
 story. Changes to the primitive set belong in code.
 
-Each definition in `data/beryl3d/effects/` names its default anchor. The shared
+Each definition in `data/client/effects/` names its default anchor. The shared
 step timing supplies the effect's duration from `data/ui-conventions.json` and
 can name an explicit target. When the timing has no effect duration, the effect
 lasts as long as the step. Each layer's interval defaults to 0 through 1, with
@@ -446,17 +463,17 @@ say only what a program cannot.
 - **The interface checks** apply the same rules to standalone stories and corpus
   recordings, including whether the declared layout relations hold.
 - **The corpus** selects recordings by distinct **signature** and includes every
-  fixture from `data/beryl3d/fixtures.json`. A signature covers what the client
+  fixture from `data/client/fixtures.json`. A signature covers what the client
   can tell apart in a recording: the shape of each view (how many objects in
   each zone, grouped as the table groups them), each script's verbs and beats,
   each prompt's shape and its numbers of candidates and buttons, and each text's
   measured number of lines. Card names and rules text are left out.
-  `data/beryl3d/corpus.txt` names the corpus, and the recordings pack built
+  `data/client/corpus.txt` names the corpus, and the recordings pack built
   before a landing holds only those recordings.
 - **At the tip**, a job with no deadline records every moment of every card,
   runs the interface checks on all of them, and files a ticket naming any
   signature the corpus lacks, with the command that adds it.
-- **Budgets.** `data/beryl3d/budgets.json` gives each gated board a budget for
+- **Budgets.** `data/client/budgets.json` gives each gated board a budget for
   its worst frame and its total, for each work counter, and for the fragments it
   shades. A count over its budget fails. A count under it passes. A budget is
   set from the floor device's frame time with headroom, with the derivation
@@ -475,7 +492,7 @@ say only what a program cannot.
 - **Compile cost** is measured outside the landing gate by Ignite's rebuild
   counts for edits to the prompt bar, button widget, battlefield rows and
   bundled flat-layer tuning. `ignite rebuild b3d-flat-tuning` appends a newline
-  to `data/beryl3d/flat.json`, which `kit_base` and `beryl_3d` embed at compile
+  to `data/client/flat.json`, which `kit_base` and `beryl_3d` embed at compile
   time. The extra newline leaves the parsed tuning values intact and lets Ignite
   measure the work of rebuilding the bundled data. Ignite restores the file
   after the measurement.
@@ -495,13 +512,13 @@ for, because they draw nothing.
 | A screen, overlay or HUD piece    | A feature directory and a line of the registry        | `game_hud`, `game_manual` or `app_screens` |
 | A prompt shape                    | A feature under the prompts, and its `ShapeBody` arm  | `game_hud`                                 |
 | A verb                            | One file, and its entry in `data/ui-conventions.json` | `game_play`                                |
-| An effect                         | A data entry and a story                              | `data/beryl3d/effects/`                    |
+| An effect                         | A data entry and a story                              | `data/client/effects/`                     |
 | A new way to arrange cards        | A policy of the solver, with stories                  | `kit_space`                                |
 | A zone, or a zone's new behavior  | A container declaration                               | `game_table`                               |
-| A window class                    | A profile                                             | `data/beryl3d/profiles/`, `game_table`     |
+| A window class                    | A profile                                             | `data/client/profiles/`, `game_table`      |
 | A widget                          | One function returning an element, with stories       | `kit_ui`                                   |
 | A way to draw                     | A paint capability or a primitive, with stories       | `kit_ui`, `kit_fx`, `beryl_render`         |
-| A tuning value                    | A key of a data file                                  | `data/beryl3d/`                            |
+| A tuning value                    | A key of a data file                                  | `data/client/`                             |
 | A test of a state no game reaches | A story                                               | Beside what it shows                       |
 | A test of a card's moment         | A scenario in the card's file                         | `rust/cards/`                              |
 

@@ -698,7 +698,14 @@ evaluation leaf is scored the same way from its estimate.
   `pimc18` lowered the suite.
 - **A second deck.** The mirror is the only testbed until §1's targets are met.
   `hold` rests on dominance, which does not depend on the deck. Card values and
-  the planner's score do, and will need another deck to test them.
+  the planner's score do, and will need another deck to test them. The app also
+  offers the shared-deck format's Dandân deck (`decks::FORGETFUL_FISH`), which
+  the overlay has no entry for. For a game whose cards the overlay tunes none
+  of, basic lands aside, every tier of the champion values cards as
+  `Knowledge::Estimate` does, from their definitions, with no override
+  (`overlay::tunes`). The work on that deck stops at legality: seeded games
+  against every agent end with every answer legal, and nothing measured its
+  strength.
 - **A solver that weighs every attack and every block.** The planner weighs a
   small set of plans. Four creatures a side is 16 attacks by 625 blocks.
 - **The Mac.** It plays no ladder games.

@@ -45,7 +45,9 @@ heavy command.
   `Card::Counterspell` and import everything with `use crate::prelude::*;`; code
   outside the card files uses `beryl_card_names::names` (also re-exported as
   `beryl_cards::names`).
-- The test decks are `decks::WU_CONTROL` and `decks::VINTAGE_WU_CONTROL`.
+- The test decks are `decks::WU_CONTROL` and `decks::VINTAGE_WU_CONTROL`, and
+  `decks::FORGETFUL_FISH`, the 80-card shared library of `Format::SHARED_DECK`
+  (`GameTable::new(Format::SHARED_DECK, &CARDS, [FORGETFUL_FISH, &[]])`).
 
 ## Rules the checks hold
 
@@ -116,7 +118,13 @@ Each of these checks explains itself when it fails.
 - `just fuzz` plays long random games (run it with
   `ignite run --class batch -- just fuzz` so multi-hour fuzzing does not starve
   interactive builds), and `just exhaust` tries every sequence of decisions near
-  the end positions of the scenarios.
+  the end positions of the scenarios. Both also play the shared-deck format:
+  `just fuzz` deals each keystone family's two decks into one shared library
+  (`decks::shared_deck`) and plays session games of `FORGETFUL_FISH`, and
+  `just exhaust` starts from the rules library's shared scenarios (those whose
+  setup has `shared`). Every agent against `FORGETFUL_FISH` is
+  `ignite test every_agent_plays_the_dandan_deck_against_random`, which is
+  ignored by default and takes minutes on every core.
 - Follow the [card-writing skill](../.agents/skills/card-writing/SKILL.md) to
   add a card. `just card brief <name>` shows its Oracle text, a Rust draft,
   rulings and references for unresolved clauses. `just card new <name>` writes
