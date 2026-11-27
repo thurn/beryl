@@ -21,6 +21,9 @@ pub fn data() -> Arc<Data> {
             .filter_map(|file| file.into_string().ok())
             .filter_map(|file| {
                 let name = file.strip_suffix(".json")?.to_owned();
+                if name == "palette" {
+                    return None;
+                }
                 let text = beryl_test_files::read_to_string(directory.join(file))
                     .expect("read effect file");
                 Some((name, text))
