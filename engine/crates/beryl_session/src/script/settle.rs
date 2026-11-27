@@ -19,13 +19,16 @@ impl Builder<'_> {
         self.drop_lift(None);
         self.open = false;
         let after = self.after;
-        let gone: Vec<(ObjectId, ZoneName)> = self
+        let mut gone: Vec<(ObjectId, ZoneName)> = self
             .table
             .objects
             .values()
             .filter(|o| !after.objects.contains_key(&o.slot))
             .map(|o| (o.slot, o.zone))
             .collect();
+        // The cards of one zone leave together, and each zone's after the one before
+        // (`timing.rs`, "zone by zone"): a subgame's start or end takes the whole table.
+        gone.sort_by_key(|&(_, zone)| zone as u8);
         for (slot, from) in gone {
             self.emit(
                 Act::Vanish {
