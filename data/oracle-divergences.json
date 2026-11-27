@@ -418,5 +418,12 @@
     "scenario": "a creature that must attack withholds Done until it is declared",
     "cr": "CR 508.1d (https://yawgatog.com/resources/magic-rules/#R5081d): \"The active player checks each creature they control to see whether it's affected by any requirements (effects that say a creature attacks if able, or that it attacks if some condition is met). If the number of requirements that are being obeyed is fewer than the maximum possible number of requirements that could be obeyed without disobeying any restrictions, the declaration of attackers is illegal.\"",
     "reason": "XMage's strict-choose test harness reports a missing ATTACKER def when declaring attackers with AttacksEachCombatStaticAbility alongside an optional attacker; Forge agrees with Beryl."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Doubling Season",
+    "scenario": "Doubling Season doubles the counters a permanent enters with",
+    "cr": "CR 122.6 (https://yawgatog.com/resources/magic-rules/#R1226): \"Some spells and abilities refer to counters being put on an object. This refers to putting counters on that object while it's on the battlefield and also to an object that's given counters as it enters the battlefield.\"",
+    "reason": "XMage leaves Dark Depths with ten ice counters under Doubling Season: it does not count the counters a permanent enters with as counters put on it, which CR 122.6 and the card's ruling (Doubling Season affects permanents that enter with counters) say it is"
   }
 ]

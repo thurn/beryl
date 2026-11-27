@@ -75,6 +75,16 @@ impl Ctx {
         vec![self.clause(Players::You, ("remove", "removes"), |_| from.clone())]
     }
 
+    /// "Double the number of +1/+1 counters on each creature you control".
+    pub(super) fn double_counters(&mut self, objects: Objects, kind: CounterKind) -> Vec<String> {
+        let on = format!(
+            "the number of {} counters on {}",
+            kind.name(),
+            self.objects(objects)
+        );
+        vec![self.clause(Players::You, ("double", "doubles"), |_| on.clone())]
+    }
+
     /// "Add {G}{G}", or "add an amount of {G} equal to its power".
     pub(super) fn add_mana_of_kind(
         &mut self,

@@ -378,7 +378,9 @@ pub(super) fn pay<L: Layout>(
                 };
                 let (game, amount) = (&mut Game::new(s, t, sink), n.unsigned_abs());
                 if n > 0 {
-                    counters::add(game, source, CounterKind::Loyalty, amount)?;
+                    // A cost puts these counters, not an effect, so a replacement of only
+                    // the counters an effect puts does not apply.
+                    counters::add(game, source, CounterKind::Loyalty, amount, false)?;
                 } else if n < 0 {
                     counters::remove(game, source, CounterKind::Loyalty, amount)?;
                 }

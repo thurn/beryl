@@ -250,6 +250,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             | Effect::AddCounters { .. }
             | Effect::RemoveCounters { .. }
             | Effect::RemoveAllCounters(_)
+            | Effect::DoubleCounters { .. }
             | Effect::AddMana { .. }
             | Effect::AddManaOfKind { .. }
             | Effect::AddProduct { .. }
@@ -434,6 +435,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 count,
             } => counters::remove_instruction(self, objects, kind, count)?,
             Effect::RemoveAllCounters(objects) => counters::remove_all_instruction(self, objects)?,
+            Effect::DoubleCounters { objects, kind } => counters::double(self, objects, kind)?,
             Effect::AddMana { player, mana } => mana::add_instruction(self, player, mana),
             Effect::AddProduct { player } => mana::add_product_instruction(self, player),
             Effect::AddManaOfKind {
@@ -778,6 +780,7 @@ fn at_once(effect: &Effect) -> bool {
             | Effect::AddCounters { .. }
             | Effect::RemoveCounters { .. }
             | Effect::RemoveAllCounters(_)
+            | Effect::DoubleCounters { .. }
             | Effect::AddMana { .. }
             | Effect::AddManaOfKind { .. }
             | Effect::AddProduct { .. }

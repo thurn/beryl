@@ -104,15 +104,18 @@ pub(crate) fn match_lore<L: Layout>(
     Ok(())
 }
 
-/// Places the first lore counter as the Saga enters (see CR 715.3a).
+/// Places the lore counters a Saga enters with (see CR 715.3a): one, or as many as the
+/// replacement effects of counters made of it as it entered
+/// (`replacement::entering::counters_entering`).
 #[cold]
 #[inline(never)]
 pub(crate) fn place_entry_lore<L: Layout>(
     s: &mut State<L>,
     permanent: Permanent<L>,
+    amount: u8,
 ) -> Result<(), Full> {
     let object = s.current(ObjectRef::from(permanent)).expect("just arrived");
-    let _ = s.add_counters(object, CounterKind::Lore, 1, false)?;
+    let _ = s.add_counters(object, CounterKind::Lore, amount, false)?;
     Ok(())
 }
 
@@ -164,18 +167,33 @@ pub(crate) fn advance<L: Layout>(
         return Ok(());
     }
     let ordered = s.in_game_order(t, adding)?;
+    // The lore each Saga had before, which the chapters it crosses are matched from.
+    let mut befores = L::Queue::<Option<u8>, 128>::default();
     sink.together();
     for &slot in ordered.as_slice() {
         let object = s
             .current(s.object_ref(slot))
             .expect("Saga on the battlefield");
+        // The turn-based action puts the counter, not an effect ([CR 715.3c]), so a
+        // replacement of only the counters an effect puts does not apply, and any other does.
+        let amount = crate::replacement::counters(
+            s,
+            t,
+            sink,
+            crate::replacement::Counters {
+                on: slot,
+                kind: CounterKind::Lore,
+                amount: 1,
+                by_effect: false,
+            },
+        )?;
+        befores.push(Some(s.counters_of(slot, CounterKind::Lore)))?;
         let layered = s.layers_read_counters(t, slot, CounterKind::Lore);
-        sink.push(s.add_counters(object, CounterKind::Lore, 1, layered)?);
+        sink.push(s.add_counters(object, CounterKind::Lore, amount, layered)?);
     }
     layers::refresh(s, t, sink)?;
-    for &slot in ordered.as_slice() {
-        let before = s.counters_of(slot, CounterKind::Lore) - 1;
-        match_lore(s, t, slot, before)?;
+    for (&slot, &before) in ordered.as_slice().iter().zip(befores.as_slice()) {
+        match_lore(s, t, slot, before.unwrap_or(0))?;
     }
     sink.apart();
     Ok(())
@@ -239,7 +257,7 @@ pub(crate) fn entering<L: Layout>(
     if saga.possible() {
         let permanent = layers::entering::as_it_would_exist(s, t, slot, *entry, copied)?;
         if saga.of(permanent.subtypes) && { permanent.lost } != L::AbilityMask::ALL {
-            entry.saga_lore = true;
+            entry.saga_lore = 1;
         }
     }
     Ok(())

@@ -44,6 +44,13 @@ use neighbours::mutants;
 #[cfg(test)]
 const EQUIVALENT: &[(&str, &str, &str, &str)] = &[
     (
+        "Hardened Scales",
+        "ability 0, replacement event",
+        "Counters { objects: All([Types(Types(4)), Whose(You)]), kind: Some(PlusOne), only_effects: true }",
+        "no cost or rule of a card in the pool puts +1/+1 counters on a creature: every +1/+1 \
+         counter is put by an effect, so limiting the replacement to effects changes nothing",
+    ),
+    (
         "Aang's Iceberg",
         "ability 1, cost",
         "part 0 4",

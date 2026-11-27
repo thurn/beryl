@@ -666,6 +666,7 @@ pub(super) fn subject_of(effect: &Effect) -> Option<Players> {
         | Effect::AddCounters { .. }
         | Effect::RemoveCounters { .. }
         | Effect::RemoveAllCounters(_)
+        | Effect::DoubleCounters { .. }
         | Effect::Modify { .. }
         | Effect::ChangeText { .. }
         | Effect::ExchangeControl(..)

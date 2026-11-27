@@ -19,6 +19,7 @@ mod chosen;
 mod combat;
 mod companion;
 mod convoke;
+mod counter_replacements;
 mod delayed;
 mod effects;
 mod entering;

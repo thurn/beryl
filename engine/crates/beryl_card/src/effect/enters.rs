@@ -114,6 +114,7 @@ impl Effect {
             | Effect::AddCounters { .. }
             | Effect::RemoveCounters { .. }
             | Effect::RemoveAllCounters(_)
+            | Effect::DoubleCounters { .. }
             | Effect::AddMana { .. }
             | Effect::AddManaOfKind { .. }
             | Effect::AddProduct { .. }

@@ -184,7 +184,8 @@ impl Effect {
             | Effect::Mutate(objects)
             | Effect::Modify { objects, .. }
             | Effect::ChangeText { objects, .. }
-            | Effect::RemoveAllCounters(objects) => Operands::of_objects(objects),
+            | Effect::RemoveAllCounters(objects)
+            | Effect::DoubleCounters { objects, .. } => Operands::of_objects(objects),
             // This object, and the partner it melds with.
             Effect::Meld(partner) => Operands::of_objects(&Objects::This).filter(Some(partner)),
             // The player who will control the permanents.

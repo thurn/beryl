@@ -42,6 +42,7 @@ enum Recipe {
     RemoveSource,
     TargetSource,
     CreateTokens(Seat),
+    CastPlaneswalker,
     ReturnCreature,
     Mutate,
     RemoveLastCounter(CounterKind),
@@ -184,6 +185,8 @@ fn replacement(event: Replaced) -> Vec<Recipe> {
             Recipe::Attack(P1),
         ],
         Replaced::Tokens { .. } => vec![Recipe::CreateTokens(P0), Recipe::CreateTokens(P1)],
+        // A planeswalker entering puts its loyalty counters on it by an effect.
+        Replaced::Counters { .. } => vec![Recipe::CastPlaneswalker],
     }
 }
 
@@ -387,6 +390,11 @@ mod tests {
             Replaced::Damage,
             Replaced::Tokens {
                 players: Players::You,
+            },
+            Replaced::Counters {
+                objects: &Filter::Any,
+                kind: None,
+                only_effects: true,
             },
         ];
         for event in events {

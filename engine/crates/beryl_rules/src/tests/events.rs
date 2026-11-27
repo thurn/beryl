@@ -1118,6 +1118,7 @@ fn a_player_orders_their_own_triggers_only_when_they_differ() {
             game.state().permanent(source).unwrap(),
             CounterKind::Story,
             1,
+            true,
         )
         .unwrap();
     });
@@ -1520,6 +1521,7 @@ fn removing_a_counter_kind_an_object_lacks_changes_nothing() {
             game.state().permanent(r).unwrap(),
             CounterKind::Story,
             2,
+            true,
         )
         .unwrap();
     });
@@ -1551,6 +1553,7 @@ fn a_permanent_has_counters_of_several_kinds_at_once() {
             game.state().permanent(r).unwrap(),
             CounterKind::Story,
             2,
+            true,
         )
         .unwrap();
         counters::add(
@@ -1558,6 +1561,7 @@ fn a_permanent_has_counters_of_several_kinds_at_once() {
             game.state().permanent(r).unwrap(),
             CounterKind::Time,
             3,
+            true,
         )
         .unwrap();
         counters::add(
@@ -1565,6 +1569,7 @@ fn a_permanent_has_counters_of_several_kinds_at_once() {
             game.state().permanent(r).unwrap(),
             CounterKind::Loyalty,
             1,
+            true,
         )
         .unwrap();
         counters::remove(
@@ -1865,7 +1870,7 @@ fn granted_keywords_end_at_cleanup_and_until_your_next_turn_lasts_through_theirs
             Duration::UntilYourNextTurn(p),
         )
         .unwrap();
-        counters::add(game, r, CounterKind::PlusOne, 1).unwrap();
+        counters::add(game, r, CounterKind::PlusOne, 1, true).unwrap();
     });
     let d = s.derived(bear);
     assert!(d.keywords.contains(Keywords::FIRST_STRIKE));

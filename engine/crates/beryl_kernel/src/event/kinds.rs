@@ -134,6 +134,8 @@ pub enum ReplacementKind {
     BeginTurn,
     /// Token creation (`beryl_card`'s `Replaced::Tokens`).
     Tokens,
+    /// Counters being put on a permanent (`beryl_card`'s `Replaced::Counters`).
+    Counters,
 }
 
 impl ReplacementKind {

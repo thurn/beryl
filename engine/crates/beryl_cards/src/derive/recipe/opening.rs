@@ -420,6 +420,14 @@ pub(super) fn open_recipe(def: &'static CardDef, place: Place, recipe: Recipe) -
             out.stimuli.push(Stimulus::CastFrom(P1, spell, Zone::Exile));
             out
         }
+        Recipe::CastPlaneswalker => {
+            let mut out = new("cast a planeswalker");
+            for _ in 0..4 {
+                out.permanent(P0, names::ISLAND);
+            }
+            out.cast(def, P0, props::PLANESWALKER.card);
+            out
+        }
         Recipe::ExileCreature => {
             let mut out = new("exile a creature");
             out.cast(def, P0, props::ARTIFACT.card);

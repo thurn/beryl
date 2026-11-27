@@ -223,6 +223,9 @@ impl Ability {
                 Replaced::PutInto(filter, _)
                 | Replaced::Enters {
                     objects: filter, ..
+                }
+                | Replaced::Counters {
+                    objects: filter, ..
                 },
             ) => {
                 filter.walk(visit);
@@ -549,6 +552,7 @@ impl Effect {
                 | Effect::AddCounters { .. }
                 | Effect::RemoveCounters { .. }
                 | Effect::RemoveAllCounters(_)
+                | Effect::DoubleCounters { .. }
                 | Effect::AddMana { .. }
                 | Effect::AddManaOfKind { .. }
                 | Effect::AddProduct { .. }

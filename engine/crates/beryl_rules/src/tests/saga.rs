@@ -56,7 +56,7 @@ fn removing_lore_does_not_trigger_but_adding_it_back_does() {
     let mut game = Game::new(&mut state, &table, &mut sink);
     crate::zones::counters::remove(&mut game, object, CounterKind::Lore, 1).unwrap();
     assert!(game.state().triggers().is_empty());
-    crate::zones::counters::add(&mut game, object, CounterKind::Lore, 1).unwrap();
+    crate::zones::counters::add(&mut game, object, CounterKind::Lore, 1, true).unwrap();
     assert_eq!(game.state().triggers().len(), 1);
     assert_eq!(game.state().counters_of(saga, CounterKind::Lore), 2);
 }
@@ -67,7 +67,7 @@ fn two_lore_counters_cross_both_chapters_in_one_range() {
     let object = state.permanent_at(saga).unwrap();
     let mut sink = Sink::off();
     let mut game = Game::new(&mut state, &table, &mut sink);
-    crate::zones::counters::add(&mut game, object, CounterKind::Lore, 2).unwrap();
+    crate::zones::counters::add(&mut game, object, CounterKind::Lore, 2, true).unwrap();
     assert_eq!(game.state().triggers().len(), 2);
     assert_eq!(game.state().counters_of(saga, CounterKind::Lore), 2);
 }
@@ -78,7 +78,7 @@ fn a_final_chapter_waiting_for_targets_prevents_sacrifice() {
     let object = state.permanent_at(saga).unwrap();
     let mut sink = Sink::off();
     let mut game = Game::new(&mut state, &table, &mut sink);
-    crate::zones::counters::add(&mut game, object, CounterKind::Lore, 2).unwrap();
+    crate::zones::counters::add(&mut game, object, CounterKind::Lore, 2, true).unwrap();
     assert_eq!(state.triggers().len(), 2);
     assert_eq!(
         crate::stack::trigger::next_to_stack(&state)

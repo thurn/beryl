@@ -1,8 +1,9 @@
 //! Neighbours of static abilities, replacements and rules.
 
 use beryl_card::{
-    Ability, Condition, Draws, Duration, Filter, Governed, LayerSpec, ManaCost, Modification,
-    Objects, PlayerRules, Replaced, Replacement, Rewrite, RuleChange, SpellCost, Types, When, Zone,
+    Ability, Condition, CounterKind, Draws, Duration, Filter, Governed, LayerSpec, ManaCost,
+    Modification, Objects, PlayerRules, Replaced, Replacement, Rewrite, RuleChange, SpellCost,
+    Types, When, Zone,
 };
 
 use super::{Kind, Neighbours, costs, leak, leak_slice, operands};
@@ -285,6 +286,37 @@ fn replacement_events(
                 name,
                 Replacement {
                     replaces: Replaced::Tokens { players },
+                    ..*replacement
+                },
+            ));
+        }
+    }
+    if let Replaced::Counters {
+        objects,
+        kind,
+        only_effects,
+    } = replacement.replaces
+    {
+        let kinds = match kind {
+            Some(_) => vec![None],
+            None => vec![Some(CounterKind::PlusOne)],
+        };
+        let flipped = kinds
+            .into_iter()
+            .map(|kind| (kind, only_effects))
+            .chain([(kind, !only_effects)]);
+        for (kind, only_effects) in flipped {
+            let replaces = Replaced::Counters {
+                objects,
+                kind,
+                only_effects,
+            };
+            out.push((
+                "replacement event",
+                Kind::ReplacementEvent,
+                format!("{replaces:?}"),
+                Replacement {
+                    replaces,
                     ..*replacement
                 },
             ));

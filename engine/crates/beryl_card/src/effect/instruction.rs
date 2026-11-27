@@ -472,6 +472,11 @@ pub enum Effect {
     },
     /// "Remove all counters from [objects]": every counter of every kind (CR 122.1).
     RemoveAllCounters(Objects),
+    /// "Double the number of [kind] counters on [objects]"
+    /// ([CR 701.10e](https://yawgatog.com/resources/magic-rules/#R70110e)): "To double the
+    /// number of a kind of counters on a player or permanent, give that player or permanent as
+    /// many of those counters as that player or permanent already has."
+    DoubleCounters { objects: Objects, kind: CounterKind },
     /// "[Player] adds [mana]"
     /// ([CR 106.3](https://yawgatog.com/resources/magic-rules/#R1063)): "A spell or ability
     /// that produces mana instructs a player to add that mana." Where the set has several

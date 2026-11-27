@@ -6,6 +6,7 @@ use super::filters::{Kind, zone_name};
 use super::words::{number, with_article};
 use crate::ability::Ability;
 use crate::continuous::{ChosenKind, Draws, Replaced, Replacement, Rewrite};
+use crate::counter::CounterKind;
 use crate::effect::Players;
 use crate::filter::Filter;
 use crate::ids::Zone;
@@ -96,12 +97,10 @@ impl Ctx {
                 "if you would begin your turn while {this} is tapped, you may skip that turn instead. If you do, untap {this}"
             )],
             (Replaced::Damage, Rewrite::Multiply(n)) => vec![super::prevention::multiplied(n)],
-            (Replaced::Tokens { players }, Rewrite::Multiply(n)) => {
-                vec![self.replaced_tokens(players, TokenCount::Multiply(n))]
-            }
-            (Replaced::Tokens { players }, Rewrite::Plus(n)) => {
-                vec![self.replaced_tokens(players, TokenCount::Plus(n))]
-            }
+            (
+                Replaced::Tokens { .. } | Replaced::Counters { .. },
+                Rewrite::Multiply(_) | Rewrite::Plus(_),
+            ) => vec![self.replaced_number(replaces, Count::of(rewrite))],
             (
                 Replaced::None
                 | Replaced::ThisEnters
@@ -110,7 +109,8 @@ impl Ctx {
                 | Replaced::Enters { .. }
                 | Replaced::BeginTurn
                 | Replaced::Damage
-                | Replaced::Tokens { .. },
+                | Replaced::Tokens { .. }
+                | Replaced::Counters { .. },
                 Rewrite::None
                 | Rewrite::ToZone(_)
                 | Rewrite::MaySkipTurnToUntap
@@ -166,9 +166,28 @@ impl Ctx {
         instead
     }
 
+    /// A replacement of how many tokens are created or counters are put.
+    fn replaced_number(&mut self, replaces: Replaced, count: Count) -> String {
+        match replaces {
+            Replaced::Tokens { players } => self.replaced_tokens(players, count),
+            Replaced::Counters {
+                objects,
+                kind,
+                only_effects,
+            } => self.replaced_counters(objects, kind, only_effects, count),
+            Replaced::None
+            | Replaced::ThisEnters
+            | Replaced::Draw(..)
+            | Replaced::PutInto(..)
+            | Replaced::Enters { .. }
+            | Replaced::BeginTurn
+            | Replaced::Damage => String::new(),
+        }
+    }
+
     /// "If an effect would create one or more tokens under [players'] control, it creates
     /// [count] instead."
-    fn replaced_tokens(&mut self, players: Players, count: TokenCount) -> String {
+    fn replaced_tokens(&mut self, players: Players, count: Count) -> String {
         let under = match players {
             Players::You => "your".to_owned(),
             Players::EachOpponent => "an opponent's".to_owned(),
@@ -182,23 +201,87 @@ impl Ctx {
             | Players::EachOther(_)) => format!("{}'s", self.player(players)),
         };
         let many = match count {
-            TokenCount::Multiply(2) => "twice that many of those tokens".to_owned(),
-            TokenCount::Multiply(n) => format!("{} times that many of those tokens", number(n)),
-            TokenCount::Plus(1) => "those tokens plus an additional token".to_owned(),
-            TokenCount::Plus(n) => format!("that many tokens plus {}", number(n)),
+            Count::Multiply(2) => "twice that many of those tokens".to_owned(),
+            Count::Multiply(n) => format!("{} times that many of those tokens", number(n)),
+            Count::Plus(1) => "those tokens plus an additional token".to_owned(),
+            Count::Plus(n) => format!("that many tokens plus {}", number(n)),
         };
         format!(
             "if an effect would create one or more tokens under {under} control, it creates {many} \
              instead"
         )
     }
+
+    /// "If an effect would put one or more counters on a permanent you control, it puts twice
+    /// that many of those counters on that permanent instead", or without `only_effects`, "If
+    /// one or more +1/+1 counters would be put on a creature you control, that many plus one
+    /// +1/+1 counters are put on it instead".
+    fn replaced_counters(
+        &mut self,
+        objects: &Filter,
+        kind: Option<CounterKind>,
+        only_effects: bool,
+        count: Count,
+    ) -> String {
+        let noun = self.noun(*objects, Kind::Permanent);
+        let on = noun.indefinite(Kind::Permanent);
+        let counters = match kind {
+            Some(kind) => format!("{} counters", kind.name()),
+            None => "counters".to_owned(),
+        };
+        let many = match count {
+            Count::Multiply(2) => "twice that many".to_owned(),
+            Count::Multiply(n) => format!("{} times that many", number(n)),
+            Count::Plus(n) => format!("that many plus {}", number(n)),
+        };
+        if only_effects {
+            let that = noun.that_permanent();
+            format!(
+                "if an effect would put one or more {counters} on {on}, it puts {many} of those \
+                 counters on {that} instead"
+            )
+        } else {
+            let rest = match kind {
+                Some(_) => counters.clone(),
+                None => "of those counters".to_owned(),
+            };
+            format!(
+                "if one or more {counters} would be put on {on}, {many} {rest} are put on it \
+                 instead"
+            )
+        }
+    }
 }
 
-/// How a token-creation replacement rewrites the count.
+/// How a replacement of a number of tokens or counters rewrites it.
 #[derive(Clone, Copy)]
-enum TokenCount {
+enum Count {
     Multiply(u8),
     Plus(u8),
+}
+
+impl Count {
+    /// The count `rewrite` makes: a `Plus` for every rewrite but `Multiply`, which the callers
+    /// pass only with `Multiply` or `Plus`.
+    fn of(rewrite: Rewrite) -> Count {
+        match rewrite {
+            Rewrite::Multiply(n) => Count::Multiply(n),
+            Rewrite::Plus(n) => Count::Plus(n),
+            Rewrite::None
+            | Rewrite::ToZone(_)
+            | Rewrite::EntersTapped
+            | Rewrite::EntersPrepared
+            | Rewrite::EntersTappedUnlessFewLands(_)
+            | Rewrite::EntersTappedUnlessYouControl(..)
+            | Rewrite::EntersTappedUnlessPayLife(_)
+            | Rewrite::EntersWithCounters(..)
+            | Rewrite::MaySkipTurnToUntap
+            | Rewrite::Instead
+            | Rewrite::Dredge(_)
+            | Rewrite::Choose(_)
+            | Rewrite::EnterAsCopy { .. } => Count::Plus(0),
+        }
+    }
 }
 
 /// What a replacement does when it changes where an object goes.

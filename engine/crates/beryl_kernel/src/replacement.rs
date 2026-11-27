@@ -130,6 +130,12 @@ pub(crate) fn check(def: &CardDef) -> Result<Replaces, Unreplaced> {
                 }
                 mask = mask | ReplacementKind::Tokens;
             }
+            (Replaced::Counters { .. }, Rewrite::Multiply(n)) if n > 1 => {
+                mask = mask | ReplacementKind::Counters;
+            }
+            (Replaced::Counters { .. }, Rewrite::Plus(n)) if n > 0 => {
+                mask = mask | ReplacementKind::Counters;
+            }
             (
                 Replaced::None
                 | Replaced::ThisEnters
@@ -138,7 +144,8 @@ pub(crate) fn check(def: &CardDef) -> Result<Replaces, Unreplaced> {
                 | Replaced::Enters { .. }
                 | Replaced::BeginTurn
                 | Replaced::Damage
-                | Replaced::Tokens { .. },
+                | Replaced::Tokens { .. }
+                | Replaced::Counters { .. },
                 Rewrite::None
                 | Rewrite::ToZone(_)
                 | Rewrite::EntersTapped

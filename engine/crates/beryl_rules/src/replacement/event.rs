@@ -51,8 +51,9 @@ pub(crate) struct Entry<L: Layout = Small> {
     pub face: FaceIx,
     /// Counters it enters with ("enters with N time counters").
     pub counters: Option<(CounterKind, u8)>,
-    /// The intrinsic lore counter, which can be placed alongside other entry counters.
-    pub saga_lore: bool,
+    /// The lore counters of a Saga's intrinsic entering replacement (one, unless a replacement
+    /// of counters changed the number), which can be placed alongside other entry counters.
+    pub saga_lore: u8,
     /// An entry replacement gives this permanent the prepared designation (see CR 723.3a).
     pub preparation: Preparation,
     /// Its controller chose to pay the life an "unless you pay N life" replacement asks.
@@ -96,8 +97,8 @@ pub(crate) fn arrive<L: Layout>(
             attach: entry.attach,
         },
     )?;
-    if entry.saga_lore {
-        crate::saga::place_entry_lore(s, permanent)?;
+    if entry.saga_lore > 0 {
+        crate::saga::place_entry_lore(s, permanent, entry.saga_lore)?;
     }
     if !entry.paid.is_empty() {
         s.remember(slot, Memo::Paid(entry.paid))?;

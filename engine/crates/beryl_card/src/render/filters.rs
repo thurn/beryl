@@ -429,6 +429,15 @@ impl Noun {
         self.phrase(kind, true)
     }
 
+    /// The permanent named again after it was described: "that creature" when it is of one
+    /// kind, else "that permanent".
+    pub(super) fn that_permanent(&self) -> String {
+        match self.kinds.as_slice() {
+            [one] => format!("that {one}"),
+            _ => "that permanent".to_owned(),
+        }
+    }
+
     /// One of them with its article: "a creature", "an artifact card", and "a Plains or an
     /// Island" for subtypes, which each take their own.
     pub(super) fn indefinite(&self, kind: Kind) -> String {

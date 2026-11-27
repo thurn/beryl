@@ -57,7 +57,8 @@ pub fn explore<L: Layout>(
         }
     }
     if let Some(permanent) = game.state().permanent(permanent.into()) {
-        counters::add(game, permanent, CounterKind::PlusOne, 1)?;
+        // Exploring is an effect's instruction, so an effect puts the counter.
+        counters::add(game, permanent, CounterKind::PlusOne, 1, true)?;
     }
     // The card is revealed, on top of the library: a yes puts it into the graveyard.
     let prompt = Prompt::new(Purpose::Explore)

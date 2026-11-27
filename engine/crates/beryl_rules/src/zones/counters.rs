@@ -1,6 +1,6 @@
 //! Counters (see [CR 122](https://yawgatog.com/resources/magic-rules/#R122)).
 //!
-//! Implements: CR 122.6
+//! Implements: CR 122.6, CR 701.10e
 
 use beryl_card::{Amount, Objects};
 use beryl_kernel::reference::{Permanent, Permanents};
@@ -9,17 +9,21 @@ use crate::fixed::Full;
 use crate::game::Game;
 use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
+use crate::replacement;
 use crate::state::{CounterKind, ObjectRef};
 
 /// Puts `amount` counters of a kind on a permanent
-/// ([CR 122.6](https://yawgatog.com/resources/magic-rules/#R1226)). One that has changed zones
-/// since gets none (see CR 400.7).
+/// ([CR 122.6](https://yawgatog.com/resources/magic-rules/#R1226)), as many as the
+/// replacement effects of counters leave ([`replacement::counters`]). `by_effect` says whether
+/// an effect puts them, rather than a cost or a rule, which some of those replacements ask.
+/// One that has changed zones since gets none (see CR 400.7).
 #[inline]
 pub fn add<L: Layout>(
     game: &mut Game<'_, L>,
     object: Permanent<L>,
     kind: CounterKind,
     amount: u8,
+    by_effect: bool,
 ) -> Result<(), Full> {
     let Some(object) = game.state.current(ObjectRef::from(object)) else {
         return Ok(());
@@ -28,6 +32,17 @@ pub fn add<L: Layout>(
     if amount == 0 || !game.state.object(slot).on_battlefield() {
         return Ok(());
     }
+    let amount = replacement::counters(
+        game.state,
+        game.table,
+        game.sink,
+        replacement::Counters {
+            on: slot,
+            kind,
+            amount,
+            by_effect,
+        },
+    )?;
     if kind == CounterKind::Lore {
         return add_lore(game, object, amount);
     }
@@ -103,7 +118,36 @@ pub(crate) fn add_instruction<L: Layout>(
     kind: CounterKind,
     count: Amount,
 ) -> Result<Outcome<L>, Full> {
-    change(run, objects, kind, count, add)
+    // An effect puts these counters.
+    change(run, objects, kind, count, |game, object, kind, n| {
+        add(game, object, kind, n, true)
+    })
+}
+
+/// [`Effect::DoubleCounters`](beryl_card::Effect::DoubleCounters): "Double the number of
+/// [kind] counters on [objects]" ([CR 701.10e]): "To double the number of a kind of counters on
+/// a player or permanent, give that player or permanent as many of those counters as that
+/// player or permanent already has." Each permanent is given its counters by an effect, so the
+/// replacement effects of counters apply to each placement. The outcome is the counters put.
+///
+/// [`Full`] when the number given does not fit beside the number it has.
+///
+/// [CR 701.10e]: https://yawgatog.com/resources/magic-rules/#R70110e
+pub(crate) fn double<L: Layout>(
+    run: &mut Run<'_, '_, L>,
+    objects: Objects,
+    kind: CounterKind,
+) -> Result<Outcome<L>, Full> {
+    let permanents = run.permanents(objects);
+    let before = counters_on(run, permanents, Some(kind));
+    let mut left = permanents;
+    while let Some(object) = run.state().next_permanent(&mut left) {
+        let has = run.state().counters_of(object.slot(), kind);
+        has.checked_add(has).ok_or(Full)?;
+        add(run.game(), object, kind, has, true)?;
+    }
+    let after = counters_on(run, permanents, Some(kind));
+    Ok(Outcome::of(permanents.slots(), after.abs_diff(before)))
 }
 
 /// [`Effect::RemoveCounters`](beryl_card::Effect::RemoveCounters): "Remove [count] [kind]

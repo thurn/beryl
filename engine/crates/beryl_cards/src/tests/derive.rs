@@ -43,6 +43,12 @@ const UNREACHED: &[(&str, &str)] = &[
          which no generated position has; the card's hand-written scenarios meld the pair",
     ),
     (
+        "Hardened Scales: ability 0 (Replacement)",
+        "it replaces +1/+1 counters put on a creature, and no prop or generated position puts \
+         any; the rules library's scenarios for the card put them with The Wandering Emperor and \
+         Adaptive Shimmerer",
+    ),
+    (
         "Lure: ability 1 (Static)",
         "generated scenarios stop before combat, so they never declare blockers; the rules \
          library's combat::MUST_BLOCK scenarios exercise it",

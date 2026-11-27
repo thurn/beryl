@@ -30,9 +30,11 @@ use crate::state::{MoveReplacement, StackEntry, State, Zone};
 use crate::table::{Capability, GameTable};
 use beryl_kernel::reference::Spell;
 
+mod counters;
 mod damage;
 mod destruction;
 mod tokens;
+pub(crate) use counters::{Counters, Entering, counters, entering_counters};
 pub(crate) use damage::{Damage, damage};
 pub(crate) use destruction::destruction;
 pub(crate) use tokens::{Tokens, tokens};
@@ -351,9 +353,10 @@ pub(crate) fn exiled_instead<L: Layout>(s: &State<L>, spell: Spell<L>, to: Zone)
 /// the drawing player chooses the order of it and another replacement of the draw ([`draw`]),
 /// so this holds in every game with a card that has one: such a card may enter the battlefield
 /// during the run. So does a game with a card whose static ability replaces damage
-/// ([`ReplacementKind::Damage`]) or token creation ([`ReplacementKind::Tokens`]): the affected
-/// player chooses the order of replacements when different orders change the result
-/// ([`damage`], [`tokens`]). A game whose cards have none of these pays two
+/// ([`ReplacementKind::Damage`]), token creation ([`ReplacementKind::Tokens`]) or counters
+/// being put ([`ReplacementKind::Counters`]): the affected player chooses the order of
+/// replacements when different orders change the result ([`damage`], [`tokens`],
+/// [`counters`]). A game whose cards have none of these pays two
 /// ANDs. Two replacements of a move that send an object to different zones would be a choice
 /// too, but every card with such a replacement sends it to exile. Two replacements of the
 /// same draw that give different players the win would also differ. With the current card
@@ -368,6 +371,7 @@ pub(crate) fn may_ask(t: &GameTable) -> bool {
         || replaces.replaces(ReplacementKind::DrawInstructions)
         || replaces.replaces(ReplacementKind::Damage)
         || replaces.replaces(ReplacementKind::Tokens)
+        || replaces.replaces(ReplacementKind::Counters)
 }
 
 /// Whether the resolution of `entry` may meet a choice it did not declare it asks: a

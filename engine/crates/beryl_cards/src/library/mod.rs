@@ -277,6 +277,16 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
         replacement::ENTERS_WITH_COUNTERS,
     ),
     (
+        "replacement",
+        names::DOUBLING_SEASON,
+        replacement::DOUBLED_COUNTERS,
+    ),
+    (
+        "replacement",
+        names::HARDENED_SCALES,
+        replacement::PLUS_ONE_COUNTER,
+    ),
+    (
         "tokens",
         names::ADELINE_RESPLENDENT_CATHAR,
         tokens::ATTACKING,

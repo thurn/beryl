@@ -916,6 +916,37 @@
       ]
     }
   ],
+  "Doubling Season": [
+    {
+      "published_at": "2024-11-08",
+      "hash": "8ff92f93e788",
+      "covered": "Two Parallel Lives make four tokens without asking"
+    },
+    {
+      "published_at": "2024-11-08",
+      "hash": "570b305091a7",
+      "untestable": "no battle is implemented yet (Invasion of Zendikar would show it)"
+    },
+    {
+      "published_at": "2024-11-08",
+      "hash": "03d3a27cf8bf",
+      "covered": "Parallel Lives doubles a token created tapped and attacking"
+    },
+    {
+      "published_at": "2024-11-08",
+      "hash": "d61c20fc054e",
+      "scenario": [
+        "Doubling Season doubles the counters a permanent enters with"
+      ]
+    },
+    {
+      "published_at": "2024-11-08",
+      "hash": "24b938b5169a",
+      "scenario": [
+        "Doubling Season doubles a planeswalker's loyalty but not its loyalty cost"
+      ]
+    }
+  ],
   "Dress Down": [
     {
       "published_at": "2021-06-18",
@@ -1316,6 +1347,27 @@
       "scenario": [
         "Gurmag Angler with seven cards in the graveyard costs {B}"
       ]
+    }
+  ],
+  "Hardened Scales": [
+    {
+      "published_at": "2023-09-01",
+      "hash": "5afb416d8fde",
+      "scenario": [
+        "Two Hardened Scales make one +1/+1 counter three"
+      ]
+    },
+    {
+      "published_at": "2023-09-01",
+      "hash": "a8f35e2401a7",
+      "scenario": [
+        "Hardened Scales adds one to the +1/+1 counters a creature enters with"
+      ]
+    },
+    {
+      "published_at": "2023-09-01",
+      "hash": "9001ac576fa9",
+      "covered": "Replacement::counters_put"
     }
   ],
   "Haunted Fengraf": [

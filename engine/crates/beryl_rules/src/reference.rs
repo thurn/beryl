@@ -287,7 +287,10 @@ pub(crate) fn reference_payable<L: Layout>(
 /// restricted mana that spell accepts among the units (see [CR 106.6]): "Some spells or
 /// abilities that produce mana restrict how that mana can be spent". Only in a game whose
 /// cards make restricted mana: in any other, a payment for a spell is one for nothing, which
-/// [`check_payments`] checks.
+/// [`check_payments`] checks. Not in a game with priced mana abilities or mana changes either:
+/// [`reference_units`] counts one tap of each source and cannot pay a source's own cost, so it
+/// would refuse a payment that pays a mana ability's {1} with a land's mana, and only
+/// [`reference_sequences`] models those, for no spell.
 ///
 /// [CR 106.6]: https://yawgatog.com/resources/magic-rules/#R1066
 #[allow(
@@ -300,7 +303,9 @@ fn check_spell_payments<L: Layout>(
     player: Seat,
     funds: &Funds<L>,
 ) -> Result<(), Violation> {
-    if !t.can(Capability::RemembersMana) {
+    if !t.can(Capability::RemembersMana)
+        || t.can_either(Capability::PricedMana, Capability::ManaChanges)
+    {
         return Ok(());
     }
     let at = Some(At::Player(player));

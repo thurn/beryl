@@ -14,7 +14,7 @@ use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
-use crate::replacement::event::ReplacementKind;
+use crate::replacement::event::{ReplacementKind, Sink};
 use crate::state::State;
 use crate::table::GameTable;
 
@@ -52,31 +52,68 @@ pub(crate) fn tokens<L: Layout>(game: &mut Game<'_, L>, proposal: Tokens) -> Res
     replaced(game, proposal)
 }
 
-/// What a replacement effect of token creation does to the count.
+/// What a replacement effect of a number (tokens created, counters put) does to it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-enum Change {
+pub(super) enum Change {
     /// Multiplies the count by N.
     Multiply(u8),
     /// Adds N to the count.
     Plus(u8),
 }
 
-/// A static ability of a permanent that applies to the token creation now: its permanent, its
-/// place among that permanent's abilities (the identity [CR 614.5] tracks as having applied),
-/// and how it rewrites the count.
+impl Change {
+    /// `n` rewritten, or [`Full`] when the result does not fit in a `u8`.
+    pub(super) fn apply(self, n: u8) -> Result<u8, Full> {
+        match self {
+            Change::Multiply(m) => n.checked_mul(m).ok_or(Full),
+            Change::Plus(m) => n.checked_add(m).ok_or(Full),
+        }
+    }
+
+    /// The change a rewrite of a number makes, if it is one.
+    pub(super) fn of(rewrite: Rewrite) -> Option<Change> {
+        match rewrite {
+            Rewrite::Multiply(n) => Some(Change::Multiply(n)),
+            Rewrite::Plus(n) => Some(Change::Plus(n)),
+            Rewrite::None
+            | Rewrite::ToZone(_)
+            | Rewrite::EntersTapped
+            | Rewrite::EntersPrepared
+            | Rewrite::EntersTappedUnlessFewLands(_)
+            | Rewrite::EntersTappedUnlessYouControl(..)
+            | Rewrite::EntersTappedUnlessPayLife(_)
+            | Rewrite::EntersWithCounters(..)
+            | Rewrite::MaySkipTurnToUntap
+            | Rewrite::Instead
+            | Rewrite::Dredge(_)
+            | Rewrite::Choose(_)
+            | Rewrite::EnterAsCopy { .. } => None,
+        }
+    }
+}
+
+/// A static ability of a permanent that applies to the event now: its permanent, its place
+/// among that permanent's abilities (the identity [CR 614.5] tracks as having applied), and
+/// how it rewrites the number.
 ///
 /// [CR 614.5]: https://yawgatog.com/resources/magic-rules/#R6145
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-struct Candidate<S> {
-    slot: S,
-    ability: ObjectAbility,
-    change: Change,
+pub(super) struct Candidate<S> {
+    pub slot: S,
+    pub ability: ObjectAbility,
+    pub change: Change,
 }
 
 /// The scratch lists in [`replaced`] hold this many effects in `Small` and grow in `Large`.
-const MOST: usize = 16;
+pub(super) const MOST: usize = 16;
 
-type Candidates<L> = <L as Layout>::Queue<Option<Candidate<<L as Layout>::Slot>>, MOST>;
+pub(super) type Candidates<L> = <L as Layout>::Queue<Option<Candidate<<L as Layout>::Slot>>, MOST>;
+
+/// The replacements that have applied to one event ([CR 614.5]).
+///
+/// [CR 614.5]: https://yawgatog.com/resources/magic-rules/#R6145
+pub(super) type Applied<L> =
+    <L as Layout>::Queue<Option<(<L as Layout>::Slot, ObjectAbility)>, MOST>;
 
 /// [`tokens`] once some permanent replaces token creation: the loop of [CR 616.1]: "If two or
 /// more replacement and/or prevention effects are attempting to modify the way an event affects
@@ -98,17 +135,14 @@ type Candidates<L> = <L as Layout>::Queue<Option<Candidate<<L as Layout>::Slot>>
 #[cold]
 #[inline(never)]
 fn replaced<L: Layout>(game: &mut Game<'_, L>, mut p: Tokens) -> Result<u8, Full> {
-    let mut applied = L::Queue::<Option<(L::Slot, ObjectAbility)>, MOST>::default();
+    let mut applied = Applied::<L>::default();
     while p.count > 0 {
         let found = candidates(game.state(), game.table(), p, applied.as_slice())?;
-        let Some(c) = choose(game, p, found.as_slice())? else {
+        let Some(c) = choose(game.state, game.sink, p.controller, found.as_slice())? else {
             break;
         };
         applied.push(Some((c.slot, c.ability)))?;
-        p.count = match c.change {
-            Change::Multiply(n) => p.count.checked_mul(n).ok_or(Full)?,
-            Change::Plus(n) => p.count.checked_add(n).ok_or(Full)?,
-        };
+        p.count = c.change.apply(p.count)?;
     }
     Ok(p.count)
 }
@@ -125,12 +159,8 @@ fn candidates<L: Layout>(
     let pick = |_, a: &Ability, r: &Replacement| match *r {
         Replacement {
             replaces: Replaced::Tokens { players },
-            rewrite: Rewrite::Multiply(n),
-        } if a.kind() == AbilityKind::Replacement => Some((players, Change::Multiply(n))),
-        Replacement {
-            replaces: Replaced::Tokens { players },
-            rewrite: Rewrite::Plus(n),
-        } if a.kind() == AbilityKind::Replacement => Some((players, Change::Plus(n))),
+            rewrite,
+        } if a.kind() == AbilityKind::Replacement => Some((players, Change::of(rewrite)?)),
         _ => None,
     };
     for (slot, ability, a, (players, change)) in
@@ -157,11 +187,13 @@ fn candidates<L: Layout>(
 /// Multipliers alone commute with each other, and additions alone commute with each other, so
 /// when every remaining effect is of the same kind any order produces the same count and the
 /// first is taken without asking. When both a multiplier and an addition remain, the order
-/// changes the final count, so the player who would control the tokens chooses among one
-/// representative of each distinct rewrite.
-fn choose<L: Layout>(
-    game: &mut Game<'_, L>,
-    p: Tokens,
+/// changes the final count, so `chooser` (the player who would control the tokens, or who
+/// controls the permanent the counters are put on) chooses among one representative of each
+/// distinct rewrite.
+pub(super) fn choose<L: Layout>(
+    s: &State<L>,
+    sink: &mut Sink<L>,
+    chooser: Seat,
     found: &[Option<Candidate<L::Slot>>],
 ) -> Result<Option<Candidate<L::Slot>>, Full> {
     let found = || found.iter().flatten().copied();
@@ -187,12 +219,12 @@ fn choose<L: Layout>(
         return Ok(reps.as_slice().iter().flatten().copied().next());
     }
     let d = Decision::options(
-        p.controller,
+        chooser,
         DecisionKind::ChooseObject,
         options,
         Prompt::new(Purpose::Replace),
     );
-    let c = super::answer(game.state, game.sink, &d)?;
+    let c = super::answer(s, sink, &d)?;
     let chosen = d.candidates.option(c);
     Ok(reps
         .as_slice()

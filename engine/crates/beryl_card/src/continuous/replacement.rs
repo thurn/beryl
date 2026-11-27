@@ -178,6 +178,29 @@ impl Replacement {
             rewrite,
         }
     }
+
+    /// "If one or more [kind] counters would be put on [a permanent the filter accepts], [rewrite]
+    /// instead", with `kind` `None` for counters of any kind. With `only_effects`, only counters
+    /// an effect puts: "If an effect would put one or more counters on a permanent you
+    /// control" (Doubling Season), and not those of a cost such as a loyalty ability's.
+    /// Hardened Scales has `only_effects` false. When two replacements of the same counters
+    /// rewrite the number differently, the controller of the permanent chooses which applies
+    /// first, whoever controls their sources (see CR 616.1).
+    pub const fn counters_put(
+        objects: &'static Filter,
+        kind: Option<CounterKind>,
+        only_effects: bool,
+        rewrite: Rewrite,
+    ) -> Replacement {
+        Replacement {
+            replaces: Replaced::Counters {
+                objects,
+                kind,
+                only_effects,
+            },
+            rewrite,
+        }
+    }
 }
 
 /// The event a replacement effect replaces.
@@ -226,6 +249,17 @@ pub enum Replaced {
     /// ([CR 614.1a](https://yawgatog.com/resources/magic-rules/#R6141a)): "Effects that use the
     /// word 'instead' are replacement effects."
     Tokens { players: Players },
+    /// One or more counters of `kind` (of any kind with `None`) being put on a permanent the
+    /// filter accepts, read for the permanent with the ability's controller. With
+    /// `only_effects`, only counters an effect puts: not those of a cost (a loyalty ability's)
+    /// or of a turn-based action (a Saga's lore counter as its controller's precombat main phase
+    /// begins) ([CR 614.1a](https://yawgatog.com/resources/magic-rules/#R6141a)): "Effects that
+    /// use the word 'instead' are replacement effects."
+    Counters {
+        objects: &'static Filter,
+        kind: Option<CounterKind>,
+        only_effects: bool,
+    },
 }
 
 impl crate::Ability {
@@ -291,7 +325,8 @@ pub enum Rewrite {
     /// Multiplies the replaced number by N, whatever it counts (damage dealt, tokens created or
     /// counters placed): "twice that many" or "double that damage" is 2.
     Multiply(u8),
-    /// Adds N to the replaced number (tokens created or counters placed).
+    /// Adds N to the replaced number (tokens created or counters placed): "that many plus one"
+    /// is 1.
     Plus(u8),
     /// "You may have this enter as a copy of [a permanent the filter accepts] on the
     /// battlefield", with the exception at `except` of the face's list

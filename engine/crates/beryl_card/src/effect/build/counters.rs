@@ -18,6 +18,11 @@ pub const fn remove_all_counters(objects: Objects) -> Effect {
     Effect::RemoveAllCounters(objects)
 }
 
+/// [`Effect::DoubleCounters`]: "double the number of [kind] counters on [objects]".
+pub const fn double_counters(objects: Objects, kind: CounterKind) -> Effect {
+    Effect::DoubleCounters { objects, kind }
+}
+
 /// [`Effect::RemoveCounters`]: "remove [count] [kind] counters from [objects]".
 pub const fn remove_counters(objects: Objects, kind: CounterKind, count: u8) -> Effect {
     Effect::RemoveCounters {

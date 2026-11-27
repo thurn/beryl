@@ -180,9 +180,66 @@ pub(super) fn entering<L: Layout>(
     if t.can(Capability::Saga) {
         crate::saga::entering(s, t, slot, &mut entry, copied)?;
     }
+    if s.replacing()
+        .is_some_and(|r| r.replaces(ReplacementKind::Counters))
+    {
+        entry = counters_entering(s, t, sink, slot, entry, copied, controller)?;
+    }
     if let Some(values) = copied {
         sink.copies.push((slot, values))?;
         entry.face = values.record(t).1;
+    }
+    Ok(entry)
+}
+
+/// The counters `entry` enters with, as the replacement effects of counters leave them
+/// ([`super::entering_counters`]). Each is put by an effect: one a replacement effect of the
+/// permanent gives it, a planeswalker's printed loyalty, and a Saga's first lore counter. The
+/// last two come from intrinsic abilities that create replacement effects (see [CR 306.5b]): "A
+/// planeswalker has the intrinsic ability 'This permanent enters with a number of loyalty
+/// counters on it equal to its printed loyalty number.' This ability creates a replacement
+/// effect (see rule 614.1c)." And (see [CR 715.3a]): "Each Saga without read ahead has the
+/// intrinsic ability 'This Saga enters with a lore counter on it.' This ability creates a
+/// replacement effect (see rule 614.1c)." The rulings of a replacement limited to effects
+/// double a planeswalker's loyalty, and `XMage` and Forge double a Saga's first lore counter the
+/// same way.
+///
+/// [CR 306.5b]: https://yawgatog.com/resources/magic-rules/#R3065b
+/// [CR 715.3a]: https://yawgatog.com/resources/magic-rules/#R7153a
+#[cold]
+#[inline(never)]
+fn counters_entering<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    slot: L::Slot,
+    mut entry: Entry<L>,
+    copied: Option<Copiable<L>>,
+    controller: Seat,
+) -> Result<Entry<L>, Full> {
+    let entering = super::Entering {
+        entry,
+        copied,
+        controller,
+    };
+    if let Some((kind, amount)) = entry.counters {
+        let proposal = super::Counters {
+            on: slot,
+            kind,
+            amount,
+            by_effect: true,
+        };
+        let n = super::entering_counters(s, t, sink, proposal, entering)?;
+        entry.counters = Some((kind, n));
+    }
+    if entry.saga_lore > 0 {
+        let proposal = super::Counters {
+            on: slot,
+            kind: CounterKind::Lore,
+            amount: entry.saga_lore,
+            by_effect: true,
+        };
+        entry.saga_lore = super::entering_counters(s, t, sink, proposal, entering)?;
     }
     Ok(entry)
 }
