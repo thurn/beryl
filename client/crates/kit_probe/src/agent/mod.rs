@@ -8,6 +8,7 @@ pub mod judged;
 pub mod line;
 pub mod locate;
 pub mod motion;
+pub mod pile_reach;
 pub mod text_overlap;
 pub mod tree;
 

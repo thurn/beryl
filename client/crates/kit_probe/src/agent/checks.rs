@@ -206,7 +206,8 @@ pub fn overlap(frame: &Frame, context: &Context) -> Vec<Fault> {
 /// over another covers it for a moment, which leaves no card out of reach. A hand card the
 /// pointer has up out of the fan is judged where it rests in the fan (`Frame::lifted`), as the
 /// pointer's hit test finds it: a press on a card the raised card covers moves the pointer
-/// there first, which lowers the raised card and raises the one beneath.
+/// there first, which lowers the raised card and raises the one beneath. Piles are judged by
+/// `pile_reach::piles_reachable`.
 #[must_use]
 pub fn reachable(frame: &Frame, context: &Context) -> Vec<Fault> {
     let resting;
@@ -298,6 +299,7 @@ pub fn reachable(frame: &Frame, context: &Context) -> Vec<Fault> {
         };
         faults.push(fault(Rule::Reachable, context, message, subjects));
     }
+    faults.extend(super::pile_reach::piles_reachable(frame, context));
     faults
 }
 

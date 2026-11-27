@@ -135,12 +135,25 @@ pub fn free_rect(frame: &Frame, index: u32, min: Size) -> Option<Rect> {
 /// line across it and `min.height` tall.
 #[must_use]
 pub fn has_free_rect(frame: &Frame, overlaps: &Overlaps, index: u32, min: Size) -> bool {
-    let grid = Grid::new(
-        frame,
-        index,
-        overlaps.near(grid_area(frame, index)),
-        Shear::NONE,
-    );
+    has_free_rect_ignoring(frame, overlaps, index, min, |_| false)
+}
+
+/// `has_free_rect` as though the elements `ignore` picks were not drawn: a press is tested
+/// against the other elements only.
+#[must_use]
+pub fn has_free_rect_ignoring(
+    frame: &Frame,
+    overlaps: &Overlaps,
+    index: u32,
+    min: Size,
+    ignore: impl Fn(u32) -> bool,
+) -> bool {
+    let near = |area: Rect| {
+        let mut near = overlaps.near(area);
+        near.retain(|&other| other == index || !ignore(other));
+        near
+    };
+    let grid = Grid::new(frame, index, near(grid_area(frame, index)), Shear::NONE);
     if grid.clear_square(frame, index, min) {
         return true;
     }
@@ -153,7 +166,7 @@ pub fn has_free_rect(frame: &Frame, overlaps: &Overlaps, index: u32, min: Size) 
         return false;
     }
     let area = shear.screen_bounds(shear.bounds(&frame.resolved[index as usize]));
-    let grid = Grid::new(frame, index, overlaps.near(area), shear);
+    let grid = Grid::new(frame, index, near(area), shear);
     let free = grid.free_cells(frame, index, true);
     grid.search(&free, min, true).is_some()
 }
