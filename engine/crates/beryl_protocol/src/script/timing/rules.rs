@@ -269,27 +269,6 @@ fn cards_leaving_several_zones_at_once_leave_zone_by_zone() {
     assert_eq!(staggers, [0.0, 300.0, 300.0, 0.0]);
 }
 
-/// Cards that come to several zones in one beat, as a subgame's new game does, come zone by
-/// zone like the cards that leave (UI Conventions, "A whole table leaving").
-#[test]
-fn cards_arriving_in_several_zones_at_once_arrive_zone_by_zone() {
-    let came = |slot, to| Act::Appear {
-        from: ZoneName::Nowhere,
-        why: Why::Created,
-        object: card(slot, to, Side::You),
-        at: None,
-        item: None,
-    };
-    let timings = beat(&[
-        came(1, ZoneName::Battlefield),
-        came(2, ZoneName::Battlefield),
-        came(3, ZoneName::Graveyard),
-    ]);
-    let staggers: Vec<f64> = timings.iter().map(|timing| timing.stagger).collect();
-    assert_eq!(staggers[1], 300.0, "{staggers:?}");
-    assert!(staggers[0] < 300.0 && staggers[2] < 300.0, "{staggers:?}");
-}
-
 /// A creature's blow bursts on what it strikes and shakes the table as it lands, and a trail
 /// follows it as it dashes.
 #[test]

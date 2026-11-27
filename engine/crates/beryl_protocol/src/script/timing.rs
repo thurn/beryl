@@ -349,20 +349,10 @@ fn motion(
     // A row opens for the permanent that appears in it before that is seen: it has made room
     // by the end of the delay (Arena's token is whole in its own slot from its first frame,
     // `UrGalw_f35w 17:38.63`). A hand dealt has no neighbours to move.
-    // The cards of one zone come together and the next zone's a set time after (UI
-    // Conventions, "A whole table leaving"), so a permanent that is the last of its zone to
-    // appear holds up the next.
-    let zoned = next_zone(act, beside)
-        .then(|| data.stagger(act.verb(), "next zone"))
-        .flatten();
     if let Act::Appear { object, .. } = act
         && object.zone == ZoneName::Battlefield
     {
-        return StepTiming {
-            opens: true,
-            stagger: zoned.map_or(own.stagger, |zoned| own.stagger.max(zoned)),
-            ..own
-        };
+        return StepTiming { opens: true, ..own };
     }
     // The cards of one draw are all in the hand as the first leaves the library: the hand
     // opens their places once, and each card then flies to a place that stays where it is.
@@ -458,12 +448,14 @@ fn motion(
     {
         return StepTiming { stagger, ..own };
     }
-    // Cards that leave or come to several zones in one beat do so zone by zone: those of one
-    // zone go together, and the next zone's begin a set time after (UI Conventions, "A whole
-    // table leaving"). A subgame's start or end takes every card of the game left behind at
-    // once and puts the new game's there, and 16 cards breaking up in four zones at once
-    // read as no move at all.
-    if let Some(stagger) = zoned {
+    // Cards that leave several zones in one beat leave zone by zone: those of one zone go
+    // together, and the next zone's begin a set time after (UI Conventions, "A whole table
+    // leaving"). A subgame's start or end takes every card of the game left behind at once,
+    // and 16 cards breaking up in four zones at once read as no move at all.
+    if let Some(stagger) = next_zone(act, beside)
+        .then(|| data.stagger(Verb::Vanish, "next zone"))
+        .flatten()
+    {
         return StepTiming {
             stagger: own.stagger.max(stagger),
             ..own

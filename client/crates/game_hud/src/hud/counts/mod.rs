@@ -342,9 +342,7 @@ impl CountFloats {
                 FloatLook::default(),
             );
             if let Some(number) = effect.number {
-                let by = counts.map_or(0, |counts| counts.change);
-                let (align, drift) =
-                    change_placement(number, by, life_style, data.verbs.count.drift);
+                let (align, drift) = change_placement(number, life_style, data.verbs.count.drift);
                 layer.anchor_float(
                     floats::LIFE_CHANGE[at],
                     life.at(Vec2::ZERO, align, offset + drift),
@@ -362,12 +360,8 @@ impl CountFloats {
 /// Keep the desktop gain above the position where it overlaps the "Your draw" toggle.
 const GAIN_CLEARANCE: f32 = 2.0;
 
-/// The most characters of a life change, sign included, that fit beside the orb in the space
-/// between it and the step stops to its left.
-const WIDE_CHANGE: usize = 2;
-
 /// The sampled number's alignment and offset relative to the life total.
-fn change_placement(number: NumberLook, by: i32, style: Life, drift: f32) -> (Vec2, Vec2) {
+fn change_placement(number: NumberLook, style: Life, drift: f32) -> (Vec2, Vec2) {
     let drift = drift * number.drift;
     let above = number.origin == NumberOrigin::Above;
     let (left, offset, anchor) = match style.change {
@@ -379,10 +373,6 @@ fn change_placement(number: NumberLook, by: i32, style: Life, drift: f32) -> (Ve
             let height = type_style::TITLE.size * type_style::TITLE.line_height;
             let offset = if above {
                 -half + size::LIFE_CHANGE_TOP - GAIN_CLEARANCE + drift
-            } else if format!("{by:+}").len() > WIDE_CHANGE {
-                // A wide loss does not fit between the orb and the step stops left of it, so it
-                // starts at the orb art's bottom, below those stops and the total's digits.
-                half + drift
             } else {
                 half - size::LIFE_CHANGE_BOTTOM - height + drift
             };
