@@ -95,12 +95,6 @@
       "value": "#ff6a5e"
     },
     {
-      "name": "stolen",
-      "kind": "color",
-      "value": "#b48cff",
-      "note": "A permanent its owner doesn't control (Card.tsx), apart from every glow."
-    },
-    {
       "name": "button-height",
       "kind": "length",
       "value": "48px",

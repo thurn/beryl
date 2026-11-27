@@ -129,9 +129,6 @@ pub mod color {
     pub const MOON: [u8; 4] = CYAN;
     /// A token's coin: the `--mark` of `.mark-token` in the same file.
     pub const COIN: [u8; 4] = [214, 210, 204, 255];
-    /// The edge of a permanent its owner does not control: the border of `.card-stolen-edge`
-    /// (`ui/src/design/components/card-marks-and-piles.css`).
-    pub const OUTLINE: [u8; 4] = STOLEN;
     /// The outer halo round a card shown away from the zone it is in: a cool violet, apart from
     /// the cyan of a card that may be played.
     pub const AWAY: [u8; 4] = [176, 140, 255, 150];

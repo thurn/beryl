@@ -1,5 +1,5 @@
-//! The marks of a permanent's own record: summoning sickness, a token's coin, a stolen
-//! permanent's outline, the attacker's wedge and the blocker's crescent.
+//! The marks of a permanent's own record: summoning sickness, a token's coin, the attacker's
+//! wedge and the blocker's crescent, and no mark on a stolen permanent.
 
 use app_client::Input;
 use app_client::driver::{Page, Recording};
@@ -147,7 +147,7 @@ fn the_sickness_badge_follows_the_card_and_leaves_its_text_clear() {
 }
 
 #[test]
-fn a_token_wears_a_coin_and_a_stolen_permanent_an_outline() {
+fn a_token_wears_a_coin_and_a_stolen_permanent_no_outline() {
     let frame = show(
         &mut client(),
         &creature(Side::You, |card| {
@@ -157,7 +157,8 @@ fn a_token_wears_a_coin_and_a_stolen_permanent_an_outline() {
         0,
     );
     assert_eq!(marks(&frame, sprites::COIN).len(), 1);
-    assert_eq!(marks(&frame, sprites::OUTLINE).len(), 1);
+    // Arena marks no permanent for being controlled by a player who does not own it.
+    assert!(marks(&frame, sprites::OUTLINE).is_empty());
     let plain = show(&mut client(), &creature(Side::You, |_| {}), 0);
     assert!(marks(&plain, sprites::COIN).is_empty());
     assert!(marks(&plain, sprites::OUTLINE).is_empty());

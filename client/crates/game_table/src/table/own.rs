@@ -6,7 +6,9 @@
 //! - Summoning sickness: a cyan crescent on a dark badge, like the web's `.card-sick-moon`.
 //!   The badge sits over the art to leave the card's text and stats visible.
 //! - A token: a coin at the bottom left, where the web's `.card-counters` row puts its label.
-//! - A permanent its owner does not control: a violet outline, the web's `.card-stolen-edge`.
+//! - A permanent its owner does not control gets no mark. MTG Arena draws none: a Coveted Jewel
+//!   the player has taken shows nothing when tapped and only the pale "playable" outline the
+//!   player's lands also show when it may be used (`0VsYGs88NXA` at 29:20 and 30:32).
 //! - A card the hand shows from its owner's graveyard, one they may cast from there: two soft
 //!   halos, violet and pale, breathing out of step, as MTG Arena rings such a card in drifting
 //!   smoke (`tovCPHl-gOM` at 9:08 and 15:02.5). Drawn on the card wherever it is, so the ring
@@ -135,10 +137,6 @@ pub(super) fn write(
     if record.token {
         let size = Vec2::splat(own.coin.size * card.x);
         marks.icon(sprites::COIN, own.coin.at * card, size, color::COIN);
-    }
-    if record.controller != record.owner {
-        let size = sprites::outline_size(card / 2.0);
-        marks.icon(sprites::OUTLINE, Vec2::ZERO, size, color::OUTLINE);
     }
     if fighting != Fighting::No {
         #[expect(
