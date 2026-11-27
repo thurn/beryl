@@ -607,3 +607,38 @@ fn a_fading_notice_pill_stays_under_a_stacked_prompt_button() {
         );
     }
 }
+
+#[test]
+fn the_dock_rises_above_a_two_row_hand_in_compact_view() {
+    let mut builder = ViewBuilder::new();
+    for index in 0..6 {
+        if index >= 4 {
+            // Graveyard cards castable from the graveyard (e.g. Underworld Breach / flashback)
+            // fan into the hand's back row and must also raise `prompt.dock`.
+            let card = builder.card(ZoneName::Graveyard, Side::You, "Island");
+            card.castable_from_graveyard = true;
+        } else {
+            builder.card(ZoneName::Hand, Side::You, "Island");
+        }
+    }
+    let mut update = builder.update();
+    if let Input::Update(prompt_update) = deciding(prompt("Pay {1}{U}")) {
+        update.view.status = prompt_update.view.status;
+    }
+    let mut client = compact(375.0, 647.0);
+    client.handle(Input::Update(Box::new(update)));
+    let frame = client.frame(0);
+    let next = find(frame, Role::Button, "Auto Pay");
+    let (_, next_top, _, next_bottom) = edges(frame, next);
+    let hand_top = frame
+        .resolved
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| e.role == Role::Card)
+        .map(|(i, _)| edges(frame, i).1)
+        .fold(f32::INFINITY, f32::min);
+    assert!(
+        next_bottom <= hand_top,
+        "Auto Pay ({next_top}..{next_bottom}) should rise above hand_top ({hand_top})"
+    );
+}

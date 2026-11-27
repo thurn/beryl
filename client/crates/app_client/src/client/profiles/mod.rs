@@ -73,7 +73,8 @@ fn project(
             ZoneName::Battlefield if object.controller == Side::You => Group::YourRows,
             ZoneName::Battlefield => Group::TheirRows,
             ZoneName::Stack => Group::Stack,
-            ZoneName::Hand if object.owner == Side::You => Group::Hand,
+            ZoneName::Hand if object.zone_side.unwrap_or(object.owner) == Side::You => Group::Hand,
+            _ if game_table::table::in_hand_fan(object) => Group::Hand,
             _ => continue,
         };
         if let Some(pose) = objects.card_pose(usize::from(object.slot.0)) {

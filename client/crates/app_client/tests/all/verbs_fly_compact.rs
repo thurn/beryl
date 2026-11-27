@@ -154,3 +154,49 @@ fn staggered_flights_into_narrow_compact_lands_row_are_seen_in_flight() {
     let unseen = unseen_steps(&before, &after, Side::You, compact_window(375.0, 647.0));
     assert!(unseen.is_empty(), "{unseen:?}");
 }
+
+/// Seven cards drawn in one staggered beat on a 393x759 compact window separate around the hold
+/// spot so earlier cards are not covered behind later draws for most of their flight.
+#[test]
+fn staggered_local_draws_in_compact_view_are_seen_in_flight() {
+    let mut builder = ViewBuilder::new();
+    let mut library = Vec::new();
+    for index in 0..10 {
+        let name = format!("Card {index:02}");
+        library.push(builder.card(ZoneName::Library, Side::You, &name).slot);
+    }
+    builder.script(ScriptBuilder::reset().build());
+    let before = builder.update();
+
+    let mut view = before.view.clone();
+    let mut flights = Vec::new();
+    for &slot in &library[..7] {
+        let object = view
+            .objects
+            .iter_mut()
+            .find(|o| o.slot == slot)
+            .expect("library card exists");
+        object.zone = ZoneName::Hand;
+        let object = object.clone();
+        flights.push(Act::Fly {
+            from: ZoneName::Library,
+            why: Why::Draw,
+            object,
+            at: None,
+            item: None,
+            origin: None,
+        });
+    }
+    let mut script = ScriptBuilder::default();
+    script.beat(flights);
+    let mut script = script.build();
+    script.timing = time_script(&script, &Table::of(&before.view));
+    view.script = Some(script);
+    let after = GameUpdate {
+        session: before.session,
+        view,
+    };
+
+    let unseen = unseen_steps(&before, &after, Side::You, compact_window(393.0, 759.0));
+    assert!(unseen.is_empty(), "{unseen:?}");
+}

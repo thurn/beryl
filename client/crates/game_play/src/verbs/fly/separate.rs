@@ -393,6 +393,59 @@ pub(super) fn bowed(step: &StepIn<'_>, subject: Subject, segment: Segment) -> Se
     .unwrap_or(segment)
 }
 
+/// Separates a staggered `local_draw_spline` on compact layouts when earlier flights cover it
+/// around the hold spot, by trying screen-space offsets for the hold waypoint.
+pub(super) fn local_draw(
+    step: &StepIn<'_>,
+    subject: Subject,
+    between: Segment,
+    build: impl Fn(Vec2) -> Shape,
+) -> Shape {
+    let default_shape = build(Vec2::ZERO);
+    if step.places.layout().bands.is_none() {
+        return default_shape;
+    }
+    let Some(peers) = PeerSamples::collect_from_places(step, subject) else {
+        return default_shape;
+    };
+    let camera = step.places.camera();
+    let default_segment = Segment {
+        shape: default_shape,
+        ..between
+    };
+    let mut best_score = peers.score(&default_segment, camera);
+    if best_score.0 <= ALLOWED_COVERED {
+        return default_shape;
+    }
+
+    let span = camera.window.size.width.min(camera.window.size.height) * 0.42;
+    let offsets = [
+        Vec2::new(-span * 0.65, 0.0),
+        Vec2::new(0.0, -span * 0.65),
+        Vec2::new(-span * 0.65, -span * 0.65),
+        Vec2::new(-span * 1.15, 0.0),
+        Vec2::new(-span * 1.15, -span * 0.65),
+        Vec2::new(0.0, -span * 1.15),
+        Vec2::new(-span * 0.65, -span * 1.15),
+        Vec2::new(span * 0.65, 0.0),
+        Vec2::new(0.0, span * 0.65),
+    ];
+    let mut best_shape = default_shape;
+    for offset in offsets {
+        let shape = build(offset);
+        let candidate = Segment { shape, ..between };
+        let score = peers.score(&candidate, camera);
+        if better(score, best_score) {
+            best_score = score;
+            best_shape = shape;
+            if best_score.0 == 0 {
+                break;
+            }
+        }
+    }
+    best_shape
+}
+
 /// Re-checks any in-flight crossing segment of `slot` that `retarget` just redirected at `from`
 /// against earlier crossing tracks, updating both the track and `records` if the new destination
 /// puts it directly behind an earlier flight.

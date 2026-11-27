@@ -267,7 +267,9 @@ const LOCAL_REF_FROM_NDC: Vec2 = Vec2::new(-0.74870, -0.81511);
 
 /// Builds the six-node Catmull-Rom spline for a card drawn into the viewer's hand, projecting
 /// each interior waypoint through the active camera and clamping it into the window's safe area.
-fn local_draw_spline(step: &StepIn<'_>, (from, to): (Pose, Pose)) -> Shape {
+/// `hold_offset` shifts the hold spot in screen points (used on compact layouts to separate
+/// staggered draws in mid-air).
+fn local_draw_spline(step: &StepIn<'_>, (from, to): (Pose, Pose), hold_offset: Vec2) -> Shape {
     let spec = &step.verbs.fly.draw.local;
     let camera = step.places.camera();
     let camera_back = camera.axes()[2];
@@ -282,10 +284,15 @@ fn local_draw_spline(step: &StepIn<'_>, (from, to): (Pose, Pose)) -> Shape {
         HeldDraw::Fixed { size, .. } => (None, to_seen * size),
         HeldDraw::OverRest { .. } => {
             let hold = held_place(step, to);
-            (
-                Some(camera.project(hold.position).truncate()),
-                hold.scale / camera.depth(hold.position),
-            )
+            let mut ndc = camera.project(hold.position).truncate();
+            if hold_offset != Vec2::ZERO {
+                let size = camera.window.size;
+                ndc += Vec2::new(
+                    hold_offset.x / (size.width / 2.0),
+                    -hold_offset.y / (size.height / 2.0),
+                );
+            }
+            (Some(ndc), hold.scale / camera.depth(hold.position))
         }
     };
     let from_ndc = camera.project(from.position).truncate();
@@ -619,7 +626,9 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
     let paths = &fly.paths;
     let straight = |spec| separate::straight_spline(step, subject, between, spec);
     let spline = match path {
-        Path::DrawLocal => Some(local_draw_spline(step, (from, to))),
+        Path::DrawLocal => Some(separate::local_draw(step, subject, between, |offset| {
+            local_draw_spline(step, (from, to), offset)
+        })),
         Path::DrawOpponent => Some(opponent_draw_spline(step, (from, to))),
         Path::PlayLandLocal => Some(straight(&paths.place_near)),
         Path::PlayLandOpponent => Some(apex_spline(
