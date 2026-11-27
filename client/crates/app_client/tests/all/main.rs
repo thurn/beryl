@@ -30,6 +30,7 @@ mod checks;
 mod common;
 mod compile_in_parts;
 mod contract;
+mod creature_row;
 mod drawn;
 mod driver;
 mod elements;

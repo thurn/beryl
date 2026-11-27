@@ -382,7 +382,10 @@ fn row(data: Row, centred: bool) -> RowArea {
         y: data.y,
         left: data.left,
         right: data.right,
-        centre: centred.then_some(f32::midpoint(data.left, data.right)),
+        // Centred rows (creatures) align on the table's middle line (x = 0, in line with the life
+        // orbs) rather than the midpoint of [left, right], because `right` ends left of the stack
+        // column. `Row::start` shifts the row inward only once it reaches either limit.
+        centre: centred.then_some(0.0),
     }
 }
 
