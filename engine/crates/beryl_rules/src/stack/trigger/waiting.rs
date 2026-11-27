@@ -125,6 +125,39 @@ fn equivalent<L: Layout>(
     })
 }
 
+/// Whether `beneath`, the entry under the top of the stack, is the same trigger again as `top`:
+/// both triggered abilities of the same card, face and ability with the same controller, the
+/// same X and the same targets, from the same source or from two sources alike in themselves
+/// ([`State::signature`]). It decides only whether a player who passed on `top` is asked
+/// again before `beneath` resolves (`Profile::passes_identical_triggers`), and a pass is always
+/// legal, so it need not be the exact equivalence of waiting triggers ([`next_to_stack`]).
+///
+/// See [CR 117.3d](https://yawgatog.com/resources/magic-rules/#R1173d): "If a player has
+/// priority and chooses not to take any actions, that player passes."
+#[cold]
+#[inline(never)]
+pub(crate) fn same_trigger_again<L: Layout>(
+    s: &State<L>,
+    top: &StackEntry<L>,
+    beneath: &StackEntry<L>,
+) -> bool {
+    let (StackItem::Triggered { of: a, .. }, StackItem::Triggered { of: b, .. }) =
+        (&top.item, &beneath.item)
+    else {
+        return false;
+    };
+    let alike = |x: ObjectRef<L>, y: ObjectRef<L>| {
+        x == y || (s.is_current(x) && s.is_current(y) && s.signature(x.slot) == s.signature(y.slot))
+    };
+    (a.card, a.face, a.ability, a.controller) == (b.card, b.face, b.ability, b.controller)
+        && (top.x, top.words) == (beneath.x, beneath.words)
+        && top.targets.as_slice() == beneath.targets.as_slice()
+        && match (a.source, b.source) {
+            (Some(x), Some(y)) => alike(x, y),
+            (x, y) => x == y,
+        }
+}
+
 /// Whether two objects that triggers name were alike as they last existed on the
 /// battlefield, where either has left it and has last-known information.
 fn same_last_known<L: Layout>(

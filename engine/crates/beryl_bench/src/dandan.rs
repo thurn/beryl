@@ -56,7 +56,7 @@ mod tests {
         let c = corpus();
         let turns: Vec<u16> = c.positions.iter().map(|s| s.turn().number()).collect();
         assert_eq!(turns, CUTS.repeat(GAMES as usize));
-        assert_eq!(stable_hash(&c.positions), 15_561_151_361_807_732_256);
+        assert_eq!(stable_hash(&c.positions), 5_291_617_746_891_441_296);
     }
 
     /// Every Dandân rollout answers every question as it always has and ends the same way.

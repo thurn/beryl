@@ -25,6 +25,7 @@ use crate::table::GameTable;
 mod places;
 mod spent;
 mod transform;
+mod yields;
 pub use places::{TargetPlace, TargetPlaces, placed};
 pub use spent::{ManaAmounts, Spent, SpentMana};
 pub use transform::AbilityController;
@@ -548,6 +549,8 @@ impl<L: Layout> State<L> {
             self.words_on_stack(&mut entry)?;
         }
         self.stack.push(entry)?;
+        // A player who passed on a trigger is asked again once anything joins the stack.
+        self.forget_yields();
         sink.arrived(|| {
             self.stack
                 .as_slice()

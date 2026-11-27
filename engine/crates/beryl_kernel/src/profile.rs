@@ -244,6 +244,16 @@ pub struct Profile {
     /// chooses which creatures that they control, if any, will attack"). Every declaration
     /// stays reachable by single picks.
     pub group_picks: PerSeat<bool>,
+    /// By seat, whether the player, having passed priority with a triggered ability on top of
+    /// the stack, passes again without being asked while each next entry to resolve is the
+    /// same trigger again: everyone under the smart stops, search and rollouts included, so
+    /// thirty identical triggers ask for one priority decision rather than thirty. Anything put
+    /// on the stack, or a different trigger next, asks again. A human is never given it, nor
+    /// anyone under the exact stops, who receive priority before each resolution as the rules
+    /// give it (see [CR 117.3b](https://yawgatog.com/resources/magic-rules/#R1173b): "The
+    /// active player receives priority after a spell or ability (other than a mana ability)
+    /// resolves."). A pass is always legal, so every line this produces is a legal line.
+    pub passes_identical_triggers: PerSeat<bool>,
     /// The player, if any, offered activations that would do nothing without their stopping
     /// for them: a human under the smart stops, who may still tap Currency Converter with
     /// nothing exiled, as the rules allow (see [CR 602.2](https://yawgatog.com/resources/magic-rules/#R6022):
@@ -268,6 +278,7 @@ impl Profile {
         taps_mana: None,
         hides_pointless: [false; Seat::BOTH.len()],
         group_picks: [false; Seat::BOTH.len()],
+        passes_identical_triggers: [false; Seat::BOTH.len()],
         quiet_pointless: None,
     };
     /// The smart stops, for search and, by default, for humans.
@@ -282,6 +293,7 @@ impl Profile {
         taps_mana: None,
         hides_pointless: [true; Seat::BOTH.len()],
         group_picks: [true; Seat::BOTH.len()],
+        passes_identical_triggers: [true; Seat::BOTH.len()],
         quiet_pointless: None,
     };
 

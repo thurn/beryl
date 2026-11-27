@@ -27,7 +27,7 @@ mod waiting;
 
 pub(crate) use state::match_states;
 pub(super) use step::begins;
-pub(crate) use waiting::{next_to_stack, put_on_stack, waiting_or_on_stack};
+pub(crate) use waiting::{next_to_stack, put_on_stack, same_trigger_again, waiting_or_on_stack};
 
 /// The triggered ability a waiting trigger or stack entry names: one of its face's own, or one
 /// of its grants that a copy exception gives ([`Copiable::given_abilities`]).

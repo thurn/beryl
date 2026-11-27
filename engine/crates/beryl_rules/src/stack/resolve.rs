@@ -27,6 +27,7 @@ use crate::observation::Observation;
 use crate::replacement::event::{self, Entry, Event, Reason, Sink, Tagged};
 use crate::resolution::Resolution;
 use crate::scratch::Scratch;
+use crate::stack::trigger;
 use crate::state::{
     CounterKind, Pending, PendingTrigger, StackEntry, StackItem, State, TargetPlaces, Zone,
     hidden_pick_answer, placed,
@@ -56,6 +57,18 @@ pub(crate) fn resolve<L: Layout>(
     x: &mut Scratch<L>,
     a: &mut dyn Answers<L>,
 ) -> Result<(), Full> {
+    // Whether a player who passed on this trigger passes on the next entry unasked
+    // (`Profile::passes_identical_triggers`) is settled while both are on the stack. The
+    // active player receives priority after it resolves
+    // (see [CR 117.3b](https://yawgatog.com/resources/magic-rules/#R1173b)), and is asked again
+    // unless the next entry is the same trigger again.
+    if s.any_yielded() {
+        let again = match s.stack() {
+            [.., beneath, top] => trigger::same_trigger_again(s, top, beneath),
+            _ => false,
+        };
+        s.note_resolving(again);
+    }
     resolve_top(s, t, x, a)?;
     if !matches!(s.pending(), Pending::Resolving(_) | Pending::Mulligans)
         && (!State::<L>::SUPPORTS_SUBGAMES || s.turn().number() != 0)

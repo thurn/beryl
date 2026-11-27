@@ -729,6 +729,15 @@ The exact profile offers a choice only across **distinct consequences**:
   renaming one's source and object to the other's leaves the waiting triggers
   what they were; non-equivalent simultaneous triggers are ordered by their
   controller under APNAP.
+- Under the smart stops, a seat with `Profile::passes_identical_triggers`
+  (search, its rollouts and an agent's seat, never a human's) that passes
+  priority with a triggered ability on top of the stack passes again without
+  being asked while each next entry to resolve is the same trigger again: same
+  card, face, ability, controller, X and targets, from the same source or a
+  source alike in itself. Anything put on the stack, or a different entry next,
+  asks again. Thirty identical triggers then cost one priority decision, not
+  thirty. A pass is always legal, so the seat only loses the chance to answer a
+  later trigger of the run after declining the first.
 - Mana payments and combat damage divisions are offered only when plans differ
   in outcome (§10, §11).
 - Alternative and optional costs are separate cast candidates: Force of Will for

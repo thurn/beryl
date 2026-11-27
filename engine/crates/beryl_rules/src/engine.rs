@@ -20,7 +20,7 @@ use crate::scratch::assert_sound;
 pub use crate::scratch::{Counts, Scratch};
 use beryl_kernel::{CombatPosition, StepPosition};
 
-use crate::state::{Pending, State};
+use crate::state::{Pending, StackEntry, StackItem, State};
 use crate::table::GameTable;
 use crate::turn::paused_step;
 use crate::{
@@ -368,10 +368,16 @@ fn handed_over<L: Layout>(s: &State<L>, passes: u8) -> bool {
 
 /// Whether the open decision is priority for a player away from a stop, who passes silently
 /// whatever else they could do, so `next` passes without listing their options.
+///
+/// A player who passed on a triggered ability passes on the same trigger again unasked while
+/// nothing joins the stack (`Profile::passes_identical_triggers`, [`State::yields`]): a pass
+/// is always legal (see [CR 117.3d](https://yawgatog.com/resources/magic-rules/#R1173d)), so
+/// a profile may make it for them.
 fn passes_silently<L: Layout>(s: &State<L>) -> bool {
     matches!(s.pending(), Pending::None)
         && s.triggers().is_empty()
-        && !profile::stops_for(s.profile(), s, s.turn().priority())
+        && (!profile::stops_for(s.profile(), s, s.turn().priority())
+            || s.yields(s.turn().priority()))
         && !s.profile().breaks_at(*s.turn())
 }
 
@@ -693,12 +699,28 @@ fn perform<L: Layout>(
 ///
 /// [CR 117.3b](https://yawgatog.com/resources/magic-rules/#R1173b): "The active player
 /// receives priority after a spell or ability (other than a mana ability) resolves."
+///
+/// A player whose profile passes on identical triggers (`Profile::passes_identical_triggers`)
+/// and who passes with a triggered ability on top of the stack is noted, so that they pass
+/// on the same trigger again unasked ([`passes_silently`]).
 fn pass<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     x: &mut Scratch<L>,
     a: &mut dyn Answers<L>,
 ) -> Result<(), Full> {
+    let player = s.turn().priority();
+    if s.profile().passes_identical_triggers[player.index()]
+        && matches!(
+            s.stack().last(),
+            Some(StackEntry {
+                item: StackItem::Triggered { .. },
+                ..
+            })
+        )
+    {
+        s.note_yield(player);
+    }
     if !s.pass_priority(t.format()) {
         return Ok(());
     }

@@ -16,6 +16,7 @@ mod game_structure;
 mod games;
 mod greedy;
 mod hold;
+mod identical_triggers;
 mod long;
 mod mcts;
 mod outgrow;

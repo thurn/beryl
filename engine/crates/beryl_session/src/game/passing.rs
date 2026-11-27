@@ -88,6 +88,11 @@ pub fn with_stops(profile: Profile, stops: StopsSetting, human: Seat) -> Profile
     // class of interchangeable attackers in one pick (Profile::group_picks).
     let mut group_picks = profile.group_picks;
     group_picks[human.index()] = false;
+    // The human receives priority before each of several identical triggers resolves, as on
+    // Arena; the agent passes on the rest once it passed on the first
+    // (Profile::passes_identical_triggers).
+    let mut passes_identical_triggers = profile.passes_identical_triggers;
+    passes_identical_triggers[human.index()] = false;
     Profile {
         stops: stops.stops(),
         step_stops,
@@ -96,6 +101,7 @@ pub fn with_stops(profile: Profile, stops: StopsSetting, human: Seat) -> Profile
         taps_mana: Some(human),
         hides_pointless,
         group_picks,
+        passes_identical_triggers,
         quiet_pointless: (!stops.full_control).then_some(human),
         limits: Limits::PLAYER,
         ..profile

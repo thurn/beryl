@@ -295,7 +295,9 @@ fn unshown_effects<L: Layout>(
 
 /// The profile below a tree's root. The root decision was offered under the game's profile;
 /// below it the tree plays under the smart stops, with no player's passes asked, no mana
-/// floated ahead of a payment and no activation offered that would do nothing, and interchangeable attackers declared in one pick. The payment profile stays, so a payment in progress is never
+/// floated ahead of a payment, no activation offered that would do nothing, interchangeable
+/// attackers declared in one pick and no priority between identical triggers once a player
+/// has passed on the first. The payment profile stays, so a payment in progress is never
 /// asked under another. The budgets go back to search's, which a player game lifts
 /// ([`State::search_limits`]).
 pub(crate) fn smart<L: Layout>(s: &mut State<L>) {
@@ -308,6 +310,7 @@ pub(crate) fn smart<L: Layout>(s: &mut State<L>) {
         taps_mana: None,
         hides_pointless: [true; 2],
         group_picks: [true; 2],
+        passes_identical_triggers: [true; 2],
         quiet_pointless: None,
         ..s.profile()
     });

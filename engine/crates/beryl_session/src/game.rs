@@ -342,6 +342,7 @@ impl Game {
             Profile {
                 hides_pointless: [false; 2],
                 group_picks: [false; 2],
+                passes_identical_triggers: [false; 2],
                 ..Profile::SMART
             }
         } else {

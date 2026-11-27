@@ -28,6 +28,7 @@ mod events;
 mod game;
 mod grants;
 mod graveyard_return;
+mod identical_triggers;
 mod invariants;
 mod land_types;
 mod layer_inputs;

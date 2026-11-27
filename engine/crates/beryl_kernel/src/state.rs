@@ -40,7 +40,7 @@ use crate::decision::Outcome;
 use crate::event::{Listens, Replaces};
 use crate::fixed::Full;
 use crate::ids::{Seat, Slot, SlotId};
-use crate::layout::{Layout, Piles, Queue, Small, Table};
+use crate::layout::{Layout, PerSeat, Piles, Queue, Small, Table};
 use crate::object::OFF_BATTLEFIELD;
 use crate::player_set::PlayerSet;
 use crate::profile::{Limits, Profile};
@@ -151,7 +151,7 @@ pub struct Budgets {
 
 /// Engine bookkeeping that is not game state.
 #[allow(clippy::struct_excessive_bools)] // Each is one independent fact the layers store.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Flags {
     /// A change since `derived` was last computed may have changed a layer result. Set by
     /// the mutators that change a layer input and cleared by [`State::rederive`] alone.
@@ -171,6 +171,15 @@ pub struct Flags {
     ///
     /// [CR 708.2]: https://yawgatog.com/resources/magic-rules/#R7082
     pub(crate) face_down: bool,
+    /// By seat, whether the player passed priority with a triggered ability on top of the
+    /// stack under [`crate::profile::Profile::passes_identical_triggers`], and nothing was put
+    /// on the stack since: while [`Flags::repeats`] holds, they pass again without being asked
+    /// ([`State::yields`]).
+    pub(crate) yielded: PerSeat<bool>,
+    /// The entry that resolved last was a triggered ability and the entry now on top of the
+    /// stack is the same trigger again ([`State::note_resolving`]). Read only while a seat has
+    /// yielded.
+    pub(crate) repeats: bool,
 }
 
 /// The whole game, stored as its [`Layout`] says: as [`Small`], copied with one `memcpy`
@@ -295,7 +304,7 @@ pub struct State<L: Layout = Small> {
 
 // Subgame storage occupies no space in Small.
 const _: () = {
-    assert!(size_of::<State<Small>>() == 19_672);
+    assert!(size_of::<State<Small>>() == 19_680);
     assert!(size_of::<<Small as Layout>::Outer>() == 0);
     assert!(size_of::<<Small as Layout>::SubgameTurns>() == 0);
 };
