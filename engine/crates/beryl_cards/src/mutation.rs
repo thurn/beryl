@@ -44,6 +44,14 @@ use neighbours::mutants;
 #[cfg(test)]
 const EQUIVALENT: &[(&str, &str, &str, &str)] = &[
     (
+        "Agatha's Soul Cauldron",
+        "ability 0, rule",
+        "rule governed filter 1 Players::EachPlayer",
+        "the rule change applies only to the Cauldron's controller, and no creature in the pool \
+         lets another player activate its abilities, so the activator is always the creature's \
+         controller",
+    ),
+    (
         "Hardened Scales",
         "ability 0, replacement event",
         "Counters { objects: All([Types(Types(4)), Whose(You)]), kind: Some(PlusOne), only_effects: true }",

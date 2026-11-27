@@ -446,5 +446,12 @@
     "scenario": "Emergent Growth forces a block and its +5/+5 ends with the turn",
     "cr": "CR 509.1c (https://yawgatog.com/resources/magic-rules/#R5091c): \"The defending player checks each creature they control to see whether it's affected by any requirements (effects that say a creature must block, or that it must block if some condition is met). If the number of requirements that are being obeyed is fewer than the maximum possible number of requirements that could be obeyed without disobeying any restrictions, the declaration of blockers is illegal. If a creature can't block unless a player pays a cost, that player is not required to pay that cost, even if blocking with that creature would increase the number of requirements being obeyed. If a requirement that says a creature blocks if able during a certain turn refers to a turn with multiple combat phases, the creature blocks if able during each declare blockers step in that turn.\"",
     "reason": "Forge's blocker AI does not block with an able creature when Emergent Growth requires the attacker to be blocked this turn."
+  },
+  {
+    "oracle": "forge",
+    "card": "Agatha's Soul Cauldron",
+    "scenario": "A creature card exiled fires the reflexive trigger and puts a counter on the target",
+    "cr": "CR 603.12 (https://yawgatog.com/resources/magic-rules/#R60312): \"A resolving spell or ability may allow or instruct a player to take an action and create a triggered ability that triggers 'when [a player] [does or doesn't]' take that action or 'when [something happens] this way.' These reflexive triggered abilities follow the rules for delayed triggered abilities (see rule 603.7), except that they're checked immediately after being created and trigger based on whether the trigger event or events occurred earlier during the resolution of the spell or ability that created them.\"",
+    "reason": "Forge does not put the reflexive triggered ability onto the stack as a separate object after the activated ability resolves."
   }
 ]

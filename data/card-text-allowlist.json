@@ -1,4 +1,11 @@
 {
+  "Agatha's Soul Cauldron": {
+    "reason": "wording",
+    "note": "The target is `TargetKind::GraveyardCard`, so it targets a card in a graveyard even though the renderer omits \"from a graveyard\" when the filter is `Filter::Any`.",
+    "diff": [
+      "Agatha's Soul Cauldron: {T} : exile target card [-from a graveyard-] . when a creature card is exiled this way , put a +1/+1 counter on target creature you control ."
+    ]
+  },
   "Accumulated Knowledge": {
     "reason": "wording",
     "note": "Oracle says \"then draw cards equal to the number of cards named ~ in all graveyards\"; the renderer says \"draw a card for each card named ~\" as a second sentence and leaves out \"in all graveyards\", which the count's zone filter still reads across every graveyard. Same two draws in the same order, and the count is read after the first draw either way.",
@@ -153,6 +160,13 @@
     "note": "The renderer writes a named token in the current template, \"create Wolves of the Hunt, a 1/1 green Wolf creature token with \\\"...\\\"\", where the 1994 Oracle text says \"a 1/1 green Wolf creature token named Wolves of the Hunt. It has \\\"...\\\"\". The token has the same name, characteristics and ability.",
     "diff": [
       "Master of the Hunt: {2} {G} {G} : create {+Wolves of the Hunt ,+} a 1/1 green Wolf creature token [-named Wolves of the Hunt . it has-] {+with+} \" bands with other creatures named Wolves of the Hunt . \""
+    ]
+  },
+  "Necrotic Ooze": {
+    "reason": "wording",
+    "note": "A static ability on a permanent applies only while that permanent is on the battlefield (CR 611.3b), so \"As long as ~ is on the battlefield, it has...\" and \"~ has...\" have the same effect.",
+    "diff": [
+      "Necrotic Ooze: [-as long as-] ~ [-is on the battlefield , it-] has all activated abilities of all creature cards in all graveyards ."
     ]
   },
   "Rest in Peace": {

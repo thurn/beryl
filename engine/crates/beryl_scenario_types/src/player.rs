@@ -103,6 +103,15 @@ impl Player {
         Action::activate_merged(self.0, card, place, index)
     }
 
+    /// Activates the `k`th ability lent to `card` by row `row` ([`ObjectAbility::Lent`]).
+    pub const fn activates_lent(self, card: &'static str, row: u8, k: u8) -> Action {
+        Action::Activate {
+            player: self.0,
+            card,
+            ability: crate::ObjectAbility::Lent(row, k),
+        }
+    }
+
     /// Pays {3} to put their revealed companion into their hand ([`Action::Companion`]).
     pub const fn takes_companion(self) -> Action {
         Action::Companion { player: self.0 }

@@ -173,3 +173,36 @@ pub const GRANTED_ENTERS: &[Scenario] = &[
             THEM.controls(names::ORNITHOPTER, 1),
         ]),
 ];
+
+const CAULDRON: &str = names::AGATHAS_SOUL_CAULDRON;
+
+/// A reflexive trigger (`Effect::Reflexive`, CR 603.12) fires during resolution when its
+/// condition holds, putting a separate ability on the stack whose target is chosen then.
+pub const REFLEXIVE: &[Scenario] = &[
+    Scenario::new(
+        "A creature card exiled fires the reflexive trigger and puts a counter on the target",
+    )
+    .battlefield(P0, &[CAULDRON, props::VANILLA.card, props::FLIER.card])
+    .graveyard(P1, &[props::GREEN_CREATURE.card])
+    .actions(&[
+        ME.activates(CAULDRON, 2),
+        Resolve,
+        stack(1),
+        ME.deciding(DecisionKind::Target, 2),
+        ME.targets(props::FLIER.card),
+        Resolve,
+        THEM.has(Zone::Exile, props::GREEN_CREATURE.card, 1),
+        ME.counters(props::FLIER.card, CounterKind::PlusOne, 1),
+        ME.counters(props::VANILLA.card, CounterKind::PlusOne, 0),
+    ]),
+    Scenario::new("A noncreature card exiled does not fire the reflexive trigger")
+        .battlefield(P0, &[CAULDRON, props::VANILLA.card])
+        .graveyard(P1, &[names::ISLAND])
+        .actions(&[
+            ME.activates(CAULDRON, 2),
+            Resolve,
+            stack(0),
+            THEM.has(Zone::Exile, names::ISLAND, 1),
+            ME.counters(props::VANILLA.card, CounterKind::PlusOne, 0),
+        ]),
+];

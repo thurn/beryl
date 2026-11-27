@@ -16,6 +16,18 @@ const CUSTOM: &[&str] = &[];
 /// a generated scenario exercises fails too, so the list stays current.
 const UNREACHED: &[(&str, &str)] = &[
     (
+        "Agatha's Soul Cauldron: ability 1 (Static)",
+        "it lends activated abilities of creature cards exiled with the Cauldron to creatures you \
+         control with +1/+1 counters on them, and generated positions exile no creature card with \
+         an activated ability; the card's hand-written scenarios exercise it",
+    ),
+    (
+        "Agatha's Soul Cauldron: ability 3 (Triggered)",
+        "it is a reflexive triggered ability that fires only when ability 2 resolves and exiles a \
+         creature card, and generated scenarios do not resolve ability 2 onto a creature card in \
+         a graveyard; the rules library's triggers::REFLEXIVE scenarios exercise it",
+    ),
+    (
         "Bloodrock Cyclops: ability 0 (Static)",
         "generated scenarios stop before combat, so they never declare attackers; the rules \
          library's combat::MUST_ATTACK scenarios exercise it",
