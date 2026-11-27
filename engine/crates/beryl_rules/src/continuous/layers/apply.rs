@@ -629,6 +629,7 @@ fn passes<L: Layout>(
             filter::is_for(players, s.object(s.battlefield()[i]).owner(), by.you)
         }
         Filter::Tapped => s.object(s.battlefield()[i]).is_tapped(),
+        Filter::WithCounter(kind) => s.counters_of(s.battlefield()[i], kind) > 0,
         Filter::Token => s.object(s.battlefield()[i]).is_token(),
         // A name is a copiable value, settled before the layers this function serves.
         Filter::Named(name) => s.definition(s.battlefield()[i]).name(t) == name,
@@ -656,6 +657,7 @@ pub(crate) fn filter_reads(filter: Filter) -> Characteristics {
         | Filter::Owned(_)
         | Filter::Tapped
         | Filter::AttackedThisTurn
+        | Filter::WithCounter(_)
         | Filter::Token
         | Filter::Named(_)
         | Filter::ManaValueAtMost(_)

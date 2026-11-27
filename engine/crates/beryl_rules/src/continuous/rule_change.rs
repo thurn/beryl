@@ -210,6 +210,7 @@ pub(crate) fn accepts(filter: Filter, face: &Face) -> bool {
         | Filter::Whose(_)
         | Filter::Owned(_)
         | Filter::AttackedThisTurn
+        | Filter::WithCounter(_)
         | Filter::Tapped
         | Filter::Token
         | Filter::Named(_)
@@ -246,6 +247,7 @@ fn accepts_composed(filter: Filter, face: &Face) -> bool {
         Filter::Whose(_)
         | Filter::Owned(_)
         | Filter::AttackedThisTurn
+        | Filter::WithCounter(_)
         | Filter::Tapped
         | Filter::Token
         | Filter::PowerAtMost(_)

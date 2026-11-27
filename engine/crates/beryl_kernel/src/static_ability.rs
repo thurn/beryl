@@ -83,6 +83,7 @@ fn mentions_tapped(filter: Filter) -> bool {
         | Filter::Whose(_)
         | Filter::Owned(_)
         | Filter::AttackedThisTurn
+        | Filter::WithCounter(_)
         | Filter::Token
         | Filter::Named(_)
         | Filter::ManaValueAtMost(_)
@@ -93,19 +94,46 @@ fn mentions_tapped(filter: Filter) -> bool {
     }
 }
 
-/// Whether `condition` asks if a permanent is tapped, of the permanent with the ability or
-/// of the permanents it counts.
-fn condition_reads_tapped(condition: &Condition) -> bool {
+/// Whether `filter` asks if a permanent has a counter of some kind.
+fn mentions_counter(filter: Filter) -> bool {
+    match filter {
+        Filter::WithCounter(_) => true,
+        Filter::Not(filter) => mentions_counter(*filter),
+        Filter::All(filters) | Filter::AnyOf(filters) => {
+            filters.iter().any(|&filter| mentions_counter(filter))
+        }
+        Filter::Any
+        | Filter::Types(_)
+        | Filter::Supertypes(_)
+        | Filter::SubtypeWord(_)
+        | Filter::ColorWords(_)
+        | Filter::Whose(_)
+        | Filter::Owned(_)
+        | Filter::Tapped
+        | Filter::AttackedThisTurn
+        | Filter::Token
+        | Filter::Named(_)
+        | Filter::ManaValueAtMost(_)
+        | Filter::PowerAtMost(_)
+        | Filter::ManaValueAtMostX
+        | Filter::ManaValueAtMostPower
+        | Filter::InZone(_) => false,
+    }
+}
+
+/// Whether `condition` asks a filter predicate of the permanent with the ability or of the
+/// permanents it counts.
+fn condition_reads_filter(condition: &Condition, mentions: fn(Filter) -> bool) -> bool {
     match condition {
-        Condition::Is(_, filter) => mentions_tapped(*filter),
+        Condition::Is(_, filter) => mentions(*filter),
         Condition::Compare(..) => compares(
             condition,
-            &|n| matches!(n, Counted::Permanents(f) if mentions_tapped(*f)),
+            &|n| matches!(n, Counted::Permanents(f) if mentions(*f)),
         ),
-        Condition::Not(condition) => condition_reads_tapped(condition),
-        Condition::All(conditions) | Condition::Any(conditions) => {
-            conditions.iter().any(condition_reads_tapped)
-        }
+        Condition::Not(condition) => condition_reads_filter(condition, mentions),
+        Condition::All(conditions) | Condition::Any(conditions) => conditions
+            .iter()
+            .any(|condition| condition_reads_filter(condition, mentions)),
         Condition::Paid(_)
         | Condition::Did
         | Condition::WonFlip
@@ -181,10 +209,11 @@ impl<L: Layout> State<L> {
     /// a layer result, so that the counter mutators mark the results stale
     /// ([`State::add_counters`]). Only +1/+1 and -1/-1 counters modify power and toughness
     /// (see [CR 613.4c]): "Effects and counters that modify power and/or toughness ... are
-    /// applied". Any other kind matters only to a static ability of its own permanent whose
-    /// "as long as" compares it, and only while some permanent's ability compares counters
+    /// applied". Any other kind matters only when a static ability on the battlefield filters
+    /// by counters ([`Inputs::ANY_COUNTERS`]), or to a static ability of its own permanent
+    /// whose "as long as" compares it while some permanent's ability compares counters
     /// ([`Inputs::COUNTERS`]): loyalty, which planeswalkers gain and lose every turn, never
-    /// does.
+    /// does otherwise.
     ///
     /// A state trigger's condition that compares the kind counts as such an "as long as"
     /// ([`watched`]).
@@ -194,6 +223,7 @@ impl<L: Layout> State<L> {
     pub fn layers_read_counters(&self, t: &GameTable, slot: L::Slot, kind: CounterKind) -> bool {
         matches!(kind, CounterKind::PlusOne | CounterKind::MinusOne)
             || !self.object(slot).on_battlefield()
+            || self.layer_inputs.contains(Inputs::ANY_COUNTERS)
             || (self.layer_inputs.contains(Inputs::COUNTERS)
                 && self.definition(slot).face(t).abilities.iter().any(|a| {
                     a.layer()
@@ -426,6 +456,7 @@ pub fn read_by_the_layers(filter: Filter) -> bool {
         | Filter::Whose(_)
         | Filter::Owned(_)
         | Filter::Tapped
+        | Filter::WithCounter(_)
         | Filter::Token
         | Filter::Named(_)
         | Filter::ManaValueAtMost(_)

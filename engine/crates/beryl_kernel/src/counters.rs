@@ -401,7 +401,11 @@ impl<L: Layout> State<L> {
         let object = object.reference();
         let n = self.counters_of(object.slot, kind).saturating_add(amount);
         self.set_counters(object.slot, kind, n)?;
-        if layered {
+        if layered
+            || self
+                .layer_inputs
+                .contains(crate::static_ability::Inputs::ANY_COUNTERS)
+        {
             self.flags.derived_dirty = true;
         }
         Ok(Event::CountersAdded {
@@ -427,7 +431,11 @@ impl<L: Layout> State<L> {
             Some(n) => *n -= amount,
             None => self.take_row(object.slot, kind, amount),
         }
-        if layered {
+        if layered
+            || self
+                .layer_inputs
+                .contains(crate::static_ability::Inputs::ANY_COUNTERS)
+        {
             self.flags.derived_dirty = true;
         }
         Event::CountersRemoved {

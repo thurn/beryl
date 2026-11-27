@@ -515,6 +515,7 @@ fn of_a_spells_characteristics(filter: Filter) -> bool {
         Filter::Whose(_)
         | Filter::Owned(_)
         | Filter::AttackedThisTurn
+        | Filter::WithCounter(_)
         | Filter::Tapped
         | Filter::Token
         | Filter::PowerAtMost(_)

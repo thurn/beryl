@@ -6,7 +6,8 @@
 use beryl_card::{Condition, Face, LentFrom, Modification, Objects};
 
 use super::{
-    Counted, compares, condition_reads_tapped, mentions_tapped, reads_graveyards, state_condition,
+    Counted, compares, condition_reads_filter, mentions_counter, mentions_tapped, reads_graveyards,
+    state_condition,
 };
 
 /// What a face's static abilities read as the layers apply that no layer writes, one bit
@@ -38,6 +39,10 @@ impl Inputs {
     pub const HAND: Inputs = Inputs(16);
     /// The cards exiled with a permanent (linked exile, [`LentFrom::ExiledWithThis`]).
     pub const LINKED: Inputs = Inputs(32);
+    /// Whether any permanent has a counter of some kind, which a filter asks
+    /// ([`beryl_card::Filter::WithCounter`]): "creatures you control with +1/+1 counters on them
+    /// have ...".
+    pub const ANY_COUNTERS: Inputs = Inputs(64);
 
     /// Both sets' inputs.
     #[inline]
@@ -81,16 +86,11 @@ impl Inputs {
             }) {
                 inputs = inputs.union(Inputs::LINKED);
             }
-            let affected_reads_tapped = matches!(
-                spec.affected,
-                Objects::All { filter, .. } | Objects::Everywhere(filter)
-                    if mentions_tapped(filter)
-            ) || matches!(
-                spec.affected,
-                Objects::Other(&Objects::All { filter, .. }) if mentions_tapped(filter)
-            );
-            if affected_reads_tapped {
+            if affected_mentions(spec.affected, mentions_tapped) {
                 inputs = inputs.union(Inputs::TAPPED);
+            }
+            if affected_mentions(spec.affected, mentions_counter) {
+                inputs = inputs.union(Inputs::ANY_COUNTERS);
             }
         }
         for condition in face.abilities.iter().filter_map(state_condition) {
@@ -110,10 +110,28 @@ impl Inputs {
             ),
             (compared(|n| matches!(n, Counted::Life(_))), Inputs::LIFE),
             (compared(|n| matches!(n, Counted::Hand)), Inputs::HAND),
-            (condition_reads_tapped(condition), Inputs::TAPPED),
+            (
+                condition_reads_filter(condition, mentions_tapped),
+                Inputs::TAPPED,
+            ),
+            (
+                condition_reads_filter(condition, mentions_counter),
+                Inputs::ANY_COUNTERS,
+            ),
         ]
         .into_iter()
         .filter(|&(reads, _)| reads)
         .fold(Inputs::NONE, |inputs, (_, input)| inputs.union(input))
     }
+}
+
+/// Whether `affected`'s filter satisfies `mentions`.
+fn affected_mentions(affected: Objects, mentions: fn(beryl_card::Filter) -> bool) -> bool {
+    matches!(
+        affected,
+        Objects::All { filter, .. } | Objects::Everywhere(filter) if mentions(filter)
+    ) || matches!(
+        affected,
+        Objects::Other(&Objects::All { filter, .. }) if mentions(filter)
+    )
 }

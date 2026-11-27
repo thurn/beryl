@@ -646,6 +646,7 @@ pub(super) fn mentions_owner(filter: Filter) -> bool {
         | Filter::ColorWords(_)
         | Filter::Owned(_)
         | Filter::AttackedThisTurn
+        | Filter::WithCounter(_)
         | Filter::Tapped
         | Filter::Token
         | Filter::Named(_)
@@ -686,6 +687,7 @@ fn zone_of(filter: Filter) -> Option<Zone> {
         | Filter::Whose(_)
         | Filter::Owned(_)
         | Filter::AttackedThisTurn
+        | Filter::WithCounter(_)
         | Filter::Tapped
         | Filter::Token
         | Filter::Named(_)

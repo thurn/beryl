@@ -6,7 +6,7 @@ use super::{render, render_ability};
 use crate::CounterKind;
 use crate::ability::{Ability, Behavior, Custom, Says};
 use crate::characteristics::{Supertypes, Types};
-use crate::continuous::{Governed, RuleChange, When};
+use crate::continuous::{Governed, LayerSpec, Modification, RuleChange, When};
 use crate::cost::{Cost, CostPart};
 use crate::definition::{CardDef, Face, card};
 use crate::effect::build::may;
@@ -350,6 +350,33 @@ fn a_counter_total_across_permanents_is_said_among_them() {
     );
     let on = render_ability(&Ability::spell().effect(&ON));
     assert!(on.contains("counter on "), "{on}");
+}
+
+/// [`Filter::WithCounter`] agrees with the number of the noun it qualifies: plural "with
+/// +1/+1 counters on them" and singular "with a +1/+1 counter on it".
+#[test]
+fn with_counter_filter_renders_singular_and_plural() {
+    static WITH_PLUS_ONE: Filter = Filter::All(&[
+        Filter::Types(Types::CREATURE),
+        Filter::Whose(&Players::You),
+        Filter::WithCounter(CounterKind::PlusOne),
+    ]);
+    static STATIC: LayerSpec = LayerSpec {
+        affected: permanents(WITH_PLUS_ONE),
+        condition: None,
+        modifications: &[Modification::ModifyPt(1, 1)],
+    };
+    static DESTROY: Effect = destroy(target());
+    static TARGETS: [TargetSpec; 1] = [TargetSpec::one(TargetKind::Permanent, WITH_PLUS_ONE)];
+    assert_eq!(
+        render_ability(&Ability::static_ability(&STATIC)),
+        "Creatures you control with +1/+1 counters on them get +1/+1."
+    );
+    let targeted = Ability::spell().targeting(&TARGETS).effect(&DESTROY);
+    assert_eq!(
+        render_ability(&targeted),
+        "Destroy target creature you control with a +1/+1 counter on it."
+    );
 }
 
 /// A mana ability's product of several terms ([`Ability::mana_of`]), as Oracle text writes

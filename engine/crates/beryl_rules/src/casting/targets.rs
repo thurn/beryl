@@ -90,6 +90,7 @@ pub(crate) fn player_matches(spec: &TargetSpec, player: Seat, you: Seat) -> bool
             | Filter::ColorWords(_)
             | Filter::Owned(_)
             | Filter::AttackedThisTurn
+            | Filter::WithCounter(_)
             | Filter::Tapped
             | Filter::Token
             | Filter::Named(_)

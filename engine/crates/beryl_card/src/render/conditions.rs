@@ -464,6 +464,7 @@ fn without_you(filter: Filter) -> Option<Filter> {
         | Filter::Whose(_)
         | Filter::Owned(_)
         | Filter::AttackedThisTurn
+        | Filter::WithCounter(_)
         | Filter::Tapped
         | Filter::Token
         | Filter::Named(_)

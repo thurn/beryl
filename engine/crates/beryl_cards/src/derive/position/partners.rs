@@ -170,7 +170,7 @@ pub(in crate::derive) fn printed(
         }
         Filter::ColorWords(words) => face.colors.intersects(words.read(&Words::NONE)),
         Filter::Tapped => permanent.tapped,
-        Filter::AttackedThisTurn => false,
+        Filter::AttackedThisTurn | Filter::WithCounter(_) => false,
         Filter::Token => permanent.token,
         Filter::Named(name) => face.name == name,
         Filter::ManaValueAtMost(value) => face.cost.mana_value() <= value,
@@ -260,7 +260,12 @@ mod tests {
             let mut check = |filter: Filter, can_cast_aura: bool| {
                 let mut only_printed = !filter.needs_a_resolution();
                 filter.walk(&mut |node| {
-                    if matches!(node, Node::Filter(Filter::Token | Filter::AttackedThisTurn)) {
+                    if matches!(
+                        node,
+                        Node::Filter(
+                            Filter::Token | Filter::AttackedThisTurn | Filter::WithCounter(_)
+                        )
+                    ) {
                         only_printed = false;
                     }
                 });

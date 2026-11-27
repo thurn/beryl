@@ -142,6 +142,7 @@ impl Evaluate for Filter {
             }
             Filter::Tapped => o.flags.has(Flag::Tapped),
             Filter::AttackedThisTurn => s.tracked(crate::trackers::Tracker::AttackedThisTurn, slot),
+            Filter::WithCounter(kind) => s.counters_of(slot, kind) > 0,
             Filter::Token => o.is_token(),
             // A face-down permanent's name is the empty string, which no card names.
             Filter::Named(name) => s.definition(slot).name(t) == name,
@@ -182,6 +183,7 @@ fn combined<L: Layout>(
         | Filter::Whose(_)
         | Filter::Owned(_)
         | Filter::AttackedThisTurn
+        | Filter::WithCounter(_)
         | Filter::Tapped
         | Filter::Token
         | Filter::Named(_)
@@ -224,6 +226,7 @@ pub(crate) fn passes_so_far<L: Layout>(
         | Filter::Whose(_)
         | Filter::Owned(_)
         | Filter::AttackedThisTurn
+        | Filter::WithCounter(_)
         | Filter::Tapped
         | Filter::Token
         | Filter::Named(_)
@@ -307,7 +310,11 @@ fn matches_printed(
         Filter::Not(f) => !passes(f),
         Filter::All(fs) => fs.iter().all(passes),
         Filter::AnyOf(fs) => fs.iter().any(passes),
-        Filter::AttackedThisTurn | Filter::Tapped | Filter::Token | Filter::InZone(_) => false,
+        Filter::AttackedThisTurn
+        | Filter::WithCounter(_)
+        | Filter::Tapped
+        | Filter::Token
+        | Filter::InZone(_) => false,
     }
 }
 

@@ -124,11 +124,18 @@ impl<L: Layout> State<L> {
     ) -> Event<L> {
         let types = self.derived(to.slot()).types;
         let o = self.object_mut(to.slot());
-        if types.contains(Types::PLANESWALKER) {
-            o.counters.loyalty = o.counters.loyalty.saturating_sub(amount);
-        }
+        let lost_loyalty = if types.contains(Types::PLANESWALKER) {
+            let before = o.counters.loyalty;
+            o.counters.loyalty = before.saturating_sub(amount);
+            o.counters.loyalty != before
+        } else {
+            false
+        };
         if types.contains(Types::CREATURE) {
             o.damage = o.damage.saturating_add(amount);
+        }
+        if lost_loyalty && self.layer_inputs.contains(Inputs::ANY_COUNTERS) {
+            self.flags.derived_dirty = true;
         }
         Event::Damage {
             source,

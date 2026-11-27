@@ -19,6 +19,7 @@ fn requires_basic(filter: Filter) -> bool {
         | Filter::Owned(_)
         | Filter::Tapped
         | Filter::AttackedThisTurn
+        | Filter::WithCounter(_)
         | Filter::Token
         | Filter::Named(_)
         | Filter::ManaValueAtMost(_)

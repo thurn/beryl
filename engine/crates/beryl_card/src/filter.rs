@@ -1,6 +1,7 @@
 //! `Filter`: the predicates targets and affected sets are written in.
 
 use crate::characteristics::{Colors, Subtype, Supertypes, Types};
+use crate::counter::CounterKind;
 use crate::effect::Players;
 use crate::ids::Zone;
 use crate::words::{ColorWords, SubtypeWord};
@@ -47,6 +48,9 @@ pub enum Filter {
     ///
     /// [CR 508.4]: https://yawgatog.com/resources/magic-rules/#R5084
     AttackedThisTurn,
+    /// Has one or more counters of this kind: "creatures you control with +1/+1 counters on
+    /// them", "a creature with a +1/+1 counter on it".
+    WithCounter(CounterKind),
     /// Is a token ([CR 111.1](https://yawgatog.com/resources/magic-rules/#R1111)): "Some
     /// effects put tokens onto the battlefield." Not a token is "nontoken".
     Token,
@@ -110,6 +114,7 @@ impl Filter {
             | Filter::Owned(_)
             | Filter::Tapped
             | Filter::AttackedThisTurn
+            | Filter::WithCounter(_)
             | Filter::Token
             | Filter::Named(_)
             | Filter::ManaValueAtMost(_)
@@ -131,6 +136,7 @@ impl Filter {
             | Filter::Whose(_)
             | Filter::Owned(_)
             | Filter::AttackedThisTurn
+            | Filter::WithCounter(_)
             | Filter::Tapped
             | Filter::Token
             | Filter::Named(_)
@@ -168,6 +174,7 @@ impl Filter {
             | Filter::SubtypeWord(_)
             | Filter::ColorWords(_)
             | Filter::AttackedThisTurn
+            | Filter::WithCounter(_)
             | Filter::Tapped
             | Filter::Token
             | Filter::Named(_)

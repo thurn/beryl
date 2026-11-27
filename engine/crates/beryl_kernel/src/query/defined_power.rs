@@ -198,6 +198,7 @@ fn depends_on_you(filter: Filter) -> bool {
         | Filter::ColorWords(_)
         | Filter::Tapped
         | Filter::AttackedThisTurn
+        | Filter::WithCounter(_)
         | Filter::Token
         | Filter::Named(_)
         | Filter::ManaValueAtMost(_)

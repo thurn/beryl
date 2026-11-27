@@ -39,6 +39,29 @@ impl Kind {
     }
 }
 
+/// A phrase placed after a noun, either invariant ("you control") or agreeing with whether
+/// the noun is singular or plural ("with a +1/+1 counter on it" / "with +1/+1 counters on
+/// them").
+enum Suffix {
+    Fixed(String),
+    Numbered { singular: String, plural: String },
+}
+
+impl Suffix {
+    fn text(&self, several: bool) -> &str {
+        match self {
+            Suffix::Fixed(text) => text,
+            Suffix::Numbered { singular, plural } => {
+                if several {
+                    plural
+                } else {
+                    singular
+                }
+            }
+        }
+    }
+}
+
 /// A noun phrase built from a filter: words before the noun, the noun or its alternatives,
 /// and words after it.
 #[derive(Default)]
@@ -50,7 +73,7 @@ pub(super) struct Noun {
     kinds: Vec<String>,
     /// Words after the noun: "you control", "in your graveyard", "with mana value 2 or
     /// less".
-    suffixes: Vec<String>,
+    suffixes: Vec<Suffix>,
 }
 
 /// One card that passes `filter`, with its article, as a prompt names what it takes: "an
@@ -91,16 +114,15 @@ impl Ctx {
             Filter::Whose(players) => match kind {
                 Kind::Card(Some(zone)) => {
                     let owner = self.zone_owner(*players);
-                    noun.suffixes
-                        .push(format!("in {owner} {}", zone_name(zone)));
+                    noun.suffix(format!("in {owner} {}", zone_name(zone)));
                 }
                 Kind::Card(None) => {
                     let owner = self.zone_owner(*players);
-                    noun.suffixes.push(format!("in {owner} zones"));
+                    noun.suffix(format!("in {owner} zones"));
                 }
                 Kind::Permanent | Kind::Spell | Kind::Source | Kind::Ability(_) => {
                     let who = self.controls(*players, true);
-                    noun.suffixes.push(who);
+                    noun.suffix(who);
                 }
                 Kind::Player => {
                     if *players == Players::EachOpponent {
@@ -115,21 +137,28 @@ impl Ctx {
                 } else {
                     "they own"
                 };
-                noun.suffixes.push(verb.to_owned());
+                noun.suffix(verb.to_owned());
             }
             Filter::Tapped => noun.adjectives.push("tapped".to_owned()),
-            Filter::AttackedThisTurn => noun.suffixes.push("that attacked this turn".to_owned()),
-            Filter::Token => noun.adjectives.push("token".to_owned()),
-            Filter::Named(name) => noun.suffixes.push(format!("named {name}")),
-            Filter::ManaValueAtMost(n) => {
-                noun.suffixes.push(format!("with mana value {n} or less"));
+            Filter::AttackedThisTurn => noun.suffix("that attacked this turn".to_owned()),
+            Filter::WithCounter(counter) => {
+                let name = counter.name();
+                noun.numbered_suffix(
+                    format!("with {} counter on it", with_article(name)),
+                    format!("with {name} counters on them"),
+                );
             }
-            Filter::ManaValueAtMostX => noun.suffixes.push("with mana value X or less".to_owned()),
-            Filter::ManaValueAtMostPower => noun.suffixes.push(format!(
+            Filter::Token => noun.adjectives.push("token".to_owned()),
+            Filter::Named(name) => noun.suffix(format!("named {name}")),
+            Filter::ManaValueAtMost(n) => {
+                noun.suffix(format!("with mana value {n} or less"));
+            }
+            Filter::ManaValueAtMostX => noun.suffix("with mana value X or less".to_owned()),
+            Filter::ManaValueAtMostPower => noun.suffix(format!(
                 "with mana value less than or equal to {}'s power",
                 self.this
             )),
-            Filter::PowerAtMost(n) => noun.suffixes.push(format!("with power {n} or less")),
+            Filter::PowerAtMost(n) => noun.suffix(format!("with power {n} or less")),
             Filter::Not(inner) => self.add_not(noun, *inner, kind),
             Filter::All(
                 [
@@ -137,7 +166,7 @@ impl Ctx {
                     Filter::Not(Filter::ManaValueAtMost(below)),
                 ],
             ) if below.checked_add(1) == Some(*max) => {
-                noun.suffixes.push(format!("with mana value {max}"));
+                noun.suffix(format!("with mana value {max}"));
             }
             Filter::All(filters) => {
                 for &each in filters {
@@ -188,13 +217,18 @@ impl Ctx {
                     .map(|c| format!("non{c}")),
             ),
             Filter::Tapped => noun.adjectives.push("untapped".to_owned()),
-            Filter::AttackedThisTurn => noun
-                .suffixes
-                .push("that didn't attack this turn".to_owned()),
+            Filter::AttackedThisTurn => noun.suffix("that didn't attack this turn".to_owned()),
+            Filter::WithCounter(counter) => {
+                let name = counter.name();
+                noun.numbered_suffix(
+                    format!("with no {name} counters on it"),
+                    format!("with no {name} counters on them"),
+                );
+            }
             Filter::Token => noun.adjectives.push("nontoken".to_owned()),
             Filter::Whose(players) => {
                 let who = self.controls(*players, false);
-                noun.suffixes.push(who);
+                noun.suffix(who);
             }
             Filter::Owned(players) => {
                 let owner = self.zone_owner(*players);
@@ -203,9 +237,9 @@ impl Ctx {
                 } else {
                     "they don't own"
                 };
-                noun.suffixes.push(verb.to_owned());
+                noun.suffix(verb.to_owned());
             }
-            Filter::Named(name) => noun.suffixes.push(format!("not named {name}")),
+            Filter::Named(name) => noun.suffix(format!("not named {name}")),
             Filter::Any
             | Filter::ManaValueAtMost(_)
             | Filter::PowerAtMost(_)
@@ -216,8 +250,7 @@ impl Ctx {
             | Filter::All(_)
             | Filter::AnyOf(_) => {
                 let inner = self.noun(filter, kind);
-                noun.suffixes
-                    .push(format!("that isn't {}", inner.indefinite(kind)));
+                noun.suffix(format!("that isn't {}", inner.indefinite(kind)));
             }
         }
     }
@@ -362,6 +395,16 @@ pub(super) fn zone_name(zone: Zone) -> &'static str {
 }
 
 impl Noun {
+    /// Appends a suffix that reads the same for singular and plural nouns.
+    fn suffix(&mut self, text: String) {
+        self.suffixes.push(Suffix::Fixed(text));
+    }
+
+    /// Appends a suffix whose wording agrees with whether the noun is singular or plural.
+    fn numbered_suffix(&mut self, singular: String, plural: String) {
+        self.suffixes.push(Suffix::Numbered { singular, plural });
+    }
+
     /// Sets the kinds, or when they are set, says these as words before them ("artifact
     /// creature").
     fn kind_or_adjective(&mut self, names: Vec<String>) {
@@ -408,7 +451,7 @@ impl Noun {
             }
         }
         words.push(named);
-        words.extend(self.suffixes.iter().cloned());
+        words.extend(self.suffixes.iter().map(|s| s.text(several).to_owned()));
         words.join(" ")
     }
 
@@ -448,7 +491,7 @@ impl Noun {
         if subtypes {
             let each: Vec<String> = self.kinds.iter().map(|k| with_article(k)).collect();
             let mut words = vec![list(&each, "or")];
-            words.extend(self.suffixes.iter().cloned());
+            words.extend(self.suffixes.iter().map(|s| s.text(false).to_owned()));
             return words.join(" ");
         }
         let phrase = self.singular(kind);
@@ -471,6 +514,7 @@ fn in_stack(filter: Filter) -> bool {
         | Filter::Owned(_)
         | Filter::Tapped
         | Filter::AttackedThisTurn
+        | Filter::WithCounter(_)
         | Filter::Token
         | Filter::Named(_)
         | Filter::ManaValueAtMost(_)

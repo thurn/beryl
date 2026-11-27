@@ -474,6 +474,7 @@ fn spells(filter: Filter) -> &'static str {
         | Filter::Whose(_)
         | Filter::Owned(_)
         | Filter::AttackedThisTurn
+        | Filter::WithCounter(_)
         | Filter::Tapped
         | Filter::Token
         | Filter::Named(_)
