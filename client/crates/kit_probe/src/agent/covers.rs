@@ -12,7 +12,7 @@ use glam::Vec2;
 use super::checks::{fault, subject};
 use super::fault::{Context, Fault, Rule};
 use kit_frame::frame::{Frame, Place, Role, StateBits};
-use kit_scene::hit::{intersection, is_within, painted_over, visible_bounds};
+use kit_scene::hit::{covered, intersection, is_within, painted_over, visible_bounds};
 use kit_ui::input::Rect;
 
 /// How far two boxes may reach into each other and not count as overlapping, in logical
@@ -29,6 +29,11 @@ enum How {
     /// An icon covers a line of the second element's text: "text overlaps nothing".
     OverText,
 }
+
+/// How much of a card a press may not reach before it counts as hidden: a card more than this
+/// covered, such as the card under the top of a pile of identical tokens, has no click left
+/// for a control to take, so a control over its sliver is not judged.
+const MOSTLY: f32 = 0.9;
 
 /// What a pile or card on the table is, for this check: which flat-layer elements may not
 /// cover it.
@@ -209,7 +214,7 @@ fn table(frame: &Frame, seen: &impl Fn(u32) -> bool) -> Vec<(u32, Rect, Under)> 
             let card = element.role == Role::Card && element.place != Place::Layer;
             let under = if pile {
                 Under::Pile
-            } else if element.state.has(StateBits::ELIGIBLE) {
+            } else if element.state.has(StateBits::ELIGIBLE) && covered(frame, index) < MOSTLY {
                 Under::Eligible
             } else {
                 Under::Card
