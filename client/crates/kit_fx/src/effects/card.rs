@@ -169,7 +169,11 @@ pub fn write(
                 };
                 player::write_surface_burst(
                     quad,
-                    (progress, effects.lift(), effects.palette()),
+                    (
+                        progress,
+                        effects.lift() * look.pose.scale,
+                        effects.palette(),
+                    ),
                     tier_only,
                     run,
                     reach,
