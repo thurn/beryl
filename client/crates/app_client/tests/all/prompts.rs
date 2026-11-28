@@ -177,6 +177,42 @@ fn priority_button_shortcuts_require_an_enabled_button() {
     }
 }
 
+/// The player pressed Space at Magical Hack's "Choose Word to Replace" with "Submit 1" in orange
+/// and nothing happened, because only a priority prompt took the key.
+#[test]
+fn space_and_enter_press_the_primary_button_of_any_prompt() {
+    for code in [KeyCode::Space, KeyCode::Enter] {
+        let mut builder = ViewBuilder::sample();
+        builder.script(ScriptBuilder::reset().build());
+        let mut client = client();
+        let hack = prompt(
+            Purpose::ReplaceWord,
+            "Choose Word to Replace",
+            vec![button(ButtonId::Confirm, "Submit 1", true, true)],
+            ShapeBody::Catalog {
+                entries: ["Plains", "Island", "Swamp", "Mountain", "Forest"]
+                    .map(str::to_owned)
+                    .to_vec(),
+                chosen: Some(1),
+            },
+        );
+        client.handle(deciding(&builder, hack, Vec::new()));
+        client.frame(0);
+        key(&mut client, code, KeyPhase::Down);
+        assert_eq!(
+            client.next_command(),
+            Some(SessionCommand::Click(ClickRequest {
+                decision: decision(),
+                revision: 2,
+                click: Click::Button {
+                    button: ButtonId::Confirm
+                },
+            })),
+            "{code:?} presses Submit"
+        );
+    }
+}
+
 #[test]
 fn priority_button_shortcuts_leave_the_game_alone_while_settings_are_open() {
     let mut client = client();
