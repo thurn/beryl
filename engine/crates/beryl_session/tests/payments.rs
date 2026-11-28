@@ -8,10 +8,11 @@
 use crate::play;
 
 use beryl_cards::CARDS;
+use beryl_cards::names;
 use beryl_cards::names::{
-    AANGS_ICEBERG, CURRENCY_CONVERTER, ELITE_SPELLBINDER, ISLAND, JACE_VRYNS_PRODIGY, MANA_CRYPT,
-    PLAINS, SNAPCASTER_MAGE, STAFF_OF_THE_STORYTELLER, STOCK_UP, SWIFT_RECONFIGURATION,
-    THIEVING_SKYDIVER, TRINKET_MAGE,
+    AANGS_ICEBERG, CURRENCY_CONVERTER, DANDAN, ELITE_SPELLBINDER, ISLAND, JACE_VRYNS_PRODIGY,
+    MANA_CRYPT, PLAINS, SNAPCASTER_MAGE, STAFF_OF_THE_STORYTELLER, STOCK_UP, SVYELUNITE_TEMPLE,
+    SWIFT_RECONFIGURATION, THIEVING_SKYDIVER, TRINKET_MAGE,
 };
 use beryl_cards::tokens::TREASURE_TOKEN;
 use beryl_engine::card::{Castings, Part, Purpose};
@@ -551,6 +552,41 @@ fn smart_stops_pay_with_the_plan_that_floats_least() {
     };
     assert_eq!(tapped(ISLAND), [true, true]);
     assert_eq!(tapped(MANA_CRYPT), [false]);
+}
+
+/// Dandân, {U}{U}, with Magical Hack, Memory Lapse and Predict in hand, an Island and a Svyelunite
+/// Temple, which taps for {U} or is sacrificed for {U}{U}. Sacrificing the Temple pays for Dandân
+/// and leaves the Island up for another spell, so the engine offers it as a second plan.
+const SACRIFICE_OPTION: Scenario = Scenario::new("a sacrifice that is not needed")
+    .at(3, P0, TurnStep::PrecombatMain)
+    .hand(
+        P0,
+        &[
+            DANDAN,
+            names::MAGICAL_HACK,
+            names::MEMORY_LAPSE,
+            names::PREDICT,
+        ],
+    )
+    .permanents(
+        P0,
+        &[Permanent::new(ISLAND), Permanent::new(SVYELUNITE_TEMPLE)],
+    )
+    .library(P0, &[PLAINS; 6])
+    .library(P1, &[PLAINS; 6]);
+
+/// Where the engine's first plan taps the Island and the Temple and sacrifices nothing, the
+/// session pays with it without asking, though another plan sacrifices the Temple for its
+/// {U}{U}: a player does not choose between payments when one of them is plainly the one
+/// they want.
+#[test]
+fn smart_stops_pay_without_asking_when_a_sacrifice_is_only_an_option() {
+    let mut play = Play::scenario(&SACRIFICE_OPTION);
+    play.choose(|c| matches!(c, Candidate::Cast { costs, .. } if costs.is_empty()));
+    assert!(
+        !play.decision().prompt.is(Purpose::Mana),
+        "the player is not asked how to pay"
+    );
 }
 
 /// Thieving Skydiver, {1}{U}, with an Island and two Plains.
