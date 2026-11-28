@@ -6,7 +6,8 @@ reads them). The client's report names the client in its `ui.json` log and holds
 element tree of the frozen frame, and `frames.jsonl`, the frame log so far. A report saved
 while a recording replayed also records the recording, its seat and the moment (`at`, in
 milliseconds, and whether the replay had already ended) in `ui.json`, so `just client tree`
-reaches the same frame with no game. A report from a live game holds the game's `replay.json`, which `just client app --replay` resumes.
+reaches the same frame with no game. A report whose folder is not on this machine is downloaded from its ticket's attachments into
+`$BERYL_CACHE/bug-reports/<ticket>`. A report from a live game holds the game's `replay.json`, which `just client app --replay` resumes.
 
 Without options the command writes no file. `--png`, `--film` and `--story` draw the reported
 moment on the current tree and write it as a story (`bug_moment`).
@@ -15,12 +16,14 @@ moment on the current tree and write it as a story (`bug_moment`).
 from __future__ import annotations
 
 import argparse
+import gzip
 import json
+import shutil
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from .. import bugs, mobile_bugs
+from .. import bugs, mobile_bugs, paths
 from . import app, bug_moment, phone
 from .command import Command
 
@@ -39,10 +42,60 @@ class Opened:
     log: object
 
 
+def download_report(ticket: str) -> Path | None:
+    """The folder of `ticket`'s attached capture under `$BERYL_CACHE/bug-reports/<ticket>`,
+    downloaded when it is not there yet, or None when the ticket has none.
+
+    A file is downloaded again only when its `sha256` on the ticket differs from the one
+    recorded in the folder's `.sha256.json`. `frames.jsonl.gz` is unpacked to `frames.jsonl`.
+    """
+    wanted = {*bugs.CAPTURE_FILES, bugs.FRAMES_GZ, *(name for name, _ in bugs.IMAGES)}
+    try:
+        listed = bugs.ignite_ticket("attachment", "list", ticket)
+    except (OSError, bugs.TicketError):
+        return None
+    attached = {
+        str(item["name"]): str(item.get("sha256", ""))
+        for item in listed.get("attachments") or []
+        if not item.get("removed_at") and item.get("name") in wanted
+    }
+    if bugs.REPORT not in attached:
+        return None
+    folder = paths.cache_root() / "bug-reports" / ticket
+    folder.mkdir(parents=True, exist_ok=True)
+    record = folder / ".sha256.json"
+    try:
+        known = json.loads(record.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        known = {}
+    for name, sha in attached.items():
+        target = folder / name
+        if known.get(name) == sha and target.is_file():
+            continue
+        try:
+            bugs.ignite_ticket("attachment", "get", ticket, name, "-o", str(target))
+        except (OSError, bugs.TicketError) as error:
+            print(f"bug: {error}", file=sys.stderr)
+            continue
+        if name == bugs.FRAMES_GZ:
+            with (
+                gzip.open(target, "rb") as source,
+                (folder / bugs.FRAMES).open("wb") as unpacked,
+            ):
+                shutil.copyfileobj(source, unpacked)
+        known[name] = sha
+    record.write_text(json.dumps(known), encoding="utf-8")
+    return folder
+
+
 def open_report(key: str, root: Path) -> Opened | None:
-    """The report at the folder `key`, or the one `bugs.find` finds by `key` under `root`."""
+    """The report at the folder `key`, or the one `bugs.find` finds by `key` under `root`, or
+    else the one attached to the ticket `key`."""
     folder = Path(key).expanduser()
     report = bugs.load(folder) if folder.is_dir() else bugs.find(root, key)
+    if report is None and not folder.is_dir():
+        downloaded = download_report(key)
+        report = bugs.load(downloaded) if downloaded else None
     if report is None:
         return None
     log: object = None

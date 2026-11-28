@@ -24,11 +24,15 @@ Read the player's full words, the screenshot and surrounding window, and the
 steps or recorded moment for each report. The ticket points to `report.md` and
 its evidence under `$BERYL_BUGS` (default
 `~/Library/Application Support/ca.thurn.beryl/bugs` on macOS,
-`%APPDATA%\ca.thurn.beryl\bugs` on Windows). If the local folder is
-unavailable, `ignite ticket attachment get <id> screenshot.png` downloads the
-attached crop. Use `window.png` for context. A spec report names its card,
-moment, and seat instead. `just client bug <id>` reads a local the client capture and
-prints the recorded state and applicable reproduction commands. Read targeted
+`%APPDATA%\ca.thurn.beryl\bugs` on Windows). The ticket also carries the
+capture as attachments: `report.md`, `replay.json`, `fixture.json`, `view.json`,
+`tree.txt`, `ui.json`, `searches.json`, `journal.jsonl` and the last two minutes
+of the frame log as `frames.jsonl.gz`. When the local folder is absent,
+`just client bug <id>` downloads them into `$BERYL_CACHE/bug-reports/<id>/`
+(unpacking the frame log) and works as it does with the folder. Use
+`window.png` for context. A spec report names its card, moment, and seat
+instead. `just client bug <id>` reads the client capture and prints the
+recorded state and applicable reproduction commands. Read targeted
 code or history where it helps identify a shared mechanism or hand a worker a
 useful starting path. Record gaps in the evidence and how the worker can
 reconstruct the case.
@@ -109,6 +113,11 @@ replays and reconstruct the failure in a deterministic case. The regression
 guard must replay that capture (a story, fixture, or spec moment made from it);
 hand-built views may be added for coverage, but they do not count as the
 report's guard.
+
+A report's capture is attached to its ticket, so any machine can work it:
+`just client bug <id>` downloads the attachments when the local folder is not
+there, and everything below runs on that copy. Do not wait for the filing
+machine, and do not hand-build views instead of the capture.
 
 For a client report, `just client bug <id> --png` draws the reported moment on
 your tree from the report's own capture, at its window size, scale and seat,

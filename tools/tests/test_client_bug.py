@@ -1,9 +1,14 @@
 """`just client bug`: what it prints for report folders built by hand, from a replayed recording,
 from a live game and from the web interface."""
 
+import gzip
 import json
+import subprocess
 from pathlib import Path
 
+import pytest
+
+from beryl_tools import bugs
 from beryl_tools.client import bug, bug_moment
 
 
@@ -141,3 +146,59 @@ def test_a_story_from_a_report_names_itself_not_the_reporting_machines_folder() 
         "capture sickness-badge 1200000000 you 2 catch-up",
         "action still",
     ]
+
+
+def test_a_report_absent_from_this_machine_is_downloaded_from_its_ticket(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    filed = report_folder(
+        tmp_path / "filing", {"client": "Beryl", "recording": "r", "at": 5}
+    )
+    run = {
+        "window": "fullscreen",
+        "display_hz": 120.0,
+        "adapter": "Metal",
+        "load": [1.0, 1.0, 1.0],
+        "fixture": None,
+    }
+    frames_log = json.dumps({"run": run}) + "\n"
+    (filed / "frames.jsonl").write_text(frames_log)
+    files: dict[str, bytes] = {
+        path.name: path.read_bytes()
+        for path in filed.iterdir()
+        if path.name in bugs.CAPTURE_FILES
+    }
+    files[bugs.FRAMES_GZ] = gzip.compress((filed / "frames.jsonl").read_bytes())
+    monkeypatch.setenv("BERYL_CACHE", str(tmp_path / "cache"))
+    downloads: list[str] = []
+
+    def ignite(argv: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        assert argv[:3] == ["ignite", "--json", "ticket"]
+        verb, rest = argv[3], argv[4:]
+        assert verb == "attachment"
+        if rest[0] == "list":
+            out: object = {
+                "attachments": [
+                    {"name": name, "sha256": f"sha-{name}", "removed_at": None}
+                    for name in files
+                ]
+            }
+        else:
+            assert rest[:2] == ["get", "by-abcd"]
+            downloads.append(rest[2])
+            Path(rest[4]).write_bytes(files[rest[2]])
+            out = {"path": rest[4]}
+        return subprocess.CompletedProcess(argv, 0, json.dumps(out), "")
+
+    monkeypatch.setattr(bugs.subprocess, "run", ignite)
+    elsewhere = tmp_path / "empty-bugs"
+    opened = bug.open_report("by-abcd", elsewhere)
+    assert opened is not None
+    assert bug.text(opened) == printed(filed).replace(
+        str(filed), str(opened.report.folder)
+    )
+    assert (opened.report.folder / "frames.jsonl").read_text() == frames_log
+    # A second read finds every file cached by its hash.
+    count = len(downloads)
+    assert bug.open_report("by-abcd", elsewhere) is not None
+    assert len(downloads) == count

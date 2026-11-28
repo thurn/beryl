@@ -1,6 +1,7 @@
+import gzip
 import json
 import subprocess
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -87,6 +88,7 @@ class Ignite:
         self.tickets: list[dict[str, Any]] = []
         self.commands: list[list[str]] = []
         self.attached: dict[str, list[str]] = {}
+        self.attach_commands: list[list[str]] = []
 
     def run(
         self, argv: list[str], **_kwargs: object
@@ -109,9 +111,16 @@ class Ignite:
             out = {"results": [{"id": epic["id"]}]}
         elif verb == "attachment":
             assert rest[0] == "list"
-            out = {"attachments": self.attached.get(rest[1], [])}
+            out = {
+                "attachments": [
+                    {"name": name, "removed_at": None}
+                    for name in self.attached.get(rest[1], [])
+                ]
+            }
         elif verb == "attach":
-            self.attached.setdefault(rest[0], []).extend(rest[1:])
+            files = [a for a in rest[1:] if a != "--no-comment"]
+            self.attached.setdefault(rest[0], []).extend(Path(f).name for f in files)
+            self.attach_commands.append(rest)
             out = {"id": rest[0]}
         else:
             assert verb == "create"
@@ -253,8 +262,12 @@ def test_file_attaches_and_embeds_the_images(
     ignite = fake_ignite(monkeypatch)
     assert cli.main(["bugs", "file"]) == 0
     ticket = ignite.tickets[0]
-    # No window.png in the folder, so only the screenshot is attached and shown.
-    assert ticket["attach"] == [str(folder / "screenshot.png")]
+    # No window.png in the folder, so only the screenshot is attached and shown, then the
+    # capture files that exist.
+    assert ticket["attach"] == [
+        str(folder / "screenshot.png"),
+        str(folder / "report.md"),
+    ]
     assert "![Screenshot](attachment:screenshot.png)" in ticket["body"]
     assert "window.png" not in ticket["body"]
     assert str(folder) in ticket["body"], "the local folder line stays"
@@ -263,17 +276,76 @@ def test_file_attaches_and_embeds_the_images(
     other = report(tmp_path, "20261108-143013-other")
     (other / "window.png").write_bytes(b"png")
     assert cli.main(["bugs", "file", other.name]) == 0
-    assert ignite.tickets[1]["attach"] == [str(other / "window.png")]
+    assert ignite.tickets[1]["attach"] == [
+        str(other / "window.png"),
+        str(other / "report.md"),
+    ]
     assert "![Window](attachment:window.png)" in ignite.tickets[1]["body"]
 
 
-def test_attach_adds_screenshots_to_filed_tickets_without_any(
+def test_file_attaches_the_capture_and_the_end_of_the_frame_log(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("BERYL_BUGS", str(tmp_path))
+    folder = report(tmp_path)
+    for name in ("replay.json", "tree.txt", "journal.jsonl"):
+        (folder / name).write_text("{}")
+    (folder / "view.json").write_bytes(b"x" * (bugs.MAX_ATTACHMENT_BYTES + 1))
+    lines = [
+        {"run": {"pid": 1}},
+        {"tier": {"tier": "enhanced"}},
+        {"first_shown_ms": 5.0},
+        {"input": {"at_ms": 1000.0}},
+        {"late": {"at_ms": 100_000.0}},
+        {"summary": {"frames": 1}},
+        {"input": {"at_ms": 200_000.0}},
+        {"summary": {"frames": 2}},
+    ]
+    (folder / "frames.jsonl").write_text("".join(json.dumps(x) + "\n" for x in lines))
+    ignite = fake_ignite(monkeypatch)
+    sent: dict[str, bytes] = {}
+    run: Callable[..., subprocess.CompletedProcess[str]] = ignite.run
+
+    def record(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        # The gzip lives in a scratch folder that is gone once filing ends.
+        for i, arg in enumerate(argv):
+            if arg == "--attach" and argv[i + 1].endswith(".gz"):
+                sent["frames"] = gzip.decompress(Path(argv[i + 1]).read_bytes())
+        return run(argv, **kwargs)
+
+    monkeypatch.setattr(bugs.subprocess, "run", record)
+    assert cli.main(["bugs", "file"]) == 0
+    names = [Path(p).name for p in ignite.tickets[0]["attach"]]
+    assert names == [
+        "report.md",
+        "replay.json",
+        "tree.txt",
+        "journal.jsonl",
+        "frames.jsonl.gz",
+    ]
+    assert "over 20 MiB" in capsys.readouterr().err
+    # The header lines stay; of the rest only the last two minutes (and the summary after
+    # the first line kept) remain.
+    kept = [json.loads(x) for x in sent["frames"].splitlines()]
+    assert kept == [
+        lines[0],
+        lines[1],
+        lines[2],
+        lines[4],
+        lines[5],
+        lines[6],
+        lines[7],
+    ]
+
+
+def test_attach_adds_what_filed_tickets_lack(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("BERYL_BUGS", str(tmp_path))
     first, second = report(tmp_path), report(tmp_path, "20261108-143013-other")
     for folder in (first, second):
         (folder / "screenshot.png").write_bytes(b"png")
+        (folder / "replay.json").write_text("{}")
     ignite = fake_ignite(
         monkeypatch,
         [
@@ -281,20 +353,21 @@ def test_attach_adds_screenshots_to_filed_tickets_without_any(
             {"id": "by-b", "labels": ["bug-report", f"bug-report:{second.name}"]},
         ],
     )
+    # by-b has its screenshot already, so it gets only the capture, and without a comment.
     ignite.attached["by-b"] = ["screenshot.png"]
     assert cli.main(["bugs", "attach", "--open"]) == 0
     assert ignite.attached == {
-        "by-a": [str(first / "screenshot.png")],
-        "by-b": ["screenshot.png"],
+        "by-a": ["screenshot.png", "report.md", "replay.json"],
+        "by-b": ["screenshot.png", "report.md", "replay.json"],
     }
-    # Run again: by-a has an attachment now, so nothing more is sent.
-    count = len(ignite.commands)
+    assert ignite.attach_commands[0][0] == "by-a"
+    assert "--no-comment" not in ignite.attach_commands[0]
+    assert "--no-comment" in ignite.attach_commands[1]
+    assert "--no-comment" in ignite.attach_commands[2]
+    # Run again: everything is attached, so nothing more is sent.
+    count = len(ignite.attach_commands)
     assert cli.main(["bugs", "attach"]) == 0
-    assert [c[3] for c in ignite.commands[count:]] == [
-        "list",
-        "attachment",
-        "attachment",
-    ]
+    assert len(ignite.attach_commands) == count
 
 
 def test_an_ai_report_files_an_incident_bead(

@@ -12,6 +12,7 @@ done report moves to `done/`.
 from __future__ import annotations
 
 import argparse
+import gzip
 import json
 import os
 import re
@@ -58,6 +59,24 @@ IMAGES: tuple[tuple[str, str], ...] = (
     ("screenshot.png", "Screenshot"),
     ("window.png", "Window"),
 )
+# The report's capture files that go on its ticket, beside the images. They let a worker on
+# another machine reproduce the report, as `just client bug <ticket>` does from them.
+CAPTURE_FILES: tuple[str, ...] = (
+    REPORT,
+    "replay.json",
+    "fixture.json",
+    "view.json",
+    "tree.txt",
+    "ui.json",
+    "searches.json",
+    "journal.jsonl",
+)
+# The frame log can reach tens of megabytes, so the ticket gets a gzip of its last two minutes.
+FRAMES = "frames.jsonl"
+FRAMES_GZ = "frames.jsonl.gz"
+FRAMES_WINDOW_MS = 120_000
+# The largest file `ignite ticket attach` accepts.
+MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
 
 
 def bundle_filing_env() -> dict[str, str]:
@@ -202,6 +221,82 @@ def images(report: Report) -> list[tuple[Path, str]]:
     ]
 
 
+def trim_frames(source: Path, target: Path) -> None:
+    """Writes the gzip `target` of the last `FRAMES_WINDOW_MS` of the frame log `source`.
+
+    The header lines (`run`, `tier` and `first_shown_ms`) are kept whole. Of the other lines,
+    those with a time (`input` and `late` records hold `at_ms`) are kept when they fall in the
+    window, and the untimed ones (summaries, timing windows) when they come after the first
+    kept timed line."""
+
+    def stamp(line: object) -> float | None:
+        if not isinstance(line, dict):
+            return None
+        for key in ("input", "late"):
+            record = line.get(key)
+            if isinstance(record, dict) and isinstance(
+                record.get("at_ms"), (int, float)
+            ):
+                return float(record["at_ms"])
+        return None
+
+    def parsed(raw: bytes) -> object:
+        try:
+            return json.loads(raw)
+        except ValueError:
+            return None
+
+    last = 0.0
+    with source.open("rb") as lines:
+        for raw in lines:
+            at = stamp(parsed(raw))
+            if at is not None:
+                last = max(last, at)
+    cutoff = last - FRAMES_WINDOW_MS
+    started = False
+    with source.open("rb") as lines, gzip.open(target, "wb") as out:
+        for raw in lines:
+            line = parsed(raw)
+            if isinstance(line, dict) and line.keys() & {
+                "run",
+                "tier",
+                "first_shown_ms",
+            }:
+                out.write(raw)
+                continue
+            at = stamp(line)
+            if at is not None and at >= cutoff:
+                started = True
+            if started and (at is None or at >= cutoff):
+                out.write(raw)
+
+
+def capture(report: Report, scratch: Path) -> list[Path]:
+    """The report's capture files for its ticket: those that exist, and a gzip of the end of
+    its frame log written under `scratch`. A file over the limit is left out, with a warning.
+    """
+    found = [
+        report.folder / name
+        for name in CAPTURE_FILES
+        if (report.folder / name).is_file()
+    ]
+    frames = report.folder / FRAMES
+    if frames.is_file():
+        zipped = scratch / FRAMES_GZ
+        trim_frames(frames, zipped)
+        found.append(zipped)
+    kept: list[Path] = []
+    for path in found:
+        if path.stat().st_size > MAX_ATTACHMENT_BYTES:
+            print(
+                f"bugs: {report.id}: not attaching {path.name}, it is over 20 MiB",
+                file=sys.stderr,
+            )
+        else:
+            kept.append(path)
+    return kept
+
+
 def embeds(report: Report) -> str:
     """Markdown that shows the report's attached images, one per line."""
     return "\n".join(
@@ -227,9 +322,12 @@ def bead_description(report: Report) -> str:
     source = (
         "Reported as a bug in the spec viewer."
         if report.kind == "spec-viewer"
-        else "Reported from the app's bug button. The screenshots are attached to "
-        "this ticket. The report folder holds them too, with the game's replay, its "
-        "latest views and the logs, on the machine that filed it:"
+        else "Reported from the app's bug button. The screenshots and the capture "
+        "(`report.md`, the game's replay, its latest views, the logs and the end of the "
+        "frame log as `frames.jsonl.gz`) are attached to this ticket, and "
+        "`just client bug <ticket>` downloads them when the local "
+        "folder is not on this machine. The report folder holds them too, on the "
+        "machine that filed it:"
     )
     viewer = (
         f"- Spec moment and seat: `{f.get('spec', '')}`\n"
@@ -353,14 +451,31 @@ def file_bead(report: Report) -> str:
             str(body),
             # Grouped reports use the launch epic's allocation. Standalone reports wait for review.
             *(["--parent", epic, "--independent"] if epic else ["--allocation", "0"]),
-            *[arg for path, _ in images(report) for arg in ("--attach", str(path))],
+            *[
+                arg
+                for path in [
+                    *(p for p, _ in images(report)),
+                    *capture(report, scratch),
+                ]
+                for arg in ("--attach", str(path))
+            ],
         )
     return str(created["results"][0]["id"])
 
 
+def attached_names(ticket: str) -> set[str]:
+    """The names of the files attached to `ticket` that have not been removed."""
+    listed = ignite_ticket("attachment", "list", ticket)
+    return {
+        str(item["name"])
+        for item in listed.get("attachments") or []
+        if not item.get("removed_at")
+    }
+
+
 def attach_cmd(args: argparse.Namespace) -> int:
-    """Attaches the screenshots of filed reports whose tickets have none, with a comment that
-    shows them."""
+    """Attaches what the tickets of filed reports lack: screenshots, with a comment that shows
+    them, and capture files, with no comment."""
     root = bugs_dir()
     try:
         tickets = report_issues(
@@ -372,19 +487,26 @@ def attach_cmd(args: argparse.Namespace) -> int:
     code = 0
     for r in reports(root, done=not args.open):
         ticket = tickets.get(r.id)
-        files = images(r)
-        if ticket is None or not files:
+        if ticket is None:
             continue
         try:
-            listed = ignite_ticket("attachment", "list", ticket)
-            if listed.get("attachments"):
-                continue
-            ignite_ticket("attach", ticket, *[str(path) for path, _ in files])
+            with tempfile.TemporaryDirectory(prefix="beryl-bug-") as folder:
+                have = attached_names(ticket)
+                pictures = [p for p, _ in images(r) if p.name not in have]
+                files = [p for p in capture(r, Path(folder)) if p.name not in have]
+                if pictures:
+                    ignite_ticket("attach", ticket, *[str(p) for p in pictures])
+                if files:
+                    ignite_ticket(
+                        "attach", ticket, "--no-comment", *[str(p) for p in files]
+                    )
         except (OSError, TicketError) as error:
             print(f"bugs: {error}", file=sys.stderr)
             code = 1
             continue
-        print(f"{ticket} {r.id}: attached {', '.join(p.name for p, _ in files)}")
+        if pictures or files:
+            names = ", ".join(p.name for p in [*pictures, *files])
+            print(f"{ticket} {r.id}: attached {names}")
     return code
 
 
@@ -638,7 +760,8 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     v.add_argument("--dry-run", action="store_true")
     v.set_defaults(func=file_cmd)
     v = verbs.add_parser(
-        "attach", help="attach the screenshots of filed reports to their tickets"
+        "attach",
+        help="attach the screenshots and capture files of filed reports to their tickets",
     )
     v.add_argument(
         "--open", action="store_true", help="only reports whose tickets are open"
