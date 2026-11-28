@@ -8,6 +8,7 @@
 use beryl_card::{Amount, Condition, Objects};
 
 use crate::card::{AbilityIx, TriggerEvent};
+use crate::continuous::layers;
 use crate::filter::is_for;
 use crate::fixed::Full;
 use crate::game::Game;
@@ -127,6 +128,13 @@ pub(crate) fn reflexive<L: Layout>(
     condition: Option<Condition>,
     ability: AbilityIx,
 ) -> Result<Outcome<L>, Full> {
+    if condition.is_some() {
+        // The condition reads the layers, which the instructions before (an exile out of a
+        // graveyard that a permanent reads, say) may have made stale, so they are brought up
+        // to date first, as `Run::remember` does before it reads a controller.
+        let game = run.resolving().0;
+        layers::refresh(game.state, game.table, game.sink)?;
+    }
     if condition.is_none_or(|condition| run.scene().holds(&condition)) {
         let (game, resolution) = run.resolving();
         let reflexive = PendingTrigger {
