@@ -205,7 +205,11 @@ pub fn rustc_wrap(args: &[String]) -> i32 {
     };
     if let Some(unit) = unit {
         let compiled = CompileUnit {
-            crate_name: unit.crate_name,
+            crate_name: recorded_name(
+                &unit.crate_name,
+                unit.mode == "test",
+                std::env::var("CARGO_PKG_NAME").ok().as_deref(),
+            ),
             mode: unit.mode.to_owned(),
             instructions: usage.instructions.map(|n| n as f64),
             cpu_s: usage.cpu_s,
@@ -231,7 +235,11 @@ pub fn runner(args: &[String]) -> i32 {
         }
     };
     let ran = CompileUnit {
-        crate_name: test_binary_crate(Path::new(program)),
+        crate_name: recorded_name(
+            &test_binary_crate(Path::new(program)),
+            true,
+            std::env::var("CARGO_PKG_NAME").ok().as_deref(),
+        ),
         mode: RUN_MODE.to_owned(),
         instructions: usage.instructions.map(|n| n as f64),
         cpu_s: usage.cpu_s,
@@ -383,6 +391,20 @@ impl CompileArgs {
                     .is_some_and(|rest| rest.is_empty() || rest.starts_with('.'))
             })
         })
+    }
+}
+
+/// The name a unit is recorded under. An integration test binary is named for its target, and
+/// many packages name that target `all` (`tests/all/main.rs`), so recording `all` added every
+/// package's test binary into one entry, which the `slow-crate` rule then reported as a single
+/// crate. A test target is recorded as `package::target` instead. A unit test of a library or
+/// binary has the package's own crate name, and every other unit keeps its crate name.
+fn recorded_name(crate_name: &str, test: bool, package: Option<&str>) -> String {
+    match package {
+        Some(package) if test && crate_name != package.replace('-', "_") => {
+            format!("{package}::{crate_name}")
+        }
+        _ => crate_name.to_owned(),
     }
 }
 

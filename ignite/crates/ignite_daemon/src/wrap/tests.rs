@@ -92,6 +92,21 @@ fn a_test_binary_is_named_by_its_crate() {
     assert_eq!(test_binary_crate(Path::new("/t/deps/plain")), "plain");
 }
 
+#[test]
+fn an_integration_test_is_recorded_under_its_package() {
+    assert_eq!(
+        recorded_name("all", true, Some("app_client")),
+        "app_client::all"
+    );
+    // A unit test has the package's own crate name, and other units keep theirs.
+    assert_eq!(
+        recorded_name("ignite_core", true, Some("ignite-core")),
+        "ignite_core"
+    );
+    assert_eq!(recorded_name("all", false, Some("app_client")), "all");
+    assert_eq!(recorded_name("all", true, None), "all");
+}
+
 /// A shim directory holds the test runner and compiler wrapper and no `cargo`, and writing it deletes the `cargo`
 /// shim an earlier release left there, so nothing in it can divert a plain `cargo` call.
 #[test]
