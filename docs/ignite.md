@@ -3193,7 +3193,11 @@ the cost back under its limit is performance work, not a defect caught.
 Protected checks, lints and formatters among them, are never switched off this
 way, and neither is a check on a platform no machine can verify. The switch is
 recorded against the check's open regression ticket, which gets a comment
-telling its worker to switch the check back on with the fix. Deferring such a
+telling its worker not to switch the check on: the landing of that ticket runs
+the check in its gate while it is off, and when the landing is pushed, the hub
+switches it on, recording the landing's session as who did it. Workers once
+switched such checks on before landing, and tip rounds at tips without the fix
+failed them again and held `master` back for up to an hour. Deferring such a
 check costs nothing while its fix is written, where a stall revert would take a
 product landing out of `master`.
 
@@ -3374,15 +3378,21 @@ output (last 40 lines; whole output on jarvis at ...)
   not move the check: the hub keeps reopening the old ticket.
   `ignite ticket close` on a regression ticket prints the checks still on it
   that have not passed.
-- `ignite land` and `ignite close` refuse, before the gate runs, while the
-  ticket holds a check that is switched off and has not passed since it failed.
-  No gate runs a switched-off check, so a partial fix used to land and close the
+- No gate or tip round runs a switched-off check, except the landing gate of the
+  ticket that holds its regression. That gate runs it as a check the change
+  fixes, and the landing names each one it ran and passed in `POST /landed`,
+  where the hub switches it on. A landing by verdict that holds such a check
+  runs its gate instead of reusing a stored verdict, because a verdict does not
+  say which checks ran.
+- `ignite land` refuses, after its gate, while the ticket holds a switched-off
+  check that the gate did not run and pass, such as one missing from the tree's
+  listing. `ignite close` refuses while the ticket holds any switched-off check
+  that has not passed since it failed. A partial fix used to land and close the
   ticket with the check still broken, and the check's next failure reopened it
   while another worker fixed the same check under a follow-up ticket. The
-  refusal names each such check. The worker switches on a check the change fixes
-  (`ignite flaky on`), so the gate runs it, and moves each check left failing to
-  the follow-up ticket. A justiciar can pass `--allow-off-checks`.
-  `GET /regressions/open` says which checks are off.
+  refusal names each such check, and the worker moves each check left failing to
+  the follow-up ticket. A justiciar can pass `--allow-off-checks`, which
+  switches nothing on. `GET /regressions/open` says which checks are off.
 - When every check on a regression ticket passes at the newest verified tip, the
   hub closes the ticket immediately if nobody holds it. That tip must have been
   first seen after the ticket was filed, reopened, or last given another check.

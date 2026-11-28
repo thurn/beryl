@@ -443,6 +443,7 @@ fn land_on_tip(world: &World, changes: &[(&str, &str)]) -> (Commit, TicketId) {
             pressure: None,
             defer_successor: false,
             test_only_files: Vec::new(),
+            switch_on: Vec::new(),
         })
         .unwrap();
     (commit, ticket)
@@ -600,4 +601,29 @@ fn a_failure_at_a_base_older_than_the_tip_that_still_fails_there_is_filed_and_le
     assert_eq!(regressions.len(), 1, "{regressions:?}");
     assert_eq!(regressions[0].first_bad, tip);
     assert_eq!(world.git.pushes().len(), 1);
+}
+
+/// A verdict does not say which checks its gate ran, and one `ignite check` stored ran none of
+/// the ticket's own regression checks. A ticket holding a switched-off check therefore gates
+/// again, runs it, and asks the hub to switch it on.
+#[test]
+fn a_ticket_holding_a_switched_off_check_runs_its_gate_despite_a_stored_verdict() {
+    use ignite_core::protocol::hub::OpenRegression;
+    let world = in_verdict_mode(world());
+    world.hold("tree-01", "t.1", "local_a", &[("a.txt", "fixed")]);
+    store_verdict(&world, &world.git.tip_now());
+    world.hub.hub.set_open_regressions(vec![OpenRegression {
+        check: "unit:a".parse().unwrap(),
+        ticket: TicketId::new("t.1").unwrap(),
+        off: true,
+    }]);
+
+    let reply = world.land_as("tree-01", "local_a");
+
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    let ran = world.gate.passes.lock().unwrap().concat();
+    assert!(ran.contains(&"unit:a".to_owned()), "{ran:?}");
+    let landings = world.landings();
+    assert_eq!(landings.len(), 1);
+    assert_eq!(landings[0].switch_on, vec!["unit:a".parse().unwrap()]);
 }

@@ -195,8 +195,9 @@ impl Checks {
             &fast_hits,
             shared.changes,
             shared.catches.clone(),
+            options.ticket.as_ref(),
         );
-        landing_view(&mut fast_view, options, shared.excused);
+        landing_view(&mut fast_view, shared.excused);
         let fast_plan = fast_view.plan(&ctx.config.gate);
         let mut fast_families =
             planned_families(fast_prepared.clone(), fast_hits.clone(), &fast_plan);

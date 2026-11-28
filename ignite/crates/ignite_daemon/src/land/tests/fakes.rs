@@ -426,11 +426,13 @@ impl LandGate for CacheGate {
 
     /// Each check's family is the part of its name before the colon; every family is in scope.
     /// A family `carried` names, whose checks read none of its moved files, is carried over.
+    /// A check with an open regression is left out as known to fail unless the landing's own
+    /// ticket holds it, switched off or not, as the real gate does.
     fn run(
         &self,
         ctx: &Context,
         tree: &GateTree,
-        _options: &RunOptions,
+        options: &RunOptions,
         carried: Option<&Carried>,
         excused: &Excused,
     ) -> GateRun {
@@ -473,6 +475,7 @@ impl LandGate for CacheGate {
                 .open_regressions()
                 .unwrap_or_default()
                 .into_iter()
+                .filter(|regression| options.ticket.as_ref() != Some(&regression.ticket))
                 .map(|regression| (regression.check, regression.ticket)),
         );
         let keys: Vec<ResultKey> = self

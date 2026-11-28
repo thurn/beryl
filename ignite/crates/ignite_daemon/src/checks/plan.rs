@@ -141,19 +141,25 @@ pub(crate) fn class_rates(ctx: &Context) -> ClassRates {
     })
 }
 
-/// What the hub knows of `check`, a check of the regression family `declared`, for scoring, or
-/// `None` when the hub has switched it off. `reply` is the family's record at the hub.
+/// What the hub knows of `check`, a check of the regression family `declared`, for scoring in a
+/// gate landing `landing` when it is set, or `None` when the hub has switched it off (see
+/// [`scored_record`]). `reply` is the family's record at the hub.
 pub(crate) fn scored_check(
     check: &CheckName,
     declared: &Family,
     reply: Option<&CheckStatsReply>,
     regression: Option<TicketId>,
+    landing: Option<&TicketId>,
 ) -> Option<GateCheck> {
     let record = reply.and_then(|r| r.checks.iter().find(|s| s.check == *check));
     let median = reply.map_or(UNKNOWN_COST, family_median_cost);
-    scored_record(check, declared, reply, record, median, regression)
+    scored_record(check, declared, reply, record, median, regression, landing)
 }
 
+/// The [`GateCheck`] of `check`, or `None` when the hub has switched it off, unless its open
+/// regression ticket is `landing`: the landing that fixes a switched-off check runs it, so its
+/// worker need not switch it on before landing, which made every tip round without the fix fail
+/// it again.
 fn scored_record(
     check: &CheckName,
     declared: &Family,
@@ -161,8 +167,10 @@ fn scored_record(
     record: Option<&CheckStats>,
     median: Cost,
     regression: Option<TicketId>,
+    landing: Option<&TicketId>,
 ) -> Option<GateCheck> {
-    if record.is_some_and(|s| s.state == CheckState::Off) {
+    let own = landing.is_some() && regression.as_ref() == landing;
+    if record.is_some_and(|s| s.state == CheckState::Off) && !own {
         return None;
     }
     Some(GateCheck {
@@ -182,9 +190,11 @@ fn scored_record(
 
 impl GateView {
     /// The gate checks of the regression families in `prepared`, with `hits` in the same order
-    /// as their checks. A check the hub has switched off is left out, and a cached result of an
-    /// uncached check is ignored. A check in `regressions` has an open regression ticket, so the
+    /// as their checks, for a gate landing `landing` when it is set. A check the hub has switched
+    /// off is left out unless `landing` holds its open regression, and a cached result of a check
+    /// that is not on is ignored. A check in `regressions` has an open regression ticket, so the
     /// planner can judge whether the change needs it to run anyway.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn new<'a>(
         prepared: &[Prepared],
         hits: &[Option<CachedResult>],
@@ -193,6 +203,7 @@ impl GateView {
         changed: &[String],
         deleted_inputs: BTreeSet<CheckName>,
         catches: GateCatches,
+        landing: Option<&TicketId>,
     ) -> GateView {
         let mut view = GateView {
             areas: catches.areas,
@@ -203,7 +214,7 @@ impl GateView {
                 .filter(|reply| reply.runs.is_some())
                 .map(|reply| reply.family.clone())
                 .collect(),
-            landing: None,
+            landing: landing.cloned(),
             recent_product_catches: catches.recent,
             deleted_inputs,
             unbuilt: BTreeSet::new(),
@@ -221,7 +232,8 @@ impl GateView {
                 };
                 let check = &keyed.listed.check;
                 let regression = catches.regressions.get(check).cloned();
-                let Some(mut scored) = scored_check(check, declared, reply, regression) else {
+                let Some(mut scored) = scored_check(check, declared, reply, regression, landing)
+                else {
                     continue;
                 };
                 let record = reply.and_then(|r| r.checks.iter().find(|s| s.check == *check));
@@ -369,6 +381,7 @@ impl super::Checks {
                     Some(record),
                     median,
                     regressions.get(check).cloned(),
+                    None,
                 )?;
                 scored.always = declared.always_for(changed);
                 Some(scored)

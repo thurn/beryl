@@ -328,34 +328,10 @@ pub struct Landed {
     /// `#[cfg(test)]` items), even though the path itself does not match `test_paths`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub test_only_files: Vec<String>,
-}
-
-/// `POST /release`: a session gives a ticket back without landing it.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Release {
-    pub ticket: TicketId,
-    pub machine: MachineId,
-    pub session: SessionId,
-    /// The note: why the ticket was given back and the exact state it was left in.
-    pub reason: String,
-    /// An operating system, a machine name to pin, or `person` to add `needs:person`.
-    #[serde(default)]
-    pub needs: Option<String>,
-    /// The branch on the remote where the release saved the tree's work.
-    #[serde(default)]
-    pub branch: Option<String>,
-    /// Why the ticket was given back, which decides whether the hub counts the release.
-    #[serde(default)]
-    pub cause: ReleaseCause,
-}
-
-/// `POST /close`: `ignite close` closes a ticket that needs no landing and frees its worker.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Close {
-    pub ticket: TicketId,
-    pub machine: MachineId,
-    pub session: SessionId,
-    pub reason: String,
+    /// The landing ticket's own regression checks that the hub had switched off and that the
+    /// landing's gate ran and passed. The hub switches each back on as the ticket closes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub switch_on: Vec<CheckName>,
 }
 
 // `ResultCost` lives in a file of its own, with its tests, to keep this one short.
@@ -363,10 +339,11 @@ pub struct Close {
 mod cost;
 pub use cost::ResultCost;
 
-// Why a ticket was released lives in a file of its own, with its tests.
+// Releases and closes, and why a ticket was released, live in a file of their own, with their
+// tests.
 #[path = "hub_releases.rs"]
 mod releases;
-pub use releases::ReleaseCause;
+pub use releases::{Close, Release, ReleaseCause};
 
 #[path = "hub_shed.rs"]
 pub mod shed;

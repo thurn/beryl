@@ -256,8 +256,11 @@ impl Checks {
                 super::prepass::PreparedGate::Failed(gated) => return *gated,
             };
         let planning = Stopwatch::start(ctx);
-        let mut view = gate_view_of(self, ctx, tree, &prepared, &hits, &changes, catches);
-        landing_view(&mut view, options, excused);
+        let landing = options.ticket.as_ref();
+        let mut view = gate_view_of(
+            self, ctx, tree, &prepared, &hits, &changes, catches, landing,
+        );
+        landing_view(&mut view, excused);
         let gate_plan = self.remember_choice(ctx, changes.paths, view.plan(&ctx.config.gate));
         // The products never built before the gate started, so the `build` line can name a
         // cold build even when listing a family made the product.
@@ -455,10 +458,9 @@ pub(super) fn planned_families(
         .collect()
 }
 
-/// Names the ticket being landed in `view`, and gives each check in `excused` its regression
-/// ticket, so the plan leaves it out as known to fail.
-pub(super) fn landing_view(view: &mut plan::GateView, options: &RunOptions, excused: &Excused) {
-    view.landing.clone_from(&options.ticket);
+/// Gives each check in `excused` its regression ticket, so the plan leaves it out as known to
+/// fail. The view already names the ticket being landed (see [`plan::GateView::new`]).
+pub(super) fn landing_view(view: &mut plan::GateView, excused: &Excused) {
     for check in &mut view.checks {
         if check.regression.is_none() {
             check.regression = excused.get(&check.check).cloned();

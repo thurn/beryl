@@ -22,12 +22,10 @@
 //!    landed since touch the change's own files or the workspace's build inputs.
 //! 5. The hub's lease on the integration branch is taken (180 seconds, renewed while held), only
 //!    after the gate has passed. If the tip moved since step 2, the lease is let go and the
-//!    landing goes back to step 2. The lease is never held through a gate: a landing that lost
-//!    three races used to take it before its next pass and hold it through the gate, and then
-//!    every other landing waited for that gate, even those whose own gates had passed and only
-//!    needed to push, so landings ran one at a time for the length of a gate each (15 minutes
-//!    and more under load). The lease is renewed once more just before the push; if the hub
-//!    says another landing holds it now, the landing starts over.
+//!    landing goes back to step 2. A lease held through a gate once made every other landing
+//!    wait for that gate, 15 minutes and more under load, even those that only needed to push.
+//!    The lease is renewed once more just before the push; if the hub says another landing
+//!    holds it now, the landing starts over.
 //! 6. A record of the landing is written to disk, and the rebased commit is pushed from the
 //!    gate's tree. A push the remote refuses because the tip moved deletes the record and goes
 //!    back to step 2. A remote that cannot be reached exits with code 4 and keeps the record,
@@ -37,14 +35,14 @@
 //!    its record and releases the lease, and a landing gives up after [`MAX_PASSES`] passes.
 //!    Records that a landing left `pushing` are settled by the daemon's sender (see
 //!    [`resolve`]).
-//! 7. The hub is told what landed, which closes the ticket. If it cannot be reached, the record
-//!    stays on disk and the ticket closes when the hub returns (see [`records`]). The ticket
-//!    tree is released and the branch its work was saved to at a release is deleted.
+//! 7. The hub is told what landed, which closes the ticket and switches on the ticket's own
+//!    switched-off checks that the gate passed (see [`crate::claim::off_checks`]). If it cannot
+//!    be reached, the record stays on disk and the ticket closes when the hub returns (see
+//!    [`records`]). The ticket tree is released and its saved branch, if any, is deleted.
 //! 8. If the release branch is configured and the landed commits changed Ignite's own source,
 //!    the commit also moves the release branch, if the release family's checks passed. That
 //!    was decided after step 4 and before the lease, running the family there if the gate did
-//!    not run all of it, so only a push is left here (see [`release`]). This never fails the
-//!    landing.
+//!    not run all of it, so only a push is left here (see [`release`]). It never fails.
 //!
 //! `ignite sync` does step 1's checks and step 2 alone. With `[land] mode = "verdict"`, a change
 //! that touches none of Ignite's own source lands by [`by_verdict`] instead.
@@ -345,7 +343,7 @@ impl Landing {
     #[allow(clippy::too_many_lines)]
     fn land_checked(&self, ctx: &Context, req: &Request, args: &LandArgs) -> Result<Reply, Stop> {
         let held = self.held_tree(ctx, true)?;
-        self.refuse_off_checks(ctx, &held.ticket, args)?;
+        let mut off = self.off_checks(ctx, &held.ticket, args);
         let ticket = held.ticket.clone();
         let session = held.session.clone().ok_or_else(|| {
             stop(
@@ -534,6 +532,7 @@ impl Landing {
                     gated.seconds,
                 )));
             }
+            off.note(&gated.run);
             // Whether the commit may move the release branch is settled now, running the
             // release family if the gate did not, so nothing but a push is left after the
             // landing's own push (see `release`).
@@ -609,6 +608,7 @@ impl Landing {
                     &rebased.head,
                     work,
                     args.fresh,
+                    off.switch_on(&ticket)?,
                 ),
                 commit: rebased.head.clone(),
                 state: RecordState::Pushing,

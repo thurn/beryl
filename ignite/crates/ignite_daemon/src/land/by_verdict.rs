@@ -18,6 +18,8 @@
 //!    [`super::base`]), and stores the verdict when the gate passes. When every failure fails
 //!    at a base older than the tip as well, the ticket tree is rebased onto the tip for real
 //!    and the gate runs again there, where such a check is filed as a regression and left out.
+//!    A ticket that holds checks the hub has switched off skips the lookup, so its gate runs
+//!    them (see [`crate::claim::off_checks`]).
 //! 4. Rebases the change onto the tip in git's object database ([`Git::replay`]), takes the
 //!    lease, and pushes the rebased commit. When the tip moves, or the remote rejects the push,
 //!    it rebases again in the object database and runs nothing. A conflict exits with code 3.
@@ -40,7 +42,7 @@ use std::path::Path;
 use serde_json::json;
 
 use ignite_core::config::LandMode;
-use ignite_core::ids::{Commit, TicketId};
+use ignite_core::ids::{CheckName, Commit, TicketId};
 use ignite_core::protocol::Class;
 use ignite_core::protocol::client::{Exit, Reply, Request};
 use ignite_core::protocol::hub::{Landed, VerdictKey, verdict_settings};
@@ -59,6 +61,7 @@ use super::timeline::Timeline;
 use super::{Landing, Rebased, Stop, line, short, stop};
 use crate::checks::verbs::{built_lines, gate_lines, render};
 use crate::checks::{Excused, GateRun, RunOptions};
+use crate::claim::off_checks::Held;
 use crate::server::{Context, error_reply};
 use crate::steps;
 use crate::update::scope::{Source, checks_dir, ignite_change};
@@ -167,7 +170,6 @@ impl Landing {
         if touches_ignite(ctx, &changed) || self.express_for(ctx, &held.path, &changed).is_some() {
             return self.land_checked(ctx, req, args);
         }
-        self.refuse_off_checks(ctx, &held.ticket, args)?;
         let start = Start {
             tip,
             head: branch_head,
@@ -177,23 +179,14 @@ impl Landing {
         self.land_by_verdict(ctx, req, args, &held, start)
     }
 
-    /// Refuses a landing that would close a regression ticket still holding checks the hub
-    /// has switched off (see [`crate::claim::off_checks`]), unless `args` allow it. A landing
-    /// with a record on disk has pushed, or may have, so it is never refused.
-    pub(super) fn refuse_off_checks(
-        &self,
-        ctx: &Context,
-        ticket: &TicketId,
-        args: &LandArgs,
-    ) -> Result<(), Stop> {
+    /// The checks the hub has switched off that `ticket`'s regression holds, which the landing
+    /// must run and pass before it is pushed (see [`crate::claim::off_checks`]): none when `args`
+    /// allow the landing without them, or when a record on disk says it has pushed, or may have.
+    pub(super) fn off_checks(&self, ctx: &Context, ticket: &TicketId, args: &LandArgs) -> Held {
         if args.allow_off || matches!(self.records.get(ticket), Ok(Some(_))) {
-            return Ok(());
+            return Held::default();
         }
-        let off = crate::claim::off_checks::on_ticket(ctx, ticket);
-        match crate::claim::off_checks::refusal("land", ticket, &off) {
-            Some(refused) => Err(Box::new(refused)),
-            None => Ok(()),
-        }
+        Held::new(crate::claim::off_checks::on_ticket(ctx, ticket))
     }
 
     /// The landing by verdict that the module's header describes. `Err` is any reply but a
@@ -220,6 +213,7 @@ impl Landing {
         steps::set_class(Class::Land);
         steps::set_ticket(&ticket, Some(&session));
         let mut timeline = Timeline::start(ctx, self.gate.as_ref());
+        let mut off = self.off_checks(ctx, &ticket, args);
 
         // A landing already pushed but not yet told to the hub is never pushed again, and one
         // whose push was cut short landed only if its commit is in the tip's history.
@@ -284,7 +278,10 @@ impl Landing {
                 base: at.onto.clone(),
                 settings: verdict_settings(&ctx.config),
             };
-            let found = if reverted {
+            // A verdict does not say which checks its gate ran, and one that `ignite check`
+            // stored ran none of the ticket's own regression checks, so a ticket holding
+            // switched-off checks gates again to run them.
+            let found = if reverted || off.any() {
                 None
             } else {
                 self.gate.verdict(ctx, &key)
@@ -372,6 +369,7 @@ impl Landing {
                     None => failed,
                 }));
             }
+            off.note(&gated.run);
             let stored = match self.gate.remember(ctx, &tree, key, at.head.clone(), &gated) {
                 Ok(()) => "stored for this tree".to_owned(),
                 Err(error) => format!("not stored: {error}"),
@@ -382,6 +380,7 @@ impl Landing {
             };
         };
 
+        let switch_on = off.switch_on(&ticket)?;
         // Step 4: rebase in the object database, take the lease, push; again when the tip moves.
         let mut passes = 0;
         let mut last_cause = String::new();
@@ -461,6 +460,7 @@ impl Landing {
                     &replayed,
                     work,
                     args.fresh,
+                    switch_on.clone(),
                 ),
                 commit: replayed.clone(),
                 state: RecordState::Pushing,
@@ -612,7 +612,8 @@ fn conflict(ctx: &Context, tip: &Commit, files: &[String]) -> Stop {
 
 /// Builds the `POST /landed` payload, marking any changed files outside `repository.test_paths`
 /// whose diff between `onto` and `head` touched only test-only code (such as Rust `#[cfg(test)]`
-/// items).
+/// items), and naming in `switch_on` the ticket's switched-off checks that its gate passed.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn landed_message(
     ctx: &Context,
     ticket: ignite_core::ids::TicketId,
@@ -621,6 +622,7 @@ pub(super) fn landed_message(
     head: &Commit,
     work: LandedWork,
     fresh: bool,
+    switch_on: Vec<CheckName>,
 ) -> Landed {
     let test_paths = &ctx.config.repository.test_paths;
     let candidates: Vec<String> = work
@@ -653,5 +655,6 @@ pub(super) fn landed_message(
         pressure: None,
         defer_successor: false,
         test_only_files,
+        switch_on,
     }
 }

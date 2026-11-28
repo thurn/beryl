@@ -675,6 +675,55 @@ fn the_gate_leaves_out_a_check_grouped_onto_another_checks_ticket() {
     assert_eq!(gated(&world, Some("tk.1")), ["unit:b"], "the fix runs it");
 }
 
+/// Workers once switched a regression's check on before landing its fix, because no gate ran a
+/// switched-off check, and every tip round without the fix then failed it again. Now the gate
+/// that lands the fix runs it while it is off; no other gate does.
+#[test]
+fn the_gate_runs_its_own_switched_off_regression_check_and_no_other() {
+    let changed = ["game_rules/tests/entering.rs", "src/a.py"];
+    let off = |check: &str| CheckStats {
+        check: name(check),
+        family: "unit".to_owned(),
+        state: CheckState::Off,
+        areas: Vec::new(),
+        median_cost: Some(1.0),
+        unit: "instructions".to_owned(),
+    };
+    let mut history = FakeHistory::default();
+    history.replies.insert(
+        "unit".to_owned(),
+        CheckStatsReply {
+            startup_billions: None,
+            startup_cpu_s: None,
+            family: "unit".to_owned(),
+            family_rate: 0.5,
+            runs: None,
+            checks: vec![off("unit:b"), off("unit:c")],
+        },
+    );
+    let world = world(&family("unit", "\"any\"", "lister", ""), &changed, history);
+    *world.launcher.listing.lock().unwrap() = listing(&["unit:b", "unit:c"]);
+    let held = |check: &str, ticket: &str| OpenRegression {
+        check: name(check),
+        ticket: TicketId::new(ticket).unwrap(),
+        off: true,
+    };
+    world
+        .hub
+        .set_open_regressions(vec![held("unit:b", "tk.1"), held("unit:c", "tk.2")]);
+
+    assert_eq!(gated(&world, Some("tk.1")), ["unit:b"], "the fix runs it");
+    assert_eq!(
+        gated(&world, Some("tk.2")),
+        ["unit:c"],
+        "the other fix runs its own"
+    );
+    assert!(
+        gated(&world, Some("tk.9")).is_empty(),
+        "no other gate runs either"
+    );
+}
+
 #[test]
 fn the_gate_fails_when_the_changed_files_cannot_be_read() {
     let world = gate_world(&["<error>"]);

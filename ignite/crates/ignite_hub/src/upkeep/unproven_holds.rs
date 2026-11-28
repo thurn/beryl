@@ -348,8 +348,9 @@ fn comment(
         ops: vec![Operation::Comment {
             id: ticket.to_owned(),
             text: format!(
-                "{check}: {note} Fix it as this ticket asks, or delete it, and switch it back on \
-                 with `ignite flaky on {check} -m \"<what you changed>\"` in the same session."
+                "{check}: {note} Fix it as this ticket asks, or delete it. Do not switch it on \
+                 yourself: `ignite land` runs it in this ticket's gate while it is off and \
+                 switches it on once the fix is pushed."
             ),
         }],
     };

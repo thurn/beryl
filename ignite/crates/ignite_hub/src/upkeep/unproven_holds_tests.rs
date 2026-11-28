@@ -123,7 +123,9 @@ fn an_unproven_check_holding_master_for_an_hour_is_switched_off_and_its_ticket_t
     assert_eq!(check_state(&conn, "clippy:lint"), "on");
     let comments = tickets::comments(&conn, &ticket).unwrap();
     assert_eq!(comments.len(), 1);
-    assert!(comments[0].text.contains("ignite flaky on rust:frames"));
+    // The worker leaves the check off: its landing runs it and switches it on.
+    assert!(comments[0].text.contains("Do not switch it on yourself"));
+    assert!(!comments[0].text.contains("ignite flaky on"));
     let recorded: (String, Option<String>) = conn
         .query_row(
             "SELECT actor, ticket FROM check_state_changes WHERE check_name = 'rust:frames'",

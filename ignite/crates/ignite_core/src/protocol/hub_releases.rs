@@ -1,7 +1,37 @@
-//! Why a ticket was given back (see [`super::Release`]), which decides whether the hub counts
-//! the release against the ticket.
+//! `POST /release` and `POST /close`, and why a ticket was given back, which decides whether
+//! the hub counts the release against the ticket.
 
 use serde::{Deserialize, Serialize};
+
+use crate::ids::{MachineId, SessionId, TicketId};
+
+/// `POST /release`: a session gives a ticket back without landing it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Release {
+    pub ticket: TicketId,
+    pub machine: MachineId,
+    pub session: SessionId,
+    /// The note: why the ticket was given back and the exact state it was left in.
+    pub reason: String,
+    /// An operating system, a machine name to pin, or `person` to add `needs:person`.
+    #[serde(default)]
+    pub needs: Option<String>,
+    /// The branch on the remote where the release saved the tree's work.
+    #[serde(default)]
+    pub branch: Option<String>,
+    /// Why the ticket was given back, which decides whether the hub counts the release.
+    #[serde(default)]
+    pub cause: ReleaseCause,
+}
+
+/// `POST /close`: `ignite close` closes a ticket that needs no landing and frees its worker.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Close {
+    pub ticket: TicketId,
+    pub machine: MachineId,
+    pub session: SessionId,
+    pub reason: String,
+}
 
 /// Why a ticket was released. The hub counts a release that says something about the ticket
 /// itself, a worker giving up or Ignite taking the ticket back from a worker, and two counted

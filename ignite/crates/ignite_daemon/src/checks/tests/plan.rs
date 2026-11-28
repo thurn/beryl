@@ -637,7 +637,7 @@ fn a_scored_check_carries_its_familys_start_up() {
         startup_cpu_s: cpu_s,
     };
     let startup = |reply: Option<&CheckStatsReply>| {
-        crate::checks::plan::scored_check(&name("unit:a"), family, reply, None)
+        crate::checks::plan::scored_check(&name("unit:a"), family, reply, None, None)
             .unwrap()
             .family_startup
     };

@@ -34,6 +34,7 @@ fn write_pushing(world: &World, commit: &Commit, at: Option<Timestamp>) -> Landi
             pressure: None,
             defer_successor: false,
             test_only_files: Vec::new(),
+            switch_on: Vec::new(),
         },
         commit: commit.clone(),
         state: RecordState::Pushing,
@@ -443,26 +444,48 @@ fn a_landing_that_moved_the_release_names_its_deploy_handle() {
 }
 
 /// Holds `t.1` on `tree-01`, a regression ticket whose `unit:a` was switched off by the hub and
-/// whose `unit:b` still runs, with `unit:c` switched off on another ticket.
-fn regression_with_an_off_check() -> World {
+/// whose `unit:b` still runs, with `unit:c` switched off on another ticket. `extra` are more
+/// checks `t.1` holds that the hub has switched off.
+fn regression_with_an_off_check(extra: &[&str]) -> World {
     let world = world();
     let open = |check: &str, ticket: &str, off: bool| OpenRegression {
         check: check.parse().unwrap(),
         ticket: TicketId::new(ticket).unwrap(),
         off,
     };
-    world.hub.hub.set_open_regressions(vec![
+    let mut regressions = vec![
         open("unit:a", "t.1", true),
         open("unit:b", "t.1", false),
         open("unit:c", "t.2", true),
-    ]);
+    ];
+    regressions.extend(extra.iter().map(|check| open(check, "t.1", true)));
+    world.hub.hub.set_open_regressions(regressions);
     world.hold("tree-01", "t.1", "local_a", &[("a.txt", "partly fixed")]);
     world
 }
 
+/// Workers once switched a regression's check on before landing its fix, so that the gate
+/// would run it, and every tip round without the fix failed it again meanwhile. The landing's
+/// gate now runs the switched-off check itself, and the landing asks the hub to switch it on.
 #[test]
-fn a_regression_ticket_holding_a_switched_off_check_does_not_land() {
-    let world = regression_with_an_off_check();
+fn a_landing_whose_gate_passed_its_switched_off_check_lands_and_switches_it_on() {
+    let world = regression_with_an_off_check(&[]);
+
+    let reply = world.land_as("tree-01", "local_a");
+
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    let ran = world.gate.passes.lock().unwrap().concat();
+    assert!(ran.contains(&"unit:a".to_owned()), "{ran:?}");
+    assert!(!ran.contains(&"unit:c".to_owned()), "{ran:?}");
+    let landings = world.landings();
+    assert_eq!(landings.len(), 1);
+    assert_eq!(landings[0].switch_on, vec!["unit:a".parse().unwrap()]);
+}
+
+#[test]
+fn a_switched_off_check_the_gate_did_not_run_refuses_the_landing() {
+    // `gone:x` is in no family the tree lists, so the gate cannot run it.
+    let world = regression_with_an_off_check(&["gone:x"]);
     let tip = world.git.tip_now();
 
     let reply = world.land_as("tree-01", "local_a");
@@ -476,23 +499,24 @@ fn a_regression_ticket_holding_a_switched_off_check_does_not_land() {
     assert!(
         reply
             .text
-            .contains("off and have not passed since they failed: unit:a.")
+            .contains("off and have not passed since they failed: gone:x."),
+        "{}",
+        reply.text
     );
     assert!(
         reply
             .text
             .contains("ignite ticket regression move <check> <ticket>")
     );
-    assert!(reply.text.contains("ignite flaky on <check>"));
+    assert!(!reply.text.contains("ignite flaky on"), "{}", reply.text);
     assert_eq!(world.git.tip_now(), tip);
     assert!(world.git.pushes().is_empty());
     assert!(world.landings().is_empty());
-    assert!(world.gate.judged.lock().unwrap().is_empty());
 }
 
 #[test]
 fn a_justiciar_lands_a_regression_ticket_holding_a_switched_off_check_with_the_override() {
-    let world = regression_with_an_off_check();
+    let world = regression_with_an_off_check(&["gone:x"]);
     let req = world.request(
         "land",
         "tree-01",
@@ -509,5 +533,7 @@ fn a_justiciar_lands_a_regression_ticket_holding_a_switched_off_check_with_the_o
     .run(&ctx, &req);
 
     assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
-    assert_eq!(world.landings().len(), 1);
+    let landings = world.landings();
+    assert_eq!(landings.len(), 1);
+    assert!(landings[0].switch_on.is_empty(), "{:?}", landings[0]);
 }

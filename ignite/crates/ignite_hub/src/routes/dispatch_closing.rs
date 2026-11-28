@@ -9,10 +9,11 @@ use ignite_core::protocol::tickets::{
 use rusqlite::Transaction;
 use serde_json::json;
 
-use ignite_core::protocol::hub::{Landed, LandedReply};
+use ignite_core::protocol::hub::{CheckState, Landed, LandedReply};
 use ignite_core::time::Timestamp;
+use ignite_store::hub::check_state::{self, Switch};
 use ignite_store::hub::fix_outcomes::LandingFix;
-use ignite_store::hub::{findings, fleet};
+use ignite_store::hub::{findings, fleet, tips};
 
 use super::{Response, SAVED_BRANCH, apply_in, load, queue, store_failure};
 
@@ -149,6 +150,47 @@ pub(super) fn settle(
     } else {
         super::close_after_landing(tx, landed, now, fix)?;
         findings::close_ticket(tx, id, now).map_err(|e| store_failure(&e))?;
+    }
+    Ok(())
+}
+
+/// The note on the record of a check that a landing switched on.
+pub(super) const SWITCHED_ON: &str = "switched on by the landing that fixed it";
+
+/// Switches on each check in `landed.switch_on`, the checks of the landing ticket's own
+/// regressions that the hub had switched off and that the landing's gate ran and passed. It
+/// records the landing's session and machine as who did it, as `ignite flaky on` records its
+/// caller. A check that is not off, or whose open regression another ticket holds, is left
+/// alone. The worker used to switch such a check on before landing, and every tip round
+/// without the fix then failed it again.
+pub(super) fn switch_on_fixed(
+    tx: &Transaction,
+    landed: &Landed,
+    now: Timestamp,
+) -> Result<(), Response> {
+    if landed.switch_on.is_empty() {
+        return Ok(());
+    }
+    let fail = |e: ignite_store::StoreError| store_failure(&e);
+    let open = tips::open_regressions(tx).map_err(fail)?;
+    for check in &landed.switch_on {
+        let check = check.as_str();
+        let held = open
+            .iter()
+            .any(|(name, ticket)| name == check && ticket == landed.ticket.as_str());
+        if !held || check_state::state(tx, check).map_err(fail)? != Some(CheckState::Off) {
+            continue;
+        }
+        let switch = Switch {
+            check,
+            state: CheckState::On,
+            actor: landed.session.as_str(),
+            machine: landed.machine.as_str(),
+            note: SWITCHED_ON,
+            ticket: Some(landed.ticket.as_str()),
+            at: now,
+        };
+        check_state::switch(tx, &switch).map_err(fail)?;
     }
     Ok(())
 }

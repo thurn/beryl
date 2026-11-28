@@ -56,7 +56,7 @@ mod counting;
 
 #[path = "dispatch_closing.rs"]
 mod closing;
-use closing::{closing, repeat, settle};
+use closing::{closing, repeat, settle, switch_on_fixed};
 
 pub use queue::{named_files, resolve_named_file, view};
 
@@ -446,6 +446,7 @@ fn landed(conn: &mut Connection, landed: &Landed, now: Timestamp, test_paths: &[
         commit: landed.work.commits.last().cloned(),
         prior_commits,
     };
+    switch_on_fixed(&tx, landed, now)?;
     settle(&mut tx, landed, now, &fix)?;
     free_worker(
         &tx,
@@ -772,3 +773,7 @@ mod search_tests;
 #[cfg(test)]
 #[path = "dispatch_fix_outcomes_tests.rs"]
 mod fix_outcomes_tests;
+
+#[cfg(test)]
+#[path = "dispatch_switch_on_tests.rs"]
+mod switch_on_tests;

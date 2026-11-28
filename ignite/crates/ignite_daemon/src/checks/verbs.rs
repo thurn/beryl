@@ -205,7 +205,9 @@ impl Verb for CheckVerb {
             family.keep(|_| true, &mut run);
         }
         let hits = checks.lookup(&prepared, &options);
-        let view = gate_view_of(&checks, ctx, &tree, &prepared, &hits, &changes, catches);
+        let view = gate_view_of(
+            &checks, ctx, &tree, &prepared, &hits, &changes, catches, None,
+        );
         let gate_plan = view.plan(&ctx.config.gate);
         let mut lines = plan::plan_lines(&view, &gate_plan, &ctx.config.gate);
         lines.extend(failure_lines(&run));
@@ -364,7 +366,7 @@ fn gate_view(
             .collect();
         checks.scope_with_deletions(ctx, tree, &families, &catches.recent, &mut changes);
     }
-    gate_view_of(checks, ctx, tree, prepared, hits, &changes, catches)
+    gate_view_of(checks, ctx, tree, prepared, hits, &changes, catches, None)
 }
 
 /// The paths the tree changes since its branch left the integration branch.
@@ -389,7 +391,9 @@ pub(super) fn worktree_changes(
     checks.trees.changes(&tree.path, &base)
 }
 
-/// [`gate_view`] using changed paths and deletion evidence collected by the caller.
+/// [`gate_view`] using changed paths and deletion evidence collected by the caller, for a gate
+/// landing `landing` when it is set.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn gate_view_of(
     checks: &Checks,
     ctx: &Context,
@@ -398,6 +402,7 @@ pub(super) fn gate_view_of(
     hits: &[Option<CachedResult>],
     changes: &GateChanges<'_>,
     catches: plan::GateCatches,
+    landing: Option<&TicketId>,
 ) -> GateView {
     let families = prepared.iter().map(|p| p.family.as_str());
     let stats = plan::scoring_stats(checks, families, &catches.areas, &catches.records);
@@ -425,6 +430,7 @@ pub(super) fn gate_view_of(
         changes.paths,
         deleted,
         catches,
+        landing,
     );
     view.unbuilt = unbuilt(ctx, tree, prepared.iter().filter_map(|p| family(&p.family)));
     // The rate of the gates of the last hour on this daemon, or the hub's for the day, and the
