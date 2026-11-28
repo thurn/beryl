@@ -41,6 +41,16 @@ fn catalog_space(input: &HudIn) -> kit_base::geometry::Rect {
         || input.profile.tray().on_window(input.window.size).0,
         |slot| slot.rect,
     );
+    // The phase button under the menu stands at the right end of the space the catalog's top
+    // lies in, so the panel keeps left of it, as the prompt tray does.
+    if let Some(phase) = input.profile.slot(SlotName::PhaseIcon) {
+        let button = phase.rect;
+        let overlaps_rows = button.y < space.y + space.height && space.y < button.y + button.height;
+        let limit = button.x - space::S;
+        if overlaps_rows && button.x > space.x && space.x + space.width > limit {
+            space.width = limit - space.x;
+        }
+    }
     if let Some(stacked) = input.profile.slot(SlotName::PromptStacked) {
         let limit = stacked.rect.y - space::S;
         if space.y + space.height > limit {
