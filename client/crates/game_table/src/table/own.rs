@@ -13,6 +13,10 @@
 //!   halos, violet and pale, breathing out of step, as MTG Arena rings such a card in drifting
 //!   smoke (`tovCPHl-gOM` at 9:08 and 15:02.5). Drawn on the card wherever it is, so the ring
 //!   rides with it from the graveyard into the hand.
+//! - A mythic rare spell on the stack: in the Enhanced tier, a looping aura in the spell's colors
+//!   round the card (`Vfx::MythicStack`), which bursts (`Vfx::MythicStackOutro`) as the spell
+//!   leaves the stack, as MTG Arena's `VFX_Stack_Mythic_Tier2` does (`9-iWvWANENU` at 28:46,
+//!   `0VsYGs88NXA` at 1:11:36). The Baseline tier draws two breathing halos in its colors.
 //! - An attacker: a wedge along the edge facing the defender. It turns gold as the creature
 //!   becomes blocked (Arena, `IEXcjBn3BXk` at 22:23). In the Enhanced tier, this is drawn as a
 //!   procedural plasma chevron (crimson-orange unblocked, solar-gold when blocked) with looping
@@ -29,16 +33,18 @@
 use std::cell::Cell;
 use std::f32::consts::PI;
 
-use beryl_protocol::protocol::{Combat, ObjectView, Side};
-use glam::{Affine3A, Quat, Vec2};
+use beryl_protocol::protocol::{Combat, ObjectView, Side, ZoneName};
+use glam::{Affine3A, Quat, Vec2, Vec3};
 
 use super::Look;
 use kit_base::atlas::Tier;
 use kit_base::data::light::Own;
 use kit_base::tokens::{badge, color};
-use kit_frame::frame::{Band, Draw, FrameBuilder, PaintBand, Sprite, sprites};
-use kit_fx::effects::edge::{Edge, past_edge, with_opacity, write_away_halo};
-use kit_fx::effects::vfx::{FighterKind, FighterVfx, write_fighter};
+use kit_frame::frame::{Band, Draw, FrameBuilder, PaintBand, Sprite, Vfx, sprites};
+use kit_fx::effects::edge::{Edge, past_edge, with_opacity, write_away_halo, write_halo};
+use kit_fx::effects::vfx::{
+    FighterKind, FighterVfx, StateLoop, unit_hash, write_fighter, write_state_loop,
+};
 
 /// How a creature fights, as its record says.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -116,8 +122,140 @@ impl PartialEq for Fights {
     }
 }
 
+/// What a mythic rare card wears for being on the stack, or for leaving it.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct StackAura {
+    /// The card is a mythic rare.
+    pub(super) mythic: bool,
+    /// The card is on the stack (`Table::toward_stack`).
+    pub(super) on_stack: bool,
+    /// How long ago, in nanoseconds, a step of the script now playing began to carry the card
+    /// off the stack, if one has.
+    pub(super) left_stack: Option<u64>,
+    /// The spell's colors on Arena's color ramp (`"subject_colors"`).
+    pub(super) tint: [u8; 4],
+}
+
+/// Writes what `record`, the card in `slot` drawn as `look`, wears for the zone it is in: a
+/// permanent's marks (`write`), the halo of a card the hand shows from its graveyard, and the
+/// aura of a mythic rare spell on the stack or the burst it leaves as it goes.
+pub(super) fn write_any(
+    (slot, record, on_battlefield, mythic): (usize, &ObjectView, bool, StackAura),
+    (look, own): (&Look, &Own),
+    fights: &Fights,
+    (now, band): (u64, PaintBand),
+    builder: &mut FrameBuilder,
+) {
+    if record.zone == ZoneName::Battlefield {
+        write(
+            (slot, record, on_battlefield),
+            (look, own),
+            fights,
+            (now, band),
+            builder,
+        );
+    } else {
+        fights.forget(slot);
+        if super::place::in_hand_fan(record) {
+            from_graveyard((look, own), (now, band), builder);
+        }
+    }
+    if mythic.mythic {
+        mythic_stack(slot, mythic, (look, own), (now, band), builder);
+    }
+}
+
+/// Writes the aura round a mythic rare spell on the stack, or the burst it leaves for
+/// `own.mythic_stack.outro_ms` once a step begins to carry it away. The burst is drawn on the
+/// card as it goes and as clear as the card is, so a spell that fades into its graveyard sooner
+/// takes its burst with it.
+fn mythic_stack(
+    slot: usize,
+    mythic: StackAura,
+    (look, own): (&Look, &Own),
+    (now, band): (u64, PaintBand),
+    builder: &mut FrameBuilder,
+) {
+    let opacity = look.pose.opacity.clamp(0.0, 1.0);
+    if opacity <= 0.0 {
+        return;
+    }
+    let tuning = &own.mythic_stack;
+    let card = builder.card();
+    let glows = band.records(Band::Glows);
+    let seed = unit_hash(slot, 7);
+    let place = |pad: f32| {
+        let size = card + Vec2::splat(2.0 * pad * card.x);
+        let transform = look.pose.upward()
+            * Affine3A::from_scale_rotation_translation(
+                size.extend(1.0),
+                Quat::IDENTITY,
+                Vec3::Z * own.lift,
+            );
+        (transform, size.y / size.x.max(f32::EPSILON))
+    };
+    if mythic.on_stack {
+        if builder.tier() == Tier::Enhanced {
+            let (transform, aspect) = place(tuning.pad);
+            let fx = StateLoop {
+                kind: Vfx::MythicStack,
+                band: glows,
+                seed,
+                now,
+                aspect,
+                tint: mythic.tint,
+                opacity,
+                // The client has no reduced-motion setting yet, as for the eligible highlight.
+                reduced_motion: false,
+            };
+            write_state_loop(builder, transform, &fx);
+        } else {
+            let inner = mix_white(mythic.tint, tuning.halo_core);
+            let place = (look.pose.upward(), own.lift);
+            write_halo(
+                builder,
+                &tuning.halo,
+                [mythic.tint, inner],
+                place,
+                (now, glows, opacity),
+            );
+        }
+        return;
+    }
+    let Some(ago) = mythic.left_stack else {
+        return;
+    };
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "an age in nanoseconds; a second fits an f32's precision well enough"
+    )]
+    let progress = ago as f32 / (tuning.outro_ms * 1e6);
+    if progress >= 1.0 || builder.tier() != Tier::Enhanced {
+        return;
+    }
+    let (transform, aspect) = place(tuning.outro_pad);
+    let draw = Draw::vfx(
+        transform,
+        mythic.tint,
+        Vfx::MythicStackOutro,
+        [progress, opacity, seed, aspect],
+    );
+    builder.draw(glows, draw);
+}
+
+/// `tint` moved a share `by` of the way to white, keeping its alpha.
+fn mix_white(tint: [u8; 4], by: f32) -> [u8; 4] {
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "a mix of two bytes stays within a byte"
+    )]
+    let mix = |c: u8| (f32::from(c) + f32::from(u8::MAX - c) * by).round() as u8;
+    [mix(tint[0]), mix(tint[1]), mix(tint[2]), tint[3]]
+}
+
 /// Writes the marks of `record`, the permanent in `slot` drawn as `look`, at `now`.
-pub(super) fn write(
+fn write(
     (slot, record, on_battlefield): (usize, &ObjectView, bool),
     (look, own): (&Look, &Own),
     fights: &Fights,
@@ -158,7 +296,7 @@ pub(super) fn write(
 
 /// Writes the halo of a card the hand shows from its owner's graveyard, drawn as `look`, at
 /// `now`, in nanoseconds since the client started.
-pub(super) fn from_graveyard(
+fn from_graveyard(
     (look, own): (&Look, &Own),
     (now, band): (u64, PaintBand),
     builder: &mut FrameBuilder,

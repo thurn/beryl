@@ -301,6 +301,7 @@ BULK_FIELDS: tuple[str, ...] = (
     "collector_number",
     "layout",
     "artist",
+    "rarity",
     "digital",
     "promo",
     "promo_types",

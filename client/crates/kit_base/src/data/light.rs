@@ -223,6 +223,7 @@ pub struct Own {
     pub moon_badge: MoonBadge,
     pub coin: OwnIcon,
     pub away: AwayHalo,
+    pub mythic_stack: MythicStack,
     pub wedge: Wedge,
     pub crescent: Crescent,
     pub combat_fx: CombatFx,
@@ -331,6 +332,31 @@ pub struct AwayHalo {
     /// How long one breath takes.
     #[serde(deserialize_with = "positive")]
     pub period_ms: f32,
+}
+
+/// The Enhanced-tier aura round a mythic rare spell on the stack, and the burst it leaves as the
+/// spell leaves the stack (`own.json`'s `mythic_stack`). MTG Arena outlines such a spell in a
+/// looping aura tinted by its colors and bursts it as the spell resolves or is countered
+/// (`9-iWvWANENU` at 28:46).
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct MythicStack {
+    /// How far the aura's quad reaches past each side of the card, as a share of its width.
+    /// Must match `MYTHIC_STACK_PAD` in `fx/mythic_stack.wgsl`.
+    #[serde(deserialize_with = "positive")]
+    pub pad: f32,
+    /// How far past each side the outro burst's quad reaches, as a share of the card's width.
+    #[serde(deserialize_with = "positive")]
+    pub outro_pad: f32,
+    /// How long the outro burst plays once the spell begins to leave the stack.
+    #[serde(deserialize_with = "positive")]
+    pub outro_ms: f32,
+    /// The Baseline tier's aura: two halos in the spell's colors, breathing as `away`'s do.
+    pub halo: AwayHalo,
+    /// How far the inner Baseline halo's color lies toward white, from 0 (the spell's color) to
+    /// 1 (white).
+    #[serde(deserialize_with = "interior")]
+    pub halo_core: f32,
 }
 
 /// The dark round badge behind the summoning-sickness moon, as shares of its diameter.

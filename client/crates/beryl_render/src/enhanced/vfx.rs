@@ -24,6 +24,7 @@ pub const SHADER: &str = concat!(
     include_str!("fx/settle.wgsl"),
     include_str!("fx/highlight.wgsl"),
     include_str!("fx/mythic_arrival.wgsl"),
+    include_str!("fx/mythic_stack.wgsl"),
     include_str!("fx/mana.wgsl"),
     include_str!("fx/stack.wgsl"),
 );

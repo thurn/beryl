@@ -17,6 +17,25 @@ use kit_frame::frame::{Band, Draw, FrameBuilder, sprites};
 pub fn write_away_halo(
     builder: &mut FrameBuilder<'_>,
     halo: &AwayHalo,
+    place: (Affine3A, f32),
+    timing: (u64, Band, f32),
+) {
+    write_halo(
+        builder,
+        halo,
+        [color::AWAY, color::AWAY_CORE],
+        place,
+        timing,
+    );
+}
+
+/// Writes two breathing `HALO` glows round a card, as `write_away_halo` does, tinted `outer`
+/// and `inner`. The Baseline tier draws the aura round a mythic rare spell on the stack this
+/// way, in the spell's colors.
+pub fn write_halo(
+    builder: &mut FrameBuilder<'_>,
+    halo: &AwayHalo,
+    [outer, inner]: [[u8; 4]; 2],
     (card, lift): (Affine3A, f32),
     (now, band, opacity): (u64, Band, f32),
 ) {
@@ -26,10 +45,7 @@ pub fn write_away_halo(
         reason = "a time within an hour, in milliseconds, fits an f32's precision"
     )]
     let phase = (now / 1_000_000 % 3_600_000) as f32 / halo.period_ms * TAU;
-    for (reach, tint, offset) in [
-        (halo.reach, color::AWAY, 0.0),
-        (halo.inner, color::AWAY_CORE, PI),
-    ] {
+    for (reach, tint, offset) in [(halo.reach, outer, 0.0), (halo.inner, inner, PI)] {
         let size =
             sprites::halo_size(card_half * reach * (1.0 + halo.breath * (phase + offset).sin()));
         let transform = card

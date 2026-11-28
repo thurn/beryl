@@ -698,6 +698,7 @@ impl<'a> Motion<'a> {
             written: &mut written,
         };
         verbs::play(step.act.verb())(&input, &mut out);
+        out.enters(&step.act);
         let mut segments = std::mem::take(&mut written.segments);
         for (slot, segment) in segments.drain(..) {
             self.push(slot, segment, Cause::Verb(number));

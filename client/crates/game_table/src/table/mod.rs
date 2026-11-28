@@ -56,7 +56,7 @@ pub use region_fit::{
 };
 pub use rows::{Beneath, Groups, NameIds, RowChange, SameName, grouped, reposed};
 pub use scene::{ABILITY_IDS, Motion, Table, Turn};
-pub use scene::{Objects, PileCount, ability_track};
+pub use scene::{Objects, PileCount, ZoneChange, ability_track};
 pub use shown::{Moves, Relaid};
 pub(crate) use stack::{CentredStack, StackPlacement};
 pub use stack::{OnStack, on_stack};

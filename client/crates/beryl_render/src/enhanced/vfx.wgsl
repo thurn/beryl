@@ -137,6 +137,12 @@ fn dispatch_vfx(in: VfxOut) -> vec4<f32> {
         case VFX_STACK_EXIT: {
             return shade_stack_exit(in.mesh_uv, time_s, seed, aspect, tint);
         }
+        case VFX_MYTHIC_STACK: {
+            return shade_mythic_stack(in.mesh_uv, time_s, seed, aspect, tint);
+        }
+        case VFX_MYTHIC_STACK_OUTRO: {
+            return shade_mythic_stack_outro(in.mesh_uv, time_s, seed, aspect, tint);
+        }
         default: {
             return vec4<f32>(0.0);
         }
@@ -195,6 +201,12 @@ fn vfx_bloom_gain(kind: u32, style: u32) -> f32 {
         }
         case VFX_STACK_EXIT: {
             return BLOOM_GAIN_STACK_EXIT;
+        }
+        case VFX_MYTHIC_STACK: {
+            return BLOOM_GAIN_MYTHIC_STACK;
+        }
+        case VFX_MYTHIC_STACK_OUTRO: {
+            return BLOOM_GAIN_MYTHIC_STACK_OUTRO;
         }
         default: {
             return 0.0;

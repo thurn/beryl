@@ -253,6 +253,7 @@ fn shift(compiled: &mut Compiled, end: u64) {
         sounds,
         turns,
         pile_counts,
+        zones,
         ..
     } = compiled;
     // A test may plant a step of its own in the records (`Plant`), which no beat laid out and
@@ -325,6 +326,10 @@ fn shift(compiled: &mut Compiled, end: u64) {
         change.at += start(change.step);
     }
     pile_counts.sort_unstable_by_key(game_table::table::PileCount::order);
+    for change in zones.iter_mut() {
+        change.at += start(change.step);
+    }
+    zones.sort_unstable_by_key(game_table::table::ZoneChange::order);
     compiled.end = end;
     std::mem::swap(&mut compiled.laid, &mut compiled.scratch);
 }

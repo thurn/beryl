@@ -15,6 +15,18 @@
     "breath": 0.03,
     "period_ms": 2600
   },
+  "mythic_stack": {
+    "pad": 0.22,
+    "outro_pad": 0.55,
+    "outro_ms": 550,
+    "halo": {
+      "reach": 0.96,
+      "inner": 1.02,
+      "breath": 0.025,
+      "period_ms": 2600
+    },
+    "halo_core": 0.55
+  },
   "coin": {
     "size": 0.16,
     "at": [-0.34, -0.42]

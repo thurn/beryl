@@ -28,7 +28,7 @@ use crate::notice::NoticeRun;
 use crate::play::TurnChange;
 use crate::sound::{SoundRun, Sounds};
 use crate::verbs::{self, Interval};
-use game_table::table::{Objects, PileCount, Table, Turn};
+use game_table::table::{Objects, PileCount, Table, Turn, ZoneChange};
 use kit_base::data::effect::{Effects, SubjectColors, Target};
 use kit_base::pose::Segment;
 use kit_fx::effects::EffectRun;
@@ -87,6 +87,8 @@ pub(crate) struct Compiled {
     /// When cards show the record the script leads to, where a step says, ordered by time.
     pub turns: Vec<Turn>,
     pub pile_counts: Vec<PileCount>,
+    /// The zones its steps put cards in, ordered by slot and then time (`ZoneChange`).
+    pub zones: Vec<ZoneChange>,
     /// When each of its steps plays, in order, as its beats were laid out; empty when it has no
     /// steps to play (no script, or timings that do not match its steps).
     pub laid: Vec<Laid>,
@@ -349,6 +351,7 @@ impl<'a> Compiling<'a> {
                 &mut out.pile_counts,
                 PileCount::order,
             );
+            take(&mut written.zones, &mut out.zones, ZoneChange::order);
             out.unplaced = motion.unplaced;
         }
         if count > 0

@@ -170,6 +170,14 @@ pub enum Vfx {
     /// A card leaving the stack: a small puff of smoke, wisps, a ghost outline and spores
     /// (`vfx_stack_flare_exit`).
     StackExit = 18,
+    /// Looping aura round a mythic rare spell on the stack: a card-shaped outline with upward
+    /// wisps, rays, a chromatic shockwave, sparks, a travelling star flare and dust motes
+    /// (`VFX_Stack_Mythic_Tier2_loop_LUT`).
+    MythicStack = 19,
+    /// The burst a mythic rare spell leaves as it leaves the stack: an outline flare, a
+    /// card-shaped shockwave, rays, a star flare and thrown sparks
+    /// (`VFX_Stack_Mythic_Tier2_outro_LUT`).
+    MythicStackOutro = 20,
 }
 
 /// Visual palette and shimmer style for outline highlight VFX (`Vfx::HighlightShimmer` and

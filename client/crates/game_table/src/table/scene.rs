@@ -35,12 +35,13 @@ use kit_ui::input::FaceSize;
 mod abilities;
 mod layout;
 mod motion;
+mod mythic;
 mod objects;
 mod placement;
 mod scroll;
 
-pub use motion::PileCount;
 pub use motion::{Motion, Turn};
+pub use motion::{PileCount, ZoneChange};
 
 /// One game object's presence on the table.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -78,7 +79,7 @@ type Drawn<'a> = (
     &'a SceneObject,
     &'a PlayerView,
     (bool, u32),
-    (Option<Pose>, bool),
+    (Option<Pose>, bool, (bool, Option<u64>)),
 );
 
 impl Objects {
@@ -433,9 +434,10 @@ impl Table {
             // the moment the spell resolves, but the script still holds it large at the stack's
             // place and flies it over (`Track::settled`).
             let landed = track.is_none_or(|(track, time)| track.settled(time));
+            let left = self.toward_stack(slot, (view, drawn), &object, motion);
             self.write_card(
                 slot,
-                (&object, drawn, (under_way, state), (held_at, landed)),
+                (&object, drawn, (under_way, state), (held_at, landed, left)),
                 (view, faces),
                 (back, dress, self.handed_waiting(motion) || between_zones),
                 builder,
@@ -590,7 +592,7 @@ impl Table {
     fn write_card(
         &self,
         slot: usize,
-        (object, view, (under_way, mut state), (held_at, landed)): Drawn<'_>,
+        (object, view, (under_way, mut state), (held_at, landed, left_stack)): Drawn<'_>,
         (shown_view, faces): (&PlayerView, &Faces),
         (back, dress, waiting): (u16, &Dress<'_>, bool),
         builder: &mut FrameBuilder,
@@ -669,20 +671,15 @@ impl Table {
         effects::card::write(effects, dress.effects, target, dress.now, &held, builder);
         self.write_shadow((Some(slot), object.place), &look.pose, under_way, builder);
         let band = builder.node_band(at);
-        if shown.zone == ZoneName::Battlefield {
-            own::write(
-                (slot, shown, landed && object.place.on_battlefield()),
-                (&look, &self.data.own),
-                &self.fights,
-                (dress.now, band),
-                builder,
-            );
-        } else {
-            self.fights.forget(slot);
-            if super::place::in_hand_fan(shown) {
-                own::from_graveyard((&look, &self.data.own), (dress.now, band), builder);
-            }
-        }
+        let on_battlefield = landed && object.place.on_battlefield();
+        let mythic = self.mythic(name, listed, left_stack, faces);
+        own::write_any(
+            (slot, shown, on_battlefield, mythic),
+            (&look, &self.data.own),
+            &self.fights,
+            (dress.now, band),
+            builder,
+        );
         if let Some(really) = shown.really.as_deref() {
             builder.annotate(at, COPY_NOTE, really);
         }

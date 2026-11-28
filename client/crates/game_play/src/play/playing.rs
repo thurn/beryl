@@ -111,6 +111,7 @@ impl Playing {
             view: &update.view,
             turns: &self.compiled.turns,
             pile_counts: &self.compiled.pile_counts,
+            zones: &self.compiled.zones,
         })
     }
 

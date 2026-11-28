@@ -561,3 +561,64 @@ fn stack_flares_stay_inside_their_quads_flash_gold_and_are_gone_by_their_end() {
     let puff = channel_sums(&shade(&mut renderer, Vfx::StackExit, grey, 0.05));
     assert!(puff.iter().sum::<u64>() < flash.iter().sum::<u64>());
 }
+
+#[test]
+fn mythic_stack_aura_hugs_the_card_in_its_colors_and_its_burst_fades() {
+    let mut renderer = enhanced();
+    // A card 120 wide padded by 0.22 of its width on each side, and 0.55 for the burst.
+    let aura_size = Vec3::new(120.0 * 1.44, 120.0 * 1.397 + 120.0 * 0.44, 1.0);
+    let burst_size = Vec3::new(120.0 * 2.1, 120.0 * 1.397 + 120.0 * 1.1, 1.0);
+    let place = |size: Vec3| {
+        Affine3A::from_scale_rotation_translation(size, Quat::IDENTITY, Vec3::new(0.0, 0.0, 1.0))
+    };
+    let aspect = |size: Vec3| size.y / size.x;
+    let blue = [64, 168, 255, 255];
+    let violet = [154, 92, 214, 255];
+    let aura = |renderer: &mut beryl_render::Renderer, tint, t| {
+        let draw = Draw::vfx(
+            place(aura_size),
+            tint,
+            Vfx::MythicStack,
+            [t, 1.0, 0.3, aspect(aura_size)],
+        );
+        render_vfx(renderer, draw)
+    };
+    let [br, _, bb] = channel_sums(&aura(&mut renderer, blue, 12.0));
+    let [vr, vg, _] = channel_sums(&aura(&mut renderer, violet, 12.0));
+    assert!(
+        bb > br && bb > 20_000,
+        "a blue spell's aura is blue: {br},{bb}"
+    );
+    assert!(vr > vg, "a black spell's aura is violet: {vr},{vg}");
+    let early = aura(&mut renderer, blue, 12.0);
+    // The card's face stays readable: its middle takes almost no light.
+    let [r, g, b] = early.at(100, 100);
+    assert!(
+        r + g + b < 60,
+        "the card's middle stays clear: {:?}",
+        [r, g, b]
+    );
+    assert_ne!(
+        early.pixels,
+        aura(&mut renderer, blue, 13.3).pixels,
+        "the aura moves as it loops"
+    );
+    let burst = |renderer: &mut beryl_render::Renderer, t| {
+        let draw = Draw::vfx(
+            place(burst_size),
+            blue,
+            Vfx::MythicStackOutro,
+            [t, 1.0, 0.3, aspect(burst_size)],
+        );
+        channel_sums(&render_vfx(renderer, draw))
+            .iter()
+            .sum::<u64>()
+    };
+    let flash = burst(&mut renderer, 0.1);
+    let end = burst(&mut renderer, 0.97);
+    assert!(flash > 30_000, "the burst flares: {flash}");
+    assert!(
+        end * 10 < flash,
+        "the burst is nearly gone by its end: {end} against {flash}"
+    );
+}

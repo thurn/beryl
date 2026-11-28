@@ -66,75 +66,83 @@
     },
     "vfx_chevron": {
       "samples": 0,
-      "expressions": 503
+      "expressions": 507
     },
     "vfx_shield": {
       "samples": 0,
-      "expressions": 471
+      "expressions": 475
     },
     "vfx_line_ribbon": {
       "samples": 0,
-      "expressions": 432
+      "expressions": 436
     },
     "vfx_line_head": {
       "samples": 0,
-      "expressions": 423
+      "expressions": 427
     },
     "vfx_probe": {
       "samples": 0,
-      "expressions": 168
+      "expressions": 172
     },
     "vfx_counter_add": {
       "samples": 0,
-      "expressions": 395
+      "expressions": 399
     },
     "vfx_counter_add_neg": {
       "samples": 0,
-      "expressions": 408
+      "expressions": 412
     },
     "vfx_counter_remove": {
       "samples": 0,
-      "expressions": 534
+      "expressions": 538
     },
     "vfx_shield_add": {
       "samples": 0,
-      "expressions": 446
+      "expressions": 450
     },
     "vfx_shield_remove": {
       "samples": 0,
-      "expressions": 407
+      "expressions": 411
     },
     "vfx_settle": {
       "samples": 0,
-      "expressions": 589
+      "expressions": 593
     },
     "vfx_highlight_shimmer": {
       "samples": 0,
-      "expressions": 373
+      "expressions": 377
     },
     "vfx_highlight_pop": {
       "samples": 0,
-      "expressions": 313
+      "expressions": 317
     },
     "vfx_mythic_arrival": {
       "samples": 0,
-      "expressions": 483
+      "expressions": 487
     },
     "vfx_mana_hit": {
       "samples": 0,
-      "expressions": 440
+      "expressions": 444
     },
     "vfx_mana_birth": {
       "samples": 0,
-      "expressions": 487
+      "expressions": 491
     },
     "vfx_stack_enter": {
       "samples": 0,
-      "expressions": 551
+      "expressions": 555
     },
     "vfx_stack_exit": {
       "samples": 0,
-      "expressions": 502
+      "expressions": 506
+    },
+    "vfx_mythic_stack": {
+      "samples": 0,
+      "expressions": 656
+    },
+    "vfx_mythic_stack_outro": {
+      "samples": 0,
+      "expressions": 500
     }
   },
   "tests": {

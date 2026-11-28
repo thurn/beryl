@@ -302,6 +302,24 @@
     },
     {
       "kind": "settled",
+      "name": "A mythic rare spell on the stack",
+      "rule": "In the Enhanced tier, a mythic rare spell is ringed in a looping aura in its colors from the moment it starts its flight to the stack until it leaves: a soft glow hugging the card's edge that drifts upward in wisps, faint slow rays, a thin shockwave that leaves the edge every few seconds with its red and blue split apart, sparks and dust motes rising past the edges, and a four-point star flare that travels round the outline. The card's face stays clear. As the spell resolves or is countered, the outline flares and a card-shaped shockwave, a ring of rays, a star flare and thrown sparks burst from it for up to 0.55 s, riding on the card as it goes. The color follows the effects palette (`data/client/effects/palette.json`): violet for black, blue, white, red, green, gold for more than one color and pale silver for colorless. The Baseline tier rings the card in two breathing halos in its colors instead, and draws no burst. Abilities of mythic rare permanents get no aura yet.",
+      "arena": {
+        "does": "Arena outlines a mythic rare spell on the stack in a looping colored aura with rays, a chromatic shockwave, sparks and dust motes (`VFX_Stack_Mythic_Tier2_loop_LUT`, chosen by rarity alone as the card moves to the stack), and bursts it as the card moves off the stack (`VFX_Stack_Mythic_Tier2_outro_LUT`). Sheoldred, the Apocalypse glows violet; Ugin, Eye of the Storms, which is colorless, is wrapped in pale smoke.",
+        "evidence": [
+          {
+            "recording": "9-iWvWANENU",
+            "time": "28:46.0"
+          },
+          {
+            "recording": "0VsYGs88NXA",
+            "time": "1:11:36"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "settled",
       "name": "Additional costs",
       "rule": "A chooser that lowers the mana to pay (Delve) opens before mana taps; a sacrifice cost is chosen after the lands tap.",
       "reports": [

@@ -407,3 +407,18 @@ def test_a_deck_printing_that_matches_nothing_fails_the_run_naming_the_row() -> 
             cards.exclusions(cards.EXCLUSIONS),
             [misnamed],
         )
+
+
+def test_a_card_keeps_its_printing_s_rarity() -> None:
+    """The client picks mythic rare effects by rarity, so pruning the bulk file keeps it."""
+    pool = sample_pool()
+    built = cards.build_store(pool)
+    rarities = {str(r["name"]): str(r["rarity"]) for r in built.records}
+    assert rarities["Counterspell"] in {
+        "common",
+        "uncommon",
+        "rare",
+        "mythic",
+        "special",
+    }
+    assert all(rarity for rarity in rarities.values())

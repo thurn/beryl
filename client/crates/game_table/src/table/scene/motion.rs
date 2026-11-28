@@ -1,7 +1,7 @@
 //! What moves on the table while a script plays (`Motion`), and when a card turns to the
 //! record the script leads to (`Turn`).
 
-use beryl_protocol::protocol::PlayerView;
+use beryl_protocol::protocol::{PlayerView, ZoneName};
 
 use super::Objects;
 use kit_space::motion::Track;
@@ -23,6 +23,28 @@ pub struct Motion<'a> {
     pub turns: &'a [Turn],
     /// Pile counts applied as steps change where cards are drawn.
     pub pile_counts: &'a [PileCount],
+    /// The zones the script's steps put cards in, and when, sorted by slot and then time
+    /// (`ZoneChange`).
+    pub zones: &'a [ZoneChange],
+}
+
+/// A step of the script begins to put the card in `slot` into `zone` at `at` on the script's
+/// clock, or, with no `zone`, takes it out of the game, as a token that leaves the battlefield
+/// is. `step` is the number of the step. While a script plays, the record a card is drawn with
+/// may already be the one the script leads to: a spell cast and resolved in one script waits on
+/// the stack with its graveyard record. These say where the card is between the two.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ZoneChange {
+    pub slot: usize,
+    pub at: u64,
+    pub step: usize,
+    pub zone: Option<ZoneName>,
+}
+
+impl ZoneChange {
+    pub fn order(&self) -> (usize, u64, usize) {
+        (self.slot, self.at, self.step)
+    }
 }
 
 /// The card in `slot` shows the record the script leads to from `at` on the script's clock,
@@ -61,6 +83,21 @@ impl Motion<'_> {
             .get(first)
             .filter(|turn| turn.slot == slot)
             .map(|turn| turn.at)
+    }
+
+    /// The last two zone changes this script has begun for the card in `slot` by its time, the
+    /// latest last.
+    pub(super) fn zone_changes(&self, slot: usize) -> (Option<ZoneChange>, Option<ZoneChange>) {
+        let first = self.zones.partition_point(|change| change.slot < slot);
+        let end = self
+            .zones
+            .partition_point(|change| (change.slot, change.at) <= (slot, self.t));
+        let begun = &self.zones[first.min(end)..end];
+        match begun {
+            [] => (None, None),
+            [last] => (None, Some(*last)),
+            [.., before, last] => (Some(*before), Some(*last)),
+        }
     }
 
     /// The last pile count this script applied to the card in `slot`.

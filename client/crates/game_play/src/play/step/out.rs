@@ -1,14 +1,14 @@
 //! What a verb writes for one step (`StepOut`), and what the verbs of a script have written so
 //! far (`Written`).
 
-use beryl_protocol::script::{Subject, Turn as TurnStep};
+use beryl_protocol::script::{Act, Subject, Turn as TurnStep};
 
 use crate::hud::counts::CountChange;
 use crate::light::{SpanChange, StreakRun};
 use crate::notice::NoticeRun;
 use crate::play::TurnChange;
 use crate::verbs::{self, Interval};
-use game_table::table::{PileCount, Turn};
+use game_table::table::{PileCount, Turn, ZoneChange};
 use kit_base::pose::{Pose, Segment};
 
 /// What the verbs of a script have written so far, beside the segments `Motion` adds to its
@@ -26,6 +26,7 @@ pub(crate) struct Written {
     pub turn_changes: Vec<TurnChange>,
     pub turns: Vec<Turn>,
     pub pile_counts: Vec<PileCount>,
+    pub zones: Vec<ZoneChange>,
 }
 
 /// What a verb writes for one step.
@@ -85,6 +86,29 @@ impl StepOut<'_> {
                 step: self.number,
             });
         }
+    }
+
+    /// Notes the zone `act`, this step's act, puts a card in as the step begins (`ZoneChange`):
+    /// where a card flies or appears, or where it goes as it vanishes, or nowhere for one that
+    /// leaves the game. An act that leaves a card in its zone notes nothing.
+    pub fn enters(&mut self, act: &Act) {
+        let (slot, zone) = match act {
+            Act::Fly { object, .. } | Act::Appear { object, .. } => {
+                (object.slot, Some(object.zone))
+            }
+            Act::Vanish {
+                subject: Subject::Object { slot },
+                object,
+                ..
+            } => (*slot, object.as_ref().map(|object| object.zone)),
+            _ => return,
+        };
+        self.written.zones.push(ZoneChange {
+            slot: usize::from(slot.0),
+            at: self.own.from,
+            step: self.number,
+            zone,
+        });
     }
 
     /// A step of the turn begins as this step does, which the step row then shows.
