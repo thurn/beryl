@@ -188,7 +188,8 @@ pub struct Live {
     resume: Option<PathBuf>,
     /// The solo manual table save `--table` asked to reopen in place of the newest game.
     resume_table: Option<PathBuf>,
-    /// The agents `--offer` adds after the session's own on the start screen.
+    /// The agents `--offer` puts before the session's own on the start screen, whose games are
+    /// played against the first agent offered.
     offered: Vec<AgentView>,
     /// The card records last given to the client, which the manual table's views add to.
     cards: CardFeed,
@@ -265,8 +266,9 @@ impl Live {
         }
     }
 
-    /// The same sessions, whose start screen also offers the agents `names`, after the
-    /// session's own list. A name no agent has is left out.
+    /// The same sessions, whose start screen offers the agents `names` before the session's
+    /// own, so that its games are played against the first of them in place of the champion.
+    /// A name no agent has is left out.
     #[must_use]
     pub fn offering(mut self, names: &[String]) -> Self {
         self.offered = (names.iter())
@@ -493,8 +495,8 @@ impl Session for Live {
         (self.inbox).send(Input::Reply(Reply::TableSaved(
             saved.map_err(|error| error.reason),
         )));
-        let mut agents = beryl_session::agents();
-        agents.extend(self.offered.iter().cloned());
+        let mut agents = self.offered.clone();
+        agents.extend(beryl_session::agents());
         self.inbox.send(Input::Agents(agents));
     }
 

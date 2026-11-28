@@ -171,6 +171,10 @@ pub struct StartRequest {
     /// before this field existed names no deck and gets `wu-control`.
     #[serde(default = "default_deck")]
     pub deck: String,
+    /// The engine steps the ladder's champion searches a decision when it is `agent`, which
+    /// the start screen's effort slider sets. None, or another agent, keeps the agent's own.
+    #[serde(default)]
+    pub work: Option<u64>,
 }
 
 /// The deck key a [`StartRequest`] names when it names none.

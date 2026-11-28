@@ -195,12 +195,3 @@ def test_play_prints_them_when_the_game_is_on_screen(
     assert play.run_play(args) == 0
     assert pressed == ['press button "Start"']
     assert "just client live tree --app 4242" in capsys.readouterr().out
-
-
-def test_another_opponent_is_found_by_the_name_of_its_toggle() -> None:
-    tree = stand_in.parse_tree(
-        't=0ms\nregion "start"\n  toggle "Searcher" #1 0,0 1x1\n  toggle "Expert" #2 0,0 1x1\n'
-    )
-    assert play.toggle_title(tree, "expert") == "Expert"
-    with pytest.raises(stand_in.StandInError, match="Searcher, Expert"):
-        play.toggle_title(tree, "random")

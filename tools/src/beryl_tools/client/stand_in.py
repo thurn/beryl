@@ -33,8 +33,8 @@ from pathlib import Path
 from .. import deps
 from . import app, live, paths
 
-# The agent the stand-in plays against, which the start screen lists only when `--offer`
-# adds it.
+# The agent the stand-in plays against, which the start screen's games are played against in
+# place of the champion when `--offer` names it.
 OPPONENT = "expert"
 # How long a prompt may stay open, unchanged, on the app's clock before the run fails.
 PROMPT_LIMIT_MS = 60_000
@@ -309,13 +309,10 @@ def ready_for(tree: Tree, ready: str) -> bool:
     raise ValueError(ready)
 
 
-def pick_opponent(running: Running, title: str = "Expert") -> None:
-    """Chooses the opponent whose toggle is named `title` (`expert`'s is "Expert") on the start
-    screen, scrolling the list to it, and presses Start."""
-    tree = wait_tree(running, "start")
-    if title not in tree.named("toggle"):
-        running.act('wheel list "Opponent" 0,-4000')
-    running.act(f'press toggle "{title}"')
+def press_start(running: Running) -> None:
+    """Presses Start on the start screen once it is up, which starts a game against the agent
+    `--offer` named."""
+    wait_tree(running, "start")
     running.act('press button "Start"')
 
 
@@ -463,7 +460,7 @@ def run_stand_in(args: argparse.Namespace) -> int:
         )
         first = start(profile)
         folder = data_folder(first)
-        pick_opponent(first)
+        press_start(first)
         play(first, played, RESUME_AFTER)
         before = board(settled(first))
         first_output = first.quit()

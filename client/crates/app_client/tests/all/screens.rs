@@ -22,7 +22,7 @@ use kit_ui::input::{Insets, Size, Window};
 
 const START: &str = "button \"Start\"";
 
-/// Three agents, none of them the one offered first, so that the first is chosen at the start.
+/// Three agents, as a host offers them: the start screen plays against the first.
 fn agents() -> Vec<AgentView> {
     ["random", "greedy", "expert"]
         .map(|name| AgentView {
@@ -33,13 +33,15 @@ fn agents() -> Vec<AgentView> {
         .to_vec()
 }
 
-/// A start request against `agent` with no seed and no fair deal.
+/// A start request against `agent` with no seed and no fair deal, at the effort slider's
+/// default of 30M engine steps a decision.
 fn request(agent: &str) -> StartRequest {
     StartRequest {
         agent: agent.to_owned(),
         seed: None,
         fair: false,
         deck: beryl_protocol::default_deck(),
+        work: Some(30_000_000),
     }
 }
 
@@ -84,27 +86,32 @@ fn no_game(agent: &str) -> Page {
 }
 
 #[test]
-fn pressing_start_with_the_second_agent_chosen_starts_against_it() {
-    let mut page = no_game("greedy");
+fn pressing_start_plays_the_first_agent_at_the_effort_the_slider_sets() {
+    let at_20m = StartRequest {
+        work: Some(20_000_000),
+        ..request("random")
+    };
+    let mut page = page(vec![
+        FixtureMessage::response(LIST_AGENTS, &agents()),
+        FixtureMessage::asked(START_GAME, &at_20m, &()),
+    ]);
     assert!(
         page.find(START).states().has(StateBits::PRIMARY),
         "the tree marks Start as the button the screen expects"
     );
     assert!(
-        page.find("toggle \"RANDOM\"")
-            .states()
-            .has(StateBits::SELECTED)
+        page.try_find("toggle \"GREEDY\"").is_err(),
+        "no opponent is offered to choose"
     );
-    page.press("toggle \"GREEDY\"");
+    page.find("text \"30M\"");
+    // A press in the slider's middle sets its level to 50, which is 20M.
+    page.press("slider \"AI effort\"");
     page.still();
-    assert!(
-        page.find("toggle \"GREEDY\"")
-            .states()
-            .has(StateBits::SELECTED)
-    );
+    page.find("text \"20M\"");
     page.press(START);
     page.still();
-    // A start for any other agent would not match the recorded request and fail the page.
+    // A start for any other agent or work would not match the recorded request and fail the
+    // page.
     assert_eq!(replies(&page), 1, "the start was sent and answered");
     assert!(
         page.try_find(START).is_err(),
@@ -436,36 +443,6 @@ fn opening_the_gallery_from_start_turns_off_music() {
 
     page.find("region \"gallery\"");
     assert!(std::iter::from_fn(|| page.next_request()).any(|r| r == Request::Music(None)));
-}
-
-#[test]
-fn the_wheel_scrolls_a_long_opponent_list_to_its_last_agent() {
-    // The host offers a dozen agents, more than the list has room for at 1600 by 900.
-    let many: Vec<AgentView> = (0..12)
-        .map(|at| AgentView {
-            name: format!("agent-{at}"),
-            title: format!("Agent {at}"),
-            description: format!("The agent numbered {at}"),
-        })
-        .collect();
-    let size = Size {
-        width: 1600.0,
-        height: 900.0,
-    };
-    let mut page = page_at(vec![FixtureMessage::response(LIST_AGENTS, &many)], size);
-    let last = page.try_act(&"press toggle \"Agent 11\"".parse().unwrap());
-    assert!(
-        last.is_err(),
-        "the last agent is out of sight before the list scrolls"
-    );
-    page.run("wheel list \"Opponent\" 0,-2000\nstill");
-    page.press("toggle \"Agent 11\"");
-    page.still();
-    assert!(
-        page.find("toggle \"Agent 11\"")
-            .states()
-            .has(StateBits::SELECTED)
-    );
 }
 
 /// Runs `body` on a thread with the 1 MB stack an iPhone gives its main thread, where the iOS

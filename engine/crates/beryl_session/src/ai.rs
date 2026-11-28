@@ -154,17 +154,21 @@ impl AgentMove {
     }
 }
 
-/// A new agent of the kind named `name`, deciding from `seed`.
+/// A new agent of the kind named `name`, deciding from `seed`: a registered agent, or a
+/// long-think agent named with its work (`family@20M`), as a game the start screen started at
+/// another effort records its opponent.
 pub(crate) fn new_agent(
     name: &str,
     t: &GameTable,
     seed: u64,
     budget: Budget,
 ) -> Result<Box<dyn GameAgent + Send>, SessionError> {
-    let agent = beryl_search::agent(name).ok_or_else(|| SessionError::UnknownAgent {
+    if let Some(agent) = beryl_search::agent(name) {
+        return Ok((agent.new)(t, seed, budget));
+    }
+    beryl_search::agent_at_work(name, t, seed).ok_or_else(|| SessionError::UnknownAgent {
         name: name.to_owned(),
-    })?;
-    Ok((agent.new)(t, seed, budget))
+    })
 }
 
 #[cfg(test)]

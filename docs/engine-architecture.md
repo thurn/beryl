@@ -1603,10 +1603,10 @@ numbers its cards from its decklists, and everything else looks a card up by
 name. Exporters that turn dumped scenarios into XMage and Forge inputs are
 Python in `tools/`, per AGENTS.md.
 
-The iOS and Android apps offer the same opponents with the same search budgets
-as the desktop app. The Quick Seer and Quick Searcher search at
-`beryl_search::Budget::QUICK` (64 iterations across four trees) on every
-platform.
+Every app plays the ladder's champion (`beryl_search::CHAMPION`), at the engine
+steps a decision that the start screen's effort slider sets: 2M to 40M, 30M by
+default. A game at any work but 30M records its opponent as the family and work
+in the ladder's form (`family@20M`), so its replay reproduces it.
 
 ### 16.1 Modules by rule
 

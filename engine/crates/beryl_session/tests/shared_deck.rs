@@ -123,6 +123,7 @@ fn play(seed: u32, moves: &mut Seen) -> (PlayerView, ReplayFile) {
         seed: Some(seed),
         fair: false,
         deck: "forgetful-fish".to_owned(),
+        work: None,
     };
     let session = sessions.start(&request).unwrap();
     let mut answers = 0u32;

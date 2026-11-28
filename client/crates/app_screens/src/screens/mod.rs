@@ -32,6 +32,27 @@ use game_table::table::Window;
 use kit_ui::element::{Action, Element};
 use kit_ui::widgets::Fields;
 
+/// The level from 0 to 100 shown by the slider whose press is `action`: a sound level on the
+/// settings sheet or the AI's effort on the start screen. `None` for any other press.
+#[must_use]
+pub fn slider_level(action: &Action) -> Option<u8> {
+    match settings::slider_setting(action) {
+        Some(setting) => setting.level(),
+        None => start::effort_level(action),
+    }
+}
+
+/// The press that moves the slider whose press is `action` to `level`, or `None` if `action`
+/// is no slider's press.
+#[must_use]
+pub fn slider_to(action: &Action, level: u8) -> Option<Action> {
+    if let Some(setting) = settings::slider_setting(action) {
+        let to = setting.level().map(|_| setting.at_level(level))?;
+        return Some(Action::new(settings::Message::Change(to)));
+    }
+    start::effort_level(action).map(|_| Action::new(start::Message::Effort(level)))
+}
+
 /// Everything a screen function reads.
 #[derive(Clone, Copy, Debug)]
 pub struct ScreenIn<'a> {

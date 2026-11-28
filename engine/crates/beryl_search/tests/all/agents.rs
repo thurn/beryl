@@ -9,8 +9,8 @@ use beryl_engine::{
     apply, next, observe,
 };
 use beryl_search::{
-    AGENTS, AgentDecision, CardValues, DEEP_SEARCHER, Family, GameAgent, Knowledge, RETIRED,
-    deep_family,
+    AGENTS, AgentDecision, CHAMPION, CardValues, DEEP_SEARCHER, DEEP_WORK, Family, GameAgent,
+    Knowledge, RETIRED, agent_at_work, champion_at, deep_family,
 };
 
 use crate::common::{SMALL_WORK, cheap};
@@ -144,4 +144,21 @@ fn play_seeded(
             }
         }
     }
+}
+
+/// The start screen offers the champion alone. At its usual work it keeps its registry name;
+/// at another, its name carries the family and work, which builds a searching agent.
+#[test]
+fn the_champion_is_offered_alone_and_named_with_its_work() {
+    assert_eq!(
+        AGENTS.iter().map(|a| a.name).collect::<Vec<_>>(),
+        [CHAMPION]
+    );
+    assert_eq!(champion_at(DEEP_WORK), CHAMPION);
+    let name = champion_at(20_000_000);
+    assert_eq!(name, format!("{DEEP_SEARCHER}@20M"));
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [VANILLA, VANILLA]).unwrap();
+    assert!(agent_at_work(&name, &t, 1).is_some());
+    assert!(agent_at_work(CHAMPION, &t, 1).is_none());
+    assert!(agent_at_work(&format!("{DEEP_SEARCHER}@0"), &t, 1).is_none());
 }

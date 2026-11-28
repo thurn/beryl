@@ -223,15 +223,61 @@ pub struct AgentInfo {
     pub new: fn(t: &GameTable, seed: u64, budget: Budget) -> Box<dyn GameAgent + Send>,
 }
 
-/// Every agent, in the order a human is offered them. The desktop and phone apps offer the
-/// same list with the same budgets.
-pub static AGENTS: &[AgentInfo] = &[
-    AgentInfo {
-        name: "mcts-omniscient-quick",
-        title: "Quick Seer",
-        description: "Cheats as the Seer does, answering in a moment",
-        new: quick_seer,
-    },
+/// Every agent a human is offered: the ladder's champion alone. The desktop and phone apps
+/// offer it at the work a decision the start screen's effort slider sets ([`champion_at`]).
+pub static AGENTS: &[AgentInfo] = &[AgentInfo {
+    name: CHAMPION,
+    title: "Deep Searcher",
+    description: "Guesses at the cards it cannot see, thinking seconds a move",
+    new: deep_searcher,
+}];
+
+/// The registry name of the ladder's champion at [`DEEP_WORK`], under which replays of games
+/// against it at that work are recorded.
+pub const CHAMPION: &str = "pimc72-hidden-30m-anchor";
+
+/// The name of the ladder's champion searching `work` engine steps a decision: [`CHAMPION`]
+/// at [`DEEP_WORK`], and otherwise its family and work in the ladder's form
+/// (`family@20M`), which [`agent_at_work`] builds and the CLI's tools read as an entrant.
+#[must_use]
+pub fn champion_at(work: u64) -> String {
+    if work == DEEP_WORK {
+        return CHAMPION.to_owned();
+    }
+    if work.is_multiple_of(1_000_000) {
+        format!("{DEEP_SEARCHER}@{}M", work / 1_000_000)
+    } else {
+        format!("{DEEP_SEARCHER}@{work}")
+    }
+}
+
+/// The engine steps in `s`, a whole number with an optional scale: `k` for thousands, `M` for
+/// millions, `G` for billions (`30M`).
+#[must_use]
+pub fn parse_work(s: &str) -> Option<u64> {
+    let (digits, scale) = match s.as_bytes().last()? {
+        b'k' => (&s[..s.len() - 1], 1_000),
+        b'M' => (&s[..s.len() - 1], 1_000_000),
+        b'G' => (&s[..s.len() - 1], 1_000_000_000),
+        _ => (s, 1),
+    };
+    digits.parse::<u64>().ok()?.checked_mul(scale)
+}
+
+/// The long-think agent `name` names in the ladder's form, `family@work` (`family@20M`),
+/// searching on every core, or `None` if `name` is not of that form.
+pub fn agent_at_work(name: &str, t: &GameTable, seed: u64) -> Option<Box<dyn GameAgent + Send>> {
+    let (family, work) = name.rsplit_once('@')?;
+    let family: Family = family.parse().ok()?;
+    let work = parse_work(work).filter(|&work| work > 0)?;
+    Some(deep_family(t, seed, family, work))
+}
+
+/// Agents no longer offered, kept buildable by name so that games recorded against them can
+/// still be reviewed, and so that tools and tests can still play them. A review re-searches
+/// with today's search, so where the search has changed since (`TURN_DISCOUNT`, for one) it
+/// may not choose as the game did.
+pub static RETIRED: &[AgentInfo] = &[
     AgentInfo {
         name: "mcts-hidden-quick",
         title: "Quick Searcher",
@@ -244,25 +290,6 @@ pub static AGENTS: &[AgentInfo] = &[
         description: "Searches many guesses at the cards it cannot see, playing each out greedily",
         new: mcts_hidden,
     },
-    AgentInfo {
-        name: "pimc18-omniscient-30m-anchor",
-        title: "Deep Seer",
-        description: "Cheats as the Seer does, thinking seconds a move",
-        new: deep_seer,
-    },
-    AgentInfo {
-        name: "pimc72-hidden-30m-anchor",
-        title: "Deep Searcher",
-        description: "Guesses at the cards it cannot see, thinking seconds a move",
-        new: deep_searcher,
-    },
-];
-
-/// Agents no longer offered, kept buildable by name so that games recorded against them can
-/// still be reviewed, and so that tools and tests can still play them. A review re-searches
-/// with today's search, so where the search has changed since (`TURN_DISCOUNT`, for one) it
-/// may not choose as the game did.
-pub static RETIRED: &[AgentInfo] = &[
     AgentInfo {
         name: "random",
         title: "Random",
@@ -335,28 +362,16 @@ fn mcts_hidden(t: &GameTable, seed: u64, budget: Budget) -> Box<dyn GameAgent + 
     )))
 }
 
-/// The Seer at [`Budget::QUICK`] whatever `budget` says: the budget phones used to give it.
-fn quick_seer(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent + Send> {
-    mcts_omniscient(t, seed, Budget::QUICK)
-}
-
 /// The Searcher at [`Budget::QUICK`] whatever `budget` says: the budget phones used to give
-/// it.
+/// it, which the phone's unattended game checks still play against.
 fn quick_searcher(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent + Send> {
     mcts_hidden(t, seed, Budget::QUICK)
 }
 
-/// `pimc18/omniscient/rollout/tuned/anchor@30M`: the long-think arena's leading family in
-/// run-003, anchored (epic by-7wl) so that it casts no spell greedy would hold unless its
-/// search is sure, as the unanchored one cast Oust on its own token. Re-searching that game,
-/// the anchor changed that move alone. `mid` is left to the arena: there it changed 16 of the
-/// game's 62 searched moves and did not lift Jace's 0. 30M engine steps a decision whatever
-/// `budget` says, on every core. Its moves do not depend on the threads.
-fn deep_seer(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent + Send> {
-    deep_family(t, seed, DEEP_SEER, DEEP_WORK)
-}
-
-/// Deep Seer's family: the anchor alone.
+/// Deep Seer's family: the anchor alone. Deep Seer
+/// (`pimc18/omniscient/rollout/tuned/anchor@30M`) was once offered as an opponent that cheats
+/// by seeing the true game. Its family is kept as the base of the retired
+/// `pimc18-omniscient-30m` and as a yardstick.
 pub const DEEP_SEER: Family = Family {
     method: Method::Pimc { worlds: 18 },
     sight: Sight::Omniscient,
@@ -450,8 +465,9 @@ pub const DEEP_SEER_UNANCHORED: Family = Family {
     ..DEEP_SEER
 };
 
-/// The engine steps a long-think agent spends on each decision.
-const DEEP_WORK: u64 = 30_000_000;
+/// The engine steps a long-think agent spends on each decision unless told otherwise: what the
+/// start screen's effort slider sets by default.
+pub const DEEP_WORK: u64 = 30_000_000;
 
 /// A long-think search of `family` at `work` engine steps a decision, on every core.
 pub fn deep_family(

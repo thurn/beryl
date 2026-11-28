@@ -70,9 +70,13 @@ pub fn start_game(deck: &str, opponent: &str, seed: u64) -> Result<StartGame, Se
 /// The game the UI's request starts: the deck it names against the agent it names, the human
 /// in seat 0 under the smart stops.
 fn requested_game(request: &StartRequest) -> Result<StartGame, SessionError> {
+    let opponent = match request.work {
+        Some(work) if request.agent == beryl_search::CHAMPION => beryl_search::champion_at(work),
+        _ => request.agent.clone(),
+    };
     start_game(
         &request.deck,
-        &request.agent,
+        &opponent,
         request.seed.map_or_else(clock_seed, u64::from),
     )
 }

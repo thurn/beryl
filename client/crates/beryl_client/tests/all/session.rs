@@ -126,6 +126,7 @@ fn a_fair_start_judged_on_the_session_thread_leaves_the_frame_loop_drawing() {
         seed: None,
         fair: true,
         deck: beryl_protocol::default_deck(),
+        work: None,
     }));
     for tick in 0..30_u32 {
         frames.handle(Input::Device(DeviceInput::Lifecycle(Lifecycle::Resumed)));

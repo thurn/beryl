@@ -8,8 +8,7 @@ use glam::Vec2;
 use super::Client;
 use super::card_input::Hold;
 use super::carry::Carry;
-use app_screens::screens::settings::{Message as SettingsMessage, slider_setting};
-use app_screens::screens::{Screen, Sheet};
+use app_screens::screens::{Screen, Sheet, slider_level, slider_to};
 use game_hud::inspect::Viewed;
 use game_table::table::{Scroller, Table};
 use kit_frame::frame::{
@@ -737,14 +736,13 @@ impl Client {
     /// or at the end it would move past.
     fn nudge(&self, up: bool) -> Option<Action> {
         let action = self.layer.focused_slider(self.features.layer_open)?;
-        let setting = slider_setting(&action)?;
-        let level = setting.level()?;
+        let level = slider_level(&action)?;
         let to = if up {
             level.saturating_add(STEP).min(100)
         } else {
             level.saturating_sub(STEP)
         };
-        (to != level).then(|| Action::new(SettingsMessage::Change(setting.at_level(to))))
+        (to != level).then(|| slider_to(&action, to)).flatten()
     }
 }
 

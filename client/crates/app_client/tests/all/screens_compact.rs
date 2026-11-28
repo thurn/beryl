@@ -109,7 +109,7 @@ fn inside_of(rect: Rect, size: Size, safe: Insets) -> bool {
         && rect.y + rect.height <= size.height - safe.bottom
 }
 
-/// Three agents, none of them the one offered first, so that the first is chosen at the start.
+/// Three agents, as a host offers them: the start screen plays against the first.
 fn agents() -> Vec<AgentView> {
     ["random", "greedy", "expert"]
         .map(|name| AgentView {
@@ -133,6 +133,7 @@ fn start_in(size: Size, safe: Insets, agent: &str, seed: Option<u32>) -> Page {
         seed,
         fair: false,
         deck: beryl_protocol::default_deck(),
+        work: Some(30_000_000),
     };
     page_in(
         vec![
@@ -145,12 +146,12 @@ fn start_in(size: Size, safe: Insets, agent: &str, seed: Option<u32>) -> Page {
 }
 
 #[test]
-fn the_start_screen_fits_each_compact_and_starts_with_the_chosen_agent_and_seed() {
+fn the_start_screen_fits_each_compact_and_starts_with_the_first_agent_and_the_seed() {
     for size in PHONES {
-        let mut page = start(size, "greedy", Some(1234));
+        let mut page = start(size, "random", Some(1234));
         assert_eq!(layout_faults(&mut page), Vec::<String>::new(), "{size:?}");
         for locator in [
-            "toggle \"GREEDY\"",
+            "slider \"AI effort\"",
             "field \"seed\"",
             "toggle \"Fair deal\"",
             "button \"Start\"",
@@ -165,13 +166,6 @@ fn the_start_screen_fits_each_compact_and_starts_with_the_chosen_agent_and_seed(
         assert!(inside(fair, size), "fair {fair:?} in {size:?}");
         page.press("toggle \"WU Control\"");
         page.still();
-        page.press("toggle \"GREEDY\"");
-        page.still();
-        assert!(
-            page.find("toggle \"GREEDY\"")
-                .states()
-                .has(StateBits::SELECTED)
-        );
         page.type_text("field \"seed\"", "12x");
         page.still();
         assert!(
@@ -202,10 +196,6 @@ fn with_the_keyboard_up_the_seed_stays_in_view_and_the_rest_scrolls_into_reach()
         page.still();
         let seed = page.find("field \"seed\"").rect();
         assert!(inside_of(seed, size, KEYBOARD_SAFE), "{seed:?} in {size:?}");
-        assert!(
-            page.find("list \"Opponent\"").rect().height > 0.0,
-            "the opponents keep a row at {size:?}"
-        );
         // The column scrolls to its foot, which brings every action under the seed into view.
         page.give_input(Input::Device(DeviceInput::Pointer(Pointer {
             kind: PointerKind::Mouse,

@@ -110,16 +110,7 @@ pub fn entrant(
     Some(built)
 }
 
-/// A budget in engine steps, as the long-think arena named it: 300k, 3M, 1G.
-pub fn parse_work(s: &str) -> Option<u64> {
-    let (digits, scale) = match s.as_bytes().last()? {
-        b'k' => (&s[..s.len() - 1], 1_000),
-        b'M' => (&s[..s.len() - 1], 1_000_000),
-        b'G' => (&s[..s.len() - 1], 1_000_000_000),
-        _ => (s, 1),
-    };
-    digits.parse::<u64>().ok()?.checked_mul(scale)
-}
+pub use beryl_search::parse_work;
 
 /// Plays game `seed` to its end, under the smart stops, searching agents with `budget`. With
 /// `check`, the invariants are checked at every decision; they are always checked at the

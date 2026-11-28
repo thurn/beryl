@@ -13,8 +13,8 @@ use beryl_engine::{
     State, Step, apply, next, observe,
 };
 use beryl_search::{
-    Agent, AgentDecision, Budget, DEEP_SEARCHER, DEEP_SEER, DEEP_SEER_UNANCHORED, GameAgent,
-    RandomAgent, deep_family,
+    Agent, AgentDecision, Budget, DEEP_SEARCHER, DEEP_SEER_UNANCHORED, GameAgent, RandomAgent,
+    deep_family,
 };
 
 pub mod widening;
@@ -151,7 +151,6 @@ pub fn cheap(
     seed: u64,
 ) -> Box<dyn GameAgent + Send> {
     let family = match name {
-        "pimc18-omniscient-30m-anchor" => Some(DEEP_SEER),
         "pimc72-hidden-30m-anchor" => Some(DEEP_SEARCHER),
         "pimc18-omniscient-30m" => Some(DEEP_SEER_UNANCHORED),
         _ => None,

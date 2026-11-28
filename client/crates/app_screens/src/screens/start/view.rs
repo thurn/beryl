@@ -1,15 +1,15 @@
-//! The start screen, where a person picks an opponent and starts a game, as the web interface's
-//! `StartScreen` (`ui/src/screens/StartScreen.tsx`, `start-panel.css`) shows it: one panel in
-//! the middle of the window with the opponents, the seed, the fair-deal box and the buttons, the
-//! manual tables' entries (`table_entries`) and the export of bug reports, and the sound button in
-//! the corner.
+//! The start screen, where a person sets the AI's effort and starts a game, as the web
+//! interface's `StartScreen` (`ui/src/screens/StartScreen.tsx`, `start-panel.css`) laid it out:
+//! one panel in the middle of the window with the decks, the effort slider, the seed, the
+//! fair-deal box and the buttons, the manual tables' entries (`table_entries`) and the export of
+//! bug reports, and the sound button in the corner.
 
 use beryl_protocol::SessionId;
 use beryl_protocol::{AgentView, DECKS};
 
 use super::super::bug_report;
 use super::super::settings::Message as SettingsMessage;
-use super::{Inputs, Message, Screen, State, seed};
+use super::{Inputs, Message, Screen, State, effort_label, seed};
 use kit_base::tokens::{color, ratio, size, space, type_style};
 use kit_frame::frame::Role;
 use kit_text::text::TypeStyle;
@@ -18,18 +18,9 @@ use kit_ui::widgets::screen::{ScreenColumn, whole_window};
 use kit_ui::widgets::start_panel::{
     PANEL_GAP, PANEL_PADDING, PANEL_WIDTH, checkbox, panel_look, small,
 };
-use kit_ui::widgets::{self, FieldState, button, field, icon_button, list, primary, tooltip};
-
-/// The agents that play on the true state, hidden cards included, which the screen marks as
-/// cheating: the web's `CHEATING`.
-const CHEATING: [&str; 2] = ["mcts-omniscient-quick", "pimc18-omniscient-30m-anchor"];
-
-/// The height of everything in the window but the opponents' rows: the panel's other contents,
-/// its padding and gaps, and a margin above and below it.
-const AROUND_AGENTS: f32 = size::START_AROUND_AGENTS;
-
-/// The least height the opponents' rows are given, about two rows.
-const AGENTS_LEAST: f32 = size::START_AGENTS_LEAST;
+use kit_ui::widgets::{
+    self, FieldState, button, field, icon_button, list, primary, slider, tooltip,
+};
 
 /// The seed field's width (`.start-seed input`).
 const SEED_WIDTH: f32 = size::START_SEED_WIDTH;
@@ -37,7 +28,7 @@ const SEED_WIDTH: f32 = size::START_SEED_WIDTH;
 /// How far the sound button stands from the window's right and bottom edges (`.sound-corner`).
 const CORNER: f32 = size::START_CORNER;
 
-/// The opponent radio dot's side.
+/// A deck's radio dot's side.
 const RADIO: f32 = size::START_RADIO;
 
 /// `.start-title`: bold 38-point serif.
@@ -51,9 +42,6 @@ pub(super) const LABEL: TypeStyle = type_style::START_LABEL;
 
 /// `.start-agent-name`: semibold 18-point serif.
 const AGENT_NAME: TypeStyle = type_style::START_AGENT_NAME;
-
-/// `.start-cheating`: 14-point serif.
-const CHEATING_NOTE: TypeStyle = type_style::START_CHEATING_NOTE;
 
 /// `.start-agent-about`: 14-point sans.
 const ABOUT: TypeStyle = type_style::START_ABOUT;
@@ -78,23 +66,6 @@ pub(super) fn start(state: &State, input: &Inputs) -> Element {
             .color(color::TEXT_DIM)
             .margin([-size::START_SUBTITLE_PULL, 0.0, 0.0, 0.0]),
     ];
-    let rows = state.agents.iter().enumerate().map(|(at, agent)| {
-        let at = u16::try_from(at).unwrap_or(u16::MAX);
-        agent_row(agent, Message::Agent(at), state.agent == Some(at), None)
-    });
-    // The host offers a dozen agents, more than a short window has room for, so the rows
-    // scroll inside what the rest of the panel leaves.
-    let room = (input.window.size.height - AROUND_AGENTS).max(AGENTS_LEAST);
-    let agents = column()
-        .name("opponents")
-        .align_self(Align::Stretch)
-        .child(
-            text("OPPONENT")
-                .style(LABEL)
-                .color(color::TEXT_DIM)
-                .margin([0.0, 0.0, size::START_LEGEND_GAP, 0.0]),
-        )
-        .child(list("Opponent", rows).gap(space::S).max_height(room));
     let decks = decks_list(state, None);
     let seed_row = seed_row(&seed_state, seed_ok);
     let buttons = buttons(going_on, state, startable, input.session);
@@ -113,7 +84,7 @@ pub(super) fn start(state: &State, input: &Inputs) -> Element {
     let panel = panel_look(panel)
         .children(heading)
         .child(decks)
-        .child(agents)
+        .child(effort_row(state.effort, LABEL))
         .child(seed_row)
         .child(fair_box(state.fair))
         .child(buttons)
@@ -148,7 +119,8 @@ struct Chosen {
     seed_state: FieldState,
     /// Whether the seed field holds a seed or nothing.
     seed_ok: bool,
-    /// Whether the start button can be pressed: an opponent is chosen and the seed is good.
+    /// Whether the start button can be pressed: the host has offered an opponent and the seed is
+    /// good.
     startable: bool,
 }
 
@@ -168,12 +140,12 @@ impl Chosen {
     }
 }
 
-/// The start screen on a phone, as the web's `.phone-start-screen` lays it out: one column
-/// over the safe area with the sound button at its top, the opponents in a list that scrolls
-/// and takes the room the rest leaves, then the seed, the fair-deal box, the start buttons one
-/// above the other, the solo table and the export of bug reports at its foot. There is no
-/// title, as on the web's phone. When the window is too short for even one opponent's row (the
-/// system keyboard is up), the whole column scrolls instead, so every action stays in reach.
+/// The start screen on a phone, as the web's `.phone-start-screen` laid it out: one column
+/// over the safe area with the decks and the sound button at its top and the effort slider
+/// under them, then at its foot the seed, the fair-deal box, the start buttons one above the
+/// other, the solo table and the export of bug reports. There is no title, as on the web's
+/// phone. When the window is too short for all of it (the system keyboard is up), the whole
+/// column scrolls, so every action stays in reach.
 fn start_column(state: &State, input: &Inputs, layout: ScreenColumn) -> Element {
     let metrics = layout.metrics.start;
     let Chosen {
@@ -197,26 +169,13 @@ fn start_column(state: &State, input: &Inputs, layout: ScreenColumn) -> Element 
         .gap(metrics.agent_gap)
         .child(decks_list(state, Some(metrics)).grow(1.0))
         .child(sound);
-    let legend = text("OPPONENT")
-        .style(TypeStyle {
-            size: metrics.label,
-            ..LABEL
-        })
-        .color(color::TEXT_DIM)
+    let label = TypeStyle {
+        size: metrics.label,
+        ..LABEL
+    };
+    let effort = effort_row(state.effort, label)
+        .min_height(metrics.field)
         .shrink(0.0);
-    let rows = state.agents.iter().enumerate().map(|(at, agent)| {
-        let at = u16::try_from(at).unwrap_or(u16::MAX);
-        agent_row(
-            agent,
-            Message::Agent(at),
-            state.agent == Some(at),
-            Some(metrics),
-        )
-    });
-    let agents = list("Opponent", rows)
-        .gap(metrics.agent_gap)
-        .shrink(1.0)
-        .min_height(metrics.agents_least);
     let mut seed_row = seed_row(&seed_state, seed_ok);
     seed_row.style.height = Some(metrics.field);
     seed_row.style.shrink = 0.0;
@@ -232,8 +191,7 @@ fn start_column(state: &State, input: &Inputs, layout: ScreenColumn) -> Element 
         .name("start column")
         .gap(metrics.gap)
         .child(corner)
-        .child(legend)
-        .child(agents)
+        .child(effort)
         // The rest stands at the foot of the column, as the web's `margin-top: auto` puts it.
         .child(row().name("space").grow(1.0))
         .child(seed_row)
@@ -247,6 +205,19 @@ fn start_column(state: &State, input: &Inputs, layout: ScreenColumn) -> Element 
         ))
         .child(layout.action(export));
     layout.scrolling("start", input.window, content)
+}
+
+/// The AI's effort: its label, the slider at `level` and the engine steps a decision that
+/// level gives the opponent's search, as `30M`, with the label in `style`.
+fn effort_row(level: u8, style: TypeStyle) -> Element {
+    row()
+        .name("AI effort")
+        .align_self(Align::Stretch)
+        .align_items(Align::Center)
+        .gap(size::START_SEED_GAP)
+        .child(text("AI effort").style(style).color(color::TEXT_DIM))
+        .child(slider("AI effort", level, Message::Effort(level)))
+        .child(text(&effort_label(level)).style(style).color(color::TYPE))
 }
 
 /// The seed's label and text field, holding `state`, drawn in ember unless `ok`.
@@ -327,8 +298,8 @@ fn corner() -> Element {
 }
 
 /// The row that offers `agent`, which a press answers with `press`, as one of a group of radio
-/// buttons (`.start-agent`): a dot, the agent's title, a note if it cheats, and what it does
-/// under the title. The chosen row is tinted gold.
+/// buttons (`.start-agent`): a dot, the title, and the description under it if there is one.
+/// The chosen row is tinted gold.
 fn agent_row(
     agent: &AgentView,
     press: Message,
@@ -338,7 +309,7 @@ fn agent_row(
     // The phone's rows are taller, with a larger dot and smaller type (`.phone-start-screen
     // .start-agent`), so each row is a touch target of its own.
     let radio = compact.map_or(RADIO, |metrics| metrics.radio);
-    let (agent_name, about, cheating_note) = if let Some(metrics) = compact {
+    let (agent_name, about) = if let Some(metrics) = compact {
         (
             TypeStyle {
                 size: metrics.agent_name,
@@ -348,13 +319,9 @@ fn agent_row(
                 size: metrics.about,
                 ..ABOUT
             },
-            TypeStyle {
-                size: metrics.about,
-                ..CHEATING_NOTE
-            },
         )
     } else {
-        (AGENT_NAME, ABOUT, CHEATING_NOTE)
+        (AGENT_NAME, ABOUT)
     };
     let mut dot = row()
         .name("radio")
@@ -381,17 +348,11 @@ fn agent_row(
                 .background(color::GOLD),
         );
     }
-    let cheats = CHEATING.contains(&agent.name.as_str());
     let title = row()
         .name("title")
         .gap(space::M)
         .align_items(Align::End)
-        .child(text(&agent.title).style(agent_name).color(color::TYPE))
-        .children(cheats.then(|| {
-            text("cheating: sees your hand")
-                .style(cheating_note)
-                .color(color::EMBER)
-        }));
+        .child(text(&agent.title).style(agent_name).color(color::TYPE));
     let words = column()
         .name("words")
         .grow(1.0)
@@ -444,7 +405,7 @@ fn fair_box(on: bool) -> Element {
     checkbox("Fair deal", on).on_press(Message::FairDeal)
 }
 
-/// The legend and rows that offer `DECKS`, as radio rows like the opponents'. A phone passes its
+/// The legend and rows that offer `DECKS`, as radio rows. A phone passes its
 /// `compact` metrics.
 fn decks_list(state: &State, compact: Option<kit_base::data::profiles::StartScreen>) -> Element {
     let rows = DECKS.iter().enumerate().map(|(at, deck)| {

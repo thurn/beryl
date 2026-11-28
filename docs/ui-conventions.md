@@ -702,8 +702,8 @@ recordings do not show them.
   number of cards as they can. The phone centers a board at most 430px wide and
   scales a 375px board to fit narrower screens. Sounds follow the same steps.
   What the desktop shows around its table is composed for the phone from the
-  same pieces. On the phone's start screen, the opponent list scrolls between
-  the sound and credits controls at the top and the seed, the Fair deal checkbox
+  same pieces. On the phone's start screen, the decks and the AI effort slider
+  stand under the sound control at the top, and the seed, the Fair deal checkbox
   and the game buttons at the bottom. The game result shows over the board with
   its reason and any culprit card centered, and the full-width result buttons
   stay above the bottom safe area when the result is shown or put aside. The

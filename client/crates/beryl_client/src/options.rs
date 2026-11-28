@@ -92,8 +92,9 @@ pub struct Options {
     /// The scheduling class the session thread, and through it the AI's search threads, run
     /// in (`--search-class`): default, as in the web app, unless a run compares another.
     pub search_class: Class,
-    /// Agents the start screen offers after the session's own list, by name (`--offer`, given
-    /// once for each): a retired agent such as `expert`, which `just client stand-in` plays.
+    /// Agents the start screen offers before the session's own, by name (`--offer`, given once
+    /// for each). Its games are played against the first in place of the champion: a retired
+    /// agent such as `expert`, which `just client stand-in` plays.
     pub offer: Vec<String>,
     /// How the tier is chosen for this run, in place of the saved setting (`--tier`).
     pub graphics: Option<Graphics>,
@@ -292,7 +293,7 @@ pub fn usage(tools: bool) -> String {
             "  --search-class <class>                           the AI's threads' class (default)",
         );
         lines.push(
-            "  --offer <agent>                                  add an agent to the start screen",
+            "  --offer <agent>                                  start screen's opponent (champion)",
         );
         lines.push(
             "  --tier automatic|baseline|enhanced               how the tier is chosen (setting)",

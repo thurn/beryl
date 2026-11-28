@@ -21,8 +21,8 @@ from .command import Command
 
 # The longest a game may be left running: the app's `--for` is one bound on a hang.
 LIMIT_S = 3600
-# The opponent the start screen offers first, so it needs no `--offer` and no choosing.
-DEFAULT_OPPONENT = "mcts-hidden"
+# The opponent the start screen plays unless `--offer` names another: the ladder's champion.
+DEFAULT_OPPONENT = "pimc72-hidden-30m-anchor"
 
 
 def seconds(text: str) -> int:
@@ -87,18 +87,6 @@ def wait_log(log: Path, process: subprocess.Popen[bytes], prefix: str) -> list[s
     )
 
 
-def toggle_title(tree: stand_in.Tree, opponent: str) -> str:
-    """The start screen's toggle for `opponent`, found by its name (`expert` is "Expert").
-    Raises StandInError, listing the toggles, when none is named so."""
-    for title in tree.named("toggle"):
-        if title.casefold() == opponent.casefold():
-            return title
-    raise stand_in.StandInError(
-        f"no opponent toggle is named {opponent!r}; the start screen has: "
-        + ", ".join(tree.named("toggle"))
-    )
-
-
 def play_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--for",
@@ -133,10 +121,8 @@ def run_play(args: argparse.Namespace) -> int:
         lines = wait_log(log, process, app.LIVE_SOCKET)
         running = stand_in.Running(process, lines=lines)  # type: ignore[arg-type]
         stand_in.wait_tree(running, "start")
-        if args.opponent == DEFAULT_OPPONENT:
-            running.act('press button "Start"')
-        else:
-            stand_in.pick_opponent(running, toggle_title(running.tree(), args.opponent))
+        # The start screen's games are played against the agent `--offer` named, if any.
+        running.act('press button "Start"')
         stand_in.wait_tree(running, "game")
         print(follow_up(process.pid, running.socket))
         print(f"play: the app's output goes to {log}")
@@ -154,7 +140,7 @@ COMMANDS: tuple[Command, ...] = (
         (
             (
                 "just client play --for 120s",
-                "a game against mcts-hidden; prints the process id and the live commands",
+                "a game against the champion; prints the process id and the live commands",
             ),
             (
                 "just client play --for 10m --opponent expert --no-build",

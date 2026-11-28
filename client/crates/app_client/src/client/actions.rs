@@ -17,14 +17,12 @@ impl Client {
     }
 
     pub(super) fn set_slider(&mut self, press: &Action, rect: kit_ui::input::Rect, x: f32) {
-        use app_screens::screens::settings::{Message, slider_setting};
-        if let Some(setting) = slider_setting(press)
-            && let Some(level) = setting.level()
+        use app_screens::screens::{slider_level, slider_to};
+        let to = kit_ui::widgets::level_at(x, rect.x, rect.width);
+        if slider_level(press).is_some_and(|level| level != to)
+            && let Some(action) = slider_to(press, to)
         {
-            let to = kit_ui::widgets::level_at(x, rect.x, rect.width);
-            if to != level {
-                self.dispatch(&Action::new(Message::Change(setting.at_level(to))));
-            }
+            self.dispatch(&action);
         }
     }
 

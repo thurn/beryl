@@ -452,7 +452,7 @@ fn a_picture_at_scale_2_draws_what_its_clips_hold() {
     assert_eq!(head.size(), (3200, 1800));
     head.seek(&"end".parse::<Moment>().expect("a moment"))
         .expect("a moment of the recording");
-    let list = head.page().find(r#"list "Opponent""#).rect();
+    let list = head.page().find(r#"list "Deck""#).rect();
     let pixels = head.pixels();
     let width = head.size().0;
     let (left, top) = ((list.x * scale) as u32, (list.y * scale) as u32);
@@ -471,10 +471,10 @@ fn a_picture_at_scale_2_draws_what_its_clips_hold() {
     }
     let total: u32 = counts.values().sum();
     let background = counts.values().max().copied().unwrap_or(0);
-    // Three rows of text, radio buttons and a selected row's fill cover far more than this.
+    // Two rows of text, radio buttons and a selected row's fill cover far more than this.
     assert!(
         total - background > total / 10,
-        "the opponent list at {list:?} drew {} of {total} pixels off its background",
+        "the deck list at {list:?} drew {} of {total} pixels off its background",
         total - background
     );
 }

@@ -1,4 +1,5 @@
-//! The start screen's opponent selection, new-game controls and navigation.
+//! The start screen's new-game controls, the AI's effort and navigation. The opponent is
+//! always the agent the host offers first: the ladder's champion.
 
 mod keys;
 mod view;
@@ -10,7 +11,7 @@ use beryl_protocol::{AgentView, DECKS, SessionId, StartRequest};
 use game_manual::screens::table_entries::{INVITE, NAME, TableEntries};
 use game_table::table::Window;
 use kit_scene::{Context, Feature};
-use kit_ui::element::Element;
+use kit_ui::element::{Action, Element};
 use kit_ui::widgets::screen::ScreenColumn;
 use kit_ui::widgets::{FieldState, Fields};
 
@@ -18,16 +19,26 @@ use super::Screen;
 
 pub const SEED: &str = "seed";
 
-/// The default opponent, Deep Searcher, when the host offers it. The start screen keeps no
-/// remembered choice, so this applies every time the host sends its agents.
-const DEFAULT_AGENT: &str = "pimc72-hidden-30m-anchor";
+/// The engine steps a decision the opponent searches for each level of the effort slider:
+/// 400k, so that the slider's 100 is 40M and its default is 30M.
+const WORK_PER_LEVEL: u64 = 400_000;
+
+/// The effort slider's level when the screen opens: 75, which is 30M engine steps a decision,
+/// the work the champion searched with before the slider existed.
+pub const DEFAULT_EFFORT: u8 = 75;
+
+/// The effort slider's lowest level, 5, which is 2M engine steps a decision: no search at all
+/// would not be the champion.
+const LEAST_EFFORT: u8 = kit_ui::widgets::STEP;
 
 pub struct StartScreen;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct State {
-    agents: Vec<AgentView>,
-    agent: Option<u16>,
+    /// The agent the host offers first, which every game the screen starts is played against.
+    agent: Option<String>,
+    /// The effort slider's level, from `LEAST_EFFORT` to 100.
+    effort: u8,
     /// The index into `DECKS` of the chosen deck.
     deck: usize,
     fair: bool,
@@ -60,7 +71,8 @@ pub enum Message {
     Leave,
     Open(Screen),
     Start(Option<SessionId>),
-    Agent(u16),
+    /// Set the effort slider to this level. The slider's own press carries its current level.
+    Effort(u8),
     /// Choose the deck at this index of `DECKS`.
     Deck(usize),
     FairDeal,
@@ -125,8 +137,7 @@ impl Feature for StartScreen {
     ) -> bool {
         match message {
             Message::Agents(agents, before_view) => {
-                state.agent = first_agent(agents);
-                state.agents.clone_from(agents);
+                state.agent = agents.first().map(|agent| agent.name.clone());
                 if *before_view {
                     state.waiting = Waiting::Resume;
                     context.request(Request::AwaitGame);
@@ -154,8 +165,7 @@ impl Feature for StartScreen {
             }
             Message::Start(_) if state.dealing() => return false,
             Message::Start(going_on) => {
-                let Some(agent) = state.agent.and_then(|at| state.agents.get(usize::from(at)))
-                else {
+                let Some(agent) = state.agent.clone() else {
                     return false;
                 };
                 let Ok(seed) = seed(&state.seed) else {
@@ -170,10 +180,11 @@ impl Feature for StartScreen {
                 }
                 let fair = state.fair;
                 context.command(Command::Start(StartRequest {
-                    agent: agent.name.clone(),
+                    agent,
                     seed,
                     fair,
                     deck: state.deck().key.to_owned(),
+                    work: Some(work(state.effort)),
                 }));
                 state.confirming = false;
                 if fair {
@@ -184,7 +195,7 @@ impl Feature for StartScreen {
                     context.request(Request::EnterGame);
                 }
             }
-            Message::Agent(agent) => state.agent = Some(*agent),
+            Message::Effort(level) => state.effort = (*level).clamp(LEAST_EFFORT, 100),
             Message::Deck(at) => {
                 if *at < DECKS.len() {
                     state.deck = *at;
@@ -216,6 +227,20 @@ impl Feature for StartScreen {
     }
 }
 
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            agent: None,
+            effort: DEFAULT_EFFORT,
+            deck: 0,
+            fair: false,
+            confirming: false,
+            seed: String::new(),
+            waiting: Waiting::Nothing,
+        }
+    }
+}
+
 impl State {
     /// The chosen deck.
     fn deck(&self) -> beryl_protocol::DeckChoice {
@@ -228,16 +253,27 @@ impl State {
     }
 }
 
-fn first_agent(agents: &[AgentView]) -> Option<u16> {
-    if agents.is_empty() {
-        return None;
-    }
-    let at = agents
-        .iter()
-        .position(|agent| agent.name == DEFAULT_AGENT)
-        .unwrap_or(0);
-    u16::try_from(at).ok()
+/// The engine steps a decision the opponent searches at effort `level`.
+#[must_use]
+pub fn work(level: u8) -> u64 {
+    u64::from(level.clamp(LEAST_EFFORT, 100)) * WORK_PER_LEVEL
 }
+
+/// The effort slider's label for `level`: its work in millions of engine steps, as `30M`.
+#[must_use]
+pub fn effort_label(level: u8) -> String {
+    format!("{}M", work(level) / 1_000_000)
+}
+
+/// The level the effort slider shows, if `action` is its press.
+#[must_use]
+pub fn effort_level(action: &Action) -> Option<u8> {
+    match action.downcast_ref::<Message>()? {
+        Message::Effort(level) => Some(*level),
+        _ => None,
+    }
+}
+
 /// What the seed field holds when it is neither blank nor a seed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct NotASeed;
@@ -273,28 +309,11 @@ pub fn in_progress(view: Option<&beryl_protocol::PlayerView>) -> bool {
 mod tests {
     use super::*;
 
-    fn agent(name: &str) -> AgentView {
-        AgentView {
-            name: name.to_owned(),
-            title: name.to_owned(),
-            description: String::new(),
-        }
-    }
-
     #[test]
-    fn deep_searcher_is_the_default_opponent() {
-        let agents = [
-            agent("expert"),
-            agent("pimc72-hidden-30m-anchor"),
-            agent("mcts-hidden"),
-        ];
-        assert_eq!(first_agent(&agents), Some(1));
-    }
-
-    #[test]
-    fn falls_back_to_the_first_agent_without_deep_searcher() {
-        let agents = [agent("expert"), agent("mcts-hidden")];
-        assert_eq!(first_agent(&agents), Some(0));
-        assert_eq!(first_agent(&[]), None);
+    fn the_default_effort_is_30m_and_the_slider_runs_from_2m_to_40m() {
+        assert_eq!(work(DEFAULT_EFFORT), 30_000_000);
+        assert_eq!(effort_label(DEFAULT_EFFORT), "30M");
+        assert_eq!(effort_label(0), "2M");
+        assert_eq!(effort_label(100), "40M");
     }
 }
