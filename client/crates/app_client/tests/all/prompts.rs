@@ -1045,3 +1045,22 @@ fn tray_pointer(
     event.kind = kind;
     client.handle(Input::Device(DeviceInput::Pointer(event)));
 }
+
+#[test]
+fn space_and_enter_press_the_primary_button_of_any_prompt() {
+    // A prompt that is not a priority decision (the word chooser of Magical Hack) still has an
+    // orange button, and Space and Return press it.
+    for code in [KeyCode::Space, KeyCode::Enter] {
+        let mut client = client();
+        let input = prompt(
+            Purpose::Choose,
+            "Choose Word to Replace",
+            vec![button(ButtonId::Decline, "Submit 1", true, true)],
+            ShapeBody::Candidates,
+        );
+        client.handle(deciding(&ViewBuilder::new(), input, Vec::new()));
+        find(client.frame(0), Role::Button, "Submit 1");
+        key(&mut client, code, KeyPhase::Down);
+        assert!(client.next_command().is_some(), "{code:?} presses Submit");
+    }
+}

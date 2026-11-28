@@ -6,7 +6,6 @@
 
 use app_screens::screens::bug_report::{self, BugStage};
 use app_screens::screens::{Screen, Sheet, start};
-use beryl_protocol::prompt::Purpose;
 use game_hud::prompts::bar;
 use game_manual::features::{lobby, table};
 use game_manual::manual::commands::COMMANDS;
@@ -59,12 +58,12 @@ pub(super) fn bug_report(client: &mut Client, pressed: Pressed) -> Option<KeyRes
     }
 }
 
-/// The game's undo and primary priority action, using the web board's keys (`StageBoard.tsx`
+/// The game's undo and the primary prompt button, using the web board's keys (`StageBoard.tsx`
 /// and `PromptBar.tsx`).
 pub(super) const PROMPT_BAR: [Shortcut; 3] = [
     Shortcut::binding("Cmd+Z", "Undo").on_every_screen(),
-    Shortcut::binding("Space", "Pass priority"),
-    Shortcut::binding("Return", "Pass priority"),
+    Shortcut::binding("Space", "Primary button"),
+    Shortcut::binding("Return", "Primary button"),
 ];
 
 pub(super) fn prompt_bar(client: &mut Client, pressed: Pressed) -> Option<KeyResponse<Action>> {
@@ -78,9 +77,8 @@ pub(super) fn prompt_bar(client: &mut Client, pressed: Pressed) -> Option<KeyRes
     if client.features.sheet.is_some() || !client.show.settled() || prompts.waiting_for_reply() {
         return None;
     }
-    let prompt = prompts
-        .current()
-        .filter(|prompt| prompt.is(Purpose::Priority))?;
+    // The orange button of every prompt answers Space and Return, not only priority's.
+    let prompt = prompts.current()?;
     // Return already goes to the focused control. Space also presses the focused control
     // while this shortcut is available, so it cannot pass priority behind that control.
     if client.layer.has_focus(client.features.layer_open) {
