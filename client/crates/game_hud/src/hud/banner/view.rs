@@ -43,6 +43,7 @@ pub(super) fn thinking_ring() -> Element {
         .width(spinner::SIZE)
         .height(spinner::SIZE)
         .background([0; 4])
+        .border(([0; 4], 0.0))
         .passes(true);
     element.shows = Some(Shown::Layers(spinner::artwork()));
     element
