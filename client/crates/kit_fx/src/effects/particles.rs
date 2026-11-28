@@ -150,7 +150,8 @@ fn lying(
     let transform = Affine3A::from_scale_rotation_translation(
         Vec3::new(size, size, 1.0),
         pose.rotation,
-        pose.position + pose.rotation * at.extend(lift),
+        // Lifted by the card's own size, as `light::above` lifts light.
+        pose.position + pose.rotation * at.extend(lift * pose.scale),
     );
     Draw::particle(transform, tint, sprites::DISC, age, seed)
 }

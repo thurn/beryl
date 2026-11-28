@@ -63,11 +63,14 @@ pub(super) fn lying(
     Draw::glow(transform, tint, sprite, progress)
 }
 
-/// The point `light.lift` millimetres over the middle of what is at `pose`, along its face's
-/// normal, as a mark lies, so that a card held up toward the camera has its light in front of
-/// it too.
+/// The point `light.lift` millimetres of the card's own size over the middle of what is at
+/// `pose`, along its face's normal, as a mark lies, so that a card held up toward the camera
+/// has its light in front of it too. The lift is scaled by `pose.scale`, as the depth between
+/// the cards of a shrunk battlefield row is (`card.layer` times the row's scale): a fixed lift
+/// would put the light on the bottom card of a pile of small lands in front of the cards
+/// stacked over it, so the light would show through them.
 pub(super) fn above(pose: &Pose, lift: f32) -> Vec3 {
-    pose.position + pose.rotation * Vec3::Z * lift
+    pose.position + pose.rotation * Vec3::Z * (lift * pose.scale)
 }
 
 /// `tint` with its opacity scaled by `by`, from 0 to 1.
