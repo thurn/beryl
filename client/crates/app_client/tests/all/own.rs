@@ -595,7 +595,7 @@ fn the_land_count_badge_is_large_and_high_contrast_in_the_report_capture() {
                 height: 759.0,
             },
             3.0,
-            2,
+            3,
         ),
     ] {
         let mut page = Page::in_window(
