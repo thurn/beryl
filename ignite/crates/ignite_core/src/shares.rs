@@ -2,9 +2,13 @@
 //! tickets.
 //!
 //! Epic allocations. A person gives an epic an allocation (`--allocation`), a weight rather than
-//! a reservation: the next free worker goes to the group with the fewest tickets in progress per
-//! unit of allocation, counted across every machine. A group with fewer ready tickets than its
-//! allocation takes what it can use and the others divide the rest. `--max-workers` is a hard
+//! a reservation: the next free worker goes to the group whose tickets in progress, counting the
+//! one it would be given, are fewest per unit of allocation, counted across every machine. This is
+//! the D'Hondt method of dividing seats: a group with an allocation of 1000 holds five workers for
+//! every one held by a group with 200. Counting the worker about to be given matters when there are
+//! few slots: by tickets in progress alone, a group with none running would score zero and go ahead
+//! of a group with a five times larger allocation that has one running. A group with fewer ready
+//! tickets than its allocation takes what it can use and the others divide the rest. `--max-workers` is a hard
 //! cap, the one setting that can leave a worker idle. A group with no allocation counts as 1, and
 //! tickets under no epic share the general pool unless their automation source has its own weight.
 //!
@@ -137,8 +141,8 @@ pub fn group_of(ancestors: &[(TicketId, Option<u32>)]) -> Group {
 }
 
 /// Whether group `a`, holding `a_held`, comes before group `b`, holding `b_held`, for the next
-/// worker: fewer in progress per share first, then the larger share, then the earlier in the
-/// input (`a_index < b_index`).
+/// worker: fewer in progress per share once given this worker first (`(held + 1) / share`, the
+/// D'Hondt quotient), then the larger share, then the earlier in the input (`a_index < b_index`).
 fn before(
     a: &EpicDemand,
     a_held: u32,
@@ -147,8 +151,8 @@ fn before(
     b_held: u32,
     b_index: usize,
 ) -> bool {
-    let left = u64::from(a_held) * b.share();
-    let right = u64::from(b_held) * a.share();
+    let left = (u64::from(a_held) + 1) * b.share();
+    let right = (u64::from(b_held) + 1) * a.share();
     left.cmp(&right)
         .then(b.share().cmp(&a.share()))
         .then(a_index.cmp(&b_index))
@@ -161,8 +165,8 @@ fn wants(epic: &EpicDemand, given: u32) -> bool {
 }
 
 /// How many of `idle` workers each group should get, in the order given. Each worker goes in
-/// turn to the group with the fewest in progress per share that still has a ready ticket and is
-/// under its cap; workers no group can use are left out of the total.
+/// turn to the group that would have the fewest in progress per share once given it, among those
+/// that still have a ready ticket and are under their cap; workers no group can use are left out of the total.
 pub fn divide(idle: u32, epics: &[EpicDemand]) -> Vec<(Group, u32)> {
     let mut given = vec![0_u32; epics.len()];
     for _ in 0..idle {
@@ -356,12 +360,33 @@ mod tests {
         let mut busy = epic("Tq44s", Some(5), 100);
         busy.held = 5;
         let epics = [busy, epic("Tw8gv", Some(2), 100)];
-        // 12 in all, so 5 x 12 / 7 is about 8.6 against 3.4: the busy epic gets 3 more and
-        // the other 4.
-        assert_eq!(counts(&divide(7, &epics)), vec![3, 4]);
+        // 12 in all, so 5 x 12 / 7 is about 8.6 against 3.4. The D'Hondt method rounds in
+        // favour of the larger share: the busy epic ends with 9 and the other with 3.
+        assert_eq!(counts(&divide(7, &epics)), vec![4, 3]);
         assert_eq!(
             epic_order(&epics),
             vec![Group::Epic(id("Tw8gv")), Group::Epic(id("Tq44s"))]
+        );
+    }
+
+    #[test]
+    fn an_allocation_of_1000_takes_five_workers_for_each_one_of_an_allocation_of_200() {
+        let epics = [
+            epic("Tq44s", Some(1000), 100),
+            epic("Tw8gv", Some(200), 100),
+        ];
+        assert_eq!(counts(&divide(12, &epics)), vec![10, 2]);
+        assert_eq!(counts(&divide(3, &epics)), vec![3, 0]);
+    }
+
+    #[test]
+    fn a_group_with_nothing_running_does_not_outrank_a_five_times_larger_one_running_one() {
+        let mut large = epic("Tq44s", Some(1000), 100);
+        large.held = 1;
+        let epics = [large, epic("Tw8gv", Some(200), 100)];
+        assert_eq!(
+            epic_order(&epics),
+            vec![Group::Epic(id("Tq44s")), Group::Epic(id("Tw8gv"))]
         );
     }
 

@@ -107,7 +107,9 @@ fn six_workers_balance_at_four_and_two_and_refill_the_pool_that_finished() {
         json!({"op":"create","parent":"$0","fields":{"type":"milestone","title":"Inherits"}}),
     ];
     // The newest ticket in the narrow pool outranks its siblings but cannot jump ahead of the
-    // wide pool. The milestone has no local allocation and shares the wide pool's workers.
+    // wide pool. Each worker goes to the pool with the fewest in progress per unit of allocation
+    // once given it, the larger pool winning a tie, so the order is wide, wide, narrow, wide,
+    // wide, narrow. The milestone has no local allocation and shares the wide pool's workers.
     for _ in 0..6 {
         ops.push(json!({"op":"create","parent":"$2","fields":{"title":"Wide ticket"}}));
         ops.push(json!({"op":"create","parent":"$1","fields":{"title":"Narrow ticket"}}));
@@ -137,7 +139,8 @@ fn six_workers_balance_at_four_and_two_and_refill_the_pool_that_finished() {
         handoffs.push((session, id));
     }
     assert!(handoffs[0].1.starts_with(&wide));
-    assert_eq!(handoffs[1].1, ids.last().unwrap().as_str());
+    assert!(handoffs[1].1.starts_with(&wide));
+    assert_eq!(handoffs[2].1, ids.last().unwrap().as_str());
     assert_eq!(
         handoffs
             .iter()
@@ -152,7 +155,9 @@ fn six_workers_balance_at_four_and_two_and_refill_the_pool_that_finished() {
             .count(),
         2
     );
-    let (session, id) = &handoffs[1];
+    // The sixth hand-off, a narrow ticket, was claimed (every even one is).
+    let (session, id) = &handoffs[5];
+    assert!(id.starts_with(&narrow));
     let (status, body) = post(&mut conn, "/landed", &landed(id, session, "Done"), at(7.0));
     assert_eq!(status, 200, "{body}");
     let (_, replacement) = ask(&mut conn, 8);

@@ -4162,12 +4162,15 @@ separately weighted automated sources. For two epics, run
 `ignite ticket update <id> --allocation 200` on the first and use
 `--allocation 100` on the second.
 
-- The hub offers the next free worker to the eligible pool with the fewest
-  claims and outstanding reservations per unit of allocation, counted across the
-  fleet. If these are the only two eligible pools and both have enough ready
-  work, the first six worker slots split four to two. When a worker in the
-  100-weight epic lands a ticket, the next free slot goes to that epic to
-  restore the split.
+- The hub offers the next free worker to the eligible pool whose claims and
+  outstanding reservations, counting the worker it would be given, are fewest
+  per unit of allocation, counted across the fleet (the D'Hondt method). A pool
+  with an allocation of 1000 therefore holds five workers for each one held by a
+  pool with 200, and a pool with nothing running does not go ahead of a much
+  larger pool that has one running. If these are the only two eligible pools and
+  both have enough ready work, the first six worker slots split four to two.
+  When a worker in the 100-weight epic lands a ticket, the next free slot goes
+  to that epic to restore the split.
 - A positive allocation is a relative weight. If one pool runs out of ready
   work, other eligible pools can use the free slots. Use `--max-workers` for a
   hard cap on an epic's concurrent workers. The cap can leave slots idle when
