@@ -2941,6 +2941,16 @@ How a daemon verifies a tip:
   instead. An outstanding native check also leaves a coverage gap so its
   platform can finish it when another verifier moves `master`.
 
+- When a required check fails before `master` moves, the round starts no other
+  family and stops the batches of the families under way, since the tip can no
+  longer promote. The family that failed still runs its remaining batches, so
+  the round's verdict and culprit search cover every check of that family the
+  tip breaks. A family's checks read mostly the same inputs, and one landing
+  often breaks many of them. On 2026-11-28 a landing of phone layout changes
+  broke about 15 `client-interface` checks. Rounds that stopped at the first
+  failing batch found them one or two at a time, each after the last one's fix
+  had landed, and `master` did not move for more than six hours.
+
 - When a required check fails, the round still reports the failure. It looks
   back through up to eight landing boundaries before the earliest landing known
   to fail, or before the failed tip's landing if the range is unknown. It

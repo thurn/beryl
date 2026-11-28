@@ -4,6 +4,7 @@
 //! first try instead of waiting for a streak.
 
 use ignite_core::protocol::hub::{TipCheckFailures, TipVerified};
+use ignite_core::tipround::UNMEASURED_BATCH;
 use ignite_store::hub;
 
 use super::rounds::{in_family, running_hub, select};
@@ -138,6 +139,55 @@ fn a_runnable_failure_stops_other_families_and_reports_on_the_first_round() {
     assert_eq!(
         reported.iter().map(|r| r.check.clone()).collect::<Vec<_>>(),
         [failing.check]
+    );
+    assert_eq!(world.master(), master);
+}
+
+/// When a required check fails in one batch of a family, the round still runs the family's
+/// other batches, so every check of the family that the tip breaks is in its failed verdict,
+/// while other families do not start. On 2026-11-28 one landing broke some 15 phone checks of
+/// `client-interface`, and rounds that stopped at the first failing batch found them one or
+/// two at a time over more than four hours.
+#[test]
+fn a_failure_still_runs_the_rest_of_its_family_but_no_other() {
+    let world = World::new();
+    let (server, _database, ctx) = running_hub(&world, "failing-family-finishes");
+    let master = world.master();
+    let tip = commit("bbbb000");
+    world.land(&tip);
+    select(&ctx, &tip);
+    // With no measured costs the first batch holds 50 checks, so the last check is in the
+    // family's second batch.
+    let family: Vec<TipCheck> = (0..=UNMEASURED_BATCH)
+        .map(|index| {
+            let mut check = in_family(&format!("c{index:02}"), "first");
+            check.key.hash = InputHash::new(format!("{:064x}", index + 1)).unwrap();
+            check
+        })
+        .collect();
+    let (failing, later) = (family[0].clone(), family[UNMEASURED_BATCH].clone());
+    let unrelated = in_family("b", "second");
+    let mut checks = family;
+    checks.push(unrelated.clone());
+    world.work.set_checks(&tip, checks);
+    world.work.set_outcome(&tip, &failing.check, Outcome::Fail);
+    world.work.set_outcome(&tip, &later.check, Outcome::Fail);
+
+    let outcome = world.verifier().verify(&ctx, &tip).unwrap();
+    let ran = world.work.runs();
+    server.stop();
+
+    assert_eq!(
+        outcome,
+        TipOutcome::Failed {
+            checks: vec![failing.check.clone(), later.check.clone()],
+            promoted: None,
+        }
+    );
+    assert!(
+        !ran.iter()
+            .any(|(_, at, checks, _)| at == &tip && checks.contains(&unrelated.check)),
+        "another family should not start after a required failure: {ran:?}"
     );
     assert_eq!(world.master(), master);
 }

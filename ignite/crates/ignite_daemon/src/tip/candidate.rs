@@ -105,8 +105,8 @@ pub(super) fn checking_superseded(
 /// them was reverted at 22:14, 1 h 40 min after it landed. Giving a checking round a bounded
 /// grace window lets fresh rounds finish short checks and report failures at `tip`, while
 /// preventing a slow round on a dead or reverted commit from running for hours and starving
-/// the newer candidate. A round with a failure of its own still stops starting checks and goes
-/// on to its verdict and culprit search (see `verify_round`).
+/// the newer candidate. A round with a failure of its own stops starting other families, finishes
+/// the family that failed, and goes on to its verdict and culprit search (see `families`).
 pub(super) fn ends_checks(
     ctx: &Context,
     tip: &Commit,

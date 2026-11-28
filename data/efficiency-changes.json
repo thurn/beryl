@@ -1165,5 +1165,10 @@
     "label": "A tip round reverts at once (`[revert] replayed`) a landing by verdict whose gate passed on an older base and that was pushed replayed over landings changing what the failing check reads, instead of filing a regression that unproven checks never let the stall rule revert. The landing records that base as `gated_base`. On 2026-11-28 the phone fixes of `TGYYS`, gated on `d9a0a6e` and replayed over `7e97768`, failed seven phone checks and held `master` from 02:59 to past 07:15 while four regression tickets fixed them one at a time; in the 7 days before, 15 regressions had the same shape",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
+  },
+  {
+    "label": "A tip round whose required check fails still runs the rest of the failing family's batches (other families still stop), so its verdict and culprit search cover every check of that family the tip breaks. On 2026-11-28 the phone layout landing `d1f0101` broke about 15 `client-interface` checks; rounds that stopped at the first failing batch found them one or two at a time from 03:40 to 07:50, each after the last one's fix had landed, and `master` did not move for more than six hours",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]

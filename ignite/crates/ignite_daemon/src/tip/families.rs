@@ -32,10 +32,21 @@
 //! finished. So the family's thread also claims its first batch it can get before leasing the
 //! tree, and the renewer holds that claim through the build. A family whose every batch another
 //! machine already holds is not built and is counted in [`Elsewhere`] too.
+//!
+//! A required failure before `master` moves stops the round from starting other families and
+//! stops their batches, but the family that failed runs its remaining batches. The checks of
+//! one family read mostly the same inputs, so a landing that breaks one of them often breaks
+//! many. On 2026-11-28 a landing of phone layout changes broke some 15 `client-interface`
+//! checks. The round that found the first of them stopped its family at that batch, and each
+//! later round confirmed the known failures and ran nothing else. The other broken checks were
+//! found one or two at a time, each after the fix for the last had landed, from 03:40 to 07:50,
+//! and `master` did not move for more than six hours. Finishing the failing family costs a few
+//! minutes of a round that cannot promote, and its verdict and culprit search then cover every
+//! check that landing broke in the family at once.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -96,12 +107,22 @@ struct Round<'a> {
     /// The commit that ended the round, or the error reading `staging` after promotion.
     ended: Mutex<Option<Result<Commit>>>,
     /// Set once a required check fails before `master` moves, so no worker starts another
-    /// family or batch on a tip that can no longer promote.
+    /// family on a tip that can no longer promote.
     failed_required: AtomicBool,
+    /// The families with a required failure, which still run their remaining batches, and the
+    /// stop flag of each family under way, raised for the others at the first failure.
+    failing: Mutex<Failing>,
     runs: Mutex<Vec<TipRun>>,
     elsewhere: Mutex<Elsewhere>,
     /// The batch each family is running under a claim, which the renewer claims again.
     held: Mutex<BTreeMap<String, u32>>,
+}
+
+/// Which families of a round have failed a required check, and each running family's stop flag.
+#[derive(Default)]
+struct Failing {
+    families: HashSet<String>,
+    stops: HashMap<String, Arc<AtomicBool>>,
 }
 
 impl Round<'_> {
@@ -111,14 +132,56 @@ impl Round<'_> {
         (!self.should_stop()).then_some(next)
     }
 
+    /// Records a required failure in `family`: no other family starts, and the batches of the
+    /// families under way stop, except those of a family that failed itself.
+    fn fail_family(&self, family: &str) {
+        let mut failing = lock(&self.failing);
+        failing.families.insert(family.to_owned());
+        self.failed_required.store(true, Ordering::SeqCst);
+        let Failing { families, stops } = &*failing;
+        for (other, stop) in stops {
+            if !families.contains(other) {
+                stop.store(true, Ordering::SeqCst);
+            }
+        }
+    }
+
+    /// The flag that stops `family`'s batches, raised already when another family has failed.
+    fn family_stop(&self, family: &str) -> Arc<AtomicBool> {
+        let mut failing = lock(&self.failing);
+        let raised =
+            self.failed_required.load(Ordering::SeqCst) && !failing.families.contains(family);
+        Arc::clone(
+            failing
+                .stops
+                .entry(family.to_owned())
+                .or_insert_with(|| Arc::new(AtomicBool::new(raised))),
+        )
+    }
+
+    /// Whether `family` should start no further batch: the round should stop, unless its only
+    /// reason is a failure in this family, whose remaining batches still run.
+    fn should_stop_batches(&self, family: &str) -> bool {
+        if self.failed_required.load(Ordering::SeqCst)
+            && !lock(&self.failing).families.contains(family)
+        {
+            return true;
+        }
+        self.should_stop_except_failure()
+    }
+
     /// Before promotion, landings can keep advancing `staging` while both verifiers work
     /// on the same candidate, and a newer candidate ends the round once `master` reaches its
     /// tip, a revert replaces it, or the grace window expires (see `candidate::ends_checks`).
     /// After promotion, a newer `staging` tip can use these trees.
     fn should_stop(&self) -> bool {
+        self.failed_required.load(Ordering::SeqCst) || self.should_stop_except_failure()
+    }
+
+    /// [`Round::should_stop`] without a required failure as a reason.
+    fn should_stop_except_failure(&self) -> bool {
         if crate::steps::stop_requested()
             || self.verifier.machine_is_off()
-            || self.failed_required.load(Ordering::SeqCst)
             || lock(&self.ended).is_some()
         {
             return true;
@@ -150,7 +213,7 @@ impl Round<'_> {
         &self,
         family: &str,
         batches: &[(u32, Vec<CheckName>)],
-        failed: &dyn Fn(&[ResultKey]),
+        failed: &dyn Fn(&str, &[ResultKey]),
     ) -> Vec<TipRun> {
         let Some(first) = self.claim_first(family, batches) else {
             return Vec::new();
@@ -162,7 +225,7 @@ impl Round<'_> {
             // The batch claimed before the build runs under that claim, which the renewer kept,
             // unless the round should stop now that the build is done.
             if lock(&granted).take_if(|held| *held == batch).is_some() {
-                if self.should_stop() {
+                if self.should_stop_batches(family) {
                     lock(&self.held).remove(family);
                     return false;
                 }
@@ -170,10 +233,12 @@ impl Round<'_> {
             }
             self.claim(family, batch)
         };
+        let failed = |keys: &[ResultKey]| failed(family, keys);
+        let stop = self.family_stop(family);
         let callbacks = BatchCallbacks {
             claim: &claim,
-            failed,
-            stop: Some(&self.failed_required),
+            failed: &failed,
+            stop: Some(&stop),
         };
         let pre_move = !self.after_master;
         let work = &self.verifier.work;
@@ -219,7 +284,7 @@ impl Round<'_> {
     fn claim(&self, family: &str, batch: u32) -> bool {
         // A family asks for its next batch once the last one has finished.
         lock(&self.held).remove(family);
-        if self.should_stop() {
+        if self.should_stop_batches(family) {
             return false;
         }
         let granted = self.ask(family, batch);
@@ -369,6 +434,7 @@ impl TipVerifier {
             queue: Mutex::new(queue.into()),
             ended: Mutex::new(None),
             failed_required: AtomicBool::new(false),
+            failing: Mutex::new(Failing::default()),
             runs: Mutex::new(Vec::new()),
             elsewhere: Mutex::new(BTreeMap::new()),
             held: Mutex::new(BTreeMap::new()),
@@ -386,7 +452,7 @@ impl TipVerifier {
             })
             .map(|check| &check.key)
             .collect();
-        let failed = |keys: &[ResultKey]| {
+        let failed = |family: &str, keys: &[ResultKey]| {
             let checks: Vec<_> = keys
                 .iter()
                 .filter(|key| required.contains(*key))
@@ -395,7 +461,7 @@ impl TipVerifier {
             if !checks.is_empty() {
                 if phase == RunPhase::BeforeMaster {
                     self.publish_failed(ctx, tip, checks.clone());
-                    round.failed_required.store(true, Ordering::SeqCst);
+                    round.fail_family(family);
                 }
                 observe_failures(ctx, tip, checks);
             }
