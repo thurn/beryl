@@ -339,7 +339,13 @@ class Combat:
         if defender in ("playerA", "playerB"):
             # XMage asks whether to pay a cost to attack a player once for each attacker and
             # each permanent that makes one, then pays it from the sources it chooses.
-            for _ in range(self.attack_costs(export, defender)):
+            costs = self.attack_costs(export, defender)
+            if costs and export.payments.asks_mana_type(who):
+                raise Unsupported(
+                    "an attack cost paid from sources XMage chooses, one of which asks "
+                    "for a mana type"
+                )
+            for _ in range(costs):
                 export.emit(f"setChoice({who}, true);")
 
         if any(

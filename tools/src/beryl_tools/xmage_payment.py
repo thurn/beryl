@@ -143,6 +143,16 @@ class Payments:
                     lines.append(f"setChoice({who}, {java_string(choice)});")
         return lines
 
+    def asks_mana_type(self, who: str) -> bool:
+        """Whether `who` has a source that XMage asks a mana type of when it taps the source
+        itself (one making mana of any type another land could produce, with two or more
+        types among `who`'s lands). A payment XMage chooses the sources of can tap it, and
+        the script has no choice to answer the prompt."""
+        names = self.player_cards.get(who, set())
+        return any(_any_type_mana(self.cards, n) for n in names) and (
+            _multiple_land_mana_types(self.cards, names)
+        )
+
     def as_made_taps(
         self, who: str, at: str, taps: list[str], mana: list[Json]
     ) -> list[str]:
