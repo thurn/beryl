@@ -181,10 +181,11 @@ pub(super) fn discarders<L: Layout, const N: usize>(
 ) -> L::Queue<(L::Slot, Seat), N> {
     let mut discarders: L::Queue<(L::Slot, Seat), N> = Default::default();
     for &(slot, from, ..) in moves {
-        if from == Zone::Hand && reasons.for_slot(slot) == Reason::Discard {
-            if let Some(owner) = s.object(slot).owner() {
-                discarders.push_bounded((slot, owner));
-            }
+        if from == Zone::Hand
+            && reasons.for_slot(slot) == Reason::Discard
+            && let Some(owner) = s.object(slot).owner()
+        {
+            discarders.push_bounded((slot, owner));
         }
     }
     discarders

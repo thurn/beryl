@@ -7,7 +7,7 @@ use crate::bitboard::Bitboard;
 use crate::format::Format;
 use crate::ids::{CardId, Seat, SlotId, SlotPlace};
 use crate::layout::{Layout, Piles, Queue, Table};
-use crate::state::{AbilityMask, AbilityTarget, Flag, Object, Pending, State, Zone};
+use crate::state::{AbilityMask, AbilityTarget, Flag, Object, Pending, State, Zone, is_shared};
 use crate::table::GameTable;
 use beryl_card::FaceIx;
 
@@ -112,6 +112,29 @@ impl<L: Layout> State<L> {
         Ok(())
     }
 
+    /// The owner of an object in the game: none for a card in a shared zone that nobody has
+    /// claimed (`unowned`), and otherwise one, the deck's owner for a card of a player's deck.
+    fn check_owner(
+        o: &Object<L>,
+        deck_owner: Option<Seat>,
+        unowned: bool,
+        at: Option<At>,
+    ) -> Result<(), Violation> {
+        if deck_owner.is_some() {
+            check(o.owner == deck_owner, "a deck card with another owner", at)?;
+        }
+        if unowned {
+            let placeholder = o.owner.is_none() && o.base_controller == Seat::P0;
+            check(placeholder, "a card in a shared zone with an owner", at)
+        } else {
+            check(
+                o.owner.is_some(),
+                "a card with no owner outside a shared zone",
+                at,
+            )
+        }
+    }
+
     fn check_objects(&self, t: &GameTable) -> Result<(), Violation> {
         // In the shared-deck format a deck slot's place names no owner: the shared deck's
         // cards fill [`SlotId::shared_deck`]'s slots.
@@ -141,28 +164,10 @@ impl<L: Layout> State<L> {
             if matches!(slot.place(), SlotPlace::Deck(..)) {
                 check(in_deck && !token, "an object outside the deck slots", at)?;
             }
-            if let Some(deck_owner) = deck_owner {
-                check(
-                    o.owner == Some(deck_owner),
-                    "a deck card with another owner",
-                    at,
-                )?;
-            }
             // A card in a shared zone has no owner, but one claimed while the question about
-            // its entering is open. Every other card in the game has one.
-            if shared_deck.is_some() && crate::state::is_shared(o.zone) && claimed != Some(slot) {
-                check(
-                    o.owner.is_none() && o.base_controller == Seat::P0,
-                    "a card in a shared zone with an owner",
-                    at,
-                )?;
-            } else {
-                check(
-                    o.owner.is_some(),
-                    "a card with no owner outside a shared zone",
-                    at,
-                )?;
-            }
+            // its entering is open.
+            let unowned = shared_deck.is_some() && is_shared(o.zone) && claimed != Some(slot);
+            Self::check_owner(o, deck_owner, unowned, at)?;
             check(o.card.index() < t.len(), "no such card", at)?;
             for link in o.names() {
                 check(
