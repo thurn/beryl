@@ -406,7 +406,8 @@ fn a_streak_bursts_where_it_leaves_and_flares_where_it_lands() {
 }
 
 /// A land played is quicker than a spell, as Arena's (data/arena-motion.json, fly), and lands
-/// with no flash, as a permanent that resolves does.
+/// with no flash. A permanent that resolves settles as it lands and flares as it leaves the
+/// stack, which a land never was on.
 #[test]
 fn a_land_played_is_quick_and_lands_with_no_flash() {
     let land = |controller| {
@@ -426,7 +427,7 @@ fn a_land_played_is_quick_and_lands_with_no_flash() {
     assert!(effects(&land(Side::You)).is_empty());
     assert!(effects(&land(Side::Opponent)).is_empty());
     let names: Vec<_> = effects(&resolved).into_iter().map(|e| e.0).collect();
-    assert_eq!(names, ["settle"]);
+    assert_eq!(names, ["settle", "stack-exit"]);
     assert_eq!(alone(&resolved).duration, 571.0);
     assert_eq!(
         alone(&fly(
