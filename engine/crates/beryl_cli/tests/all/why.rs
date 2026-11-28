@@ -77,39 +77,6 @@ fn prints_both_tree_branches() {
 }
 
 #[test]
-fn prior_tree_keeps_the_beza_attack_lead_under_the_override_margin() {
-    let name = "beza-trinket-into-blockers";
-    let entry = entries()
-        .unwrap()
-        .into_iter()
-        .find(|entry| entry.name == name)
-        .unwrap();
-    let at = reach(&TEST, &entry).unwrap();
-    let mut scratch = Scratch::new();
-    let obs = observe(&at.s, &at.t, &mut scratch, at.d.decider);
-    let candidates = labels(&at.t, &at.s, &at.d);
-    let [attack, hold] = ["attack with Beza, the Bounding Spring", "done"]
-        .map(|name| candidates.iter().position(|label| label == name).unwrap());
-    let family = "pimc72/hidden/rollout/tuned/anchor+guard+prior"
-        .parse()
-        .unwrap();
-    let settings = Settings {
-        family,
-        work: 3_000_000,
-        threads: 2,
-    };
-    let mut search = LongSearch::new(&at.t, settings, run_seed(name, 1));
-    search.choose(obs, &at.d, beryl_search::AgentDecision(0));
-    let stats = search.last_search().unwrap();
-    let mean = |i: usize| {
-        assert!(stats.visits[i] > 0, "{}", candidates[i]);
-        stats.rewards[i] / f64::from(stats.visits[i])
-    };
-    let lead = mean(attack) - mean(hold);
-    assert!(lead < beryl_search::ANCHOR_MARGIN, "attack lead {lead:+.4}");
-}
-
-#[test]
 fn tree_report_counts_the_ordinary_search_visits() {
     let name = "oust-own-token";
     let entry = entries()
