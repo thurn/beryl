@@ -286,7 +286,10 @@ pub mod scenarios {
             .battlefield(P1, &[CAULDRON])
             .hand(P0, &[POOL, BOLT])
             .library(P0, &[ANGEL, Card::Island, Card::Plains, Card::Forest])
-            .library(P1, &[Card::Island, Card::Plains, Card::Mountain, Card::Forest])
+            .library(
+                P1,
+                &[Card::Island, Card::Plains, Card::Mountain, Card::Forest],
+            )
             .actions(&[
                 ME.casts(POOL),
                 Resolve,
