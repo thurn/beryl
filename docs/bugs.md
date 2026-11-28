@@ -24,6 +24,17 @@ fixed in the same session. Newest first.
   scenario "Cavern of Souls under Mana Flare makes two mana for the chosen type"
   in `mana_flare.rs`, and `check_spell_payments` in `just fuzz`.
 
+||||||| parent of 423b20437 (docs: record the reflexive stale-layers bug)
+- **A reflexive trigger's condition read stale layer results.** In a fuzz game
+  with Painter's Servant on the battlefield, a creature-card exile out of a
+  graveyard that a permanent reads made the layer results stale. The reflexive
+  condition "a creature card was exiled this way" then read a controller through
+  `State::derived` and hit the debug assertion "derived read while dirty".
+  `delayed_triggers::reflexive` now calls `layers::refresh` before it reads a
+  condition. Guard: the existing debug assertion, which the search test
+  `a_color_given_in_every_zone_shows_nothing_hidden` hit once Agatha's Soul
+  Cauldron was in the fuzz pool. No lint can say it, because the stale read is
+  a runtime ordering property of each instruction.
 - **The sequence reference failed games with many lands under Mana Reflection or
   Mana Flare.** With Mana Reflection and seventeen lands, `just fuzz` reported
   "the cached funds disagree with the sequence reference" for a `{C}` probe that
