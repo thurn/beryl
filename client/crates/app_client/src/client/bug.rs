@@ -61,6 +61,7 @@ impl Client {
         // Closing or changing the sheet resets the settings confirmation.
         self.features.reset_sheet();
         if opening {
+            self.reported_hover = self.hovered_slot();
             self.layer.focus(None);
             self.update_bug(&Message::Opened {
                 now: self.now,

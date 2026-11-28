@@ -29,8 +29,12 @@ impl Client {
     pub(super) fn inspect(&mut self, now: u64) {
         let until = self.refusal_frame(now);
         let hovered = self.hovered_slot();
+        // The bug report freezes the table as it stands, hover content included, so that the
+        // player can report what they were pointing at: the pointer keeps the position it had
+        // when the report opened (`table_mouse`).
         let visible = matches!(self.features.screen, Screen::Game | Screen::Table)
-            && self.features.sheet.is_none();
+            && self.table_shown();
+        eprintln!("INSPECT hovered {:?} visible {visible} bug {}", hovered, self.bug_open());
         let decision = self.open_decision().map(|decision| decision.id);
         let view = self
             .show
@@ -56,6 +60,9 @@ impl Client {
     /// The slot of the card the last frame found under the pointer, whether or not the
     /// inspector reads it.
     pub(super) fn hovered_slot(&self) -> Option<ObjectId> {
+        if self.bug_open() {
+            return self.reported_hover;
+        }
         let slot = self.show.pointer().hovered()?;
         u16::try_from(slot).ok().map(ObjectId)
     }

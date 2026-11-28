@@ -315,3 +315,17 @@ fn the_revealed_pill_stands_over_the_revealed_pile_and_its_cross_puts_it_away() 
         "the pile is put away"
     );
 }
+
+/// The player hovered a card, pressed Cmd+B to report what they saw, and the card's full-size
+/// view vanished from the frozen table, so it could not be reported.
+#[test]
+fn the_inspector_stays_up_while_the_bug_report_is_open() {
+    let mut page = page(&table());
+    let card = "card \"Serra Angel\" #8";
+    hover(&mut page, card);
+    let before = inspector(&mut page).expect("the hovered card is inspected");
+    page.chord("Cmd+B");
+    page.still();
+    let during = inspector(&mut page).expect("the inspector stays while the report is open");
+    assert_eq!(before, during, "and where it stood");
+}
