@@ -1221,8 +1221,8 @@ Rules for trees:
 - When leased trees hold every slot, an incident commander, a justiciar or the
   operator frees one with `ignite trees evict <tree> [--force]`. It deletes the
   tree's build directories under the tree's command lock, so it refuses while a
-  command runs there; `--force` stops those commands first. The lease stays
-  with its holder, whose ticket gets a comment.
+  command runs there; `--force` stops those commands first. The lease stays with
+  its holder, whose ticket gets a comment.
 - After a build command ends, the daemon measures that tree's build directories
   in logical bytes. Before its next build, a tree over its ceiling is cleaned
   until its outputs are below 80% of the ceiling. Cleanup removes replaced
@@ -4425,9 +4425,9 @@ full pause for a broken build, hub or daemon fault, or resource exhaustion.
 - `ignite emergency adopt <ticket>` moves the emergency in force onto an
   incident or justiciar ticket the caller holds. It keeps the scope, the
   allowances, the time it lapses and its end condition, so an adopted landings
-  freeze still ends once `master` catches up and upkeep goes on renewing it.
-  The ticket it leaves is allowed every heavy verb. Both tickets get a comment,
-  and the one left also gets an `ignite tell`.
+  freeze still ends once `master` catches up and upkeep goes on renewing it. The
+  ticket it leaves is allowed every heavy verb. Both tickets get a comment, and
+  the one left also gets an `ignite tell`.
 - When a declaration replaces another session's emergency, the earlier
   declarer's ticket gets a comment and an `ignite tell`.
 
