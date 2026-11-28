@@ -4464,10 +4464,10 @@ behind:
   signature `master-stall-postmortem`, which waits on the freeze's ticket. Its
   worker writes the stall's timeline, names the cause of each lost hour, and
   fixes the workflow or infrastructure that let `master` fall behind, with a
-  test. A low-value test or check that held `master` back is deleted rather
-  than repaired. Upkeep files it even when it does not freeze landings (see below). The
-  freeze's ticket used to carry this work as a second task, so it depended on
-  that worker choosing to do it after `master` moved; as its own ticket it
+  test. A low-value test or check that held `master` back is deleted rather than
+  repaired. Upkeep files it even when it does not freeze landings (see below).
+  The freeze's ticket used to carry this work as a second task, so it depended
+  on that worker choosing to do it after `master` moved; as its own ticket it
   always happens, and starts from the mitigation record.
 - Each upkeep pass renews the emergency, so it does not lapse after two hours,
   and lists every open regression, justiciar and incident ticket as allowed to
