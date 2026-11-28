@@ -207,9 +207,9 @@ impl FakeWork {
                 ListingPhase::Build => missing.reportable,
                 ListingPhase::PeerBuild => !missing.reportable,
                 ListingPhase::All
-                    | ListingPhase::Other
-                    | ListingPhase::AllDue
-                    | ListingPhase::OtherDue => true,
+                | ListingPhase::Other
+                | ListingPhase::AllDue
+                | ListingPhase::OtherDue => true,
             })
             .cloned()
             .collect();

@@ -91,7 +91,8 @@ impl Checks {
                 listing_platforms(family).is_none_or(|os| os.contains(&self.settings.os))
                     && (!family.machine_relative || self.families().any(|(own, _)| own == *name))
                     && self.verifies_in_tip_rounds(name)
-                    && (phase.lists_deferred() || !family.defer_platforms.contains(&self.settings.os))
+                    && (phase.lists_deferred()
+                        || !family.defer_platforms.contains(&self.settings.os))
             })
             .collect();
         let mut set = TipSet {

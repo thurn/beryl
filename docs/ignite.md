@@ -5037,12 +5037,12 @@ A check family can defer just its results on named platforms, even while those
 platforms have active verifiers. For example, with
 `platforms = ["macos", "windows"]` and `defer_platforms = ["windows"]`, the
 family participates in the macOS gate and verifies Windows after promotion.
-Every entry in `defer_platforms` must appear in the family's `platforms` list.
-A round that is not catching up does not list such a family on a deferred
-platform, so it builds none of the family's products there. It keys the
-family's checks from the listing kept at the hub. Before this, every Windows tip
-round built the whole `client` product (41 to 52 CPU minutes) only to defer the
-checks that needed it.
+Every entry in `defer_platforms` must appear in the family's `platforms` list. A
+round that is not catching up does not list such a family on a deferred
+platform, so it builds none of the family's products there. It keys the family's
+checks from the listing kept at the hub. Before this, every Windows tip round
+built the whole `client` product (41 to 52 CPU minutes) only to defer the checks
+that needed it.
 
 After the other required checks pass, the hub records the gap before `master`
 moves. `ignite status` and the dashboard's first line name the first tip with
