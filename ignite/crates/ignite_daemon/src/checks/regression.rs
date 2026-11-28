@@ -91,6 +91,7 @@ impl Checks {
                 listing_platforms(family).is_none_or(|os| os.contains(&self.settings.os))
                     && (!family.machine_relative || self.families().any(|(own, _)| own == *name))
                     && self.verifies_in_tip_rounds(name)
+                    && (phase.lists_deferred() || !family.defer_platforms.contains(&self.settings.os))
             })
             .collect();
         let mut set = TipSet {
@@ -130,7 +131,8 @@ impl Checks {
                 .copied()
                 .filter(|(name, family)| {
                     // On this machine's own platform, a family not listed here is one it does not
-                    // run (machine-relative) or does not verify in tip rounds.
+                    // run (machine-relative), does not verify in tip rounds, or defers until
+                    // after `master` moves in a round that is not catching up.
                     listing_platforms(family).is_some_and(|list| list.contains(&os))
                         && (os != self.settings.os || !local.iter().any(|(own, _)| own == name))
                 })

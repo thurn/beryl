@@ -209,15 +209,34 @@ pub enum ListingPhase {
     /// Build families that need a listing published by a peer.
     PeerBuild,
     Other,
+    /// [`ListingPhase::All`] in a round that is not catching up on deferred checks: a family
+    /// whose `defer_platforms` names this machine's platform is keyed from the listing kept at
+    /// the hub rather than listed here.
+    AllDue,
+    /// [`ListingPhase::Other`], leaving out families deferred here as [`ListingPhase::AllDue`]
+    /// does.
+    OtherDue,
 }
 
 impl ListingPhase {
     pub(crate) fn includes(self, builds: bool) -> bool {
         match self {
-            Self::All => true,
+            Self::All | Self::AllDue => true,
             Self::Build | Self::PeerBuild => builds,
-            Self::Other => !builds,
+            Self::Other | Self::OtherDue => !builds,
         }
+    }
+
+    /// Whether this machine lists, and builds the products for, the families that defer its
+    /// platform until after `master` moves.
+    ///
+    /// Such a family's checks run before `master` moves only in a round catching up on that
+    /// platform's deferrals; any other round defers every one without a cached pass. Listing
+    /// them anyway built the products they need first: on Windows, where the client's
+    /// interface, test and validation families defer, every tip round built the whole `client`
+    /// product, 41 to 52 CPU minutes, before it could move `master`, only to defer its checks.
+    pub(crate) fn lists_deferred(self) -> bool {
+        !matches!(self, Self::AllDue | Self::OtherDue)
     }
 }
 

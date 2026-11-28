@@ -144,10 +144,13 @@ impl TipVerifier {
         } else {
             TipSet::default()
         };
-        let phase = if ctx.config.repository.green.is_some() {
-            ListingPhase::Other
-        } else {
-            ListingPhase::All
+        // Only a round catching up on deferred checks runs them before `master` moves, so only
+        // such a round lists the families that defer this platform and builds their products.
+        let phase = match (ctx.config.repository.green.is_some(), scope.catch_up_only()) {
+            (true, true) => ListingPhase::Other,
+            (true, false) => ListingPhase::OtherDue,
+            (false, true) => ListingPhase::All,
+            (false, false) => ListingPhase::AllDue,
         };
         let other = self.work.checks(ctx, tip, phase)?;
         self.record_listing(&other);

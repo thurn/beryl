@@ -1165,5 +1165,10 @@
     "label": "A tip round reverts at once (`[revert] replayed`) a landing by verdict whose gate passed on an older base and that was pushed replayed over landings changing what the failing check reads, instead of filing a regression that unproven checks never let the stall rule revert. The landing records that base as `gated_base`. On 2026-11-28 the phone fixes of `TGYYS`, gated on `d9a0a6e` and replayed over `7e97768`, failed seven phone checks and held `master` from 02:59 to past 07:15 while four regression tickets fixed them one at a time; in the 7 days before, 15 regressions had the same shape",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
+  },
+  {
+    "label": "A tip round that is not catching up on deferred checks no longer lists the families whose `defer_platforms` names the machine's platform, and so no longer builds their products to list them. On cygnus from 2026-11-27T07:02Z to 19:02Z every Windows tip round built the whole `client` product (14 builds, 41 to 52 CPU minutes each, 313 wall minutes in all) before it could move `master`, to list the client's interface, test and validation families, whose checks it then deferred anyway",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]

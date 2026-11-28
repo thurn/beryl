@@ -180,7 +180,10 @@ impl FakeWork {
                 && match phase {
                     ListingPhase::Build => check.runnable,
                     ListingPhase::PeerBuild => !check.runnable,
-                    ListingPhase::All | ListingPhase::Other => true,
+                    ListingPhase::All
+                    | ListingPhase::Other
+                    | ListingPhase::AllDue
+                    | ListingPhase::OtherDue => true,
                 }
         };
         let listed = self.listed(at);
@@ -203,7 +206,10 @@ impl FakeWork {
             .filter(|missing| match phase {
                 ListingPhase::Build => missing.reportable,
                 ListingPhase::PeerBuild => !missing.reportable,
-                ListingPhase::All | ListingPhase::Other => true,
+                ListingPhase::All
+                    | ListingPhase::Other
+                    | ListingPhase::AllDue
+                    | ListingPhase::OtherDue => true,
             })
             .cloned()
             .collect();

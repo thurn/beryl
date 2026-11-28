@@ -193,7 +193,7 @@ fn hold_ordinary_listing(work: &FakeWork) -> (mpsc::Receiver<ListingPhase>, mpsc
     let (release, resume) = mpsc::channel();
     *work.before_listing.lock().unwrap() = Some(Box::new(move |phase| {
         started.send(phase).unwrap();
-        if matches!(phase, ListingPhase::All | ListingPhase::Other) {
+        if !matches!(phase, ListingPhase::Build | ListingPhase::PeerBuild) {
             resume.recv().unwrap();
         }
     }));
@@ -204,7 +204,7 @@ fn wait_for_ordinary_listing(phases: &mpsc::Receiver<ListingPhase>) {
     for expected in [
         ListingPhase::Build,
         ListingPhase::PeerBuild,
-        ListingPhase::Other,
+        ListingPhase::OtherDue,
     ] {
         assert_eq!(
             phases.recv_timeout(Duration::from_secs(10)).unwrap(),

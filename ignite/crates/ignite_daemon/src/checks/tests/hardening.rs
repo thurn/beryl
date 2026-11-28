@@ -251,6 +251,60 @@ fn a_tip_waits_for_a_foreign_build_listing_without_building_it() {
     assert_eq!(world.launcher.commands("lister").len(), commands);
 }
 
+/// A round that is not catching up defers a family whose `defer_platforms` names this platform,
+/// so it keys that family from the listing kept at the hub and builds nothing for it. A
+/// catching-up round lists it here.
+#[test]
+fn a_round_that_defers_a_family_here_builds_nothing_to_list_it() {
+    let manifest = format!(
+        "{}\n{}\n[product.binary]\nbuild = \"builder\"\ninputs = [\"src\"]\noutputs = [\"out\"]\n",
+        family("unit", "\"any\"", "lister", ""),
+        family(
+            "native",
+            "[\"macos\", \"windows\"]",
+            "lister",
+            "needs = [\"binary\"]\ndefer_platforms = [\"macos\"]"
+        ),
+    );
+    let world = world(&manifest, &[], FakeHistory::default());
+    *world.launcher.listing.lock().unwrap() = listing(&["unit:a", "native:b"]);
+    let phase = |phase| {
+        world
+            .checks
+            .regression_checks_for(&world.ctx, &tree(), phase)
+            .unwrap()
+    };
+
+    let cold = phase(ListingPhase::OtherDue);
+    assert!(world.builds.requests().is_empty());
+    assert_eq!(world.launcher.commands("lister").len(), 1);
+    assert!(cold.checks.iter().all(|check| check.family == "unit"));
+    assert!(cold.unlisted.iter().any(|missing| {
+        missing.name == name("native:listing") && missing.platforms.contains(&Os::Macos)
+    }));
+    assert_eq!(cold.defer_platforms["native"], [Os::Macos]);
+
+    let catching_up = phase(ListingPhase::Other);
+    let listed = catching_up
+        .checks
+        .iter()
+        .find(|check| check.family == "native")
+        .unwrap();
+    assert!(listed.runnable);
+    let builds = world.builds.requests().len();
+    assert!(builds > 0);
+
+    let warm = phase(ListingPhase::OtherDue);
+    let kept = warm
+        .checks
+        .iter()
+        .find(|check| check.family == "native" && check.key.platform == Some(Os::Macos))
+        .unwrap();
+    assert_eq!(kept.key, listed.key);
+    assert!(!kept.runnable);
+    assert_eq!(world.builds.requests().len(), builds);
+}
+
 #[test]
 fn an_ancestor_uses_kept_listings_without_building_or_listing() {
     let manifest = format!(
