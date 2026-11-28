@@ -33,8 +33,9 @@ fixed in the same session. Newest first.
   `delayed_triggers::reflexive` now calls `layers::refresh` before it reads a
   condition. Guard: the existing debug assertion, which the search test
   `a_color_given_in_every_zone_shows_nothing_hidden` hit once Agatha's Soul
-  Cauldron was in the fuzz pool. No lint can say it, because the stale read is
-  a runtime ordering property of each instruction.
+  Cauldron was in the fuzz pool. No lint can say it, because the stale read is a
+  runtime ordering property of each instruction.
+
 - **The sequence reference failed games with many lands under Mana Reflection or
   Mana Flare.** With Mana Reflection and seventeen lands, `just fuzz` reported
   "the cached funds disagree with the sequence reference" for a `{C}` probe that
