@@ -311,6 +311,19 @@ pub(super) fn unrun<'a>(
     left
 }
 
+/// For each family, how many of `set` have no verdict yet: a round that stopped before it ran
+/// them leaves them unrun, whatever the budget said.
+pub(super) fn unrun_without_verdict<'a>(
+    set: impl Iterator<Item = &'a &'a TipCheck>,
+    verdicts: &HashMap<ResultKey, TipRun>,
+) -> BTreeMap<String, u32> {
+    let mut left: BTreeMap<String, u32> = BTreeMap::new();
+    for check in set.filter(|check| !verdicts.contains_key(&check.key)) {
+        *left.entry(check.family.clone()).or_default() += 1;
+    }
+    left
+}
+
 /// Records in the round's budget the checks it set out to run and did not, and the newer tip
 /// that ended it, if one did. The hub reads them to say why tip verification missed a check.
 pub(super) fn note_unrun(tally: &mut Tally, left: BTreeMap<String, u32>, ended_by: Option<Commit>) {

@@ -283,6 +283,51 @@ fn master_stays_behind_a_failing_check_and_moves_at_the_tip_that_fixes_it() {
 }
 
 #[test]
+fn a_failure_with_a_regression_ticket_does_not_keep_the_round_from_running_other_checks() {
+    let world = World::new();
+    let ctx = world.ctx("m-1");
+    let mut verifier = world.verifier();
+    world.work.add_landing("tk.21", &["bbbb000"], &["src/a"]);
+
+    let broken = commit("bbbb000");
+    world.land(&broken);
+    world.work.set_checks(&broken, vec![check("a", 'a')]);
+    world
+        .work
+        .set_outcome(&broken, &name("unit:a"), Outcome::Fail);
+    assert!(matches!(
+        verifier.verify(&ctx, &broken).unwrap(),
+        TipOutcome::Failed { .. }
+    ));
+    assert_eq!(world.hub.regressions().len(), 1);
+    world
+        .hub
+        .set_open_regressions(vec![ignite_core::protocol::hub::OpenRegression {
+            check: name("unit:a"),
+            ticket: ticket("tk.99"),
+            off: false,
+        }]);
+
+    // A later tip adds a second check while the first still fails and has its ticket. The round
+    // runs the new check, which fails too, instead of stopping at the first.
+    let later = commit("cccc000");
+    world.land(&later);
+    world
+        .work
+        .set_checks(&later, vec![check("a", 'a'), check("b", 'b')]);
+    world
+        .work
+        .set_outcome(&later, &name("unit:a"), Outcome::Fail);
+    world
+        .work
+        .set_outcome(&later, &name("unit:b"), Outcome::Fail);
+    let TipOutcome::Failed { checks, .. } = verifier.verify(&ctx, &later).unwrap() else {
+        panic!("the round should fail");
+    };
+    assert!(checks.contains(&name("unit:b")), "{checks:?}");
+}
+
+#[test]
 fn the_one_landing_that_touched_a_failed_checks_inputs_is_blamed_without_a_run() {
     let world = World::new();
     let ctx = world.ctx("m-1");

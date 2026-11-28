@@ -159,7 +159,7 @@ pub fn explain(evidence: &Evidence, check: &CheckName, tip: &str) -> Option<Miss
             short(newer.as_str())
         ),
         None => "`master` did not move, so the checks past the tip budget wait for a later \
-                 round"
+                 round, or the round stopped at a failing check before it ran them"
             .to_owned(),
     };
     Some(Miss {

@@ -3024,9 +3024,12 @@ How a daemon verifies a tip:
     them and no machine ran it. A round with no budget record says nothing and
     is not read as "not run".
   - **Skipped:** every round that finished there left checks of the family
-    unrun, because a newer tip ended it or because `master` did not move and the
-    checks past the budget wait for a later round. Each round's record lists how
-    many checks of each family it left unrun, and the tip that ended it.
+    unrun, because a newer tip ended it, because `master` did not move and the
+    checks past the budget wait for a later round, or because the round stopped
+    at a failure that no regression ticket covers yet. A failure that has an
+    open regression ticket does not stop a round from running its other checks.
+    Each round's record lists how many checks of each family it left unrun, and
+    the tip that ended it.
   - When no round has finished at the tip or after it, tip verification has not
     reached that tip yet. That is not a miss, and nothing is recorded.
 

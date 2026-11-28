@@ -240,8 +240,25 @@ impl TipVerifier {
         if let Some(by) = candidate::ends_checks(ctx, tip, &self.superseded_since) {
             return Ok(TipOutcome::Superseded { by });
         }
+        // A failure that already has an open regression ticket does not stop the round from
+        // running its other checks: it fails at every tip until someone fixes it, and a round
+        // that stopped at it would never run the checks of any later breakage (the checks of
+        // `client-interface` that a landing then found failing were left unrun this way).
+        let unticketed_failure =
+            |verdicts: &HashMap<ResultKey, TipRun>, regressions: &HashSet<CheckName>| {
+                last != tip
+                    && checks.iter().any(|check| {
+                        check.runnable
+                            && !split.is_after(check)
+                            && !regressions.contains(&check.check)
+                            && verdicts
+                                .get(&check.key)
+                                .is_some_and(|run| run.outcome == Outcome::Fail)
+                    })
+            };
         tally.budget.clone_from(&split.budget);
-        if !broken && !runnable_failure(&verdicts, &regressions) {
+        let mut ran_within = false;
+        if !broken && !unticketed_failure(&verdicts, &regressions) {
             // Confirm cached failures before unrelated batches so a newer tip can be
             // selected as soon as the failure repeats.
             let (confirm, cache_disabled): (Vec<_>, Vec<_>) =
@@ -251,7 +268,8 @@ impl TipVerifier {
             if last != tip {
                 observe_failed_verdicts(ctx, tip, confirm.into_iter(), &verdicts);
             }
-            if !runnable_failure(&verdicts, &regressions) {
+            if !unticketed_failure(&verdicts, &regressions) {
+                ran_within = true;
                 let phase = if scope.catch_up_only() {
                     RunPhase::AfterMaster
                 } else {
@@ -280,10 +298,26 @@ impl TipVerifier {
                         }
                         return Ok(TipOutcome::Superseded { by });
                     }
-                } else if !runnable_failure(&verdicts, &regressions) {
+                    // The round goes on to report the failure it holds, and leaves unrun what
+                    // the newer tip kept from running.
+                    if let Some(left) = unrun_if_superseded {
+                        split::note_unrun(tally, left, Some(by.clone()));
+                    }
+                } else if !unticketed_failure(&verdicts, &regressions) {
                     self.run_rechecks(ctx, tip, &checks, &cache_disabled, &mut verdicts, tally);
                 }
             }
+        }
+        if !ran_within {
+            // The round stopped at a failure before it ran the checks it had chosen. Leaving
+            // them out of the record made the hub read them as unchanged since the last
+            // verified commit, and report them as "not run" rather than as left for a later
+            // round.
+            split::note_unrun(
+                tally,
+                split::unrun_without_verdict(split.within.iter().chain(&split.after), &verdicts),
+                None,
+            );
         }
         if runnable_failure(&verdicts, &regressions) {
             let failed_keys: Vec<_> = checks
