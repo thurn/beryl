@@ -25,6 +25,7 @@ fixed in the same session. Newest first.
   in `mana_flare.rs`, and `check_spell_payments` in `just fuzz`.
 
 ||||||| parent of 423b20437 (docs: record the reflexive stale-layers bug)
+
 - **A reflexive trigger's condition read stale layer results.** In a fuzz game
   with Painter's Servant on the battlefield, a creature-card exile out of a
   graveyard that a permanent reads made the layer results stale. The reflexive
