@@ -325,6 +325,18 @@ impl TipMachine {
 
     /// A daemon starting on the machine, with its tip loop.
     fn daemon(&self) -> (Arc<Server>, TipLoop) {
+        self.daemon_ending(self.hung.clone())
+    }
+
+    /// [`TipMachine::daemon`] for a daemon that is about to be restarted. Its thread still runs
+    /// in the test, so its stall watch would otherwise end the hung round a second time once the
+    /// clock passes the limit; a daemon that has been replaced ends nothing, and its own
+    /// `Hung` counts the attempts apart from the live daemon's.
+    fn replaced_daemon(&self) -> (Arc<Server>, TipLoop) {
+        self.daemon_ending(Arc::new(Hung::default()))
+    }
+
+    fn daemon_ending(&self, ender: Arc<Hung>) -> (Arc<Server>, TipLoop) {
         let steps = Arc::new(Steps::new(Arc::new(FakeClock::new(T0))));
         let host = Host::with_timing(
             HostParts {
@@ -353,7 +365,7 @@ impl TipMachine {
             watch: Duration::from_millis(20),
             version: None,
             git: None,
-            ender: Some(self.hung.clone()),
+            ender: Some(ender),
             stop_wait: crate::stop::STOP_WAIT,
             stall_limit: crate::server::process::STALL_LIMIT,
         };
@@ -880,7 +892,7 @@ fn a_stalled_tip_round_keeps_its_stall_clock_across_daemon_restarts() {
         machine.threads.ctx.clone(),
         machine.git.tip("staging").unwrap(),
     );
-    let (first, first_loop) = machine.daemon();
+    let (first, first_loop) = machine.replaced_daemon();
     machine.switch.set(Some(first.clone()));
     let cut = turn_on_a_thread(first_loop, ctx.clone());
     assert!(until(|| lock(&machine.hung.lock).is_some()));
