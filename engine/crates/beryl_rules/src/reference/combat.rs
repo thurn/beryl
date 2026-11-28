@@ -7,7 +7,10 @@
 //! code with `combat::requirements`, which finds the most requirements by a pruned search. It
 //! does read the same inputs as that search: the rules about each creature and player
 //! (`combat_rules_on`, `combat_rules_for`), whether one creature can block another
-//! (`combat::can_block`, `rule_change::cant_block`), and the cost to attack (`attack_cost`). A
+//! (`combat::can_block`, `rule_change::cant_block`), and the cost to attack (`attack_cost`). In a
+//! game whose cards have priced mana abilities or change mana abilities, as Mana Reflection
+//! doubles what a land makes, whether the cost can be paid is read from every sequence of mana
+//! abilities (`sequences::reference_sequences_with`) rather than one unit per source. A
 //! mistake in one of those readers is not caught here; `tests/rules.rs` tests them directly.
 //!
 //! [CR 508.1c]: https://yawgatog.com/resources/magic-rules/#R5081c
@@ -19,7 +22,8 @@
 //! Implements: none. Reference enumeration for combat requirements and restrictions.
 
 use super::check;
-use super::{reference_pays, reference_units};
+use super::{reference_pays, reference_units, sequences};
+use crate::bitboard::Bitboard;
 use crate::card::ManaCost;
 use crate::card::{Keywords, Types};
 use crate::combat;
@@ -157,19 +161,32 @@ fn enumerate_attacks<L: Layout>(
             )
         })
         .count();
+    // A unit for each source can't say what a priced mana ability or a change to mana makes.
+    let rich = t.can_either(Capability::PricedMana, Capability::ManaChanges);
     let paid_for = |chosen: &[L::Slot]| -> Option<bool> {
         let added = chosen.len() - already.len();
         let n = attacking_player + if has_planeswalker { 0 } else { added };
         if n == 0 || per.is_zero() {
             return Some(true);
         }
-        let tapping = chosen
+        let tapping: Bitboard<L::Slot> = chosen
             .iter()
             .copied()
             .filter(|&slot| !s.derived(slot).keywords.contains(Keywords::VIGILANCE))
             .collect();
-        let units = reference_units(s, t, active, Paying::NOTHING, tapping)?;
         let total = times(per, u32::try_from(n).ok()?).ok()?;
+        if rich {
+            return sequences::reference_sequences_with(
+                s,
+                t,
+                active,
+                total,
+                Paying::NOTHING,
+                tapping,
+                &[],
+            );
+        }
+        let units = reference_units(s, t, active, Paying::NOTHING, tapping)?;
         Some(reference_pays(units.as_slice(), total))
     };
 

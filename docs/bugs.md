@@ -6,6 +6,19 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **The combat reference ignored Mana Reflection when it priced an attack.**
+  Under Propaganda with Mana Reflection on the battlefield, one Island makes
+  `{U}{U}`, which pays `{2}` for one attacker. The engine offered the attacker,
+  but `just fuzz` reported "attack candidate disagrees with enumerating
+  reference": `reference::combat` counted one unit of mana per untapped source
+  (`reference_units`), which cannot say what a change to mana or a priced mana
+  ability makes. It now reads payability from every sequence of mana abilities
+  (`sequences::reference_sequences_with`) in a game with `PricedMana` or
+  `ManaChanges`, as the other payment references already did. Guard: the
+  scenario "under Mana Reflection one Island pays for an attacker" in
+  `propaganda.rs`. No type stops a new reference from reading `reference_units`
+  in a rich game, since it is right in every other game.
+
 - **The outlet search's quick bound counted a creature for one outlet only.**
   With Phyrexian Altar ("Sacrifice a creature: Add one mana of any color"),
   Springleaf Drum ("{T}, Tap an untapped creature you control: Add one mana of
@@ -49,8 +62,6 @@ fixed in the same session. Newest first.
   of the unrestricted pool that can pay priced mana abilities. Guard: the
   scenario "Cavern of Souls under Mana Flare makes two mana for the chosen type"
   in `mana_flare.rs`, and `check_spell_payments` in `just fuzz`.
-
-||||||| parent of 423b20437 (docs: record the reflexive stale-layers bug)
 
 - **A reflexive trigger's condition read stale layer results.** In a fuzz game
   with Painter's Servant on the battlefield, a creature-card exile out of a
