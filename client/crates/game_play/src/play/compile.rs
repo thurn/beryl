@@ -11,9 +11,10 @@
 
 use std::sync::Arc;
 
-use beryl_protocol::protocol::{PlayerView, StackItem};
+use beryl_protocol::protocol::{Mana, PlayerView, StackItem};
 use beryl_protocol::script::{
-    Act, Edge, Script, Step, StepTiming, Subject, Table as Played, Tally, Verb, mover_of, replay,
+    Act, Edge, Script, Step, StepTiming, Stream, Subject, Table as Played, Tally, Verb, mover_of,
+    replay,
 };
 
 use super::record::{MoveKey, Plant, Planted, SegmentRecord, StepRecord};
@@ -28,7 +29,7 @@ use crate::play::TurnChange;
 use crate::sound::{SoundRun, Sounds};
 use crate::verbs::{self, Interval};
 use game_table::table::{Objects, PileCount, Table, Turn};
-use kit_base::data::effect::{Effects, Target};
+use kit_base::data::effect::{Effects, SubjectColors, Target};
 use kit_base::pose::Segment;
 use kit_fx::effects::EffectRun;
 use kit_space::motion::Track;
@@ -635,12 +636,35 @@ fn effects_of(
                 Subject::Object { slot } => Some(u32::from(slot.0)),
                 _ => None,
             },
+            colors: carried_colors(&step.act),
             start,
             duration: end - start,
             curve: named_curve(effect.curve),
             step: number,
         });
     }
+}
+
+/// The colors `act` carries for its effects' `"subject_colors"` tints, in place of the colors of
+/// what they are on: a streak of mana brings its mana's color to the source it leaves and to what
+/// it pays for, so that a land of two colors tapped for blue glows blue. Colorless mana carries no
+/// color and is tinted colorless.
+fn carried_colors(act: &Act) -> Option<SubjectColors> {
+    let Act::Streak {
+        stream: Stream::Mana { color },
+        ..
+    } = act
+    else {
+        return None;
+    };
+    Some(match color {
+        Mana::White => SubjectColors::WHITE,
+        Mana::Blue => SubjectColors::BLUE,
+        Mana::Black => SubjectColors::BLACK,
+        Mana::Red => SubjectColors::RED,
+        Mana::Green => SubjectColors::GREEN,
+        Mana::Colorless => SubjectColors::NONE,
+    })
 }
 
 /// What the effects of `act` are on where they name nothing themselves, as the web stage's

@@ -158,6 +158,12 @@ pub enum Vfx {
     HighlightPop = 13,
     /// Mythic rare permanent arrival glow, flare, smoldering residue, and rings (`VFX_ETB_Mythic_Tier2_LUT`).
     MythicArrival = 14,
+    /// Mana leaving a tapped source: a swirling ring in the mana's color round a hot pip, a ring
+    /// burst, white sparks and a dark under-glow (`vfx_ManaTap_<Color>_Birth`).
+    ManaBirth = 15,
+    /// Mana landing on what it pays for: a four-point light-ping flare, colored wisps, sparks
+    /// and side flares (`vfx_manaStack_<color>_hit`).
+    ManaHit = 16,
 }
 
 /// Visual palette and shimmer style for outline highlight VFX (`Vfx::HighlightShimmer` and
@@ -584,6 +590,7 @@ pub enum Shape {
 #[serde(deny_unknown_fields)]
 pub struct Quad {
     pub scale: Scalar,
+    /// A fixed color, or `"subject_colors"` for the color the run carries or its subject has.
     pub tint: Tint,
     /// How much the draw material fades the light, from 0 (whole) to 1 (gone).
     pub fade: Scalar,

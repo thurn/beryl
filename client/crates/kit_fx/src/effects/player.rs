@@ -5,7 +5,9 @@ use kit_base::data::effect::{
     Clock, DirectedSprite, Direction, EffectPalette, Layer, LightRecord, NumberOrigin, Primitive,
     Quad, Scalar, Shape, Surface, Tint, Vfx,
 };
-use kit_frame::frame::{Band, Draw, FrameBuilder, Sprite, sprites};
+use kit_frame::frame::{
+    Band, Draw, EffectTarget, FrameBuilder, NodeRef, Sprite, StateBits, sprites,
+};
 use kit_ui::{input::Tier, layout::FloatLook};
 
 use super::{EffectRun, Reach, light};
@@ -87,7 +89,8 @@ pub(super) fn write_light(
         ) {
             continue;
         }
-        let Some(reach) = reach_at(0) else { return };
+        let Some(mut reach) = reach_at(0) else { return };
+        reach.colors = run.colors.unwrap_or(reach.colors);
         if layer.mythic_only && !reach.mythic {
             continue;
         }
@@ -242,7 +245,7 @@ fn write_vfx(
         0
     };
     builder.draw_tier_only(
-        Band::Glows,
+        vfx_band(run, builder),
         Draw::vfx_styled(
             transform,
             rgba,
@@ -251,6 +254,22 @@ fn write_vfx(
             [progress, opacity, seed, aspect],
         ),
     );
+}
+
+/// The band a VFX layer draws in: `Band::Glows`, tested against the table's depth and bloomed,
+/// unless what it is on is moving or held. A card in motion is drawn after the glows and over
+/// them (`Band::MovingOpaque`), so a land turning as it taps would hide the middle of the burst
+/// on it; the decorations of cards in motion (`Band::Moving`) are drawn over it.
+fn vfx_band(run: &EffectRun, builder: &FrameBuilder<'_>) -> Band {
+    let EffectTarget::Key(id) = run.on else {
+        return Band::Glows;
+    };
+    let moving = builder
+        .anchor_element(&NodeRef::Id(id))
+        .is_some_and(|(_, node)| {
+            node.state.has(StateBits::MOVING) || node.state.has(StateBits::HELD)
+        });
+    if moving { Band::Moving } else { Band::Glows }
 }
 
 /// Writes a burst in surface paint order, using the surface's own pose and scale.

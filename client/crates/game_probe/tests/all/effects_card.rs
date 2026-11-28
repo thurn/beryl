@@ -29,6 +29,7 @@ fn run(effect: &str) -> EffectRun {
         on: ON,
         on_point: false,
         particle_seed: Some(7),
+        colors: None,
         start: 1_000 * MS,
         duration: 1_000 * MS,
         curve: Curve::LINEAR,

@@ -475,3 +475,44 @@ fn mythic_arrival_vfx_renders_tinted_glow_flare_and_smolder() {
         "smoldering residue lingers and fades: {lb} < {bb}"
     );
 }
+
+#[test]
+fn mana_birth_and_hit_take_the_mana_color_and_stay_inside_their_quads() {
+    let mut renderer = enhanced();
+    let tf = Affine3A::from_scale_rotation_translation(
+        Vec3::new(180.0, 180.0, 1.0),
+        Quat::IDENTITY,
+        Vec3::new(0.0, 0.0, 1.0),
+    );
+    let blue = [64, 168, 255, 255];
+    let red = [255, 88, 46, 255];
+    let shade = |renderer: &mut beryl_render::Renderer, kind, tint, t| {
+        render_vfx(renderer, Draw::vfx(tf, tint, kind, [t, 1.0, 0.4, 1.0]))
+    };
+    for kind in [Vfx::ManaBirth, Vfx::ManaHit] {
+        let [br, _, bb] = channel_sums(&shade(&mut renderer, kind, blue, 0.2));
+        let [rr, _, rb] = channel_sums(&shade(&mut renderer, kind, red, 0.2));
+        assert!(bb > br && rr > rb, "{kind:?} takes the mana's color");
+        let pic = shade(&mut renderer, kind, blue, 0.2);
+        for (x, y) in [(0, 0), (199, 0), (0, 199), (199, 199)] {
+            assert_eq!(
+                pic.at(x, y),
+                [0, 0, 0],
+                "{kind:?} corner ({x},{y}) stays dark"
+            );
+        }
+        let late = channel_sums(&shade(&mut renderer, kind, blue, 0.98));
+        let early = channel_sums(&shade(&mut renderer, kind, blue, 0.2));
+        assert!(
+            late.iter().sum::<u64>() * 10 < early.iter().sum::<u64>(),
+            "{kind:?} is nearly gone by its end: {late:?} against {early:?}"
+        );
+    }
+    let hit = shade(&mut renderer, Vfx::ManaHit, red, 0.08);
+    let [r, g, b] = hit.at(100, 100);
+    assert!(
+        r > 200 && g > 200 && b > 150,
+        "the hit's flare is white in the middle: {:?}",
+        [r, g, b]
+    );
+}

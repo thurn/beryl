@@ -195,10 +195,11 @@ restore the old behavior.
   (jD7VqaT8VC8 45:26.77, SswBO8aOOgc 21:02.75, IEXcjBn3BXk 18:06.62, jD7VqaT8VC8
   45:27.5, SswBO8aOOgc 21:02.0, pE4XSNi-nZc 34:21.0, jD7VqaT8VC8 17:34.0,
   IT6nwh6HtYk 9:17.93, IT6nwh6HtYk 9:18.2).
-- **Mana into what it pays for.** Each tapped land glows and sends one streak of
-  its color straight to the spell on the stack, which flashes as they land, in
-  about 0.3 s. Mana does not stop at a pool (by-p1j). Seen for casts paid with
-  lands (TbrYIs2juCw 33:32.45, 3sEoP_s4DQE 45:30.85).
+- **Mana into what it pays for.** Each tapped land bursts in the color of its
+  mana ("mana-birth") and sends one streak of that color straight to the spell
+  on the stack, which flares as they land ("mana-hit"), in about 0.3 s. Mana
+  does not stop at a pool (by-p1j). Seen for casts paid with lands (TbrYIs2juCw
+  33:32.45, 3sEoP_s4DQE 45:30.85).
 - **Ordering cards on a library.** Cards a player puts back on their library in
   an order of their choice (Halimar Depths, and the cards a look leaves on top
   or on the bottom) lie in one row under "Order Cards", the library's top card
@@ -920,19 +921,20 @@ plays that timing. `just client check` checks the motion in a recording, and
   flashes: mana from its source into the spell or ability it pays for, and
   damage from a spell or ability to what it hits. It rises out of its source's
   row toward the middle of the table on a low arc, a bright head with a tail
-  behind it, gathering as it leaves and quickening all the way, and its tail is
-  drawn in as it lands. Mana leaves as its source begins to turn, several into
-  one spell together, and has left the row before the row closes up; the mana of
-  a pile of lands fans out to either side. A source with no place left on the
-  table sends none: what its mana pays for only flashes. Each tapped land sends
-  one streak of its color to the spell on the stack in about 0.3 s. A burn spell
-  or ability glows, and a streak of fire crosses to its target in about 0.25 s,
-  with a burst where it lands; the spell leaves after (TbrYIs2juCw 33:32.45,
+  behind it, a hot core down its middle and sparks shed behind its head,
+  gathering as it leaves and quickening all the way, and its tail is drawn in as
+  it lands. Mana leaves as its source begins to turn, several into one spell
+  together, and has left the row before the row closes up; the mana of a pile of
+  lands fans out to either side. A source with no place left on the table sends
+  none: what its mana pays for only flashes. Each tapped land sends one streak
+  of its color to the spell on the stack in about 0.3 s. A burn spell or ability
+  glows, and a streak of fire crosses to its target in about 0.25 s, with a
+  burst where it lands; the spell leaves after (TbrYIs2juCw 33:32.45,
   3sEoP_s4DQE 45:30.85, pE4XSNi-nZc 22:00.6, IEXcjBn3BXk 20:40.88, IEXcjBn3BXk
   38:36.7, I3Te0m1bBFw 31:37.8). Beryl: 250 ms, 100 ms after its cause, ease-in.
-  Effects: glow as it begins (mana) (on what it leaves), flash as it ends (mana)
-  (on what it strikes), glow as it begins (damage) (on what it leaves), impact
-  as it ends (damage) (on what it strikes).
+  Effects: mana-birth as it begins (mana) (on what it leaves), mana-hit as it
+  ends (mana) (on what it strikes), glow as it begins (damage) (on what it
+  leaves), impact as it ends (damage) (on what it strikes).
 - **count.** A number changes and shows that it did: a life total, a kind of
   counter, a power and toughness, a mana pool. A life total jumps to its new
   value in a burst of about 0.4 s; a loss's red number drifts down from the
@@ -1087,6 +1089,23 @@ says what a player may do; an effect says what just happened, and is gone.
 - **flash.** A flare of white light with rays over a spell or ability as the
   mana that pays for it lands, brightest at once, that spreads to about twice
   the card's width and is gone. Drawn over its card. Beryl: 330 ms, linear.
+- **mana-birth.** As mana leaves a tapped land or other source, light in the
+  mana's color swirls round a hot white point over it, with a dark glow under
+  it, a thin ring that runs outward and white sparks thrown out from the middle,
+  and is gone in about 0.6 s. A land of two colors glows in the color of the
+  mana it gives. In Baseline, a glow in the mana's color with a white middle and
+  a ring that spreads. Drawn over its card. Each tapped land bursts into a swirl
+  of its mana's color round the tap symbol, with sparks and a dark under-glow,
+  as its streak rises out of it (3sEoP_s4DQE 45:30.85, TbrYIs2juCw 33:32.45).
+  Beryl: 600 ms, linear.
+- **mana-hit.** As mana lands on the spell or ability it pays for, a white
+  four-point flare with long side rays flashes over it, light and wisps in the
+  mana's color spread across it, and sparks of that color scatter outward, all
+  gone in about 0.45 s. In Baseline, a white flare with rays and a glow in the
+  mana's color. Drawn over its card. Where a land's streak meets the spell on
+  the stack, a white star flare with side rays flashes and colored glints
+  scatter over the card (3sEoP_s4DQE 45:31.2, TbrYIs2juCw 33:32.85). Beryl: 450
+  ms, linear.
 - **beam.** A cone of white and yellow light shoots from the side of a triggered
   ability that has come to rest on the stack, toward the middle of the table,
   from a little above its middle: it reaches nearly two cards' widths in a

@@ -59,6 +59,10 @@ pub struct EffectRun {
     pub on_point: bool,
     /// Seed for particle emitters. A run with no seed emits no particles.
     pub particle_seed: Option<u32>,
+    /// Colors the step carries, which `"subject_colors"` tints use in place of the subject's
+    /// own: the color of the mana a streak brings, on the source it leaves and on what it pays
+    /// for. `None` uses the subject's colors.
+    pub colors: Option<SubjectColors>,
     pub start: u64,
     pub duration: u64,
     pub curve: Curve,
@@ -88,6 +92,7 @@ impl EffectRun {
             on: EffectTarget::Key(ElementId(0)),
             on_point: false,
             particle_seed: Some(0),
+            colors: None,
             start: 0,
             duration,
             curve: Curve::LINEAR,

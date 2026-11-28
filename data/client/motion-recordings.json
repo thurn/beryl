@@ -18,7 +18,7 @@
     "lift": "verbs-dig"
   },
   "effects": {
-    "glow": "verbs-zones",
+    "glow": "verbs-burn",
     "settle": "verbs-piles",
     "dissolve": "verbs-opening-theirs",
     "dim": "verbs-zones",
@@ -27,7 +27,8 @@
     "impact": "verbs-combat",
     "shake": "verbs-combat",
     "trail": "verbs-combat",
-    "flash": "verbs-zones",
+    "mana-birth": "verbs-zones",
+    "mana-hit": "verbs-zones",
     "beam": "verbs-piles",
     "pulse": "verbs-piles",
     "loss": "verbs-burn",

@@ -590,7 +590,7 @@
     {
       "kind": "settled",
       "name": "Mana into what it pays for",
-      "rule": "Each tapped land glows and sends one streak of its color straight to the spell on the stack, which flashes as they land, in about 0.3 s. Mana does not stop at a pool.",
+      "rule": "Each tapped land bursts in the color of its mana (\"mana-birth\") and sends one streak of that color straight to the spell on the stack, which flares as they land (\"mana-hit\"), in about 0.3 s. Mana does not stop at a pool.",
       "reports": [
         "by-p1j"
       ],
@@ -2133,7 +2133,7 @@
     },
     {
       "name": "streak",
-      "shows": "A streak of light leaves one thing and lands on another, which flashes: mana from its source into the spell or ability it pays for, and damage from a spell or ability to what it hits. It rises out of its source's row toward the middle of the table on a low arc, a bright head with a tail behind it, gathering as it leaves and quickening all the way, and its tail is drawn in as it lands. Mana leaves as its source begins to turn, several into one spell together, and has left the row before the row closes up; the mana of a pile of lands fans out to either side. A source with no place left on the table sends none: what its mana pays for only flashes.",
+      "shows": "A streak of light leaves one thing and lands on another, which flashes: mana from its source into the spell or ability it pays for, and damage from a spell or ability to what it hits. It rises out of its source's row toward the middle of the table on a low arc, a bright head with a tail behind it, a hot core down its middle and sparks shed behind its head, gathering as it leaves and quickening all the way, and its tail is drawn in as it lands. Mana leaves as its source begins to turn, several into one spell together, and has left the row before the row closes up; the mana of a pile of lands fans out to either side. A source with no place left on the table sends none: what its mana pays for only flashes.",
       "arena": {
         "does": "Each tapped land sends one streak of its color to the spell on the stack in about 0.3 s. A burn spell or ability glows, and a streak of fire crosses to its target in about 0.25 s, with a burst where it lands; the spell leaves after.",
         "evidence": [
@@ -2185,13 +2185,13 @@
       },
       "effects": [
         {
-          "effect": "glow",
+          "effect": "mana-birth",
           "when": "start",
           "case": "mana",
           "on": "source"
         },
         {
-          "effect": "flash",
+          "effect": "mana-hit",
           "when": "end",
           "case": "mana",
           "on": "struck"
@@ -2774,6 +2774,52 @@
       "layer": "over",
       "values": {
         "duration": 330,
+        "delay": null,
+        "curve": "linear"
+      }
+    },
+    {
+      "name": "mana-birth",
+      "shows": "As mana leaves a tapped land or other source, light in the mana's color swirls round a hot white point over it, with a dark glow under it, a thin ring that runs outward and white sparks thrown out from the middle, and is gone in about 0.6 s. A land of two colors glows in the color of the mana it gives. In Baseline, a glow in the mana's color with a white middle and a ring that spreads.",
+      "layer": "over",
+      "arena": {
+        "does": "Each tapped land bursts into a swirl of its mana's color round the tap symbol, with sparks and a dark under-glow, as its streak rises out of it.",
+        "evidence": [
+          {
+            "recording": "3sEoP_s4DQE",
+            "time": "45:30.85"
+          },
+          {
+            "recording": "TbrYIs2juCw",
+            "time": "33:32.45"
+          }
+        ]
+      },
+      "values": {
+        "duration": 600,
+        "delay": null,
+        "curve": "linear"
+      }
+    },
+    {
+      "name": "mana-hit",
+      "shows": "As mana lands on the spell or ability it pays for, a white four-point flare with long side rays flashes over it, light and wisps in the mana's color spread across it, and sparks of that color scatter outward, all gone in about 0.45 s. In Baseline, a white flare with rays and a glow in the mana's color.",
+      "layer": "over",
+      "arena": {
+        "does": "Where a land's streak meets the spell on the stack, a white star flare with side rays flashes and colored glints scatter over the card.",
+        "evidence": [
+          {
+            "recording": "3sEoP_s4DQE",
+            "time": "45:31.2"
+          },
+          {
+            "recording": "TbrYIs2juCw",
+            "time": "33:32.85"
+          }
+        ]
+      },
+      "values": {
+        "duration": 450,
         "delay": null,
         "curve": "linear"
       }

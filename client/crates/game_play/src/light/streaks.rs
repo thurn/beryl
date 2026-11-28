@@ -22,6 +22,11 @@
 //! which fades as the head goes, and has a hot point at its head `dot` times its head's
 //! half-width across. Its body is the ribbon sprite, the same all along, so that the records
 //! along it join into one band; the comet sprite drew a bead at each record.
+//!
+//! As Arena's mana trail does (`vfx_ManaTap_<Color>_Sustain`, recording `3sEoP_s4DQE` at 45:30.95), a streak
+//! has a hot core down the middle of its ribbon, and sheds sparks behind its head that drift off
+//! and fade. The burst where mana leaves and the flare where it lands are the `mana-birth` and
+//! `mana-hit` effects.
 
 use beryl_protocol::protocol::Mana;
 use beryl_protocol::script::{Stream, Subject};
@@ -33,6 +38,7 @@ use kit_base::data::verbs::Streak;
 use kit_base::tokens::color;
 use kit_frame::frame::{Band, Draw, FrameBuilder, sprites};
 use kit_fx::effects::light::quad;
+use kit_fx::effects::vfx::unit_hash;
 
 /// How many records draw one streak, evenly along the part of its arc from its tail to its
 /// head.
@@ -132,6 +138,14 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
                 ),
             );
         }
+        write_core(
+            &comet,
+            (through, lit, spacing),
+            tint,
+            (eye, tuning),
+            builder,
+        );
+        write_sparks(&comet, through, (run, tint), eye, builder);
         // The hot point at its head (the web's dot `5` times the head's width across).
         let across = tuning.dot * comet.wide;
         builder.draw(
@@ -139,6 +153,82 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
             Draw::glow(
                 quad(comet.at(through), Vec3::X, eye, across, across),
                 hot(tint),
+                sprites::DISC,
+                0.0,
+            ),
+        );
+    }
+}
+
+/// Draws a streak's hot core, a narrower band near white down the middle of its ribbon, as
+/// Arena's trail has (`vfx_ManaTap_<Color>_Sustain`). Its records lie where the ribbon's do.
+fn write_core(
+    comet: &Comet,
+    (through, lit, spacing): (f32, f32, f32),
+    tint: [u8; 4],
+    (eye, tuning): (Vec3, &Streak),
+    builder: &mut FrameBuilder<'_>,
+) {
+    let length = comet.length();
+    for record in 1..=RECORDS {
+        #[expect(clippy::cast_precision_loss, reason = "a record's number, under 9")]
+        let share = record as f32 / RECORDS as f32;
+        let t = comet.back + lit * share;
+        let half = comet.wide * share * share * tuning.ribbon * CORE;
+        let long = (2.0 * spacing).max(2.0 * half);
+        let own = (long / length.max(f32::EPSILON)).max(f32::EPSILON);
+        builder.draw(
+            Band::Glows,
+            Draw::streak(
+                quad(comet.at(t), comet.tangent(t), eye, long, 2.0 * half),
+                hot(tint),
+                sprites::RIBBON,
+                (through - t) / own + 0.5,
+                lit / own,
+            ),
+        );
+    }
+}
+
+/// How wide the streak's hot core is, as a share of its ribbon's body.
+const CORE: f32 = 0.35;
+
+/// How many sparks a streak sheds along its way.
+const SPARKS: u32 = 12;
+
+/// How long a spark lasts, as a share of the streak's way.
+const SPARK_LIFE: f32 = 0.4;
+
+/// Draws the sparks a streak sheds behind its head, as Arena's trail does: each is left at its
+/// own point along the arc as the head passes, drifts off to one side and slows, and shrinks
+/// and fades. Half are the streak's color and half near white. Each spark's place, way and size
+/// come from the step's number and its own, so the same streak sheds the same sparks.
+fn write_sparks(
+    comet: &Comet,
+    through: f32,
+    (run, tint): (&StreakRun, [u8; 4]),
+    eye: Vec3,
+    builder: &mut FrameBuilder<'_>,
+) {
+    for spark in 0..SPARKS {
+        let hash = |salt: u32| unit_hash(run.step, spark * 4 + salt);
+        #[expect(clippy::cast_precision_loss, reason = "a spark's number, under 13")]
+        let left = (spark as f32 + hash(0)) / SPARKS as f32 * 0.9;
+        let age = (through - left) / SPARK_LIFE;
+        if !(0.0..1.0).contains(&age) {
+            continue;
+        }
+        let angle = hash(1) * std::f32::consts::TAU;
+        let way = Vec3::new(angle.cos(), angle.sin(), 0.4 * hash(2));
+        let drift = comet.wide * (1.5 + 2.5 * hash(3)) * (1.0 - (1.0 - age) * (1.0 - age));
+        let at = comet.at(left) + way * drift;
+        let across = comet.wide * 1.4 * (1.0 - 0.6 * age);
+        let color = if spark % 2 == 0 { tint } else { hot(tint) };
+        builder.draw(
+            Band::Glows,
+            Draw::glow(
+                quad(at, Vec3::X, eye, across, across),
+                fade(color, (1.0 - age).powf(1.5)),
                 sprites::DISC,
                 0.0,
             ),

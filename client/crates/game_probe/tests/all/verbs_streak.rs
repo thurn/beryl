@@ -191,7 +191,8 @@ fn a_streak_is_drawn_while_its_step_plays_and_at_no_other_time() {
         for now in (0..to + 50 * MS).step_by(usize::try_from(5 * MS).expect("fits")) {
             let records = streaks(&streaked.frame(now));
             if (from..to).contains(&now) {
-                assert_eq!(records.len(), RECORDS, "one streak at {now}");
+                // The ribbon and its hot core down the middle, each `RECORDS` long.
+                assert_eq!(records.len(), 2 * RECORDS, "one streak at {now}");
                 drawn += 1;
             } else {
                 assert_eq!(records, Vec::new(), "no streak at {now}");

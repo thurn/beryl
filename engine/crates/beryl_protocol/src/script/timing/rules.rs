@@ -311,10 +311,11 @@ fn a_blow_bursts_on_what_it_strikes() {
     );
 }
 
-/// What a streak lands on flashes as it lands, and its source glows as it leaves; a player's
-/// pool is no card to glow, and mana from nowhere has no source.
+/// Mana bursts out of its source as it leaves and flares on what it pays for as it lands, and
+/// damage glows where it leaves and strikes where it lands; a player's pool is no card to burst
+/// from, and mana from nowhere has no source.
 #[test]
-fn a_streak_glows_where_it_leaves_and_flashes_where_it_lands() {
+fn a_streak_bursts_where_it_leaves_and_flares_where_it_lands() {
     let names = |act: &Act| -> Vec<(String, Edge, Option<Subject>)> {
         effects(act)
             .into_iter()
@@ -325,8 +326,8 @@ fn a_streak_glows_where_it_leaves_and_flashes_where_it_lands() {
     assert_eq!(
         names(&paid),
         [
-            ("glow".to_owned(), Edge::Start, Some(object(1))),
-            ("flash".to_owned(), Edge::End, Some(object(2))),
+            ("mana-birth".to_owned(), Edge::Start, Some(object(1))),
+            ("mana-hit".to_owned(), Edge::End, Some(object(2))),
         ]
     );
     let burn = streak(
@@ -350,7 +351,7 @@ fn a_streak_glows_where_it_leaves_and_flashes_where_it_lands() {
         streak(None, object(2), mana()),
     ] {
         let names: Vec<_> = effects(&spent).into_iter().map(|e| e.0).collect();
-        assert_eq!(names, ["flash"]);
+        assert_eq!(names, ["mana-hit"]);
     }
 }
 

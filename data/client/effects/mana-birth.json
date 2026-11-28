@@ -1,0 +1,57 @@
+{
+  "name": "mana-birth",
+  "target": "subject",
+  "layers": [
+    {
+      "kind": "sprite",
+      "baseline_only": true,
+      "shape": "disc",
+      "quad": {
+        "scale": { "from": 0.7, "by": 0.5, "start": 0.0, "end": 0.6 },
+        "tint": "subject_colors",
+        "alpha": 0.8,
+        "fade": {
+          "rise": { "from": 1, "by": -1, "start": 0.0, "end": 0.08 },
+          "fall": { "from": 0, "by": 1, "start": 0.25, "end": 0.75 }
+        },
+        "record": {
+          "scale": { "from": 1.0, "by": 0.2 },
+          "opacity": { "from": 1.0, "by": -1.0 }
+        }
+      }
+    },
+    {
+      "kind": "sprite",
+      "baseline_only": true,
+      "shape": "disc",
+      "quad": {
+        "scale": { "from": 0.32, "by": 0.12, "start": 0.0, "end": 0.5 },
+        "tint": [255, 252, 240, 230],
+        "fade": {
+          "rise": { "from": 1, "by": -1, "start": 0.0, "end": 0.06 },
+          "fall": { "from": 0, "by": 1, "start": 0.18, "end": 0.55 }
+        }
+      }
+    },
+    {
+      "kind": "ring",
+      "baseline_only": true,
+      "quad": {
+        "scale": { "from": 0.25, "by": 1.2, "start": 0.0, "end": 0.4 },
+        "tint": "subject_colors",
+        "fade": {
+          "rise": { "from": 1, "by": -1, "start": 0.0, "end": 0.06 },
+          "fall": { "from": 0, "by": 1, "start": 0.15, "end": 0.4 }
+        }
+      }
+    },
+    {
+      "kind": "vfx",
+      "enhanced_only": true,
+      "vfx": "mana_birth",
+      "size": 2.0,
+      "tint": "subject_colors",
+      "fade": { "from": 0, "by": 1, "start": 0.85 }
+    }
+  ]
+}

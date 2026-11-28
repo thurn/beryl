@@ -42,6 +42,7 @@ fn records(effect: &str, data: &Effects) -> String {
             Subject::Object { slot } => Some(u32::from(slot.0)),
             _ => None,
         },
+        colors: None,
         start: 1_000,
         duration: 10_000,
         curve: if effect == "glow" {
@@ -118,6 +119,7 @@ fn remaining_records(effect: &str, on: Subject, moving: bool, data: &Effects) ->
             Subject::Object { slot } => Some(u32::from(slot.0)),
             _ => None,
         },
+        colors: None,
         start: 100 * MS,
         duration: 1_000 * MS,
         curve: Curve::LINEAR,

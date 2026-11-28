@@ -125,6 +125,12 @@ fn dispatch_vfx(in: VfxOut) -> vec4<f32> {
         case VFX_MYTHIC_ARRIVAL: {
             return shade_mythic_arrival(in.mesh_uv, time_s, seed, aspect, tint);
         }
+        case VFX_MANA_BIRTH: {
+            return shade_mana_birth(in.mesh_uv, time_s, seed, aspect, tint);
+        }
+        case VFX_MANA_HIT: {
+            return shade_mana_hit(in.mesh_uv, time_s, seed, aspect, tint);
+        }
         default: {
             return vec4<f32>(0.0);
         }
@@ -171,6 +177,12 @@ fn vfx_bloom_gain(kind: u32, style: u32) -> f32 {
         }
         case VFX_MYTHIC_ARRIVAL: {
             return BLOOM_GAIN_MYTHIC_ARRIVAL;
+        }
+        case VFX_MANA_BIRTH: {
+            return BLOOM_GAIN_MANA_BIRTH;
+        }
+        case VFX_MANA_HIT: {
+            return BLOOM_GAIN_MANA_HIT;
         }
         default: {
             return 0.0;

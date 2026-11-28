@@ -1,0 +1,42 @@
+{
+  "name": "mana-hit",
+  "target": "subject",
+  "layers": [
+    {
+      "kind": "burst",
+      "baseline_only": true,
+      "quad": {
+        "scale": { "from": 1.6, "by": 1.0 },
+        "tint": [255, 250, 238, 217],
+        "fade": { "from": 0, "by": 1 },
+        "alpha": { "remaining_power": 0.6 },
+        "record": {
+          "scale": { "from": 1.0, "by": 0.2 },
+          "opacity": { "from": 1.0, "by": -1.0 }
+        }
+      }
+    },
+    {
+      "kind": "sprite",
+      "baseline_only": true,
+      "shape": "disc",
+      "quad": {
+        "scale": { "from": 0.8, "by": 0.6 },
+        "tint": "subject_colors",
+        "alpha": 0.75,
+        "fade": {
+          "rise": { "from": 1, "by": -1, "start": 0.0, "end": 0.08 },
+          "fall": { "from": 0, "by": 1, "start": 0.2, "end": 0.85 }
+        }
+      }
+    },
+    {
+      "kind": "vfx",
+      "enhanced_only": true,
+      "vfx": "mana_hit",
+      "size": 1.9,
+      "tint": "subject_colors",
+      "fade": { "from": 0, "by": 1, "start": 0.9 }
+    }
+  ]
+}
