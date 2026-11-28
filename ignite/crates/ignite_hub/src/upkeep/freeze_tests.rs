@@ -169,8 +169,34 @@ fn landings_resume_once_master_holds_every_landing_before_the_freeze() {
     let report = freeze::pass(&mut conn, clock.now()).unwrap();
     assert!(report.lifted);
     assert_eq!(in_force(&conn, &clock), None);
-    // The ticket stays open for the work on what caused the stall.
-    assert_eq!(ticket(&conn, &frozen).status, Status::Open);
+    // No worker holds the ticket, so upkeep closes it.
+    assert_eq!(ticket(&conn, &frozen).status, Status::Closed);
+    assert_eq!(comment_count(&conn, &frozen), 1);
+}
+
+/// A landing under the freeze's ticket leaves it open until `master` catches up, and a worker
+/// that holds it when `master` does keeps it, to close after recording its mitigations.
+#[test]
+fn the_freeze_ticket_stays_open_until_master_catches_up() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    landing(&mut conn, &clock);
+    clock.advance(FREEZE_SECONDS);
+    let report = freeze::pass(&mut conn, clock.now()).unwrap();
+    let frozen = report.filed[0].ticket.clone();
+    assert!(freeze::holds_open(&conn, &frozen).unwrap());
+    assert!(!freeze::holds_open(&conn, &report.filed[1].ticket).unwrap());
+
+    conn.execute(
+        "UPDATE tickets SET assignee = 'local_j', status = 'in_progress' WHERE id = ?1",
+        [&frozen],
+    )
+    .unwrap();
+    verify(&conn, &clock, "aaaaaaa");
+    clock.advance(60.0);
+    assert!(freeze::pass(&mut conn, clock.now()).unwrap().lifted);
+    assert!(!freeze::holds_open(&conn, &frozen).unwrap());
+    assert_ne!(ticket(&conn, &frozen).status, Status::Closed);
     assert_eq!(comment_count(&conn, &frozen), 1);
 }
 

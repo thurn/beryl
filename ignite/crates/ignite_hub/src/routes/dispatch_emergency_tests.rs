@@ -4,9 +4,10 @@
 use serde_json::{Value, json};
 
 use ignite_core::protocol::emergency::EMERGENCY_LASTS_S;
+use ignite_core::protocol::tickets::Status;
 use ignite_store::hub;
 
-use super::tests::{Parent, at, claim, file_under, free, open, post, register};
+use super::tests::{Parent, at, claim, file_under, free, landed, open, post, register};
 
 fn declare(ticket: &str, session: &str) -> Value {
     json!({"change": "declare", "ticket": ticket, "session": session, "machine": "m-1"})
@@ -302,4 +303,71 @@ fn resuming_every_machine_does_not_end_an_emergency_declared_on_another_ticket()
     );
     assert_eq!(status, 200, "{ended}");
     assert!(!in_force(&mut conn, 10.0));
+}
+
+/// In November 2026 a justiciar landed its last fix under the landings freeze's ticket, and
+/// the landing closed it while `master` was still 71 landings behind. A landing under that
+/// ticket now records the work and releases the ticket, so the pool offers it again.
+#[test]
+fn landing_under_an_unended_freeze_releases_its_ticket_instead_of_closing_it() {
+    let mut conn = open();
+    register(&mut conn);
+    let (_, ids) = file_under(
+        &mut conn,
+        Parent::Loose,
+        &[("Landings frozen", &["justiciar"], &[])],
+    );
+    let ticket = ids[0].as_str();
+    conn.execute(
+        "INSERT INTO meta (key, value) VALUES ('master_freeze', ?1)",
+        [json!({"ticket": ticket, "since": at(0.0)}).to_string()],
+    )
+    .unwrap();
+    let (status, reply) = post(&mut conn, "/claims", &claim(ticket, "local_j"), at(1.0));
+    assert_eq!(status, 200, "{reply}");
+    let (status, reply) = post(
+        &mut conn,
+        "/landed",
+        &landed(ticket, "local_j", "fix: the tip"),
+        at(2.0),
+    );
+    assert_eq!(status, 200, "{reply}");
+    let after = ignite_store::hub::tickets::load(&conn, ticket)
+        .unwrap()
+        .unwrap();
+    assert_eq!(after.status, Status::Open);
+    assert_eq!(after.assignee, None);
+    assert!(after.landed.is_some());
+    let comments: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM comments WHERE ticket = ?1 AND text LIKE 'Landed 3a9e4c1%'",
+            [ticket],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(comments, 1);
+    // The daemon sends a landing again when it did not read the reply.
+    let (status, reply) = post(
+        &mut conn,
+        "/landed",
+        &landed(ticket, "local_j", "fix: the tip"),
+        at(2.5),
+    );
+    assert_eq!(status, 200, "{reply}");
+
+    // Once `master` catches up, upkeep deletes the stored freeze and a landing closes again.
+    conn.execute("DELETE FROM meta WHERE key = 'master_freeze'", [])
+        .unwrap();
+    post(&mut conn, "/claims", &claim(ticket, "local_k"), at(3.0));
+    let (status, reply) = post(
+        &mut conn,
+        "/landed",
+        &landed(ticket, "local_k", "fix: more"),
+        at(4.0),
+    );
+    assert_eq!(status, 200, "{reply}");
+    let closed = ignite_store::hub::tickets::load(&conn, ticket)
+        .unwrap()
+        .unwrap();
+    assert_eq!(closed.status, Status::Closed);
 }

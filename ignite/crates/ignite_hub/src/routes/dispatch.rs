@@ -53,7 +53,7 @@ mod counting;
 
 #[path = "dispatch_closing.rs"]
 mod closing;
-use closing::closing;
+use closing::{closing, repeat, settle};
 
 pub use queue::{named_files, resolve_named_file, view};
 
@@ -399,23 +399,8 @@ fn landed(conn: &mut Connection, landed: &Landed, now: Timestamp, test_paths: &[
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(sql_failure)?;
     let ticket = load(&tx, id)?;
-    if ticket.status == Status::Closed && ticket.session.as_ref() == Some(&landed.session) {
-        if ticket.landed.as_ref() != Some(&landed.work)
-            || queue::chain_machine(&tx, &landed.machine, now)
-                .map_err(|e| store_failure(&e))?
-                .is_none()
-        {
-            return Ok(Response::json(200, &json!(LandedReply { next: None })));
-        }
-        let next = fleet::reservation_for_landing(
-            &tx,
-            landed.machine.as_str(),
-            landed.session.as_str(),
-            id,
-            now,
-        )
-        .map_err(|e| store_failure(&e))?;
-        return Ok(Response::json(200, &json!(LandedReply { next })));
+    if let Some(reply) = repeat(&tx, &ticket, landed, now)? {
+        return Ok(reply);
     }
     holds(&ticket, &landed.session)?;
     let provider: Option<String> = tx
@@ -456,14 +441,13 @@ fn landed(conn: &mut Connection, landed: &Landed, now: Timestamp, test_paths: &[
         commit: landed.work.commits.last().cloned(),
         prior_commits,
     };
-    close_after_landing(&mut tx, landed, now, &fix)?;
+    settle(&mut tx, landed, now, &fix)?;
     free_worker(
         &tx,
         &landed.machine,
         &landed.session,
         Some(&landed.work.files),
     )?;
-    findings::close_ticket(&tx, id, now).map_err(|e| store_failure(&e))?;
     let ticket = load(&tx, id)?;
     if let Some(commit) = &fix.commit
         && ticket

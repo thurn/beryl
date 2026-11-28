@@ -23,8 +23,14 @@
 //! - Every pass renews the emergency, so it never lapses while the stall lasts, and lists every
 //!   open regression, justiciar and incident ticket as allowed to land, so the fixes get in.
 //!   A tip round's own reverts do not go through `ignite land` and are never refused.
-//! - It ends once `master` holds every landing made before the freeze. The ticket stays open
-//!   for its root-cause work.
+//! - It ends once `master` holds every landing made before the freeze.
+//! - Landing a fix under the freeze's ticket does not close it while the freeze's stall lasts
+//!   ([`holds_open`]): the hub releases it instead, so the pool sends it to another worker
+//!   if `master` still does not move. Its body says to close it once `master` moves, and
+//!   `ignite land` closes the ticket it lands under, so in November 2026 a justiciar's last
+//!   fix closed the ticket while `master` was still 71 landings behind, and the postmortem
+//!   that waits on it started while the stall went on. Once `master` catches up, upkeep
+//!   closes the ticket if no worker holds it.
 //! - It is not declared while a tip waits on a machine that has stopped reporting, because
 //!   stopping landings does not bring that machine back ([`super::stuck::tips_waiting`] files
 //!   its ticket), or while another emergency is in force. The postmortem ticket is filed
@@ -38,8 +44,8 @@ use serde::{Deserialize, Serialize};
 use ignite_core::ids::{MachineId, SessionId, TicketId};
 use ignite_core::protocol::emergency::{Allowance, Emergency, EmergencyScope};
 use ignite_core::protocol::tickets::{
-    BatchRequest, Dependency, EdgeKind, INCIDENT_LABEL, JUSTICIAR_LABEL, Operation, TicketFields,
-    TicketType,
+    BatchRequest, Dependency, EdgeKind, INCIDENT_LABEL, JUSTICIAR_LABEL, Operation, Status,
+    TicketFields, TicketType,
 };
 use ignite_core::time::Timestamp;
 use ignite_store::hub::batch;
@@ -106,9 +112,9 @@ pub fn pass(conn: &mut Connection, now: Timestamp) -> Result<FreezeReport> {
         if caught_up(conn, freeze.since, now)? {
             if ours.is_some() {
                 emergency::clear(conn)?;
-                comment(conn, &freeze, now)?;
                 report.lifted = true;
             }
+            caught_up_comment(conn, &freeze, ours.is_some(), now)?;
             set_state(conn, None)?;
         } else if let Some(current) = ours {
             emergency::impose(conn, &renewed(conn, current.clone(), now)?)?;
@@ -265,8 +271,10 @@ fn file(conn: &mut Connection, stall: &Stall<'_>, now: Timestamp) -> Result<File
          Get `master` moving: fix or revert what fails at the tip, and defer a platform whose \
          machine is off. Record each mitigation on this ticket with what it fixed and the \
          evidence that led you to it, because a postmortem ticket waits on this one and starts \
-         from that record. Close this ticket once `master` moves; finding out why the stall \
-         happened is the postmortem's work. Read `ignite guide justiciar` before anything else."
+         from that record. Landing a fix under this ticket releases it instead of closing it \
+         while `master` is still behind, and upkeep closes it once `master` catches up; close \
+         it yourself only when `master` has moved. Finding out why the stall happened is the \
+         postmortem's work. Read `ignite guide justiciar` before anything else."
     );
     let filing = Filing {
         signature: Signature::of_subject(FREEZE_SUBJECT, JUSTICIAR_LABEL),
@@ -364,20 +372,59 @@ fn file_postmortem(
     filing::file(conn, UPKEEP, &filing, now)
 }
 
-/// Says on the freeze's ticket that landings resumed.
-fn comment(conn: &mut Connection, freeze: &Freeze, now: Timestamp) -> Result<()> {
-    let text = format!(
-        "`master` now holds every landing made before landings froze at {}, so landings resumed \
-         at {now}. Close this ticket once its mitigations are recorded; the postmortem ticket \
-         that waits on it finds the cause of the stall.",
+/// Whether landing `ticket` must leave it open: it is the ticket of a freeze whose stall has
+/// not ended, because `master` still lacks a landing made before landings froze. The stored
+/// freeze is deleted by the first pass after `master` catches up, so this is true until then.
+pub fn holds_open(conn: &Connection, ticket: &str) -> Result<bool> {
+    Ok(state(conn)?.is_some_and(|freeze| freeze.ticket.as_str() == ticket))
+}
+
+/// Says on the freeze's ticket that `master` caught up, and closes it if it is open and no
+/// worker holds it. A worker that holds it closes it after recording its mitigations.
+fn caught_up_comment(
+    conn: &mut Connection,
+    freeze: &Freeze,
+    lifted: bool,
+    now: Timestamp,
+) -> Result<()> {
+    let Some(ticket) = ignite_store::hub::tickets::load(conn, freeze.ticket.as_str())? else {
+        return Ok(());
+    };
+    let open = ticket.status != Status::Closed;
+    let close = open && ticket.assignee.is_none();
+    if !lifted && !close {
+        return Ok(());
+    }
+    let mut text = format!(
+        "`master` now holds every landing made before landings froze at {}",
         freeze.since
     );
+    text.push_str(if lifted {
+        ", so landings resumed."
+    } else {
+        "."
+    });
+    if close {
+        text.push_str(" No worker holds this ticket, so upkeep closed it.");
+    } else if open {
+        text.push_str(" Close this ticket once its mitigations are recorded.");
+    }
+    text.push_str(" The postmortem ticket that waits on it finds the cause of the stall.");
+    let id = freeze.ticket.to_string();
+    let mut ops = vec![Operation::Comment {
+        id: id.clone(),
+        text,
+    }];
+    if close {
+        ops.push(Operation::Close {
+            id,
+            reason: "master caught up with the landings made before the freeze".to_owned(),
+            include_ready: false,
+        });
+    }
     let request = BatchRequest {
         preconditions: Vec::new(),
-        ops: vec![Operation::Comment {
-            id: freeze.ticket.to_string(),
-            text,
-        }],
+        ops,
     };
     batch::apply(conn, &request, UPKEEP.actor, UPKEEP.machine, now)?;
     Ok(())
