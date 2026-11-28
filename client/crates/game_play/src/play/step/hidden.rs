@@ -16,6 +16,7 @@
 
 use super::super::record::{Cause, SegmentRecord};
 use super::Motion;
+use super::room::only_height;
 use crate::verbs::{self, Interval};
 use beryl_protocol::protocol::ZoneName;
 use game_table::table::{Place, Placement, Rest};
@@ -58,12 +59,16 @@ pub(super) fn scrolled_out(rest: Option<&Rest>) -> bool {
 /// Whether a card resting at `before` and then at `after` goes into or out of the window of a
 /// container that scrolls without moving: the window's nearer end is both the last place in
 /// view and where the cards beyond it rest, so a card there that one more item pushes out of
-/// view keeps its pose (`Motion::show_or_hide`).
+/// view keeps its pose (`Motion::show_or_hide`). The cards beyond the window rest at that end
+/// at the depth of their place in the row, which differs from the depth of the card in view
+/// there, so a difference in height alone does not count as a move: a card that kept its place
+/// but for its depth, as the creature row scrolled one group along, was drawn there, covering
+/// the card that slid into that place, until its slide ended.
 pub(super) fn shown_or_hidden(before: Option<&Rest>, after: Option<&Rest>) -> bool {
     let (Some(before), Some(after)) = (before, after) else {
         return false;
     };
-    before.pose == after.pose && scrolled_out(Some(before)) != scrolled_out(Some(after))
+    only_height(before.pose, after.pose) && scrolled_out(Some(before)) != scrolled_out(Some(after))
 }
 
 impl Motion<'_> {
