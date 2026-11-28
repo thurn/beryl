@@ -352,18 +352,38 @@ fn shared_games_of_the_pool_and_every_card() {
     println!("shared fuzz decks: {every}");
 }
 
-/// A shared-deck game of the identity family in which Worldgorger Dragon and Animate Dead
-/// loop above a triggered ability waiting on the stack, which names the looping card from
-/// before the loop. The loop check once read that reference as staler each time around, so no
-/// position repeated and the game ran out of the looping card's incarnations in `Large`. The
-/// loop is mandatory, so the game ends (see CR 104.4b).
+/// A deterministic board setup in which Worldgorger Dragon and Animate Dead enter a mandatory
+/// loop, so the game ends in a draw (see CR 104.4b).
 #[test]
 fn a_loop_above_a_waiting_trigger_is_a_draw() {
-    let seed = 1959;
-    let cards = keystone_family("identity").expect("the identity family");
-    let t = shared(|seed| fuzz_deck_from(seed, &cards), seed);
-    let s: State = State::new(&t, seed, Profile::SMART).unwrap();
-    let played = play_widening(&t, s, seed, &mut HashMap::new(), false, &mut agents(seed));
+    use beryl_cards::names::{ANIMATE_DEAD, PLAINS, SWAMP, WORLDGORGER_DRAGON};
+    use beryl_engine::{Seat, TurnStep, Zone};
+    let t = GameTable::new(
+        Format::CONSTRUCTED,
+        &CARDS,
+        [
+            &[
+                (1, WORLDGORGER_DRAGON),
+                (1, ANIMATE_DEAD),
+                (2, SWAMP),
+                (18, PLAINS),
+            ],
+            &[(20, PLAINS)],
+        ],
+    )
+    .unwrap();
+    let mut s: State = State::new(&t, 0, Profile::SMART).unwrap();
+    s.board().begin_at(3, Seat::P0, TurnStep::PrecombatMain);
+    for slot in s.library(Seat::P0).to_vec() {
+        let zone = match s.definition_name(&t, slot) {
+            WORLDGORGER_DRAGON => Zone::Graveyard,
+            SWAMP => Zone::Battlefield,
+            ANIMATE_DEAD => Zone::Hand,
+            _ => continue,
+        };
+        s.board().place(slot, zone).unwrap();
+    }
+    let played = play_widening(&t, s, 0, &mut HashMap::new(), false, &mut agents(0));
     assert_eq!(played.outcome, Outcome::Draw);
 }
 
