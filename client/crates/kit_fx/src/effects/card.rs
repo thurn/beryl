@@ -129,7 +129,19 @@ pub fn write(
     look: &Look,
     builder: &mut FrameBuilder<'_>,
 ) {
-    for (run, primitive, progress) in layers(runs, on, now, builder.tier()) {
+    let tier = builder.tier();
+    for (run, primitive, progress, tier_only) in
+        runs.iter().filter(|run| run.on == on).flat_map(|run| {
+            player::sampled_layers(run, now, tier).map(move |(layer, progress)| {
+                (
+                    run,
+                    &layer.primitive,
+                    progress,
+                    layer.baseline_only || layer.enhanced_only,
+                )
+            })
+        })
+    {
         match primitive {
             Primitive::Surface {
                 amount,
@@ -158,6 +170,7 @@ pub fn write(
                 player::write_surface_burst(
                     quad,
                     (progress, effects.lift(), effects.palette()),
+                    tier_only,
                     run,
                     reach,
                     builder,

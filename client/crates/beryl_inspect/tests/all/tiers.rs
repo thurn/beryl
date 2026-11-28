@@ -28,16 +28,42 @@ fn enhanced_line(draw: &Draw) -> bool {
 }
 
 fn shared_draws(frame: &Frame) -> Vec<&Draw> {
-    frame
+    let mut draws: Vec<&Draw> = frame
         .draws
         .iter()
-        .filter(|draw| match frame.tier {
-            Tier::Baseline => {
-                draw.material != Material::ContactShadow as u8 && !baseline_line(draw)
+        .enumerate()
+        .filter_map(|(index, draw)| {
+            if frame.tier_only.get(index).copied().unwrap_or(false) {
+                return None;
             }
-            Tier::Enhanced => draw.material != Material::Particle as u8 && !enhanced_line(draw),
+            let keep = match frame.tier {
+                Tier::Baseline => {
+                    draw.material != Material::ContactShadow as u8 && !baseline_line(draw)
+                }
+                Tier::Enhanced => {
+                    draw.material != Material::Particle as u8
+                        && draw.material != Material::Vfx as u8
+                        && !enhanced_line(draw)
+                }
+            };
+            keep.then_some(draw)
         })
-        .collect()
+        .collect();
+    // `batch_bands` may reorder non-overlapping shared records differently around tier-only
+    // records (`BoxShadow` vs `Material::Vfx`) in the same band.
+    let key = |d: &Draw| {
+        (
+            d.material,
+            d.flags,
+            d.layer,
+            d.uv,
+            d.tint,
+            d.model.map(f32::to_bits),
+            d.params.map(f32::to_bits),
+        )
+    };
+    draws.sort_unstable_by_key(|d| key(d));
+    draws
 }
 
 #[test]

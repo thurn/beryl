@@ -422,7 +422,7 @@ impl Outline {
                 farthest = farthest.max(reach);
                 if !enhanced {
                     let spread = if inset { -shadow.spread } else { shadow.spread };
-                    builder.draw(
+                    builder.draw_tier_only(
                         band,
                         Draw::box_shadow(
                             placed(size + Vec2::splat(2.0 * reach)),

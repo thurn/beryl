@@ -19,7 +19,11 @@ pub(super) fn layers(
     sampled_layers(run, now, tier).map(|(layer, local)| (&layer.primitive, local))
 }
 
-fn sampled_layers(run: &EffectRun, now: u64, tier: Tier) -> impl Iterator<Item = (&Layer, f32)> {
+pub(super) fn sampled_layers(
+    run: &EffectRun,
+    now: u64,
+    tier: Tier,
+) -> impl Iterator<Item = (&Layer, f32)> {
     let elapsed = run.elapsed(now);
     let eased = elapsed.map(|elapsed| run.curve.ease(elapsed));
     run.definition.layers.iter().filter_map(move |layer| {
@@ -87,9 +91,9 @@ pub(super) fn write_light(
         if layer.mythic_only && !reach.mythic {
             continue;
         }
+        let tier_only = layer.baseline_only || layer.enhanced_only;
         write_light_primitive(
-            primitive,
-            p,
+            (primitive, p, tier_only),
             reach,
             &reach_at,
             (eye, lift, palette),
@@ -100,8 +104,7 @@ pub(super) fn write_light(
 }
 
 fn write_light_primitive(
-    primitive: &Primitive,
-    p: f32,
+    (primitive, p, tier_only): (&Primitive, f32, bool),
     reach: Reach,
     reach_at: &impl Fn(u64) -> Option<Reach>,
     (eye, lift, palette): (Vec3, f32, &EffectPalette),
@@ -119,7 +122,7 @@ fn write_light_primitive(
             write_quad(
                 quad,
                 (sprite(*shape), size),
-                (p, lift, palette),
+                (p, lift, palette, tier_only),
                 run,
                 reach,
                 builder,
@@ -129,7 +132,7 @@ fn write_light_primitive(
             write_quad(
                 quad,
                 (sprites::RING, basic),
-                (p, lift, palette),
+                (p, lift, palette, tier_only),
                 run,
                 reach,
                 builder,
@@ -143,14 +146,14 @@ fn write_light_primitive(
             write_quad(
                 quad,
                 (sprites::BURST, size),
-                (p, lift, palette),
+                (p, lift, palette, tier_only),
                 run,
                 reach,
                 builder,
             );
         }
         Primitive::Directed { sprite } => {
-            write_directed(sprite, (p, lift), run, reach, builder);
+            write_directed(sprite, (p, lift), tier_only, run, reach, builder);
         }
         Primitive::Streak {
             lookback_ms,
@@ -238,7 +241,7 @@ fn write_vfx(
     } else {
         0
     };
-    builder.draw(
+    builder.draw_tier_only(
         Band::Glows,
         Draw::vfx_styled(
             transform,
@@ -254,6 +257,7 @@ fn write_vfx(
 pub(super) fn write_surface_burst(
     quad: &Quad,
     (progress, lift, palette): (f32, f32, &EffectPalette),
+    tier_only: bool,
     run: &EffectRun,
     reach: Reach,
     builder: &mut FrameBuilder<'_>,
@@ -263,7 +267,7 @@ pub(super) fn write_surface_burst(
         write_quad(
             quad,
             (sprites::BURST, size),
-            (progress, lift, palette),
+            (progress, lift, palette, tier_only),
             run,
             reach,
             builder,
@@ -295,7 +299,7 @@ fn write_record(
 fn write_quad(
     quad: &Quad,
     (sprite, size): (Sprite, Vec2),
-    (progress, lift, palette): (f32, f32, &EffectPalette),
+    (progress, lift, palette, tier_only): (f32, f32, &EffectPalette, bool),
     run: &EffectRun,
     reach: Reach,
     builder: &mut FrameBuilder<'_>,
@@ -307,21 +311,24 @@ fn write_quad(
     };
     write_record(record, (progress, lift), run, reach, builder);
     let tint = quad.tint.resolve(palette, reach.colors);
-    builder.draw(
-        Band::Glows,
-        light::lying(
-            (&reach.pose, lift),
-            size * quad.scale.at(progress),
-            light::fade(tint, quad.alpha.at(progress)),
-            sprite,
-            quad.fade.at(progress).clamp(0.0, 1.0),
-        ),
+    let draw = light::lying(
+        (&reach.pose, lift),
+        size * quad.scale.at(progress),
+        light::fade(tint, quad.alpha.at(progress)),
+        sprite,
+        quad.fade.at(progress).clamp(0.0, 1.0),
     );
+    if tier_only {
+        builder.draw_tier_only(Band::Glows, draw);
+    } else {
+        builder.draw(Band::Glows, draw);
+    }
 }
 
 fn write_directed(
     directed: &DirectedSprite,
     (progress, lift): (f32, f32),
+    tier_only: bool,
     run: &EffectRun,
     reach: Reach,
     builder: &mut FrameBuilder<'_>,
@@ -350,15 +357,17 @@ fn write_directed(
         reach,
         builder,
     );
-    builder.draw(
-        Band::Glows,
-        kit_frame::frame::Draw::glow(
-            transform,
-            light::fade(directed.tint, directed.alpha.at(progress)),
-            sprite(directed.shape),
-            directed.fade.at(progress).clamp(0.0, 1.0),
-        ),
+    let draw = kit_frame::frame::Draw::glow(
+        transform,
+        light::fade(directed.tint, directed.alpha.at(progress)),
+        sprite(directed.shape),
+        directed.fade.at(progress).clamp(0.0, 1.0),
     );
+    if tier_only {
+        builder.draw_tier_only(Band::Glows, draw);
+    } else {
+        builder.draw(Band::Glows, draw);
+    }
 }
 
 /// The sampled position and opacity of a number already laid out by its host.

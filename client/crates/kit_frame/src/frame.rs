@@ -368,6 +368,9 @@ pub struct Frame {
     pub names: String,
     /// In drawing order.
     pub draws: Vec<Draw>,
+    /// Parallel to `draws`: whether each record came from a tier-only layer (`baseline_only` or
+    /// `enhanced_only`) so cross-tier parity checks can compare only shared records.
+    pub tier_only: Vec<bool>,
     /// `draws[..opaque]` are the opaque records.
     pub opaque: u32,
     /// `draws[layer..]` are the flat layer's records, drawn with no depth test and not shaken.
@@ -471,6 +474,7 @@ impl Frame {
             drop_regions: Vec::with_capacity(8),
             names: String::with_capacity(name_bytes),
             draws: Vec::with_capacity(draws),
+            tier_only: Vec::with_capacity(draws),
             opaque: 0,
             layer: 0,
             bands: [0; BANDS + 1],

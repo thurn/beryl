@@ -32,6 +32,7 @@ impl<'a> FrameBuilder<'a> {
         frame.drop_regions.clear();
         frame.names.clear();
         frame.draws.clear();
+        frame.tier_only.clear();
         frame.opaque = 0;
         frame.layer = 0;
         frame.bands = [0; BANDS + 1];
@@ -167,7 +168,13 @@ impl<'a> FrameBuilder<'a> {
     /// Adds a record to `band`. Within the flat layer's band, records are drawn in the order
     /// they are pushed, which is the order of its tree.
     pub fn draw(&mut self, band: Band, draw: Draw) {
-        self.push(band, draw, false);
+        self.push(band, draw, false, false);
+    }
+
+    /// Adds a record to `band` that belongs only to the active visual tier (`baseline_only` or
+    /// `enhanced_only`), so cross-tier parity checks skip it.
+    pub fn draw_tier_only(&mut self, band: Band, draw: Draw) {
+        self.push(band, draw, false, true);
     }
 
     /// Adds a record to `band` that lies on the record pushed just before it, in the same band,
@@ -177,10 +184,10 @@ impl<'a> FrameBuilder<'a> {
     /// of a panel seen lengthwise, as on a tapped card, would be drawn first and covered by
     /// the panel.
     pub fn draw_over(&mut self, band: Band, draw: Draw) {
-        self.push(band, draw, true);
+        self.push(band, draw, true, false);
     }
 
-    fn push(&mut self, band: Band, draw: Draw, over: bool) {
+    fn push(&mut self, band: Band, draw: Draw, over: bool, tier_only: bool) {
         let particle = draw.material == Material::Particle as u8;
         let vfx = draw.is_vfx();
         debug_assert!(
@@ -204,6 +211,7 @@ impl<'a> FrameBuilder<'a> {
             .scratch
             .push(band, self.frame.draws.len(), &draw, over);
         self.frame.draws.push(draw);
+        self.frame.tier_only.push(tier_only);
         if self.frame.looking {
             self.frame.owners.push(self.owner);
         }

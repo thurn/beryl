@@ -107,6 +107,7 @@ pub(super) struct Scratch {
     /// own anchor unless `FrameBuilder::draw_over` laid it on the record pushed before it.
     anchors: Vec<u32>,
     draws: Vec<Draw>,
+    tier_only: Vec<bool>,
     nodes: Vec<u64>,
     /// The render band of each registered card or ability's face, by node index.
     card_bands: Vec<Option<Band>>,
@@ -137,6 +138,7 @@ impl Scratch {
             keys: Vec::with_capacity(draws),
             anchors: Vec::with_capacity(draws),
             draws: Vec::with_capacity(draws),
+            tier_only: Vec::with_capacity(draws),
             nodes: Vec::with_capacity(nodes),
             card_bands: Vec::with_capacity(nodes),
             batching: Batching {
@@ -155,6 +157,7 @@ impl Scratch {
         self.keys.clear();
         self.anchors.clear();
         self.draws.clear();
+        self.tier_only.clear();
         self.nodes.clear();
         self.card_bands.clear();
         self.first_calls = [None; BANDS];
@@ -194,7 +197,12 @@ impl Scratch {
 /// load, all but the screen areas, which `areas` measures when a gate asks for them.
 pub(super) fn finish(frame: &mut Frame) {
     let (view_projection, card) = (frame.view_projection, frame.card);
-    let Frame { draws, scratch, .. } = frame;
+    let Frame {
+        draws,
+        tier_only,
+        scratch,
+        ..
+    } = frame;
     for key in &mut scratch.keys {
         let draw = &draws[scratch.anchors[record_index(*key)] as usize];
         *key |= u64::from(depth_key(band_of(*key), draw, view_projection)) << DEPTH_SHIFT;
@@ -205,6 +213,10 @@ pub(super) fn finish(frame: &mut Frame) {
         .draws
         .extend(scratch.keys.iter().map(|key| draws[record_index(*key)]));
     std::mem::swap(draws, &mut scratch.draws);
+    scratch
+        .tier_only
+        .extend(scratch.keys.iter().map(|key| tier_only[record_index(*key)]));
+    std::mem::swap(tier_only, &mut scratch.tier_only);
     if !frame.owners.is_empty() {
         let pushed = std::mem::take(&mut frame.owners);
         frame.owners = (scratch.keys.iter())
@@ -347,6 +359,8 @@ impl Frame {
         }
         let mut at = 0;
         self.draws.retain(|_| (kept[at], at += 1).0);
+        at = 0;
+        self.tier_only.retain(|_| (kept[at], at += 1).0);
         at = 0;
         self.scratch.keys.retain(|_| (kept[at], at += 1).0);
         at = 0;
