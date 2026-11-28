@@ -464,12 +464,39 @@ fn motion(
     // once and puts the new game's there, and 16 cards breaking up in four zones at once
     // read as no move at all.
     if let Some(stagger) = zoned {
+        let own = batch_capped(act, beside, own);
         return StepTiming {
             stagger: own.stagger.max(stagger),
             ..own
         };
     }
-    own
+    batch_capped(act, beside, own)
+}
+
+/// The most time one batch of cards may spend starting, from its first card to its last.
+const BATCH_SPREAD_MS: f64 = 1500.0;
+
+/// `own`, with the stagger of a large batch of one verb compressed so that its cards begin
+/// within [`BATCH_SPREAD_MS`], as a draw's do. Day's Undoing in a late game shuffles 58 cards
+/// into the libraries, and at the verb's 326 ms stagger the last card left 19 s after the
+/// first. Batches of up to five keep the verb's stagger.
+fn batch_capped(act: &Act, beside: &[&Act], own: StepTiming) -> StepTiming {
+    if own.stagger <= 0.0 || !matches!(act, Act::Fly { .. } | Act::Vanish { .. }) {
+        return own;
+    }
+    let count = beside
+        .iter()
+        .filter(|other| other.verb() == act.verb())
+        .count();
+    if count < 2 {
+        return own;
+    }
+    #[allow(clippy::cast_precision_loss)]
+    let gaps = (count - 1) as f64;
+    StepTiming {
+        stagger: own.stagger.min(BATCH_SPREAD_MS / gaps),
+        ..own
+    }
 }
 
 /// The effects the step `act` begins, which finds the table `found`: its verb's that fit it

@@ -563,3 +563,33 @@ fn opponent_discard_uses_its_own_duration_including_in_shared_games() {
     assert_eq!(timing.case.as_deref(), Some("opponent discard"));
     assert_eq!(timing.duration, 475.0);
 }
+
+/// Cards of one verb that all move in one beat, such as every card of both players' hands and
+/// graveyards shuffled into their libraries, begin within 1500 ms of each other however many
+/// there are, and a small batch keeps the verb's own stagger.
+#[test]
+fn a_large_batch_of_flights_is_compressed_to_a_set_spread() {
+    let main = Table::empty(20);
+    let batch = |count: u16| -> Vec<Act> {
+        (1..=count)
+            .map(|slot| {
+                fly(
+                    ZoneName::Library,
+                    Why::Effect,
+                    card(slot, ZoneName::Hand, Side::You),
+                )
+            })
+            .collect()
+    };
+    let stagger = |count: u16| {
+        let acts = batch(count);
+        let refs: Vec<&Act> = acts.iter().collect();
+        timing_of(&acts[0], &main, None, &refs).stagger
+    };
+    let small = stagger(3);
+    assert!(small > 0.0, "a flight staggers");
+    assert_eq!(stagger(5), small, "five cards keep the verb's stagger");
+    let large = stagger(58);
+    assert!(large * 57.0 <= 1500.0 + 1e-9, "{large}");
+    assert!(large < small);
+}

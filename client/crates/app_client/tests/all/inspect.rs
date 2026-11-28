@@ -325,7 +325,13 @@ fn the_bug_report_keeps_the_hovered_card_zoom_on_screen() {
     assert!(inspector(&mut page).is_some(), "hovering a card zooms it");
     page.chord("Cmd+B");
     page.still();
-    assert!(inspector(&mut page).is_some(), "the zoom stays in the report");
+    assert!(
+        inspector(&mut page).is_some(),
+        "the zoom stays in the report"
+    );
     page.step(Duration::from_millis(500));
-    assert!(inspector(&mut page).is_some(), "and after the picture is taken");
+    assert!(
+        inspector(&mut page).is_some(),
+        "and after the picture is taken"
+    );
 }

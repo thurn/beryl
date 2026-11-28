@@ -29,8 +29,8 @@ impl Client {
     pub(super) fn inspect(&mut self, now: u64) {
         let until = self.refusal_frame(now);
         let hovered = self.inspected_slot();
-        let visible = matches!(self.features.screen, Screen::Game | Screen::Table)
-            && self.table_shown();
+        let visible =
+            matches!(self.features.screen, Screen::Game | Screen::Table) && self.table_shown();
         let decision = self.open_decision().map(|decision| decision.id);
         let view = self
             .show

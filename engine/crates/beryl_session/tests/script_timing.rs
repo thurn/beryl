@@ -3,7 +3,8 @@
 //! of a game resumed from a save of the corpus.
 
 use crate::common::fixtures::TRINKET_MAGE_FINDS_PORTABLE_HOLE;
-use beryl_cards::CARDS;
+use beryl_cards::{CARDS, names};
+use beryl_scenario::prelude::{ME, P0, P1, Resolve, Scenario, Zone};
 use beryl_session::corpus;
 use beryl_session::protocol::PlayerView;
 use beryl_session::script::Script;
@@ -83,4 +84,71 @@ fn a_game_resumed_from_a_save_sends_timed_scripts() {
         }
     }
     panic!("no save of the corpus resumes into a game that plays on");
+}
+
+/// A late game's Day's Undoing shuffles 58 cards into the libraries. They begin to move
+/// within a second and a half of each other, not 326 ms apart (19 s in all), which a player
+/// reported as an animation that took over 30 seconds.
+#[test]
+fn a_late_game_days_undoing_shuffles_its_cards_in_under_two_seconds() {
+    const LATE_GAME: &Scenario = &Scenario::new("Day's Undoing shuffles a late game's cards away")
+        .battlefield(P0, &[names::ISLAND; 3])
+        .hand(
+            P0,
+            &[
+                names::DAYS_UNDOING,
+                names::PLAINS,
+                names::PLAINS,
+                names::PLAINS,
+                names::PLAINS,
+                names::PLAINS,
+                names::PLAINS,
+                names::PLAINS,
+                names::PLAINS,
+                names::PLAINS,
+                names::PLAINS,
+                names::PLAINS,
+                names::PLAINS,
+            ],
+        )
+        .graveyard(P0, &[names::ISLAND; 17])
+        .library(P0, &[names::ISLAND; 20])
+        .hand(P1, &[names::PLAINS; 10])
+        .graveyard(P1, &[names::ISLAND; 18])
+        .library(P1, &[names::ISLAND; 20])
+        .actions(&[
+            ME.casts(names::DAYS_UNDOING),
+            Resolve,
+            ME.has(Zone::Graveyard, names::DAYS_UNDOING, 0),
+        ]);
+    let views = views(LATE_GAME, |_, _, _| {});
+    let mut batch = 0;
+    for seats in &views {
+        let script = seats[0].script.as_ref().expect("a view's script");
+        assert_timed(script, "Day's Undoing");
+        for beat in &script.beats {
+            // The index of the beat's first step among all steps.
+            let start: usize = script
+                .beats
+                .iter()
+                .take_while(|b| !std::ptr::eq(*b, beat))
+                .map(Vec::len)
+                .sum();
+            let timings = &script.timing[start..start + beat.len()];
+            let flights = timings.iter().filter(|t| t.stagger > 0.0).count();
+            batch = batch.max(flights);
+            if let Some(widest) = timings.iter().map(|t| t.stagger).reduce(f64::max) {
+                #[allow(clippy::cast_precision_loss)]
+                let spread = widest * flights.saturating_sub(1) as f64;
+                assert!(
+                    spread <= 1500.0 + 1e-6,
+                    "{flights} staggered steps spread over {spread} ms"
+                );
+            }
+        }
+    }
+    assert!(
+        batch >= 30,
+        "the scenario shuffles a large batch, saw {batch}"
+    );
 }
