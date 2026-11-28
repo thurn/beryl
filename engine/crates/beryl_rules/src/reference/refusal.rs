@@ -37,6 +37,69 @@ pub(super) fn check_refusals<L: Layout>(s: &State<L>, t: &GameTable) -> Result<(
     Ok(())
 }
 
+fn priority_slot<L: Layout>(opt: Opt<L>) -> Option<L::Slot> {
+    match opt {
+        Opt::PlayLand(slot)
+        | Opt::Cast { slot, .. }
+        | Opt::Activate { slot, .. }
+        | Opt::Mana { slot, .. }
+        | Opt::TurnFaceUp(slot) => Some(slot),
+        Opt::Pass
+        | Opt::Play
+        | Opt::Draw
+        | Opt::Keep
+        | Opt::Mulligan
+        | Opt::FreeMulligan
+        | Opt::Trigger(_)
+        | Opt::Yes
+        | Opt::No
+        | Opt::Done
+        | Opt::Attack { .. }
+        | Opt::AttackAll(_)
+        | Opt::Defender(_)
+        | Opt::Block(_)
+        | Opt::Lethal(_)
+        | Opt::Pool(_)
+        | Opt::Number(_)
+        | Opt::Plan(_)
+        | Opt::Player(_)
+        | Opt::Ability(_)
+        | Opt::Object(_)
+        | Opt::Companion => None,
+    }
+}
+
+fn attack_slot<L: Layout>(opt: Opt<L>) -> Option<L::Slot> {
+    match opt {
+        Opt::Attack { slot, .. } | Opt::AttackAll(slot) => Some(slot),
+        Opt::Pass
+        | Opt::Play
+        | Opt::Draw
+        | Opt::Keep
+        | Opt::Mulligan
+        | Opt::FreeMulligan
+        | Opt::Trigger(_)
+        | Opt::Yes
+        | Opt::No
+        | Opt::Done
+        | Opt::PlayLand(_)
+        | Opt::Cast { .. }
+        | Opt::Activate { .. }
+        | Opt::Mana { .. }
+        | Opt::TurnFaceUp(_)
+        | Opt::Defender(_)
+        | Opt::Block(_)
+        | Opt::Lethal(_)
+        | Opt::Pool(_)
+        | Opt::Number(_)
+        | Opt::Plan(_)
+        | Opt::Player(_)
+        | Opt::Ability(_)
+        | Opt::Object(_)
+        | Opt::Companion => None,
+    }
+}
+
 /// Checks that every card in the priority holder's hand (or exiled as a prepare spell copy)
 /// that has an option in `priority_decision` is not refused by [`refusal`].
 fn check_priority_refusals<L: Layout>(s: &State<L>, t: &GameTable) -> Result<(), Violation> {
@@ -52,47 +115,21 @@ fn check_priority_refusals<L: Layout>(s: &State<L>, t: &GameTable) -> Result<(),
         return Ok(());
     };
 
-    let mut offered = Vec::new();
-    for &opt in opts.as_slice() {
-        match opt {
-            Opt::PlayLand(slot)
-            | Opt::Cast { slot, .. }
-            | Opt::Activate { slot, .. }
-            | Opt::Mana { slot, .. }
-            | Opt::TurnFaceUp(slot) => offered.push(slot),
-            Opt::Pass
-            | Opt::Play
-            | Opt::Draw
-            | Opt::Keep
-            | Opt::Mulligan
-            | Opt::FreeMulligan
-            | Opt::Trigger(_)
-            | Opt::Yes
-            | Opt::No
-            | Opt::Done
-            | Opt::Attack { .. }
-            | Opt::AttackAll(_)
-            | Opt::Defender(_)
-            | Opt::Block(_)
-            | Opt::Lethal(_)
-            | Opt::Pool(_)
-            | Opt::Number(_)
-            | Opt::Plan(_)
-            | Opt::Player(_)
-            | Opt::Ability(_)
-            | Opt::Object(_)
-            | Opt::Companion => {}
-        }
-    }
-    if offered.is_empty() {
+    if !opts
+        .as_slice()
+        .iter()
+        .any(|&opt| priority_slot(opt).is_some())
+    {
         return Ok(());
     }
 
     let obs = Observation::new(s, player);
     let refused_offered = cards.filter(|slot| {
-        let is_offered = offered
+        let is_offered = opts
+            .as_slice()
             .iter()
-            .any(|&cand| cand == slot || interchangeable(s, cand, slot));
+            .filter_map(|&opt| priority_slot(opt))
+            .any(|cand| cand == slot || interchangeable(s, cand, slot));
         is_offered && refusal(obs, t, slot).is_some()
     });
     if let Some(index) = refused_offered.min(SlotId::index) {
@@ -115,38 +152,11 @@ fn check_attack_refusals<L: Layout>(s: &State<L>, t: &GameTable) -> Result<(), V
         return Ok(());
     };
 
-    let mut offered = Vec::new();
-    for &opt in opts.as_slice() {
-        match opt {
-            Opt::Attack { slot, .. } | Opt::AttackAll(slot) => offered.push(slot),
-            Opt::Pass
-            | Opt::Play
-            | Opt::Draw
-            | Opt::Keep
-            | Opt::Mulligan
-            | Opt::FreeMulligan
-            | Opt::Trigger(_)
-            | Opt::Yes
-            | Opt::No
-            | Opt::Done
-            | Opt::PlayLand(_)
-            | Opt::Cast { .. }
-            | Opt::Activate { .. }
-            | Opt::Mana { .. }
-            | Opt::TurnFaceUp(_)
-            | Opt::Defender(_)
-            | Opt::Block(_)
-            | Opt::Lethal(_)
-            | Opt::Pool(_)
-            | Opt::Number(_)
-            | Opt::Plan(_)
-            | Opt::Player(_)
-            | Opt::Ability(_)
-            | Opt::Object(_)
-            | Opt::Companion => {}
-        }
-    }
-    if offered.is_empty() {
+    if !opts
+        .as_slice()
+        .iter()
+        .any(|&opt| attack_slot(opt).is_some())
+    {
         return Ok(());
     }
 
@@ -156,9 +166,11 @@ fn check_attack_refusals<L: Layout>(s: &State<L>, t: &GameTable) -> Result<(), V
         if derived.controller != active {
             continue;
         }
-        let is_offered = offered
+        let is_offered = opts
+            .as_slice()
             .iter()
-            .any(|&cand| cand == slot || interchangeable(s, cand, slot));
+            .filter_map(|&opt| attack_slot(opt))
+            .any(|cand| cand == slot || interchangeable(s, cand, slot));
         if is_offered {
             check(
                 combat::attack_refusal(obs, t, slot).is_none(),
