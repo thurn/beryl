@@ -161,7 +161,9 @@ pub fn proposal_bounds(
                 return None;
             };
             let card = layout?.bounds(ElementId(u32::from(slot.0)))?;
-            let width = 12.0 * label.text.chars().count() as f32 + 2.0 * space::M;
+            // A third of a touch target per character is wider than any text there.
+            let width =
+                label.text.chars().count() as f32 * target / f32::from(3_u8) + space::M + space::M;
             Some(Rect {
                 x: card.x + (card.width - width) / 2.0,
                 y: card.y - target - space::S,
