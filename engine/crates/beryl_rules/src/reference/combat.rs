@@ -161,33 +161,14 @@ fn enumerate_attacks<L: Layout>(
             )
         })
         .count();
-    // A unit for each source can't say what a priced mana ability or a change to mana makes.
-    let rich = t.can_either(Capability::PricedMana, Capability::ManaChanges);
     let paid_for = |chosen: &[L::Slot]| -> Option<bool> {
         let added = chosen.len() - already.len();
         let n = attacking_player + if has_planeswalker { 0 } else { added };
         if n == 0 || per.is_zero() {
             return Some(true);
         }
-        let tapping: Bitboard<L::Slot> = chosen
-            .iter()
-            .copied()
-            .filter(|&slot| !s.derived(slot).keywords.contains(Keywords::VIGILANCE))
-            .collect();
         let total = times(per, u32::try_from(n).ok()?).ok()?;
-        if rich {
-            return sequences::reference_sequences_with(
-                s,
-                t,
-                active,
-                total,
-                Paying::NOTHING,
-                tapping,
-                &[],
-            );
-        }
-        let units = reference_units(s, t, active, Paying::NOTHING, tapping)?;
-        Some(reference_pays(units.as_slice(), total))
+        pays_to_attack(s, t, chosen, total)
     };
 
     let is_alone = |slot: L::Slot| {
@@ -245,6 +226,37 @@ fn enumerate_attacks<L: Layout>(
         }
     }
     Some(maximal)
+}
+
+/// Whether the active player can pay `total` to attack with `chosen`, those of which without
+/// vigilance tap before it is paid and so can't tap for mana. In a game whose cards have priced
+/// mana abilities or change mana abilities, as Mana Reflection doubles what a land makes, one
+/// unit per source can't say what is made, so every sequence of mana abilities is tried.
+fn pays_to_attack<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    chosen: &[L::Slot],
+    total: ManaCost,
+) -> Option<bool> {
+    let active = s.turn().active();
+    let tapping: Bitboard<L::Slot> = chosen
+        .iter()
+        .copied()
+        .filter(|&slot| !s.derived(slot).keywords.contains(Keywords::VIGILANCE))
+        .collect();
+    if t.can_either(Capability::PricedMana, Capability::ManaChanges) {
+        return sequences::reference_sequences_with(
+            s,
+            t,
+            active,
+            total,
+            Paying::NOTHING,
+            tapping,
+            &[],
+        );
+    }
+    let units = reference_units(s, t, active, Paying::NOTHING, tapping)?;
+    Some(reference_pays(units.as_slice(), total))
 }
 
 /// Checks `combat::block_decision(s, t, chosen)` against exhaustive enumeration.
