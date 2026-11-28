@@ -352,6 +352,13 @@
         "line_height": 1.4,
         "note": "A menu row's label: `.table-menu`'s 14 points at line height 1.4 in `ui/src/table/menu.css`."
       },
+      "LIST_ROW": {
+        "font": "OpenSans",
+        "weight": 400,
+        "size": 14,
+        "line_height": 1.5,
+        "note": "A row of a testing list: the menu label's size at a line height of exactly 21 points, so a name that breaks onto several lines makes a row a whole number of points tall."
+      },
       "MENU_TITLE": {
         "font": "Serif",
         "weight": 700,

@@ -205,6 +205,9 @@ pub(super) fn list_row(
     let least = minimum.unwrap_or(size::MENU_ROW_HEIGHT);
     // A long name breaks onto more lines, so the row keeps the height its text takes rather
     // than shrinking to fit more rows in the list.
+    // `type_style::MENU` has a line height of 19.6 points, so a name that broke onto two lines
+    // made a row 45.2 points tall and put the rows after it at fractions of a point, where the
+    // `overlap` check found neighbors cutting into each other. `LIST_ROW` is exactly 21 points a line.
     let mut row = Element::new(Role::Button)
         .name(name)
         .min_height(least)
@@ -213,7 +216,7 @@ pub(super) fn list_row(
         .on_press(message)
         .child(
             text(name)
-                .style(type_style::MENU)
+                .style(type_style::LIST_ROW)
                 .color(color::TYPE)
                 .grow(1.0)
                 .shrink(1.0)
