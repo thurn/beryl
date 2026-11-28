@@ -26,6 +26,12 @@ procedure. If the CLI is down, read
   Check that `ignite ticket show <incident ID>` shows the `incident` label
   and your session as assignee. Comment with the evidence, the operator's
   declaration and your session ID.
+- If an emergency is already in force (`ignite emergency` shows it), such as
+  the landings freeze that `ignite-upkeep` declares when `master` stalls, run
+  `ignite emergency adopt <incident ID>` instead of ending it and declaring a
+  new one. The emergency keeps its scope, its allowances and its end: a
+  freeze still ends by itself once `master` catches up, and upkeep keeps
+  renewing it.
 - When `master` stalls while `green` advances, run
   `ignite emergency declare <incident ID> --landings-only` to pause new
   landings to `staging`. Workers can still claim tickets, build and run checks.
@@ -34,6 +40,17 @@ procedure. If the CLI is down, read
 - For a broken build, a hub or daemon fault, or resource exhaustion, run
   `ignite emergency declare <incident ID>` to pause hand-offs and all new
   heavy commands.
+- To stop new hand-offs while the fixes still start, run
+  `ignite pool pause --all --except-holding-master`: regression and justiciar
+  tickets are still handed off, one per machine. Plain `ignite pool pause
+  --all` stops even those, so use it only when they must not start either.
+  Neither pause touches the emergency, and `ignite pool resume --all` never
+  ends one.
+- When builds wait for a build slot and leased trees hold every slot, free
+  one with `ignite trees evict <tree>`. It refuses while a command runs in the
+  tree, `--force` stops those commands first, and the lease holder's ticket is
+  told. Never delete a tree's build directories by hand: in November 2026
+  that broke a test running in one of them.
 - Renew the pause with the same scope before it expires in two hours. If
   Ignite is down, keep the timeline locally, proceed with recovery and record
   it on the ticket when the hub answers.
@@ -66,8 +83,10 @@ procedure. If the CLI is down, read
 - Record each mitigation on the incident ticket with exactly one outcome.
   Link a filed root-cause ticket with evidence of why the normal handler
   failed, or write one sentence explaining why nothing needs fixing.
-- Follow the guide to confirm recovery, restore fleet settings and end the
-  pause with `ignite pool resume --all`. Withdraw outstanding orders and
+- Follow the guide to confirm recovery, restore fleet settings, resume
+  hand-offs with `ignite pool resume --all` if you paused them, and end the
+  emergency with `ignite emergency end` (a freeze also ends by itself once
+  `master` catches up). Withdraw outstanding orders and
   verify every mitigation has its recorded outcome. Once recovery is confirmed,
   record it and file follow-ups for skipped checks and remaining fixes. If
   `master` stalled, close the incident ticket once it advances. Title a
