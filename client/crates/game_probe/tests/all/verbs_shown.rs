@@ -331,6 +331,73 @@ fn a_reset_empties_the_revealed_pile() {
     assert!(card(&frame, REVEALED_FACE + u32::from(slots[0].0)).is_none());
 }
 
+/// A free mulligan reveals the opponent's hand and then shuffles it into the library. The
+/// player saw the Revealed Cards pile of that hand stay over the table through the game that
+/// followed, as if it were the opponent's current hand.
+#[test]
+fn a_revealed_hand_that_goes_back_into_the_library_leaves_the_pile() {
+    let mut builder = ViewBuilder::new();
+    let slots: Vec<ObjectId> = ["Counterspell", "Plains", "Memory Lapse"]
+        .into_iter()
+        .map(|name| builder.card(ZoneName::Hand, Side::Opponent, name).slot)
+        .collect();
+    builder.script(ScriptBuilder::reset().build());
+    let start = builder.update();
+    let acts = slots
+        .iter()
+        .map(|&slot| Act::Showcase {
+            object: record(&start, slot),
+        })
+        .collect();
+    let revealed = scripted(&start, &start.view, acts);
+    let mut show = played(
+        &start,
+        &revealed,
+        vec![data_timing("showcase", None); slots.len()],
+    );
+    let mut buffer = empty_frame();
+    let shown = frame(&mut show, &mut buffer, 20_000 * MS);
+    let first = u32::from(slots[0].0);
+    assert!(
+        card(&shown, REVEALED_FACE + first).is_some(),
+        "the hand is revealed"
+    );
+
+    let acts = slots
+        .iter()
+        .map(|&slot| {
+            let mut object = record(&start, slot);
+            object.zone = ZoneName::Library;
+            Act::Vanish {
+                subject: Subject::Object { slot },
+                from: ZoneName::Hand,
+                why: beryl_protocol::protocol::Why::Return,
+                object: Some(object),
+                at: None,
+            }
+        })
+        .collect();
+    let mut view = start.view.clone();
+    for object in &mut view.objects {
+        object.zone = ZoneName::Library;
+    }
+    let shuffled = scripted(&start, &view, acts);
+    show.record();
+    show.push(
+        Box::new(shuffled),
+        vec![data_timing("vanish", None); slots.len()],
+    );
+    // The script starts at the first frame after it arrives and plays over the ones after.
+    frame(&mut show, &mut buffer, 40_000 * MS);
+    let frame = frame(&mut show, &mut buffer, 60_000 * MS);
+    for slot in slots {
+        assert!(
+            card(&frame, REVEALED_FACE + u32::from(slot.0)).is_none(),
+            "the face of {slot:?} left the pile with its card"
+        );
+    }
+}
+
 /// A view with five cards in the opponent's library, and the updates in which they look at the
 /// top three and stop.
 fn looked_at() -> (GameUpdate, GameUpdate, GameUpdate, Vec<ObjectId>) {

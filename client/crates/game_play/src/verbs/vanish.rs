@@ -5,6 +5,9 @@
 //! white light, a glow) is the step's effect, drawn apart from this motion.
 
 use super::{StepIn, StepOut};
+use crate::light::{Span, SpanChange};
+use beryl_protocol::protocol::ZoneName;
+use beryl_protocol::script::{Act, Span as Edge, Subject};
 use kit_base::pose::{Segment, Shape};
 
 pub const BUILT: bool = true;
@@ -16,6 +19,27 @@ pub const BUILT: bool = true;
 pub const CLOSES: f64 = 0.4;
 
 pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
+    // A revealed hand that goes back into the library (a free mulligan's) is no longer
+    // information the opponent holds: its face leaves the Revealed Cards pile as the card goes,
+    // so the pile does not stay over the table through the game that follows.
+    if let Act::Vanish {
+        subject: Subject::Object { slot },
+        from: ZoneName::Hand,
+        object: Some(object),
+        ..
+    } = step.act
+        && object.zone == ZoneName::Library
+    {
+        out.span(SpanChange {
+            span: Span::Revealed {
+                slot: *slot,
+                cause: None,
+            },
+            end: Edge::End,
+            over: step.own,
+            step: step.number,
+        });
+    }
     let (Some(subject), Some(from), Some(to)) = (step.subject, step.from, step.to) else {
         return;
     };

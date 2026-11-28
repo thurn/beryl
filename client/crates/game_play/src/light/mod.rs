@@ -194,12 +194,22 @@ impl Lit {
 
     /// The open span equal to `span` begins to go, and is gone once `over` is done. A span that
     /// is not open, or already going, is left as it is.
+    ///
+    /// A `Revealed` span with no cause names the card's face whatever revealed it.
     pub fn end(&mut self, span: &Span, over: Interval) {
-        if let Some(open) = self
-            .open
-            .iter_mut()
-            .find(|open| open.ends.is_none() && open.span == *span)
-        {
+        if let Some(open) = self.open.iter_mut().find(|open| {
+            open.ends.is_none()
+                && match (&open.span, span) {
+                    (
+                        Span::Revealed { slot, .. },
+                        Span::Revealed {
+                            slot: ended,
+                            cause: None,
+                        },
+                    ) => slot == ended,
+                    _ => open.span == *span,
+                }
+        }) {
             open.ends = Some(over);
         }
     }
