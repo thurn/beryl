@@ -163,7 +163,7 @@ fn dispatch_ready(
     let epic_order = dispatch_groups(snapshot, &mut ready);
     let improvements = improvements_due(conn, machine)?;
     let holds = provider_usage::held(conn, settings, now)?;
-    let placement = placement::Placement::load(conn, free, settings, &holds, &ready, now)?;
+    let placement = placement::Placement::load(conn, free, settings, &holds, &mut ready, now)?;
     let free = &MachineFree {
         free_cores: dispatch::room(free, &capacity.cores),
         ..free.clone()

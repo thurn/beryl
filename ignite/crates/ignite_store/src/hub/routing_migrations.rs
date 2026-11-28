@@ -120,8 +120,92 @@ pub(super) fn backfill_os_requirements(transaction: &Transaction<'_>) -> Result<
     Ok(())
 }
 
+/// Removes the `machine:` label that culprit affinity added to each open regression. Seen on
+/// 2026-11-27: that label pinned a regression to a slow, swapping machine for eight hours while
+/// `master` waited. The affinity stays in the metadata as a preference, marked as no longer
+/// adding the label. A `machine:` label that a person or worker added stays.
+pub(super) fn soften_regression_pins(transaction: &Transaction<'_>) -> Result<()> {
+    let rows = {
+        let mut statement = transaction.prepare(
+            "SELECT id, labels, metadata FROM tickets \
+             WHERE status != 'closed' AND labels LIKE '%\"regression\"%' \
+               AND json_extract(metadata, '$.culprit_affinity.added_label') = 1",
+        )?;
+        statement
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?
+    };
+    for (id, labels, metadata) in rows {
+        let invalid = |e: serde_json::Error| StoreError::Invalid(format!("ticket {id}: {e}"));
+        let mut labels: Vec<String> = serde_json::from_str(&labels).map_err(invalid)?;
+        let mut metadata: Value = serde_json::from_str(&metadata).map_err(invalid)?;
+        let affinity = &mut metadata["culprit_affinity"];
+        if let Some(added) = affinity["machine_label"].as_str() {
+            labels.retain(|label| label != added);
+        }
+        affinity["added_label"] = Value::Bool(false);
+        transaction.execute(
+            "UPDATE tickets SET labels = ?2, metadata = ?3 WHERE id = ?1",
+            params![id, Value::from(labels).to_string(), metadata.to_string()],
+        )?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn culprit_pins_on_open_regressions_become_preferences() {
+        let mut conn = rusqlite::Connection::open_in_memory().unwrap();
+        let migrations = crate::hub::MIGRATIONS;
+        crate::migrate::apply(&mut conn, &migrations[..55]).unwrap();
+        let affinity = |added: bool| {
+            serde_json::json!({"culprit_affinity": {
+                "landing": {"machine": "m-2", "provider": "claude"},
+                "machine_label": "machine:multivac",
+                "added_label": added,
+            }})
+            .to_string()
+        };
+        for (id, status, labels, metadata) in [
+            ("T1", "open", r#"["regression","machine:multivac"]"#, affinity(true)),
+            // A person pinned it, so culprit affinity did not add the label.
+            ("T2", "open", r#"["regression","machine:multivac"]"#, affinity(false)),
+            ("T3", "closed", r#"["regression","machine:multivac"]"#, affinity(true)),
+            // A reopened landing keeps its pin until it lands again.
+            ("T4", "open", r#"["machine:multivac"]"#, affinity(true)),
+        ] {
+            conn.execute(
+                "INSERT INTO tickets (id, title, status, created_at, created_by, updated_at,
+                                     version, labels, metadata)
+                 VALUES (?1, 'test', ?2, 'now', 'test', 'now', 1, ?3, ?4)",
+                rusqlite::params![id, status, labels, metadata],
+            )
+            .unwrap();
+        }
+        crate::migrate::apply(&mut conn, migrations).unwrap();
+        let row = |id: &str| -> (String, bool) {
+            conn.query_row(
+                "SELECT labels, json_extract(metadata, '$.culprit_affinity.added_label')
+                 FROM tickets WHERE id = ?1",
+                [id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap()
+        };
+        assert_eq!(row("T1"), (r#"["regression"]"#.to_owned(), false));
+        let pinned = r#"["regression","machine:multivac"]"#.to_owned();
+        assert_eq!(row("T2"), (pinned.clone(), false));
+        assert_eq!(row("T3"), (pinned, true));
+        assert_eq!(row("T4"), (r#"["machine:multivac"]"#.to_owned(), true));
+    }
+
     #[test]
     fn os_labels_filed_after_the_original_migration_become_requirements() {
         let mut conn = rusqlite::Connection::open_in_memory().unwrap();

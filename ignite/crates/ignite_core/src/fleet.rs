@@ -43,6 +43,10 @@ pub struct MachineSetting {
     /// fifteen tickets waited for build slots on the two loaded Macs.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub state_until: Option<Timestamp>,
+    /// The operator's speed for the machine, which replaces the hub's measurement
+    /// (`crate::machine_speed`). `None` uses the measurement.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub speed: Option<crate::machine_speed::Speed>,
     #[serde(flatten)]
     pub trees: TreeSettings,
 }
@@ -378,6 +382,14 @@ pub fn summary(before: &FleetSettings, after: &FleetSettings) -> String {
                 if previous.tree_ceiling_gb != trees.tree_ceiling_gb {
                     let _ = write!(change, ", tree ceiling {} GB", trees.tree_ceiling_gb);
                 }
+                if before.machine(name).speed != setting.speed {
+                    match setting.speed {
+                        Some(speed) => {
+                            let _ = write!(change, ", speed {speed}");
+                        }
+                        None => change.push_str(", speed measured"),
+                    }
+                }
                 changes.push(change);
             }
             None => changes.push(format!("machine {name}: defaults restored")),
@@ -483,6 +495,9 @@ pub struct FleetMachine {
     pub capacity: Option<CapacityReport>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub snapshot: Option<crate::protocol::machine_state::MachineSnapshot>,
+    /// The speed dispatch uses: the operator's setting, else the hub's measurement, else none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub speed: Option<crate::machine_speed::Speed>,
 }
 
 /// One usage window, or a sample with no windows if the CLI had no usage figures.

@@ -48,6 +48,9 @@ mod mix;
 #[path = "dispatch_placement.rs"]
 mod placement;
 
+#[path = "dispatch_speed.rs"]
+mod speed;
+
 #[path = "dispatch_releases.rs"]
 mod counting;
 
@@ -757,6 +760,10 @@ mod mix_tests;
 #[cfg(test)]
 #[path = "dispatch_placement_tests.rs"]
 mod placement_tests;
+
+#[cfg(test)]
+#[path = "dispatch_speed_tests.rs"]
+mod speed_tests;
 
 #[cfg(test)]
 #[path = "dispatch_fix_outcomes_tests.rs"]

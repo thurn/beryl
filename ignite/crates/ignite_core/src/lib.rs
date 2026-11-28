@@ -19,6 +19,7 @@ pub mod host;
 pub mod ids;
 pub mod inputs;
 pub mod manifest;
+pub mod machine_speed;
 pub mod mix;
 pub mod output;
 pub mod pins;

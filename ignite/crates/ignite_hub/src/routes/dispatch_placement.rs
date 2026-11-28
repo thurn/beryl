@@ -25,6 +25,8 @@ use super::queue::{self, held};
 
 pub(super) struct Placement<'a> {
     asker: &'a MachineFree,
+    /// Where a ticket that holds `master` back goes, which this comparison leaves out.
+    fastest: super::speed::Fastest,
     current: Option<CapacityReport>,
     peers: Vec<Peer>,
 }
@@ -50,10 +52,11 @@ impl<'a> Placement<'a> {
         asker: &'a MachineFree,
         settings: &FleetSettings,
         holds: &BTreeMap<String, Vec<Hold>>,
-        ready: &[ReadyTicket],
+        ready: &mut [ReadyTicket],
         now: Timestamp,
     ) -> Result<Self> {
         let mut placement = Self {
+            fastest: super::speed::Fastest::load(conn, asker, settings, ready, now)?,
             asker,
             current: None,
             peers: Vec::new(),
@@ -110,6 +113,9 @@ impl<'a> Placement<'a> {
         now: Timestamp,
         requirements: &Requirements,
     ) -> Result<Option<String>> {
+        if held::holds_master(ready) {
+            return self.fastest.defer(conn, ready, now);
+        }
         let Some(capacity) = &self.current else {
             return Ok(None);
         };

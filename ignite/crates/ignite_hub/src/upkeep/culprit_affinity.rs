@@ -1,4 +1,9 @@
 //! Routes repairs to the machine and provider that hold a CLI landing's transcript.
+//!
+//! A reopened landing is pinned there with a `machine:` label that Ignite removes when it lands
+//! again. A regression holds `master` back, so its affinity is only a preference in its
+//! metadata, which dispatch weighs against the speed of the machines that are free
+//! (`routes::dispatch_speed`).
 
 use std::collections::BTreeMap;
 
@@ -25,11 +30,13 @@ pub fn landing(ticket: &Ticket) -> Option<CliLanding> {
     })
 }
 
+/// The affinity of `repair` for `culprit`'s landing. With `preference`, no label is added.
 pub fn for_repair(
     conn: &Connection,
     culprit: &Ticket,
     repair: Option<&Ticket>,
     needed_os: Option<Os>,
+    preference: bool,
 ) -> Result<Option<CulpritAffinity>> {
     let Some(landing) = landing(culprit) else {
         return Ok(None);
@@ -51,7 +58,7 @@ pub fn for_repair(
     Ok(Some(CulpritAffinity {
         landing,
         machine_label,
-        added_label: already_added || !already_labelled,
+        added_label: !preference && (already_added || !already_labelled),
     }))
 }
 
@@ -60,9 +67,11 @@ pub fn affinity(ticket: &Ticket) -> Option<CulpritAffinity> {
 }
 
 pub fn added_label(ticket: &Ticket) -> Option<String> {
-    affinity(ticket)
-        .filter(|pin| pin.added_label)
-        .map(|pin| pin.machine_label)
+    added_label_of(&affinity(ticket)?)
+}
+
+fn added_label_of(pin: &CulpritAffinity) -> Option<String> {
+    pin.added_label.then(|| pin.machine_label.clone())
 }
 
 /// Replaces the temporary routing while preserving the ticket's own labels.
@@ -73,13 +82,16 @@ pub fn update(
 ) -> (Vec<String>, Vec<String>, Vec<String>) {
     let previous = added_label(ticket);
     let remove = previous
-        .filter(|label| pin.as_ref().is_none_or(|pin| pin.machine_label != *label))
+        .filter(|label| {
+            pin.as_ref()
+                .is_none_or(|pin| !pin.added_label || pin.machine_label != *label)
+        })
         .into_iter()
         .collect();
     let Some(pin) = pin else {
         return (Vec::new(), remove, vec![CULPRIT_AFFINITY_KEY.to_owned()]);
     };
-    let add = vec![pin.machine_label.clone()];
+    let add = added_label_of(&pin).into_iter().collect();
     set_meta.insert(CULPRIT_AFFINITY_KEY.to_owned(), json!(pin));
     (add, remove, Vec::new())
 }

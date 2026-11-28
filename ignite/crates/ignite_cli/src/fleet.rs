@@ -10,6 +10,7 @@ use serde_json::{Value, json};
 use ignite_core::fleet::{
     FleetSettings, FleetUpdate, FleetView, MachineState, SESSION_STATE_HOURS, TreeSpace, summary,
 };
+use ignite_core::machine_speed::Speed;
 use ignite_core::protocol::client::{Exit, Reply};
 use ignite_core::time::Timestamp;
 
@@ -44,6 +45,11 @@ pub enum FleetCommand {
         /// Maximum size of one tree's build directories in decimal gigabytes.
         #[arg(long)]
         tree_ceiling_gb: Option<u32>,
+        /// The machine's speed relative to the fastest (1.0), replacing the hub's measurement,
+        /// or "measured" to use the measurement again. Work that holds master back goes to the
+        /// fastest machine that can take it.
+        #[arg(long, value_name = "N|measured", value_parser = parse_speed)]
+        speed: Option<SpeedSetting>,
     },
     /// Change a provider's settings.
     Provider {
@@ -84,6 +90,17 @@ impl From<State> for MachineState {
     }
 }
 
+/// A `--speed` value: the operator's speed, or `None` to use the measurement.
+#[derive(Clone, Copy, Debug)]
+pub struct SpeedSetting(Option<Speed>);
+
+fn parse_speed(text: &str) -> std::result::Result<SpeedSetting, String> {
+    if text == "measured" {
+        return Ok(SpeedSetting(None));
+    }
+    text.parse().map(|speed| SpeedSetting(Some(speed)))
+}
+
 /// When the edit is made and whether a session (rather than the operator) makes it.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Editor {
@@ -102,6 +119,7 @@ impl FleetCommand {
                 trees_root,
                 tree_space_gb,
                 tree_ceiling_gb,
+                speed,
             } => {
                 let mut machine = settings.machine(name);
                 if let Some(state) = state {
@@ -121,6 +139,9 @@ impl FleetCommand {
                 }
                 if let Some(ceiling) = tree_ceiling_gb {
                     machine.trees.tree_ceiling_gb = *ceiling;
+                }
+                if let Some(SpeedSetting(speed)) = speed {
+                    machine.speed = *speed;
                 }
                 settings.machines.insert(name.clone(), machine);
             }
@@ -252,6 +273,14 @@ fn render(view: &FleetView) -> String {
         );
         for machine in view.machines.iter().filter(|machine| &machine.name == name) {
             let _ = write!(text, " | {}, last seen {}", machine.os, machine.last_seen);
+            if let Some(speed) = machine.speed {
+                let source = if setting.speed.is_some() {
+                    "set"
+                } else {
+                    "measured"
+                };
+                let _ = write!(text, ", speed {speed} ({source})");
+            }
             if let Some(capacity) = &machine.capacity {
                 let _ = write!(
                     text,
@@ -325,6 +354,7 @@ mod tests {
             trees_root: None,
             tree_space_gb: None,
             tree_ceiling_gb: None,
+            speed: None,
         }
     }
 

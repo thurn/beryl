@@ -21,6 +21,7 @@ pub mod leases;
 pub mod listings;
 pub mod machine_asks;
 pub mod machine_snapshots;
+pub mod machine_speeds;
 mod meta;
 pub mod metrics;
 pub mod pins;
@@ -332,6 +333,11 @@ pub const MIGRATIONS: &[Migration] = &[
         version: 55,
         sql: include_str!("external_edges.sql"),
         code: None,
+    },
+    Migration {
+        version: 56,
+        sql: "",
+        code: Some(routing_migrations::soften_regression_pins),
     },
 ];
 

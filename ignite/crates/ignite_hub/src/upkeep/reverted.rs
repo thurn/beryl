@@ -70,7 +70,7 @@ pub fn file(
     match &existing {
         Some(ticket) => {
             let id = ticket.id.to_string();
-            let pin = culprit_affinity::for_repair(conn, ticket, Some(ticket), ticket.needs_os)?;
+            let pin = culprit_affinity::for_repair(conn, ticket, Some(ticket), ticket.needs_os, false)?;
             let mut set_meta = BTreeMap::from([(REVERTED_KEY.to_owned(), meta)]);
             let (add_labels, remove_labels, unset_meta) =
                 culprit_affinity::update(ticket, pin, &mut set_meta);

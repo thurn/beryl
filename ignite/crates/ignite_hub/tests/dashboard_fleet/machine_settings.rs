@@ -37,12 +37,12 @@ fn fleet_settings_are_editable_only_on_the_private_listener() {
             "cygnus".to_owned(),
             MachineSetting {
                 state: MachineState::ChecksOnly,
-                state_until: None,
                 trees: TreeSettings {
                     trees_root: Some(r"D:\trees".to_owned()),
                     tree_space_gb: Some(TreeSpace::Gigabytes(90)),
                     tree_ceiling_gb: 40,
                 },
+                ..MachineSetting::default()
             },
         ),
         (

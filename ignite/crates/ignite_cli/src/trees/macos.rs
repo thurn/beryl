@@ -79,6 +79,7 @@ pub(super) fn run(cwd: &Path, state: bool, size_gb: u32) -> Reply {
         indefinitely: false,
         trees_root: Some(root.clone()),
         tree_space_gb: None,
+        speed: None,
         tree_ceiling_gb: None,
     };
     let reply = crate::fleet::run(Some(&command), cwd);

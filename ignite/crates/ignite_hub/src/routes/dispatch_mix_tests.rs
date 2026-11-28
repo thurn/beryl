@@ -623,8 +623,12 @@ fn file_repair(
     regressions::file(conn, author, &report, now).unwrap().0
 }
 
+/// The culprit's machine is only a preference for a regression, which holds `master` back.
+/// While jarvis has room and is as fast as the asker, the regression waits for it and its
+/// provider. A minute after it was last passed over, any machine that asks may take it.
 #[test]
-fn a_late_culprit_reroutes_an_unclaimed_regression_to_its_machine_and_provider() {
+fn a_late_culprit_prefers_its_machine_and_provider_for_an_unclaimed_regression() {
+    use super::placement_tests::{capacity, record};
     use ignite_core::protocol::tickets::CAUSED_BY_KEY;
     use ignite_store::hub::tickets;
 
@@ -638,8 +642,9 @@ fn a_late_culprit_reroutes_an_unclaimed_regression_to_its_machine_and_provider()
     assert_eq!(post(&mut conn, "/claims", &stale_claim, at(4.0)).0, 409);
     let ticket = tickets::load(&conn, &id).unwrap().unwrap();
     assert_eq!(ticket.metadata[CAUSED_BY_KEY], json!(culprit));
-    assert!(ticket.labels.iter().any(|label| label == "machine:jarvis"));
+    assert!(!ticket.labels.iter().any(|label| label.starts_with("machine:")));
 
+    record(&conn, "m-1", &capacity(true), at(600.0));
     let nearby = machine_room("m-1", 1, &["claude", "codex"]);
     let elsewhere = machine_room("m-2", 1, &["claude"]);
     assert_eq!(ask(&mut conn, &elsewhere, at(600.0))["ticket"], Value::Null);
@@ -651,9 +656,10 @@ fn a_late_culprit_reroutes_an_unclaimed_regression_to_its_machine_and_provider()
         200
     );
 
-    // jarvis still reports, but the regression holds `master` back and has been ready for ten
-    // minutes, so another machine may take it and the original provider is no longer required.
-    let fresh = ask(&mut conn, &elsewhere, at(601.0));
+    // The reservation cleared the deferral, so the minute starts again here.
+    assert_eq!(ask(&mut conn, &elsewhere, at(601.0))["ticket"], Value::Null);
+    record(&conn, "m-1", &capacity(true), at(661.0));
+    let fresh = ask(&mut conn, &elsewhere, at(661.0));
     assert_eq!(fresh["ticket"], id);
     assert_eq!(fresh["provider"], "claude");
 }

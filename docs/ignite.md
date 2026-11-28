@@ -3264,13 +3264,13 @@ output (last 40 lines; whole output on jarvis at ...)
   in the range. A later report can set the culprit. If a worker has already
   claimed the ticket, it receives the new attribution through the same mechanism
   as `ignite tell`.
-- It records the operating system when the check is not portable. For a CLI
-  culprit landing, the hub pins the repair to the machine that ran it if that
-  machine can run the check, and asks for the same provider. Otherwise the
-  regression keeps its usual machine pin. After 30 minutes without a report from
-  the pinned machine, another machine that can run the check may take it. The
-  provider of the original landing is required only on the original machine (see
-  [Machine and provider pins](#machine-and-provider-pins)).
+- It records the operating system when the check is not portable. It has no
+  machine pin. For a CLI culprit landing, the hub records the machine that ran
+  it, if that machine can run the check, as the regression's culprit affinity in
+  its metadata, which dispatch treats as a preference (see
+  [Work that holds master back goes to the fastest machine](#work-that-holds-master-back-goes-to-the-fastest-machine)).
+  On that machine the regression asks for the original landing's provider when
+  the machine offers it.
 - It goes first in the dispatch order. The hub reserves it for a machine under a
   one-time code. On the culprit's machine and provider, the daemon tries to
   resume the original transcript under a new Ignite session. A worker that takes
@@ -4010,6 +4010,29 @@ File platform-specific work with `ignite ticket create --needs-os macos` or
   minutes, a ticket marked for fallback can run on another machine that meets
   its operating system requirement and any provider pin.
 
+#### Work that holds master back goes to the fastest machine
+
+On 2026-11-27 `master` waited more than eight hours behind a regression pinned
+to the machine that held its culprit's transcript. That machine was at 99% CPU
+and swapping, while a machine several times faster had idle workers. So a
+ticket that holds `master` back (a regression, a justiciar ticket, or a repair
+that blocks a tip) goes to the fastest machine that can take it now:
+
+- Once an hour hub upkeep measures each machine's speed from the last seven
+  days of check records. For every check family and verb run on two or more
+  machines, a machine's ratio is its median duration over the median of all
+  the runs. Its slowness is the median of its ratios, and its speed is the
+  fastest machine's slowness over its own, so the fastest has 1.0. `ignite fleet`
+  shows each machine's speed, and `ignite fleet machine <name> --speed <n>`
+  replaces the measurement. A machine with no measurement counts as 1.0.
+- A machine that asks for work leaves such a ticket to another machine that
+  has a free worker slot, fits the ticket's operating system and check
+  families, and is faster. The culprit's machine keeps the ticket when its
+  speed is at least 75% of the fastest one's. A ticket passed over for a minute
+  goes to whichever eligible machine asks next.
+- A `machine:` pin that a person or worker added, such as with
+  `ignite release --needs <machine>`, still binds.
+
 The choice of tier and the provider's availability are described under
 [The provider mix](#the-provider-mix).
 
@@ -4747,6 +4770,10 @@ Its edit commands are:
   after the daemon reports it. Use a number when the volume is shared. The tree
   space divided by the ceiling gives the number of build slots, rounded down to
   a minimum of one.
+- `ignite fleet machine <name> --speed <n|measured>` sets the machine's speed
+  relative to the fastest machine (1.0) in place of the hub's measurement, or
+  goes back to the measurement. Dispatch uses it to send work that holds
+  `master` back to the fastest machine.
 - `ignite fleet provider <name> [--on|--off] [--share <n>] [--stop-percent <n>] [--five-hour-stop-percent <n>]`
   edits provider policy. A share is a weight from 0 to 1,000. A share of zero
   keeps the provider out of the mix: it takes only tickets whose `provider:`

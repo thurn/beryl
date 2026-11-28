@@ -30,6 +30,9 @@
 //!   (`ignite_store::hub::transcripts::delete_expired`);
 //! - once an hour, removes the attachment files of tickets closed long ago or beyond the
 //!   budget, and files a ticket when open tickets alone fill it ([`attachments`]);
+//! - once an hour, measures each machine's speed from the last week's check records, which
+//!   dispatch uses to send work that holds `master` back to the fastest machine
+//!   (`ignite_store::hub::machine_speeds`);
 //! - takes an hourly snapshot of the database and a daily export ([`backup`]).
 //!
 //! The routes call the rest as reports arrive: a landing a tip round reverted ([`reverted::file`]),
@@ -265,6 +268,7 @@ impl Upkeep {
                 .map(|deleted| report.metrics_deleted = deleted),
         );
         keep(ignite_store::hub::machine_snapshots::delete_expired(conn, now).map(|_| ()));
+        keep(ignite_store::hub::machine_speeds::refresh(conn, now).map(|_| ()));
         keep(ignite_store::hub::transcripts::delete_expired(conn, now).map(|_| ()));
         if let Some(dir) = self.backups.clone() {
             keep(backup::compress_existing(&dir));

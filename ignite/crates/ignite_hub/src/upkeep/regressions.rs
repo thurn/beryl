@@ -155,8 +155,7 @@ fn file_report(
         }
         (None, None) => {
             let pin = affinity(&tx, report, None)?;
-            let origin = filing::origin(&tx, author.machine)?;
-            (vec![create(report, origin, pin)], Outcome::Created)
+            (vec![create(report, pin)], Outcome::Created)
         }
         (None, Some(ticket)) => (reopen(&tx, &ticket, author, report)?, Outcome::Reopened),
     };
@@ -336,7 +335,8 @@ fn affinity(
         return Ok(None);
     };
     let needed_os = repair.map_or(report.platform, |ticket| ticket.needs_os);
-    culprit_affinity::for_repair(conn, &culprit, repair, needed_os)
+    // A regression holds `master` back, so the culprit's machine is only a preference.
+    culprit_affinity::for_repair(conn, &culprit, repair, needed_os, true)
 }
 
 /// Updates an existing ticket when a later report confirms the culprit. Returns any open
@@ -545,11 +545,10 @@ fn filers(ticket: &Ticket, author: Author) -> Vec<String> {
     filers
 }
 
-fn create(
-    report: &RegressionReport,
-    origin: Option<String>,
-    pin: Option<CulpritAffinity>,
-) -> Operation {
+/// The new regression ticket. It has no `machine:` label, neither for the machine that
+/// reported it nor for the culprit's: it holds `master` back, so dispatch sends it to the
+/// fastest machine that can take it, preferring the culprit's when nearly as fast.
+fn create(report: &RegressionReport, pin: Option<CulpritAffinity>) -> Operation {
     let mut linked: Vec<String> = report.caused_by.iter().map(ToString::to_string).collect();
     for suspect in &report.suspects {
         let suspect = suspect.to_string();
@@ -564,18 +563,15 @@ fn create(
             kind: Some(EdgeKind::DiscoveredFrom),
         })
         .collect();
-    let mut labels = vec![
+    let labels = vec![
         "regression".to_owned(),
         format!("check:{}", report.check.family()),
     ];
-    labels
-        .extend(origin.filter(|label| pin.as_ref().is_none_or(|pin| pin.machine_label != *label)));
     let mut metadata = BTreeMap::from([(CAUSED_BY_KEY.to_owned(), json!(report.caused_by))]);
     if report.caused_by.is_some() {
         metadata.insert(CULPRIT_CHECK_KEY.to_owned(), json!(report.check));
     }
     if let Some(pin) = pin {
-        labels.push(pin.machine_label.clone());
         metadata.insert(CULPRIT_AFFINITY_KEY.to_owned(), json!(pin));
     }
     Operation::Create {

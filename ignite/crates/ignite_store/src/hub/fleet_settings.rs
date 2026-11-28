@@ -469,6 +469,7 @@ mod tests {
             MachineSetting {
                 state: MachineState::Active,
                 state_until: None,
+                speed: None,
                 trees: TreeSettings {
                     tree_ceiling_gb: 150,
                     ..TreeSettings::default()
@@ -485,6 +486,7 @@ mod tests {
             MachineSetting {
                 state: MachineState::ChecksOnly,
                 state_until: None,
+                speed: None,
                 trees: TreeSettings {
                     tree_ceiling_gb: 150,
                     ..TreeSettings::default()
@@ -610,6 +612,7 @@ mod tests {
             MachineSetting {
                 state: MachineState::ChecksOnly,
                 state_until: None,
+                speed: None,
                 trees: TreeSettings {
                     tree_ceiling_gb: 200,
                     ..TreeSettings::default()

@@ -10,7 +10,7 @@ use ignite_core::fleet::{
 use ignite_core::time::Timestamp;
 use ignite_store::hub::fleet_settings::{self, PutOutcome};
 use ignite_store::hub::rows::Machine;
-use ignite_store::hub::{capacity, fleet, machine_snapshots, provider_usage};
+use ignite_store::hub::{capacity, fleet, machine_snapshots, machine_speeds, provider_usage};
 use ignite_store::{Result, StoreError};
 
 use super::{Request, Response};
@@ -48,6 +48,7 @@ pub(crate) fn view_in_snapshot(
     let settings = fleet_settings::settings(conn)?;
     let changes = fleet_settings::changes(conn, 20)?;
     let mut reports = capacity::latest(conn, now)?;
+    let speeds = machine_speeds::speeds(conn, &settings)?;
     let machines = machines
         .iter()
         .map(|machine| {
@@ -63,6 +64,10 @@ pub(crate) fn view_in_snapshot(
                 },
                 last_seen: machine.last_seen.parse().map_err(invalid)?,
                 snapshot: machine_snapshots::latest(conn, &machine.id)?,
+                speed: speeds
+                    .iter()
+                    .find(|(name, _)| name.eq_ignore_ascii_case(&machine.name))
+                    .map(|(_, speed)| *speed),
             })
         })
         .collect::<Result<Vec<_>>>()?;
