@@ -16,8 +16,9 @@ use beryl_protocol::script::Notice;
 use glam::Vec2;
 use std::convert::Infallible;
 
+use crate::art::orb;
 use game_play::notice::{Announced, NoticeRun, Place};
-use game_table::table::{HALF_LIFE, HudAnchor, Layout};
+use game_table::table::{HudAnchor, Layout};
 use kit_base::data::profiles::SizeClass;
 use kit_base::tokens::{ratio, size, space};
 use kit_scene::{Context, Feature, StateUpdate};
@@ -266,11 +267,24 @@ impl NoticeFloats {
                 (Place::Banner | Place::Coin, _) => {
                     HudAnchor::Middle.at(Vec2::splat(0.5), Vec2::splat(0.5), slide)
                 }
-                (Place::Pill(player), false) => HudAnchor::Life(player).at(
-                    Vec2::ZERO,
-                    Vec2::new(0.5, 1.0),
-                    slide - Vec2::Y * (HALF_LIFE + space::S),
-                ),
+                // The orb is drawn over floats, so a pill must clear the orb's art, not just
+                // the number: it sits on the side of the orb that faces the middle of the
+                // table, above your orb and below the opponent's.
+                (Place::Pill(player), false) => {
+                    let clear = orb::ART[3] * layout.play.life.orb_scale / 2.0 + space::S;
+                    match player {
+                        Side::You => HudAnchor::Life(player).at(
+                            Vec2::ZERO,
+                            Vec2::new(0.5, 1.0),
+                            slide - Vec2::Y * clear,
+                        ),
+                        Side::Opponent => HudAnchor::Life(player).at(
+                            Vec2::ZERO,
+                            Vec2::new(0.5, 0.0),
+                            slide + Vec2::Y * clear,
+                        ),
+                    }
+                }
             };
             layer.anchor_float(
                 id,

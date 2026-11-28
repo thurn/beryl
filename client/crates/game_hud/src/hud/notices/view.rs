@@ -14,7 +14,7 @@ pub(super) fn element(input: &Inputs<'_>) -> Element {
         Notice::Turn { active } => turn_banner(*active, input.turn_width),
         Notice::Scry { top, bottom, .. } => pill(&format!("Scry: {top} top, {bottom} bottom.")),
         Notice::TopOrBottom { top, .. } => pill(if *top { "Top" } else { "Bottom" }),
-        Notice::Chosen { value, .. } => pill(value),
+        Notice::Chosen { value, .. } => chosen_pill(value),
         Notice::Coin { player, won, .. } => {
             let title = input.coin_source().unwrap_or("Coin flip");
             let who = who(*player);
@@ -161,6 +161,16 @@ fn banner(title: Element, detail: Option<&str>) -> Element {
         .radius(space::M)
         .child(title)
         .children(detail.map(text))
+}
+
+/// What a player chose while a spell or ability resolved, such as a land type: a pill like the
+/// others but in the title style, since the word is what the player needs to read.
+fn chosen_pill(words: &str) -> Element {
+    column()
+        .align_items(Align::Center)
+        .padding(space::M)
+        .radius(space::M)
+        .child(text(words).style(type_style::TITLE))
 }
 
 /// A pill: `words` on a small rounded panel.
