@@ -283,7 +283,16 @@ impl Segment {
                     ..self.from
                 }
             }
-            Shape::Spline(spline) => spline.pose_at(&self.from, &self.to, elapsed),
+            Shape::Spline(spline) => {
+                let mut pose = spline.pose_at(&self.from, &self.to, elapsed);
+                if !spline.flips()
+                    && let Some(turning) = self.turning
+                {
+                    pose.turn =
+                        self.from.turn + (self.to.turn - self.from.turn) * turning.turned(elapsed);
+                }
+                pose
+            }
         }
     }
 }
@@ -351,6 +360,7 @@ impl Segment {
         let elapsed = self.elapsed(t);
         if let Shape::Spline(spline) = &mut self.shape {
             spline.through(&mut self.from, elapsed, pose);
+            self.turning = None;
             return;
         }
         if self.shape == Shape::Fading {

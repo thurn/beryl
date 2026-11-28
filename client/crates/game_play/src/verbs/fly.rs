@@ -679,17 +679,30 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
         Path::ExileTransfer => Some(straight(&paths.return_drift)),
         Path::Straight { .. } | Path::Bowed { .. } => None,
     };
-    if let Some(shape) = spline {
-        out.segment(subject, Segment { shape, ..between });
-        return;
-    }
-    // A card whose face changes turns over at moments of its own: a drawn card turns via its
-    // 3D spline orientations, any other a little before half way (the web's `turningOf`).
+    // A card whose face changes turns over at moments of its own: a spline with 3D flip
+    // orientations turns via those orientations, and any other flight turns a little before half
+    // way (the web's `turningOf`), so a fast-launching cast does not pitch face-down while it is
+    // still in the hand band.
     let turning = turns(from, to).then_some(if draws(step.act) {
         fly.turn.draw
     } else {
         fly.turn.cast
     });
+    if let Some(shape) = spline {
+        let turning = match shape {
+            Shape::Spline(spline) if spline.flips() => None,
+            _ => turning,
+        };
+        out.segment(
+            subject,
+            Segment {
+                shape,
+                turning,
+                ..between
+            },
+        );
+        return;
+    }
     let segment = match path {
         Path::Straight { rises } => Segment {
             arc: arc(rises),

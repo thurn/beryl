@@ -517,7 +517,9 @@ impl Spline {
         self.flags & (1 << 3) != 0
     }
 
-    fn flips(&self) -> bool {
+    /// Whether the spline's 3D waypoint orientations turn the card over during flight.
+    #[must_use]
+    pub fn flips(&self) -> bool {
         self.flags & FLAG_FLIPS != 0
     }
 
