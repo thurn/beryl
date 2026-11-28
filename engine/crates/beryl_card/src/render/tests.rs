@@ -520,3 +520,16 @@ fn a_combat_rule_says_what_it_requires_or_restricts() {
          control that's attacking you."
     );
 }
+
+/// A text-changing effect that turns "Islands" in Dandân's "When you control no Islands" into
+/// another basic land type's name rendered "Plainses". The rules text spells the plural of
+/// "Plains" the same as its singular: "no Plains".
+#[test]
+fn the_plural_of_a_basic_land_type_reads_as_oracle_text_does() {
+    use super::words::plural;
+    assert_eq!(plural("Plains"), "Plains");
+    assert_eq!(plural("Island"), "Islands");
+    assert_eq!(plural("Swamp"), "Swamps");
+    assert_eq!(plural("Mountain"), "Mountains");
+    assert_eq!(plural("Forest"), "Forests");
+}

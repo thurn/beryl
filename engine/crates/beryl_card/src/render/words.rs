@@ -56,7 +56,7 @@ pub(super) fn counted(count: u8, singular: &str, plural: &str) -> String {
 /// The plural of a noun Oracle text uses: "creatures", "sorceries", "Equipment".
 pub(super) fn plural(noun: &str) -> String {
     // A subtype is capitalized; the few that do not take an "s" are the ones the pool names.
-    if matches!(noun, "Equipment" | "Fish" | "Sheep" | "Elk") {
+    if matches!(noun, "Equipment" | "Fish" | "Sheep" | "Elk" | "Plains") {
         return noun.to_owned();
     }
     if let Some(stem) = noun.strip_suffix("ery") {
