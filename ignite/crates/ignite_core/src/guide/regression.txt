@@ -30,6 +30,11 @@ Fixing it:
 - Say on the ticket which test you deleted or redesigned and why.
 - When the ticket's comments show more failures that your fix does not
   cover, fix them too or file a ticket with the evidence.
+- Filing that ticket does not move a check: the hub keeps reopening this
+  one with it. Before you land, move each check you leave failing onto
+  the follow-up ticket with `ignite ticket regression move <check>
+  <ticket>`. `ignite land` and `ignite close` refuse while this ticket
+  holds a check that is switched off, since no gate runs it.
 - Run the repaired or replacement check before landing. If you deleted
   the check, verify that its family no longer lists it.
 

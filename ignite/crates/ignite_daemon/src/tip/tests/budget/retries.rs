@@ -177,6 +177,7 @@ fn a_saved_deferral_does_not_excuse_a_failure_or_an_open_regression() {
                 .set_open_regressions(vec![ignite_core::protocol::hub::OpenRegression {
                     check: deferred.check.clone(),
                     ticket: ticket("tk.31"),
+                    off: false,
                 }]);
             world
                 .work

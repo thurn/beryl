@@ -655,10 +655,12 @@ fn the_gate_leaves_out_a_check_grouped_onto_another_checks_ticket() {
         OpenRegression {
             check: name("unit:a"),
             ticket: TicketId::new("tk.1").unwrap(),
+            off: false,
         },
         OpenRegression {
             check: name("unit:b"),
             ticket: TicketId::new("tk.1").unwrap(),
+            off: false,
         },
     ]);
     let open = verbs::open_regressions(&world.ctx);

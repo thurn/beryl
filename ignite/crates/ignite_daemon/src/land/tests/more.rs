@@ -5,7 +5,7 @@ use std::sync::atomic::Ordering;
 
 use ignite_core::ids::{Commit, SessionId, TicketId, TreeId};
 use ignite_core::protocol::client::Exit;
-use ignite_core::protocol::hub::Landed;
+use ignite_core::protocol::hub::{Landed, OpenRegression};
 use ignite_core::protocol::tickets::LandedWork;
 use ignite_core::time::Timestamp;
 use ignite_core::traits::Clock;
@@ -14,6 +14,7 @@ use super::fakes::TestGit;
 use super::{World, world, world_with, world_with_checks};
 use crate::land::env::LandTrees as _;
 use crate::land::records::{LandingRecord, RecordState};
+use crate::server::Verb as _;
 
 /// Writes a `pushing` record of the held ticket's, for `commit`, written at `at`.
 fn write_pushing(world: &World, commit: &Commit, at: Option<Timestamp>) -> LandingRecord {
@@ -439,4 +440,74 @@ fn a_landing_that_moved_the_release_names_its_deploy_handle() {
     let refused = "release not moved: rel checks did not pass";
     assert_eq!(landed_handle(branch, refused, &pushed), None);
     assert_eq!(landed_handle(None, line, &pushed), None);
+}
+
+/// Holds `t.1` on `tree-01`, a regression ticket whose `unit:a` was switched off by the hub and
+/// whose `unit:b` still runs, with `unit:c` switched off on another ticket.
+fn regression_with_an_off_check() -> World {
+    let world = world();
+    let open = |check: &str, ticket: &str, off: bool| OpenRegression {
+        check: check.parse().unwrap(),
+        ticket: TicketId::new(ticket).unwrap(),
+        off,
+    };
+    world.hub.hub.set_open_regressions(vec![
+        open("unit:a", "t.1", true),
+        open("unit:b", "t.1", false),
+        open("unit:c", "t.2", true),
+    ]);
+    world.hold("tree-01", "t.1", "local_a", &[("a.txt", "partly fixed")]);
+    world
+}
+
+#[test]
+fn a_regression_ticket_holding_a_switched_off_check_does_not_land() {
+    let world = regression_with_an_off_check();
+    let tip = world.git.tip_now();
+
+    let reply = world.land_as("tree-01", "local_a");
+
+    assert_eq!(reply.exit, Exit::CheckFailed, "{}", reply.text);
+    assert!(
+        reply.text.starts_with("refused  t.1 holds checks"),
+        "{}",
+        reply.text
+    );
+    assert!(
+        reply
+            .text
+            .contains("off and have not passed since they failed: unit:a.")
+    );
+    assert!(
+        reply
+            .text
+            .contains("ignite ticket regression move <check> <ticket>")
+    );
+    assert!(reply.text.contains("ignite flaky on <check>"));
+    assert_eq!(world.git.tip_now(), tip);
+    assert!(world.git.pushes().is_empty());
+    assert!(world.landings().is_empty());
+    assert!(world.gate.judged.lock().unwrap().is_empty());
+}
+
+#[test]
+fn a_justiciar_lands_a_regression_ticket_holding_a_switched_off_check_with_the_override() {
+    let world = regression_with_an_off_check();
+    let req = world.request(
+        "land",
+        "tree-01",
+        "local_a",
+        &["-m", "the note", "--allow-off-checks"],
+    );
+    let mut ctx = world.ctx.clone();
+    ctx.session.clone_from(&req.session);
+    ctx.tree = Some(TreeId::new("tree-01").unwrap());
+
+    let reply = crate::land::LandVerb {
+        landing: world.landing.clone(),
+    }
+    .run(&ctx, &req);
+
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    assert_eq!(world.landings().len(), 1);
 }

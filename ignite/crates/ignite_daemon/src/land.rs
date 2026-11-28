@@ -345,6 +345,7 @@ impl Landing {
     #[allow(clippy::too_many_lines)]
     fn land_checked(&self, ctx: &Context, req: &Request, args: &LandArgs) -> Result<Reply, Stop> {
         let held = self.held_tree(ctx, true)?;
+        self.refuse_off_checks(ctx, &held.ticket, args)?;
         let ticket = held.ticket.clone();
         let session = held.session.clone().ok_or_else(|| {
             stop(

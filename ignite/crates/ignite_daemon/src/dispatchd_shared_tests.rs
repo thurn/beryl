@@ -415,6 +415,7 @@ fn a_grouped_regression_suppresses_the_report_and_lifts_the_hold() {
             .map(|check| OpenRegression {
                 check: check.parse().unwrap(),
                 ticket: ticket.clone(),
+                off: false,
             })
             .collect(),
     );
@@ -433,6 +434,7 @@ fn open_regression(rig: &Rig) {
     rig.hub.set_open_regressions(vec![OpenRegression {
         check: CHECK.parse().unwrap(),
         ticket: super::tests::ticket_id("R.3"),
+        off: false,
     }]);
 }
 

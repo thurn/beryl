@@ -100,10 +100,14 @@ pub(super) fn parse_release(req: &Request) -> std::result::Result<(String, Optio
     Ok((note, needs))
 }
 
-pub(super) fn parse_close(req: &Request) -> std::result::Result<String, Reply> {
-    let (mut values, words) = options(&req.args, &[("message", Some("-m"))])?;
+/// The reason of `ignite close`, and whether it passed `--allow-off-checks`
+/// (see [`super::off_checks`]).
+pub(super) fn parse_close(req: &Request) -> std::result::Result<(String, bool), Reply> {
+    let mut args = req.args.clone();
+    let allow = super::off_checks::take_allow(&mut args);
+    let (mut values, words) = options(&args, &[("message", Some("-m"))])?;
     match values.remove("message") {
-        Some(reason) if words.is_empty() && !reason.trim().is_empty() => Ok(reason),
-        _ => Err(usage("ignite close -m \"<reason>\"")),
+        Some(reason) if words.is_empty() && !reason.trim().is_empty() => Ok((reason, allow)),
+        _ => Err(usage("ignite close -m \"<reason>\" [--allow-off-checks]")),
     }
 }

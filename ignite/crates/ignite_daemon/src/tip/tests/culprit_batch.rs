@@ -174,6 +174,7 @@ fn open_hub_regression_skips_redundant_bisection_unless_revert_eligible() {
     world.hub.set_open_regressions(vec![OpenRegression {
         check: failing.check.clone(),
         ticket: ticket("tk.open"),
+        off: false,
     }]);
     world.hub.set_tip_coverage(TipCoverage {
         platforms: [(

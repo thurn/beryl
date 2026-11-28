@@ -40,7 +40,7 @@ use std::path::Path;
 use serde_json::json;
 
 use ignite_core::config::LandMode;
-use ignite_core::ids::Commit;
+use ignite_core::ids::{Commit, TicketId};
 use ignite_core::protocol::Class;
 use ignite_core::protocol::client::{Exit, Reply, Request};
 use ignite_core::protocol::hub::{Landed, VerdictKey, verdict_settings};
@@ -167,6 +167,7 @@ impl Landing {
         if touches_ignite(ctx, &changed) || self.express_for(ctx, &held.path, &changed).is_some() {
             return self.land_checked(ctx, req, args);
         }
+        self.refuse_off_checks(ctx, &held.ticket, args)?;
         let start = Start {
             tip,
             head: branch_head,
@@ -174,6 +175,25 @@ impl Landing {
             changed,
         };
         self.land_by_verdict(ctx, req, args, &held, start)
+    }
+
+    /// Refuses a landing that would close a regression ticket still holding checks the hub
+    /// has switched off (see [`crate::claim::off_checks`]), unless `args` allow it. A landing
+    /// with a record on disk has pushed, or may have, so it is never refused.
+    pub(super) fn refuse_off_checks(
+        &self,
+        ctx: &Context,
+        ticket: &TicketId,
+        args: &LandArgs,
+    ) -> Result<(), Stop> {
+        if args.allow_off || matches!(self.records.get(ticket), Ok(Some(_))) {
+            return Ok(());
+        }
+        let off = crate::claim::off_checks::on_ticket(ctx, ticket);
+        match crate::claim::off_checks::refusal("land", ticket, &off) {
+            Some(refused) => Err(Box::new(refused)),
+            None => Ok(()),
+        }
     }
 
     /// The landing by verdict that the module's header describes. `Err` is any reply but a

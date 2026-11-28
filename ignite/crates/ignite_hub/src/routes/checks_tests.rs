@@ -19,6 +19,8 @@ use ignite_store::hub::{self, batch};
 use super::{Request, handle};
 use crate::auth::Writer;
 
+#[path = "checks_tests/open_regressions.rs"]
+mod open_regressions;
 #[path = "checks_tests/unclaimed.rs"]
 mod unclaimed;
 
@@ -438,46 +440,6 @@ fn a_regression_that_is_already_open_returns_its_ticket_and_changes_nothing() {
         .query_row("SELECT first_bad FROM regressions", [], |r| r.get(0))
         .unwrap();
     assert_eq!(first_bad, "abcd");
-}
-
-#[test]
-fn open_regressions_list_a_check_grouped_onto_another_checks_ticket() {
-    let hub = TestHub::start("open-regressions");
-    {
-        let conn = hub.conn.lock().unwrap();
-        for (id, status) in [("tk.1", "open"), ("tk.2", "closed")] {
-            conn.execute(
-                "INSERT INTO tickets (id, title, status, created_at, created_by, updated_at,
-                                      version)
-                 VALUES (?1, 'Regression: rust:a', ?2, 'x', 't', 'x', 0)",
-                [id, status],
-            )
-            .unwrap();
-        }
-        // `rust:b` was added to the open ticket of `rust:a`, so no title names it.
-        for (check, ticket, state) in [
-            ("rust:a", "tk.1", "open"),
-            ("rust:b", "tk.1", "reopened"),
-            ("rust:c", "tk.1", "fixed"),
-            ("rust:d", "tk.2", "open"),
-        ] {
-            conn.execute(
-                "INSERT INTO regressions (check_name, ticket, first_bad, last_good, state)
-                 VALUES (?1, ?2, 'abcd', '0000', ?3)",
-                [check, ticket, state],
-            )
-            .unwrap();
-        }
-    }
-    let (status, reply) = hub.send("GET", "/regressions/open", None, false);
-    assert_eq!(status, 200);
-    assert_eq!(
-        reply,
-        json!({"regressions": [
-            {"check": "rust:a", "ticket": "tk.1"},
-            {"check": "rust:b", "ticket": "tk.1"},
-        ]})
-    );
 }
 
 #[test]

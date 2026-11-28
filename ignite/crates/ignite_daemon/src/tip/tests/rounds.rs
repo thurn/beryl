@@ -111,6 +111,7 @@ fn a_covered_check_with_an_open_regression_reports_its_own_pass() {
         .set_open_regressions(vec![ignite_core::protocol::hub::OpenRegression {
             check: regressed.check.clone(),
             ticket: ticket("tk.1"),
+            off: false,
         }]);
     world.store(&covering.key, Outcome::Pass, "m-2");
     world

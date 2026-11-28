@@ -54,6 +54,11 @@ pub enum Command {
         /// The note dependent tickets will read; the landed commits' subjects when omitted.
         #[arg(short = 'm', long = "message")]
         note: Option<String>,
+        /// Land even though the ticket holds regression checks the hub has switched off, which
+        /// no gate runs. Only for justiciars: a worker moves such a check to its follow-up
+        /// ticket with `ignite ticket regression move`.
+        #[arg(long)]
+        allow_off_checks: bool,
     },
     /// Give the ticket back unfinished: save the tree's work on the remote and release
     /// the tree.
@@ -72,6 +77,10 @@ pub enum Command {
         /// Why it needs no landing: obsolete, already done, or no change to the repository.
         #[arg(short = 'm', long = "message")]
         reason: String,
+        /// Close even though the ticket holds regression checks the hub has switched off. Only
+        /// for justiciars, as for `ignite land`.
+        #[arg(long)]
+        allow_off_checks: bool,
     },
     /// Run any other heavy command with cores from the daemon, and record it.
     Run {

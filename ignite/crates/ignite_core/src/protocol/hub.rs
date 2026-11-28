@@ -519,6 +519,10 @@ pub enum FoundBy {
 pub struct OpenRegression {
     pub check: CheckName,
     pub ticket: TicketId,
+    /// The hub has switched the check off, so no gate or tip round runs it and its failure
+    /// shows nowhere until someone switches it on. A hub too old to say answers `false`.
+    #[serde(default)]
+    pub off: bool,
 }
 
 /// `GET /regressions/open`: every check with an open regression and its ticket.

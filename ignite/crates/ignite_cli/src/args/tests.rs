@@ -61,11 +61,11 @@ fn hub_serves_without_a_subcommand_and_restores_with_one() {
 #[test]
 fn land_needs_no_message() {
     let parsed = Cli::try_parse_from(["ignite", "land"]).unwrap().command;
-    assert!(matches!(parsed, Command::Land { note: None }));
+    assert!(matches!(parsed, Command::Land { note: None, .. }));
     let parsed = Cli::try_parse_from(["ignite", "land", "-m", "n"])
         .unwrap()
         .command;
-    assert!(matches!(parsed, Command::Land { note: Some(_) }));
+    assert!(matches!(parsed, Command::Land { note: Some(_), .. }));
 }
 
 #[test]
@@ -132,7 +132,7 @@ fn parses_the_documented_commands() {
         Command::Release { note: Some(_), needs: Some(needs) } if needs == "person"
     ));
     assert!(
-        matches!(parse("ignite close -m obsolete"), Command::Close { reason } if reason == "obsolete")
+        matches!(parse("ignite close -m obsolete"), Command::Close { reason, allow_off_checks: false } if reason == "obsolete")
     );
     let Command::Run {
         class,

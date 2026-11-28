@@ -210,8 +210,10 @@ impl Hub for LeaseHub {
         Ok(())
     }
     fn open_regressions(&self) -> Result<Vec<OpenRegression>> {
-        let reply: OpenRegressions = self.regression_route("GET", "/regressions/open", &())?;
-        Ok(reply.regressions)
+        match self.regression_route::<OpenRegressions>("GET", "/regressions/open", &()) {
+            Err(Error::NotFound(_)) => self.hub.open_regressions(),
+            reply => Ok(reply?.regressions),
+        }
     }
     fn landed_commits(&self, commits: &[Commit]) -> Result<Vec<LandedCommit>> {
         self.hub.landed_commits(commits)

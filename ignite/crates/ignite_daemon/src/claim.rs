@@ -25,11 +25,14 @@ mod activity;
 mod base;
 mod brief;
 mod finish;
+pub(crate) mod off_checks;
 mod parse;
 mod watch;
 
 #[cfg(test)]
 mod fakes;
+#[cfg(test)]
+mod off_checks_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

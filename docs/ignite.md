@@ -3340,6 +3340,15 @@ output (last 40 lines; whole output on jarvis at ...)
   not move the check: the hub keeps reopening the old ticket.
   `ignite ticket close` on a regression ticket prints the checks still on it
   that have not passed.
+- `ignite land` and `ignite close` refuse, before the gate runs, while the
+  ticket holds a check that is switched off and has not passed since it failed.
+  No gate runs a switched-off check, so a partial fix used to land and close the
+  ticket with the check still broken, and the check's next failure reopened it
+  while another worker fixed the same check under a follow-up ticket. The
+  refusal names each such check. The worker switches on a check the change
+  fixes (`ignite flaky on`), so the gate runs it, and moves each check left
+  failing to the follow-up ticket. A justiciar can pass `--allow-off-checks`.
+  `GET /regressions/open` says which checks are off.
 - When every check on a regression ticket passes at the newest verified tip, the
   hub closes the ticket immediately if nobody holds it. That tip must have been
   first seen after the ticket was filed, reopened, or last given another check.

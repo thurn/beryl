@@ -18,7 +18,7 @@ use ignite_core::traits::{Error, Result};
 use ignite_store::local::{shown, trees as tree_rows};
 
 use super::parse::{failure, parse_close, parse_release};
-use super::{Claims, Held, ReleaseRequest, Saved, brief, lock};
+use super::{Claims, Held, ReleaseRequest, Saved, brief, lock, off_checks};
 use crate::server::Context;
 
 /// What a release gave back.
@@ -135,14 +135,20 @@ impl Claims {
     }
 
     pub(super) fn close(&self, ctx: &Context, req: &Request) -> Reply {
-        let reason = match parse_close(req) {
-            Ok(reason) => reason,
+        let (reason, allow_off) = match parse_close(req) {
+            Ok(parsed) => parsed,
             Err(reply) => return reply,
         };
         let held = match self.held_for(req) {
             Ok(held) => held,
             Err(reply) => return reply,
         };
+        if !allow_off {
+            let off = off_checks::on_ticket(ctx, &held.ticket);
+            if let Some(refused) = off_checks::refusal("close", &held.ticket, &off) {
+                return refused;
+            }
+        }
         let title = brief::title_of(held.brief.as_ref(), &held.ticket);
         let closed = self
             .desk

@@ -527,13 +527,15 @@ fn fixes(conn: &Connection, request: &Request, now: Timestamp) -> Result<Respons
     Ok(Response::json(200, &json!(fixes)))
 }
 
-/// Every check with an open regression and the open ticket that holds it.
+/// Every check with an open regression, the open ticket that holds it, and whether it is
+/// switched off.
 fn open_regressions(conn: &Connection) -> Result<Response, Response> {
-    let rows = tips::open_regressions(conn).map_err(|e| store_failure(&e))?;
+    let rows = tips::open_regression_states(conn).map_err(|e| store_failure(&e))?;
     let regressions = rows
         .into_iter()
-        .map(|(check, ticket)| {
+        .map(|(check, ticket, off)| {
             Ok(OpenRegression {
+                off,
                 check: check
                     .parse()
                     .map_err(|e| failure(500, &format!("check name {check:?}: {e}")))?,

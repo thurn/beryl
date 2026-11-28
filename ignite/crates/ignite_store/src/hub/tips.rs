@@ -373,6 +373,23 @@ pub fn regression_fixed(conn: &Connection, check: &str) -> Result<()> {
     Ok(())
 }
 
+/// Each check whose regression is not fixed, with its ticket and whether the check is switched
+/// off, for the tickets that are not closed, as [`open_regressions`] lists them.
+pub fn open_regression_states(conn: &Connection) -> Result<Vec<(String, String, bool)>> {
+    let mut statement = conn.prepare(
+        "SELECT r.check_name, r.ticket, coalesce(c.state = 'off', false)
+         FROM regressions r JOIN tickets t ON t.id = r.ticket
+         LEFT JOIN checks c ON c.name = r.check_name
+         WHERE t.status != 'closed' AND r.state != ?1 ORDER BY r.check_name",
+    )?;
+    let rows = statement
+        .query_map(params![FIXED], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
+}
+
 /// Each check whose regression is not fixed, with its ticket, for the tickets that are not
 /// closed. A check the hub added to another check's ticket is listed with that ticket.
 pub fn open_regressions(conn: &Connection) -> Result<Vec<(String, String)>> {
