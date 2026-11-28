@@ -22,10 +22,12 @@ use kit_base::data::profiles::SlotName;
 
 use crate::features::table::Message as TableMessage;
 use game_table::profiles::Profile;
-use game_table::table::Window;
+use game_table::table::{HudAnchor, Window};
 use kit_base::data::profiles::ManualControls;
 use kit_base::tokens::{color, size, space, type_style};
-use kit_ui::element::{Align, Anchor, Display, Element, Justify, Track, column, holder, row, text};
+use kit_ui::element::{
+    Align, Anchor, AnchorTarget, Display, Element, Justify, Track, column, holder, row, text,
+};
 use kit_ui::widgets::button;
 
 /// The mana symbols, in the order the web's `POOL_SYMBOLS` shows them, with each one's amount.
@@ -62,6 +64,7 @@ pub fn pools(view: &PlayerView, window: Window, profile: Profile<'_>) -> Element
                 metrics,
                 profile.data().checks.target_points,
             )
+            .map(|button| follow_orb(button, side, metrics))
         });
         return holder().name("pools").children(buttons);
     }
@@ -126,6 +129,24 @@ fn mana_button(
         .on_press(TableMessage::ManaSheet(Some(side)));
     element.anchor = Some(Anchor::Point(at, Vec2::new(1.0, 0.5)));
     Some(element)
+}
+
+/// Stands the viewer's Mana button level with their life orb, on the orb's left. The orb floats
+/// just above the top of the viewer's hand, so a button in the strip's middle would lie over the
+/// hand's back row and leave a card under it with no area to press. The opponent's button
+/// stays at the middle of their strip, where no hand of theirs is pressed.
+fn follow_orb(mut button: Element, side: Side, metrics: ManualControls) -> Element {
+    if side == Side::You {
+        // The anchor puts the button's top left corner at the orb's centre less this fraction
+        // of the button's size, so its right edge is `pool_right` points left of the orb's
+        // centre and its middle is level with it.
+        let back = (metrics.pool_right + metrics.pool_width) / metrics.pool_width;
+        button.anchor = Some(Anchor::Object(
+            AnchorTarget::Layout(HudAnchor::Life(side).id()),
+            Vec2::new(back, 0.5),
+        ));
+    }
+    button
 }
 
 /// The sheet of `side`'s mana and counters on the phone, as the web's `ManaSheet` shows them:
