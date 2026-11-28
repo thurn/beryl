@@ -719,15 +719,16 @@ recordings do not show them.
   of several: "Discard a basic land card or {most:words} cards." A look that may
   take nothing is its sentence as a question, with "Decline": "Put {most:words}
   of them into your hand?", "Exile {most:words} of them?", "Put {most:words} of
-  them on top of your library?" ("on the bottom of" where they go to the
-  bottom), "Put {most:words} of them into your graveyard?", "Put {most:words} of
-  them onto the battlefield?". The other way about, Arena opens a payment that
-  may be declined and Beryl asks first: "Pay {cost}." is answered "Pay {cost}"
-  or "Decline". A card offered to cast is cast by its button, "Cast". Arena asks
-  Discard a basic land card? and then Discard two cards.; a look that may take
-  nothing is headed Choose One over a question, with Submit and Decline; a
-  payment that may be declined has Decline beside Auto Pay (UrGalw_f35w 21:13.5,
-  5UHzpVvUkfI 27:36.5, IHPV6yRaFlk 28:19.5, 0VsYGs88NXA 56:48.5).
+  them on top of your library?", "Put {most:words} of them on the bottom of your
+  library?", "Put {most:words} of them into your graveyard?", "Put {most:words}
+  of them onto the battlefield?". The other way about, Arena opens a payment
+  that may be declined and Beryl asks first: "Pay {cost}." is answered "Pay
+  {cost}" or "Decline". A card offered to cast is cast by its button, "Cast".
+  Arena asks Discard a basic land card? and then Discard two cards.; a look that
+  may take nothing is headed Choose One over a question, with Submit and
+  Decline; a payment that may be declined has Decline beside Auto Pay
+  (UrGalw_f35w 21:13.5, 5UHzpVvUkfI 27:36.5, IHPV6yRaFlk 28:19.5, 0VsYGs88NXA
+  56:48.5).
 - **Words: prompts the recordings lack.** Each is composed from the nearest
   prompt Arena shows. A discard to hand size: "Discard {most} cards." A mulligan
   of more than one card: "Return {most} Cards". Manifest dread: "Manifest one of
@@ -739,27 +740,28 @@ recordings do not show them.
   {most:words} of them onto the battlefield." One card a filter names, looked at
   and sent somewhere Arena's recordings do not show: "Put {what} into your
   hand.", "Put {what} into your hand?", "Exile {what}.", "Put {what} on top of
-  your library.", "Put {what} on top of your library?" ("on the bottom of" for
-  the bottom), "Put {what} into your graveyard.", "Put {what} into your
-  graveyard?", "Put {what} onto the battlefield." An optional move of a card
-  anywhere but to exile: "Put that card into your hand{from}?", "Put that card
-  into your graveyard{from}?", "Put that card onto the battlefield{from}?", "Put
-  that card on top of your library{from}?" ("on the bottom of" for the bottom),
-  "Move that card{from}?". A cost of no mana: "Pay {0}." The opening choices:
-  "Play or draw?", answered Play or Draw, and "Keep or mulligan?" over Arena's
-  own buttons. Catalogs: "Choose Creature Type", "Choose Word to Replace",
-  "Choose New Word". Waterbend: "Tap permanents to Waterbend". Convoke: "Tap
-  creatures to Convoke". Improvise: "Tap artifacts to Improvise". What a
-  declared creature is aimed at: "Choose attack target", "Choose what to block".
-  Piles of a split: "Hand", "Exile", "Battlefield". The pass button's captions
-  for where Arena shows none: "To Untap", "To Upkeep", "To Main 1", "To Main 2",
-  "To Cleanup", "Nothing to play" under a halt and "To Opponent's Turn" under
-  the player's own End Turn. The own-target warning (exception 7) asks Arena's
-  question less its end, "Do you want to target {name}?", and a spell picked on
-  the stack reads "Target {name}", or the warning's question where it is the
-  player's own. Only the opponent's manifest dread, fateseal and put-back are
-  seen, and games begin with the first player chosen (pE4XSNi-nZc 28:43.5,
-  pE4XSNi-nZc 34:55.0, pE4XSNi-nZc 27:18.0, 0VsYGs88NXA 16:58.0).
+  your library.", "Put {what} on the bottom of your library.", "Put {what} on
+  top of your library?", "Put {what} on the bottom of your library?", "Put
+  {what} into your graveyard.", "Put {what} into your graveyard?", "Put {what}
+  onto the battlefield." An optional move of a card anywhere but to exile: "Put
+  that card into your hand{from}?", "Put that card into your graveyard{from}?",
+  "Put that card onto the battlefield{from}?", "Put that card on top of your
+  library{from}?", "Put that card on the bottom of your library{from}?", "Move
+  that card{from}?". A cost of no mana: "Pay {0}." The opening choices: "Play or
+  draw?", answered Play or Draw, and "Keep or mulligan?" over Arena's own
+  buttons. Catalogs: "Choose Creature Type", "Choose Word to Replace", "Choose
+  New Word". Waterbend: "Tap permanents to Waterbend". Convoke: "Tap creatures
+  to Convoke". Improvise: "Tap artifacts to Improvise". What a declared creature
+  is aimed at: "Choose attack target", "Choose what to block". Piles of a split:
+  "Hand", "Exile", "Battlefield". The pass button's captions for where Arena
+  shows none: "To Untap", "To Upkeep", "To Main 1", "To Main 2", "To Cleanup",
+  "Nothing to play" under a halt and "To Opponent's Turn" under the player's own
+  End Turn. The own-target warning (exception 7) asks Arena's question less its
+  end, "Do you want to target {name}?", and a spell picked on the stack reads
+  "Target {name}", or the warning's question where it is the player's own. Only
+  the opponent's manifest dread, fateseal and put-back are seen, and games begin
+  with the first player chosen (pE4XSNi-nZc 28:43.5, pE4XSNi-nZc 34:55.0,
+  pE4XSNi-nZc 27:18.0, 0VsYGs88NXA 16:58.0).
 - **Words: what a card's text would say.** Arena words many prompts from the
   text of the card that asks, which a prompt's record does not carry. A look, a
   search or an optional search whose cards a filter of the asking spell or
