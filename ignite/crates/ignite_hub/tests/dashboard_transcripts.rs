@@ -162,7 +162,10 @@ fn the_session_page_shows_the_lines_and_the_tell_box() {
     // The last line is the turn's end, so the header says the worker waits between turns,
     // with a muted dot, though its worker row still says `working`.
     assert!(html.contains("turn 1 ended"), "{html}");
-    assert!(html.contains("waiting") && !html.contains(">working<"), "{html}");
+    assert!(
+        html.contains("waiting") && !html.contains(">working<"),
+        "{html}"
+    );
     // While a turn runs, the header shows the worker's own state.
     let running = held();
     transcripts::append(
@@ -173,7 +176,10 @@ fn the_session_page_shows_the_lines_and_the_tell_box() {
     )
     .unwrap();
     let (_, html) = page(&running, &format!("/TT1/session/{SESSION}"), true, true);
-    assert!(html.contains(">working<") && !html.contains("turn 1 ended"), "{html}");
+    assert!(
+        html.contains(">working<") && !html.contains("turn 1 ended"),
+        "{html}"
+    );
     // A line's text cannot end the element that carries the lines as JSON.
     assert!(!html.contains("</script> ticket"), "{html}");
     // The script renders the lines, so the page has no copy of them as HTML rows.

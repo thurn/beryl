@@ -132,40 +132,14 @@ pub(crate) fn options(
         || session.split('-').nth(1).unwrap_or("unknown"),
         |(app, _, _)| app.as_str(),
     );
-    // The hub's worker row stays `working` for as long as the session holds the ticket, also
-    // after its turn has ended: a turn that failed on the plan's quota while the worker's
-    // `ignite land` still ran showed "working" with a green dot. A last line that is the
-    // turn's end means no turn runs now, so the header says the session is waiting instead.
-    let turn_ended = last.is_some_and(|line| line.line.kind == TranscriptKind::Result);
-    // A worker gone on to another ticket along a lane is done with this one.
-    let state = match &worker {
-        Some((_, state, _)) if held && turn_ended && state == "working" => "waiting",
-        Some((_, state, _)) if held => state.as_str(),
-        Some(_) => "done",
-        None => "gone",
-    };
+    let (state, tone, turn) = status(worker.as_ref(), held, last);
     let ticket_link = c::link(
         &ticket_url(root, ticket),
         &esc(&display_id(ticket)),
         None,
         "",
     );
-    let tone = match state {
-        "down" | "stalled" => Tone::Red,
-        "idle" | "gone" | "done" | "waiting" => Tone::Muted,
-        _ => Tone::Green,
-    };
     let (model, effort) = run_view(conn, session, ticket)?;
-    let turn = last.map_or_else(
-        || c::muted("no turn yet"),
-        |line| {
-            if turn_ended {
-                format!("turn {} ended", line.line.turn)
-            } else {
-                format!("turn {}", line.line.turn)
-            }
-        },
-    );
     let others = session_tabs(root, ticket, &sessions, session);
     let header = format!(
         "<header class=\"c-session-head\"><h1 class=\"c-session-name\">{}</h1>\
@@ -301,4 +275,41 @@ fn tell_box() -> String {
          <span class=\"c-edit-hint\">Sent after the turn ends, or at once with Now.</span>\
          </div></form>"
     )
+}
+
+/// The header's state, the tone of its dot and its turn, for a session whose worker row is
+/// `worker` (app, state, ticket held) and whose last line on the ticket is `last`.
+fn status<'a>(
+    worker: Option<&'a (String, String, Option<String>)>,
+    held: bool,
+    last: Option<&StoredTranscriptLine>,
+) -> (&'a str, Tone, String) {
+    // The hub's worker row stays `working` for as long as the session holds the ticket, also
+    // after its turn has ended: a turn that failed on the plan's quota while the worker's
+    // `ignite land` still ran showed "working" with a green dot. A last line that is the
+    // turn's end means no turn runs now, so the header says the session is waiting instead.
+    let turn_ended = last.is_some_and(|line| line.line.kind == TranscriptKind::Result);
+    // A worker gone on to another ticket along a lane is done with this one.
+    let state = match worker {
+        Some((_, state, _)) if held && turn_ended && state == "working" => "waiting",
+        Some((_, state, _)) if held => state.as_str(),
+        Some(_) => "done",
+        None => "gone",
+    };
+    let tone = match state {
+        "down" | "stalled" => Tone::Red,
+        "idle" | "gone" | "done" | "waiting" => Tone::Muted,
+        _ => Tone::Green,
+    };
+    let turn = last.map_or_else(
+        || c::muted("no turn yet"),
+        |line| {
+            if turn_ended {
+                format!("turn {} ended", line.line.turn)
+            } else {
+                format!("turn {}", line.line.turn)
+            }
+        },
+    );
+    (state, tone, turn)
 }
