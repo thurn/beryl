@@ -406,6 +406,7 @@ impl Mounted for ProposalPanel {
         let slot = features.slot::<Self>();
         let bounds = proposal_bounds(
             proposals,
+            &view.table.as_ref()?.labels,
             *slot.state(),
             inputs.profile,
             inputs.hud.placement_scene,

@@ -161,8 +161,10 @@ pub(super) fn next_slot(
 }
 
 /// Finds a clear lane for the proposal panel at either edge of the battlefield. The
-/// scrollable review can use a shorter slot when the full panel would cover a row.
+/// scrollable review can use a shorter slot when the full panel would cover a row. The panel also
+/// keeps clear of `labels`, the boxes where state nudge buttons stand, which are not cards.
 pub(super) fn proposal_slot(
+    labels: &[Rect],
     preferred: Rect,
     short_height: Option<f32>,
     bands: TableBands,
@@ -191,12 +193,17 @@ pub(super) fn proposal_slot(
         positions
             .into_iter()
             .filter(move |y| *y >= top && y + height <= bottom)
-            .flat_map(move |y| {
-                [right, left].map(move |x| rect(x, y, preferred.width, height).into())
-            })
+            .flat_map(move |y| [right, left].map(move |x| rect(x, y, preferred.width, height)))
+            .filter(|panel| !labels.iter().any(|label| crosses(*panel, *label)))
+            .map(Into::into)
     });
     let avoids = groups.map(Group::children).to_vec();
     layout
         .place("proposal panel", avoids, choices)
         .map(|(_, placed)| placed)
+}
+
+/// Whether the two boxes share any area.
+fn crosses(a: Rect, b: Rect) -> bool {
+    a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
 }

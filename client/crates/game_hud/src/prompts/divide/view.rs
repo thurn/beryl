@@ -99,8 +99,15 @@ fn edge_share(
     let target = input.profile.data().checks.target_points;
     let (more, less) = steps(share, left, target);
     let name = format!("share {}", slot.0);
-    // The share's strip, as high as a desktop step is wide.
-    let high = size::SHARE_STEP;
+    // The share's strip, as high as a desktop step is wide, but short enough that the rest of the
+    // card, which the strip stands on, is still a touch target high (the "reachable" check).
+    // A card 66 points high would otherwise keep 38.
+    let high = input
+        .placement_scene
+        .and_then(|layout| layout.bounds(ElementId(u32::from(slot.0))))
+        .map_or(size::SHARE_STEP, |card| {
+            size::SHARE_STEP.min((card.height - target - 1.0).max(space::M))
+        });
     let mut shown = text(&share.amount.to_string())
         .name(&format!("share amount {}", slot.0))
         .style(type_style::BODY)

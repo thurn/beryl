@@ -35,6 +35,7 @@ use game_hud::inspect::viewer::object_box;
 use game_table::profiles::Profile;
 use game_table::table::Window;
 use kit_base::tokens::{color, size, space, type_style};
+use kit_frame::frame::ElementId;
 use kit_ui::element::{Align, Anchor, Element, Overflow, column, row, text};
 use kit_ui::input::Size;
 use kit_ui::widgets::screen::overlay;
@@ -102,17 +103,15 @@ pub fn proposals(
         .overflow(Overflow::ScrollY)
         .children(proposals.iter().map(|each| proposal(each, Some(target))));
     if let Some(bounds) = bounds {
+        // The toggle is the panel's first row, since the panel's slot is where the toggle
+        // would otherwise stand over its contents.
         panel = panel
             .width(bounds.width)
             .max_height(bounds.height)
+            .child(toggle)
             .child(body);
         panel.anchor = Some(Anchor::Point(Vec2::new(bounds.x, bounds.y), Vec2::ZERO));
-        return Some(
-            column()
-                .name("proposal controls")
-                .child(toggle)
-                .child(panel),
-        );
+        return Some(column().name("proposal controls").child(panel));
     }
     // If both sides of the battlefield are occupied, use a dismissible review
     // like the command list. The player can return to the board with one press.
@@ -140,6 +139,7 @@ pub fn proposals(
 #[must_use]
 pub fn proposal_bounds(
     proposals: &[ProposalView],
+    labels: &[LabelView],
     opened: Option<u32>,
     profile: Profile<'_>,
     layout: Option<&PlacementScene>,
@@ -151,7 +151,27 @@ pub fn proposal_bounds(
         SlotName::ManualProposalsPanel,
         SlotName::ManualProposalsShort,
     ]);
+    let target = profile.data().checks.target_points;
+    // A label row stands over a card's top edge. Its width is not known here, so each is taken
+    // as wide as its text could be at the largest.
+    let label_boxes: Vec<Rect> = labels
+        .iter()
+        .filter_map(|label| {
+            let TargetRef::Object { slot } = label.on else {
+                return None;
+            };
+            let card = layout?.bounds(ElementId(u32::from(slot.0)))?;
+            let width = 12.0 * label.text.chars().count() as f32 + 2.0 * space::M;
+            Some(Rect {
+                x: card.x + (card.width - width) / 2.0,
+                y: card.y - target - space::S,
+                width,
+                height: 2.0 * target + space::S,
+            })
+        })
+        .collect();
     super::profiles::proposal_slot(
+        &label_boxes,
         panel?.rect,
         short.map(|slot| slot.rect.height),
         profile.bands()?,
