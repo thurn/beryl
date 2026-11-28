@@ -450,19 +450,27 @@ pub fn step_shown(
                 .iter()
                 .map(|sample| apart(sample.rect, origin.rect))
                 .fold(0.0, f32::max);
-            let changes: Vec<u64> = path
-                .windows(2)
-                .filter(|pair| apart(pair[1].rect, pair[0].rect) >= 1.0)
-                .map(|pair| pair[1].t)
-                .collect();
-            let moving = match (changes.first(), changes.last()) {
-                (Some(&first), Some(&last)) => {
+            // The card is moving from its first frame that is off where it began until its last
+            // frame that is not yet where it ends. Judging each frame against the one before it
+            // would count only the fast middle of an eased move: a short move spends its first and
+            // last tenth of a second under a point per frame, which the viewer still sees as part
+            // of the move.
+            let end = path.last().map_or(origin.rect, |sample| sample.rect);
+            let left = path
+                .iter()
+                .find(|sample| apart(sample.rect, origin.rect) >= 1.0);
+            let arrived = path
+                .iter()
+                .rev()
+                .find(|sample| apart(sample.rect, end) >= 1.0);
+            let moving = match (left, arrived) {
+                (Some(first), Some(last)) if last.t >= first.t => {
                     let before = path
                         .iter()
                         .rev()
-                        .find(|sample| sample.t < first)
-                        .map_or(first, |sample| sample.t);
-                    last - before
+                        .find(|sample| sample.t < first.t)
+                        .map_or(first.t, |sample| sample.t);
+                    last.t - before
                 }
                 _ => 0,
             };

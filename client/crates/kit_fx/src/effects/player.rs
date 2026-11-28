@@ -95,6 +95,14 @@ pub(super) fn write_light(
             continue;
         }
         let tier_only = layer.baseline_only || layer.enhanced_only;
+        // A light lies over a card by `lift`, which must stay under the gap to the card stacked
+        // over it. Cards in a row shrunk to fit a phone are `pose.scale` of the usual size and
+        // so is that gap, so the lift shrinks with them; light on a player's anchor has no card over it.
+        let lift = if run.on_point {
+            lift
+        } else {
+            lift * reach.pose.scale
+        };
         write_light_primitive(
             (primitive, p, tier_only),
             reach,
