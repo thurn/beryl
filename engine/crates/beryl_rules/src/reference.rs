@@ -489,8 +489,9 @@ fn check_ability_payments<L: Layout>(
                 "the payability prefilter disagrees with the reference for an ability",
                 at,
             )?;
+            // As the activation check asks, with the rich path that counts changed mana.
             check(
-                funds.pays(s, t, cost, none) == expected,
+                funds.pays_for(s, t, cost, none, Paying::NOTHING) == expected,
                 "the cached funds disagree with the reference for an ability",
                 at,
             )?;

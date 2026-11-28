@@ -85,5 +85,35 @@ pub mod scenarios {
             .permanents(P0, &[Permanent::new(WHEEL).tapped()])
             .battlefield(P1, &[GIANT])
             .actions(&[THEM.deciding(DecisionKind::Priority, 2)]),
+        // The Wheel's own cost sacrifices it, so Krark-Clan Ironworks may not sacrifice it for
+        // mana first: the Ironworks may take only itself or Ornithopter for {C}{C}, and three
+        // Islands pay the rest.
+        Scenario::new("Krark-Clan Ironworks cannot sacrifice the Wheel to pay the Wheel's {5}")
+            .interaction(&[Card::KrarkClanIronworks])
+            .battlefield(
+                P0,
+                &[
+                    WHEEL,
+                    Card::KrarkClanIronworks,
+                    Card::Ornithopter,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                ],
+            )
+            .battlefield(P1, &[GIANT])
+            .actions(&[
+                ME.activates(WHEEL, 0),
+                ME.targets(GIANT),
+                ME.deciding(DecisionKind::ChooseObject, 2),
+                ME.picks(Card::Ornithopter),
+                // {C}{C} floats: the Islands pay the rest, or the Ironworks sacrifices itself.
+                ME.answers(DecisionKind::PaymentPlan, Pick::Plan { i: 0 }),
+                Resolve,
+                THEM.has(Zone::Graveyard, GIANT, 1),
+                ME.has(Zone::Graveyard, WHEEL, 1),
+                ME.has(Zone::Graveyard, Card::Ornithopter, 1),
+                ME.controls(Card::KrarkClanIronworks, 1),
+            ]),
     ];
 }

@@ -50,5 +50,24 @@ pub mod scenarios {
                 THEM.has(Zone::Graveyard, Card::TheSurgicalBay, 1),
                 ME.has(Zone::Hand, Card::Plains, 1),
             ]),
+            // Reflecting Pool makes {U} only while The Surgical Bay, a land that could produce
+            // it, is on the battlefield, so the Pool taps for the mana before the Bay is
+            // sacrificed (see CR 601.2g: "the player then has a chance to activate mana
+            // abilities").
+            Scenario::new(
+                "Reflecting Pool pays The Surgical Bay's {U} before the Bay is sacrificed",
+            )
+            .interaction(&[Card::ReflectingPool])
+            .library(P0, &[Card::Plains])
+            .battlefield(
+                P0,
+                &[Card::TheSurgicalBay, Card::ReflectingPool, Card::Forest],
+            )
+            .actions(&[
+                ME.activates(Card::TheSurgicalBay, 2),
+                Resolve,
+                ME.has(Zone::Graveyard, Card::TheSurgicalBay, 1),
+                ME.has(Zone::Hand, Card::Plains, 1),
+            ]),
         ];
 }

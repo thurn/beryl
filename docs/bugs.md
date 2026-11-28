@@ -6,6 +6,38 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **An ability that sacrifices its own source was offered when its mana could be
+  paid only before the sacrifice.** In a fuzz game, the player controlled The
+  Surgical Bay (`{1}{U}`, `{T}`, sacrifice it: draw a card), Reflecting Pool and
+  lands that make no blue mana. The ability was offered, and its payment
+  panicked with "a spell offered is payable". Reflecting Pool can make `{U}`
+  only while the Bay, a land that could produce it, is on the battlefield. The
+  payability check reads the sources with the Bay still there, which matches the
+  rules (CR 601.2g lets the player activate mana abilities before paying costs),
+  but `parts::pay` paid an ability's tap and sacrifice before its mana, so the
+  Bay was gone when the mana plans were made. Fixed: an activation pays its
+  source's own sacrifice after its mana (`parts::pay_removing_source`), and
+  every mana path for an ability, the outlet paths included, excludes the source
+  its cost taps or sacrifices (`spent_by_entry`), as the payability check
+  already did, so no outlet sacrifices the source before its cost does. A
+  sacrifice of another chosen permanent is still paid before the mana. Guard:
+  the scenario "Reflecting Pool pays The Surgical Bay's {U} before the Bay is
+  sacrificed" in `the_surgical_bay.rs`. The scenario "Krark-Clan Ironworks
+  cannot sacrifice the Wheel to pay the Wheel's {5}" in `flamecast_wheel.rs`
+  guards the outlet paths. The debug assertion in `pay_mana` catches the class
+  in `just fuzz`.
+
+- **The ability payment reference used the plain funds in a game with priced
+  mana.** With Agatha's Soul Cauldron (which makes `check_ability_payments` run)
+  and an opponent's Mana Flare, `just fuzz` reported "the cached funds disagree
+  with the reference for an ability" for a `{2}` cost the player's eleven
+  untapped lands could pay. Under Mana Flare no land is a plain source, so
+  `Funds::pays` saw only the pool. The engine offers abilities with
+  `Funds::pays_for`, which falls back to the rich path, but the check compared
+  `Funds::pays`. Fixed: the check compares `pays_for`, as the spell and sequence
+  checks already did. Guard: none beyond `just fuzz`; the three checks now call
+  the same function.
+
 - **The combat reference ignored Mana Reflection when it priced an attack.**
   Under Propaganda with Mana Reflection on the battlefield, one Island makes
   `{U}{U}`, which pays `{2}` for one attacker. The engine offered the attacker,

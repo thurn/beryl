@@ -34,7 +34,7 @@ use crate::state::{CastStep, Casting, Pending, State};
 use crate::table::{Capability, GameTable, is_outlet_mana, outlet_part};
 use beryl_kernel::chosen::ChosenValue;
 
-use super::costs::total_cost;
+use super::costs::{spent_by_entry, total_cost};
 use super::mana_payment::{self, SacrificeCost};
 use super::steps::{after_mana, pay_mana as pay_again, top};
 use super::{parts, spent};
@@ -74,11 +74,18 @@ fn casting_keeps<L: Layout>(t: &GameTable) -> impl Fn(&State<L>, ManaCost) -> Re
     move |after, cost| {
         let entry = top(after);
         let paying = Paying::entry(after, t, entry);
-        match SacrificeCost::of_entry(t, entry) {
-            Some(other) => other.payable(after, t, cost, paying),
-            None => mana::payable(after, t, entry.controller(), cost, Bitboard::EMPTY, paying),
+        if let Some(other) = SacrificeCost::of_entry(t, entry) {
+            return other.payable(after, t, cost, paying);
         }
+        let spent = spent_by_entry(t, entry);
+        mana::payable(after, t, entry.controller(), cost, spent, paying)
     }
+}
+
+/// What no step of the payment for the entry on top of the stack may tap or sacrifice: the
+/// source its cost taps or sacrifices ([`spent_by_entry`]), which the cost pays with itself.
+fn paid_with_itself<L: Layout>(s: &State<L>, t: &GameTable) -> Bitboard<L::Slot> {
+    spent_by_entry(t, top(s))
 }
 
 /// Whether a payment of `cost` by `player`, whose plans pay none of it, can still be made by
@@ -93,23 +100,25 @@ pub(super) fn payable_through<L: Layout>(
     keeps: Keeps<'_, L>,
 ) -> Result<bool, Full> {
     let mut out: L::Queue<Opt<L>, OPTIONS> = Default::default();
-    step_options(s, t, player, cost, paying, keeps, &mut out)?;
+    step_options(s, t, player, cost, Bitboard::EMPTY, paying, keeps, &mut out)?;
     Ok(!out.is_empty())
 }
 
 /// Adds to `out` the options of a payment by plan of `cost` beside its plans: each mana
 /// ability of a permanent that an outlet could sacrifice, then each outlet, each only if
-/// `keeps` says the cost is still payable after it.
+/// `keeps` says the cost is still payable after it. None of them taps or sacrifices `exclude`.
+#[allow(clippy::too_many_arguments)]
 fn step_options<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     player: Seat,
     cost: ManaCost,
+    exclude: Bitboard<L::Slot>,
     paying: Paying<L>,
     keeps: Keeps<'_, L>,
     out: &mut L::Queue<Opt<L>, OPTIONS>,
 ) -> Result<(), Full> {
-    let outlets = mana::outlets(s, t, player, Bitboard::EMPTY);
+    let outlets = mana::outlets(s, t, player, exclude);
     let fodder = (outlets.iter())
         .filter(|o| o.sacrifices())
         .fold(Bitboard::EMPTY, |all, o| all | o.fodder);
@@ -204,15 +213,16 @@ fn takes<L: Layout>(
     Ok(out)
 }
 
-/// The outlet that ability `ability` of the permanent in `slot` is.
+/// The outlet that ability `ability` of the permanent in `slot` is, taking none of `exclude`.
 fn outlet<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     player: Seat,
     slot: L::Slot,
     ability: ObjectAbility,
+    exclude: Bitboard<L::Slot>,
 ) -> Outlet<L> {
-    mana::outlets(s, t, player, Bitboard::EMPTY)
+    mana::outlets(s, t, player, exclude)
         .into_iter()
         .find(|o| o.slot == slot && o.ability == ability)
         .expect("an outlet offered")
@@ -241,7 +251,8 @@ pub(super) fn pay_mana<L: Layout>(
     let plans = mana_payment::plans(s, t, sink, top(s), cost, greedy)?;
     if greedy && let Some(plan) = plans.as_slice().first() {
         let paying = Paying::entry(s, t, top(s));
-        let spent = mana::pay(s, t, sink, c.player, cost, Bitboard::EMPTY, plan, paying)?;
+        let exclude = paid_with_itself(s, t);
+        let spent = mana::pay(s, t, sink, c.player, cost, exclude, plan, paying)?;
         spent::record(s, t, &c, spent)?;
         return after_mana(s, t, sink, c);
     }
@@ -271,7 +282,17 @@ fn plan_options<L: Layout>(
         out.push(Opt::Plan(index::<L>(i)))?;
     }
     let paying = Paying::entry(s, t, entry);
-    step_options(s, t, c.player, cost, paying, &casting_keeps(t), &mut out)?;
+    let exclude = paid_with_itself(s, t);
+    step_options(
+        s,
+        t,
+        c.player,
+        cost,
+        exclude,
+        paying,
+        &casting_keeps(t),
+        &mut out,
+    )?;
     Ok(out)
 }
 
@@ -308,7 +329,8 @@ pub(super) fn take<L: Layout>(
     if let Opt::Plan(i) = option {
         let plans = mana_payment::plans(s, t, sink, entry, cost, false)?;
         let plan = &plans.as_slice()[Into::<usize>::into(i)];
-        let spent = mana::pay(s, t, sink, c.player, cost, Bitboard::EMPTY, plan, paying)?;
+        let exclude = paid_with_itself(s, t);
+        let spent = mana::pay(s, t, sink, c.player, cost, exclude, plan, paying)?;
         spent::record(s, t, &c, spent)?;
         return after_mana(s, t, sink, c);
     }
@@ -338,7 +360,7 @@ pub(super) fn begin_outlet<L: Layout>(
     greedy: bool,
 ) -> Result<(), Full> {
     let cost = remaining.unwrap_or_else(|| total_cost(s, t, top(s), &c));
-    let o = outlet(s, t, c.player, slot, ability);
+    let o = outlet(s, t, c.player, slot, ability, paid_with_itself(s, t));
     let able = takes(s, t, &o, cost, &casting_keeps(t))?;
     if greedy || able.count() == 1 {
         let paid = able
@@ -371,7 +393,7 @@ fn choose_color<L: Layout>(
     greedy: bool,
 ) -> Result<(), Full> {
     let cost = remaining.unwrap_or_else(|| total_cost(s, t, top(s), &c));
-    let o = outlet(s, t, c.player, slot, ability);
+    let o = outlet(s, t, c.player, slot, ability, paid_with_itself(s, t));
     let colors = colors(s, t, &o, paid, cost, &casting_keeps(t))?;
     debug_assert!(colors != 0, "a permanent offered keeps the cost payable");
     if greedy || colors.is_power_of_two() {
@@ -425,7 +447,7 @@ pub(super) fn outlet_decision<L: Layout>(
     remaining: Option<ManaCost>,
 ) -> Result<Decision<L>, Full> {
     let cost = remaining.unwrap_or_else(|| total_cost(s, t, top(s), c));
-    let o = outlet(s, t, c.player, slot, ability);
+    let o = outlet(s, t, c.player, slot, ability, paid_with_itself(s, t));
     let keeps = casting_keeps(t);
     let about = Bitboard::single(slot);
     match paid {
@@ -447,7 +469,7 @@ fn pick_decision<L: Layout>(o: &Outlet<L>, player: Seat, able: Bitboard<L::Slot>
         kind: DecisionKind::ChooseObject,
         candidates: Candidates::Objects(able),
         prompt,
-        about: Bitboard::single(o.slot),
+        about: Bitboard::EMPTY,
         filter: None,
     }
 }
@@ -504,19 +526,28 @@ pub(super) fn manual_options<L: Layout>(
     remaining: ManaCost,
     paying: Paying<L>,
 ) -> Result<L::Queue<Opt<L>, OPTIONS>, Full> {
-    manual_options_keeping(s, t, player, remaining, paying, &casting_keeps(t))
+    let exclude = paid_with_itself(s, t);
+    manual_options_keeping(s, t, player, remaining, exclude, paying, &casting_keeps(t))
 }
 
+/// [`manual_options`] with `keeps` judging what follows, none of the options tapping or
+/// sacrificing `exclude`.
 fn manual_options_keeping<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     player: Seat,
     remaining: ManaCost,
+    exclude: Bitboard<L::Slot>,
     paying: Paying<L>,
     keeps: Keeps<'_, L>,
 ) -> Result<L::Queue<Opt<L>, OPTIONS>, Full> {
     let mut out: L::Queue<Opt<L>, OPTIONS> = Default::default();
     for &option in mana::manual_candidates(s, t, player, remaining, paying)?.iter() {
+        if let Opt::Mana { slot, .. } | Opt::Activate { slot, .. } = option
+            && exclude.contains(slot)
+        {
+            continue;
+        }
         let mut rest = remaining;
         let after = simulate(s, t, |after, sink| {
             rest = mana::manual_pay(after, t, sink, player, remaining, option, paying)?.0;
@@ -526,7 +557,7 @@ fn manual_options_keeping<L: Layout>(
             out.push(option)?;
         }
     }
-    for o in &mana::outlets(s, t, player, Bitboard::EMPTY) {
+    for o in &mana::outlets(s, t, player, exclude) {
         if !takes(s, t, o, remaining, keeps)?.is_empty() {
             out.push(Opt::Activate {
                 slot: o.slot,
@@ -561,7 +592,9 @@ pub(super) fn pay_resolving<L: Layout>(
             if remaining.is_zero() {
                 return Ok(());
             }
-            let options = manual_options_keeping(game.state, t, player, remaining, paying, &keeps)?;
+            let none = Bitboard::EMPTY;
+            let options =
+                manual_options_keeping(game.state, t, player, remaining, none, paying, &keeps)?;
             let step = Prompt::new(Purpose::Mana).cost(remaining);
             crate::interpret::choices::pay(game, resolution, player, options.as_slice(), step)?
         } else {
@@ -572,7 +605,17 @@ pub(super) fn pay_resolving<L: Layout>(
                 options.push(Opt::Plan(index::<L>(i)))?;
             }
             if !greedy || options.is_empty() {
-                step_options(game.state, t, player, cost, paying, &keeps, &mut options)?;
+                let none = Bitboard::EMPTY;
+                step_options(
+                    game.state,
+                    t,
+                    player,
+                    cost,
+                    none,
+                    paying,
+                    &keeps,
+                    &mut options,
+                )?;
             }
             if greedy {
                 options.as_slice()[0]
@@ -593,7 +636,7 @@ pub(super) fn pay_resolving<L: Layout>(
         if let Opt::Activate { slot, ability } = option
             && is_outlet(s, t, slot, ability)
         {
-            let o = outlet(s, t, player, slot, ability);
+            let o = outlet(s, t, player, slot, ability, Bitboard::EMPTY);
             let able = takes(s, t, &o, remaining, &keeps)?;
             let paid = if greedy || able.count() == 1 {
                 able.min(|slot| slot)

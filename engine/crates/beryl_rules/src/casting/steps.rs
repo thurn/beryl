@@ -321,7 +321,8 @@ pub(super) fn pay_mana<L: Layout>(
             }
             if let Some(plan) = plans.as_slice().first() {
                 let paying = mana::Paying::entry(s, t, top(s));
-                let spent = mana::pay(s, t, sink, c.player, cost, Bitboard::EMPTY, plan, paying)?;
+                let exclude = spent_by_entry(t, top(s));
+                let spent = mana::pay(s, t, sink, c.player, cost, exclude, plan, paying)?;
                 spent::record(s, t, &c, spent)?;
             }
             after_mana(s, t, sink, c)
@@ -341,10 +342,14 @@ pub(super) fn after_mana<L: Layout>(
     sink: &mut Sink<L>,
     c: Casting<L>,
 ) -> Result<(), Full> {
-    if let CastKind::Spell { .. } = c.kind {
-        return parts::pay(s, t, sink, c, 0);
+    match c.kind {
+        CastKind::Spell { .. } => parts::pay(s, t, sink, c, 0),
+        CastKind::Activation => {
+            parts::pay_removing_source(s, t, sink)?;
+            finish(s, t, sink, c)
+        }
+        CastKind::Trigger => finish(s, t, sink, c),
     }
-    finish(s, t, sink, c)
 }
 
 /// The spell becomes cast, or the ability activated.
@@ -698,6 +703,7 @@ pub(crate) fn perform<L: Layout>(
             let entry = top(s);
             let cost = total_cost(s, t, entry, &c);
             let paying = mana::Paying::entry(s, t, entry);
+            let exclude = spent_by_entry(t, entry);
             let plans = mana_payment::plans(s, t, sink, entry, cost, false)?;
             let spent = mana::pay(
                 s,
@@ -705,7 +711,7 @@ pub(crate) fn perform<L: Layout>(
                 sink,
                 c.player,
                 cost,
-                Bitboard::EMPTY,
+                exclude,
                 &plans.as_slice()[Into::<usize>::into(i)],
                 paying,
             )?;

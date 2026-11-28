@@ -13,6 +13,7 @@ use crate::replacement::event::Sink;
 use crate::state::{StackEntry, StackItem, State};
 use crate::table::{Capability, GameTable};
 
+use super::costs::spent_by_entry;
 use super::parts;
 
 /// A spell whose other costs can use one of the permanents that pays its mana.
@@ -158,7 +159,8 @@ pub(super) fn whole_cost_payable<L: Layout>(
 }
 
 /// The plans for a spell must leave its other costs payable. An ability has already paid
-/// its other costs by this point.
+/// its other costs by this point, but for a sacrifice of its source ([`parts::pay`] says why),
+/// and no plan taps a source its cost taps or sacrifices ([`spent_by_entry`]).
 #[inline]
 pub(super) fn plans<L: Layout>(
     s: &State<L>,
@@ -177,7 +179,7 @@ pub(super) fn plans<L: Layout>(
             sink,
             entry.controller(),
             cost,
-            Bitboard::EMPTY,
+            spent_by_entry(t, entry),
             greedy,
             paying,
         ),
@@ -196,7 +198,8 @@ pub(super) fn options<L: Layout>(
     if super::outlets::offered(s, t, player) {
         return super::outlets::manual_options(s, t, player, remaining, paying);
     }
-    let options = mana::manual_options(s, t, player, remaining, Bitboard::EMPTY, paying)?;
+    let exclude = spent_by_entry(t, entry);
+    let options = mana::manual_options(s, t, player, remaining, exclude, paying)?;
     let Some(other) = SacrificeCost::of_entry(t, entry) else {
         return Ok(options);
     };

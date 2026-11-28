@@ -21,7 +21,7 @@ use crate::game::life;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
 use crate::mana::{self, Funds};
-use crate::replacement::event::{self, Reason, Sink};
+use crate::replacement::event::{self, Sink};
 use crate::state::{
     CastKind, CastStep, Casting, CounterKind, PayingObjects, Pending, StackEntry, StackItem, State,
     Zone, ZoneKey,
@@ -35,6 +35,10 @@ use super::delve::{DELVE, DELVE_PART, delve_candidates, delve_most, delves};
 use super::steps::{finish, pay_mana, top};
 
 mod moving;
+mod source;
+
+pub(super) use source::pay_removing_source;
+use source::{pay_with_source, removes};
 
 pub(crate) use moving::pay_with_all;
 
@@ -311,43 +315,6 @@ pub(super) fn payable_with_substitutes<L: Layout>(
     funds.pays_for(s, t, cost, exclude, paying)
 }
 
-/// Does `action` to the source of the ability `entry`, as the part of its cost that says so.
-fn pay_with_source<L: Layout>(
-    s: &mut State<L>,
-    t: &GameTable,
-    sink: &mut Sink<L>,
-    action: CostAction,
-) -> Result<(), Full> {
-    let source = top(s).object().expect("an activated ability's source");
-    match action {
-        CostAction::Tap => match s.permanent(source) {
-            Some(permanent) => event::set_tapped(s, t, sink, permanent, true),
-            None => Ok(()),
-        },
-        CostAction::Sacrifice => {
-            event::move_one(s, t, sink, source.slot, Zone::Graveyard, Reason::Sacrifice)
-        }
-        CostAction::Discard => {
-            let discarder = s.object(source.slot).owner();
-            event::move_one_by(
-                s,
-                t,
-                sink,
-                discarder,
-                source.slot,
-                Zone::Graveyard,
-                Reason::Discard,
-            )
-        }
-        CostAction::RemoveCounter(kind) => {
-            counters::remove_from_object(&mut Game::new(s, t, sink), source, kind, 1)
-        }
-        CostAction::Exile | CostAction::Reveal => {
-            unreachable!("the card table refuses a cost the engine cannot pay")
-        }
-    }
-}
-
 /// Pays the parts of the cost from the part at `from` on, stopping at
 /// one its player chooses objects for ([`CastStep::Objects`]); then turns to what follows
 /// them. An ability's parts are paid before its mana and a spell's after it, so a spell's
@@ -357,7 +324,14 @@ fn pay_with_source<L: Layout>(
 /// [CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h): "The player pays the
 /// total cost. First, they pay all costs that don't involve random elements or moving objects
 /// from the library to a public zone, in any order." The solver never taps a source that pays
-/// with itself (`spent_by_entry`), so paying an ability's parts first changes nothing.
+/// with itself (`spent_by_entry`). An ability's sacrifice of its own source is still paid after
+/// its mana ([`pay_removing_source`]): what other sources make may depend on it, as Reflecting
+/// Pool's "any type that a land you control could produce" does on a land that sacrifices
+/// itself, and the player may activate those mana abilities first ([CR 601.2g]): "the player
+/// then has a chance to activate mana abilities". That is the order the payability check
+/// assumes, since it reads the sources with the source still on the battlefield.
+///
+/// [CR 601.2g]: https://yawgatog.com/resources/magic-rules/#R6012g
 pub(super) fn pay<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
@@ -369,6 +343,7 @@ pub(super) fn pay<L: Layout>(
     let mut index = from;
     while let Some(part) = part_at(t, top(s), index) {
         match *part {
+            CostPart::This(action) if c.kind == CastKind::Activation && removes(action) => {}
             CostPart::This(action) => pay_with_source(s, t, sink, action)?,
             CostPart::Loyalty(n) => {
                 // CR 606.4: "The cost to activate a loyalty ability of a permanent is to put

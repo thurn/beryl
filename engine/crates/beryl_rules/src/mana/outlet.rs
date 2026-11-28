@@ -132,7 +132,7 @@ pub(crate) fn outlet_decision<L: Layout>(
         kind: DecisionKind::ChooseObject,
         candidates: Candidates::Objects(offered),
         prompt: Prompt::new(purpose).most(1),
-        about: Bitboard::single(slot),
+        about: Bitboard::EMPTY,
         filter: None,
     })
 }
