@@ -516,3 +516,48 @@ fn mana_birth_and_hit_take_the_mana_color_and_stay_inside_their_quads() {
         [r, g, b]
     );
 }
+
+#[test]
+fn stack_flares_stay_inside_their_quads_flash_gold_and_are_gone_by_their_end() {
+    let mut renderer = enhanced();
+    // A quad 1.7 card widths across and 1.4 times as tall as wide, as the effect files draw it.
+    let tf = Affine3A::from_scale_rotation_translation(
+        Vec3::new(180.0, 180.0, 1.0),
+        Quat::IDENTITY,
+        Vec3::new(0.0, 0.0, 1.0),
+    );
+    let gold = [255, 205, 100, 255];
+    let grey = [190, 192, 200, 255];
+    let shade = |renderer: &mut beryl_render::Renderer, kind, tint, t| {
+        render_vfx(renderer, Draw::vfx(tf, tint, kind, [t, 1.0, 1.4, 1.0]))
+    };
+    for (kind, tint) in [(Vfx::StackEnter, gold), (Vfx::StackExit, grey)] {
+        let pic = shade(&mut renderer, kind, tint, 0.2);
+        for (x, y) in [(0, 0), (199, 0), (0, 199), (199, 199)] {
+            assert_eq!(
+                pic.at(x, y),
+                [0, 0, 0],
+                "{kind:?} corner ({x},{y}) stays dark"
+            );
+        }
+        let late = channel_sums(&shade(&mut renderer, kind, tint, 0.98));
+        let early = channel_sums(&pic);
+        assert!(
+            late.iter().sum::<u64>() * 10 < early.iter().sum::<u64>(),
+            "{kind:?} is nearly gone by its end: {late:?} against {early:?}"
+        );
+    }
+    // The arrival's flash is gold, though its rim runs white: red leads green, green leads blue.
+    let [r, g, b] = channel_sums(&shade(&mut renderer, Vfx::StackEnter, gold, 0.05));
+    assert!(
+        r > g && g * 10 > b * 12,
+        "the flash is gold: {:?}",
+        [r, g, b]
+    );
+    // The flash is up at once and gone by the half, while the exit's puff is dimmer than it.
+    let flash = channel_sums(&shade(&mut renderer, Vfx::StackEnter, gold, 0.05));
+    let spent = channel_sums(&shade(&mut renderer, Vfx::StackEnter, gold, 0.6));
+    assert!(spent.iter().sum::<u64>() * 3 < flash.iter().sum::<u64>());
+    let puff = channel_sums(&shade(&mut renderer, Vfx::StackExit, grey, 0.05));
+    assert!(puff.iter().sum::<u64>() < flash.iter().sum::<u64>());
+}

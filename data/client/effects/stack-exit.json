@@ -1,0 +1,29 @@
+{
+  "name": "stack-exit",
+  "target": "subject",
+  "layers": [
+    {
+      "kind": "sprite",
+      "baseline_only": true,
+      "shape": "halo",
+      "quad": {
+        "scale": { "from": 1.1, "by": 0.5 },
+        "tint": [200, 200, 205, 120],
+        "fade": { "from": 0, "by": 1 },
+        "record": {
+          "scale": { "from": 1.0, "by": 0.3 },
+          "opacity": { "from": 0.6, "by": -0.6 }
+        }
+      }
+    },
+    {
+      "kind": "vfx",
+      "enhanced_only": true,
+      "vfx": "stack_exit",
+      "size": 1.7,
+      "aspect": 1.4,
+      "tint": [190, 192, 200, 255],
+      "fade": { "from": 0, "by": 1, "start": 0.9 }
+    }
+  ]
+}

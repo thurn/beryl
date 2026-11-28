@@ -131,6 +131,12 @@ fn dispatch_vfx(in: VfxOut) -> vec4<f32> {
         case VFX_MANA_HIT: {
             return shade_mana_hit(in.mesh_uv, time_s, seed, aspect, tint);
         }
+        case VFX_STACK_ENTER: {
+            return shade_stack_enter(in.mesh_uv, time_s, seed, aspect, tint);
+        }
+        case VFX_STACK_EXIT: {
+            return shade_stack_exit(in.mesh_uv, time_s, seed, aspect, tint);
+        }
         default: {
             return vec4<f32>(0.0);
         }
@@ -183,6 +189,12 @@ fn vfx_bloom_gain(kind: u32, style: u32) -> f32 {
         }
         case VFX_MANA_HIT: {
             return BLOOM_GAIN_MANA_HIT;
+        }
+        case VFX_STACK_ENTER: {
+            return BLOOM_GAIN_STACK_ENTER;
+        }
+        case VFX_STACK_EXIT: {
+            return BLOOM_GAIN_STACK_EXIT;
         }
         default: {
             return 0.0;

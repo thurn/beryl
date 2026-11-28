@@ -29,6 +29,8 @@
     "trail": "verbs-combat",
     "mana-birth": "verbs-zones",
     "mana-hit": "verbs-zones",
+    "stack-enter": "verbs-zones",
+    "stack-exit": "verbs-zones",
     "beam": "verbs-piles",
     "pulse": "verbs-piles",
     "loss": "verbs-burn",

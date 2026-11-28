@@ -1,0 +1,29 @@
+{
+  "name": "stack-enter",
+  "target": "subject",
+  "layers": [
+    {
+      "kind": "burst",
+      "baseline_only": true,
+      "quad": {
+        "scale": { "from": 1.3, "by": 0.5 },
+        "tint": [255, 214, 120, 200],
+        "fade": { "from": 0, "by": 1 },
+        "alpha": { "remaining_power": 1.5 },
+        "record": {
+          "scale": { "from": 1.0, "by": 0.12 },
+          "opacity": { "remaining_power": 1.5 }
+        }
+      }
+    },
+    {
+      "kind": "vfx",
+      "enhanced_only": true,
+      "vfx": "stack_enter",
+      "size": 1.7,
+      "aspect": 1.4,
+      "tint": [255, 205, 100, 255],
+      "fade": { "from": 0, "by": 1, "start": 0.9 }
+    }
+  ]
+}

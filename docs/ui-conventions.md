@@ -852,7 +852,11 @@ plays that timing. `just client check` checks the motion in a recording, and
   pE4XSNi-nZc 23:23.5, UrGalw_f35w 17:01.3, UrGalw_f35w 16:15.8, WQiYBv23buw
   29:14.3, vPdoSA5H5xU 17:46.2, 3sEoP_s4DQE 39:04.3, 5UHzpVvUkfI 1:01:50.3,
   UrGalw_f35w 17:01.03). Beryl: 475 ms, 326 ms apart, ease-out. Effects: settle
-  as it ends (into the battlefield) (but not land played, opponent land played).
+  as it ends (into the battlefield) (but not land played, opponent land played),
+  stack-enter as it ends (own spell cast), stack-enter as it ends (opponent
+  spell cast), stack-enter as it ends (exile to stack), settle as it ends
+  (permanent resolves) (into the battlefield), stack-exit as it begins
+  (permanent resolves).
 - **appear.** A card comes to be at its place with no flight: a token, the
   opening hand, a card a look put in the graveyard, a permanent put into a
   library. Its row makes room in its delay, so it shows at a place already open.
@@ -876,8 +880,10 @@ plays that timing. `just client check` checks the motion in a recording, and
   5UHzpVvUkfI 26:06.7, UrGalw_f35w 19:28.5, 3sEoP_s4DQE 24:49.4, I3Te0m1bBFw
   39:50.0, WQiYBv23buw 29:15.67, pE4XSNi-nZc 22:01.3, IHPV6yRaFlk 39:46.9).
   Beryl: 395 ms, 260 ms after its cause, in place. Effects: dissolve as it
-  begins, dim as it begins (resolved instant or sorcery), blanch as it begins
-  (exiled), glow as it begins (bounced).
+  begins, dissolve as it begins (countered), dim as it begins (resolved instant
+  or sorcery), blanch as it begins (exiled), glow as it begins (bounced),
+  stack-exit as it begins (countered), stack-exit as it begins (resolved instant
+  or sorcery).
 - **emerge.** An ability lifts out of its source and goes on the stack: a small
   copy appears in the middle of its source and travels all but straight to the
   stack, sagging a little toward the middle of the table, and grows as it goes.
@@ -1114,6 +1120,21 @@ says what a player may do; an effect says what just happened, and is gone.
   mana's color. Drawn over its card. Where a land's streak meets the spell on
   the stack, a white star flare with side rays flashes and colored glints
   scatter over the card (3sEoP_s4DQE 45:31.2, TbrYIs2juCw 33:32.85). Beryl: 450
+  ms, linear.
+- **stack-enter.** As a spell lands on the stack, a gold flash fills the card's
+  own outline, brightest at once and gone by the half, with soft smoke round it,
+  10 gold sparks thrown outward from its edge, a few flecks of dark debris and a
+  white glitter that builds over the card, all gone in about 0.9 s. In Baseline,
+  a gold flare that spreads and fades. Drawn over its card. A card arriving on
+  the stack flashes gold in its own outline for about 0.4 s with soft smoke,
+  gold sparks, dark debris and white glitter (vfx_stack_flare_enter)
+  (TbrYIs2juCw 19:11.5, 0VsYGs88NXA 19:44.5). Beryl: 900 ms, linear.
+- **stack-exit.** As a card leaves the stack, a smaller puff of smoke over it, 5
+  wisps that curl away from the middle, a ghost outline of the card that thins
+  away and a few pale spores that drift up, all gone in about 0.7 s. In
+  Baseline, a pale halo that spreads and fades. Drawn over its card. A card
+  leaving the stack puffs into smoke with wisps, a ghost outline and spores
+  (vfx_stack_flare_exit) (TbrYIs2juCw 19:11.5, 0VsYGs88NXA 19:44.5). Beryl: 700
   ms, linear.
 - **beam.** A cone of white and yellow light shoots from the side of a triggered
   ability that has come to rest on the stack, toward the middle of the table,

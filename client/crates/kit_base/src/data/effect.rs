@@ -164,6 +164,12 @@ pub enum Vfx {
     /// Mana landing on what it pays for: a four-point light-ping flare, colored wisps, sparks
     /// and side flares (`vfx_manaStack_<color>_hit`).
     ManaHit = 16,
+    /// A spell landing on the stack: a gold flash in the card's outline, soft smoke, gold sparks,
+    /// dark debris and white glitter (`vfx_stack_flare_enter`).
+    StackEnter = 17,
+    /// A card leaving the stack: a small puff of smoke, wisps, a ghost outline and spores
+    /// (`vfx_stack_flare_exit`).
+    StackExit = 18,
 }
 
 /// Visual palette and shimmer style for outline highlight VFX (`Vfx::HighlightShimmer` and

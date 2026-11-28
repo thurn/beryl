@@ -311,6 +311,56 @@ fn a_blow_bursts_on_what_it_strikes() {
     );
 }
 
+/// A spell that lands on the stack flares as it arrives, and a card that leaves the stack
+/// puffs as it goes, whether it flies to the battlefield, is countered or is a resolved instant
+/// or sorcery. Each of those keeps the effect it already had (a landing's settle, a counter's
+/// dissolve, a resolved spell's dim), since a case's own effects replace the verb's general ones.
+#[test]
+fn a_card_flares_as_it_arrives_on_the_stack_and_puffs_as_it_leaves() {
+    let names = |act: &Act| -> Vec<(String, Edge)> {
+        effects(act).into_iter().map(|e| (e.0, e.1)).collect()
+    };
+    for (from, side) in [
+        (ZoneName::Hand, Side::You),
+        (ZoneName::Hand, Side::Opponent),
+    ] {
+        let cast = fly(from, Why::Cast, card(1, ZoneName::Stack, side));
+        assert_eq!(names(&cast), [("stack-enter".to_owned(), Edge::End)]);
+    }
+    let to_battlefield = fly(
+        ZoneName::Stack,
+        Why::Resolve,
+        card(1, ZoneName::Battlefield, Side::You),
+    );
+    assert_eq!(
+        names(&to_battlefield),
+        [
+            ("settle".to_owned(), Edge::End),
+            ("stack-exit".to_owned(), Edge::Start),
+        ]
+    );
+    let gone = || Some(card(1, ZoneName::Graveyard, Side::You));
+    let countered = vanish(object(1), Why::Counter, gone());
+    assert_eq!(
+        names(&countered),
+        [
+            ("dissolve".to_owned(), Edge::Start),
+            ("stack-exit".to_owned(), Edge::Start),
+        ]
+    );
+    let spent = vanish(object(1), Why::Resolve, gone());
+    assert_eq!(
+        names(&spent),
+        [
+            ("dim".to_owned(), Edge::Start),
+            ("stack-exit".to_owned(), Edge::Start),
+        ]
+    );
+    // A destroyed permanent never was on the stack.
+    let destroyed = vanish(object(1), Why::Destroy, gone());
+    assert_eq!(names(&destroyed), [("dissolve".to_owned(), Edge::Start)]);
+}
+
 /// Mana bursts out of its source as it leaves and flares on what it pays for as it lands, and
 /// damage glows where it leaves and strikes where it lands; a player's pool is no card to burst
 /// from, and mana from nowhere has no source.

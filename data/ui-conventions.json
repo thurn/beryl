@@ -1719,6 +1719,32 @@
             "land played",
             "opponent land played"
           ]
+        },
+        {
+          "effect": "stack-enter",
+          "when": "end",
+          "case": "own spell cast"
+        },
+        {
+          "effect": "stack-enter",
+          "when": "end",
+          "case": "opponent spell cast"
+        },
+        {
+          "effect": "stack-enter",
+          "when": "end",
+          "case": "exile to stack"
+        },
+        {
+          "effect": "settle",
+          "when": "end",
+          "into": "battlefield",
+          "case": "permanent resolves"
+        },
+        {
+          "effect": "stack-exit",
+          "when": "start",
+          "case": "permanent resolves"
         }
       ]
     },
@@ -1889,6 +1915,11 @@
           "when": "start"
         },
         {
+          "effect": "dissolve",
+          "when": "start",
+          "case": "countered"
+        },
+        {
           "effect": "dim",
           "when": "start",
           "case": "resolved instant or sorcery"
@@ -1902,6 +1933,16 @@
           "effect": "glow",
           "when": "start",
           "case": "bounced"
+        },
+        {
+          "effect": "stack-exit",
+          "when": "start",
+          "case": "countered"
+        },
+        {
+          "effect": "stack-exit",
+          "when": "start",
+          "case": "resolved instant or sorcery"
         }
       ],
       "closes": {
@@ -2820,6 +2861,52 @@
       },
       "values": {
         "duration": 450,
+        "delay": null,
+        "curve": "linear"
+      }
+    },
+    {
+      "name": "stack-enter",
+      "shows": "As a spell lands on the stack, a gold flash fills the card's own outline, brightest at once and gone by the half, with soft smoke round it, 10 gold sparks thrown outward from its edge, a few flecks of dark debris and a white glitter that builds over the card, all gone in about 0.9 s. In Baseline, a gold flare that spreads and fades.",
+      "layer": "over",
+      "arena": {
+        "does": "A card arriving on the stack flashes gold in its own outline for about 0.4 s with soft smoke, gold sparks, dark debris and white glitter (vfx_stack_flare_enter).",
+        "evidence": [
+          {
+            "recording": "TbrYIs2juCw",
+            "time": "19:11.5"
+          },
+          {
+            "recording": "0VsYGs88NXA",
+            "time": "19:44.5"
+          }
+        ]
+      },
+      "values": {
+        "duration": 900,
+        "delay": null,
+        "curve": "linear"
+      }
+    },
+    {
+      "name": "stack-exit",
+      "shows": "As a card leaves the stack, a smaller puff of smoke over it, 5 wisps that curl away from the middle, a ghost outline of the card that thins away and a few pale spores that drift up, all gone in about 0.7 s. In Baseline, a pale halo that spreads and fades.",
+      "layer": "over",
+      "arena": {
+        "does": "A card leaving the stack puffs into smoke with wisps, a ghost outline and spores (vfx_stack_flare_exit).",
+        "evidence": [
+          {
+            "recording": "TbrYIs2juCw",
+            "time": "19:11.5"
+          },
+          {
+            "recording": "0VsYGs88NXA",
+            "time": "19:44.5"
+          }
+        ]
+      },
+      "values": {
+        "duration": 700,
         "delay": null,
         "curve": "linear"
       }

@@ -9,7 +9,7 @@ use kit_base::data::{Card, Data, profiles};
 use serde_json::Value;
 
 const VERBS: &str = include_str!("../../../../../data/client/verbs.json");
-const EFFECTS: [(&str, &str); 21] = [
+const EFFECTS: [(&str, &str); 23] = [
     (
         "glow",
         include_str!("../../../../../data/client/effects/glow.json"),
@@ -93,6 +93,14 @@ const EFFECTS: [(&str, &str); 21] = [
     (
         "mana-hit",
         include_str!("../../../../../data/client/effects/mana-hit.json"),
+    ),
+    (
+        "stack-enter",
+        include_str!("../../../../../data/client/effects/stack-enter.json"),
+    ),
+    (
+        "stack-exit",
+        include_str!("../../../../../data/client/effects/stack-exit.json"),
     ),
 ];
 const AUDIT: &str = include_str!("../../../../../data/client/audit.json");
