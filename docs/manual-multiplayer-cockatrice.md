@@ -111,15 +111,15 @@ action a click performs.
 The "Move to" submenu sends the selected cards to a zone. In Beryl a move is
 usually a drag, and the menu's "Move to" group lists the destinations.
 
-| Cockatrice                        | Key        | In Beryl                                                                 |
-| --------------------------------- | ---------- | ------------------------------------------------------------------------ |
-| Top of library in random order    | —          | Drag onto the top half of the library. Menu, "Top of library".           |
-| X cards from the top of library…  | —          | List, asking for the number.                                             |
+| Cockatrice                        | Key          | In Beryl                                                                 |
+| --------------------------------- | ------------ | ------------------------------------------------------------------------ |
+| Top of library in random order    | —            | Drag onto the top half of the library. Menu, "Top of library".           |
+| X cards from the top of library…  | —            | List, asking for the number.                                             |
 | Bottom of library in random order | Cmd+Option+B | Drag onto the bottom half of the library. Key.                           |
-| Table                             | —          | Drag to the battlefield. Menu, "Battlefield", from a graveyard or exile. |
-| Hand                              | —          | Drag to the hand. Menu.                                                  |
-| Graveyard                         | Cmd+Delete | Drag to the graveyard. Menu. Key.                                        |
-| Exile                             | —          | Drag to exile. Menu.                                                     |
+| Table                             | —            | Drag to the battlefield. Menu, "Battlefield", from a graveyard or exile. |
+| Hand                              | —            | Drag to the hand. Menu.                                                  |
+| Graveyard                         | Cmd+Delete   | Drag to the graveyard. Menu. Key.                                        |
+| Exile                             | —            | Drag to exile. Menu.                                                     |
 
 Cockatrice's piles accept a drop only on top. Beryl's library shows a top half
 and a bottom half while a card is dragged over it.
@@ -406,30 +406,30 @@ turn. Beryl lets either player do both.
 Beryl's lobby shows each seat's deck counts, readiness and score. Players can
 open it from the gear at the top right of the table.
 
-| Cockatrice                                         | Key                       | In Beryl                                                                                                                                                       |
-| -------------------------------------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Host game                                          | Cmd+N                     | "Host a table" on the start screen. Key there.                                                                                                                 |
-| Game settings: players, starting life              | Cmd+Shift+N               | The lobby's game row. Two seats only.                                                                                                                          |
-| Password, buddies only, registered only, game type | —                         | Not carried over. An invite code is the only way in.                                                                                                           |
-| Spectator settings; join as spectator              | —                         | Not carried over. There are no spectators.                                                                                                                     |
-| Create or join as judge                            | —                         | Not carried over. Either player may already act on any public card.                                                                                            |
-| Open decklists in lobby                            | —                         | Not carried over. A decklist is never shown to the other player.                                                                                               |
-| Load deck…                                         | Cmd+O                     | Key. "Change" in the lobby: open a file or pick a saved deck.                                                                                                  |
-| Load deck from clipboard…                          | Cmd+Shift+V               | Key. Paste a decklist.                                                                                                                                         |
-| Load remote deck…; Load from website…              | Cmd+Option+O; Cmd+Shift+O | Not carried over. Beryl has no deck server and fetches no decklists.                                                                                           |
-| Unload deck                                        | Cmd+Option+U              | Key. "Change" in the lobby.                                                                                                                                    |
+| Cockatrice                                         | Key                       | In Beryl                                                                                                                                    |
+| -------------------------------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Host game                                          | Cmd+N                     | "Host a table" on the start screen. Key there.                                                                                              |
+| Game settings: players, starting life              | Cmd+Shift+N               | The lobby's game row. Two seats only.                                                                                                       |
+| Password, buddies only, registered only, game type | —                         | Not carried over. An invite code is the only way in.                                                                                        |
+| Spectator settings; join as spectator              | —                         | Not carried over. There are no spectators.                                                                                                  |
+| Create or join as judge                            | —                         | Not carried over. Either player may already act on any public card.                                                                         |
+| Open decklists in lobby                            | —                         | Not carried over. A decklist is never shown to the other player.                                                                            |
+| Load deck…                                         | Cmd+O                     | Key. "Change" in the lobby: open a file or pick a saved deck.                                                                               |
+| Load deck from clipboard…                          | Cmd+Shift+V               | Key. Paste a decklist.                                                                                                                      |
+| Load remote deck…; Load from website…              | Cmd+Option+O; Cmd+Shift+O | Not carried over. Beryl has no deck server and fetches no decklists.                                                                        |
+| Unload deck                                        | Cmd+Option+U              | Key. "Change" in the lobby.                                                                                                                 |
 | Sideboard lock; drag cards between main and side   | Cmd+Shift+B               | Changed. In the lobby the key opens the sideboard swap view. There is no lock: changes are open until Start. Beryl's bug report uses Cmd+B. |
-| Ready to start                                     | Cmd+Shift+S               | Key. The guest's "Ready".                                                                                                                                      |
-| Force start                                        | —                         | The host's Start, available when both decks are loaded and the guest is ready.                                                                                 |
-| (first seat plays first)                           |                           | Changed. Start rolls for first, or uses the lobby's setting.                                                                                                   |
-| (no opening hand is dealt)                         |                           | Changed. Start deals each hand and offers keep or mulligan.                                                                                                    |
-| Concede / Unconcede                                | F2                        | Key. Asks first. There is no unconcede: the game is over and both players are in the lobby.                                                                    |
-| (rematch: everyone readies again)                  |                           | "Next game" returns to the lobby with the score and sideboards open.                                                                                           |
-| Game information                                   | —                         | The lobby panel, reachable from the table's menu.                                                                                                              |
-| Copy game link; Invite to game…                    | —                         | "Copy" beside the invite code.                                                                                                                                 |
-| Leave game                                         | Cmd+Q                     | Leave table in the gear menu. Cmd+Q quits Beryl after confirmation. Quit keeps the saved guest seat.                                                           |
-| Kick from game                                     | —                         | Not carried over. The host leaves, and hosts again for a new invite.                                                                                           |
-| Reconnect to a game in progress                    | —                         | Automatic while the app stays open. After reopening, use Resume table on the start screen.                                                                     |
+| Ready to start                                     | Cmd+Shift+S               | Key. The guest's "Ready".                                                                                                                   |
+| Force start                                        | —                         | The host's Start, available when both decks are loaded and the guest is ready.                                                              |
+| (first seat plays first)                           |                           | Changed. Start rolls for first, or uses the lobby's setting.                                                                                |
+| (no opening hand is dealt)                         |                           | Changed. Start deals each hand and offers keep or mulligan.                                                                                 |
+| Concede / Unconcede                                | F2                        | Key. Asks first. There is no unconcede: the game is over and both players are in the lobby.                                                 |
+| (rematch: everyone readies again)                  |                           | "Next game" returns to the lobby with the score and sideboards open.                                                                        |
+| Game information                                   | —                         | The lobby panel, reachable from the table's menu.                                                                                           |
+| Copy game link; Invite to game…                    | —                         | "Copy" beside the invite code.                                                                                                              |
+| Leave game                                         | Cmd+Q                     | Leave table in the gear menu. Cmd+Q quits Beryl after confirmation. Quit keeps the saved guest seat.                                        |
+| Kick from game                                     | —                         | Not carried over. The host leaves, and hosts again for a new invite.                                                                        |
+| Reconnect to a game in progress                    | —                         | Automatic while the app stays open. After reopening, use Resume table on the start screen.                                                  |
 
 Cockatrice binds Cmd+N, Cmd+Shift+N and Cmd+Option+U twice: once for one of the
 lobby actions listed just above, and once for a game action listed in an earlier

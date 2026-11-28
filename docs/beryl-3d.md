@@ -712,9 +712,10 @@ backend is unavailable.
 
 ## Bug reports
 
-Cmd+B or Ctrl+B opens the report during a game and at the manual table. The client freezes the table before raising the
-sheet. The host reads back the renderer's frame and saves the resolved tree from
-that moment. Closing the sheet resumes the table clock.
+Cmd+B or Ctrl+B opens the report during a game and at the manual table. The
+client freezes the table before raising the sheet. The host reads back the
+renderer's frame and saves the resolved tree from that moment. Closing the sheet
+resumes the table clock.
 
 The native app uses the shared bug storage. A saved report can include the
 picture, view and replay, `tree.txt`, and the frame log `frames.jsonl`. Its

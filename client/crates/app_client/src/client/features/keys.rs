@@ -45,9 +45,7 @@ const SAVE: usize = 4;
 
 pub(super) fn bug_report(client: &mut Client, pressed: Pressed) -> Option<KeyResponse<Action>> {
     match pressed.index {
-        0..=3 if pressed.first => {
-            Some(KeyResponse::Action(Action::new(bug_report::Message::Open)))
-        }
+        0..=3 if pressed.first => Some(KeyResponse::Action(Action::new(bug_report::Message::Open))),
         SAVE if client.bug_open()
             && matches!(client.features.bug().stage, BugStage::Describe { .. }) =>
         {
