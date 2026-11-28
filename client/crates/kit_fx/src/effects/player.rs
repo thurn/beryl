@@ -6,7 +6,7 @@ use kit_base::data::effect::{
     Quad, Scalar, Shape, Surface, Tint, Vfx,
 };
 use kit_frame::frame::{
-    Band, Draw, EffectTarget, FrameBuilder, NodeRef, Sprite, StateBits, sprites,
+    Band, Draw, EffectTarget, FrameBuilder, NodeRef, PaintBand, Sprite, sprites,
 };
 use kit_ui::{input::Tier, layout::FloatLook};
 
@@ -257,9 +257,12 @@ fn write_vfx(
 }
 
 /// The band a VFX layer draws in: `Band::Glows`, tested against the table's depth and bloomed,
-/// unless what it is on is moving or held. A card in motion is drawn after the glows and over
-/// them (`Band::MovingOpaque`), so a land turning as it taps would hide the middle of the burst
-/// on it; the decorations of cards in motion (`Band::Moving`) are drawn over it.
+/// unless what it is on paints as moving or held (`PaintBand::of`, which leaves out a card
+/// that only reflows within the table, such as one of a pile whose count changes: that card is
+/// still drawn with the table, and its layers must stay behind the cards in front of it). A card
+/// in motion is drawn after the glows and over them (`Band::MovingOpaque`), so a land turning as
+/// it taps would hide the middle of the burst on it; the decorations of cards in motion
+/// (`Band::Moving`) are drawn over it.
 fn vfx_band(run: &EffectRun, builder: &FrameBuilder<'_>) -> Band {
     let EffectTarget::Key(id) = run.on else {
         return Band::Glows;
@@ -267,7 +270,7 @@ fn vfx_band(run: &EffectRun, builder: &FrameBuilder<'_>) -> Band {
     let moving = builder
         .anchor_element(&NodeRef::Id(id))
         .is_some_and(|(_, node)| {
-            node.state.has(StateBits::MOVING) || node.state.has(StateBits::HELD)
+            matches!(PaintBand::of(node), PaintBand::Moving | PaintBand::Dragged)
         });
     if moving { Band::Moving } else { Band::Glows }
 }
