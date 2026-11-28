@@ -741,10 +741,6 @@ COMMANDS: tuple[Command, ...] = (
         "ios-device",
         "installs the app's iOS host on the paired iPhone and replays two recordings, when asked",
         (
-            (
-                "just client ios-device --user-asked",
-                "the user asked for it: install and replay",
-            ),
             ("just client ios-device", "a person's run, which needs no flag"),
             (
                 "just client ios-device --ota",
