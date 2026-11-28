@@ -68,6 +68,7 @@ mod revert;
 mod round;
 mod split;
 mod state;
+mod sweep;
 mod verify;
 mod work;
 

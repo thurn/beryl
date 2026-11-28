@@ -277,6 +277,15 @@ pub(super) struct BlameEntry<'a> {
 pub(super) struct BlameSummary {
     pub culprits: HashSet<Commit>,
     pub complete: bool,
+    /// The failures reported as regressions whose search named a single landing.
+    pub named: Vec<Blamed>,
+}
+
+/// A failure of a check in `family` on `platform` that was reported against one `landing`.
+pub(super) struct Blamed {
+    pub family: String,
+    pub platform: Option<ignite_core::config::Os>,
+    pub landing: TipLanding,
 }
 
 /// A check's resolved search bounds after checking `newest` and `master`.
@@ -689,6 +698,7 @@ impl TipVerifier {
         let plans = self.plan_blame(ctx, master, tip, &open, entries)?;
         let mut culprits = HashSet::new();
         let mut complete = true;
+        let mut named = Vec::new();
         let mut hint = None;
         let mut probe_cache = HashMap::new();
         let mut landings_cache = HashMap::new();
@@ -725,12 +735,28 @@ impl TipVerifier {
                     culprits.insert(cutoff.clone());
                 }
             }
+            let single = match &culprit {
+                Ok(Some(found)) if found.suspects.len() == 1 => found.suspects.first().cloned(),
+                _ => None,
+            };
             complete &= self.report_blamed(ctx, tip, plan, culprit, reported, &mut open)?;
+            // A reverted culprit takes its other failures with it, so only a reported one counts.
+            if let Some(landing) = single.filter(|_| open.contains(&check.check)) {
+                named.push(Blamed {
+                    family: check.family.clone(),
+                    platform: check.key.platform,
+                    landing,
+                });
+            }
             super::round::require_running()?;
             if save_after_each {
                 self.save(ctx);
             }
         }
-        Ok(BlameSummary { culprits, complete })
+        Ok(BlameSummary {
+            culprits,
+            complete,
+            named,
+        })
     }
 }

@@ -2951,6 +2951,20 @@ How a daemon verifies a tip:
   failing batch found them one or two at a time, each after the last one's fix
   had landed, and `master` did not move for more than six hours.
 
+- That rule covers only the checks within the budget. A failed round never
+  reaches the checks past it, and the next tip's selection is scored again and
+  picks a different slice, so on the same day 30 broken checks of one family
+  were found one batch per round across 20 rounds. So when the culprit search
+  reports a failure in a family on one platform against a single landing, the
+  round also runs, before it reports, every check of that family and platform
+  past the budget whose inputs that landing changed. Their failures are reported
+  in the same round against the same culprit, so upkeep switches them off
+  together. These runs use the `tip` class without the kept tip cores, run
+  whatever newer tip appears, and stop only when `master` reaches the tip. The
+  round's record counts them as `swept`. A failure with no single culprit, one
+  handed to another machine to search, or one whose culprit was reverted runs
+  none.
+
 - When a required check fails, the round still reports the failure. It looks
   back through up to eight landing boundaries before the earliest landing known
   to fail, or before the failed tip's landing if the range is unknown. It

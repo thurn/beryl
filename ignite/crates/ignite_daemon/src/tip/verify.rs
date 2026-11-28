@@ -9,7 +9,7 @@ use ignite_core::protocol::hub::{CachedResult, ResultKey, TipFailure, TipState, 
 use ignite_core::traits::{Push, Result};
 
 use super::coverage::{Required, Scope};
-use super::families::{RunPhase, observe_failures};
+use super::families::{RunPhase, observe_failed_verdicts};
 use super::round::{master_reached, require_running};
 use super::state::{self, FailedTip};
 use super::{
@@ -27,21 +27,6 @@ pub(super) struct RunPlan<'a> {
 
 fn count(len: usize) -> u32 {
     u32::try_from(len).unwrap_or(u32::MAX)
-}
-
-fn observe_failed_verdicts<'a>(
-    ctx: &Context,
-    tip: &Commit,
-    required: impl Iterator<Item = &'a TipCheck>,
-    verdicts: &HashMap<ResultKey, TipRun>,
-) {
-    let keys = required
-        .filter_map(|check| {
-            let key = verdicts.get(&check.key)?.failure_key.as_ref()?;
-            (key == &check.key).then(|| key.clone())
-        })
-        .collect();
-    observe_failures(ctx, tip, keys);
 }
 
 impl TipVerifier {
@@ -593,6 +578,18 @@ impl TipVerifier {
             } else {
                 None
             };
+            self.sweep(
+                ctx,
+                last,
+                tip,
+                scope,
+                &checks,
+                &split.after,
+                &blame.named,
+                &regressions,
+                &mut verdicts,
+                tally,
+            );
             return Ok(TipOutcome::Failed {
                 checks: names_of(&failed),
                 promoted,

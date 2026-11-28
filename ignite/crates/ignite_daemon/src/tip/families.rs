@@ -87,6 +87,10 @@ pub(super) enum RunPhase {
     Build,
     BeforeMaster,
     AfterMaster,
+    /// A failed round's run of the checks past the budget that its culprit may have broken
+    /// (see `sweep`). It runs whatever newer tip appears, since its failures are reported
+    /// against this tip, and ends only when `master` reaches the tip.
+    Sweep,
 }
 
 /// What the threads of one round share.
@@ -99,6 +103,8 @@ struct Round<'a> {
     /// with work under way: the next round is what moves `master` now, and the checks left
     /// over are in the next tip's set.
     after_master: bool,
+    /// Whether the round is a [`RunPhase::Sweep`], which `master` reaching the tip ends.
+    sweep: bool,
     /// Claim names for checks scoped to an OS or to an individual verifier.
     claim_scopes: BTreeMap<&'a str, (Os, bool)>,
     /// The result key of each check to run, which the hub looks up for a stored result.
@@ -186,7 +192,12 @@ impl Round<'_> {
         {
             return true;
         }
-        let ended = if self.after_master {
+        let ended = if self.sweep {
+            // `master` reaches the tip only by moving from where the round found it.
+            super::round::master_reached(self.ctx, self.tip)
+                .filter(|master| self.verifier.master_at_start.as_ref() != Some(master))
+                .map(Ok)
+        } else if self.after_master {
             match self.ctx.git.tip(&self.ctx.config.repository.staging) {
                 Ok(newest) if newest == *self.tip => None,
                 other => Some(other),
@@ -413,7 +424,7 @@ impl TipVerifier {
         to_run: &[&TipCheck],
         phase: RunPhase,
     ) -> Result<FamilyRuns> {
-        let after_master = phase == RunPhase::AfterMaster;
+        let after_master = matches!(phase, RunPhase::AfterMaster | RunPhase::Sweep);
         let costs = |family: &str| family_costs(ctx, tip, family);
         let queue = by_family(batches(
             &self.listed,
@@ -426,6 +437,7 @@ impl TipVerifier {
             ctx,
             tip,
             after_master,
+            sweep: phase == RunPhase::Sweep,
             claim_scopes: claim_scopes(to_run),
             keys: to_run
                 .iter()
@@ -516,6 +528,22 @@ impl TipVerifier {
             .unwrap_or_else(PoisonError::into_inner);
         Ok((superseded, runs, elsewhere))
     }
+}
+
+/// [`observe_failures`] for the checks of `required` whose verdict failed on its exact key.
+pub(super) fn observe_failed_verdicts<'a>(
+    ctx: &Context,
+    tip: &Commit,
+    required: impl Iterator<Item = &'a TipCheck>,
+    verdicts: &HashMap<ResultKey, TipRun>,
+) {
+    let keys = required
+        .filter_map(|check| {
+            let key = verdicts.get(&check.key)?.failure_key.as_ref()?;
+            (key == &check.key).then(|| key.clone())
+        })
+        .collect();
+    observe_failures(ctx, tip, keys);
 }
 
 /// Lets newer staging compete when a required check has an exact failed result.

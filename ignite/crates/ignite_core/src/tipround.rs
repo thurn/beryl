@@ -337,6 +337,16 @@ pub struct RoundBudget {
     /// The newer `staging` tip that ended the round before it ran every check it set out to.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ended_by: Option<Commit>,
+    /// Checks past the budget that a failed round ran before it reported: the rest of a family
+    /// whose failure the culprit search pinned on one landing, among the checks whose inputs that
+    /// landing changed. Their failures are reported in the same round with the same culprit.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub swept: u32,
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)] // serde passes the field by reference.
+fn is_zero(count: &u32) -> bool {
+    *count == 0
 }
 
 impl RoundBudget {
