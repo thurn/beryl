@@ -2,10 +2,13 @@
 
 use std::collections::BTreeMap;
 
-use ignite_core::dispatch::{self, ReadyTicket};
+use rusqlite::{Connection, OptionalExtension};
+
+use ignite_core::dispatch::{self, ReadyTicket, SavedWork};
 use ignite_core::ids::TicketId;
 use ignite_core::protocol::tickets::{REVERTED_KEY, Ticket};
 use ignite_core::shares::{self, EpicDemand, Group};
+use ignite_store::Result;
 
 use super::Snapshot;
 
@@ -28,6 +31,31 @@ const HUB_FILED: [&str; 10] = [
 
 /// The label of a ticket set aside for a person, which no machine is offered.
 const NEEDS_PERSON: &str = "needs:person";
+
+/// What committed work `ticket` already has ([`SavedWork`]). A landing gate's checks write
+/// `land` records with the ticket, so one such record means a worker judged the work complete
+/// and started to land it.
+pub(super) fn saved_work(conn: &Connection, ticket: &Ticket) -> Result<SavedWork> {
+    if ticket.metadata.contains_key(REVERTED_KEY) {
+        return Ok(SavedWork::Finished);
+    }
+    if !ticket.metadata.contains_key(super::super::SAVED_BRANCH) {
+        return Ok(SavedWork::None);
+    }
+    let gated = conn
+        .query_row(
+            "SELECT 1 FROM records WHERE ticket = ?1 AND verb = 'land' LIMIT 1",
+            [ticket.id.as_str()],
+            |_| Ok(()),
+        )
+        .optional()?
+        .is_some();
+    Ok(if gated {
+        SavedWork::Finished
+    } else {
+        SavedWork::Unfinished
+    })
+}
 
 impl Snapshot {
     /// The group a ticket shares workers in: its ancestors, nearest first, through
@@ -58,8 +86,15 @@ impl Snapshot {
     }
 
     /// Automatic dispatch leaves parked tickets and work set aside for a person alone.
-    /// A ticket started by name still follows the claim rules.
-    pub(super) fn parked(&self, ticket: &Ticket, group: &Group) -> Option<&'static str> {
+    /// A ticket started by name still follows the claim rules. A ticket whose `saved` work is
+    /// [`SavedWork::Finished`] is not parked by its group's allocation: zero, or none, stops the group's
+    /// new work, but finished work only needs landing and goes stale while it waits.
+    pub(super) fn parked(
+        &self,
+        ticket: &Ticket,
+        group: &Group,
+        saved: SavedWork,
+    ) -> Option<&'static str> {
         if ticket.labels.iter().any(|label| label == NEEDS_PERSON) {
             return Some("set aside for a person (needs:person)");
         }
@@ -81,6 +116,9 @@ impl Snapshot {
             return Some("its automated source has allocation zero");
         }
         let allocation = self.allocation(group);
+        if saved == SavedWork::Finished {
+            return None;
+        }
         if allocation == Some(0) {
             return Some(match group {
                 Group::General => "the general pool has allocation zero",

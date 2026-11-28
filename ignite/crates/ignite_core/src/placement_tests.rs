@@ -1,12 +1,12 @@
 use super::*;
-use crate::dispatch::TicketKind;
+use crate::dispatch::{SavedWork, TicketKind};
 
 fn ready() -> ReadyTicket {
     ReadyTicket {
         id: "ticket".parse().unwrap(),
         kind: TicketKind::Ordinary,
         holds_tip: false,
-        has_saved_work: false,
+        saved_work: SavedWork::None,
         epic: crate::shares::Group::General,
         allocation: 100,
         chain: 0,

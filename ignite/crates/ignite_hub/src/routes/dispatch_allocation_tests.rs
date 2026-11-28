@@ -258,3 +258,37 @@ fn a_database_from_before_allocation_keeps_its_eligible_and_parked_work() {
     assert_eq!(ask(&mut conn, 2).1["ticket"], "E200.2");
     assert_eq!(ask(&mut conn, 3).1, Value::Null);
 }
+
+#[test]
+fn finished_work_is_offered_after_its_epic_is_set_to_zero_and_unfinished_work_is_not() {
+    use super::tests::{Parent, file_under, release, set_workers};
+    let mut conn = open();
+    register(&mut conn);
+    let (epic, ids) = file_under(
+        &mut conn,
+        Parent::Epic(Some(1)),
+        &[("gated", &[], &[]), ("half done", &[], &[])],
+    );
+    let epic = epic.unwrap();
+    for (n, id) in ids.iter().enumerate() {
+        let session = format!("local_w{n}");
+        post(&mut conn, "/claims", &claim(id.as_str(), &session), at(1.0));
+        let mut body = release(id.as_str(), &session);
+        body["branch"] = json!(format!("ignite/{id}"));
+        assert_eq!(post(&mut conn, "/release", &body, at(2.0)).0, 200);
+    }
+    // The first ticket's worker ran a landing gate before it released the ticket.
+    conn.execute(
+        "INSERT INTO records (ticket, session, at, verb, machine, class, queued_s, wall_s, cpu_s,
+                              peak_mb, outcome, ignite)
+         VALUES (?1, 'local_w0', ?2, 'land', 'm-1', 'land', 0, 1, 1, 0, 'pass', 'test')",
+        rusqlite::params![ids[0].as_str(), at(1.5).to_string()],
+    )
+    .unwrap();
+    // A person stops the epic's new work, as an operator does to free workers for other work.
+    set_workers(&mut conn, &epic, 0);
+    let (_, offered) = ask(&mut conn, 3);
+    assert_eq!(offered["ticket"], ids[0].as_str());
+    let (_, nothing) = ask(&mut conn, 4);
+    assert!(nothing.is_null(), "{nothing}");
+}

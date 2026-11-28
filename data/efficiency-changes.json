@@ -1170,5 +1170,10 @@
     "label": "A tip round whose required check fails still runs the rest of the failing family's batches (other families still stop), so its verdict and culprit search cover every check of that family the tip breaks. On 2026-11-28 the phone layout landing `d1f0101` broke about 15 `client-interface` checks; rounds that stopped at the first failing batch found them one or two at a time from 03:40 to 07:50, each after the last one's fix had landed, and `master` did not move for more than six hours",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Dispatch offers finished work (a reverted landing, or a saved branch whose landing gate has run) even when its epic has allocation zero or is at its `--max-workers` cap; saved work that never reached a gate still waits for its epic. On 2026-11-28 at 04:50 five product epics were set to allocation zero for an experiment, and `EP4KG.86`, released at 06:50 with its fix done and only its landing left, was never offered again: 6 hours and growing, with handoffs to other tickets at 07:06 and 07:12 that would have taken it",
+    "metric": "bead.minutes",
+    "expect": "down"
   }
 ]

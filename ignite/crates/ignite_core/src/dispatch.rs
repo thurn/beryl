@@ -7,8 +7,13 @@
 //!    system itself. Like a regression, it skips the test of expected cores. Then:
 //! 2. An open regression ticket. It skips the test of expected cores.
 //! 3. A ready ticket with saved work (a `saved_branch` from an earlier release, or a reverted
-//!    landing) whose group is in [`crate::shares::epic_order`], so finished or in-progress work
-//!    lands before its branch rots and conflicts with new landings.
+//!    landing), so finished or in-progress work lands before its branch rots and conflicts with
+//!    new landings. Finished work goes first and is offered whatever its group's share: a
+//!    reverted landing, or a saved branch whose landing gate has already run. An allocation of
+//!    zero or a `--max-workers` cap stops an epic's new work, but finished work only needs a
+//!    landing, and a branch left waiting for the epic's next allocation goes stale against every
+//!    other landing. Saved work that never reached a gate still needs its group in
+//!    [`crate::shares::epic_order`].
 //! 4. An improvement ticket, when improvements are under their share
 //!    ([`crate::shares::improvements_due`]). The largest saving goes first, taking the three
 //!    units in turn.
@@ -53,9 +58,8 @@ pub struct ReadyTicket {
     pub kind: TicketKind,
     /// A repair that tip verification reported as blocking an unfinished tip.
     pub holds_tip: bool,
-    /// Whether the ticket already has committed work to finish and land (a saved branch or a
-    /// reverted landing).
-    pub has_saved_work: bool,
+    /// The committed work the ticket already has to finish and land.
+    pub saved_work: SavedWork,
     /// The group it shares workers in ([`crate::shares::group_of`]).
     pub epic: Group,
     /// The ticket weight within its pool.
@@ -76,6 +80,20 @@ pub struct ReadyTicket {
     pub saving: Option<(Unit, f64)>,
     pub pins: Pins,
     pub needs_os: Option<Os>,
+}
+
+/// The committed work a ready ticket already has, which dispatch offers ahead of new work.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub enum SavedWork {
+    /// No saved branch and no reverted landing.
+    #[default]
+    None,
+    /// A release saved its branch before any landing gate ran on it.
+    Unfinished,
+    /// The work is finished and what is left is landing it: tip verification reverted its
+    /// landing, or a landing gate has run on its saved branch. Offered even when its group is
+    /// not in the epic order.
+    Finished,
 }
 
 /// A check family needed by a ticket and the systems that can run it.
@@ -301,7 +319,8 @@ pub enum Stage {
     Justiciar,
     /// An open regression ticket.
     Regression,
-    /// A ticket with saved work (a saved branch or a reverted landing) offered ahead of new work.
+    /// A ticket with saved work (a saved branch or a reverted landing) offered ahead of new work,
+    /// finished work first.
     Resume,
     /// An improvement ticket, ahead of the groups because improvements are under their share.
     Improvement,
@@ -330,13 +349,17 @@ pub fn order<'a>(
     let mut resumed: Vec<&ReadyTicket> = ready
         .iter()
         .filter(|t| {
-            t.has_saved_work
+            t.saved_work != SavedWork::None
                 && t.kind != TicketKind::Regression
                 && !t.holds_tip
-                && epic_order.contains(&t.epic)
+                && (t.saved_work == SavedWork::Finished || epic_order.contains(&t.epic))
         })
         .collect();
-    resumed.sort_by(|a, b| queue_order(a, b));
+    resumed.sort_by(|a, b| {
+        b.saved_work
+            .cmp(&a.saved_work)
+            .then_with(|| queue_order(a, b))
+    });
     let improvements = improvements.map_or_else(Vec::new, |unit| improvement_order(ready, unit));
     let groups = epic_order.iter().flat_map(|group| {
         let mut tickets: Vec<&ReadyTicket> = ready

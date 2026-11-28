@@ -98,7 +98,12 @@ pub fn why_nothing(free: &MachineFree, ready: &[ReadyTicket], epic_order: &[Grou
     let in_order: Vec<&ReadyTicket> = for_us
         .iter()
         .copied()
-        .filter(|t| justiciar(t) || t.kind != TicketKind::Ordinary || epic_order.contains(&t.epic))
+        .filter(|t| {
+            justiciar(t)
+                || t.kind != TicketKind::Ordinary
+                || t.saved_work == super::SavedWork::Finished
+                || epic_order.contains(&t.epic)
+        })
         .collect();
     if in_order.is_empty() {
         return format!(

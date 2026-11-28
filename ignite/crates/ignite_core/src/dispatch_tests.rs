@@ -47,7 +47,7 @@ fn ticket(name: &str, epic: Option<&str>) -> ReadyTicket {
         id: id(name),
         kind: TicketKind::Ordinary,
         holds_tip: false,
-        has_saved_work: false,
+        saved_work: SavedWork::None,
         epic: epic.map_or(Group::General, |value| Group::Epic(id(value))),
         allocation: 100,
         chain: 0,
@@ -379,7 +379,7 @@ fn saved_work_goes_before_new_tickets_across_epics_and_improvements() {
     improvement.kind = TicketKind::Improvement;
     improvement.saving = Some((Unit::CoreHours, 10.0));
     let mut saved_low_epic = ticket("Ts", Some("Elow"));
-    saved_low_epic.has_saved_work = true;
+    saved_low_epic.saved_work = SavedWork::Unfinished;
     saved_low_epic.created_at = Timestamp::from_millis(9_000);
     let order = [
         Group::Epic(id("Etop")),
@@ -420,13 +420,13 @@ fn saved_work_goes_before_new_tickets_across_epics_and_improvements() {
 #[test]
 fn saved_work_respects_epic_cap_and_orders_reverted_first() {
     let mut saved_ordinary = ticket("Ts", Some("Elow"));
-    saved_ordinary.has_saved_work = true;
+    saved_ordinary.saved_work = SavedWork::Unfinished;
     saved_ordinary.allocation = 100;
     let mut reverted = ticket("Trev", Some("Elow"));
-    reverted.has_saved_work = true;
+    reverted.saved_work = SavedWork::Unfinished;
     reverted.allocation = 300;
     let mut capped = ticket("Tcap", Some("Ecap"));
-    capped.has_saved_work = true;
+    capped.saved_work = SavedWork::Unfinished;
     capped.allocation = 500;
     let fresh = ticket("Tnew", Some("Etop"));
     // `Ecap` is omitted from `epic_order` because it is at its `--max-workers` cap.
@@ -441,5 +441,34 @@ fn saved_work_respects_epic_cap_and_orders_reverted_first() {
     assert_eq!(
         ticket_of(next_for(&everyone(), &ready, &order, None, &[])),
         Some("Ts".to_owned())
+    );
+}
+
+#[test]
+fn finished_work_is_offered_first_even_in_a_group_left_out_of_the_order() {
+    // `Estopped` is missing from `epic_order` (allocation zero, or at its cap). A ticket in it
+    // whose landing gate already ran still goes first; one whose work never reached a gate
+    // waits for the group, behind saved work in an active group.
+    let fresh = ticket("Tnew", Some("Etop"));
+    let mut saved = ticket("Tsaved", Some("Etop"));
+    saved.saved_work = SavedWork::Unfinished;
+    saved.allocation = 300;
+    let mut unfinished = ticket("Thalf", Some("Estopped"));
+    unfinished.saved_work = SavedWork::Unfinished;
+    let mut finished = ticket("Tdone", Some("Estopped"));
+    finished.saved_work = SavedWork::Finished;
+    let order = [Group::Epic(id("Etop"))];
+    let ready = [fresh, saved, unfinished, finished];
+    let offered: Vec<(&str, Stage)> = super::order(&ready, &order, None)
+        .into_iter()
+        .map(|(t, stage)| (t.id.as_str(), stage))
+        .collect();
+    assert_eq!(
+        offered,
+        [
+            ("Tdone", Stage::Resume),
+            ("Tsaved", Stage::Resume),
+            ("Tnew", Stage::Group),
+        ]
     );
 }

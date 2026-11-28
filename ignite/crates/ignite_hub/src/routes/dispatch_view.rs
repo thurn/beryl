@@ -693,7 +693,11 @@ fn held_back(
             "its epic is at its --max-workers cap"
         } else if !offerable.contains(&id) {
             "released by two sessions, so it waits for a justiciar"
-        } else if let Some(reason) = snapshot.parked(&ticket, &snapshot.group(&id)) {
+        } else if let Some(reason) = snapshot.parked(
+            &ticket,
+            &snapshot.group(&id),
+            super::allocation::saved_work(conn, &ticket)?,
+        ) {
             reason
         } else {
             continue;

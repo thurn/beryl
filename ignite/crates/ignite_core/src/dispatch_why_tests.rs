@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::config::Os;
-use crate::dispatch::next_for;
+use crate::dispatch::{SavedWork, next_for};
 use crate::ids::{MachineId, SessionId, TicketId};
 use crate::protocol::hub::IdleWorker;
 use crate::time::Timestamp;
@@ -36,7 +36,7 @@ fn ticket(name: &str, cores: f64) -> ReadyTicket {
         id: TicketId::new(name).unwrap(),
         kind: TicketKind::Ordinary,
         holds_tip: false,
-        has_saved_work: false,
+        saved_work: SavedWork::None,
         epic: crate::shares::Group::General,
         allocation: 100,
         chain: 0,

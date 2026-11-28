@@ -4177,6 +4177,12 @@ separately weighted automated sources. For two epics, run
   parked. Standalone tickets use the General pool, whose default weight is 1. A
   blank source allocation lets its standalone tickets share the General pool. An
   explicit positive source weight gives them a separate pool.
+- Allocation zero and `--max-workers` hold back an epic's new work, not its
+  finished work. A ticket whose landing was reverted, or whose saved branch has
+  already been through a landing gate, is offered first among saved work
+  whatever its epic's allocation, because all it needs is a landing and its
+  branch goes stale while it waits. Saved work that never reached a gate waits
+  for the epic like any other ticket.
 - A ticket's allocation orders it within its pool without changing the pool's
   share. A blank ticket allocation uses the default queue weight of 100. Clear
   an override in the dashboard or set `allocation` to `null` in a batch update.
@@ -5740,7 +5746,8 @@ These show that cores, trees and workers go where the rules say.
   again once the label is removed.
 - **A parked epic.** File an epic with tickets and allocation zero. Expect no
   hand-off from it. Set `--allocation 100` and expect the next eligible ticket
-  to be offered. A ticket with its own zero stays parked.
+  to be offered. A ticket with its own zero stays parked. A released ticket of
+  the epic whose landing gate had run is still offered at allocation zero.
 - **Checks only.** Run `ignite pool pause` on a machine with busy workers.
   Expect those workers to finish and verification to continue. Offer a
   regression with no compatible active machine and expect it to be eligible
