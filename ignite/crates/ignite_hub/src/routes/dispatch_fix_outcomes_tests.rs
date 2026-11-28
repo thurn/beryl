@@ -489,3 +489,42 @@ fn reopening_a_regression_ticket_does_not_restamp_already_fixed_checks() {
     );
     assert_eq!(second_fixes[0].outcome, FixOutcome::TestOnly);
 }
+
+#[test]
+fn landing_a_regression_or_justiciar_fix_lets_tip_verification_advance_past_stale_candidate() {
+    use ignite_core::ids::Commit;
+    use ignite_core::tipround::{TipCandidate, TipCandidateUpdate};
+    use ignite_store::hub::tips;
+
+    let mut conn = open();
+    register(&mut conn);
+    let stale = TipCandidate {
+        commit: Commit::new("aaaaaaa").unwrap(),
+        retry_on_new_tip: false,
+    };
+    assert!(
+        tips::update_candidate(
+            &mut conn,
+            &TipCandidateUpdate {
+                expected: None,
+                replacement: stale.clone(),
+            },
+            at(0.5),
+        )
+        .unwrap()
+    );
+
+    let (ticket, _) = regressions::file(&mut conn, UPKEEP, &report("first"), at(1.0)).unwrap();
+    assert_eq!(
+        post(&mut conn, "/claims", &claim(&ticket, "a"), at(2.0)).0,
+        200
+    );
+    assert_eq!(
+        post(&mut conn, "/landed", &landed(&ticket, "a", "fixed"), at(3.0)).0,
+        200
+    );
+
+    let updated = tips::candidate(&conn).unwrap().unwrap();
+    assert_eq!(updated.commit, stale.commit);
+    assert!(updated.retry_on_new_tip);
+}

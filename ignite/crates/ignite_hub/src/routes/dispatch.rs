@@ -465,6 +465,15 @@ fn landed(conn: &mut Connection, landed: &Landed, now: Timestamp, test_paths: &[
     )?;
     findings::close_ticket(&tx, id, now).map_err(|e| store_failure(&e))?;
     let ticket = load(&tx, id)?;
+    if let Some(commit) = &fix.commit
+        && ticket
+            .labels
+            .iter()
+            .any(|l| l == "regression" || l == ignite_core::protocol::tickets::JUSTICIAR_LABEL)
+    {
+        ignite_store::hub::tips::allow_newer_candidate(&tx, commit.as_str())
+            .map_err(|e| store_failure(&e))?;
+    }
     let lane = label(&ticket.labels, "lane:").filter(|_| !landed.defer_successor);
     let next = match lane {
         Some(lane) => queue::chain_next(

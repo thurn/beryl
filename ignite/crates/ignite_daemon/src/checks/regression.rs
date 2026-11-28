@@ -253,21 +253,18 @@ impl Checks {
         .collect()
     }
 
-    /// Checks without a record stay on. Index the hub's states once for the whole listing
-    /// without per-area counts: families with thousands of checks (such as `client-interface`)
-    /// otherwise exceed the 30 s HTTP timeout and fall back to treating switched-off checks as on.
-    fn check_states(&self, family: &str) -> HashMap<CheckName, CheckState> {
+    /// Reads the hub's check states for `family` without per-area counts: families with thousands
+    /// of checks otherwise exceed the 30 s HTTP timeout. Returns the hub error rather than falling
+    /// back to an empty map, which would treat switched-off checks as on and run or bisect them.
+    fn check_states(&self, family: &str) -> Result<HashMap<CheckName, CheckState>> {
         let no_areas = [String::new()];
-        self.history
-            .stats_in(family, &no_areas)
-            .map(|stats| {
-                stats
-                    .checks
-                    .into_iter()
-                    .map(|entry| (entry.check, entry.state))
-                    .collect()
-            })
-            .unwrap_or_default()
+        self.history.stats_in(family, &no_areas).map(|stats| {
+            stats
+                .checks
+                .into_iter()
+                .map(|entry| (entry.check, entry.state))
+                .collect()
+        })
     }
 
     /// Adds one platform's prepared checks, or the missing listing, to the round.
@@ -290,15 +287,12 @@ impl Checks {
                 Platforms::Any(_) => Vec::new(),
             };
             let Some(prepared) = prepared.remove(name) else {
-                set.unlisted.push(Unlisted {
-                    name: CheckName::new(format!("{name}:listing")).unwrap_or_else(|_| {
-                        unreachable!("a family name and a word make a check name")
-                    }),
-                    family: name.to_owned(),
-                    message: missing_listing(name, self.settings.os, run),
-                    reportable: runs_here,
+                set.unlisted.push(unlisted_listing(
+                    name,
+                    missing_listing(name, self.settings.os, run),
+                    runs_here,
                     platforms,
-                });
+                ));
                 continue;
             };
             for broken in &prepared.broken {
@@ -320,7 +314,16 @@ impl Checks {
                     platforms: platforms.clone(),
                 });
             }
-            let states = self.check_states(name);
+            let states = match self.check_states(name) {
+                Ok(states) => states,
+                Err(error) => {
+                    let message =
+                        format!("could not read which checks of {name} are switched off: {error}");
+                    set.unlisted
+                        .push(unlisted_listing(name, message, false, platforms));
+                    continue;
+                }
+            };
             let keys_for: Vec<Option<Os>> = if family.platforms.is_any() {
                 vec![None]
             } else {
@@ -373,6 +376,23 @@ impl Checks {
                 }
             }
         }
+    }
+}
+
+/// An unlisted placeholder for `family` when its listing or check states are unavailable.
+fn unlisted_listing(
+    family: &str,
+    message: String,
+    reportable: bool,
+    platforms: Vec<Os>,
+) -> Unlisted {
+    Unlisted {
+        name: CheckName::new(format!("{family}:listing"))
+            .unwrap_or_else(|_| unreachable!("a family name and a word make a check name")),
+        family: family.to_owned(),
+        message,
+        reportable,
+        platforms,
     }
 }
 

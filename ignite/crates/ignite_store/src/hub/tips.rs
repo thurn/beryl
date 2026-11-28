@@ -51,6 +51,18 @@ pub fn candidate(conn: &Connection) -> Result<Option<TipCandidate>> {
     meta::get(conn, CANDIDATE_KEY)
 }
 
+/// Lets the next tip round move past the current candidate once a regression or justiciar fix
+/// lands at `landed_commit`, so rounds do not keep starting on a pre-fix commit.
+pub fn allow_newer_candidate(conn: &Connection, landed_commit: &str) -> Result<()> {
+    if let Some(mut selected) = candidate(conn)?
+        .filter(|tip| tip.commit.as_str() != landed_commit && !tip.retry_on_new_tip)
+    {
+        selected.retry_on_new_tip = true;
+        meta::put(conn, CANDIDATE_KEY, &selected)?;
+    }
+    Ok(())
+}
+
 /// One machine's selection wins even when two machines fetch different staging tips.
 pub fn update_candidate(
     conn: &mut Connection,

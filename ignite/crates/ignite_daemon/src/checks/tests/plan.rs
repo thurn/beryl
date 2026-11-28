@@ -598,6 +598,28 @@ fn tip_verification_lists_the_regression_checks_the_hub_has_not_switched_off() {
     assert_eq!(listed[0].key.platform, None);
 }
 
+#[test]
+fn an_unreachable_hub_leaves_the_family_unlisted_instead_of_running_switched_off_checks() {
+    let mut history = FakeHistory::default();
+    history.fail_stats.insert("unit".to_owned());
+    let manifest = &MANIFEST[..MANIFEST.find("[family.rs]").unwrap()];
+    let world = world(manifest, &[], history);
+    *world.launcher.listing.lock().unwrap() =
+        "{\"check\": \"unit:a\"}\n{\"check\": \"unit:b\"}\n".to_owned();
+
+    let set = world
+        .checks
+        .regression_checks(&world.ctx, &TreeId::new("tree-01").unwrap())
+        .unwrap();
+
+    assert!(set.checks.is_empty());
+    assert!(set.off.is_empty());
+    assert_eq!(set.unlisted.len(), 1);
+    assert_eq!(set.unlisted[0].family, "unit");
+    assert!(!set.unlisted[0].reportable);
+    assert!(set.unlisted[0].message.contains("switched off"));
+}
+
 /// The hub's estimate of a family's start-up reaches each of its checks, so the gate charges it
 /// once for the family; billions of instructions are preferred to CPU seconds.
 #[test]

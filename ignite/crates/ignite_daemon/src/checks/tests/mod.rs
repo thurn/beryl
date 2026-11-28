@@ -252,6 +252,7 @@ impl TreeSource for FakeTrees {
 struct FakeHistory {
     replies: BTreeMap<String, CheckStatsReply>,
     fixes: BTreeMap<String, Vec<ignite_core::protocol::hub::CheckFix>>,
+    fail_stats: std::collections::BTreeSet<String>,
 }
 
 impl CheckHistory for FakeHistory {
@@ -264,6 +265,9 @@ impl CheckHistory for FakeHistory {
     }
 
     fn stats(&self, family: &str) -> Result<CheckStatsReply> {
+        if self.fail_stats.contains(family) {
+            return Err(Error::Io(format!("hub unreachable for {family}")));
+        }
         Ok(self
             .replies
             .get(family)

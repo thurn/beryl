@@ -335,3 +335,61 @@ fn a_closed_regression_stall_refiles_after_the_grace_window() {
             .contains("historical 90th-percentile")
     );
 }
+
+#[test]
+fn a_failed_tip_after_a_closed_master_lag_ticket_ends_its_grace_window() {
+    let clock = FakeClock::new(Timestamp::parse("2026-06-01T00:00:00Z").unwrap());
+    let mut conn = hub::open_in_memory().unwrap();
+    let landing = apply(
+        &mut conn,
+        vec![create("Stuck landing", TicketType::Task, None, &[])],
+        clock.now(),
+    )[0]
+    .clone();
+    conn.execute(
+        "UPDATE tickets SET landed_at = ?1 WHERE id = ?2",
+        params![clock.now().to_string(), landing],
+    )
+    .unwrap();
+
+    clock.advance(MASTER_LAG_SECONDS + 60.0);
+    let first = justiciar::master_lag(&mut conn, clock.now()).unwrap();
+    assert_eq!(first.len(), 1);
+
+    // Worker lands a fix and closes the master-lag ticket.
+    let landed_at = clock.now().to_string();
+    conn.execute(
+        "UPDATE tickets SET landed_at = ?1 WHERE id = ?2",
+        params![landed_at, first[0].ticket],
+    )
+    .unwrap();
+    clock.advance(2.0);
+    apply(
+        &mut conn,
+        vec![Operation::Close {
+            id: first[0].ticket.clone(),
+            reason: "Landed fix".to_owned(),
+            include_ready: false,
+        }],
+        clock.now(),
+    );
+
+    // While no tip seen at or after the fix has failed, the grace window holds.
+    clock.advance(60.0);
+    assert!(
+        justiciar::master_lag(&mut conn, clock.now())
+            .unwrap()
+            .is_empty()
+    );
+
+    // Once a tip seen after the fix fails, master_lag files a new ticket right away.
+    conn.execute(
+        "INSERT INTO tips (commit_sha, seen, state) VALUES ('deadbeef', ?1, 'failed')",
+        params![clock.now().to_string()],
+    )
+    .unwrap();
+    let second = justiciar::master_lag(&mut conn, clock.now()).unwrap();
+    assert_eq!(second.len(), 1);
+    assert_eq!(second[0].change, Change::Created);
+    assert_ne!(second[0].ticket, first[0].ticket);
+}

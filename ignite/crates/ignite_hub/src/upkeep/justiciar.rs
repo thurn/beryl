@@ -368,25 +368,37 @@ fn tell_one(
 }
 
 /// Whether a master-lag ticket that reported the stuck landing `landing` was closed less than
-/// [`MASTER_LAG_SECONDS`] before `now`. Its worker either found nothing for Ignite to fix or
-/// landed a fix that has not yet had time to move `master`, so a new ticket for the same
-/// landing would send a second worker after the same stall. A stall that outlasts that wait
-/// gets a new ticket, in case the fix did not work.
+/// [`MASTER_LAG_SECONDS`] before `now` and no tip seen at or after its fix has failed yet. Its
+/// worker either found nothing for Ignite to fix or landed a fix that has not yet had time to
+/// move `master`, so a new ticket for the same landing would send a second worker after the same
+/// stall. Once a tip seen at or after `landed_at` (or `closed_at` when nothing landed) fails, or
+/// the stall outlasts that wait, a new ticket is filed.
 fn recently_closed_for(conn: &Connection, landing: &str, now: Timestamp) -> Result<bool> {
     let key = Signature::of_subject(MASTER_LAG_SUBJECT, LABEL).key();
-    let newest: Option<(Option<String>, Option<String>)> = conn
+    let newest: Option<(Option<String>, Option<String>, Option<String>)> = conn
         .query_row(
-            "SELECT closed_at, metadata FROM tickets
+            "SELECT closed_at, landed_at, metadata FROM tickets
              WHERE json_extract(metadata, '$.ignite_signature') = ?1 AND status = 'closed'
              ORDER BY created_at DESC, id DESC LIMIT 1",
             [key],
-            |row| Ok((row.get(0)?, row.get(1)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )
         .optional()?;
-    let Some((Some(closed_at), metadata)) = newest else {
+    let Some((Some(closed_at), landed_at, metadata)) = newest else {
         return Ok(false);
     };
     if now.seconds_since(parse_time(&closed_at)?) >= MASTER_LAG_SECONDS {
+        return Ok(false);
+    }
+    let since = landed_at.as_deref().unwrap_or(&closed_at);
+    let failed_after: Option<()> = conn
+        .query_row(
+            "SELECT 1 FROM tips WHERE state = 'failed' AND seen >= ?1 LIMIT 1",
+            [since],
+            |_| Ok(()),
+        )
+        .optional()?;
+    if failed_after.is_some() {
         return Ok(false);
     }
     let metadata: BTreeMap<String, Value> = match metadata {
