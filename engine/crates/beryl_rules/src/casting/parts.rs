@@ -98,7 +98,8 @@ fn step<L: Layout>(c: &Casting<L>) -> PayingObjects<L> {
         | CastStep::TargetCount
         | CastStep::Target { .. }
         | CastStep::Plan
-        | CastStep::Manual { .. } => unreachable!("a casting paying with objects"),
+        | CastStep::Manual { .. }
+        | CastStep::Outlet { .. } => unreachable!("a casting paying with objects"),
     }
 }
 

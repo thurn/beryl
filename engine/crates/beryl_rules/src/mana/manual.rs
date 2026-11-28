@@ -32,6 +32,36 @@ pub(crate) fn manual_options<L: Layout>(
     exclude: Bitboard<L::Slot>,
     paying: Paying<L>,
 ) -> Result<L::Queue<Opt<L>, OPTIONS>, Full> {
+    list(s, t, player, remaining, exclude, paying, true)
+}
+
+/// [`manual_options`] without the test that the rest stays payable: each floating mana of a
+/// kind that pays toward `remaining`, each kind of each class of sources, and each priced or
+/// multi-term mana ability whose price the pool pays. For a payment in a game with outlets,
+/// whose test of the rest counts what outlets add by trying each option
+/// (`casting::outlets`).
+#[cold]
+#[inline(never)]
+pub(crate) fn manual_candidates<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+    remaining: ManaCost,
+    paying: Paying<L>,
+) -> Result<L::Queue<Opt<L>, OPTIONS>, Full> {
+    list(s, t, player, remaining, Bitboard::EMPTY, paying, false)
+}
+
+/// [`manual_options`], with the test that the rest stays payable if `filtered`.
+fn list<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+    remaining: ManaCost,
+    exclude: Bitboard<L::Slot>,
+    paying: Paying<L>,
+    filtered: bool,
+) -> Result<L::Queue<Opt<L>, OPTIONS>, Full> {
     let sources = Sources::of(s, t, player, exclude, paying)?;
     let pool = s.player(player).mana().amounts_u8();
     let rich =
@@ -54,9 +84,10 @@ pub(crate) fn manual_options<L: Layout>(
         } else {
             continue;
         }
-        let ok = sources
-            .units_left(after, &Table::filled(0), spent)
-            .pays(rest)
+        let ok = !filtered
+            || sources
+                .units_left(after, &Table::filled(0), spent)
+                .pays(rest)
             || (rich
                 && super::rich::pays_from_state(
                     after,
@@ -84,8 +115,8 @@ pub(crate) fn manual_options<L: Layout>(
             let pays_rich = |p, cost| {
                 rich && super::rich::pays_from_state(p, &sources, &taps, 0, &[0; CLASSES], cost)
             };
-            let mut ok = false;
-            if helps(remaining, kind) {
+            let mut ok = !filtered && (helps(remaining, kind) || !c.is_restricted());
+            if !ok && helps(remaining, kind) {
                 let mut rest = remaining;
                 pay_unit(&mut rest, kind);
                 let mut after = pool;
@@ -114,7 +145,7 @@ pub(crate) fn manual_options<L: Layout>(
         }
     }
     if rich {
-        super::rich::manual_extra_options(remaining, pool, &sources, &mut out)?;
+        super::rich::manual_extra_options(remaining, pool, &sources, filtered, &mut out)?;
     }
     Ok(out)
 }

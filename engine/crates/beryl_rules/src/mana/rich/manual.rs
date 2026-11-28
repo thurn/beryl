@@ -19,14 +19,15 @@ use super::super::units::Units;
 use super::super::{CLASSES, KINDS};
 use super::{activate_extra_step, each_pool_payment, pays_from_state, pays_from_state_with};
 
-/// Offers priced and multi-term mana abilities whose price is payable from the pool and that
-/// leave `remaining` payable afterwards.
+/// Offers priced and multi-term mana abilities whose price is payable from the pool and, if
+/// `filtered`, that leave `remaining` payable afterwards.
 #[cold]
 #[inline(never)]
 pub(in crate::mana) fn manual_extra_options<L: Layout>(
     remaining: ManaCost,
     pool: [u8; KINDS],
     sources: &Sources<L>,
+    filtered: bool,
     out: &mut L::Queue<Opt<L>, OPTIONS>,
 ) -> Result<(), Full> {
     for (ei, extra) in sources.extras.iter().enumerate() {
@@ -34,9 +35,12 @@ pub(in crate::mana) fn manual_extra_options<L: Layout>(
         let mut extra_used = [0u8; CLASSES];
         extra_used[ei] = 1;
         for act in &extra.activations {
-            let mut ok = false;
+            let mut ok = !filtered && super::super::amounts_pay(pool, act.price);
             let mut overflow = false;
             each_pool_payment(pool, act.price, &mut |_, pool_after_price| {
+                if ok {
+                    return false;
+                }
                 if act
                     .each_made_split(&mut |made, restricted_made| {
                         let mut after = pool_after_price;
@@ -154,10 +158,15 @@ pub(in crate::mana) fn manual_pay_extra<L: Layout>(
     let mut extra_used = [0u8; CLASSES];
     extra_used[ei] = 1;
     let mut chosen = None;
+    // A payment with outlets tries each option and keeps those after which the rest is still
+    // payable (`casting::outlets`), which the test below cannot see: there, any way to pay the
+    // price is tried.
+    let mut first = None;
     let mut overflow = false;
     each_pool_payment(pool, act.price, &mut |price_spend, pool_after_price| {
         if act
             .each_made_split(&mut |made, restricted_made| {
+                first.get_or_insert((price_spend, made, restricted_made));
                 let mut after = pool_after_price;
                 for (a, &m) in after.iter_mut().zip(&made) {
                     let Some(sum) = a.checked_add(m) else {
@@ -197,7 +206,7 @@ pub(in crate::mana) fn manual_pay_extra<L: Layout>(
         return Err(Full);
     }
     let (price_spend, made, restricted_made) =
-        chosen.expect("a pool payment that leaves the cost payable");
+        chosen.or(first).expect("a pool payment of the price");
     sink.together();
     let activated = activate_extra_step(
         s,

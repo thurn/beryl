@@ -18,6 +18,7 @@
 
 mod manual;
 mod objects;
+mod outlets;
 mod plans;
 mod terms;
 mod walk;
@@ -43,6 +44,8 @@ use super::{CLASSES, KINDS, Taps, amounts_pay};
 
 pub(super) use manual::{manual_can_spend_after, manual_extra_options, manual_pay_extra};
 pub(super) use objects::pays_with_objects;
+pub(super) use outlets::pays_through_outlets;
+pub(crate) use outlets::{Outlet, outlets};
 pub(super) use plans::{each_plan, plans};
 pub(super) use terms::{EvaluatedTerm, RichActivation, collect_extras};
 
@@ -134,6 +137,9 @@ pub(super) fn pays<L: Layout>(
         return true;
     };
     pays_with_sources(s, funds.player(), cost, &sources)
+        || (t.can(Capability::PricedMana)
+            // Too many classes for Small, as above.
+            && pays_through_outlets(s, t, funds.player(), cost, exclude, paying).unwrap_or(true))
 }
 
 /// [`pays`] with `sources` already built.
@@ -195,6 +201,38 @@ pub(super) fn pays_from_state_with<L: Layout>(
     if let Some((kinds, amount)) = bonus_land {
         base.add(kinds, u16::from(amount));
     }
+    pays_from_units_with(base, sources, taps, rem_used, extra_used, cost, spare)
+}
+
+/// Whether `cost` is payable from the units of `base`, which may pay a price or the cost, those
+/// of `spare`, which pay only the cost, and every source of `sources`.
+pub(super) fn pays_from_units<L: Layout>(
+    base: Units,
+    sources: &Sources<L>,
+    spare: Units,
+    cost: ManaCost,
+) -> bool {
+    pays_from_units_with(
+        base,
+        sources,
+        &Table::filled(0),
+        0,
+        &[0; CLASSES],
+        cost,
+        spare,
+    )
+}
+
+/// [`pays_from_state_with`] with the pool and any unplayed land already counted in `base`.
+fn pays_from_units_with<L: Layout>(
+    mut base: Units,
+    sources: &Sources<L>,
+    taps: &Taps<L>,
+    rem_used: u8,
+    extra_used: &[u8; CLASSES],
+    cost: ManaCost,
+    spare: Units,
+) -> bool {
     let mut restricted = spare;
     for (i, &(_, kind, _)) in sources.remembered().iter().enumerate() {
         if rem_used & (1 << i) == 0 {

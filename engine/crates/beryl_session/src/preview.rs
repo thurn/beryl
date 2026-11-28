@@ -261,8 +261,13 @@ fn walk<L: Layout>(
             .is_some_and(|&o| branch(o).is_some())
         {
             for (i, &o) in opts.iter().enumerate() {
+                // A payment with outlets offers them after its plans: each plan is a branch,
+                // and an outlet is a step towards one of them, which the plans already show.
+                let Some(branch) = branch(o) else {
+                    continue;
+                };
                 let shown = beryl_engine::view(&s, t, scratch);
-                let at = priced(branch(o).expect("one kind"), shown, t);
+                let at = priced(branch, shown, t);
                 let mut copy = s.clone();
                 apply(&mut copy, t, scratch, &mut Replay, choice(i));
                 walk(before, copy, t, scratch, &at, out);

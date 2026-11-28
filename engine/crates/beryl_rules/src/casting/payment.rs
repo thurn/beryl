@@ -81,6 +81,9 @@ pub fn pay<L: Layout>(
     cost: ManaCost,
 ) -> Flow {
     let (none, mana) = (Bitboard::EMPTY, Prompt::new(Purpose::Mana));
+    if super::outlets::offered(game.state, game.table, player) {
+        return super::outlets::pay_resolving(game, resolution, player, cost);
+    }
     if game.state.profile().payment == Payment::Manual {
         let mut remaining = cost;
         while !remaining.is_zero() {

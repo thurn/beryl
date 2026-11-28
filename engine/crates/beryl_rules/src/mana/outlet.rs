@@ -174,6 +174,29 @@ pub(crate) fn answer_outlet<L: Layout>(
     }
 }
 
+/// Activates the outlet mana ability `ability` of the permanent in `slot`, its cost taking the
+/// permanent in `paid` and its mana of `color`, in the middle of a payment (see CR 605.3a): the
+/// payment's steps chose both.
+#[cold]
+#[inline(never)]
+pub(crate) fn activate_paid<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    slot: L::Slot,
+    ability: ObjectAbility,
+    paid: L::Slot,
+    color: ManaColor,
+) -> Result<(), Full> {
+    let permanent = s.permanent_at(slot).expect("an outlet on the battlefield");
+    let printed = s
+        .abilities(t, slot)
+        .find(|&(a, _)| a == ability)
+        .map(|(_, a)| a)
+        .expect("the outlet ability chosen");
+    activate_outlet(s, t, sink, permanent, ability, printed, paid, color)
+}
+
 /// Pays an outlet mana ability's cost and adds its mana in one event group (see CR 605.3b).
 #[cold]
 #[inline(never)]

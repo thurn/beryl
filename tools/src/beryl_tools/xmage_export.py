@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from typing import cast
 
 from .card_facts import Json, Unsupported
+from .outlets import refuse_outlet_payments
 from .xmage import Exporter
 from .xmage_java import Export, Faces, method_name, setup_cards, xmage_spelling
 
@@ -41,6 +42,9 @@ def _export_one(entry: Json, index: int, faces: Faces, known: set[str]) -> Expor
         if any(position.get("subgame_depth") for position in trace):
             raise Unsupported("the exporter cannot script turns in a subgame")
         writer.cards.refuse_unplaceable_setup(writer.setup)
+        refuse_outlet_payments(
+            writer.cards, writer.setup, cast(list[Json], entry["actions"])
+        )
         writer.run()
     except Unsupported as e:
         export.unsupported = str(e)

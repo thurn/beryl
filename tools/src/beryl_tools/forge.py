@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import cast
 
 from . import card_store, cards, paths
+from .outlets import refuse_outlet_payments
 from .card_facts import (
     as_their_own,
     Cards,
@@ -555,6 +556,11 @@ def export(
                     "the Forge exporter does not model prepared spell copies"
                 )
             described.track_merges(cast(list[JsonObject], entry["actions"]))
+            refuse_outlet_payments(
+                described,
+                cast(JsonObject, entry["setup"]),
+                cast(list[JsonObject], entry["actions"]),
+            )
             steps: list[JsonObject] = []
             unchecked = 0
             setup_target = None

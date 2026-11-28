@@ -204,6 +204,7 @@ fn activations<L: Layout>(
         for (_, a) in s.abilities(t, slot) {
             if a.kind() != AbilityKind::Mana
                 || a.timing() == Timing::AsInstant
+                || super::outlets::is_outlet(a)
                 || !spendable(s, t, paying, slot, a)
                 || !controls(s, t, player, a, &words)
             {
@@ -226,7 +227,7 @@ fn activations<L: Layout>(
     Some(permanents)
 }
 
-type ReferenceChanges = (Vec<(u8, u8, bool)>, u8, u8);
+pub(super) type ReferenceChanges = (Vec<(u8, u8, bool)>, u8, u8);
 
 /// Reads live mana-changing continuous effects from the Effects store and permanent
 /// `AbilityKind::ManaChange` abilities from the battlefield (independent of `mana::changes` and
@@ -236,7 +237,7 @@ type ReferenceChanges = (Vec<(u8, u8, bool)>, u8, u8);
     clippy::disallowed_methods,
     reason = "reads the source card's printed face to look up the ChangeMana instruction data"
 )]
-fn live_mana_changes<L: Layout>(
+pub(super) fn live_mana_changes<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     slot: L::Slot,
@@ -390,7 +391,7 @@ fn reference_could_produce<L: Layout>(
 /// The activation of a mana ability on `slot`, read from its cost and product: `None` for a cost
 /// with a part besides {T} and sacrificing its source.
 #[allow(clippy::too_many_lines)]
-fn activation_on<L: Layout>(
+pub(super) fn activation_on<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     slot: L::Slot,
@@ -666,7 +667,7 @@ fn search(
 /// What is left of `pool`, a sorted list of units, after each way of paying `price` from it:
 /// every choice of as many units as the price takes that pays it, each choice of how many units
 /// of each set of kinds once.
-fn payments(pool: &[u8], price: ManaCost) -> Vec<Vec<u8>> {
+pub(super) fn payments(pool: &[u8], price: ManaCost) -> Vec<Vec<u8>> {
     let total = usize::try_from(price.total(0)).expect("a price fits a usize");
     if total == 0 {
         return vec![pool.to_vec()];

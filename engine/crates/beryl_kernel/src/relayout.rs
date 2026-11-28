@@ -470,6 +470,17 @@ impl<L: Layout> Relayout for Pending<L> {
                     CastStep::Target { left } => CastStep::Target { left },
                     CastStep::Plan => CastStep::Plan,
                     CastStep::Manual { remaining } => CastStep::Manual { remaining },
+                    CastStep::Outlet {
+                        slot: outlet,
+                        ability,
+                        paid,
+                        remaining,
+                    } => CastStep::Outlet {
+                        slot: slot(outlet),
+                        ability,
+                        paid: paid.map(slot),
+                        remaining,
+                    },
                     CastStep::Objects(p) => CastStep::Objects(PayingObjects {
                         part: p.part,
                         graveyard_from: p.graveyard_from,

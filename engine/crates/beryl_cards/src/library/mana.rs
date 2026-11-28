@@ -538,6 +538,8 @@ pub const OUTLET_MANA: &[Scenario] = &[
             ME.picks(props::COLORLESS_CREATURE.card),
             ME.mana(ManaColor::Colorless, 2),
             ME.casts(props::EQUIPMENT.card),
+            // The Ironworks could still sacrifice itself: paying from the pool is a choice.
+            ME.answers(DecisionKind::PaymentPlan, Pick::Plan { i: 0 }),
             Resolve,
             ME.controls(props::EQUIPMENT.card, 1),
             ME.mana(ManaColor::Colorless, 1),
@@ -580,5 +582,115 @@ pub const OUTLET_MANA: &[Scenario] = &[
             ME.controls(props::COLORLESS_CREATURE.card, 1),
             ME.has(Zone::Graveyard, props::COLORLESS_CREATURE.card, 1),
             ME.mana(ManaColor::Colorless, 2),
+        ]),
+    Scenario::new("A four-mana spell with no lands is paid by sacrificing two artifacts")
+        .battlefield(
+            P0,
+            &[
+                names::KRARK_CLAN_IRONWORKS,
+                props::COLORLESS_CREATURE.card,
+                props::COLORLESS_CREATURE.card,
+            ],
+        )
+        .hand(P0, &[names::KRARK_CLAN_IRONWORKS])
+        .actions(&[
+            // The first activation must take an Ornithopter: giving up the Ironworks first
+            // leaves {4} unpayable, so it is not offered. The second may take either.
+            ME.casts(names::KRARK_CLAN_IRONWORKS),
+            ME.deciding(DecisionKind::ChooseObject, 2),
+            ME.picks(props::COLORLESS_CREATURE.card),
+            ME.answers(DecisionKind::PaymentPlan, Pick::Plan { i: 0 }),
+            Resolve,
+            ME.controls(names::KRARK_CLAN_IRONWORKS, 2),
+            ME.controls(props::COLORLESS_CREATURE.card, 0),
+            ME.has(Zone::Graveyard, props::COLORLESS_CREATURE.card, 2),
+            ME.mana(ManaColor::Colorless, 0),
+        ]),
+    Scenario::new("Mana Crypt is tapped for mana and then sacrificed in one payment")
+        .interaction(&[names::MANA_CRYPT])
+        .battlefield(P0, &[names::KRARK_CLAN_IRONWORKS, names::MANA_CRYPT])
+        .hand(P0, &[names::KRARK_CLAN_IRONWORKS])
+        .actions(&[
+            // Mana Crypt's {C}{C} floats, then the Ironworks sacrifices it for {C}{C} more, so
+            // the Ironworks need not sacrifice itself.
+            ME.casts(names::KRARK_CLAN_IRONWORKS),
+            ME.answers(
+                DecisionKind::PaymentPlan,
+                Pick::Card {
+                    card: names::MANA_CRYPT,
+                },
+            ),
+            ME.mana(ManaColor::Colorless, 2),
+            ME.picks(names::MANA_CRYPT),
+            ME.answers(DecisionKind::PaymentPlan, Pick::Plan { i: 0 }),
+            Resolve,
+            ME.controls(names::KRARK_CLAN_IRONWORKS, 2),
+            ME.has(Zone::Graveyard, names::MANA_CRYPT, 1),
+            ME.mana(ManaColor::Colorless, 0),
+        ]),
+    Scenario::new("The Ironworks sacrifices itself as the last activation of a payment")
+        .battlefield(
+            P0,
+            &[names::KRARK_CLAN_IRONWORKS, props::COLORLESS_CREATURE.card],
+        )
+        .hand(P0, &[names::KRARK_CLAN_IRONWORKS])
+        .actions(&[
+            // Only the Ornithopter first and the Ironworks itself second pays {4}: nothing is
+            // asked.
+            ME.casts(names::KRARK_CLAN_IRONWORKS),
+            Resolve,
+            ME.controls(names::KRARK_CLAN_IRONWORKS, 1),
+            ME.has(Zone::Graveyard, names::KRARK_CLAN_IRONWORKS, 1),
+            ME.has(Zone::Graveyard, props::COLORLESS_CREATURE.card, 1),
+        ]),
+    Scenario::new(
+        "Shrapnel Blast keeps an artifact for its own cost that the Ironworks can't take",
+    )
+    .interaction(&[names::SHRAPNEL_BLAST])
+    .battlefield(
+        P0,
+        &[
+            names::KRARK_CLAN_IRONWORKS,
+            props::COLORLESS_CREATURE.card,
+            names::MOUNTAIN,
+        ],
+    )
+    .hand(P0, &[names::SHRAPNEL_BLAST])
+    .actions(&[
+        // Either artifact may pay {C}{C} toward {1}{R}, but once one is gone the Ironworks
+        // is not offered again: the other must stay for Shrapnel Blast's sacrifice.
+        ME.casts(names::SHRAPNEL_BLAST),
+        ME.targets_player(THEM),
+        ME.deciding(DecisionKind::ChooseObject, 2),
+        ME.picks(props::COLORLESS_CREATURE.card),
+        Resolve,
+        THEM.life(15),
+        ME.has(Zone::Graveyard, props::COLORLESS_CREATURE.card, 1),
+        ME.has(Zone::Graveyard, names::KRARK_CLAN_IRONWORKS, 1),
+        ME.mana(ManaColor::Colorless, 1),
+    ]),
+    Scenario::new("An artifact sacrificed to the Ironworks pays Mana Tithe's {1}")
+        .interaction(&[names::MANA_TITHE])
+        .battlefield(
+            P0,
+            &[names::KRARK_CLAN_IRONWORKS, props::COLORLESS_CREATURE.card],
+        )
+        .hand(P0, &[props::COLORLESS_CREATURE.card])
+        .battlefield(P1, &[names::PLAINS])
+        .hand(P1, &[names::MANA_TITHE])
+        .actions(&[
+            ME.casts(props::COLORLESS_CREATURE.card),
+            ME.passes(),
+            THEM.casts(names::MANA_TITHE),
+            ME.passes(),
+            ME.yes(),
+            ME.picks(props::COLORLESS_CREATURE.card),
+            // {C}{C} floats: paying {1} from it, or sacrificing the Ironworks too.
+            ME.answers(DecisionKind::PaymentPlan, Pick::Plan { i: 0 }),
+            Resolve,
+            ME.controls(props::COLORLESS_CREATURE.card, 1),
+            ME.controls(names::KRARK_CLAN_IRONWORKS, 1),
+            ME.has(Zone::Graveyard, props::COLORLESS_CREATURE.card, 1),
+            ME.mana(ManaColor::Colorless, 1),
         ]),
 ];

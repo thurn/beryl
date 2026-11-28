@@ -35,6 +35,7 @@ use beryl_kernel::mana_memory::RememberedMana;
 mod combat;
 mod grants;
 mod objects;
+mod outlets;
 mod refusal;
 mod sequences;
 
@@ -42,6 +43,7 @@ mod sequences;
 pub(crate) use combat::verify_all_paths;
 #[cfg(test)]
 pub(crate) use objects::reference_pays_with_objects;
+pub(crate) use outlets::reference_outlets;
 pub(crate) use sequences::reference_sequences;
 
 fn check(ok: bool, what: &'static str, at: Option<At>) -> Result<(), Violation> {
@@ -172,9 +174,17 @@ fn check_payments<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Resul
         return Ok(());
     };
     let rich = t.can_either(Capability::PricedMana, Capability::ManaChanges);
+    // With an outlet, what pays is what the brute force over outlets finds; the solver's plans
+    // activate none, so they are checked against the sequences of the other mana abilities.
+    // The checks of spells' restricted mana and of convoke do not count outlets yet.
+    let outlets = rich && outlets::controls_outlet(s, t, player);
     for cost in PROBES.iter().copied().chain(hand).chain(abilities) {
         // X is announced before payment, as 0 here.
         let cost = ManaCost { x: 0, ..cost };
+        if outlets {
+            check_outlets(s, t, player, &funds, ManaCost { x: 0, ..cost })?;
+            continue;
+        }
         if rich {
             check_sequences(s, t, player, &funds, cost)?;
             continue;
@@ -213,6 +223,9 @@ fn check_payments<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Resul
                 )?;
             }
         }
+    }
+    if outlets {
+        return Ok(());
     }
     check_spell_payments(s, t, player, &funds)?;
     check_ability_payments(s, t, player, &funds, units.as_slice())?;
@@ -272,6 +285,47 @@ fn check_sequences<L: Layout>(
                 at,
             )?;
         }
+    }
+    Ok(())
+}
+
+/// Whether `player` can pay `cost` for no spell, where they control an outlet: as the
+/// prefilter and the cached funds say, against every sequence of their mana abilities, outlets
+/// included ([`reference_outlets`]); as the solver's plans say, against every sequence of the
+/// others ([`reference_sequences`]), since the solver plans no outlet.
+fn check_outlets<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+    funds: &Funds<L>,
+    cost: ManaCost,
+) -> Result<(), Violation> {
+    let at = Some(At::Player(player));
+    let none = Bitboard::EMPTY;
+    if let Some(expected) = reference_outlets(s, t, player, cost, Paying::NOTHING)
+        && let Ok(prefilter) = mana::payable(s, t, player, cost, none, Paying::NOTHING)
+    {
+        check(
+            prefilter == expected,
+            "the payability prefilter disagrees with the outlet reference",
+            at,
+        )?;
+        check(
+            funds.pays_for(s, t, cost, none, Paying::NOTHING) == expected,
+            "the cached funds disagree with the outlet reference",
+            at,
+        )?;
+    }
+    let Some(expected) = reference_sequences(s, t, player, cost) else {
+        return Ok(());
+    };
+    let mut sink = Sink::default();
+    if let Ok(plans) = mana::plans(s, t, &mut sink, player, cost, none, false, Paying::NOTHING) {
+        check(
+            plans.is_empty() != expected,
+            "the payment solver disagrees with the sequence reference",
+            at,
+        )?;
     }
     Ok(())
 }

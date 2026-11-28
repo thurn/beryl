@@ -6,6 +6,32 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **The outlet search's quick bound counted a creature for one outlet only.**
+  With Phyrexian Altar ("Sacrifice a creature: Add one mana of any color"),
+  Springleaf Drum ("{T}, Tap an untapped creature you control: Add one mana of
+  any color") and one creature, `{W}{W}` was reported unpayable, though the Drum
+  can tap the creature for `{W}` and the Altar can then sacrifice it for another
+  `{W}`. Before searching, `mana::rich::outlets::pays_through_outlets` gives up
+  if the cost is unpayable even with every permanent an outlet could take turned
+  into its outlet's mana. That bound counted each permanent for one outlet, but
+  a permanent can be tapped by one outlet and then sacrificed to another. Fixed:
+  the bound counts each permanent once for the best outlet that taps it and once
+  for the best one that sacrifices it. Guard: the seeded test
+  `outlet_payments_agree_with_the_reference_on_200_seeded_boards` in
+  `tests/outlet_payment.rs`, which compares the search with the brute force
+  `reference_outlets`.
+
+- **A spell that costs nothing offered to sacrifice to an outlet.** With
+  Krark-Clan Ironworks on the battlefield, casting Ornithopter (`{0}`) asked a
+  payment question offering the empty plan or sacrificing an artifact to the
+  Ironworks. The payment by plan with outlets (`casting::outlets::pay_mana`) was
+  entered for every cost, and a cost of nothing is still payable after any
+  outlet activation, so every outlet passed the test for being offered. Fixed:
+  `casting::steps::pay_mana` takes the outlet path only for a cost that is not
+  zero. Guard: the Krark-Clan Ironworks scenario "An artifact sacrificed to the
+  Ironworks pays Mana Tithe's {1}", which casts Ornithopter with the Ironworks
+  out and fails on a question it did not script.
+
 - **Restricted mana abilities missed live mana changes under Mana Flare.** With
   Mana Flare, Cavern of Souls naming Elemental, and `{U}` in the pool,
   Flickerwisp (`{1}{W}{W}`) could not be cast and `just fuzz` reported "the

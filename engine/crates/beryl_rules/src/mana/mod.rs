@@ -38,8 +38,8 @@ use crate::layout::Small;
 
 pub use add::add;
 pub(crate) use add::{add_instruction, add_of_kind_instruction, add_product_instruction};
-pub(crate) use manual::{manual_options, manual_pay};
-pub(crate) use outlet::{answer_outlet, outlet_decision};
+pub(crate) use manual::{manual_candidates, manual_options, manual_pay};
+pub(crate) use outlet::{activate_paid as activate_outlet, answer_outlet, outlet_decision};
 pub(crate) use pay::{activate, pay};
 pub(crate) use pool::{Funds, payable};
 pub(crate) use priority::{
@@ -48,6 +48,7 @@ pub(crate) use priority::{
     waterbend_mana_options,
 };
 pub(crate) use remembered::{Paying, RESTRICTED, Restricted, restricted_sources};
+pub(crate) use rich::{Outlet, outlets};
 pub(crate) use solver::{Plan, plans, plans_accepting};
 pub use sources::mana_contribution;
 #[cfg(test)]

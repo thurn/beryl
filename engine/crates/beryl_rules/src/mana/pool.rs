@@ -390,7 +390,9 @@ pub(crate) fn payable<L: Layout>(
     {
         return Ok(true);
     }
-    Ok(super::rich::pays_with_sources(s, player, cost, &sources))
+    Ok(super::rich::pays_with_sources(s, player, cost, &sources)
+        || (t.can(Capability::PricedMana)
+            && super::rich::pays_through_outlets(s, t, player, cost, exclude, paying)?))
 }
 
 /// Pays one unit toward `remaining`: a colored or colorless symbol of its kind if one is

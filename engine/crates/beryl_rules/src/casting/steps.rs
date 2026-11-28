@@ -222,7 +222,11 @@ pub(super) fn advance<L: Layout>(
 ) -> Result<(), Full> {
     loop {
         match c.step {
-            CastStep::X | CastStep::Plan | CastStep::Manual { .. } | CastStep::Objects(_) => {
+            CastStep::X
+            | CastStep::Plan
+            | CastStep::Manual { .. }
+            | CastStep::Objects(_)
+            | CastStep::Outlet { .. } => {
                 break;
             }
             CastStep::TargetCount | CastStep::Target { .. } => {
@@ -305,6 +309,9 @@ pub(super) fn pay_mana<L: Layout>(
             Ok(())
         }
         payment @ (Payment::Manual | Payment::KeepMostPayable | Payment::Greedy) => {
+            if !cost.is_zero() && super::outlets::offered(s, t, c.player) {
+                return super::outlets::pay_mana(s, t, sink, c, cost, payment);
+            }
             let plans = mana_payment::plans(s, t, sink, entry, cost, payment == Payment::Greedy)?;
             debug_assert!(!plans.is_empty(), "a spell offered is payable");
             if plans.len() > 1 {
@@ -328,7 +335,7 @@ pub(super) fn pay_mana<L: Layout>(
 /// activated before costs are paid." CR 601.2h permits spending that mana before exiling
 /// cards; it does not permit activating mana abilities after paying the exile cost. Keeping
 /// the unfinished cast pending also keeps session cancellation valid.
-fn after_mana<L: Layout>(
+pub(super) fn after_mana<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
@@ -582,6 +589,9 @@ pub(crate) fn decision<L: Layout>(
             target_candidates(s, t, c)?,
             Prompt::new(Purpose::Target).most(left),
         ),
+        CastStep::Plan if super::outlets::offered(s, t, c.player) => {
+            super::outlets::plan_decision(s, t, sink, c)?
+        }
         CastStep::Plan => {
             let entry = top(s);
             let cost = total_cost(s, t, entry, c);
@@ -599,6 +609,12 @@ pub(crate) fn decision<L: Layout>(
             Prompt::new(Purpose::Mana).cost(remaining),
         ),
         CastStep::Objects(_) => parts::decision(s, t, c)?,
+        CastStep::Outlet {
+            slot,
+            ability,
+            paid,
+            remaining,
+        } => super::outlets::outlet_decision(s, t, c, slot, ability, paid, remaining)?,
     })
 }
 
@@ -671,6 +687,10 @@ pub(crate) fn perform<L: Layout>(
             s.announce_target(target)?;
             c.step = CastStep::Target { left: left - 1 };
         }
+        CastStep::Plan if !matches!(option, Some(Opt::Plan(_))) => {
+            let option = option.expect("an answer to a payment");
+            return super::outlets::take(s, t, sink, c, option, false);
+        }
         CastStep::Plan => {
             let Some(Opt::Plan(i)) = option else {
                 unreachable!("a payment plan");
@@ -693,8 +713,26 @@ pub(crate) fn perform<L: Layout>(
             return after_mana(s, t, sink, c);
         }
         CastStep::Objects(_) => return parts::perform(s, t, sink, c, option, object),
+        CastStep::Outlet {
+            slot,
+            ability,
+            paid,
+            remaining,
+        } => {
+            return super::outlets::perform_outlet(
+                s, t, sink, c, slot, ability, paid, remaining, option, object,
+            );
+        }
         CastStep::Manual { remaining } => {
             let option = option.expect("a manual payment");
+            if let Opt::Activate { slot, ability } = option
+                && super::outlets::is_outlet(s, t, slot, ability)
+            {
+                let remaining = Some(remaining);
+                return super::outlets::begin_outlet(
+                    s, t, sink, c, slot, ability, remaining, false,
+                );
+            }
             let paying = mana::Paying::entry(s, t, top(s));
             let (remaining, color) =
                 mana::manual_pay(s, t, sink, c.player, remaining, option, paying)?;

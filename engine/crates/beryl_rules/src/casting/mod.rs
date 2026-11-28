@@ -20,6 +20,7 @@ mod graveyard;
 pub(crate) mod land;
 mod legal;
 mod mana_payment;
+mod outlets;
 pub(crate) mod parts;
 pub mod payment;
 mod spent;

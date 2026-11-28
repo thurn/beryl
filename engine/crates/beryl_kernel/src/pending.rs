@@ -33,6 +33,18 @@ pub enum CastStep<L: Layout = Small> {
     Manual { remaining: ManaCost },
     /// Paying one part of the cost with objects its player chooses, one at a time.
     Objects(PayingObjects<L>),
+    /// Activating the outlet mana ability `ability` of the permanent in `slot` in the middle
+    /// of the payment (see CR 605.3a): an outlet's cost sacrifices or taps a permanent its
+    /// controller chooses. While `paid` is `None` the question is which permanent pays it;
+    /// once it is `Some`, which color of mana the ability adds. `remaining` is what is left
+    /// to pay under the manual profile ([`CastStep::Manual`]) to return to, and `None` for a
+    /// payment by plan, which goes back to choosing a plan.
+    Outlet {
+        slot: L::Slot,
+        ability: beryl_card::ObjectAbility,
+        paid: Option<L::Slot>,
+        remaining: Option<ManaCost>,
+    },
 }
 
 /// The next payment decision before a special action can turn a permanent face up.

@@ -79,9 +79,18 @@ impl<L: Layout> SacrificeCost<L> {
         if mana.is_zero() {
             return Ok(true);
         }
-        Ok(!self
+        if !self
             .plans(s, t, &mut Sink::off(), mana, true, paying)?
-            .is_empty())
+            .is_empty()
+        {
+            return Ok(true);
+        }
+        // No plan pays it now, but activating outlets first might: try each first step.
+        if super::outlets::offered(s, t, self.player) {
+            let keeps = |after: &State<L>, cost| self.payable(after, t, cost, paying);
+            return super::outlets::payable_through(s, t, self.player, mana, paying, &keeps);
+        }
+        Ok(false)
     }
 
     fn rest_is_payable(&self, s: &State<L>, t: &GameTable) -> Result<bool, Full> {
@@ -184,6 +193,9 @@ pub(super) fn options<L: Layout>(
 ) -> Result<L::Queue<Opt<L>, OPTIONS>, Full> {
     let player = entry.controller();
     let paying = Paying::entry(s, t, entry);
+    if super::outlets::offered(s, t, player) {
+        return super::outlets::manual_options(s, t, player, remaining, paying);
+    }
     let options = mana::manual_options(s, t, player, remaining, Bitboard::EMPTY, paying)?;
     let Some(other) = SacrificeCost::of_entry(t, entry) else {
         return Ok(options);
