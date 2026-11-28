@@ -428,12 +428,6 @@ restore the old behavior.
   control or each other. No layer of a library, graveyard or exile pile covers a
   card in play, for either seat, however long a row grows. The opponent's piles
   keep the band above their back row to themselves (by-biv, by-krxg).
-- **Playground dock.** In a tools build, while a card's playground example is
-  played, a button at the table's top edge, right of the log toggle, names the
-  card, the example and its place among the card's examples. It opens a list of
-  the examples, the one played now selected, with Back last. Choosing one ends
-  the game and starts it. On the desktop \] and \[ start the next and the
-  previous example, wrapping around, and R starts the current one again.
 - **Proposal panel.** Turn upkeep and combat show the suggested changes with one
   checkbox per line and a mark on each affected card. Apply commits the checked
   lines as one undoable batch. The panel shares the log column on desktop and

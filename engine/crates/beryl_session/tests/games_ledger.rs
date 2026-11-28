@@ -36,7 +36,6 @@ fn report() -> BugReport {
         updates: Vec::new(),
         spec: None,
         spec_viewer: false,
-        playground: None,
         manual: None,
     }
 }

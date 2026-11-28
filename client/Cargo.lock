@@ -188,7 +188,6 @@ dependencies = [
  "kit_space",
  "kit_text",
  "kit_ui",
- "serde",
  "serde_json",
 ]
 
@@ -470,7 +469,6 @@ dependencies = [
  "app_screens",
  "beryl_assets",
  "beryl_cards",
- "beryl_cli",
  "beryl_client",
  "beryl_host",
  "beryl_inspect",

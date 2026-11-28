@@ -15,7 +15,6 @@
 use crate::client;
 use app_screens::screens::bug_report;
 use app_screens::screens::settings::Message as SettingsMessage;
-use app_screens::screens::testing::playground::Card;
 use client::{Reply, SessionCommand};
 use kit_ui::element::Action;
 use std::collections::{BTreeMap, VecDeque};
@@ -28,7 +27,7 @@ use beryl_protocol::ipc::{
     SavedTable, SetStopsRequest, TableConnectionError, UndoRequest,
 };
 use beryl_protocol::prompt::{Click, ClickReply};
-use beryl_protocol::{AgentView, CandidateIndex, SessionId};
+use beryl_protocol::{AgentView, CandidateIndex};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -291,40 +290,21 @@ impl Responses {
                 plays_on: false,
             });
         }
-        let recorded = |what: &str, error: serde_json::Error| {
-            format!("the recorded `{what}` answer is not one: {error}")
-        };
-        let reply = match (name, command) {
-            (PLAYGROUND_FIND, SessionCommand::PlaygroundFind(text)) => Reply::PlaygroundFound(
-                text.clone(),
-                Option::<String>::deserialize(value).map_err(|error| recorded(name, error))?,
+        let reply = match name {
+            ipc::TABLE_SAVED => Reply::TableSaved(Ok(Vec::<SavedTable>::deserialize(value)
+                .map_err(|error| {
+                    format!("the recorded `table_saved` answer is not one: {error}")
+                })?)),
+            ipc::TABLE_HOST | ipc::TABLE_JOIN | ipc::TABLE_RESUME => Reply::TableOpen(
+                TableConnectionError::deserialize(value).map_or(Ok(()), |error| Err(error.reason)),
             ),
-            (PLAYGROUND_EXAMPLES, _) => Reply::PlaygroundExamples(Ok(
-                Card::deserialize(value).map_err(|error| recorded(name, error))?
-            )),
-            (PLAYGROUND_START, _) => Reply::PlaygroundStarted(Ok(
-                SessionId::deserialize(value).map_err(|error| recorded(name, error))?
-            )),
-            _ => reply(name, value)?,
+            _ => Reply::Done(Ok(())),
         };
         Ok(Answer {
             reply,
             plays_on: name == ipc::CHOOSE,
         })
     }
-}
-
-/// The reply a recorded answer `value` to the command `name` stands for, for every command
-/// whose answer the client reads no more of than whether it failed.
-fn reply(name: &str, value: &Value) -> Result<Reply, String> {
-    Ok(match name {
-        ipc::TABLE_SAVED => Reply::TableSaved(Ok(Vec::<SavedTable>::deserialize(value)
-            .map_err(|error| format!("the recorded `table_saved` answer is not one: {error}"))?)),
-        ipc::TABLE_HOST | ipc::TABLE_JOIN | ipc::TABLE_RESUME => Reply::TableOpen(
-            TableConnectionError::deserialize(value).map_or(Ok(()), |error| Err(error.reason)),
-        ),
-        _ => Reply::Done(Ok(())),
-    })
 }
 
 /// The sequence number of the decision a recorded click was made on, if `message` is one.
@@ -338,12 +318,6 @@ fn seq_of(message: &FixtureMessage) -> Option<u64> {
     };
     request.get("decision")?.get("seq")?.as_u64()
 }
-
-/// The names a story's recorded answers to the playground's commands go by: the web app's IPC
-/// has none, its playground page having had a server of its own.
-pub const PLAYGROUND_FIND: &str = "playground_find";
-pub const PLAYGROUND_EXAMPLES: &str = "playground_examples";
-pub const PLAYGROUND_START: &str = "playground_start";
 
 /// The command's name as the app's IPC knows it, and its request as the app would receive it.
 fn wire(command: &SessionCommand) -> (&'static str, Option<Value>) {
@@ -411,11 +385,5 @@ fn wire(command: &SessionCommand) -> (&'static str, Option<Value>) {
         ),
         SessionCommand::DeckList => (ipc::DECK_LIST, None),
         SessionCommand::DeckImport(request) => (ipc::DECK_IMPORT, value(request)),
-        // The playground has no command of the web app's: a recording never answers one.
-        SessionCommand::PlaygroundFind(text) => (PLAYGROUND_FIND, value(text)),
-        SessionCommand::PlaygroundExamples(card) => (PLAYGROUND_EXAMPLES, value(card)),
-        SessionCommand::PlaygroundStart { card, variant } => {
-            (PLAYGROUND_START, value(&[card, variant]))
-        }
     }
 }

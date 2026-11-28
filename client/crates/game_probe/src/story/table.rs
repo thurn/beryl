@@ -31,9 +31,6 @@ pub struct TableStory {
     pub views: Vec<PlayerView>,
     pub actions: Vec<String>,
     pub feature: Option<String>,
-    /// Further messages of the recording after its views, each a `message <json>` line: the
-    /// session's answers to commands the story's actions send, or the host's events.
-    pub extra: Vec<FixtureMessage>,
 }
 
 #[cfg(feature = "stories")]
@@ -51,7 +48,6 @@ impl TableStory {
         let mut shared = false;
         let mut actions = Vec::new();
         let mut battlefield_order = false;
-        let mut extra = Vec::new();
         let mut lines = lines.iter();
 
         while let Some(&(index, line)) = lines.next() {
@@ -83,10 +79,6 @@ impl TableStory {
                 "manual" if value.is_empty() => manual = true,
                 "shared" if value.is_empty() => shared = true,
                 "action" if !value.is_empty() => actions.push(value.to_owned()),
-                "message" => {
-                    extra
-                        .push(serde_json::from_str(value).map_err(|error| why(error.to_string()))?);
-                }
                 "battlefield-order" if value.is_empty() => battlefield_order = true,
                 "handling" if handling.is_none() => {
                     handling =
@@ -119,7 +111,16 @@ impl TableStory {
         let mut start = builder.build();
         slots.apply(&mut start);
         if shared {
-            share_piles(&mut start);
+            let mut library = std::mem::take(&mut start.players.you.library);
+            library.extend(std::mem::take(&mut start.players.opponent.library));
+            let mut graveyard = std::mem::take(&mut start.players.you.graveyard);
+            graveyard.extend(std::mem::take(&mut start.players.opponent.graveyard));
+            for object in &mut start.objects {
+                if matches!(object.zone, ZoneName::Library | ZoneName::Graveyard) {
+                    object.zone_side = None;
+                }
+            }
+            start.shared = Some(SharedPiles { library, graveyard });
         }
         stack.finish(&mut start)?;
         [start.players.you.life, start.players.opponent.life] = life;
@@ -136,7 +137,6 @@ impl TableStory {
             views,
             actions,
             feature: feature.map(str::to_owned),
-            extra,
         })
     }
 
@@ -153,25 +153,8 @@ impl TableStory {
                 view: view.clone(),
             })
         }));
-        messages.extend(self.extra.iter().cloned());
         messages
     }
-}
-
-/// Makes the two players' libraries and graveyards of `start` one shared library and one
-/// shared graveyard, as in the shared-deck format.
-#[cfg(feature = "stories")]
-fn share_piles(start: &mut PlayerView) {
-    let mut library = std::mem::take(&mut start.players.you.library);
-    library.extend(std::mem::take(&mut start.players.opponent.library));
-    let mut graveyard = std::mem::take(&mut start.players.you.graveyard);
-    graveyard.extend(std::mem::take(&mut start.players.opponent.graveyard));
-    for object in &mut start.objects {
-        if matches!(object.zone, ZoneName::Library | ZoneName::Graveyard) {
-            object.zone_side = None;
-        }
-    }
-    start.shared = Some(SharedPiles { library, graveyard });
 }
 
 #[cfg(feature = "stories")]

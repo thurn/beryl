@@ -19,8 +19,6 @@
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Sender, channel};
 use std::thread::JoinHandle;
 
@@ -33,9 +31,8 @@ use beryl_protocol::ipc::{
     TableLobbyRequest, TableResumeRequest,
 };
 use beryl_session::ai::AgentMove;
-use beryl_session::bugs::PlaygroundExample;
 use beryl_session::card_records::{CardRecords, CardRecordsRequest, card_records};
-use beryl_session::{SessionId, Sessions, StartGame};
+use beryl_session::{Sessions, StartGame};
 use beryl_shell::Dirs;
 use beryl_table_session::TableEvent;
 use beryl_table_session::connections::TableConnections;
@@ -44,28 +41,6 @@ use game_manual::manual::tokens;
 
 use crate::bugs::Job;
 use crate::cards::CardFeed;
-#[cfg(feature = "tools")]
-use crate::playground;
-
-/// A build without `tools` has no card playground: it finds no card and starts no example.
-#[cfg(not(feature = "tools"))]
-mod playground {
-    use app_screens::screens::testing::playground::Card;
-
-    const NONE: &str = "This build has no playground";
-
-    pub fn find(_: &str) -> Option<String> {
-        None
-    }
-
-    pub fn examples(_: &str) -> Result<Card, String> {
-        Err(NONE.to_owned())
-    }
-
-    pub fn prepared(_: &str, _: &str) -> Result<beryl_session::Prepared, String> {
-        Err(NONE.to_owned())
-    }
-}
 
 /// What answers the frame thread's commands: `Sessions`, or a test's stand-in.
 pub trait Session {
@@ -192,13 +167,6 @@ pub struct Live {
     offered: Vec<AgentView>,
     /// The card records last given to the client, which the manual table's views add to.
     cards: CardFeed,
-    /// Whether the game in progress is a card's playground example, whose views give the
-    /// client the records of the cards they show, as the manual table's do: a prepared game
-    /// has no decklist to give them from.
-    by_view: Arc<AtomicBool>,
-    /// The playground example played now and the session it was started in, which a bug
-    /// report saved during its game names.
-    playground: Option<(SessionId, PlaygroundExample)>,
 }
 
 impl Live {
@@ -209,13 +177,7 @@ impl Live {
     #[must_use]
     pub fn new(dirs: Option<Dirs>, inbox: Inbox) -> Self {
         let views = inbox.clone();
-        let cards = CardFeed::new(inbox.clone());
-        let by_view = Arc::new(AtomicBool::new(false));
-        let (view_cards, named) = (cards.clone(), Arc::clone(&by_view));
-        let emit = move |update: beryl_session::GameUpdate| {
-            if named.load(Ordering::Relaxed) {
-                view_cards.view(&update.view);
-            }
+        let emit = move |update| {
             views.send(Input::Update(Box::new(update)));
         };
         let data = dirs.as_ref().map_or_else(
@@ -227,6 +189,7 @@ impl Live {
             Some(dirs) => beryl_shell::sessions(&beryl_cards::CARDS, &dirs, emit),
             None => Sessions::new(&beryl_cards::CARDS, None, emit),
         };
+        let cards = CardFeed::new(inbox.clone());
         let table_views = inbox.clone();
         let table_cards = cards.clone();
         let events = inbox.clone();
@@ -260,8 +223,6 @@ impl Live {
             resume_table: None,
             offered: Vec::new(),
             cards,
-            by_view,
-            playground: None,
         }
     }
 
@@ -354,8 +315,6 @@ impl Live {
     /// from those it was last given records for. The game's first views may reach the client
     /// before the records do; its cards then show their faces once the host has prepared them.
     fn give_cards(&mut self) {
-        self.by_view.store(false, Ordering::Relaxed);
-        self.playground = None;
         let Some(replay) = self.sessions.current_replay() else {
             return;
         };
@@ -369,17 +328,6 @@ impl Live {
             records
         };
         self.cards.decks(lists.clone(), records);
-    }
-
-    /// Starts the card's playground variant in place of the game in progress, its views giving
-    /// the client the records of the cards they show.
-    fn start_playground(&mut self, card: String, variant: String) -> Result<SessionId, String> {
-        let prepared = playground::prepared(&card, &variant)?;
-        self.by_view.store(true, Ordering::Relaxed);
-        let session =
-            (self.sessions.start_prepared(prepared)).map_err(|error| error.to_string())?;
-        self.playground = Some((session, PlaygroundExample { card, variant }));
-        Ok(session)
     }
 
     /// Gives the client the records of a deck loaded at the manual table, before the table's
@@ -574,26 +522,11 @@ impl Session for Live {
             SessionCommand::DeckImport(request) => {
                 Reply::DeckImport(decks::import(&self.decks, request))
             }
-            SessionCommand::PlaygroundFind(text) => {
-                Reply::PlaygroundFound(text.clone(), playground::find(&text))
-            }
-            SessionCommand::PlaygroundExamples(card) => {
-                Reply::PlaygroundExamples(playground::examples(&card))
-            }
-            SessionCommand::PlaygroundStart { card, variant } => {
-                Reply::PlaygroundStarted(self.start_playground(card, variant))
-            }
         }
     }
 
     fn save_bug(&mut self, job: Job) -> Result<(), String> {
         let latest = job.latest_session();
-        let job = match &self.playground {
-            Some((session, example)) if latest == Some(*session) => {
-                job.in_playground(example.clone())
-            }
-            _ => job,
-        };
         let manual = self.tables.current_report().filter(|report| {
             latest.is_none()
                 || report

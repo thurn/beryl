@@ -55,13 +55,11 @@ fn actor(action: &Action) -> Option<Seat> {
 
 /// Existing scenario setups are reusable data, not card-name branches in the viewer.
 /// Each distinct variant has its own pair of full-width boards on the scrolling page.
-///
-/// # Panics
-///
-/// When `card` names no implemented card, with a file or complete from the card store.
 pub fn generate(catalog: &'static Catalog, card: &'static str) -> Playground {
-    let def = (catalog.cards.cards().iter())
-        .chain(catalog.cards.from_store())
+    let def = catalog
+        .cards
+        .cards()
+        .iter()
         .copied()
         .find(|d| d.name == card)
         .expect("card definition");
@@ -638,52 +636,29 @@ pub fn prepare(
     Err(format!("Could not reach {}", moment.title))
 }
 
-/// The game `variant` plays as `view` sees it, set up and ready for a session to start
-/// (`Sessions::start_prepared`): the other seat is the automated opponent, and the viewer's own
-/// seat answers nothing for them once the game is handed over.
-///
-/// # Errors
-///
-/// When the variant's setup does not reach its interaction ([`prepare`]), or its opponent's
-/// plan names an action the game cannot take.
-pub fn prepared(
-    catalog: &'static Catalog,
-    variant: &'static Variant,
-    view: View,
-) -> Result<Prepared, String> {
-    let (table, state) = prepare(catalog, variant)?;
-    let opponent = opponent::Opponent::new(variant, view.other(), &table)?;
-    let stand_in = Scripted::with_actions(&[], view.seat(), &table, Shared::default())?;
-    Ok(Prepared {
-        opponent: Box::new(opponent),
-        stand_in: Box::new(stand_in),
-        scripted: true,
-        hand_over: Some(Box::new(|| true)),
-        table,
-        state,
-        human: view.seat(),
-        stops: StopsSetting::SMART,
-    })
-}
-
-/// Starts the game `variant` plays as `view` sees it in sessions of its own, which send every
-/// view to `emit`.
-///
-/// # Errors
-///
-/// When the game cannot be set up ([`prepared`]) or the session refuses it.
 pub fn start(
     catalog: &'static Catalog,
     variant: &'static Variant,
     view: View,
     emit: impl Fn(GameUpdate, Phase) + Send + Sync + 'static,
 ) -> Result<Sessions, String> {
-    let prepared = prepared(catalog, variant, view)?;
+    let (table, state) = prepare(catalog, variant)?;
+    let opponent = opponent::Opponent::new(variant, view.other(), &table)?;
+    let stand_in = Scripted::with_actions(&[], view.seat(), &table, Shared::default())?;
     let sessions = Sessions::new(catalog.cards, None, move |update| {
         emit(update, Phase::Live);
     });
     sessions
-        .start_prepared(prepared)
+        .start_prepared(Prepared {
+            opponent: Box::new(opponent),
+            stand_in: Box::new(stand_in),
+            scripted: true,
+            hand_over: Some(Box::new(|| true)),
+            table,
+            state,
+            human: view.seat(),
+            stops: StopsSetting::SMART,
+        })
         .map_err(|e| e.to_string())?;
     Ok(sessions)
 }

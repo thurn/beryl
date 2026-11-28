@@ -298,7 +298,6 @@ mod milestone_three {
                         window: input.window,
                         column: input.profile.screen_column(),
                         filter: FieldState::default(),
-                        card: FieldState::default(),
                     },
                 ),
                 Screen::Lobby => game_manual::features::lobby::LobbyScreen::view(

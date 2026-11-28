@@ -12,7 +12,6 @@ use app_screens::screens::gallery::GalleryScreen;
 use app_screens::screens::settings::SettingsSheet;
 use app_screens::screens::start::StartScreen;
 use app_screens::screens::testing::TestingScreen;
-use app_screens::screens::testing::dock::PlaygroundDock;
 use game_hud::hud::full_control::FullControl;
 use game_hud::hud::log::GameLog;
 use game_hud::hud::steps::StepRow;
@@ -82,7 +81,6 @@ feature_slots! {
         game_log: GameLog,
         start: StartScreen,
         testing: TestingScreen,
-        playground_dock: PlaygroundDock,
         gallery: GalleryScreen,
         bug_report: BugReport,
         game_over: GameOver,

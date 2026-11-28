@@ -34,7 +34,6 @@ pub fn registered_features() -> impl ExactSizeIterator<Item = FeatureInfo> {
             Some(Placement::TableOverlay) => "table overlay".to_owned(),
             Some(Placement::TableLog) => "table log".to_owned(),
             Some(Placement::TableProposals) => "table proposals".to_owned(),
-            Some(Placement::TableTools) => "table tools".to_owned(),
             None => "HUD control".to_owned(),
         },
         source: entry.source,

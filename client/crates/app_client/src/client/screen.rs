@@ -26,7 +26,6 @@ struct MountedViews {
     screen: Option<Element>,
     log: Option<Element>,
     result: Option<Element>,
-    tools: Option<Element>,
     menu_face: Option<FaceId>,
 }
 
@@ -50,17 +49,15 @@ impl Client {
         self.features.inspect(&Inspect::Invalidate);
         self.refresh_screen_state();
         let under_visible = sheet != Some(Sheet::Settings) && !self.bug_hides_screen();
-        let mut furniture = self.game_furniture(under_visible);
+        let furniture = self.game_furniture(under_visible);
         let placement_scene = self.placement_scene();
         let MountedViews {
             sheet: sheet_view,
             screen: mounted_screen,
             log,
             result,
-            tools,
             menu_face,
         } = self.mounted_views(under_visible, placement_scene.as_ref());
-        furniture.tools = tools;
         let view = self.show.latest().map(|update| &update.view);
         let input = ScreenIn {
             placement_scene: placement_scene.as_ref(),
@@ -193,7 +190,6 @@ impl Client {
             band_full_control: band.map(|input| self.features.full_control_view(input)),
             viewer: viewer.and_then(|input| self.features.viewer_view(input)),
             prompt: None,
-            tools: None,
         }
     }
 
@@ -232,15 +228,11 @@ impl Client {
             let result = (under_visible && feature_inputs.screen == Screen::Game)
                 .then(|| features.view(Placement::GameOver, feature_inputs))
                 .flatten();
-            let tools = (under_visible && feature_inputs.screen == Screen::Game)
-                .then(|| features.view(Placement::TableTools, feature_inputs))
-                .flatten();
             MountedViews {
                 sheet: sheet_view,
                 screen: mounted_screen,
                 log,
                 result,
-                tools,
                 menu_face,
             }
         })

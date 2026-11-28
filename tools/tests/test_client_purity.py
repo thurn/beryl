@@ -155,24 +155,6 @@ def test_only_the_recorder_file_names_the_recorder(tmp_path: Path) -> None:
     assert "beryl_inspect depends on beryl_cli" in found
 
 
-def test_the_app_names_the_recorder_only_in_its_optional_playground(
-    tmp_path: Path,
-) -> None:
-    manifest = f"{CRATES}/beryl_client/Cargo.toml"
-    playground = f"{CRATES}/beryl_client/src/playground.rs"
-    write(tmp_path, manifest, "[dependencies]\nberyl_cli = { optional = true }\n")
-    write(tmp_path, playground, "use beryl_cli::specs;\n")
-    assert purity.scene_purity(tmp_path) == []
-    session = f"{CRATES}/beryl_client/src/session.rs"
-    write(tmp_path, session, "use beryl_cli::specs;\n")
-    (found,) = purity.scene_purity(tmp_path)
-    assert found.startswith(f"{session}:1: names beryl_cli")
-    write(tmp_path, session, "")
-    write(tmp_path, manifest, "[dependencies]\nberyl_cli = {}\n")
-    (found,) = purity.scene_purity(tmp_path)
-    assert "beryl_client depends on beryl_cli" in found
-
-
 def test_the_scene_names_no_clock_however_it_is_imported(tmp_path: Path) -> None:
     scene = f"{CRATES}/app_client/src/lib.rs"
     write(
