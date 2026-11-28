@@ -28,9 +28,9 @@ impl Client {
     /// word a refused click puts under a permanent, at the table's time `now`.
     pub(super) fn inspect(&mut self, now: u64) {
         let until = self.refusal_frame(now);
-        let hovered = self.hovered_slot();
+        let hovered = self.inspected_slot();
         let visible = matches!(self.features.screen, Screen::Game | Screen::Table)
-            && self.features.sheet.is_none();
+            && self.table_shown();
         let decision = self.open_decision().map(|decision| decision.id);
         let view = self
             .show
@@ -50,6 +50,16 @@ impl Client {
         });
         if let Some(face) = face {
             self.show.faces_mut().want_full(face);
+        }
+    }
+
+    /// The slot of the card the inspector follows: the card under the pointer, or while the bug
+    /// report is open, the one that was under it when the report opened.
+    pub(super) fn inspected_slot(&self) -> Option<ObjectId> {
+        if self.bug_open() {
+            self.bug_hovered
+        } else {
+            self.hovered_slot()
         }
     }
 

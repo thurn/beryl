@@ -315,3 +315,17 @@ fn the_revealed_pill_stands_over_the_revealed_pile_and_its_cross_puts_it_away() 
         "the pile is put away"
     );
 }
+
+#[test]
+fn the_bug_report_keeps_the_hovered_card_zoom_on_screen() {
+    // The report freezes the table so the player can screenshot it, and the zoom of the card
+    // under the pointer is part of what they want to show.
+    let mut page = page(&table());
+    hover(&mut page, "card \"Island\" #5");
+    assert!(inspector(&mut page).is_some(), "hovering a card zooms it");
+    page.chord("Cmd+B");
+    page.still();
+    assert!(inspector(&mut page).is_some(), "the zoom stays in the report");
+    page.step(Duration::from_millis(500));
+    assert!(inspector(&mut page).is_some(), "and after the picture is taken");
+}
