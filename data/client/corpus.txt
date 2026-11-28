@@ -1328,7 +1328,7 @@ predict/naming-the-milled-card-draws-two-0
 predict/naming-the-milled-card-draws-two-ask-2
 predict/targeting-its-caster-after-memory-lapse-mills-the-known-card-and-draws-two
 predict/targeting-the-opponent-mills-the-shared-library-into-the-shared-graveyard
-propaganda/generated-1-cast-from-hand
+propaganda/under-mana-reflection-one-island-pays-for-an-attacker
 propaganda/under-propaganda-a-creature-that-taps-for-mana-cannot-pay-for-its-own-attack
 propaganda/under-propaganda-attacking-jace-the-mind-sculptor-costs-nothing
 propaganda/under-propaganda-each-combats-attack-is-paid-for
