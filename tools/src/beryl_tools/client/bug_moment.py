@@ -191,9 +191,9 @@ def story_text(text: str, name: str, words: str) -> str:
     out.append(f"// A bug report's moment. The player said: {first}\n")
     for line in lines[1:]:
         if line.startswith("capture "):
-            parts = line.split(" ")
-            parts[1] = name
-            line = " ".join(parts)
+            # The source is a path and may hold spaces; the four words after it do not.
+            tail = line.rstrip("\n").rsplit(" ", 4)[1:]
+            line = f"capture {name} {' '.join(tail)}\n"
         out.append(line)
     return "".join(out)
 

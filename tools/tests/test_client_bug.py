@@ -136,7 +136,7 @@ def test_trimming_keeps_the_last_views_and_every_answer(tmp_path: Path) -> None:
 def test_a_story_from_a_report_names_itself_not_the_reporting_machines_folder() -> None:
     written = (
         "story table 1728x1117 desktop\n"
-        "capture /Users/someone/bugs/x/fixture.json 1200000000 you 2 catch-up\n"
+        "capture /Users/someone/Application Support/bugs/x/fixture.json 1200000000 you 2 catch-up\n"
         "action still\n"
     )
     text = bug_moment.story_text(written, "sickness-badge", "the badge shows\nmore")
