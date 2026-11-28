@@ -41,7 +41,6 @@ pub const ACTIVE_HELD_SECONDS: f64 = 24.0 * 3_600.0;
 /// The label on a ticket for the justiciar to look at.
 const JUSTICIAR: &str = ignite_core::dispatch::JUSTICIAR;
 
-
 /// Why a ticket in progress is reported.
 enum HeldFor {
     /// It has been in progress for more than [`HELD_SECONDS`] with a session that is not
@@ -147,12 +146,18 @@ fn minutes_since_command(
         |row| row.get(0),
     )?;
     let Some(at) = at else { return Ok(None) };
-    Ok(Some((now.seconds_since(parse_time(&at)?).max(0.0) / 60.0) as u64))
+    Ok(Some(
+        (now.seconds_since(parse_time(&at)?).max(0.0) / 60.0) as u64,
+    ))
 }
 
 /// Whether a session (not upkeep) closed the latest `held` ticket for `subject` within
 /// [`HELD_REFILE_COOLDOWN_SECONDS`] of `now`, so upkeep waits before re-filing it.
-pub(super) fn held_recently_closed(conn: &Connection, subject: &str, now: Timestamp) -> Result<bool> {
+pub(super) fn held_recently_closed(
+    conn: &Connection,
+    subject: &str,
+    now: Timestamp,
+) -> Result<bool> {
     let key = Signature::of_subject(subject, "held").key();
     let newest: Option<(String, String, Option<String>)> = conn
         .query_row(

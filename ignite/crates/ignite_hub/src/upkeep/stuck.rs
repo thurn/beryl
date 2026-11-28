@@ -42,8 +42,8 @@ mod held;
 #[path = "stuck_incomplete.rs"]
 mod incomplete;
 
-use held::{find_held, held_filing, held_recently_closed};
 pub use held::{ACTIVE_HELD_SECONDS, HELD_REFILE_COOLDOWN_SECONDS, HELD_SECONDS, STOPPED_SECONDS};
+use held::{find_held, held_filing, held_recently_closed};
 
 pub use incomplete::{ROUND_LIMIT, incomplete};
 

@@ -464,7 +464,11 @@ fn record_command(conn: &rusqlite::Connection, at: ignite_core::time::Timestamp)
     .unwrap();
 }
 
-fn filed(upkeep: &mut Upkeep, conn: &mut rusqlite::Connection, now: ignite_core::time::Timestamp) -> Vec<String> {
+fn filed(
+    upkeep: &mut Upkeep,
+    conn: &mut rusqlite::Connection,
+    now: ignite_core::time::Timestamp,
+) -> Vec<String> {
     upkeep.pass(conn, now).unwrap().tickets_filed
 }
 
@@ -489,7 +493,10 @@ fn a_ticket_whose_session_still_runs_commands_waits_a_day() {
     assert_eq!(report.len(), 1);
     let body = ticket(&conn, &report[0]).body;
     assert!(body.contains("held for 24 hours"), "{body}");
-    assert!(body.contains("last recorded a command 61 min ago"), "{body}");
+    assert!(
+        body.contains("last recorded a command 61 min ago"),
+        "{body}"
+    );
 }
 
 #[test]
@@ -499,7 +506,8 @@ fn a_ticket_whose_session_has_a_command_running_is_not_reported_at_six_hours() {
     let mut upkeep = Upkeep::new(None).unwrap();
     held_by_s1(&mut conn, clock.now());
     set_worker(&conn, "working", clock.now());
-    conn.execute("UPDATE workers SET command_running = 1", []).unwrap();
+    conn.execute("UPDATE workers SET command_running = 1", [])
+        .unwrap();
     clock.advance(7.0 * 3_600.0);
     assert!(filed(&mut upkeep, &mut conn, clock.now()).is_empty());
 }
@@ -519,7 +527,10 @@ fn a_ticket_whose_session_stopped_running_commands_is_reported_at_six_hours() {
     let report = filed(&mut upkeep, &mut conn, clock.now());
     assert_eq!(report.len(), 1);
     let body = ticket(&conn, &report[0]).body;
-    assert!(body.contains("last recorded a command 41 min ago"), "{body}");
+    assert!(
+        body.contains("last recorded a command 41 min ago"),
+        "{body}"
+    );
 }
 
 #[test]
