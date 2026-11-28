@@ -10,7 +10,8 @@ use super::Show;
 use super::compile::{nanoseconds, subject_of};
 use crate::beat::Laid;
 use crate::light::Lit;
-use game_table::table::{Held, Moves, TrayPoses};
+use crate::verbs::fly;
+use game_table::table::{Camera, Held, Moves, TrayPoses};
 use kit_base::pose::{Curve, Pose};
 use kit_frame::frame::ShowPlacement;
 
@@ -128,6 +129,7 @@ impl Show {
             return;
         }
         let mut handed = self.table.take_handed();
+        let (camera, target) = (self.table.camera(), self.table.layout().target);
         for (slot, track) in playing.compiled.tracks.iter_mut().enumerate() {
             let (Some(from), Some(resting), Some(last)) = (
                 self.table.letting_go(slot),
@@ -144,14 +146,14 @@ impl Show {
             }
             handed.push(slot);
             for segment in track.segments_mut() {
-                if !hand_over(segment, &resting, from) {
+                if !hand_over(segment, &resting, from, (camera, target)) {
                     break;
                 }
             }
             for record in
                 (playing.compiled.segments.iter_mut()).filter(|record| record.slot == slot)
             {
-                if !hand_over(&mut record.segment, &resting, from) {
+                if !hand_over(&mut record.segment, &resting, from, (camera, target)) {
                     break;
                 }
             }
@@ -175,8 +177,15 @@ const HANDED_NEAR: f32 = 2.0;
 
 /// Starts `segment` from `from`, where the tray let its card go, if it starts from `resting`,
 /// where the card rested before the tray held it up (within `HANDED_NEAR`), and holds it there
-/// too if it also ends there. Says whether the next segment may start from `resting` as well.
-fn hand_over(segment: &mut kit_base::pose::Segment, resting: &Pose, from: Pose) -> bool {
+/// too if it also ends there. A flight that leaves keeps to the window seen by `camera`, whose
+/// layout asks to see a square of side `target` of each card (`fly::start_at`). Says whether the
+/// next segment may start from `resting` as well.
+fn hand_over(
+    segment: &mut kit_base::pose::Segment,
+    resting: &Pose,
+    from: Pose,
+    (camera, target): (&Camera, f32),
+) -> bool {
     let near = |pose: &Pose| {
         pose.position.distance(resting.position) <= HANDED_NEAR
             && pose.rotation == resting.rotation
@@ -185,7 +194,7 @@ fn hand_over(segment: &mut kit_base::pose::Segment, resting: &Pose, from: Pose) 
     if !near(&segment.from) {
         return false;
     }
-    segment.start_at(from);
+    fly::start_at(segment, from, camera, target);
     if !near(&segment.to) {
         return false;
     }

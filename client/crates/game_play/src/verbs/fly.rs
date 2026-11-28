@@ -35,8 +35,11 @@ use kit_base::pose::{
 };
 
 mod separate;
+mod window;
 
 pub(crate) use separate::reseparate_retargeted;
+use window::kept_in_window;
+pub(crate) use window::start_at;
 
 pub const BUILT: bool = true;
 
@@ -144,10 +147,7 @@ fn path_of(act: &Act, case: Option<&str>, fly: &Fly) -> Path {
 /// turn the other way about the direction toward the camera.
 fn bow(bowing: &Bowing, toward: f32, (from, to): (Pose, Pose), camera: &Camera) -> Bow {
     let [right, up, back] = camera.axes();
-    let middle = from.position.midpoint(to.position);
-    let points = camera.to_screen(middle + right).x - camera.to_screen(middle).x;
-    let way = (camera.to_screen(to.position) - camera.to_screen(from.position)) / points;
-    let (across, rise) = (way.x, -way.y);
+    let Vec2 { x: across, y: rise } = screen_way(from.position, to.position, camera);
     // Of the two sides of the line, the one toward that edge of the table.
     let side = if across * toward < 0.0 { -1.0 } else { 1.0 };
     let off = side * bowing.share;
@@ -157,6 +157,16 @@ fn bow(bowing: &Bowing, toward: f32, (from, to): (Pose, Pose), camera: &Camera) 
         lean: (side * bowing.lean).to_radians(),
         axis: back,
     }
+}
+
+/// The way from `from` to `to` as `camera` shows it: how far `to` lies to the right of and
+/// above `from` on the window, in millimetres at the depth of the way's middle (`bow`).
+fn screen_way(from: Vec3, to: Vec3, camera: &Camera) -> Vec2 {
+    let [right, ..] = camera.axes();
+    let middle = from.midpoint(to);
+    let points = camera.to_screen(middle + right).x - camera.to_screen(middle).x;
+    let way = (camera.to_screen(to) - camera.to_screen(from)) / points;
+    Vec2::new(way.x, -way.y)
 }
 
 /// Where a drawn card is held up to be read. A fixed position uses the hand's card height.
@@ -717,78 +727,3 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
 
 /// The subdivisions of a flight when checking whether it fits in the window.
 const LOOKS: u16 = 24;
-
-/// How much of its bow a moment must have for `kept_in_window` to push the card from there:
-/// near either end a bow moves the card hardly at all, and the ends are where the card rests.
-const PUSHED_FROM: f32 = 0.2;
-
-/// `segment`, bowed down, up or left on the screen as far as it takes for its card's centre to
-/// stay inside the top, bottom and right edges of the window's safe area, by half the side of the square the
-/// "on screen" check asks to see of a card, so that at least half the card and all that square
-/// are seen, at every moment of its flight but those near its ends. The opponent's hand is held
-/// mostly above the window, and their graveyard, exile and library lie along the top right, so a
-/// flight between them that keeps to its own line in the table's space is mostly out of sight:
-/// its ends lie at very different depths, so that line curves above the top edge on the window.
-/// A segment whose card stays inside comes back as it was. Only straight and bowed paths are
-/// pushed, since the others already keep to the window by their own rules.
-fn kept_in_window(segment: Segment, camera: &Camera, target: f32) -> Segment {
-    let [right, up, back] = camera.axes();
-    let mut bow = match segment.shape {
-        Shape::Line => Bow {
-            offset: Vec3::ZERO,
-            sharpness: 1.0,
-            lean: 0.0,
-            axis: back,
-        },
-        Shape::Bowed(bow) => bow,
-        _ => return segment,
-    };
-    let with = |bow: Bow| Segment {
-        shape: Shape::Bowed(bow),
-        ..segment
-    };
-    let (size, insets) = (camera.window.size, camera.window.safe_area);
-    // Half the square of a card the "on screen" check holds inside the safe area, so that the
-    // centre kept that far in leaves the whole square in.
-    let margin = target / 2.0;
-    // The moments looked at, each as the card's centre with no bow and the share of the bow it
-    // has there, found once, since a push changes only the bow's offset. They are spread evenly
-    // over the easing curve's own parameter rather than over time, which takes no search for
-    // the progress at a given time (`Curve::ease`), a cost paid for every flight that starts.
-    // Each centre is projected alone, rather than the card's four corners.
-    let way = segment.to.position - segment.from.position;
-    let mut moments = [(Vec3::ZERO, 0.0_f32); LOOKS as usize];
-    let mut count = 0;
-    for look in 1..LOOKS {
-        let [elapsed, eased] = segment.curve.point(f32::from(look) / f32::from(LOOKS));
-        let arch = bow.arch(eased);
-        if arch >= PUSHED_FROM {
-            let rise = Vec3::Z * segment.arc * (PI * elapsed).sin();
-            moments[count] = (segment.from.position + way * eased + rise, arch);
-            count += 1;
-        }
-    }
-    let mut pushed = false;
-    // The window's projection is not linear in depth, so a push is measured again after it is
-    // made, and made again for what is still short.
-    for _ in 0..3 {
-        let (mut down, mut upward, mut left) = (0.0_f32, 0.0_f32, 0.0_f32);
-        for &(straight, arch) in &moments[..count] {
-            let position = straight + bow.offset * arch;
-            let centre = camera.to_screen(position);
-            let points = camera.to_screen(position + Vec3::X).x - centre.x;
-            let short_down = insets.top + margin - centre.y;
-            let short_up = centre.y - (size.height - insets.bottom - margin);
-            let short_left = centre.x - (size.width - insets.right - margin);
-            down = down.max(short_down / points / arch);
-            upward = upward.max(short_up / points / arch);
-            left = left.max(short_left / points / arch);
-        }
-        if down <= 0.0 && upward <= 0.0 && left <= 0.0 {
-            break;
-        }
-        bow.offset += up * (upward.max(0.0) - down.max(0.0)) - right * left.max(0.0);
-        pushed = true;
-    }
-    if pushed { with(bow) } else { segment }
-}
