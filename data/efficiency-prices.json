@@ -3,7 +3,7 @@
     {
       "as_of": "2026-11-15",
       "source": "https://platform.claude.com/docs/en/about-claude/pricing",
-      "note": "US dollars per million tokens, global inference, standard speed. Claude cache_write is a 5-minute cache write and cache_write_1h a 1-hour one. Haiku 5.5's prices for a prompt over 100,000 tokens are under above. Codex estimates use OpenAI's Standard API rates from https://developers.openai.com/api/docs/models, with missing model rates added 2026-11-20. Codex credit billing has no separate cache-write rate, so cache_write and cache_write_1h use the input rate. The prices under above apply to prompts over 272,000 tokens. GPT-5.6 Sol uses the promotional rates published through November 30, 2026. Gemini rates are Google AI Studio / Vertex AI API rates from https://ai.google.dev/gemini-api/docs/pricing (95% cached-input discount; no separate cache-write rate; Argon and 3.8 Flash use introductory rates).",
+      "note": "US dollars per million tokens, global inference, standard speed. Claude cache_write is a 5-minute cache write and cache_write_1h a 1-hour one. Haiku 5.5's prices for a prompt over 100,000 tokens are under above. Codex estimates use OpenAI's Standard API rates from https://developers.openai.com/api/docs/models, with missing model rates added 2026-11-20. Codex credit billing has no separate cache-write rate, so cache_write and cache_write_1h use the input rate. Codex rates have no long-context tier: on 2026-11-27, Codex's weekly quota samples from 17 to 25 November showed requests over 272,000 tokens using quota at the same rate per base-price dollar as shorter ones (ratio 0.95, 90% interval 0.70 to 1.19), so the API's doubled rates above 272,000 tokens do not apply to plan usage. GPT-5.6 Sol uses the promotional rates published through November 30, 2026. Gemini rates are Google AI Studio / Vertex AI API rates from https://ai.google.dev/gemini-api/docs/pricing (95% cached-input discount; no separate cache-write rate; Argon and 3.8 Flash use introductory rates).",
       "models": {
         "claude-fable-5-2": {
           "input": 8.0,
@@ -53,90 +53,42 @@
           "cache_write": 2.0,
           "cache_write_1h": 2.0,
           "cache_read": 0.1,
-          "output": 10.0,
-          "above": {
-            "tokens": 272000,
-            "input": 4.0,
-            "cache_write": 4.0,
-            "cache_write_1h": 4.0,
-            "cache_read": 0.2,
-            "output": 15.0
-          }
+          "output": 10.0
         },
         "gpt-6.2-sol": {
           "input": 2.0,
           "cache_write": 2.0,
           "cache_write_1h": 2.0,
           "cache_read": 0.1,
-          "output": 10.0,
-          "above": {
-            "tokens": 272000,
-            "input": 4.0,
-            "cache_write": 4.0,
-            "cache_write_1h": 4.0,
-            "cache_read": 0.2,
-            "output": 15.0
-          }
+          "output": 10.0
         },
         "gpt-6.2-astra": {
           "input": 8.0,
           "cache_write": 8.0,
           "cache_write_1h": 8.0,
           "cache_read": 0.4,
-          "output": 40.0,
-          "above": {
-            "tokens": 272000,
-            "input": 16.0,
-            "cache_write": 16.0,
-            "cache_write_1h": 16.0,
-            "cache_read": 0.8,
-            "output": 60.0
-          }
+          "output": 40.0
         },
         "gpt-6-sol": {
           "input": 2.0,
           "cache_write": 2.0,
           "cache_write_1h": 2.0,
           "cache_read": 0.2,
-          "output": 10.0,
-          "above": {
-            "tokens": 272000,
-            "input": 4.0,
-            "cache_write": 4.0,
-            "cache_write_1h": 4.0,
-            "cache_read": 0.4,
-            "output": 15.0
-          }
+          "output": 10.0
         },
         "gpt-6-astra": {
           "input": 10.0,
           "cache_write": 10.0,
           "cache_write_1h": 10.0,
           "cache_read": 1.0,
-          "output": 50.0,
-          "above": {
-            "tokens": 272000,
-            "input": 20.0,
-            "cache_write": 20.0,
-            "cache_write_1h": 20.0,
-            "cache_read": 2.0,
-            "output": 75.0
-          }
+          "output": 50.0
         },
         "gpt-5.6-sol": {
           "input": 4.0,
           "cache_write": 4.0,
           "cache_write_1h": 4.0,
           "cache_read": 0.4,
-          "output": 20.0,
-          "above": {
-            "tokens": 272000,
-            "input": 8.0,
-            "cache_write": 8.0,
-            "cache_write_1h": 8.0,
-            "cache_read": 0.8,
-            "output": 30.0
-          }
+          "output": 20.0
         },
         "gemini-4-neon": {
           "input": 3.0,
