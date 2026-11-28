@@ -49,11 +49,6 @@ const WINDOWLESS_HZ: f32 = 60.0;
 pub const FIRST_SHOWN: &str = "beryl: first frame shown";
 /// The line the app prints when it receives new tuning from `--watch`.
 pub const DATA_RELOADED: &str = "beryl: data reloaded";
-/// How long after a replayed recording ends the app waits for the glyph worker before it writes
-/// the summary: far longer than a phone emulator's software renderer needs to rasterize the
-/// glyphs that a game's text asks for.
-const GLYPH_GRACE_NS: u64 = 120_000_000_000;
-
 /// The line the app prints when a replayed recording's last script has ended.
 pub const FIXTURE_ENDED: &str = "beryl: fixture ended";
 /// The line the app prints when a view first says the game is over.
@@ -93,9 +88,6 @@ struct AppFeed {
     /// Whether the source has ended: a replayed recording has played to its end, or a view of
     /// the live game has said the game is over.
     ended: bool,
-    /// After a replayed recording ends, when to stop waiting for the glyph worker and write the
-    /// summary regardless: the clock at which the grace period `GLYPH_GRACE_NS` runs out.
-    settling: Option<u64>,
     /// Whether the player asked to quit (`Request::Quit`), which ends the run.
     quit: bool,
     /// The run as known before the host opened; the host fills in the display and adapter.
@@ -303,19 +295,9 @@ impl Feed for AppFeed {
                 self.ended = true;
                 fixture.finished_at(ticked.clock);
                 println!("{FIXTURE_ENDED} at {:.1} ms", ticked.clock as f64 / 1e6);
-                if self.finish == Finish::AtFixtureEnd {
-                    self.settling = Some(ticked.clock + GLYPH_GRACE_NS);
-                }
             }
-        }
-        // The summary records how many glyphs the text still lacked. On a phone emulator the
-        // glyph worker can still be rasterizing when the recording ends, so the summary waits
-        // for it, up to the grace period, instead of reporting glyphs that are only late.
-        if let Some(deadline) = self.settling
-            && (client.missing_glyphs() == 0 || ticked.clock >= deadline)
-        {
-            self.settling = None;
-            summarize = true;
+            let due = fixture.summary_due(ticked.clock, client.missing_glyphs());
+            summarize = due && self.finish == Finish::AtFixtureEnd;
         }
         let mut log = self.log.borrow_mut();
         let Some(Ok(log)) = log.as_mut() else {
@@ -383,9 +365,6 @@ impl Feed for AppFeed {
         #[cfg(all(feature = "tools", any(unix, windows)))]
         if self.live.as_ref().is_some_and(crate::live::Live::has_work) {
             return Wake::Now;
-        }
-        if let Some(deadline) = self.settling {
-            return Wake::At(deadline);
         }
         match &self.source {
             Some(Source::Fixture(fixture)) => fixture.wake(),
@@ -532,7 +511,6 @@ fn surface_app_feed(
         log_dir,
         finish,
         ended: false,
-        settling: None,
         quit: false,
         run: Run {
             checkout: checkout(),
@@ -598,7 +576,6 @@ pub fn run(options: &Options) -> Result<Finished, String> {
             Finish::AtExit
         },
         ended: false,
-        settling: None,
         quit: false,
         run: run.clone(),
         searching: false,

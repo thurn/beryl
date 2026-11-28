@@ -41,6 +41,10 @@ pub struct Replayed {
     pub ended: bool,
 }
 
+/// How long after a recording ends the summary waits for the glyph worker: far longer than a
+/// phone emulator's software renderer needs to rasterize the glyphs that a game's text asks for.
+const GLYPH_GRACE_NS: u64 = 120_000_000_000;
+
 /// A recording being replayed.
 pub struct Fixture {
     views: Vec<GameUpdate>,
@@ -60,6 +64,8 @@ pub struct Fixture {
     started: Option<u64>,
     /// The host's clock when the last script ended (`ended`), in nanoseconds.
     ended_at: Option<u64>,
+    /// Whether `summary_due` has said that the summary may be written.
+    summarized: bool,
 }
 
 impl Fixture {
@@ -99,6 +105,7 @@ impl Fixture {
             seat,
             started: None,
             ended_at: None,
+            summarized: false,
         })
     }
 
@@ -120,6 +127,19 @@ impl Fixture {
     /// Notes that the recording's last script ended at the host's `clock`.
     pub fn finished_at(&mut self, clock: u64) {
         self.ended_at.get_or_insert(clock);
+    }
+
+    /// Whether the summary may be written at the host's `clock`, given how many glyphs the
+    /// text still lacks. Says yes once, after the recording ends. On a phone emulator the glyph
+    /// worker can still be rasterizing then, so the summary waits for it, up to `GLYPH_GRACE_NS`,
+    /// instead of reporting glyphs that are only late.
+    pub fn summary_due(&mut self, clock: u64, missing_glyphs: usize) -> bool {
+        let due = !self.summarized
+            && self
+                .ended_at
+                .is_some_and(|ended| missing_glyphs == 0 || clock >= ended + GLYPH_GRACE_NS);
+        self.summarized |= due;
+        due
     }
 
     /// The recording's card records, the first time this is asked, for the client before the
@@ -174,6 +194,9 @@ impl Fixture {
     pub fn wake(&self) -> Wake {
         if self.released == 0 {
             return Wake::Now;
+        }
+        if let (Some(ended), false) = (self.ended_at, self.summarized) {
+            return Wake::At(ended + GLYPH_GRACE_NS);
         }
         self.due.map_or(Wake::Never, Wake::At)
     }
