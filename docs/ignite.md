@@ -2590,11 +2590,11 @@ releases the lease and exits with code 4.
   report no list of individual findings to compare.
 - The reporting daemon, or a much faster machine (see
   [Finding the culprit](#finding-the-culprit)), later runs the same bounded
-  culprit search as tip verification in a separate command. A historical probe leases a landing tree
-  only while another tree stays free. On a machine with one landing tree, the
-  search reports when it cannot narrow the range because it needs a probe. The
-  result updates the original open regression with its culprit or remaining
-  range.
+  culprit search as tip verification in a separate command. A historical probe
+  leases a landing tree only while another tree stays free. On a machine with
+  one landing tree, the search reports when it cannot narrow the range because
+  it needs a probe. The result updates the original open regression with its
+  culprit or remaining range.
 
 ### Express landings
 
