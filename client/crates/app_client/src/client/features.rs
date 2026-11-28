@@ -9,6 +9,7 @@ use app_screens::screens::bug_report::{self, BugReport};
 use app_screens::screens::gallery::{self, GalleryScreen};
 use app_screens::screens::settings::{self, SettingsSheet};
 use app_screens::screens::start::{self, StartScreen};
+use app_screens::screens::testing::dock::{self, PlaygroundDock};
 use app_screens::screens::testing::{self, TestingScreen};
 use app_screens::screens::{Music, Screen, Sheet};
 use app_screens::settings::ScreenSettings;
@@ -45,6 +46,7 @@ use game_hud::hud::{
 };
 pub use inspect::{FeatureInfo, composed_features, registered_features};
 mod manual;
+mod playground;
 mod table_input;
 use manual::{
     AskPrompt, CommandList, ContextMenu, LobbyScreen, OrderTray, ProposalPanel, TableLog,
@@ -59,6 +61,8 @@ const REGISTRY: &[Registration] = &[
     Registration::of::<StartScreen>("start", Placement::Screen(Screen::Start))
         .keys(&start::SHORTCUTS, keys::start),
     Registration::of::<TestingScreen>("testing", Placement::Screen(Screen::Testing)),
+    Registration::of::<PlaygroundDock>("playground-dock", Placement::TableTools)
+        .keys(&dock::SHORTCUTS, playground::keys),
     Registration::of::<GalleryScreen>("gallery", Placement::Screen(Screen::Gallery)),
     Registration::of::<BugReport>(BUG_REPORT, Placement::Sheet(Sheet::BugReport))
         .keys(&keys::BUG_REPORT_KEYS, keys::bug_report),
@@ -113,6 +117,8 @@ pub(super) enum Placement {
     TableOverlay,
     TableLog,
     TableProposals,
+    /// A tools build's debug control at the table's top edge (`Furniture::tools`).
+    TableTools,
 }
 
 /// App inputs available to mounts. Each feature receives only the inputs it reads.
@@ -422,6 +428,7 @@ impl Client {
         match change.name.as_str() {
             start::SEED => self.update_start(&start::Message::Seed(change.text)),
             testing::FILTER => self.update_testing(&testing::Message::Filter(change.text)),
+            testing::CARD => self.update_testing(&testing::Message::Card(change.text)),
             bug_report::DESCRIPTION => {
                 self.update_bug(&bug_report::Message::Description(change.text));
             }
@@ -594,34 +601,6 @@ impl Mounted for GalleryScreen {
             gallery::Request::Restart => client.restart_story(),
         }
         true
-    }
-}
-
-impl Mounted for TestingScreen {
-    fn mounted_view<'a>(features: &'a mut Features, inputs: ViewInputs<'_>) -> Option<&'a Element> {
-        Some(features.slot::<Self>().view(testing::Inputs {
-            window: inputs.window,
-            column: inputs.profile.screen_column(),
-            filter: inputs.fields.get(testing::FILTER),
-        }))
-    }
-
-    fn command(_: &mut Client, command: Self::Command) {
-        match command {}
-    }
-
-    fn request(client: &mut Client, request: Self::Request) -> bool {
-        match request {
-            testing::Request::Replay { name, seat } => {
-                client.requests.push_back(Request::Replay { name, seat });
-                client.features.screen = Screen::Game;
-                client.change_sheet(None)
-            }
-            testing::Request::Story(name) => {
-                client.update_gallery(&gallery::Message::Open(name));
-                update::<StartScreen>(client, &start::Message::Open(Screen::Gallery))
-            }
-        }
     }
 }
 

@@ -24,6 +24,9 @@ pub struct Furniture {
     pub dock_full_control: Option<Element>,
     pub band_full_control: Option<Element>,
     pub viewer: Option<Element>,
+    /// A tools build's debug control at the table's top edge, such as the playground's dock,
+    /// which places itself.
+    pub tools: Option<Element>,
 }
 
 /// Composes the HUD in the order its profile gives. The opening dims the
@@ -91,6 +94,7 @@ pub fn game(
         && shade.is_none()
         && furniture.is_empty()
         && overlays.is_empty()
+        && views.tools.is_none()
         && !layout.anchored_to_window
     {
         return prompt.unwrap_or_else(|| row().name("game"));
@@ -106,6 +110,7 @@ pub fn game(
         game.children.extend(furniture);
     }
     game.children.extend(shade);
+    game.children.extend(views.tools.take());
     game.children.extend(overlays);
     if layout.anchored_to_window {
         game.anchor = Some(Anchor::Point(Vec2::ZERO, Vec2::ZERO));

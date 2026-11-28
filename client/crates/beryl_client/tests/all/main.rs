@@ -13,5 +13,6 @@ mod ffi;
 mod fixture;
 mod frame_log;
 mod live;
+mod playground;
 mod session;
 mod settings;

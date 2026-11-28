@@ -425,8 +425,10 @@ an effect, a feature's state, and a table with its view and script.
   boards, the `screen/*` recordings, the sample views of the scene's tests and
   the gallery screen's samples. The gallery lists stories by crate and feature
   and plays one at its declared profile and window size. The Testing screen
-  opens the same preview from its story list. The tools host reads stories from
-  the checkout and release builds embed them.
+  opens the same preview from its story list. In a tools build it also finds a
+  card and plays its playground examples live against the automated opponent,
+  and the dock at the table's top edge switches between them. The tools host
+  reads stories from the checkout and release builds embed them.
 - **The builders of protocol values belong to `beryl_protocol`**, behind a
   feature that only tests and tools turn on, so that a change to a protocol type
   fixes its builder in the same commit.

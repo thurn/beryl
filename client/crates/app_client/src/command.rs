@@ -13,6 +13,7 @@ use beryl_protocol::protocol::{Answer, Side, TableAction};
 use beryl_protocol::{DecisionId, SessionError, SessionId, StartRequest, StopsSetting};
 
 use crate::settings::Settings;
+use app_screens::screens::testing::playground::Card;
 use game_play::sound::Music;
 use kit_frame::frame::ElementId;
 use kit_ui::input::{Rect, Size};
@@ -68,6 +69,17 @@ pub enum SessionCommand {
     /// Read a pasted decklist and save it in the deck library under its name
     /// (`beryl_table_session::decks::import`).
     DeckImport(DeckImportRequest),
+    /// Find the implemented card this text names most nearly, for the testing screen's card
+    /// field (`beryl_cli::specs::closest`). Only a tools build's session answers it.
+    PlaygroundFind(String),
+    /// List the playground examples of the card with this name (`beryl_cli::specs::playground`).
+    PlaygroundExamples(String),
+    /// Start the card's playground variant, ending the game in progress, from the seat of the
+    /// player whose action it shows.
+    PlaygroundStart {
+        card: String,
+        variant: String,
+    },
 }
 
 /// The session's answer to a `SessionCommand`. `Sessions::click` returns the prompt's next
@@ -96,6 +108,12 @@ pub enum Reply {
     DeckList(Result<Vec<SavedDeck>, SessionError>),
     /// The deck a decklist was read as, now saved, or why it could not be read or saved.
     DeckImport(Result<DeckImportReply, SessionError>),
+    /// The card a `PlaygroundFind` for this text found, if any.
+    PlaygroundFound(String, Option<String>),
+    /// The examples a `PlaygroundExamples` listed, or why there are none.
+    PlaygroundExamples(Result<Card, String>),
+    /// The session a `PlaygroundStart` started its game in, or why it did not start.
+    PlaygroundStarted(Result<SessionId, String>),
 }
 
 /// What the client asks of the platform.

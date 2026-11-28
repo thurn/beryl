@@ -336,6 +336,13 @@ def bead_description(report: Report) -> str:
         if report.kind == "spec-viewer"
         else ""
     )
+    card, _, variant = f.get("playground", "").partition("/")
+    playground = (
+        f"- Playground example: card `{card}`, variant `{variant}` (reopen it from the "
+        "Testing screen in `just dev`, or with `beryl_cli::specs::playground::find`)\n"
+        if variant
+        else ""
+    )
     pictures = "".join(f"\n{line}\n" for line in embeds(report).split("\n") if line)
     return (
         f"{ai}{source}\n\n"
@@ -345,7 +352,7 @@ def bead_description(report: Report) -> str:
         f"- Game: {game or 'none (not in a game)'}\n"
         f"- Built from: {f.get('commit', 'unknown')}\n"
         f"- Page: {f.get('url', '')}\n"
-        f"{viewer}\n"
+        f"{viewer}{playground}\n"
         f"## What the player said\n\n{description(report)}\n{pictures}"
     )
 

@@ -194,6 +194,18 @@ impl Client {
             Input::TableError(reason) => self.table_error(reason),
             Input::Reply(Reply::DeckList(saved)) => self.take_saved_decks(saved),
             Input::Reply(Reply::DeckImport(imported)) => self.take_imported_deck(imported),
+            Input::Reply(Reply::PlaygroundFound(text, card)) => {
+                self.update_testing(&testing::Message::Found { text, card });
+                self.show_screen();
+            }
+            Input::Reply(Reply::PlaygroundExamples(examples)) => {
+                self.update_testing(&testing::Message::Examples(examples));
+                self.show_screen();
+            }
+            Input::Reply(Reply::PlaygroundStarted(started)) => {
+                self.update_dock(&testing::dock::Message::Started(started));
+                self.show_screen();
+            }
             Input::Settings(settings) => {
                 let monitor_changed = self.settings.fps_monitor != settings.fps_monitor;
                 self.settings = settings;

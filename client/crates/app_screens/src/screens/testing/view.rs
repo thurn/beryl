@@ -4,13 +4,17 @@
 //! (`Message::Replay`). Only a tools build of the app lists recordings, and the start screen
 //! offers the way here (the key T) only once some are listed.
 //!
+//! Beside them, the playground: a field that finds the card closest to what is typed in it, a
+//! row for that card that lists its examples, and a row for each example that plays it. A
+//! card the session could make no example of says why, or "No examples".
+//!
 //! The web interface's testing screen (`Testing` in `ui/src/screens/Testing.tsx`) lists cards
 //! with spec moments under the title "Scenarios", filters them with a field whose placeholder
 //! is "Find a card", and names the seats "You" and "Them"; this screen uses those words.
 
 use beryl_protocol::protocol::Side;
 
-use super::{FILTER, Inputs, Message, State};
+use super::{CARD, FILTER, Inputs, Message, State};
 use kit_base::tokens::{color, size, space, type_style};
 use kit_frame::frame::Role;
 use kit_ui::element::{Align, Element, Justify, column, row, text};
@@ -18,6 +22,10 @@ use kit_ui::widgets::{button, field, list, primary, screen::whole_window};
 
 /// The name of the list of recordings.
 pub const RECORDINGS: &str = "recordings";
+/// The name of the playground's list: the card found, then its examples.
+pub const PLAYGROUND: &str = "playground";
+/// The words the playground's list shows for a card with no example.
+pub const NO_EXAMPLES: &str = "No examples";
 
 /// The words of the seat toggle, which is on while recordings replay from the opponent's seat:
 /// the web's name for that seat.
@@ -35,7 +43,7 @@ pub(super) fn testing(testing: &State, input: &Inputs) -> Element {
         .enumerate()
         .filter(|(_, name)| name.to_lowercase().contains(&query))
         .filter_map(|(index, name)| {
-            Some(recording_row(
+            Some(list_row(
                 Message::Replay {
                     recording: u16::try_from(index).ok()?,
                 },
@@ -48,7 +56,7 @@ pub(super) fn testing(testing: &State, input: &Inputs) -> Element {
         .iter()
         .filter(|name| name.to_lowercase().contains(&query))
         .map(|name| {
-            recording_row(
+            list_row(
                 Message::Story(name.clone()),
                 name,
                 layout.map(|layout| layout.metrics.list_row),
@@ -81,7 +89,8 @@ pub(super) fn testing(testing: &State, input: &Inputs) -> Element {
             .child(filter)
             .child(rows)
             .children(show_stories.then(story_heading))
-            .children(show_stories.then_some(stories));
+            .children(show_stories.then_some(stories))
+            .child(playground(testing, input, Some(layout.metrics.list_row)));
         return layout
             .scrolling("testing", input.window, content)
             .background(color::SURFACE);
@@ -116,9 +125,57 @@ pub(super) fn testing(testing: &State, input: &Inputs) -> Element {
                             .min_height(0.0)
                             .child(story_heading())
                             .child(stories.min_height(0.0))
-                    })),
+                    }))
+                    .child(playground(testing, input, None)),
             ),
     )
+}
+
+/// The playground's column: its heading, the card field, and the list of the card found and
+/// the examples of the card picked. Each row is at least `minimum` tall, as the list rows are.
+fn playground(testing: &State, input: &Inputs, minimum: Option<f32>) -> Element {
+    let mut state = input.card.clone();
+    "Play a card".clone_into(&mut state.placeholder);
+    let mut field = field(CARD, &state).shrink(0.0);
+    field.style.align_self = Some(Align::Stretch);
+    let found = (testing.found.as_deref()).map(|card| list_row(Message::Pick, card, minimum));
+    let mut notes = Vec::new();
+    let mut examples = Vec::new();
+    match &testing.examples {
+        Some(Ok(card)) => {
+            notes.extend(card.missing.iter().map(String::as_str));
+            if card.examples.is_empty() {
+                notes.push(NO_EXAMPLES);
+            }
+            examples.extend(
+                (0u16..)
+                    .zip(&card.examples)
+                    .map(|(at, example)| list_row(Message::Play(at), &example.text(), minimum)),
+            );
+        }
+        Some(Err(why)) => notes.push(why),
+        None => {}
+    }
+    column()
+        .name("playground column")
+        .gap(space::L)
+        .grow(1.0)
+        .basis(0.0)
+        .min_width(0.0)
+        .min_height(0.0)
+        .child(text("Playground").style(type_style::MENU).shrink(0.0))
+        .child(field)
+        .children(
+            notes
+                .into_iter()
+                .map(|note| text(note).style(type_style::BODY).color(color::TEXT_DIM)),
+        )
+        .child(
+            list(PLAYGROUND, found.into_iter().chain(examples))
+                .grow(1.0)
+                .basis(0.0)
+                .min_height(0.0),
+        )
 }
 
 /// The toggle for the seat recordings replay from: on, drawn as the primary button, while it
@@ -136,7 +193,11 @@ fn seat_toggle(seat: Side) -> Element {
 
 /// The row of the `index`th recording, named `name`, which replays it when pressed.
 /// On a phone the row is a touch target's height at the least.
-fn recording_row(message: Message, name: &str, minimum: Option<f32>) -> Element {
+pub(super) fn list_row(
+    message: impl Clone + PartialEq + std::fmt::Debug + 'static,
+    name: &str,
+    minimum: Option<f32>,
+) -> Element {
     let least = minimum.unwrap_or(size::MENU_ROW_HEIGHT);
     // A long name breaks onto more lines, so the row keeps the height its text takes rather
     // than shrinking to fit more rows in the list.

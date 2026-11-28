@@ -24,6 +24,8 @@ pub mod archive;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub mod filing;
 mod markdown;
+mod playground;
+pub use playground::PlaygroundExample;
 
 use markdown::{Game, Markdown, markdown, region_note};
 
@@ -69,6 +71,9 @@ pub struct BugReport {
     /// The manual table active when the report was saved, if any.
     #[serde(skip)]
     pub manual: Option<ManualTable>,
+    /// The card's playground example the report was saved during, if any.
+    #[serde(skip)]
+    pub playground: Option<PlaygroundExample>,
 }
 
 /// One seat's deck at a manual table.
@@ -621,6 +626,7 @@ mod tests {
             spec: None,
             spec_viewer: false,
             manual: None,
+            playground: None,
         };
         let images = Images {
             screenshot: Some(b"hi".to_vec()),
@@ -685,6 +691,7 @@ mod tests {
             spec: SpecMoment::parse("llanowar-elves/tap/theirs"),
             spec_viewer: false,
             manual: None,
+            playground: None,
         };
         let first = write(
             &dir,
@@ -757,6 +764,7 @@ mod tests {
             updates: Vec::new(),
             spec: None,
             spec_viewer: false,
+            playground: None,
             manual: Some(ManualTable {
                 kind: "joined".to_owned(),
                 update: None,

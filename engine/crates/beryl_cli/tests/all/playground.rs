@@ -180,3 +180,13 @@ fn opponent_play_leaves_the_viewers_search_interactive() {
     }
     panic!("search never offered");
 }
+
+#[test]
+fn a_typed_name_finds_the_closest_card() {
+    let closest = |text| beryl_cli::specs::closest(&TEST, text).map(|spec| spec.card);
+    assert_eq!(closest("Counterspell"), Some("Counterspell"));
+    assert_eq!(closest("counterspell"), Some("Counterspell"));
+    assert_eq!(closest("counterspel"), Some("Counterspell"));
+    assert_eq!(closest("  "), None);
+    assert_eq!(closest("zzqx no card"), None);
+}

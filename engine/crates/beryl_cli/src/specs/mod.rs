@@ -86,6 +86,27 @@ pub fn spec(catalog: &'static Catalog, card: &str) -> Option<&'static Spec> {
         .or_else(|| from_store(catalog, card))
 }
 
+/// The spec of the card `text` names most nearly, as a person types it into a search field:
+/// the card it names by its name or slug ([`spec`]), else the card with a file whose slug
+/// starts with the slug of `text`, else one whose slug holds it. Among several, the shortest
+/// name wins, then the first in alphabetical order, so that "counter" finds Counterspell
+/// before Counterbalance. `None` when nothing matches or `text` has no letter or digit.
+pub fn closest(catalog: &'static Catalog, text: &str) -> Option<&'static Spec> {
+    let typed = slug(text);
+    if typed.is_empty() {
+        return None;
+    }
+    if let Some(spec) = spec(catalog, &typed).or_else(|| spec(catalog, text.trim())) {
+        return Some(spec);
+    }
+    let best = |matches: &dyn Fn(&str) -> bool| {
+        (cards(catalog).iter())
+            .filter(|s| matches(&s.slug))
+            .min_by_key(|s| (s.card.len(), s.card))
+    };
+    best(&|s| s.starts_with(&typed)).or_else(|| best(&|s| s.contains(&typed)))
+}
+
 /// The spec of the card complete from the store that `card` names, by its name or its slug,
 /// made once and kept.
 fn from_store(catalog: &'static Catalog, card: &str) -> Option<&'static Spec> {

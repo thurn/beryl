@@ -20,7 +20,8 @@ use beryl_render::Picture;
 use beryl_session::GameUpdate;
 use beryl_session::Sessions;
 use beryl_session::bugs::{
-    self, Attached, BugReport, Environment, Images, ManualDeck, ManualTable, PageInfo, Region,
+    self, Attached, BugReport, Environment, Images, ManualDeck, ManualTable, PageInfo,
+    PlaygroundExample, Region,
 };
 use beryl_table_session::TableReportSnapshot;
 use kit_probe::agent::{TreeOptions, tree};
@@ -184,6 +185,7 @@ impl Bugs {
             frame_log,
             views: self.views.iter().cloned().collect(),
             replayed: self.replayed.take(),
+            playground: None,
         };
         match live {
             Some(commands) => commands.save_bug(job),
@@ -237,9 +239,20 @@ pub struct Job {
     frame_log: Option<Attachment>,
     views: Vec<GameUpdate>,
     replayed: Option<Replayed>,
+    /// The card's playground example the report was saved during, if any.
+    playground: Option<PlaygroundExample>,
 }
 
 impl Job {
+    /// The same report, saved during the game of the card's playground example `example`.
+    #[must_use]
+    pub fn in_playground(self, example: PlaygroundExample) -> Self {
+        Self {
+            playground: Some(example),
+            ..self
+        }
+    }
+
     pub(crate) fn latest_session(&self) -> Option<beryl_session::SessionId> {
         self.views.last().map(|update| update.session)
     }
@@ -296,7 +309,7 @@ impl Job {
                 note: "The client's frame log through the bug report request".to_owned(),
             });
         }
-        let report = build_bug_report(
+        let mut report = build_bug_report(
             saving,
             window,
             scale,
@@ -305,6 +318,7 @@ impl Job {
             manual,
             &mut attached,
         );
+        report.playground = self.playground;
         let none;
         let sessions = if let Some(sessions) = sessions {
             sessions
@@ -395,6 +409,7 @@ fn build_bug_report(
         spec: None,
         spec_viewer: false,
         manual,
+        playground: None,
     }
 }
 

@@ -90,6 +90,7 @@ pub(super) fn front_matter(out: &mut String, m: &Markdown<'_>, viewport: &str) {
          url: {}\n\
          viewport: {viewport}\n\
          spec: {}\n\
+         playground: {}\n\
          session: {}\n\
          seed: {}\n\
          turn: {}\n\
@@ -105,6 +106,7 @@ pub(super) fn front_matter(out: &mut String, m: &Markdown<'_>, viewport: &str) {
         if dirty { " (uncommitted changes)" } else { "" },
         quote(&m.report.page.url),
         opt(m.report.spec.as_ref().map(ToString::to_string)),
+        opt(m.report.playground.as_ref().map(ToString::to_string)),
         opt(g.session.map(|s| s.to_string())),
         opt(g.seed.map(|s| s.to_string())),
         opt(g.turn.map(|t| t.to_string())),
@@ -182,6 +184,17 @@ pub(super) fn markdown(m: &Markdown<'_>) -> String {
     }
     if let Some(spec) = &m.report.spec {
         spec_lines(&mut out, spec);
+    }
+    if let Some(example) = &m.report.playground {
+        writeln!(
+            out,
+            "- The card's playground example: card `{card}`, variant `{variant}`. In \
+             `just dev`, type the card on the Testing screen and choose the variant, or start \
+             it with `beryl_cli::specs::playground::find(catalog, \"{card}\", \"{variant}\")`.",
+            card = example.card,
+            variant = example.variant,
+        )
+        .expect("writes");
     }
     if let Some(manual) = &m.report.manual {
         manual_lines(&mut out, manual, g);

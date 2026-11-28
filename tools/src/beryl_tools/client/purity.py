@@ -80,12 +80,15 @@ INSPECT_BANNED: tuple[str, ...] = (
     "winit",
 )
 GPU_CALL: re.Pattern[str] = re.compile(r"\bwgpu::")
-# The engine runs in one place among The client's tools: the `record` program of `beryl_record`,
-# which builds the recordings pack that `beryl_inspect::recordings` reads. Only its manifest and
-# its recorder file may name the crate that plays it, so that `client` links no engine.
+# The engine's recorders run in one place among The client's tools: the `record` program of
+# `beryl_record`, which builds the recordings pack that `beryl_inspect::recordings` reads. Only its
+# manifest and recorder file may name their crate, so that `client` links no recorder, besides
+# the tools build's card playground: an optional dependency of `beryl_client`, named in one file.
 RECORDER_CRATE = "beryl_cli"
 RECORD = "beryl_record"
 RECORDER_FILE = f"client/crates/{RECORD}/src/recorder.rs"
+PLAYGROUND_CRATE = "beryl_client"
+PLAYGROUND_FILE = f"client/crates/{PLAYGROUND_CRATE}/src/playground.rs"
 # The main workspace's crates that bring the engine, the rules or the cards. Only the app and
 # the recorder may depend on them: every other crate, and each of its test binaries, then builds
 # without them, so an edit to the engine rebuilds only those two (docs/beryl-3d.md,
@@ -247,14 +250,18 @@ def recorder_use(root: Path, crate: Path) -> list[str]:
     if crate.name != RECORD and manifest.is_file():
         named = tomllib.loads(manifest.read_text())
         tables = ("dependencies", "dev-dependencies", "build-dependencies")
-        if any(RECORDER_CRATE in named.get(table, {}) for table in tables):
+        deps = [named.get(table, {}).get(RECORDER_CRATE) for table in tables]
+        optional = isinstance(deps[0], dict) and deps[0].get("optional") is True
+        if any(dep is not None for dep in deps) and not (
+            crate.name == PLAYGROUND_CRATE and optional and deps[1:] == [None, None]
+        ):
             found.append(
                 f"{manifest.relative_to(root).as_posix()}: {crate.name} depends on "
                 f"{RECORDER_CRATE}; only beryl_record's `record` program plays the engine"
             )
     for path in sorted(crate.rglob("*.rs")):
         rel = path.relative_to(root).as_posix()
-        if rel == RECORDER_FILE:
+        if rel in (RECORDER_FILE, PLAYGROUND_FILE):
             continue
         for number, line in code_lines(path):
             if pattern.search(line):
