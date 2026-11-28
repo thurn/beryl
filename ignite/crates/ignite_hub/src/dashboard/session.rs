@@ -29,7 +29,7 @@
 
 use rusqlite::{Connection, OptionalExtension};
 
-use ignite_core::protocol::cli::{StoredTranscriptLine, TELL_NOW_KEY};
+use ignite_core::protocol::cli::{StoredTranscriptLine, TELL_NOW_KEY, TranscriptKind};
 use ignite_store::hub::transcripts;
 
 use super::common::brand;
@@ -132,8 +132,14 @@ pub(crate) fn options(
         || session.split('-').nth(1).unwrap_or("unknown"),
         |(app, _, _)| app.as_str(),
     );
+    // The hub's worker row stays `working` for as long as the session holds the ticket, also
+    // after its turn has ended: a turn that failed on the plan's quota while the worker's
+    // `ignite land` still ran showed "working" with a green dot. A last line that is the
+    // turn's end means no turn runs now, so the header says the session is waiting instead.
+    let turn_ended = last.is_some_and(|line| line.line.kind == TranscriptKind::Result);
     // A worker gone on to another ticket along a lane is done with this one.
     let state = match &worker {
+        Some((_, state, _)) if held && turn_ended && state == "working" => "waiting",
         Some((_, state, _)) if held => state.as_str(),
         Some(_) => "done",
         None => "gone",
@@ -146,13 +152,19 @@ pub(crate) fn options(
     );
     let tone = match state {
         "down" | "stalled" => Tone::Red,
-        "idle" | "gone" | "done" => Tone::Muted,
+        "idle" | "gone" | "done" | "waiting" => Tone::Muted,
         _ => Tone::Green,
     };
     let (model, effort) = run_view(conn, session, ticket)?;
     let turn = last.map_or_else(
         || c::muted("no turn yet"),
-        |line| format!("turn {}", line.line.turn),
+        |line| {
+            if turn_ended {
+                format!("turn {} ended", line.line.turn)
+            } else {
+                format!("turn {}", line.line.turn)
+            }
+        },
     );
     let others = session_tabs(root, ticket, &sessions, session);
     let header = format!(

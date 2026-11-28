@@ -324,8 +324,9 @@ pub struct Facts {
     pub ticket_held: bool,
     /// The session's `ignite` verbs that still run.
     pub running_verbs: Vec<Verb>,
-    /// Whether a `land` of the session has begun its push.
-    pub land_pushing: bool,
+    /// Whether a `land`, `release` or `close` of the session is running, from its start and
+    /// not only once a landing has begun its push.
+    pub ending_ticket: bool,
     /// The undelivered messages, in order, each starting `Message about <ticket>:`.
     pub messages: Vec<String>,
     /// Interrupted ends in a row with no `ignite` command between them, this one included.

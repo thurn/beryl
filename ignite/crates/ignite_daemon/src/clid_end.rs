@@ -137,7 +137,7 @@ impl CliDaemon {
             now: self.now(),
             ticket_held,
             running_verbs: self.verbs_of(&session),
-            land_pushing: self.host.ending_ticket(&session),
+            ending_ticket: self.host.ending_ticket(&session),
             messages,
             interrupted_in_row,
             previous,

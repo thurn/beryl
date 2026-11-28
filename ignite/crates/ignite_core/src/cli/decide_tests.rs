@@ -30,7 +30,7 @@ fn facts() -> Facts {
         now: NOW,
         ticket_held: true,
         running_verbs: Vec::new(),
-        land_pushing: false,
+        ending_ticket: false,
         messages: Vec::new(),
         interrupted_in_row: 1,
         previous: PreviousAnswer::Other,
@@ -174,7 +174,7 @@ fn every_rule_and_boundary_chooses_its_action() {
             TurnEnd::Clean,
             Facts {
                 previous: PreviousAnswer::BlockSent,
-                land_pushing: true,
+                ending_ticket: true,
                 running_verbs: vec![verb("land", "L-5521")],
                 ..facts()
             },
@@ -226,7 +226,7 @@ fn every_rule_and_boundary_chooses_its_action() {
             TurnEnd::Interrupted,
             Facts {
                 interrupted_in_row: 5,
-                land_pushing: true,
+                ending_ticket: true,
                 running_verbs: vec![verb("test", "T-1"), verb("land", "L-7")],
                 ..facts()
             },
@@ -237,7 +237,7 @@ fn every_rule_and_boundary_chooses_its_action() {
             running.clone(),
             TurnEnd::PlanLimit { window: None },
             Facts {
-                land_pushing: true,
+                ending_ticket: true,
                 ..facts()
             },
             Parks,
@@ -414,7 +414,7 @@ fn every_end_in_every_state_returns_an_action() {
         },
         Facts {
             previous: PreviousAnswer::BlockSent,
-            land_pushing: true,
+            ending_ticket: true,
             interrupted_in_row: 0,
             hold: Some(on_hold()),
             last_text: None,
@@ -435,7 +435,7 @@ fn every_end_in_every_state_returns_an_action() {
                 if facts.hold.is_some() {
                     assert!(!starts_now, "{state} {end:?} started a turn during a hold");
                 }
-                if facts.land_pushing {
+                if facts.ending_ticket {
                     assert!(!releases, "{state} {end:?} released during a push");
                 }
             }

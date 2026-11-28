@@ -25,9 +25,11 @@
 //!
 //! Two guards then apply to what the rules chose:
 //!
-//! - A release never runs while a `land` of the session has begun its push, since releasing
-//!   resets the tree under the push. The slot waits for the land instead, or parks when no land
-//!   is listed as running.
+//! - A release never runs while a `land`, `release` or `close` of the session runs, from the
+//!   verb's start, since releasing resets the tree the landing gate is checking or pushing. The
+//!   slot waits for the land instead, or parks when no land is listed as running. So a worker
+//!   whose turn ends on the plan's limit during its landing keeps the ticket until the landing
+//!   finishes, and is released only if the turn that follows also ends on the limit.
 //! - No turn starts while the app is on a CLI hold, so a resume or a back-off parks the slot.
 //!   When the hold ends, the daemon resumes every parked slot.
 
@@ -57,7 +59,7 @@ pub const API_ERROR_TEXT: &str = "Your last turn ended on an API error and was s
 /// not name returns [`Action::Park`], never a release or a start.
 pub fn decide(slot: &Slot, end: &TurnEnd, facts: &Facts) -> Action {
     let chosen = by_the_rules(slot, end, facts);
-    let chosen = guard_push(chosen, facts);
+    let chosen = guard_ending(chosen, facts);
     guard_hold(chosen, facts)
 }
 
@@ -179,9 +181,9 @@ fn wait_for(verb: &Verb) -> Action {
     }
 }
 
-/// A release turned into a wait while a `land` of the session has begun its push.
-fn guard_push(chosen: Action, facts: &Facts) -> Action {
-    if !facts.land_pushing || !matches!(chosen, Action::Release { .. }) {
+/// A release turned into a wait while a verb that ends the session's ticket runs.
+fn guard_ending(chosen: Action, facts: &Facts) -> Action {
+    if !facts.ending_ticket || !matches!(chosen, Action::Release { .. }) {
         return chosen;
     }
     match facts
@@ -191,8 +193,8 @@ fn guard_push(chosen: Action, facts: &Facts) -> Action {
     {
         Some(land) => wait_for(land),
         None => Action::Park {
-            report: "a land of the session has begun its push but is not listed as running, so \
-                     the ticket was not released"
+            report: "a verb that ends the session's ticket runs, but no land is listed as \
+                     running, so the ticket was not released"
                 .to_owned(),
         },
     }
