@@ -21,9 +21,16 @@ path = "src/main.rs"
 [features]
 # What only a debug build has: `--fixture`, which replays a recording from the recordings pack
 # instead of playing a game, `--pause-at`, `--drive`, `--load`, `--slow-gpu`, and `--agent`
-# with its `--opponent`, `--seed` and `--search-class`. A release build leaves it off, and with it the
-# pack.
-tools = ["dep:beryl_inspect", "beryl_host/drive", "beryl_host/headless", "dep:socket2"]
+# with its `--opponent`, `--seed` and `--search-class`, and the testing screen's card playground,
+# with every card's scenarios. A release build leaves it off, and with it the pack.
+tools = [
+    "dep:beryl_inspect",
+    "beryl_host/drive",
+    "beryl_host/headless",
+    "dep:socket2",
+    "dep:beryl_cli",
+    "beryl_cards/scenarios",
+]
 
 [dependencies]
 app_client.workspace = true
@@ -37,6 +44,10 @@ kit_ui.workspace = true
 beryl_assets = { path = "../beryl_assets" }
 beryl_host = { path = "../beryl_host" }
 beryl_inspect = { path = "../beryl_inspect", optional = true }
+# The card playground of the tools build (`beryl_cli::specs::playground`): each card's examples,
+# set up from its scenarios and played against an automated opponent. It replaces the browser
+# server that fed the web app's playground page.
+beryl_cli = { path = "../../../engine/crates/beryl_cli", optional = true }
 beryl_render = { path = "../beryl_render" }
 game_probe.workspace = true
 # The decklist of a game `--agent` starts, as the web app's session deals it. The session

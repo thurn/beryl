@@ -413,6 +413,28 @@ def test_spec_viewer_report_files_reproduction_context(
     assert saved is not None and saved.bead == "by-viewer"
 
 
+def test_playground_report_names_its_card_and_variant(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("BERYL_BUGS", str(tmp_path))
+    folder = report(tmp_path)
+    md = folder / "report.md"
+    md.write_text(
+        md.read_text().replace(
+            "status: open",
+            "playground: counterspell/playground-counter-a-spell-0\nstatus: open",
+        )
+    )
+
+    ignite = fake_ignite(monkeypatch, created="by-playground")
+    assert cli.main(["bugs", "file"]) == 0
+    body = ignite.tickets[0]["body"]
+    assert (
+        "Playground example: card `counterspell`, variant "
+        "`playground-counter-a-spell-0`" in body
+    )
+
+
 def test_retry_recovers_existing_bead(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

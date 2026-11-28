@@ -24,6 +24,9 @@ game_play.workspace = true
 game_hud.workspace = true
 game_manual.workspace = true
 game_probe.workspace = true
+# Reads a card's playground examples from a story's recorded answer, in place of a hand-written
+# reader. The client workspace already depends on it.
+serde.workspace = true
 
 [build-dependencies]
 # Reads the audio manifest to generate credits.

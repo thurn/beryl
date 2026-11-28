@@ -17,6 +17,8 @@ pub mod live;
 pub mod load;
 pub mod options;
 mod places;
+#[cfg(feature = "tools")]
+pub mod playground;
 pub mod session;
 pub mod settings;
 pub mod tier;
