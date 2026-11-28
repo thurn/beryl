@@ -569,8 +569,11 @@ def missing_glyph_faults(log: str | None) -> list[str]:
     table without them. The app waits for its glyph worker before it writes the summary (the
     emulator's software renderer is slow enough that the worker can still be running when the
     recording ends), so glyphs missing there were never delivered. Card scans are not checked:
-    the emulator has no network access to Scryfall, so its cards are always Beryl's frame."""
-    summary = next((line["summary"] for line in lines(log or "") if "summary" in line), {})
+    the emulator has no network access to Scryfall, so its cards are always Beryl's frame.
+    """
+    summary = next(
+        (line["summary"] for line in lines(log or "") if "summary" in line), {}
+    )
     missing = summary.get("missing_glyphs", 0)
     if not missing:
         return []

@@ -73,10 +73,10 @@ host input and suspend or resume, and `just ios-smoke --game wu-control` or
 `--game forgetful-fish` to play a whole seeded game of that deck against the AI.
 The Android smoke's cards show Beryl's frame without scans, because the emulator
 cannot reach Scryfall, and it fails when the text still lacks glyphs after the
-recording ends.
-Install on a paired iPhone with `just ios-device --user-asked` only when the
-user asks. `just mobile-bugs` pulls the bug reports the phone smokes saved into
-the desktop's bugs folder, and `--device` also pulls from a paired iPhone.
+recording ends. Install on a paired iPhone with `just ios-device --user-asked`
+only when the user asks. `just mobile-bugs` pulls the bug reports the phone
+smokes saved into the desktop's bugs folder, and `--device` also pulls from a
+paired iPhone.
 
 ## Sizes on a phone
 
