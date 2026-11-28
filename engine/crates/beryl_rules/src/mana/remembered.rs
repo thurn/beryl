@@ -130,7 +130,7 @@ pub(crate) struct Restricted<L: Layout = Small> {
 
 /// The creature type the permanent in `slot` chose as it entered, by the game's number, as a
 /// restriction to "the chosen type" reads it.
-fn chosen_type<L: Layout>(s: &State<L>, slot: L::Slot) -> u8 {
+pub(super) fn chosen_type<L: Layout>(s: &State<L>, slot: L::Slot) -> u8 {
     match s.chosen(slot) {
         Some(ChosenValue::CreatureType(Some(n))) => n,
         _ => RememberedMana::<L>::NO_TYPE,

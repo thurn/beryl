@@ -137,12 +137,13 @@ fn run_search<L: Layout>(
             continue;
         }
         for (ai, act) in extra.activations.iter().enumerate() {
-            act.each_made(&mut |made| {
+            act.each_made_split(&mut |made, restricted_made| {
                 options.push(Priced {
                     extra: u8::try_from(ei).expect("fits u8"),
                     activation: u8::try_from(ai).expect("fits u8"),
                     price: act.price,
                     made,
+                    restricted_made,
                 });
                 true
             })?;
@@ -170,6 +171,7 @@ struct Priced {
     activation: u8,
     price: ManaCost,
     made: [u8; KINDS],
+    restricted_made: [u8; KINDS],
 }
 
 struct PlanSearch<'a, L: Layout, F: FnMut(Plan<L>, &[u8; CLASSES], &mut bool, &mut bool)> {
@@ -227,9 +229,12 @@ impl<L: Layout, F: FnMut(Plan<L>, &[u8; CLASSES], &mut bool, &mut bool)> PlanSea
         for &i in chosen {
             let option = self.options[i];
             need = need.plus(option.price);
-            for (p, &m) in pool.iter_mut().zip(&option.made) {
+            for (p, (&m, &rm)) in pool
+                .iter_mut()
+                .zip(option.made.iter().zip(&option.restricted_made))
+            {
                 // More mana of one kind than the layout holds: the game goes on in a larger one.
-                let Some(sum) = p.checked_add(m) else {
+                let Some(sum) = p.checked_add(m).and_then(|s| s.checked_add(rm)) else {
                     self.full = true;
                     return;
                 };
@@ -263,20 +268,22 @@ impl<L: Layout, F: FnMut(Plan<L>, &[u8; CLASSES], &mut bool, &mut bool)> PlanSea
         };
         let mut steps = ch.steps.clone();
         let mut paid = false;
-        self.pay_prices(ch, order, pool, &mut steps, &mut paid);
+        self.pay_prices(ch, order, pool, [0; KINDS], &mut steps, &mut paid);
         paid
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn pay_prices(
         &mut self,
         ch: &Chosen<L>,
         order: &[usize],
         pool: [u8; KINDS],
+        extra_restricted: [u8; KINDS],
         steps: &mut Vec<Step>,
         paid: &mut bool,
     ) {
         let Some((&first, rest)) = order.split_first() else {
-            self.pay_cost(ch, pool, steps, paid);
+            self.pay_cost(ch, pool, extra_restricted, steps, paid);
             return;
         };
         let option = self.options[first];
@@ -289,27 +296,49 @@ impl<L: Layout, F: FnMut(Plan<L>, &[u8; CLASSES], &mut bool, &mut bool)> PlanSea
                 };
                 *p = sum;
             }
+            let mut next_res = extra_restricted;
+            for (r, &m) in next_res.iter_mut().zip(&option.restricted_made) {
+                let Some(sum) = r.checked_add(m) else {
+                    self.full = true;
+                    return false;
+                };
+                *r = sum;
+            }
             steps.push(Step {
                 extra: option.extra,
                 activation: option.activation,
                 price_spend,
                 made: option.made,
+                restricted_made: option.restricted_made,
             });
-            self.pay_prices(ch, rest, after, steps, paid);
+            self.pay_prices(ch, rest, after, next_res, steps, paid);
             steps.pop();
             !self.done()
         });
     }
 
-    fn pay_cost(&mut self, ch: &Chosen<L>, pool: [u8; KINDS], steps: &[Step], paid: &mut bool) {
+    fn pay_cost(
+        &mut self,
+        ch: &Chosen<L>,
+        pool: [u8; KINDS],
+        extra_restricted: [u8; KINDS],
+        steps: &[Step],
+        paid: &mut bool,
+    ) {
         let mut units = restricted_units(self.sources, ch);
+        for (k, &n) in extra_restricted.iter().enumerate() {
+            if n > 0 {
+                units.add(1 << k, u16::from(n));
+            }
+        }
         for (k, &n) in pool.iter().enumerate() {
             units.add(1 << k, u16::from(n));
         }
         if !units.pays(self.cost) {
             return;
         }
-        let rest = after_restricted(self.cost, self.sources, ch);
+        let (rest, restricted_spend) =
+            after_restricted(self.cost, self.sources, ch, extra_restricted);
         let Some(final_spend) = exact_concrete_spend(pool, rest) else {
             return;
         };
@@ -327,6 +356,7 @@ impl<L: Layout, F: FnMut(Plan<L>, &[u8; CLASSES], &mut bool, &mut bool)> PlanSea
                 plain: ch.plain.clone(),
                 steps: steps.to_vec(),
                 final_spend,
+                restricted_spend,
             })),
         };
         // The walk began from the members the priced activations use.

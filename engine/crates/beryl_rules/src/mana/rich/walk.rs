@@ -17,10 +17,13 @@ use super::Step;
 /// class, because what one makes does not depend on when it is activated. Members are always
 /// tapped in order, so that two payments that differ only in which of two such sources they
 /// tap are one.
+/// `(unrestricted_made, restricted_made, rider)` for one outcome of a [`Free`] source.
+type FreeOutcome = ([u8; KINDS], [u8; KINDS], bool);
+
 pub(super) struct Free {
     /// The extra's index in [`Sources::extras`] and the activation for each of `outcomes`.
     members: Vec<(u8, Vec<u8>)>,
-    outcomes: Vec<[u8; KINDS]>,
+    outcomes: Vec<FreeOutcome>,
     /// The most mana one activation makes.
     most: u32,
 }
@@ -32,18 +35,19 @@ impl Free {
             if !is_free(sources, ei) {
                 continue;
             }
-            let mut made_by: Vec<([u8; KINDS], u8)> = Vec::new();
+            let mut made_by: Vec<(FreeOutcome, u8)> = Vec::new();
             for (ai, act) in extra.activations.iter().enumerate() {
-                act.each_made(&mut |made| {
-                    if !made_by.iter().any(|&(m, _)| m == made) {
-                        made_by.push((made, u8::try_from(ai).expect("fits u8")));
+                act.each_made_split(&mut |made, restricted_made| {
+                    let key = (made, restricted_made, act.rider);
+                    if !made_by.iter().any(|&(m, _)| m == key) {
+                        made_by.push((key, u8::try_from(ai).expect("fits u8")));
                     }
                     true
                 })?;
             }
             made_by.sort_unstable();
             let consumed = extra.activations.iter().any(|a| a.consumed);
-            let outcomes: Vec<[u8; KINDS]> = made_by.iter().map(|&(m, _)| m).collect();
+            let outcomes: Vec<FreeOutcome> = made_by.iter().map(|&(m, _)| m).collect();
             let acts: Vec<u8> = made_by.iter().map(|&(_, a)| a).collect();
             let member = (u8::try_from(ei).expect("fits u8"), acts);
             if let Some(group) = free.iter_mut().find(|g| {
@@ -58,7 +62,7 @@ impl Free {
             }
             let most = outcomes
                 .iter()
-                .map(|m| m.iter().map(|&n| u32::from(n)).sum())
+                .map(|&(m, r, _)| m.iter().chain(&r).map(|&n| u32::from(n)).sum())
                 .max()
                 .unwrap_or(0);
             if most > 0 {
@@ -285,8 +289,8 @@ pub(super) fn unrestricted<L: Layout>(
     Some(made)
 }
 
-/// The units of the mana `ch` chose that pays only the cost: the remembered mana and the mana
-/// of restricted classes.
+/// The units of the mana `ch` chose that pays only the cost: the remembered mana, the mana of
+/// restricted classes, and the restricted mana of any chosen extra steps.
 pub(super) fn restricted_units<L: Layout>(sources: &Sources<L>, ch: &Chosen<L>) -> Units {
     let mut units = Units::NONE;
     for (ri, &(_, kind, _)) in sources.remembered().iter().enumerate() {
@@ -300,15 +304,24 @@ pub(super) fn restricted_units<L: Layout>(sources: &Sources<L>, ch: &Chosen<L>) 
             units.add(1 << color, u16::from(c.amount));
         }
     }
+    for step in &ch.steps {
+        for (k, &n) in step.restricted_made.iter().enumerate() {
+            if n > 0 {
+                units.add(1 << k, u16::from(n));
+            }
+        }
+    }
     units
 }
 
-/// `cost` less what the mana `ch` chose that pays only the cost pays of it.
+/// `cost` less what the mana `ch` chose (plus any `extra_restricted` from priced steps) that pays
+/// only the cost pays of it, together with how much restricted mana from steps was spent.
 pub(super) fn after_restricted<L: Layout>(
     cost: ManaCost,
     sources: &Sources<L>,
     ch: &Chosen<L>,
-) -> ManaCost {
+    extra_restricted: [u8; KINDS],
+) -> (ManaCost, [u8; KINDS]) {
     let mut cost = cost;
     for (ri, &(_, kind, _)) in sources.remembered().iter().enumerate() {
         if ch.rem_used & (1 << ri) != 0 {
@@ -323,7 +336,26 @@ pub(super) fn after_restricted<L: Layout>(
             }
         }
     }
-    cost
+    let mut step_spend = [0u8; KINDS];
+    for step in &ch.steps {
+        for (k, &n) in step.restricted_made.iter().enumerate() {
+            for _ in 0..n {
+                if super::super::pool::helps(cost, k) {
+                    super::super::pool::pay_unit(&mut cost, k);
+                    step_spend[k] += 1;
+                }
+            }
+        }
+    }
+    for (k, &n) in extra_restricted.iter().enumerate() {
+        for _ in 0..n {
+            if super::super::pool::helps(cost, k) {
+                super::super::pool::pay_unit(&mut cost, k);
+                step_spend[k] += 1;
+            }
+        }
+    }
+    (cost, step_spend)
 }
 
 fn avail_class<L: Layout>(sources: &Sources<L>, taps: &Taps<L>, i: usize) -> u8 {
@@ -381,7 +413,7 @@ fn choose_outcomes<L: Layout>(
     if left == 0 {
         return f(ch);
     }
-    let Some(&made) = fr.outcomes.get(from) else {
+    let Some(&(made, restricted_made, _)) = fr.outcomes.get(from) else {
         return true;
     };
     let min_n = if from + 1 == fr.outcomes.len() {
@@ -406,6 +438,7 @@ fn choose_outcomes<L: Layout>(
                 activation: acts[from],
                 price_spend: [0; KINDS],
                 made,
+                restricted_made,
             });
         }
         let cont = choose_outcomes(sources, fr, from + 1, left - n, ch, f);

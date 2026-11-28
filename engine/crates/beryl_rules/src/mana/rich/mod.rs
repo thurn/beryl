@@ -25,29 +25,26 @@ mod walk;
 use std::collections::BTreeSet;
 
 use crate::bitboard::Bitboard;
-use crate::card::{
-    Ability, AbilityIx, AbilityKind, Amount, CostAction, CostPart, INTRINSIC_MANA, ManaColor,
-    ManaCost, ManaSet, ObjectAbility, Timing,
-};
+use crate::card::{AbilityIx, AbilityKind, INTRINSIC_MANA, ManaColor, ManaCost, ManaSet};
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::replacement::event::{self, Sink};
-use crate::state::{AbilityRef, Derived, ManaAmounts, PendingTrigger, State, TriggeredAbility};
-use crate::table::{Capability, GameTable, is_priced, is_sacrificed};
+use crate::state::{AbilityRef, ManaAmounts, PendingTrigger, State, TriggeredAbility};
+use crate::table::{Capability, GameTable, is_priced};
 
 use super::pay::{activate_consuming, activate_restricted, human_taps, tapped_source};
 use super::pool::Funds;
 use super::remembered::{self, Paying};
 use super::solver::Plan;
-use super::sources::{Sources, allowed, can_tap};
+use super::sources::Sources;
 use super::units::Units;
 use super::{CLASSES, KINDS, Taps, amounts_pay};
 
 pub(super) use manual::{manual_can_spend_after, manual_extra_options, manual_pay_extra};
 pub(super) use objects::pays_with_objects;
 pub(super) use plans::{each_plan, plans};
-pub(super) use terms::{EvaluatedTerm, RichActivation};
+pub(super) use terms::{EvaluatedTerm, RichActivation, collect_extras};
 
 /// A class of interchangeable sources the plain classes cannot say: permanents with a priced mana
 /// ability ([`is_priced`]) or a mana ability whose product one [`ManaSet`] cannot say.
@@ -65,7 +62,10 @@ pub(super) struct Step {
     pub(super) extra: u8,
     pub(super) activation: u8,
     pub(super) price_spend: [u8; KINDS],
+    /// Unrestricted mana added to the pool by this activation.
     pub(super) made: [u8; KINDS],
+    /// Restricted mana added to `remembered_mana` by this activation (zero unless restricted).
+    pub(super) restricted_made: [u8; KINDS],
 }
 
 /// The sequence of activations a rich [`Plan`] performs.
@@ -74,8 +74,29 @@ pub(crate) struct Sequence {
     /// `(class_index, color_index)` for each plain source tapped before the sequence.
     pub(super) plain: Vec<(u8, u8)>,
     pub(super) steps: Vec<Step>,
-    /// Concrete mana spent from the pool on the final cost.
+    /// Concrete unrestricted mana spent from the pool on the final cost.
     pub(super) final_spend: [u8; KINDS],
+    /// Concrete restricted mana from `steps` spent on the final cost.
+    pub(super) restricted_spend: [u8; KINDS],
+}
+
+/// Whether any extra source has a restricted mana ability with a rider.
+pub(super) fn has_rider<L: Layout>(extras: &[Extra<L>]) -> bool {
+    extras.iter().any(|e| e.activations.iter().any(|a| a.rider))
+}
+
+/// Whether `plan`'s rich sequence spends restricted mana from an activation with a rider.
+pub(super) fn rides<L: Layout>(extras: &[Extra<L>], plan: &Plan<L>) -> bool {
+    plan.sequence.as_deref().is_some_and(|seq| {
+        seq.steps.iter().any(|st| {
+            extras[usize::from(st.extra)].activations[usize::from(st.activation)].rider
+                && st
+                    .restricted_made
+                    .iter()
+                    .zip(seq.restricted_spend)
+                    .any(|(&m, s)| m > 0 && s > 0)
+        })
+    })
 }
 
 /// Whether the permanent in `slot` has any priced mana ability, multi-term/counted mana
@@ -92,196 +113,6 @@ pub(super) fn has_extra_mana<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Sl
                 && a.produces() == ManaSet::NONE
                 && !crate::table::is_could_produce(a))
     })
-}
-
-/// Collects all untapped permanents `player` controls (not in `exclude`) that have a priced or
-/// multi-term/counted mana ability into `extras`. Out of line: called only in a game with
-/// `PricedMana` or `ManaChanges`.
-#[cold]
-#[inline(never)]
-pub(super) fn collect_extras<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    player: Seat,
-    exclude: Bitboard<L::Slot>,
-    extras: &mut Vec<Extra<L>>,
-) -> Result<(), Full> {
-    for (slot, d) in super::sources::controlled(s, player) {
-        if exclude.contains(slot) || super::sources::source(s, t, player, slot, d).is_some() {
-            continue;
-        }
-        collect_extra(s, t, player, slot, d, extras)?;
-    }
-    Ok(())
-}
-
-fn collect_extra<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    player: Seat,
-    slot: L::Slot,
-    d: &Derived<L>,
-    extras: &mut Vec<Extra<L>>,
-) -> Result<(), Full> {
-    if !can_tap(s, player, slot, d) {
-        return Ok(());
-    }
-    let words = s.words_of(slot);
-    let changes = if s.has_mana_changes() {
-        super::changes::matching(s, t, slot)?
-    } else {
-        super::changes::MatchingChanges::default()
-    };
-    let mut activations = Vec::new();
-    let intrinsic = s.intrinsic_mana(t, slot);
-    for k in 0..KINDS {
-        if intrinsic & (1 << k) != 0 {
-            let mut terms = [EvaluatedTerm::default(); 8];
-            terms[0] = EvaluatedTerm {
-                kinds: 1 << k,
-                amount: changes.multiplier,
-                uniform: false,
-            };
-            let mut count = 1usize;
-            super::changes::append_extra_mana(&mut terms, 1, &mut count, changes.fixed)?;
-            activations.push(RichActivation {
-                ability: None,
-                price: ManaCost::NONE,
-                terms,
-                own_term_count: 1,
-                term_count: u8::try_from(count).expect("fits u8"),
-                type_produced: changes.type_produced,
-                consumed: false,
-            });
-        }
-    }
-    for (obj_ability, a) in s.abilities(t, slot) {
-        if a.kind() != AbilityKind::Mana
-            || a.timing() == Timing::AsInstant
-            || a.spend().is_some()
-            || !allowed(s, t, a, player, &words)
-        {
-            continue;
-        }
-        let Some(act) = eval_activation(s, t, slot, obj_ability, a, changes)? else {
-            continue;
-        };
-        if act.total_mana() > 0 {
-            activations.push(act);
-        }
-    }
-    if activations.is_empty() {
-        return Ok(());
-    }
-    let key = s.definition(slot).key();
-    // Permanents of one card with the same activations are one extra, though an effect such as
-    // Mana Flare or Urborg, Tomb of Yawgmoth changes what they make: the activations above
-    // apply it, and each names the ability it activates, so one that lost or gained a mana
-    // ability has different activations. A player may control more such lands than there is
-    // room for extras.
-    if let Some(existing) = extras
-        .iter_mut()
-        .find(|e| e.least == key && e.count < u8::MAX && e.activations == activations)
-    {
-        existing.members.insert(slot);
-        existing.count += 1;
-        return Ok(());
-    }
-    if extras.len() >= CLASSES {
-        return Err(Full);
-    }
-    extras.push(Extra {
-        members: Bitboard::single(slot),
-        count: 1,
-        least: key,
-        activations,
-    });
-    Ok(())
-}
-
-fn eval_activation<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    slot: L::Slot,
-    obj_ability: ObjectAbility,
-    a: &Ability,
-    changes: super::changes::MatchingChanges,
-) -> Result<Option<RichActivation>, Full> {
-    let sacrificed = is_sacrificed(a);
-    let tap_and_mana =
-        a.cost().mana.x == 0 && matches!(a.cost().parts(), [CostPart::This(CostAction::Tap)]);
-    if !sacrificed && !tap_and_mana {
-        return Ok(None);
-    }
-    let mut terms = [EvaluatedTerm::default(); 8];
-    let mut count = 0usize;
-    let tapped = a.cost().does(CostAction::Tap);
-    let multiplier = if tapped { changes.multiplier } else { 1 };
-    let words = s.words_of(slot);
-    for term in a.product() {
-        let amount = if let Amount::Fixed(n) = term.amount {
-            n
-        } else {
-            crate::interpret::amount_of(s, t, slot, term.amount)?
-        };
-        if amount == 0 {
-            continue;
-        }
-        let kinds = match term.kinds {
-            beryl_card::Kinds::Fixed(bits) => bits,
-            beryl_card::Kinds::CouldProduce(filter) => {
-                super::changes::could_produce(s, t, s.controller(slot), filter, &words)
-            }
-        };
-        if kinds == 0 {
-            continue;
-        }
-        if multiplier > 1 && !term.uniform && !kinds.is_power_of_two() && amount > 1 {
-            for _ in 0..amount {
-                if count >= terms.len() {
-                    return Err(Full);
-                }
-                terms[count] = EvaluatedTerm {
-                    kinds,
-                    amount: multiplier,
-                    uniform: true,
-                };
-                count += 1;
-            }
-        } else {
-            let scaled = amount.checked_mul(multiplier).ok_or(Full)?;
-            let uniform = term.uniform || (multiplier > 1 && !kinds.is_power_of_two());
-            if count >= terms.len() {
-                return Err(Full);
-            }
-            terms[count] = EvaluatedTerm {
-                kinds,
-                amount: scaled,
-                uniform,
-            };
-            count += 1;
-        }
-    }
-    let own_term_count = count;
-    let type_produced = if tapped {
-        super::changes::append_extra_mana(&mut terms, own_term_count, &mut count, changes.fixed)?;
-        changes.type_produced
-    } else {
-        0
-    };
-    let mut price = a.cost().mana;
-    if crate::continuous::rule_change::spends_as_any_color(s, t, s.controller(slot), slot) {
-        price = price.as_any_color();
-    }
-    Ok(Some(RichActivation {
-        ability: Some(obj_ability),
-        price,
-        terms,
-        own_term_count: u8::try_from(own_term_count).expect("fits u8"),
-        term_count: u8::try_from(count).expect("fits u8"),
-        type_produced,
-        consumed: sacrificed,
-    }))
 }
 
 /// Whether `player`, whose funds the plain path found are `funds`, can pay `cost` with none of
@@ -409,11 +240,12 @@ pub(super) fn pays_from_state_with<L: Layout>(
         }
     }
     // A permanent whose mana abilities all lack a price is tapped up front: more mana never
-    // makes a cost unpayable, and what it makes may pay a price. Only the order of priced
-    // activations matters, so the search below tries orders of those alone. Each starting
-    // pool is one way of choosing what those permanents make, kept once.
+    // makes a cost unpayable, and what it makes may pay a price (except the restricted part of
+    // a restricted ability, which pays only the cost). Only the order of priced activations
+    // matters, so the search below tries orders of those alone. Each starting state is one way
+    // of choosing what those permanents make, kept once.
     let mut used = *extra_used;
-    let mut starts = BTreeSet::from([base]);
+    let mut starts = BTreeSet::from([(base, restricted)]);
     for (i, extra) in sources.extras.iter().enumerate() {
         // Remaining unused activations in this extra class; saturating at 0 means none left.
         let left = extra.count.saturating_sub(used[i]);
@@ -422,22 +254,26 @@ pub(super) fn pays_from_state_with<L: Layout>(
         }
         let mut outcomes = BTreeSet::new();
         for act in &extra.activations {
-            act.each_units(Units::NONE, &mut |made| {
-                outcomes.insert(made);
+            act.each_units_split(Units::NONE, Units::NONE, &mut |u, r| {
+                outcomes.insert((u, r));
                 true
             });
         }
         for _ in 0..left {
             starts = starts
                 .iter()
-                .flat_map(|&start| outcomes.iter().map(move |&made| add_units(start, made)))
+                .flat_map(|&(start_u, start_r)| {
+                    outcomes.iter().map(move |&(made_u, made_r)| {
+                        (add_units(start_u, made_u), add_units(start_r, made_r))
+                    })
+                })
                 .collect();
         }
         used[i] = extra.count;
     }
-    starts
-        .into_iter()
-        .any(|start| split_pays(start, restricted, &splits, used, &sources.extras, cost))
+    starts.into_iter().any(|(start_u, start_r)| {
+        split_pays(start_u, start_r, &splits, used, &sources.extras, cost)
+    })
 }
 
 /// The members of a class with a restricted twin class ([`super::sources::Class::twin`]): how
@@ -460,7 +296,7 @@ fn split_pays<L: Layout>(
     cost: ManaCost,
 ) -> bool {
     let Some((split, rest)) = splits.split_first() else {
-        let mut seen: BTreeSet<([u8; CLASSES], Units)> = BTreeSet::new();
+        let mut seen: BTreeSet<([u8; CLASSES], Units, Units)> = BTreeSet::new();
         return pays_dfs(base, restricted, used, extras, cost, &mut seen);
     };
     (0..=split.avail).any(|n| {
@@ -488,12 +324,12 @@ fn pays_dfs<L: Layout>(
     used: [u8; CLASSES],
     extras: &[Extra<L>],
     cost: ManaCost,
-    seen: &mut BTreeSet<([u8; CLASSES], Units)>,
+    seen: &mut BTreeSet<([u8; CLASSES], Units, Units)>,
 ) -> bool {
     if add_units(pool, restricted).pays(cost) {
         return true;
     }
-    if !seen.insert((used, pool)) {
+    if !seen.insert((used, pool, restricted)) {
         return false;
     }
     for (i, extra) in extras.iter().enumerate() {
@@ -508,8 +344,8 @@ fn pays_dfs<L: Layout>(
             }
             let mut found = false;
             each_units_payment(pool, act.price, &mut |left| {
-                act.each_units(left, &mut |next_pool| {
-                    if pays_dfs(next_pool, restricted, next_used, extras, cost, seen) {
+                act.each_units_split(left, restricted, &mut |next_pool, next_restricted| {
+                    if pays_dfs(next_pool, next_restricted, next_used, extras, cost, seen) {
                         found = true;
                         return false;
                     }
@@ -647,13 +483,37 @@ pub(super) fn pay<L: Layout>(
         extra_slots.push(slots.as_slice().to_vec());
     }
     let mut extra_used = [0usize; CLASSES];
+    let mut rem_spend = seq.restricted_spend;
     for step in &seq.steps {
         let ei = usize::from(step.extra);
         let slot = extra_slots[ei][extra_used[ei]];
         extra_used[ei] += 1;
         let act = &sources.extras[ei].activations[usize::from(step.activation)];
-        activate_extra_step(s, t, sink, player, slot, act, step.price_spend, step.made)?;
+        let before_rem = s.player(player).remembered_mana().len();
+        activate_extra_step(
+            s,
+            t,
+            sink,
+            player,
+            slot,
+            act,
+            step.price_spend,
+            step.made,
+            step.restricted_made,
+        )?;
+        if act.restricted {
+            let after_rem = s.player(player).remembered_mana().len();
+            for at in (before_rem..after_rem).rev() {
+                let k = s.player(player).remembered_mana()[at].color.index();
+                if rem_spend[k] > 0 {
+                    remembered::spend(s, t, player, at, paying)?;
+                    rem_spend[k] -= 1;
+                    spent[k] = spent[k].checked_add(1).ok_or(Full)?;
+                }
+            }
+        }
     }
+    debug_assert_eq!(rem_spend, [0; KINDS]);
     for (k, &n) in seq.final_spend.iter().enumerate() {
         if n > 0 {
             s.spend_mana(player, ManaColor::ALL[k], n);
@@ -673,6 +533,7 @@ pub(super) fn activate_extra_step<L: Layout>(
     act: &RichActivation,
     price_spend: [u8; KINDS],
     made: [u8; KINDS],
+    restricted_made: [u8; KINDS],
 ) -> Result<(), Full> {
     for (k, &n) in price_spend.iter().enumerate() {
         if n > 0 {
@@ -739,6 +600,13 @@ pub(super) fn activate_extra_step<L: Layout>(
                 .map(|(_, a)| a)
                 .expect("activated mana ability");
             crate::coverage::hit(ability);
+            if act.restricted {
+                for (k, &n) in restricted_made.iter().enumerate() {
+                    for _ in 0..n {
+                        remembered::add(s, t, sink, permanent, ability, ManaColor::ALL[k])?;
+                    }
+                }
+            }
             for (k, &n) in made.iter().enumerate() {
                 if n > 0 {
                     let added = s.add_mana(player, Some(source), ManaColor::ALL[k], n)?;

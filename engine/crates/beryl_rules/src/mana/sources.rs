@@ -411,6 +411,7 @@ impl<L: Layout> Sources<L> {
         // Built in place: a copy of its classes costs every payment.
         let mut out = Sources::<L>::default();
         let alternatives = t.can(Capability::SacrificeAlternative);
+        let rich_mana = t.can_either(Capability::PricedMana, Capability::ManaChanges);
         let reads_restrictions = paying.reads_restrictions(t);
         let mut restricted_slots: L::Queue<L::Slot, 16> = Default::default();
         let mut twins = false;
@@ -422,6 +423,7 @@ impl<L: Layout> Sources<L> {
             if reads_restrictions
                 && s.definition(slot).facts(t).has_restricted_mana
                 && can_tap(s, player, slot, d)
+                && !(rich_mana && super::rich::has_extra_mana(s, t, slot))
             {
                 restricted_slots.push(slot)?;
             }
@@ -554,8 +556,9 @@ impl<L: Layout> Sources<L> {
                 out.rider_remembered |= 1 << i;
             }
         }
-        if t.can_either(Capability::PricedMana, Capability::ManaChanges) {
-            super::rich::collect_extras(s, t, player, exclude, &mut out.extras)?;
+        if rich_mana {
+            out.memory |=
+                super::rich::collect_extras(s, t, player, exclude, paying, &mut out.extras)?;
         }
         Ok(out)
     }
@@ -580,7 +583,10 @@ impl<L: Layout> Sources<L> {
 
     #[inline]
     pub(super) fn has_rider(&self) -> bool {
-        self.rider_remembered != 0 || self.rider_classes != 0 || self.classes().len() > 32
+        self.rider_remembered != 0
+            || self.rider_classes != 0
+            || self.classes().len() > 32
+            || super::rich::has_rider(&self.extras)
     }
 
     /// The mana that remembers in the pool that the payment accepts
@@ -607,13 +613,15 @@ impl<L: Layout> Sources<L> {
             }
             bits &= bits - 1;
         }
-        if self.classes().len() > 32 {
-            return (self.classes()[32..]
+        if self.classes().len() > 32
+            && self.classes()[32..]
                 .iter()
-                .zip(plan.taps.as_slice()[32..].iter()))
-            .any(|(c, &n)| c.has_rider() && n > 0);
+                .zip(&plan.taps.as_slice()[32..])
+                .any(|(c, &n)| c.has_rider() && n > 0)
+        {
+            return true;
         }
-        false
+        super::rich::rides(&self.extras, plan)
     }
 
     /// What a plan does but which sources it taps: the mana it leaves floating, the sources
@@ -756,11 +764,7 @@ fn restricted_classes<L: Layout>(
         if !paying.accepts(t, r.restriction, r.chosen_type) {
             continue;
         }
-        let rider = if t.restriction(r.restriction).rider.is_some() {
-            CLASS_RIDER
-        } else {
-            0
-        };
+        let rider = u8::from(t.restriction(r.restriction).rider.is_some()) * CLASS_RIDER;
         classes.push(Class {
             kinds: r.kinds,
             amount: 1,

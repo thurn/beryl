@@ -6,6 +6,24 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Restricted mana abilities missed live mana changes under Mana Flare.** With
+  Mana Flare, Cavern of Souls naming Elemental, and `{U}` in the pool,
+  Flickerwisp (`{1}{W}{W}`) could not be cast and `just fuzz` reported "the
+  payability prefilter disagrees with the reference for a spell". When a
+  permanent matched a live mana-changing effect (`has_extra_mana`),
+  `Sources::of` still added its restricted mana ability to `classes` without
+  applying the mana change, while `collect_extras` skipped restricted abilities
+  (`a.spend().is_some()`) and put only the permanent's unrestricted abilities in
+  `extras`. That both dropped Mana Flare's extra mana on the restricted ability
+  and split one permanent across `classes` and `extras` without a twin link.
+  Fixed: a permanent handled by `extras` is omitted from `restricted_slots` and
+  its accepted restricted abilities are collected into `extras` with their own
+  terms marked restricted (and carrying their rider) while triggered extra mana
+  stays unrestricted; `reference_sequences_with` also keeps restricted mana out
+  of the unrestricted pool that can pay priced mana abilities. Guard: the
+  scenario "Cavern of Souls under Mana Flare makes two mana for the chosen type"
+  in `mana_flare.rs`, and `check_spell_payments` in `just fuzz`.
+
 - **The sequence reference failed games with many lands under Mana Reflection or
   Mana Flare.** With Mana Reflection and seventeen lands, `just fuzz` reported
   "the cached funds disagree with the sequence reference" for a `{C}` probe that

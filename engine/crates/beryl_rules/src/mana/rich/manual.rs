@@ -15,8 +15,9 @@ use crate::table::GameTable;
 use super::super::pool::{helps, pay_unit};
 use super::super::remembered::Paying;
 use super::super::sources::Sources;
+use super::super::units::Units;
 use super::super::{CLASSES, KINDS};
-use super::{activate_extra_step, each_pool_payment, pays_from_state};
+use super::{activate_extra_step, each_pool_payment, pays_from_state, pays_from_state_with};
 
 /// Offers priced and multi-term mana abilities whose price is payable from the pool and that
 /// leave `remaining` payable afterwards.
@@ -37,7 +38,7 @@ pub(in crate::mana) fn manual_extra_options<L: Layout>(
             let mut overflow = false;
             each_pool_payment(pool, act.price, &mut |_, pool_after_price| {
                 if act
-                    .each_made(&mut |made| {
+                    .each_made_split(&mut |made, restricted_made| {
                         let mut after = pool_after_price;
                         for (a, &m) in after.iter_mut().zip(&made) {
                             let Some(sum) = a.checked_add(m) else {
@@ -46,13 +47,21 @@ pub(in crate::mana) fn manual_extra_options<L: Layout>(
                             };
                             *a = sum;
                         }
-                        if pays_from_state(
+                        let mut spare = Units::NONE;
+                        for (k, &n) in restricted_made.iter().enumerate() {
+                            if n > 0 {
+                                spare.add(1 << k, u16::from(n));
+                            }
+                        }
+                        if pays_from_state_with(
                             after,
                             sources,
                             &Table::filled(0),
                             0,
                             &extra_used,
+                            None,
                             remaining,
+                            spare,
                         ) {
                             ok = true;
                             return false;
@@ -148,7 +157,7 @@ pub(in crate::mana) fn manual_pay_extra<L: Layout>(
     let mut overflow = false;
     each_pool_payment(pool, act.price, &mut |price_spend, pool_after_price| {
         if act
-            .each_made(&mut |made| {
+            .each_made_split(&mut |made, restricted_made| {
                 let mut after = pool_after_price;
                 for (a, &m) in after.iter_mut().zip(&made) {
                     let Some(sum) = a.checked_add(m) else {
@@ -157,15 +166,23 @@ pub(in crate::mana) fn manual_pay_extra<L: Layout>(
                     };
                     *a = sum;
                 }
-                if pays_from_state(
+                let mut spare = Units::NONE;
+                for (k, &n) in restricted_made.iter().enumerate() {
+                    if n > 0 {
+                        spare.add(1 << k, u16::from(n));
+                    }
+                }
+                if pays_from_state_with(
                     after,
                     &sources,
                     &Table::filled(0),
                     0,
                     &extra_used,
+                    None,
                     remaining,
+                    spare,
                 ) {
-                    chosen = Some((price_spend, made));
+                    chosen = Some((price_spend, made, restricted_made));
                     return false;
                 }
                 true
@@ -179,9 +196,20 @@ pub(in crate::mana) fn manual_pay_extra<L: Layout>(
     if overflow {
         return Err(Full);
     }
-    let (price_spend, made) = chosen.expect("a pool payment that leaves the cost payable");
+    let (price_spend, made, restricted_made) =
+        chosen.expect("a pool payment that leaves the cost payable");
     sink.together();
-    let activated = activate_extra_step(s, t, sink, player, slot, &act, price_spend, made);
+    let activated = activate_extra_step(
+        s,
+        t,
+        sink,
+        player,
+        slot,
+        &act,
+        price_spend,
+        made,
+        restricted_made,
+    );
     sink.apart();
     activated?;
     Ok((remaining, None))

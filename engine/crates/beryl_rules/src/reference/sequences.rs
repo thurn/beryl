@@ -31,40 +31,55 @@ const MOST_PRICED: usize = 10;
 pub(crate) static SKIPPED: AtomicU64 = AtomicU64::new(0);
 
 /// One mana ability a permanent may be tapped for: its price, the mana part of its cost, and
-/// each set of units of mana it may make, one for each way of choosing the kind of a term
-/// whose units are all one kind ([`crate::card::Term::uniform`]). Each unit is the set of
-/// kinds it may be.
+/// each `(unrestricted, restricted)` pair of units of mana it may make, one for each way of
+/// choosing the kind of a term whose units are all one kind ([`crate::card::Term::uniform`]).
+/// Unrestricted units may pay later prices or the cost; restricted units pay only the cost
+/// (see CR 106.6). Each unit is the set of kinds it may be.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Activation {
     pub(crate) price: ManaCost,
-    pub(crate) makes: Vec<Vec<u8>>,
+    pub(crate) makes: Vec<(Vec<u8>, Vec<u8>)>,
 }
 
 impl Activation {
-    /// An activation of `price` whose product is `terms`, each its kinds, how many units it
-    /// makes and whether all its units are one kind.
+    /// An unrestricted activation of `price` whose product is `terms`, each its kinds, how many
+    /// units it makes and whether all its units are one kind.
     pub(crate) fn of(price: ManaCost, terms: &[(u8, u8, bool)]) -> Activation {
-        let mut makes = vec![Vec::new()];
-        for &(kinds, amount, uniform) in terms {
-            let choices: Vec<u8> = if uniform {
-                (0..6)
-                    .map(|k| 1u8 << k)
-                    .filter(|k| kinds & k != 0)
-                    .collect()
-            } else {
-                vec![kinds]
-            };
-            makes = makes
-                .iter()
-                .flat_map(|made| {
-                    choices.iter().map(move |&kind| {
-                        let mut more = made.clone();
-                        more.extend(std::iter::repeat_n(kind, usize::from(amount)));
-                        more
+        Activation::of_split(price, terms, &[], false)
+    }
+
+    fn of_split(
+        price: ManaCost,
+        own_terms: &[(u8, u8, bool)],
+        extra_terms: &[(u8, u8, bool)],
+        restricted: bool,
+    ) -> Activation {
+        let mut makes = vec![(Vec::new(), Vec::new())];
+        let mut push_terms = |terms: &[(u8, u8, bool)], to_restricted: bool| {
+            for &(kinds, amount, uniform) in terms {
+                let choices: Vec<u8> = if uniform {
+                    (0..6)
+                        .map(|k| 1u8 << k)
+                        .filter(|k| kinds & k != 0)
+                        .collect()
+                } else {
+                    vec![kinds]
+                };
+                makes = makes
+                    .iter()
+                    .flat_map(|(unres, res)| {
+                        choices.iter().map(move |&kind| {
+                            let (mut u, mut r) = (unres.clone(), res.clone());
+                            let dst = if to_restricted { &mut r } else { &mut u };
+                            dst.extend(std::iter::repeat_n(kind, usize::from(amount)));
+                            (u, r)
+                        })
                     })
-                })
-                .collect();
-        }
+                    .collect();
+            }
+        };
+        push_terms(own_terms, restricted);
+        push_terms(extra_terms, false);
         Activation { price, makes }
     }
 
@@ -128,15 +143,16 @@ pub(super) fn reference_sequences_with<L: Layout>(
     for (k, &n) in s.player(player).mana().amounts_u8().iter().enumerate() {
         pool.extend(std::iter::repeat_n(1u8 << k, usize::from(n)));
     }
+    let mut spare = spare.to_vec();
     if paying.reads_restrictions(t) {
         for mana in s.player(player).remembered_mana() {
             if paying.accepts(t, mana.restriction, mana.chosen_type) {
-                pool.push(crate::card::ManaSet::one(mana.color).colors);
+                spare.push(crate::card::ManaSet::one(mana.color).colors);
             }
         }
     }
     let permanents = activations(s, t, player, paying, exclude)?;
-    sequences_pay_with(&pool, &permanents, cost, spare)
+    sequences_pay_with(&pool, &permanents, cost, &spare)
 }
 
 /// The mana abilities each untapped permanent `player` controls could be tapped for now, read
@@ -373,6 +389,7 @@ fn reference_could_produce<L: Layout>(
 
 /// The activation of a mana ability on `slot`, read from its cost and product: `None` for a cost
 /// with a part besides {T} and sacrificing its source.
+#[allow(clippy::too_many_lines)]
 fn activation_on<L: Layout>(
     s: &State<L>,
     t: &GameTable,
@@ -426,9 +443,14 @@ fn activation_on<L: Layout>(
     if super::reference_spends_as_any_color(s, t, s.controller(slot), slot) {
         price = price.as_any_color();
     }
+    let restricted = a.spend().is_some();
     if type_produced == 0 {
-        own_terms.extend_from_slice(extra_terms);
-        return Some(Activation::of(price, &own_terms));
+        return Some(Activation::of_split(
+            price,
+            &own_terms,
+            extra_terms,
+            restricted,
+        ));
     }
     // Expand each own-term choice down to concrete single-color units so we know the exact set
     // of mana types the tapped ability itself produced, then append fixed extras and
@@ -466,19 +488,25 @@ fn activation_on<L: Layout>(
         }
     }
     let mut result_makes = Vec::with_capacity(makes.len());
-    for mut made in makes {
+    for made in makes {
         let produced_mask = made.iter().copied().fold(0u8, |acc, k| acc | k);
+        let (mut unres, res) = if restricted {
+            (Vec::new(), made)
+        } else {
+            (made, Vec::new())
+        };
         for &(kinds, amount, _) in extra_terms {
-            made.extend(std::iter::repeat_n(kinds, usize::from(amount)));
+            unres.extend(std::iter::repeat_n(kinds, usize::from(amount)));
         }
         if produced_mask != 0 {
-            made.extend(std::iter::repeat_n(
+            unres.extend(std::iter::repeat_n(
                 produced_mask,
                 usize::from(type_produced),
             ));
         }
-        if !result_makes.contains(&made) {
-            result_makes.push(made);
+        let pair = (unres, res);
+        if !result_makes.contains(&pair) {
+            result_makes.push(pair);
         }
     }
     Some(Activation {
@@ -542,23 +570,30 @@ fn sequences_pay_with(
     let (flexible, plain): (Vec<_>, Vec<_>) = permanents
         .iter()
         .partition(|options| options.iter().any(Activation::is_priced));
-    let mut starts: BTreeSet<Vec<u8>> = BTreeSet::from([pool.to_vec()]);
+    let mut init_spare = spare.to_vec();
+    init_spare.sort_unstable();
+    let mut starts: BTreeSet<(Vec<u8>, Vec<u8>)> = BTreeSet::from([(pool.to_vec(), init_spare)]);
     for options in plain {
-        let makes: Vec<&Vec<u8>> = options.iter().flat_map(|a| &a.makes).collect();
-        let one_unit = makes.iter().all(|made| made.len() == 1);
-        let ways: Vec<Vec<u8>> = if one_unit {
-            vec![vec![makes.iter().fold(0, |kinds, made| kinds | made[0])]]
+        let makes: Vec<&(Vec<u8>, Vec<u8>)> = options.iter().flat_map(|a| &a.makes).collect();
+        let one_unres = makes.iter().all(|(u, r)| u.len() == 1 && r.is_empty());
+        let ways: Vec<(Vec<u8>, Vec<u8>)> = if one_unres {
+            vec![(
+                vec![makes.iter().fold(0, |kinds, (u, _)| kinds | u[0])],
+                Vec::new(),
+            )]
         } else {
             makes.into_iter().cloned().collect()
         };
         starts = starts
             .iter()
-            .flat_map(|start| {
-                ways.iter().map(move |made| {
-                    let mut more = start.clone();
-                    more.extend(made);
-                    more.sort_unstable();
-                    more
+            .flat_map(|(start_u, start_r)| {
+                ways.iter().map(move |(made_u, made_r)| {
+                    let (mut u, mut r) = (start_u.clone(), start_r.clone());
+                    u.extend(made_u);
+                    u.sort_unstable();
+                    r.extend(made_r);
+                    r.sort_unstable();
+                    (u, r)
                 })
             })
             .collect();
@@ -566,8 +601,8 @@ fn sequences_pay_with(
     let flexible: Vec<&Vec<Activation>> = flexible.into_iter().collect();
     let mut seen = BTreeSet::new();
     let mut unknown = false;
-    for start in starts {
-        match search(start, 0, &flexible, cost, spare, &mut seen) {
+    for (start_u, start_r) in starts {
+        match search(start_u, 0, &flexible, cost, &start_r, &mut seen) {
             Some(true) => return Some(true),
             Some(false) => {}
             None => unknown = true,
@@ -585,7 +620,7 @@ fn search(
     flexible: &[&Vec<Activation>],
     cost: ManaCost,
     spare: &[u8],
-    seen: &mut BTreeSet<(u16, Vec<u8>)>,
+    seen: &mut BTreeSet<(u16, Vec<u8>, Vec<u8>)>,
 ) -> Option<bool> {
     if pool.len() + spare.len() > UNITS {
         return None;
@@ -599,7 +634,9 @@ fn search(
         return Some(true);
     }
     pool.sort_unstable();
-    if !seen.insert((used, pool.clone())) {
+    let mut sorted_spare = spare.to_vec();
+    sorted_spare.sort_unstable();
+    if !seen.insert((used, pool.clone(), sorted_spare)) {
         return Some(false);
     }
     let mut unknown = false;
@@ -609,10 +646,12 @@ fn search(
         }
         for activation in *options {
             for left in payments(&pool, activation.price) {
-                for made in &activation.makes {
+                for (made_u, made_r) in &activation.makes {
                     let mut next = left.clone();
-                    next.extend(made);
-                    match search(next, used | (1 << i), flexible, cost, spare, seen) {
+                    next.extend(made_u);
+                    let mut next_spare = spare.to_vec();
+                    next_spare.extend(made_r);
+                    match search(next, used | (1 << i), flexible, cost, &next_spare, seen) {
                         Some(true) => return Some(true),
                         Some(false) => {}
                         None => unknown = true,

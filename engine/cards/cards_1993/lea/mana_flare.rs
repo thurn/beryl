@@ -121,5 +121,26 @@ pub mod scenarios {
                 Resolve,
                 ME.has(Zone::Battlefield, Card::ManaFlare, 1),
             ]),
+        // Under Mana Flare, Cavern of Souls tapped for its restricted ability produces one
+        // restricted mana of the chosen color plus one unrestricted mana of that color from
+        // Mana Flare: enough with an Island to cast Flickerwisp ({1}{W}{W}), and the spell
+        // still gets Cavern's uncounterable rider.
+        Scenario::new("Cavern of Souls under Mana Flare makes two mana for the chosen type")
+            .interaction(&[Card::CavernOfSouls, Card::Flickerwisp])
+            .battlefield(P0, &[Card::ManaFlare, Card::Island])
+            .hand(P0, &[Card::CavernOfSouls, Card::Flickerwisp])
+            .battlefield(P1, &[Card::Island, Card::Island])
+            .hand(P1, &[Card::Counterspell])
+            .library(P0, &[Card::Island; 7])
+            .library(P1, &[Card::Island; 7])
+            .actions(&[
+                ME.plays(Card::CavernOfSouls),
+                ME.chooses_named("Elemental"),
+                ME.casts(Card::Flickerwisp),
+                THEM.casts(Card::Counterspell),
+                Resolve,
+                Resolve,
+                ME.controls(Card::Flickerwisp, 1),
+            ]),
     ];
 }
