@@ -351,10 +351,12 @@ impl Client {
     /// Whether the open prompt lists what it asks about over the table on a shade of its own
     /// (`prompts::covers_table`). The table then takes no press, and the piles' and the rows'
     /// counts, which would stand over its list and its pill, are hidden under the shade, as the
-    /// web's `.stage-tray` covers them.
+    /// web's `.stage-tray` covers them. The phone's open stops panel covers it too: it lies over
+    /// cards, which a press there would reach through it.
     pub(super) fn prompt_covers_table(&self) -> bool {
         self.table_open()
-            && (self.features.prompts.current()).is_some_and(game_hud::prompts::covers_table)
+            && ((self.features.prompts.current()).is_some_and(game_hud::prompts::covers_table)
+                || self.step_inputs().in_panel())
     }
 }
 

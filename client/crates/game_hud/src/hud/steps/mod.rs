@@ -152,6 +152,13 @@ impl Inputs {
         }
     }
 
+    /// Whether the stops are open in the panel under the phone's phase button, which lies over
+    /// part of the table.
+    #[must_use]
+    pub fn in_panel(self) -> bool {
+        self.panel.is_some() && self.visible()
+    }
+
     #[must_use]
     pub fn visible(self) -> bool {
         self.latest.is_some() && self.enabled && self.viewing.is_none()
