@@ -236,6 +236,25 @@ omniscient twin) and the search anchored to the expert (`anchor+expert+guard`).
 
 5. **The verdict and the record** (§4.6).
 
+**Each command finishes within 30 minutes.** Ignite treats an `ignite run`
+that has lasted 45 minutes as stuck, and takes the ticket back from a session
+still waiting on it 15 minutes later. A full suite or match takes far longer
+than that, so the measure ticket splits each step into commands that each take
+less than 30 minutes, run one after another:
+
+- **The suite:** one `just gate` for each budget (`--work 3M`, then
+  `--work 30M`), each with its own `--out` directory. If one budget still takes
+  too long, run it with fewer `--seeds`, and give the totals as passed of the
+  runs played. Add the two tables together for the totals of 400.
+- **The screen:** `--games N`, with `N` chosen so that one run takes less than
+  30 minutes.
+- **The match:** give every run the same `--out` directory, and raise `--cap`
+  each time. Start at `--cap 20`, time it, and then raise the cap by as many
+  games as fit in 30 minutes, up to 2000. A run that reaches its cap undecided
+  prints the score so far. The next run continues the same match from the games
+  already played. Stop when the sequential test decides the match or the cap
+  reaches 2000.
+
 ### 4.4 Guidance for the judgement
 
 - **Read totals before entries.** One entry moves by three or four runs in 20
