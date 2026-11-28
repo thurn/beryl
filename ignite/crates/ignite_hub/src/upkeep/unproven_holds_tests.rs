@@ -346,3 +346,100 @@ fn a_check_that_passes_on_a_newer_failed_tip_clears_its_hold() {
     assert_eq!(check_state(&conn, "pytest:inputs"), "on");
     assert_eq!(check_state(&conn, "rust:other"), "off");
 }
+
+/// Records the open regression of `check` on its own ticket, blamed on `first_bad`.
+fn blamed_on(conn: &mut Connection, check: &str, first_bad: &str, clock: &FakeClock) {
+    let id = apply(
+        conn,
+        vec![create("Regression", TicketType::Bug, None, &[])],
+        clock.now(),
+    )
+    .remove(0);
+    conn.execute(
+        "INSERT INTO regressions (check_name, ticket, first_bad, last_good, state)
+         VALUES (?1, ?2, ?3, 'aaaa', 'open')",
+        params![check, id, first_bad],
+    )
+    .unwrap();
+}
+
+#[test]
+fn a_check_broken_by_a_commit_that_has_held_master_for_an_hour_is_switched_off_when_found() {
+    // One landing broke many phone layouts. Each tip round ran only some of them, so a round
+    // found new failures an hour after the first, and each batch used to wait an hour of its own.
+    let mut conn = hub::open_in_memory().unwrap();
+    let clock = start();
+    for check in ["ui:phone/a", "ui:phone/b", "ui:other"] {
+        list_check(&mut conn, check);
+    }
+    blamed_on(&mut conn, "ui:phone/a", "dddd", &clock);
+    verified(&conn, "aaaa", &clock);
+    clock.advance(60.0);
+    failed(&conn, "bbbb", &["ui:phone/a"], &clock);
+    clock.advance(HOLD_SECONDS + 60.0);
+    assert_eq!(pass(&mut conn, &clock), ["ui:phone/a"]);
+
+    // A later round finds two more failures: one from the same landing, one from another.
+    failed(&conn, "cccc", &["ui:phone/b", "ui:other"], &clock);
+    blamed_on(&mut conn, "ui:phone/b", "dddd", &clock);
+    blamed_on(&mut conn, "ui:other", "eeee", &clock);
+    clock.advance(60.0);
+    assert_eq!(pass(&mut conn, &clock), ["ui:phone/b"]);
+    assert_eq!(check_state(&conn, "ui:phone/b"), "off");
+    assert_eq!(
+        check_state(&conn, "ui:other"),
+        "on",
+        "a check broken by another landing waits its own hour"
+    );
+    let note: String = conn
+        .query_row(
+            "SELECT note FROM check_state_changes WHERE check_name = 'ui:phone/b'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert!(note.contains("first bad commit dddd"), "{note}");
+
+    clock.advance(HOLD_SECONDS);
+    assert_eq!(pass(&mut conn, &clock), ["ui:other"]);
+}
+
+#[test]
+fn a_check_switched_back_on_keeps_its_own_hold_when_its_culprit_held_master_earlier() {
+    use ignite_core::protocol::hub::CheckState;
+    use ignite_store::hub::check_state::{self, Switch};
+
+    let mut conn = hub::open_in_memory().unwrap();
+    let clock = start();
+    for check in ["ui:phone/a", "ui:phone/b"] {
+        list_check(&mut conn, check);
+    }
+    blamed_on(&mut conn, "ui:phone/a", "dddd", &clock);
+    blamed_on(&mut conn, "ui:phone/b", "dddd", &clock);
+    verified(&conn, "aaaa", &clock);
+    clock.advance(60.0);
+    failed(&conn, "bbbb", &["ui:phone/a", "ui:phone/b"], &clock);
+    clock.advance(HOLD_SECONDS + 60.0);
+    assert_eq!(pass(&mut conn, &clock), ["ui:phone/a", "ui:phone/b"]);
+
+    // The worker fixing ui:phone/b switches it on before its fix reaches the tip, so a tip
+    // without the fix fails it again. The earlier hold of its culprit does not count.
+    check_state::switch(
+        &conn,
+        &Switch {
+            check: "ui:phone/b",
+            state: CheckState::On,
+            actor: "worker",
+            machine: "m-1",
+            note: "fixed",
+            ticket: None,
+            at: clock.now(),
+        },
+    )
+    .unwrap();
+    clock.advance(60.0);
+    failed(&conn, "cccc", &["ui:phone/b"], &clock);
+    clock.advance(60.0);
+    assert!(pass(&mut conn, &clock).is_empty());
+    assert_eq!(check_state(&conn, "ui:phone/b"), "on");
+}

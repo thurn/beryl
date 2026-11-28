@@ -3162,7 +3162,14 @@ independent of `broken_build`.
 Before that revert, upkeep switches off a check that has held `master` back for
 an hour without a record of catching a real defect. A check holds `master` back
 when a tip seen after the newest verified tip failed it, and its hour starts
-when the first such tip finished verification. Its record is the hub's
+when the hub first saw such a tip. Checks whose regressions name the same first
+bad commit share the earliest of their hours. A landing that breaks many checks
+of a large family, such as every phone layout of the interface checks, is found
+a few checks per round, because each round runs only what its budget selects.
+Without the shared hour, each new batch waited an hour of its own after the same
+landing had already held `master` back for hours. A check switched back on after
+that earliest hour began keeps its own start, so a fix still on its way to the
+tip is not switched off again at once. Its record is the hub's
 `check_fix_outcomes`: a check with any `product` outcome is kept, except in the
 `[rules] budgets` families, such as instruction counts, where a fix that brings
 the cost back under its limit is performance work, not a defect caught.

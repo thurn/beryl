@@ -14,6 +14,13 @@
 //!   [`tip_streaks::STREAK`] tips (covering tips that were superseded before finishing or are
 //!   still verifying). Its hold starts when the first such tip was `seen`, so slow tip rounds
 //!   do not extend the hour.
+//! - Checks whose regressions name the same first bad commit share the earliest hold among
+//!   them. A landing that breaks many checks of a large family, such as every phone layout of
+//!   the interface checks, is found a few checks per tip round, because each round runs only
+//!   the checks its budget selects and stops at the first failures. Each new batch then waited
+//!   an hour of its own, while the same landing had already held `master` back for hours. A
+//!   check switched back on after that earliest hold began keeps its own start, so a fix that
+//!   has not landed yet is not switched off again at once.
 //! - Its record is `check_fix_outcomes`. Any `product` outcome is evidence of a real defect,
 //!   except for a check in one of the `[rules] budgets` families, whose product fixes are
 //!   performance work to get back under a limit.
@@ -48,6 +55,9 @@ pub(super) const HOLD_SECONDS: f64 = 3600.0;
 struct Hold {
     since: Timestamp,
     tip: String,
+    /// The first bad commit its regression names, when its hold starts from an earlier failure
+    /// of another check that the same commit broke.
+    culprit: Option<String>,
     platform: Option<Os>,
     confirmed: bool,
     tips: usize,
@@ -80,11 +90,22 @@ pub(super) fn switch_off(
             continue;
         }
         let ticket = regression_ticket(&tx, &check)?;
+        let held = match &hold.culprit {
+            Some(culprit) => format!(
+                "Its first bad commit {} has held master back since {}, and it failed at tip {}.",
+                short(culprit),
+                hold.since,
+                short(&hold.tip),
+            ),
+            None => format!(
+                "Held master back since {} (it failed at tip {}).",
+                hold.since,
+                short(&hold.tip),
+            ),
+        };
         let note = format!(
-            "Held master back since {} (it failed at tip {}). No fix of this check has changed \
-             product behavior, so upkeep switched it off instead of waiting for its repair.",
-            hold.since,
-            short(&hold.tip),
+            "{held} No fix of this check has changed product behavior, so upkeep switched it off \
+             instead of waiting for its repair."
         );
         check_state::switch(
             &tx,
@@ -184,7 +205,46 @@ fn holds(conn: &Connection) -> Result<BTreeMap<String, Hold>> {
         }
     }
     holds.retain(|_, hold| hold.confirmed || hold.tips >= tip_streaks::STREAK);
+    share_culprit_holds(conn, &mut holds, &re_enabled)?;
     Ok(holds)
+}
+
+/// Starts each hold at the earliest hold among the checks whose regressions name the same first
+/// bad commit, unless the check was switched back on after that earlier start.
+fn share_culprit_holds(
+    conn: &Connection,
+    holds: &mut BTreeMap<String, Hold>,
+    re_enabled: &BTreeMap<String, Timestamp>,
+) -> Result<()> {
+    let mut first_bad: BTreeMap<String, String> = BTreeMap::new();
+    let mut select = conn.prepare("SELECT check_name, first_bad FROM regressions")?;
+    let rows = select.query_map([], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+    })?;
+    for row in rows {
+        let (check, commit) = row?;
+        if holds.contains_key(&check) {
+            first_bad.insert(check, commit);
+        }
+    }
+    let mut earliest: BTreeMap<&str, Timestamp> = BTreeMap::new();
+    for (check, commit) in &first_bad {
+        let since = holds[check].since;
+        earliest
+            .entry(commit.as_str())
+            .and_modify(|at| *at = (*at).min(since))
+            .or_insert(since);
+    }
+    for (check, commit) in &first_bad {
+        let start = earliest[commit.as_str()];
+        let hold = holds.get_mut(check).expect("listed from the holds");
+        if start >= hold.since || re_enabled.get(check).is_some_and(|at| start <= *at) {
+            continue;
+        }
+        hold.since = start;
+        hold.culprit = Some(commit.clone());
+    }
+    Ok(())
 }
 
 fn latest_re_enables(conn: &Connection) -> Result<BTreeMap<String, Timestamp>> {
@@ -223,6 +283,7 @@ fn record_hold(
     let entry = holds.entry(name).or_insert_with(|| Hold {
         since,
         tip: tip.to_owned(),
+        culprit: None,
         platform: key.platform,
         confirmed: false,
         tips: 0,
