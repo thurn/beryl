@@ -67,12 +67,6 @@ pub struct FloatingPrompt {
     pub button_padding: f32,
     #[serde(deserialize_with = "nonnegative")]
     pub overlap: f32,
-    /// How far a control on the middle band's line may reach past each of the band's edges, in
-    /// logical points. At 375 by 647 the band is 38 points tall, 6 short of a touch target, and
-    /// a 44-point button centred in it covered 3 points of an eligible attacker, so a control
-    /// that would overhang by more stands elsewhere.
-    #[serde(deserialize_with = "nonnegative")]
-    pub middle_overhang: f32,
     #[serde(deserialize_with = "nonnegative")]
     pub gap: f32,
     #[serde(deserialize_with = "nonnegative")]
