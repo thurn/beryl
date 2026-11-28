@@ -268,6 +268,9 @@ pub(super) struct BlameEntry<'a> {
     pub prior: Option<&'a Commit>,
     pub output: Option<&'a str>,
     pub allow_revert: bool,
+    /// The revert is allowed only because a landing in the range was replayed over landings
+    /// that changed what the check reads (see `replayed`), so only such a culprit is reverted.
+    pub replayed_only: bool,
 }
 
 /// Outcome of blaming a round's failing checks.
@@ -542,10 +545,16 @@ impl TipVerifier {
     ) -> Result<bool> {
         let check = plan.entry.check;
         let mut note = None;
+        // A revert allowed only for a replayed landing needs the culprit to be one.
+        let why = match &culprit {
+            Ok(Some(found)) if plan.entry.replayed_only => self.replay_reason(ctx, check, found),
+            _ => None,
+        };
         if plan.allow_revert
             && let Ok(Some(found)) = &culprit
+            && (why.is_some() || !plan.entry.replayed_only)
         {
-            match self.try_revert(ctx, tip, check, found, plan.entry.output) {
+            match self.try_revert(ctx, tip, check, found, plan.entry.output, why.as_deref()) {
                 Handled::Reverted => {
                     self.reported.insert(check.key.clone());
                     return Ok(true);

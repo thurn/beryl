@@ -34,6 +34,7 @@ fn the_brief_shows_what_a_landed_dependency_left() {
                 commits: vec![Commit::new("2f0c1d9e").unwrap()],
                 files: vec!["rust/scene/src/pool.rs".to_owned()],
                 note: "Badges draw from one record pool.\nMore detail.".to_owned(),
+                gated_base: None,
             }),
             close_reason: None,
         }],
@@ -486,6 +487,7 @@ fn depend(world: &World, ticket: &str, dependencies: &[(&str, &str)]) {
             commits: vec![Commit::new(*commit).unwrap()],
             files: Vec::new(),
             note: "landed".to_owned(),
+            gated_base: None,
         });
         world.desk.add(landed);
     }

@@ -105,6 +105,9 @@ fn with_a_verdict_a_landing_whose_tip_moves_five_times_runs_no_gate_and_lands() 
         world.landings()[0].work.commits,
         std::slice::from_ref(landed_commit)
     );
+    // The gate's base is recorded, so a tip round can tell that the pushed commit sits on
+    // landings its gate never saw (`[revert] replayed`).
+    assert_eq!(world.landings()[0].work.gated_base, Some(base.clone()));
     assert!(
         reply
             .text

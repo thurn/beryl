@@ -518,6 +518,14 @@ impl TipVerifier {
             let now = ctx.clock.now();
             self.retry_for_stall = stall_at.filter(|at| now < *at).map(|at| (tip.clone(), at));
             let stalled = stall_at.is_some_and(|at| now >= at);
+            let replayed = self.replay_revertible(
+                ctx,
+                last,
+                tip,
+                failed.iter().copied().filter(|check| {
+                    !check.is_build() && can_revert(check) && !regressions.contains(&check.check)
+                }),
+            );
 
             // A revert must not break a build that passed at the tip; one that already fails
             // here is blamed on its own landing.
@@ -534,8 +542,10 @@ impl TipVerifier {
                             && ctx.config.revert.broken_build
                             && ctx.config.repository.green.is_some()
                     } else {
-                        stalled && can_stall_revert(check)
+                        (stalled && can_stall_revert(check)) || replayed.contains(&check.check)
                     },
+                    replayed_only: !(check.is_build() || stalled && can_stall_revert(check))
+                        && replayed.contains(&check.check),
                 })
                 .collect();
             let blame = self.blame_failed(ctx, last, tip, &regressions, &entries, true)?;

@@ -62,6 +62,7 @@ mod families;
 mod green;
 mod machines;
 mod meter;
+mod replayed;
 mod report;
 mod revert;
 mod round;
@@ -237,6 +238,9 @@ pub struct TipLanding {
     pub ticket: Option<TicketId>,
     pub commits: Vec<Commit>,
     pub paths: Vec<String>,
+    /// The base its gate passed on, when it was pushed replayed onto a newer tip (see
+    /// `LandedWork::gated_base`).
+    pub gated_base: Option<Commit>,
 }
 
 impl TipLanding {

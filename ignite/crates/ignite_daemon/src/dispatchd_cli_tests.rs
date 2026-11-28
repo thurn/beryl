@@ -610,6 +610,7 @@ fn a_lost_landing_reply_delivers_the_lane_successor_once_the_cli_turn_ends() {
                 commits: vec![commit.clone()],
                 files: Vec::new(),
                 note: "Landed the first ticket.".to_owned(),
+                gated_base: None,
             },
             fresh: false,
             pressure: None,

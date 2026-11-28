@@ -133,6 +133,7 @@ impl TipWork for OneCheck {
                 ticket: None,
                 commits: vec![commit],
                 paths: the_check(self.platform).inputs,
+                gated_base: None,
             })
             .collect())
     }

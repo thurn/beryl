@@ -279,6 +279,7 @@ impl TipVerifier {
                     .get(&check.key)
                     .and_then(|run| run.output.as_deref()),
                 allow_revert: false,
+                replayed_only: false,
             })
             .collect();
         self.blame_failed(ctx, last, tip, &HashSet::new(), &entries, false)?;

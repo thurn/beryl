@@ -142,6 +142,7 @@ impl World {
                     commits: commits.iter().map(|c| commit(c)).collect(),
                     files: Vec::new(),
                     note: String::new(),
+                    gated_base: None,
                 },
                 fresh: false,
                 pressure: None,
@@ -765,6 +766,7 @@ mod memory;
 mod more;
 mod process;
 mod products;
+mod replayed;
 mod revert_builds;
 mod rounds;
 mod speed;

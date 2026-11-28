@@ -793,6 +793,7 @@ impl Hub for FakeHub {
                     .map(|landed| LandedCommit {
                         commit: commit.clone(),
                         ticket: landed.ticket.clone(),
+                        gated_base: landed.work.gated_base.clone(),
                     })
             })
             .collect())

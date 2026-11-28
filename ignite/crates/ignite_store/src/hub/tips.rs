@@ -392,24 +392,31 @@ pub fn landed_commits(conn: &Connection, commits: &[Commit]) -> Result<Vec<Lande
     let wanted: Vec<&str> = commits.iter().map(Commit::as_str).collect();
     let wanted = serde_json::to_string(&wanted).map_err(|e| StoreError::Invalid(e.to_string()))?;
     let mut statement = conn.prepare(
-        "SELECT landed_commit.value, tickets.id
+        "SELECT landed_commit.value, tickets.id, json_extract(tickets.landed, '$.gated_base')
          FROM tickets, json_each(tickets.landed, '$.commits') AS landed_commit
          WHERE tickets.landed IS NOT NULL
            AND landed_commit.value IN (SELECT value FROM json_each(?1))
          ORDER BY tickets.landed_at, tickets.id",
     )?;
-    let mut owner: std::collections::HashMap<String, String> = std::collections::HashMap::new();
-    for row in statement.query_map(params![wanted], |row| Ok((row.get(0)?, row.get(1)?)))? {
-        let (commit, ticket): (String, String) = row?;
-        owner.insert(commit, ticket);
+    let mut owner: std::collections::HashMap<String, (String, Option<String>)> =
+        std::collections::HashMap::new();
+    for row in statement.query_map(params![wanted], |row| {
+        Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+    })? {
+        let (commit, ticket, gated_base): (String, String, Option<String>) = row?;
+        owner.insert(commit, (ticket, gated_base));
     }
     commits
         .iter()
         .filter_map(|commit| {
-            owner.get(commit.as_str()).map(|ticket| {
+            owner.get(commit.as_str()).map(|(ticket, gated_base)| {
                 Ok(LandedCommit {
                     commit: commit.clone(),
                     ticket: parse("ticket", ticket)?,
+                    gated_base: gated_base
+                        .as_deref()
+                        .map(|base| parse("gated_base", base))
+                        .transpose()?,
                 })
             })
         })
@@ -505,6 +512,32 @@ mod tests {
             found,
             expected.map(|(c, t)| (c.to_owned(), t.to_owned())).to_vec()
         );
+    }
+
+    /// A landing by verdict records the base its gate passed on when it pushed its change
+    /// replayed onto a newer tip, and tip verification reads it back with the commit's ticket.
+    #[test]
+    fn a_replayed_landing_is_named_with_its_gated_base() {
+        let conn = hub::open_in_memory().unwrap();
+        land(&conn, "t.1", "2026-11-01T00:00:00.000Z", &["aaaa"]);
+        conn.execute(
+            "UPDATE tickets SET landed = json_set(landed, '$.gated_base', 'dddd') WHERE id = 't.1'",
+            [],
+        )
+        .unwrap();
+        land(&conn, "t.2", "2026-11-02T00:00:00.000Z", &["bbbb"]);
+        let asked: Vec<Commit> = ["aaaa", "bbbb"]
+            .iter()
+            .map(|c| Commit::new(*c).unwrap())
+            .collect();
+
+        let bases: Vec<Option<String>> = landed_commits(&conn, &asked)
+            .unwrap()
+            .into_iter()
+            .map(|l| l.gated_base.map(|base| base.to_string()))
+            .collect();
+
+        assert_eq!(bases, [Some("dddd".to_owned()), None]);
     }
 
     #[test]

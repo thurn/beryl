@@ -214,23 +214,27 @@ impl TipWork for CheckTipWork {
 /// bad commit.
 pub fn ticketed_landings(ctx: &Context, commits: Vec<CommitPaths>) -> Result<Vec<TipLanding>> {
     let shas: Vec<Commit> = commits.iter().map(|c| c.commit.clone()).collect();
-    let owners: HashMap<Commit, TicketId> = ctx
+    let owners: HashMap<Commit, (TicketId, Option<Commit>)> = ctx
         .hub
         .landed_commits(&shas)?
         .into_iter()
-        .map(|landed| (landed.commit, landed.ticket))
+        .map(|landed| (landed.commit, (landed.ticket, landed.gated_base)))
         .collect();
-    let owner = |i: usize| owners.get(&shas[i]);
+    let owner = |i: usize| owners.get(&shas[i]).map(|(ticket, _)| ticket);
     let ends: Vec<Commit> = (0..shas.len())
         .filter(|&i| i + 1 == shas.len() || owner(i).is_none() || owner(i) != owner(i + 1))
         .map(|i| shas[i].clone())
         .collect();
     Ok(ignite_git::changed::group(commits, &ends)
         .into_iter()
-        .map(|landing| TipLanding {
-            ticket: landing.commits.last().and_then(|c| owners.get(c)).cloned(),
-            commits: landing.commits,
-            paths: landing.paths,
+        .map(|landing| {
+            let owner = landing.commits.last().and_then(|c| owners.get(c));
+            TipLanding {
+                ticket: owner.map(|(ticket, _)| ticket.clone()),
+                gated_base: owner.and_then(|(_, base)| base.clone()),
+                commits: landing.commits,
+                paths: landing.paths,
+            }
         })
         .collect())
 }

@@ -293,6 +293,7 @@ fn a_required_failure_with_multiple_suspects_is_reported_during_a_stall() {
             ticket: Some(ticket("tk.39")),
             commits: vec![commit("abab000")],
             paths: vec!["src/a/main.rs".to_owned()],
+            gated_base: None,
         },
     );
     world
@@ -386,6 +387,7 @@ fn a_search_that_ends_at_a_range_is_reported() {
             ticket: Some(ticket("tk.39")),
             commits: vec![commit("abab000")],
             paths: vec!["src/a/main.rs".to_owned()],
+            gated_base: None,
         },
     );
     world

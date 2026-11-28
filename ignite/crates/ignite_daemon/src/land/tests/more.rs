@@ -27,6 +27,7 @@ fn write_pushing(world: &World, commit: &Commit, at: Option<Timestamp>) -> Landi
                 commits: vec![commit.clone()],
                 files: Vec::new(),
                 note: "the note".to_owned(),
+                gated_base: None,
             },
             fresh: false,
             pressure: None,

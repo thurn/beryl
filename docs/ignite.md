@@ -727,9 +727,9 @@ How the executable is installed and kept current:
   12; see [Landing](#landing)), `repository.green` (unset by default; it must
   differ from `staging` and `master`), which gives tip rounds a build step (see
   [Tip verification](#tip-verification)), and `[revert]` settings `broken_build`
-  (default false) and `stall_minutes` (unset by default, see
-  [A broken build is reverted](#a-broken-build-is-reverted)). Their defaults
-  keep every landing checked on the exact tip.
+  (default false), `replayed` (default false) and `stall_minutes` (unset by
+  default, see [A broken build is reverted](#a-broken-build-is-reverted)). Their
+  defaults keep every landing checked on the exact tip.
 - A setting in `ignite.toml` takes effect when the process that uses it next
   starts and reads the file from the main checkout. `ignite.toml` is not
   Ignite's source, so a change to it builds no release and restarts nothing.
@@ -3162,6 +3162,25 @@ recorded against the check's open regression ticket, which gets a comment
 telling its worker to switch the check back on with the fix. Deferring such a
 check costs nothing while its fix is written, where a stall revert would take a
 product landing out of `master`.
+
+A landing by verdict runs its gate on its tree's base and then pushes the change
+replayed onto the tip without running anything, so the commit on `staging` can
+be a combination that no gate ran. The landing records the base its gate passed
+on as `gated_base` in its landed work when the replay moved it, and the hub
+returns it with each landed commit. With `[revert] replayed = true`, a non-build
+failure, of any check and with no stall, qualifies for a revert when a landing
+between `master` and the tip was replayed over landings that changed what the
+check reads, the check is not already an open regression, and the search ends at
+that replayed landing. Both sides of the combination passed the check (the
+landings before the culprit at the search's last good commit, and the culprit in
+its gate), so the failure says nothing against the check, only that the landing
+on `staging` is not the code its gate passed. The other conditions below still
+apply. The reopened ticket's note says which base its gate passed on and which
+landings it was replayed over, and it lands again with its tree rebased onto the
+tip for real and the gate run there, so the conflict is found before `staging`.
+On 2026-11-28 a landing of phone fixes, pushed over one landing that changed the
+effects its checks read, failed seven phone checks and held `master` for more
+than four hours while regression tickets fixed them one by one.
 
 An eligible failure reverts its culprit when all of these hold, and otherwise
 gets a regression ticket:

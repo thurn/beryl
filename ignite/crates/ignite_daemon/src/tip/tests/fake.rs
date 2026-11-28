@@ -127,6 +127,7 @@ impl FakeWork {
             ticket: Some(ticket(ticket_id)),
             commits: commits.iter().map(|c| commit(c)).collect(),
             paths: paths.iter().map(|p| (*p).to_owned()).collect(),
+            gated_base: None,
         });
     }
 

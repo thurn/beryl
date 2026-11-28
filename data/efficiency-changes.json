@@ -1160,5 +1160,10 @@
     "label": "The Antigravity rule in `.agents/rules/agy-efficiency.md` keeps the prompt cache warm with 240-second `schedule` wakes for at most about 15 minutes of a wait, then ends the turn so that Ignite resumes the worker when its `ignite` command finishes. On 2026-11-28 a Gemini worker on `ENVP2.22` kept one turn open for 5 hours of waits on its test run and landing: 219 model calls, most of them wakes, read 36.4M cached tokens of a 180k-234k conversation against 0.6M fresh input, and the turn ended on the weekly quota",
     "metric": "bead.dollars",
     "expect": "down"
+  },
+  {
+    "label": "A tip round reverts at once (`[revert] replayed`) a landing by verdict whose gate passed on an older base and that was pushed replayed over landings changing what the failing check reads, instead of filing a regression that unproven checks never let the stall rule revert. The landing records that base as `gated_base`. On 2026-11-28 the phone fixes of `TGYYS`, gated on `d9a0a6e` and replayed over `7e97768`, failed seven phone checks and held `master` from 02:59 to past 07:15 while four regression tickets fixed them one at a time; in the 7 days before, 15 regressions had the same shape",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]

@@ -159,8 +159,9 @@ impl TipVerifier {
         check: &TipCheck,
         culprit: &Culprit,
         output: Option<&str>,
+        why: Option<&str>,
     ) -> Handled {
-        match self.revert(ctx, tip, check, culprit, output) {
+        match self.revert(ctx, tip, check, culprit, output, why) {
             Ok(handled) => handled,
             Err(why) => {
                 eprintln!(
@@ -172,7 +173,8 @@ impl TipVerifier {
         }
     }
 
-    /// [`TipVerifier::try_revert`] with the reason when nothing was reverted.
+    /// [`TipVerifier::try_revert`] with the reason when nothing was reverted. `why`, when
+    /// given, opens the culprit's output on its reopened ticket.
     fn revert(
         &mut self,
         ctx: &Context,
@@ -180,6 +182,7 @@ impl TipVerifier {
         check: &TipCheck,
         culprit: &Culprit,
         output: Option<&str>,
+        why: Option<&str>,
     ) -> Result<Handled, String> {
         let ([landing], CulpritSearch::OneCandidate | CulpritSearch::Bisected { .. }) =
             (culprit.suspects.as_slice(), &culprit.search)
@@ -258,7 +261,10 @@ impl TipVerifier {
             // A later landing was undone only because it uses what the culprit added, so its
             // ticket says so before the check's output.
             let output = if undone.commits == landing.commits {
-                output.clone()
+                match why {
+                    Some(why) => format!("{why}\n\n{output}"),
+                    None => output.clone(),
+                }
             } else {
                 format!(
                     "This landing was undone together with {}, which {} blamed: it uses what \

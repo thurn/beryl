@@ -243,6 +243,7 @@ mod tests {
                 commits: vec![Commit::new("dddd").unwrap()],
                 files: vec!["a.rs".to_owned()],
                 note: "fix".to_owned(),
+                gated_base: None,
             }),
         );
 
@@ -284,6 +285,7 @@ mod tests {
                 commits: vec![Commit::new("dddd").unwrap()],
                 files: vec!["a.rs".to_owned()],
                 note: "fix".to_owned(),
+                gated_base: None,
             }),
         );
 

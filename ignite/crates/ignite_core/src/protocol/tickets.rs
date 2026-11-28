@@ -114,6 +114,12 @@ pub struct LandedWork {
     pub commits: Vec<Commit>,
     pub files: Vec<String>,
     pub note: String,
+    /// The base commit the landing's gate passed on, recorded when the landing replayed its
+    /// change onto a newer tip and pushed it without running the gate again (landing by
+    /// verdict). The commits between this base and the pushed commit's parent are the ones the
+    /// gate never saw beside the change. `None` when the gate ran on the pushed commit's parent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gated_base: Option<Commit>,
 }
 
 /// An improvement ticket's estimated saving.

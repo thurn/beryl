@@ -597,6 +597,7 @@ impl Landing {
                     .map_err(io)?,
                 files: changed.clone(),
                 note: note.clone(),
+                gated_base: None,
             };
             let mut record = LandingRecord {
                 landed: by_verdict::landed_message(

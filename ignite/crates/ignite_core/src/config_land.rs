@@ -53,6 +53,13 @@ pub struct Revert {
     /// trigger a revert. Unset leaves those failures to regression tickets.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stall_minutes: Option<u64>,
+    /// A tip round reverts, without waiting for a stall, a landing whose gate passed on an older
+    /// base and that was replayed over landings changing what the failing check reads, when the
+    /// check passes just before it and fails with it. The gate never ran that combination of
+    /// commits, so the revert takes `staging` back to commits that were each checked, and the
+    /// reopened ticket lands again through a gate on the real tip.
+    #[serde(default)]
+    pub replayed: bool,
 }
 
 #[cfg(test)]

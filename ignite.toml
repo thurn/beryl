@@ -160,9 +160,14 @@ rules = [
 # agent takes tens of minutes, so a tip round reverts the one landing that broke a build check.
 # A confirmed culprit of a required check can also be reverted once master has been held back
 # for two hours, the same threshold upkeep uses to escalate master lag.
+# `replayed` reverts at once a landing whose gate passed on an older base and that was pushed
+# replayed over landings changing what the failing check reads: nobody gated that combination.
+# Set 2026-11-28 (was unset): in the 7 days before, 15 regressions had this shape, and one held
+# master for over four hours. Unset it to go back to reporting them as regressions.
 [revert]
 broken_build = true
 stall_minutes = 120
+replayed = true
 
 [self_update]
 quiet_seconds = 5

@@ -459,6 +459,10 @@ pub struct LandingsRequest {
 pub struct LandedCommit {
     pub commit: Commit,
     pub ticket: TicketId,
+    /// The base the landing's gate passed on, when the landing pushed its change replayed onto
+    /// a newer tip than that (see [`LandedWork::gated_base`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gated_base: Option<Commit>,
 }
 
 /// The requested commits that a ticket's landing recorded; a commit no landing recorded, such

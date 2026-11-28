@@ -427,6 +427,10 @@ impl Landing {
                     .map_err(io)?,
                 files,
                 note: note.clone(),
+                // The gate passed on `at.onto`; a replay onto a newer tip pushes a combination
+                // with the commits since then that no gate ran, which a tip round may revert
+                // (`[revert] replayed`).
+                gated_base: (at.onto != onto).then(|| at.onto.clone()),
             };
             let mut record = LandingRecord {
                 landed: landed_message(

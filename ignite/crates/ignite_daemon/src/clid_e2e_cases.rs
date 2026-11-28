@@ -663,6 +663,7 @@ fn cli_e2e_four_workers_on_two_providers_start_with_room_and_leave_at_landing() 
                     commits: vec!["abc1234".parse().unwrap()],
                     files: Vec::new(),
                     note: "Landed the test ticket.".to_owned(),
+                    gated_base: None,
                 },
                 fresh: false,
                 pressure: None,
