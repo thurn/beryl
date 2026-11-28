@@ -277,7 +277,8 @@ impl<L: Layout> Runner<L> {
             (controller, index)
         } else {
             debug_assert_eq!(zone, Zone::Graveyard);
-            let owner = object.owner();
+            // A shared graveyard is every player's: the first seat's names it.
+            let owner = object.owner().unwrap_or(Seat::P0);
             let index = self
                 .s
                 .graveyard(owner)

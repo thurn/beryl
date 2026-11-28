@@ -322,7 +322,7 @@ impl RolloutPolicy {
                     match d.prompt.purpose {
                         Purpose::Crew => -p.value(slot),
                         Purpose::ExileCost => -p.in_hand(slot),
-                        _ if o.zone() == Zone::Hand && o.owner() == p.me => -p.in_hand(slot),
+                        _ if o.zone() == Zone::Hand && o.owner() == Some(p.me) => -p.in_hand(slot),
                         _ => p.value(slot),
                     }
                 }),

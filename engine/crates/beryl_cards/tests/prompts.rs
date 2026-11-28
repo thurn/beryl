@@ -149,7 +149,16 @@ fn a_look_keeps_its_cards_from_the_yes_or_no_through_the_pick() {
             let mut about = beryl_engine::Slot::all().filter(|&slot| (d.about).contains(slot));
             let first = s.object(about.next().expect("cards to look at"));
             assert!(matches!(first.zone(), Zone::Library | Zone::Hand));
-            assert!((d.about & !s.zone(ZoneKey::Of(first.owner(), first.zone()))).is_empty());
+            assert!(
+                (d.about
+                    & !s.zone(ZoneKey::Of(
+                        first
+                            .owner()
+                            .expect("a card in a hand or library of its own"),
+                        first.zone()
+                    )))
+                .is_empty()
+            );
             if d.prompt.part == Part::Whether {
                 whether = Some(d.about);
             } else {

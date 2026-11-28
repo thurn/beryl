@@ -94,7 +94,7 @@ pub(crate) fn decision<L: Layout>(
         Pending::ArrangePiles { group } => Ok(piles::decision(s, group)),
         // The question is about the land entering, for this much life.
         Pending::EnterPayingLife { slot, life } => Ok(options(
-            s.object(slot).owner(),
+            crate::replacement::entering_player(s, slot, None),
             DecisionKind::YesNo,
             &[Opt::Yes, Opt::No],
             Prompt::new(Purpose::PayLife).count(life),
@@ -147,9 +147,12 @@ pub(crate) fn decision<L: Layout>(
             slot, remaining, ..
         } => mana::mana_price_decision(s, t, sink, slot, remaining),
         // The question is about the land entering.
-        Pending::EnterChoosing { slot, kind, .. } => {
-            catalog::decision(t, s.object(slot).owner(), kind, Bitboard::single(slot))
-        }
+        Pending::EnterChoosing { slot, kind, .. } => catalog::decision(
+            t,
+            crate::replacement::entering_player(s, slot, None),
+            kind,
+            Bitboard::single(slot),
+        ),
         Pending::DeclareAttackers { attacker } => combat::attack_decision(s, t, attacker),
         Pending::PayingToAttack { remaining } => {
             combat::attack_cost::decision(s, t, sink, remaining)

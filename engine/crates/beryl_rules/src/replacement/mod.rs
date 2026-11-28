@@ -49,7 +49,8 @@ pub(crate) mod turns;
 pub(crate) use draws::{DrawReplacement, draw, dredge, dredges};
 pub(crate) use enchant::{Enchants, enchants};
 pub(crate) use entering::{
-    chosen_to_enter, controls_at_least, few_other_lands, life_to_enter, pay_life_to_enter,
+    chosen_to_enter, controls_at_least, entering_player, few_other_lands, life_to_enter,
+    pay_life_to_enter,
 };
 use entering::{entering, entering_copy, entering_destinations, entering_values, selected_copy};
 

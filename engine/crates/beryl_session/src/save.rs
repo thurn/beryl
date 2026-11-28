@@ -8,7 +8,7 @@
 use beryl_engine::card::{AbilityKind, CastingOption, ChosenKind, FaceAbility, ManaColor};
 use beryl_engine::chosen::ChosenValue;
 use beryl_engine::state::StackItem;
-use beryl_engine::{Choice, Decision, GameTable, Layout, Opt, State, TurnStep, Zone};
+use beryl_engine::{Choice, Decision, GameTable, Layout, Opt, Seat, State, TurnStep, Zone};
 use serde::{Deserialize, Serialize};
 
 use crate::perturb;
@@ -326,9 +326,12 @@ fn in_order<L: Layout>(
         let o = s.object(slot);
         match o.zone() {
             Zone::Battlefield => Some((0, s.battlefield().iter().position(|&b| b == slot)?)),
+            // A shared graveyard, whose cards have no owner, is saved as the first seat's.
             Zone::Graveyard => Some((
-                1 + o.owner().index(),
-                s.graveyard(o.owner()).iter().position(|&g| g == slot)?,
+                1 + o.owner().unwrap_or(Seat::P0).index(),
+                s.graveyard(o.owner().unwrap_or(Seat::P0))
+                    .iter()
+                    .position(|&g| g == slot)?,
             )),
             Zone::Stack => Some((
                 3,

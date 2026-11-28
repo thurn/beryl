@@ -2,7 +2,7 @@
 
 use beryl_engine::card::{FaceIx, Types};
 use beryl_engine::state::{Flag, Memo};
-use beryl_engine::{GameTable, Layout, State, Zone};
+use beryl_engine::{GameTable, Layout, Seat, State, Zone};
 use serde::{Deserialize, Serialize};
 
 use super::{is_false, is_zero};
@@ -176,10 +176,15 @@ impl Obj {
             name: public_name(slot).to_owned(),
             zone: o.zone().into(),
             controller: controller.get(),
-            owner: (o.owner() != controller).then_some(o.owner().get()),
+            // A card with no owner, in a shared library or graveyard, records none.
+            owner: o
+                .owner()
+                .filter(|&owner| owner != controller)
+                .map(Seat::get),
             tapped: o.is_tapped(),
             shown: matches!(o.zone(), Zone::Hand | Zone::Library)
-                && s.opponents_of(o.owner()).any(|p| s.knows(p, slot)),
+                && s.opponents_of(o.owner().unwrap_or(controller))
+                    .any(|p| s.knows(p, slot)),
             before_v5: false,
             token: (permanent || o.zone() == Zone::Stack) && o.is_token(),
             card: (!hidden && !o.is_token() && o.flags().has(Flag::Copy))

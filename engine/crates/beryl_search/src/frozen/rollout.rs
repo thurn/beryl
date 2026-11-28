@@ -150,7 +150,7 @@ impl RolloutPolicy {
                     match d.prompt.purpose {
                         Purpose::Crew => -p.value(slot),
                         Purpose::ExileCost => -p.in_hand(slot),
-                        _ if o.zone() == Zone::Hand && o.owner() == p.me => -p.in_hand(slot),
+                        _ if o.zone() == Zone::Hand && o.owner() == Some(p.me) => -p.in_hand(slot),
                         _ => p.value(slot),
                     }
                 })
@@ -610,7 +610,9 @@ impl Policy<'_> {
                     let controller = if matches!(o.zone(), Zone::Battlefield | Zone::Stack) {
                         self.obs.controller(slot)
                     } else {
-                        o.owner()
+                        // The frozen policy reads a card with no owner, in a shared library
+                        // or graveyard, as the first seat's, as it did when it was frozen.
+                        o.owner().unwrap_or(Seat::P0)
                     };
                     (controller, self.value(slot))
                 }

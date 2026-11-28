@@ -1879,9 +1879,11 @@ fixed in the same session. Newest first.
   counts as zero. Prevention: `beryl_cards/tests/shared_zones.rs` covers
   `Players::ControllerOf` before and after a move from a shared zone,
   `Effect::ForEachPlayer` taking from a shared zone, and `State::defined_pt` in
-  a shared graveyard and library. No type prevents reading `State::controller`
-  on an ownerless slot; callers on off-battlefield cards must check
-  `State::has_owner`.
+  a shared graveyard and library. `Object::owner` now returns `Option<Seat>`,
+  `None` for a card in a shared zone that no player has claimed, so every reader
+  of an owner must say what "its owner" means for such a card. No type yet
+  prevents reading `State::controller` or `State::base_controller` on an
+  ownerless slot, which still return the `Seat::P0` placeholder.
 
 - **`without_floating` panicked on a source that can sacrifice itself for
   mana.** `beryl_session::game::playing::without_floating` asserts that every

@@ -1861,7 +1861,7 @@ pub fn guarded<L: Layout>(
                 && matches!(&d.candidates, Candidates::Objects(slots) if !slots.is_empty())
                 && d.object_candidates().all(|slot| {
                     let object = obs.object(slot);
-                    object.zone() == Zone::Hand && object.owner() == d.player
+                    object.zone() == Zone::Hand && object.owner() == Some(d.player)
                 })
         }
         _ => false,

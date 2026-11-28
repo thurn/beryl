@@ -637,9 +637,8 @@ fn passes<L: Layout>(
         Filter::SubtypeWord(word) => d.subtypes.contains(t.subtypes(), word.read(&by.words)),
         Filter::ColorWords(colors) => d.colors.intersects(colors.read(&by.words)),
         Filter::Whose(players) => filter::is_for(players, d.controller, by.you),
-        Filter::Owned(players) => {
-            filter::is_for(players, s.object(s.battlefield()[i]).owner(), by.you)
-        }
+        Filter::Owned(players) => (s.object(s.battlefield()[i]).owner())
+            .is_some_and(|o| filter::is_for(players, o, by.you)),
         Filter::Tapped => s.object(s.battlefield()[i]).is_tapped(),
         Filter::WithCounter(kind) => {
             !beryl_kernel::Number::is_zero(s.counters_of(s.battlefield()[i], kind))

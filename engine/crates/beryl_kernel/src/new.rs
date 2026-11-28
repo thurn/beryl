@@ -97,7 +97,7 @@ impl<L: Layout> State<L> {
                 *s.object_mut(slot) = Object {
                     card,
                     zone: Zone::Library,
-                    owner: player,
+                    owner: Some(player),
                     base_controller: player,
                     ..Object::EMPTY
                 };
@@ -115,7 +115,7 @@ impl<L: Layout> State<L> {
 
     /// [`State::deal`] for a table of the shared-deck format: its one deck is dealt into the
     /// slots of a shared deck ([`SlotId::shared_deck`]), every card in the shared library and in
-    /// both players' sets of it, with no owner ([`Seat::P0`], [`State::has_owner`]). The
+    /// both players' sets of it, with no owner ([`Object::owner`] is `None`). The
     /// permutation that deals them is the one opening shuffle, as for a deck of each player's.
     #[cold]
     fn deal_shared(t: &GameTable, seed: u64, profile: Profile) -> Result<State<L>, Misfit> {
@@ -142,7 +142,7 @@ impl<L: Layout> State<L> {
             *s.object_mut(slot) = Object {
                 card,
                 zone: Zone::Library,
-                owner: Seat::P0,
+                owner: None,
                 base_controller: Seat::P0,
                 ..Object::EMPTY
             };
@@ -207,19 +207,21 @@ impl<L: Layout> State<L> {
                 // a card in the shared library has none.
                 let (zone, owner) = match (kept_exiled, shared) {
                     (true, true) => (Zone::Exile, previous.owner),
-                    (true, false) => (Zone::Exile, player),
-                    (false, true) => (Zone::Library, Seat::P0),
-                    (false, false) => (Zone::Library, player),
+                    (true, false) => (Zone::Exile, Some(player)),
+                    (false, true) => (Zone::Library, None),
+                    (false, false) => (Zone::Library, Some(player)),
                 };
+                // A card with no owner is kept in the shared zones under the first seat.
+                let pile = owner.unwrap_or(Seat::P0);
                 *next.object_mut(slot) = Object {
                     card: self.card_really_is(slot),
                     zone,
                     owner,
-                    base_controller: owner,
+                    base_controller: pile,
                     ..Object::EMPTY
                 };
                 if kept_exiled {
-                    next.zones.members[owner.index()][zone.index()].insert(slot);
+                    next.zones.members[pile.index()][zone.index()].insert(slot);
                     for known in next.knowledge.as_mut_slice() {
                         known.insert(slot);
                     }
@@ -229,8 +231,8 @@ impl<L: Layout> State<L> {
                         members[zone.index()].insert(slot);
                     }
                 } else {
-                    next.zones.members[owner.index()][zone.index()].insert(slot);
-                    next.zones.library.push(owner.index(), slot)?;
+                    next.zones.members[pile.index()][zone.index()].insert(slot);
+                    next.zones.library.push(pile.index(), slot)?;
                 }
             }
         }

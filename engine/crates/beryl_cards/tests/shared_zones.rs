@@ -135,7 +135,7 @@ fn either_player_casts_a_card_given_flashback_from_the_shared_graveyard() {
         );
         assert_eq!(Game::spell_controller(&g.s, bolt), Some(player));
         // The caster took the card out of the shared graveyard, and owns it on the stack.
-        assert_eq!(g.s.object(bolt).owner(), player);
+        assert_eq!(g.s.object(bolt).owner(), Some(player));
     }
 }
 
@@ -163,7 +163,7 @@ fn either_player_casts_a_card_with_escape_from_the_shared_graveyard() {
             |_, d| Game::cast(d, bolt),
             |s| {
                 caster = caster.or(Game::spell_controller(s, bolt));
-                owner = owner.or(caster.map(|_| s.object(bolt).owner()));
+                owner = owner.or(caster.and_then(|_| s.object(bolt).owner()));
                 caster.is_some() && s.stack().is_empty()
             },
         );
@@ -174,7 +174,7 @@ fn either_player_casts_a_card_with_escape_from_the_shared_graveyard() {
             (g.s.in_zone(Zone::Exile)).filter(|slot| g.s.definition_name(&g.t, slot) == ISLAND);
         assert_eq!(exiled.count(), 3);
         // The cards exiled to pay the escape cost are the payer's.
-        assert!(exiled.all(|slot| g.s.object(slot).owner() == player));
+        assert!(exiled.all(|slot| g.s.object(slot).owner() == Some(player)));
     }
 }
 
@@ -364,8 +364,7 @@ impl Position {
 
 /// The owner of the card in `slot`, which must have one.
 fn owner(s: &State, slot: Slot) -> Seat {
-    assert!(s.has_owner(slot), "the card has an owner");
-    s.object(slot).owner()
+    s.object(slot).owner().expect("the card has an owner")
 }
 
 #[test]

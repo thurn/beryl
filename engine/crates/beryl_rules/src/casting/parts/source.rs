@@ -60,7 +60,11 @@ pub(super) fn pay_with_source<L: Layout>(
             event::move_one(s, t, sink, source.slot, Zone::Graveyard, Reason::Sacrifice)
         }
         CostAction::Discard => {
-            let discarder = s.object(source.slot).owner();
+            // A card with no owner is in a shared library or graveyard, not in a hand, so it
+            // cannot be discarded.
+            let Some(discarder) = s.object(source.slot).owner() else {
+                return Ok(());
+            };
             event::move_one_by(
                 s,
                 t,

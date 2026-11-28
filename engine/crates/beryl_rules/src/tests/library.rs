@@ -379,7 +379,7 @@ fn any_card_is_manifested_for_any_player() {
     crate::continuous::layers::refresh(&mut s, &t, &mut x.events).unwrap();
     let o = s.object(card);
     assert_eq!((o.zone(), o.face()), (Zone::Battlefield, FaceIx::DOWN));
-    assert_eq!((o.owner(), s.controller(card)), (p, p.opponent()));
+    assert_eq!((o.owner(), s.controller(card)), (Some(p), p.opponent()));
     assert_eq!(s.derived(card).types, Types::CREATURE);
     // Its owner knew it in their hand, and still does.
     assert!(s.who_knows(card).contains(p));

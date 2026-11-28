@@ -339,7 +339,7 @@ mod tests {
                 .move_object(&mut Sink::off(), slot, Zone::Graveyard, Place::Top)
                 .unwrap();
         }
-        let owner = state.object(card).owner();
+        let owner = state.object(card).pile_seat();
         assert_eq!(
             state.cards_in(owner, Graveyard).slots(),
             Bitboard::single(card)
@@ -366,7 +366,7 @@ mod tests {
             .move_object(&mut Sink::off(), slot, Zone::Library, Place::Top)
             .unwrap();
         let current = state.object_ref(slot);
-        let owner = state.object(slot).owner();
+        let owner = state.object(slot).pile_seat();
         assert_eq!(
             state.move_object(&mut Sink::off(), slot, Zone::Graveyard, Place::Top),
             Err(Full)

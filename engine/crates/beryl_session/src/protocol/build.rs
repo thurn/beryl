@@ -399,11 +399,11 @@ pub(super) fn face_name<L: Layout>(
 /// The owner and controller of the object in `slot`, as the viewer sees them. A card in a
 /// shared library or graveyard has no owner: its record names one fixed side for both.
 fn owner_and_controller<L: Layout>(obs: Observation<'_, L>, slot: L::Slot) -> (Side, Side) {
-    if obs.shown().has_owner(slot) {
-        let o = obs.object(slot);
-        (side(obs, o.owner()), side(obs, obs.controller(slot)))
-    } else {
-        (SHARED_PILE_SIDE, SHARED_PILE_SIDE)
+    match obs.object(slot).owner() {
+        Some(owner) if !obs.shown().in_shared_zone(slot) => {
+            (side(obs, owner), side(obs, obs.controller(slot)))
+        }
+        _ => (SHARED_PILE_SIDE, SHARED_PILE_SIDE),
     }
 }
 

@@ -64,10 +64,10 @@ pub(crate) fn prompt_view<L: Layout>(
             // player who decides.
             player: side(
                 obs,
-                if obs.shown().has_owner(slot) {
-                    card.owner()
-                } else {
+                if obs.shown().in_shared_zone(slot) {
                     d.decider
+                } else {
+                    card.owner().unwrap_or(d.decider)
                 },
             ),
             zone: card.zone().into(),

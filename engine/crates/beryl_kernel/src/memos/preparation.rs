@@ -92,7 +92,7 @@ impl<L: Layout> State<L> {
     ///
     /// [CR 112.2]: https://yawgatog.com/resources/magic-rules/#R1122
     pub fn set_prepare_spell_owner(&mut self, spell: Spell<L>, owner: Seat) {
-        self.object_mut(spell.slot()).owner = owner;
+        self.object_mut(spell.slot()).owner = Some(owner);
     }
 
     /// Removes the designation and any copy still in exile. A copy already on the stack

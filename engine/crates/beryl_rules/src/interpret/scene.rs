@@ -473,13 +473,7 @@ impl<L: Layout> Scene<'_, L> {
             // shared library or graveyard has none, and "its owner" there is the player who
             // performs the instruction.
             Players::OwnerOf(objects) => {
-                let owner = |s| {
-                    if self.s.has_owner(s) {
-                        self.s.object(s).owner()
-                    } else {
-                        self.taker()
-                    }
-                };
+                let owner = |s| self.s.object(s).owner().unwrap_or_else(|| self.taker());
                 let mut who = self.objects(objects).fold(PlayerSet::NOBODY, |mut who, s| {
                     who.insert(owner(s));
                     who

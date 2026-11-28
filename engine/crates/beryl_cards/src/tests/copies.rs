@@ -78,7 +78,7 @@ fn a_card_copying_a_transformed_back_face_has_mana_value_zero() {
             .battlefield()
             .iter()
             .copied()
-            .find(|&slot| state.object(slot).owner() == seat)
+            .find(|&slot| state.object(slot).owner() == Some(seat))
             .unwrap()
     });
     let source = state.card_behind(copy).unwrap();

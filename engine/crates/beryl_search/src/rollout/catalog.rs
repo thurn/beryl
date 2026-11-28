@@ -133,7 +133,7 @@ fn card_name<L: Layout>(p: &Policy<'_, L>) -> u8 {
             .filter(|&slot| {
                 let o = obs.object(slot);
                 o.zone() != Zone::Library
-                    && (obs.shares_zones() || o.owner() == owner)
+                    && (obs.shares_zones() || o.owner() == Some(owner))
                     && obs.card(slot) == Some(card)
             })
             .count()

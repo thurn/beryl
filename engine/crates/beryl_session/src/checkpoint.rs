@@ -644,7 +644,8 @@ fn permanent<L: Layout>(
     let class_level = s.class_level(slot);
     Permanent {
         card: name(t, s, slot),
-        owner: o.owner().get(),
+        // Every permanent has an owner: the battlefield is never shared.
+        owner: o.owner().unwrap_or(s.base_controller(slot)).get(),
         controller: s.base_controller(slot).get(),
         face,
         token: o.is_token(),

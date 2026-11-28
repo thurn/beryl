@@ -349,7 +349,7 @@ fn a_subgame_carries_library_cards_from_the_pool_and_offers_no_wish() {
     );
     assert!(LargeSlot::all().any(|slot| {
         let object = sampled.object(slot);
-        object.owner() == player
+        object.owner() == Some(player)
             && matches!(object.zone(), Zone::Library | Zone::Hand)
             && sampled.definition_name(&table, slot) == WISH.name
     }));

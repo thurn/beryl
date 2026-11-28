@@ -99,6 +99,29 @@ pub(super) fn entering_destinations<L: Layout>(
 ///
 /// [CR 306.5b]: https://yawgatog.com/resources/magic-rules/#R3065b
 /// [CR 614.12a]: https://yawgatog.com/resources/magic-rules/#R61412a
+/// The player a card enters the battlefield under, as its entering replacements and the
+/// questions they ask read it: the controller the move names, or else its owner (see
+/// [CR 110.2]): "A permanent's owner is the same as the owner of the card that represents it
+/// (unless it's a token; see rule 111.2). A permanent's controller is, by default, the player
+/// under whose control it entered the battlefield."
+///
+/// # Panics
+///
+/// For a card in a shared library or graveyard that no player has claimed. The zone-change
+/// pipeline claims each such card for its taker before it prepares the move
+/// (`event::shared::claim_taken`), so every card entering from a shared zone has an owner.
+///
+/// [CR 110.2]: https://yawgatog.com/resources/magic-rules/#R1102
+pub(crate) fn entering_player<L: Layout>(
+    s: &State<L>,
+    slot: L::Slot,
+    controller: Option<Seat>,
+) -> Seat {
+    controller
+        .or_else(|| s.object(slot).owner())
+        .expect("a card entering from a shared zone was claimed for its taker")
+}
+
 #[allow(
     clippy::disallowed_methods,
     reason = "reads the face the permanent enters with (see CR 614.12)"
@@ -111,7 +134,7 @@ pub(super) fn entering<L: Layout>(
     mut entry: Entry<L>,
     copied: Option<Copiable<L>>,
 ) -> Result<Entry<L>, Full> {
-    let controller = entry.controller.unwrap_or(s.object(slot).owner());
+    let controller = entering_player(s, slot, entry.controller);
     let face = entering_values(s, t, slot, entry, copied).face(t);
     // Found at the first replacement of entering: most permanents have none.
     let mut lost = None;
@@ -320,7 +343,7 @@ fn copy_to_enter<L: Layout>(
     if layers::lost_entering(s, t, slot, entry, face, None)?.contains(AbilityIx::new(n)) {
         return Ok(None);
     }
-    let player = entry.controller.unwrap_or(s.object(slot).owner());
+    let player = entering_player(s, slot, entry.controller);
     let words = crate::card::Words::NONE;
     let mut options = <L::Queue<Opt<L>, OPTIONS>>::default();
     options.push(Opt::Done)?;
@@ -441,7 +464,7 @@ pub(crate) fn pay_life_to_enter<L: Layout>(
 ) -> Result<(), Full> {
     let copied = selected_copy(sink, slot);
     let values = entering_values(s, t, slot, entry, copied);
-    let player = entry.controller.unwrap_or(s.object(slot).owner());
+    let player = entering_player(s, slot, entry.controller);
     if let Some((ability, n)) = life_asked(values.face(t))
         && (copied.is_some() || s.has_ability(slot, ability))
     {

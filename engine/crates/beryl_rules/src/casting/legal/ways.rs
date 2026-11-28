@@ -157,7 +157,7 @@ pub(super) fn can_fuse<L: Layout>(
     def.shape.has_fuse() && {
         let object = s.object(slot);
         object.zone() == Zone::Hand
-            && object.owner() == player
+            && object.owner() == Some(player)
             && matches!(def.face(FaceIx::FUSED).casting, [CastingOption::Fuse])
     }
 }

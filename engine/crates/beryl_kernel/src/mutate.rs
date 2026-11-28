@@ -376,7 +376,7 @@ impl<L: Layout> State<L> {
             return Err(Full);
         }
         o.card = values.card();
-        o.owner = owner;
+        o.owner = Some(owner);
         o.base_controller = owner;
         o.flags = ObjectFlags::NONE;
         o.flags.set(Flag::Token, true);

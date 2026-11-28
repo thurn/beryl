@@ -438,7 +438,10 @@ impl InTable {
     fn objects(&self, s: &State) -> Vec<(beryl_engine::Slot, CardIx)> {
         let mut found = Vec::new();
         let mut look = |slot| {
-            let owner = s.object(slot).owner();
+            // A permanent or a spell always has an owner.
+            let Some(owner) = s.object(slot).owner() else {
+                return;
+            };
             if let Some(stand_in) = Observation::new(s, owner)
                 .card(slot)
                 .and_then(|card| self.stand_in_of(card))

@@ -57,7 +57,7 @@ impl<L: Layout> State<L> {
     /// zone." Zones are kept by owner, so that holds by construction.
     ///
     /// In the shared-deck format a card that enters the shared library or graveyard has no
-    /// owner again: its owner and base controller become [`Seat::P0`] once the move has done
+    /// owner again: its owner becomes `None` and its base controller [`Seat::P0`] once the move has done
     /// what depends on who owned it ([`State::claim`]).
     pub fn move_object(
         &mut self,
@@ -119,7 +119,7 @@ impl<L: Layout> State<L> {
         if o.face == FaceIx::DOWN && !stays_down {
             // CR 708.9: "If a face-down spell moves from the stack to any zone other than
             // the battlefield, its owner must reveal it to all players as they move it."
-            self.reveal(sink, o.owner, slot);
+            self.reveal(sink, o.pile_seat(), slot);
         }
         let from = o.zone;
         let old_incarnation = o.incarnation;
@@ -145,7 +145,7 @@ impl<L: Layout> State<L> {
         let o = self.object_mut(slot);
         o.incarnation = incarnation;
         o.zone = to;
-        o.base_controller = o.owner;
+        o.base_controller = o.pile_seat();
         o.flags = o.flags.kept_across_zones();
         o.damage = <L::Count as crate::layout::Number>::ZERO;
         // See [CR 122.2](https://yawgatog.com/resources/magic-rules/#R1222): "Counters on an
@@ -157,7 +157,7 @@ impl<L: Layout> State<L> {
         // Adventure, an adventurer card has only its normal characteristics."
         o.face = FaceIx::FRONT;
         o.combat = CombatRole::None;
-        let owner = o.owner.index();
+        let owner = o.pile_seat().index();
         let enters_shared = SHARED && is_shared(to);
         if enters_shared {
             enter_shared(self, slot, to, place)?;
@@ -308,8 +308,8 @@ impl<L: Layout> State<L> {
     ) -> Result<L::Slot, Full> {
         let o = self.object(card);
         let shared = self.shares_zones();
-        let (owner, zone) = (if shared { arranger } else { o.owner }, o.zone);
-        let list = self.pile_of(o.owner);
+        let (owner, zone) = (if shared { arranger } else { o.pile_seat() }, o.zone);
+        let list = self.pile_of(o.pile_seat());
         let piles = match zone {
             Zone::Graveyard => &mut self.zones.graveyard,
             Zone::Library => &mut self.zones.library,
@@ -407,9 +407,8 @@ impl<L: Layout> State<L> {
     /// goes back to a shared zone. The shared-deck format: "The 'owner' of a card on the stack or
     /// permanent on the battlefield is considered to be the person who cast it."
     ///
-    /// The kernel does not check, as the card leaves, that it was claimed: a card claimed by
-    /// [`Seat::P0`] looks the same as one never claimed, so the rules' zone-change pipeline,
-    /// which knows who takes each card, makes that check.
+    /// The kernel does not check, as the card leaves, that it was claimed: the rules'
+    /// zone-change pipeline, which knows who takes each card, makes that check.
     #[cold]
     #[inline(never)]
     pub fn claim(&mut self, slot: L::Slot, player: Seat) {
@@ -418,7 +417,7 @@ impl<L: Layout> State<L> {
             "a card claimed outside a shared zone"
         );
         let o = self.object_mut(slot);
-        o.owner = player;
+        o.owner = Some(player);
         o.base_controller = player;
     }
 
@@ -429,7 +428,7 @@ impl<L: Layout> State<L> {
     #[inline(never)]
     pub fn disown(&mut self, slot: L::Slot) {
         let o = self.object_mut(slot);
-        o.owner = Seat::P0;
+        o.owner = None;
         o.base_controller = Seat::P0;
     }
 
@@ -438,7 +437,7 @@ impl<L: Layout> State<L> {
     /// knows where they put each card.
     pub fn reorder_library(&mut self, card: CardIn<Library, L>, place: Place) -> Result<(), Full> {
         let slot = card.slot();
-        let list = self.pile_of(self.objects[slot.index()].owner);
+        let list = self.pile_of(self.objects[slot.index()].pile_seat());
         let library = &mut self.zones.library;
         let i = library
             .position(list, slot)
@@ -608,7 +607,7 @@ impl<L: Layout> State<L> {
     /// (see CR 708.5). Forget the slot bindings for that hand, as when it moves an
     /// unrevealed card to a library (see CR 402.3).
     pub fn hide_choice_from_hand(&mut self, moved: L::Slot) {
-        let owner = self.object(moved).owner;
+        let owner = self.object(moved).pile_seat();
         forget_hand(self, owner, moved);
     }
 
@@ -654,7 +653,7 @@ fn leave<L: Layout, const SHARED: bool>(s: &mut State<L>, slot: L::Slot, to: Zon
         leave_shared(s, slot, o.zone);
         return;
     }
-    let owner = o.owner.index();
+    let owner = o.pile_seat().index();
     match o.zone {
         Zone::Library => s.zones.library.remove_item(owner, slot),
         Zone::Graveyard => {

@@ -192,7 +192,8 @@ fn phasing_preserves_a_permanents_turn_trackers() {
     assert_eq!(s.trackers(a), tracked);
     assert_eq!(s.check_invariants(&t), Ok(()));
 
-    s.phase_in(s.phasing_in_for(s.object(a).owner())).unwrap();
+    s.phase_in(s.phasing_in_for(s.object(a).owner().unwrap()))
+        .unwrap();
     derive(&t, &mut s);
     assert_eq!(s.trackers(a), tracked);
     assert_eq!(s.check_invariants(&t), Ok(()));

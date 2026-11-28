@@ -105,7 +105,10 @@ pub fn exile_and_return_transformed<L: Layout>(
     if game.state.object(slot).zone() != Zone::Exile {
         return Ok(());
     }
-    let owner = game.state.object(slot).owner();
+    // Exile is never shared, so the exiled card has an owner.
+    let Some(owner) = game.state.object(slot).owner() else {
+        return Ok(());
+    };
     return_transformed(game, owner, game.state.object_ref(slot))
 }
 
@@ -130,11 +133,7 @@ pub fn return_transformed<L: Layout>(
     if !game.state.is_current(card) {
         return Ok(());
     }
-    let owner = if game.state.has_owner(card.slot) {
-        game.state.object(card.slot).owner()
-    } else {
-        player
-    };
+    let owner = game.state.object(card.slot).owner().unwrap_or(player);
     let values = game.state.copiable(card.slot);
     if !values.shape(game.table).is_double_faced() {
         return Ok(());

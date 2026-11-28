@@ -280,7 +280,7 @@ fn a_copy_has_the_copiable_values_and_never_a_hidden_card() {
     // CR 707.2: the copy has what the original has.
     let copy = copy_of(&t, &mut s, Seat::P1, bear, false);
     assert_eq!(s.copiable(copy), s.copiable(bear));
-    assert_eq!(s.object(copy).owner(), Seat::P1);
+    assert_eq!(s.object(copy).owner(), Some(Seat::P1));
 
     // CR 707.9b: an exception is part of the copy's own copiable values, so a copy of the
     // copy has it too.
@@ -462,7 +462,7 @@ fn a_controller_is_a_permanents_a_spells_or_else_the_owner() {
     s.board().set_controller(bear, Seat::P1);
     derive(&t, &mut s, 0);
     assert_eq!(s.controller(bear), Seat::P1);
-    assert_eq!(s.object(bear).owner(), Seat::P0);
+    assert_eq!(s.object(bear).owner(), Some(Seat::P0));
 
     // CR 111.2: a token's creator owns it, and controls it as it enters.
     let copy = copy_of(&t, &mut s, Seat::P1, bear, false);

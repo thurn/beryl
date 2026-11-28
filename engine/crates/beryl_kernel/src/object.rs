@@ -313,7 +313,9 @@ pub struct Object<L: Layout = Small> {
     /// Bumped on every zone change (see CR 400.7), so stale references are detectable.
     pub(crate) incarnation: u16,
     pub(crate) zone: Zone,
-    pub(crate) owner: Seat,
+    /// The card's owner (see CR 108.3), or none for a card in a shared library or graveyard,
+    /// which no player owns until one claims it to take it out ([`State::claim`](crate::State::claim)).
+    pub(crate) owner: Option<Seat>,
     /// The controller before continuous effects: the owner, but for a spell and a permanent
     /// ([`State::controller`](crate::State::controller),
     /// [`State::base_controller`](crate::State::base_controller)).
@@ -353,7 +355,7 @@ impl<L: Layout> Object<L> {
         card: L::Card::FIRST,
         incarnation: 0,
         zone: Zone::Nowhere,
-        owner: Seat::P0,
+        owner: None,
         base_controller: Seat::P0,
         flags: ObjectFlags::NONE,
         damage: L::Count::ZERO,
@@ -399,9 +401,26 @@ impl<L: Layout> Object<L> {
 
     /// see [CR 108.3](https://yawgatog.com/resources/magic-rules/#R1083): "The owner of a card in the
     /// game is the player who started the game with it in their deck."
+    ///
+    /// `None` for a card in a shared library or graveyard (the shared-deck format), which has
+    /// no owner, unless a player has claimed it to take it out ([`State::claim`]). Also `None`
+    /// for an empty slot. A caller decides what "its owner" means for such a card, usually
+    /// the player who performs the instruction.
+    ///
+    /// [`State::claim`]: crate::State::claim
     #[inline]
-    pub fn owner(&self) -> Seat {
+    pub fn owner(&self) -> Option<Seat> {
         self.owner
+    }
+
+    /// The seat whose zone sets and lists hold the object: its owner, or [`Seat::P0`] for a
+    /// card with none, since the kernel keeps a shared library and graveyard in
+    /// [`Seat::P0`]'s lists ([`State::pile_of`](crate::State::pile_of)) and puts the shared
+    /// zones' cards in both players' sets. Only the kernel's own bookkeeping reads it: a rule
+    /// that asks who owns a card reads [`Object::owner`].
+    #[inline]
+    pub(crate) fn pile_seat(&self) -> Seat {
+        self.owner.unwrap_or(Seat::P0)
     }
 
     /// Every status flag at once.

@@ -98,7 +98,7 @@ pub(crate) fn enchants<L: Layout>(
     if objects.is_empty() && players.is_empty() {
         return Ok(Enchants::Nothing);
     }
-    let controller = entry.controller.unwrap_or(s.object(slot).owner());
+    let controller = super::entering::entering_player(s, slot, entry.controller);
     let prompt = Prompt::new(Purpose::Choose).most(1);
     let mut options = Default::default();
     let decision = if players.is_empty() {

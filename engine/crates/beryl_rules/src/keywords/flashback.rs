@@ -58,12 +58,9 @@ pub(crate) fn instruction<L: Layout>(
 ) -> Result<Outcome<L>, Full> {
     let cards = run.scene().objects(cards);
     for &slot in run.in_game_order(cards)?.iter() {
+        let taker = run.taker();
         let s = run.state();
-        let player = if s.has_owner(slot) {
-            s.object(slot).owner()
-        } else {
-            run.taker()
-        };
+        let player = s.object(slot).owner().unwrap_or(taker);
         let card = s.object_ref(slot);
         let (game, resolution) = run.resolving();
         grant(game, resolution, card, player)?;

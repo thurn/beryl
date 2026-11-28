@@ -1506,7 +1506,7 @@ fn a_stolen_creatures_dies_trigger_belongs_to_its_last_controller() {
         .iter()
         .find(|&&slot| s.object(slot).is_token())
         .expect("a token copy");
-    assert_eq!((s.object(copy).owner(), s.controller(copy)), (p, p));
+    assert_eq!((s.object(copy).owner(), s.controller(copy)), (Some(p), p));
 }
 
 #[test]
@@ -1787,7 +1787,7 @@ fn gaining_control_changes_the_controller_until_the_effect_ends() {
         continuous::gain_control(game, resolution, stolen, Duration::Indefinite).unwrap();
     });
     assert_eq!(s.controller(theirs), p);
-    assert_eq!(s.object(theirs).owner(), q);
+    assert_eq!(s.object(theirs).owner(), Some(q));
     assert!(s.object(theirs).is_summoning_sick());
     assert_eq!(s.derived(mine).power, 2, "Adeline counts it");
     // It untaps in its new controller's untap step and goes to its owner's graveyard.

@@ -182,7 +182,7 @@ impl<L: Layout> State<L> {
 
     fn is_pool_card(&self, player: Seat, slot: L::Slot) -> bool {
         let object = self.object(slot);
-        object.zone != Zone::Nowhere && !object.is_token() && object.owner == player
+        object.zone != Zone::Nowhere && !object.is_token() && object.owner == Some(player)
     }
 
     /// Prepares a sideboard card in a free pool slot. The rules then reveal it, if required,
@@ -223,7 +223,7 @@ impl<L: Layout> State<L> {
         let incarnation = self.object(slot).incarnation;
         *self.object_mut(slot) = Object {
             card,
-            owner: player,
+            owner: Some(player),
             base_controller: player,
             incarnation,
             ..Object::EMPTY

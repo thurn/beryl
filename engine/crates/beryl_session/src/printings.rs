@@ -130,7 +130,7 @@ impl Printings {
             let pile = if s.shares_zones() {
                 0
             } else {
-                o.owner().index() as u8
+                o.owner().map_or(0, |owner| owner.index() as u8)
             };
             (!o.is_token()).then(|| (pile, s.definition_name(t, slot)))
         };

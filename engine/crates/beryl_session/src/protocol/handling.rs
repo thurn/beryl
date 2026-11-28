@@ -36,15 +36,10 @@ pub(super) fn card_handling<L: Layout>(
         return None;
     }
     let card = obs.object(shown(d)?);
-    let player = card.owner();
+    // A shared library is no player's: the side named is the player who looks.
+    let player = card.owner().unwrap_or(d.decider);
     match card.zone() {
         Zone::Library => {
-            // A shared library is no player's: the side named is the player who looks.
-            let player = if obs.shown().shares_zones() {
-                d.decider
-            } else {
-                player
-            };
             // The top cards the prompt counts, or the whole library.
             let size = obs.library(player).len();
             let count = (d.prompt.count > 0)

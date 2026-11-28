@@ -25,8 +25,11 @@ use beryl_kernel::reference::{CardIn, Hand};
 #[inline]
 pub fn discard<L: Layout>(game: &mut Game<'_, L>, card: CardIn<Hand, L>) -> Result<(), Full> {
     // In a game whose players share a graveyard, a discarded card has no owner once it is
-    // there, so the move names its discarder for the discard triggers to read.
-    let discarder = game.state.object(card.slot()).owner();
+    // there, so the move names its discarder for the discard triggers to read. A card with no
+    // owner is in a shared zone, so it has left the hand and is not discarded.
+    let Some(discarder) = game.state.object(card.slot()).owner() else {
+        return Ok(());
+    };
     zones::move_to_by(
         game,
         discarder,

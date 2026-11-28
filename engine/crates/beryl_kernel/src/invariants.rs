@@ -142,14 +142,24 @@ impl<L: Layout> State<L> {
                 check(in_deck && !token, "an object outside the deck slots", at)?;
             }
             if let Some(deck_owner) = deck_owner {
-                check(o.owner == deck_owner, "a deck card with another owner", at)?;
+                check(
+                    o.owner == Some(deck_owner),
+                    "a deck card with another owner",
+                    at,
+                )?;
             }
             // A card in a shared zone has no owner, but one claimed while the question about
-            // its entering is open.
+            // its entering is open. Every other card in the game has one.
             if shared_deck.is_some() && crate::state::is_shared(o.zone) && claimed != Some(slot) {
                 check(
-                    o.owner == Seat::P0 && o.base_controller == Seat::P0,
+                    o.owner.is_none() && o.base_controller == Seat::P0,
                     "a card in a shared zone with an owner",
+                    at,
+                )?;
+            } else {
+                check(
+                    o.owner.is_some(),
+                    "a card with no owner outside a shared zone",
                     at,
                 )?;
             }
@@ -218,7 +228,11 @@ impl<L: Layout> State<L> {
                 )?;
             }
             if o.zone == Zone::Hand {
-                check(known_by(o.owner), "a hand card its owner doesn't know", at)?;
+                check(
+                    known_by(o.pile_seat()),
+                    "a hand card its owner doesn't know",
+                    at,
+                )?;
             }
         }
         Ok(())
@@ -234,7 +248,7 @@ impl<L: Layout> State<L> {
                 incarnation: o.incarnation,
                 zone: o.zone,
                 owner: o.owner,
-                base_controller: o.owner,
+                base_controller: o.pile_seat(),
                 timestamp: o.timestamp,
                 // See CR 723.3c: the exiled copy has the inset's characteristics.
                 face: if o.zone == Zone::Exile && self.prepare_source(slot).is_some() {
@@ -295,7 +309,7 @@ impl<L: Layout> State<L> {
                 | Zone::Hand
                 | Zone::Battlefield
                 | Zone::Graveyard
-                | Zone::Exile) => members[o.owner.index()][zone.index()].insert(slot),
+                | Zone::Exile) => members[o.pile_seat().index()][zone.index()].insert(slot),
             }
         }
         self.check_shared_lists()?;

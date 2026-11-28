@@ -572,12 +572,21 @@ impl<L: Layout> State<L> {
         }
     }
 
-    /// Whether the object in `slot` has an owner. A card in a shared library or graveyard has
-    /// none: its `owner` field holds [`Seat::P0`], which nothing may read as a player. Every
-    /// object has one in a game whose zones are not shared.
+    /// Whether the object in `slot` has an owner ([`Object::owner`]). A card in a shared library
+    /// or graveyard has none, unless a player has claimed it to take it out
+    /// ([`State::claim`]). Every card in the game has one in a game whose zones are not shared.
     #[inline]
     pub fn has_owner(&self, slot: L::Slot) -> bool {
-        !(self.shares_zones() && is_shared(self.object(slot).zone))
+        self.object(slot).owner.is_some()
+    }
+
+    /// Whether the object in `slot` is in a shared library or graveyard: the shared-deck format's
+    /// one library and graveyard, which every player's zone of that kind is. Such a card has no
+    /// owner ([`Object::owner`]) unless a player has claimed it to take it out
+    /// ([`State::claim`]).
+    #[inline]
+    pub fn in_shared_zone(&self, slot: L::Slot) -> bool {
+        self.shares_zones() && is_shared(self.object(slot).zone)
     }
 
     /// Whether the object in `slot` is in one of `player`'s zones: their library, hand or

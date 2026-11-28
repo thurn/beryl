@@ -384,7 +384,9 @@ fn fires<L: Layout>(
         }
         (TriggerEvent::Discards, &Event::ZoneChange { object, .. }) => {
             let discarder = s.object(object.slot).owner();
-            (whose(discarder) && about(object)).then(|| info(Some(object), discarder, 0))
+            discarder
+                .filter(|&discarder| whose(discarder) && about(object))
+                .map(|discarder| info(Some(object), discarder, 0))
         }
         (TriggerEvent::Draws, &Event::Draw { player, .. }) if whose(player) => {
             Some(info(None, player, 0))

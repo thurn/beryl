@@ -429,11 +429,7 @@ fn put_at_owners_choice<L: Layout>(
     for &slot in run.in_game_order(objects)?.iter() {
         let (game, resolution) = run.resolving();
         let object = game.state.object_ref(slot);
-        let owner = if game.state.has_owner(slot) {
-            game.state.object(slot).owner()
-        } else {
-            taker
-        };
+        let owner = game.state.object(slot).owner().unwrap_or(taker);
         let about = Bitboard::single(slot);
         let top = choices::yes_no(game, resolution, owner, top_or_bottom, about)?;
         put_into(

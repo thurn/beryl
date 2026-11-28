@@ -100,7 +100,7 @@ impl<L: Layout> State<L> {
             self.leave_battlefield(slot);
             let o = self.object_mut(slot);
             o.flags.set(Flag::PhasedOut, true);
-            let owner = o.owner.index();
+            let owner = o.pile_seat().index();
             self.zones.members[owner][Zone::Battlefield.index()].remove(slot);
             self.phased_out.insert(slot);
         }
@@ -131,7 +131,7 @@ impl<L: Layout> State<L> {
             if o.attached_to.is_some_and(|host| staying.contains(host)) {
                 o.attached_to = None;
             }
-            let owner = o.owner.index();
+            let owner = o.pile_seat().index();
             self.zones.members[owner][Zone::Battlefield.index()].insert(slot);
         }
         self.forget_phased_out_under(slots);

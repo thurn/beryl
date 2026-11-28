@@ -137,7 +137,7 @@ impl Evaluate for Filter {
             // format: "Anything referring to 'your' graveyard or library is referencing the
             // shared zone").
             Filter::Owned(players) => {
-                is_for(players, o.owner, you)
+                o.owner.is_some_and(|owner| is_for(players, owner, you))
                     || (s.zones.mask == 0 && owned_by_all(s, slot, players, you))
             }
             Filter::Tapped => o.flags.has(Flag::Tapped),

@@ -38,7 +38,7 @@ fn the_player_named_takes_a_card_out_of_the_shared_graveyard() {
     )
     .unwrap();
     assert!(s.zone(ZoneKey::Of(Seat::P1, Zone::Hand)).contains(card));
-    assert_eq!(s.object(card).owner(), Seat::P1);
+    assert_eq!(s.object(card).owner(), Some(Seat::P1));
     assert_eq!(sink.taker, None, "the taker lasts for the one move");
     // Back into the shared graveyard, it has no owner again.
     let back = Bitboard::single(card);

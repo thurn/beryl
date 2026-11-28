@@ -178,10 +178,8 @@ impl<L: Layout> Policy<'_, L> {
                     // players' zones, so it counts as on the wanted side.
                     let controller = if matches!(o.zone(), Zone::Battlefield | Zone::Stack) {
                         self.obs.controller(slot)
-                    } else if self.obs.holds(side, slot) {
-                        side
                     } else {
-                        o.owner()
+                        o.owner().unwrap_or(side)
                     };
                     (controller, self.value(slot))
                 }

@@ -495,7 +495,11 @@ pub(crate) fn cleanup_discard<L: Layout>(
     sink: &mut Sink<L>,
     slot: L::Slot,
 ) -> Result<(), Full> {
-    let discarder = s.object(slot).owner();
+    // A card with no owner is in a shared library or graveyard, not in a hand, so it
+    // cannot be discarded.
+    let Some(discarder) = s.object(slot).owner() else {
+        return Ok(());
+    };
     event::move_one_by(
         s,
         t,

@@ -181,7 +181,8 @@ impl<L: Layout> State<L> {
                 *inner.object_mut(slot) = Object {
                     card: self.card_really_is(slot),
                     zone: Zone::Library,
-                    owner: player,
+                    // A card in a shared library has no owner.
+                    owner: self.object(slot).owner,
                     base_controller: player,
                     ..Object::EMPTY
                 };

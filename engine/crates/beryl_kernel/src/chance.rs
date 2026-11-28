@@ -189,14 +189,14 @@ fn settle_but<L: Layout>(
     }
     if let Some(r) = &mut chance.replaying {
         let happened = Random::Reveal {
-            owner: o.owner,
+            owner: o.pile_seat(),
             card: o.card.wide(),
         };
         match r.reveals.pop_front() {
             None => chance.mismatch(s, None, happened),
             Some((owner, card)) => {
                 let recorded = Some(Random::Reveal { owner, card });
-                if owner != o.owner {
+                if owner != o.pile_seat() {
                     chance.mismatch(s, recorded, happened);
                 } else if card != o.card.wide() {
                     // A card the layout's index cannot name is in no slot to trade with.
@@ -214,7 +214,7 @@ fn settle_but<L: Layout>(
         }
     }
     chance.happened.push(Random::Reveal {
-        owner: o.owner,
+        owner: o.pile_seat(),
         card: s.object(slot).card.wide(),
     });
 }
@@ -245,7 +245,7 @@ fn partner<L: Layout>(
     if o.zone.index() >= Zone::OWNED {
         return None;
     }
-    (s.zone(ZoneKey::Of(o.owner, o.zone)) & !settled)
+    (s.zone(ZoneKey::Of(o.pile_seat(), o.zone)) & !settled)
         .iter()
         .find(|&p| p != slot && unknown(s, p) && s.object(p).card == card)
 }
@@ -346,7 +346,7 @@ pub fn pick_at_random<L: Layout>(
     if let Some(r) = &mut chance.replaying {
         let o = s.object(drawn);
         let happened = Random::Pick {
-            owner: o.owner,
+            owner: o.pile_seat(),
             card: o.card.wide(),
         };
         match r.picks.pop_front() {
@@ -354,7 +354,7 @@ pub fn pick_at_random<L: Layout>(
             Some((owner, card)) => {
                 let recorded_as = |slot: L::Slot| {
                     let obj = s.object(slot);
-                    obj.owner == owner && obj.card.wide() == card
+                    obj.pile_seat() == owner && obj.card.wide() == card
                 };
                 // The candidate drawn as the game drew it, where it matches: another copy of
                 // the same card would be a different object, in a different place in its
@@ -373,7 +373,7 @@ pub fn pick_at_random<L: Layout>(
     }
     let o = s.object(chosen);
     chance.happened.push(Random::Pick {
-        owner: o.owner,
+        owner: o.pile_seat(),
         card: o.card.wide(),
     });
     chosen

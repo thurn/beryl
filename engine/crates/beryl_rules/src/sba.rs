@@ -575,8 +575,10 @@ pub(crate) fn reveal_face_down<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>) 
     s.reveal_face_down_components();
     let reveal = |s: &mut State<L>, sink: &mut Sink<L>, slot| {
         let object = s.object(slot);
-        if object.face() == crate::card::FaceIx::DOWN {
-            s.reveal(sink, object.owner(), slot);
+        if object.face() == crate::card::FaceIx::DOWN
+            && let Some(owner) = object.owner()
+        {
+            s.reveal(sink, owner, slot);
         }
     };
     for i in 0..s.battlefield().len() {

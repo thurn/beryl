@@ -635,7 +635,7 @@ fn prepare_entries<L: Layout, const N: usize>(
     }
     for player in s.players_in_turn_order(s.players()) {
         for (&slot, result) in ordered.iter().zip(prepared.as_mut_slice()) {
-            if s.object(slot).owner() == player {
+            if s.object(slot).owner() == Some(player) {
                 *result = prepare(s, slot)?;
             }
         }

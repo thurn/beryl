@@ -25,7 +25,7 @@ use super::exile::exile;
 
 /// Whether `player` both owns and controls the permanent in `slot`.
 fn owns_and_controls<L: Layout>(s: &State<L>, player: Seat, slot: L::Slot) -> bool {
-    s.object(slot).owner() == player && s.controller(slot) == player
+    s.object(slot).owner() == Some(player) && s.controller(slot) == player
 }
 
 impl<L: Layout> Scene<'_, L> {

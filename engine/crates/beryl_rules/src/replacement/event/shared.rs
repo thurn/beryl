@@ -153,7 +153,8 @@ pub(super) fn claim_taken<L: Layout>(
 }
 
 /// Gives back the cards of `ordered` that [`claim_taken`] claimed and that a replacement effect
-/// kept in their shared zone: they have no owner again.
+/// kept in their shared zone: they have no owner again. A card still in a shared library or
+/// graveyard with an owner is one that was claimed.
 #[cold]
 #[inline(never)]
 pub(super) fn disown_unmoved<L: Layout>(
@@ -162,7 +163,8 @@ pub(super) fn disown_unmoved<L: Layout>(
     moves: &[PreparedMove<L>],
 ) {
     for &slot in ordered {
-        if !s.has_owner(slot) && !moves.iter().any(|&(moved, ..)| moved == slot) {
+        let claimed = s.in_shared_zone(slot) && s.has_owner(slot);
+        if claimed && !moves.iter().any(|&(moved, ..)| moved == slot) {
             s.disown(slot);
         }
     }
@@ -180,7 +182,9 @@ pub(super) fn discarders<L: Layout, const N: usize>(
     let mut discarders: L::Queue<(L::Slot, Seat), N> = Default::default();
     for &(slot, from, ..) in moves {
         if from == Zone::Hand && reasons.for_slot(slot) == Reason::Discard {
-            discarders.push_bounded((slot, s.object(slot).owner()));
+            if let Some(owner) = s.object(slot).owner() {
+                discarders.push_bounded((slot, owner));
+            }
         }
     }
     discarders

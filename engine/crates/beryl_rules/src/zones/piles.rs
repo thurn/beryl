@@ -149,9 +149,5 @@ fn owned_in<L: Layout>(
 ///
 /// [CR 101.4]: https://yawgatog.com/resources/magic-rules/#R1014
 fn arranger<L: Layout>(s: &State<L>, slot: L::Slot) -> Seat {
-    if s.has_owner(slot) {
-        s.object(slot).owner()
-    } else {
-        s.turn().active()
-    }
+    s.object(slot).owner().unwrap_or(s.turn().active())
 }

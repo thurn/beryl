@@ -209,7 +209,7 @@ fn eighty_card_decks_are_refused_by_small_and_play_in_large() {
                 .stack()
                 .iter()
                 .filter(|entry| match entry.item {
-                    StackItem::Spell { object, .. } => s.object(object.slot).owner() == p,
+                    StackItem::Spell { object, .. } => s.object(object.slot).owner() == Some(p),
                     _ => false,
                 })
                 .map(|_| 1)
@@ -707,7 +707,7 @@ fn determinization_keeps_the_size_of_every_hidden_group() {
             let cards = |s: &State| {
                 let mut v: Vec<CardIx> = Slot::all()
                     .filter(|&slot| {
-                        s.object(slot).owner() == p && s.object(slot).zone() != Zone::Nowhere
+                        s.object(slot).owner() == Some(p) && s.object(slot).zone() != Zone::Nowhere
                     })
                     .filter_map(|slot| s.card_behind(slot))
                     .collect();

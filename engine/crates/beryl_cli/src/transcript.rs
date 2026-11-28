@@ -22,7 +22,7 @@ pub struct Transcript {
     /// The name of each object seen at a decision, by slot, with its incarnation: events
     /// name objects by slot, and a token that has left the battlefield is gone by the time
     /// its events are written.
-    seen: HashMap<Slot, (u16, String, Seat)>,
+    seen: HashMap<Slot, (u16, String, Option<Seat>)>,
 }
 
 /// Each candidate of `d` in `s` as a transcript labels it, in the decision's order.
@@ -163,8 +163,9 @@ impl Transcript {
     }
 
     /// The owner of an object an event refers to, as for [`Transcript::called`]: a token
-    /// that has ceased to exist has none now.
-    fn owner(&self, s: &State, r: ObjectRef) -> Seat {
+    /// that has ceased to exist has none now, and a card in a shared library or graveyard has
+    /// none at all.
+    fn owner(&self, s: &State, r: ObjectRef) -> Option<Seat> {
         let o = s.object(r.slot);
         if o.zone() != Zone::Nowhere && o.incarnation() == r.incarnation {
             return o.owner();
@@ -174,7 +175,7 @@ impl Transcript {
 
     /// How the object was last seen at a decision, if it was that object or the one it
     /// became by changing zones.
-    fn last_seen(&self, r: ObjectRef) -> Option<(&String, &Seat)> {
+    fn last_seen(&self, r: ObjectRef) -> Option<(&String, &Option<Seat>)> {
         self.seen
             .get(&r.slot)
             .filter(|(incarnation, _, _)| {
@@ -266,25 +267,35 @@ impl Transcript {
 /// A zone change worth a line: spells resolving or countered, permanents leaving the
 /// battlefield, tokens created, cards discarded or exiled. Draws, shuffles and lands played
 /// are left out; the decisions and each turn's hands show them.
-fn zone_change(n: &str, owner: Seat, from: Zone, to: Zone, reason: Reason) -> Option<String> {
-    let owner = owner.get();
+fn zone_change(
+    n: &str,
+    owner: Option<Seat>,
+    from: Zone,
+    to: Zone,
+    reason: Reason,
+) -> Option<String> {
+    // A card in a shared library or graveyard has no owner.
+    let whose = owner.map_or_else(|| "the shared".to_owned(), |o| format!("P{}'s", o.get()));
     Some(match (from, to, reason) {
         (_, _, Reason::Counter) => format!("{n} is countered"),
         (Zone::Stack, Zone::Battlefield, _) | (Zone::Stack, _, Reason::Resolve) => {
             format!("{n} resolves")
         }
         (Zone::Stack | Zone::Battlefield, Zone::Hand, _) => {
-            format!("{n} is returned to P{owner}'s hand")
+            format!("{n} is returned to {whose} hand")
         }
         (_, Zone::Battlefield, Reason::Created) => format!("{n} is created"),
         (_, Zone::Battlefield, Reason::Return) => format!("{n} returns to the battlefield"),
         (Zone::Battlefield, Zone::Graveyard, Reason::Destroy) => format!("{n} is destroyed"),
         (Zone::Battlefield, Zone::Graveyard, Reason::Sacrifice) => format!("{n} is sacrificed"),
         (Zone::Battlefield, Zone::Graveyard, _) => format!("{n} dies"),
-        (Zone::Battlefield, Zone::Library, _) => format!("{n} is put into P{owner}'s library"),
+        (Zone::Battlefield, Zone::Library, _) => format!("{n} is put into {whose} library"),
         (Zone::Battlefield, Zone::Exile, _) => format!("{n} is exiled"),
-        (Zone::Hand, Zone::Graveyard, Reason::Discard) => format!("P{owner} discards {n}"),
-        (Zone::Hand, Zone::Exile, _) => format!("{n} is exiled from P{owner}'s hand"),
+        (Zone::Hand, Zone::Graveyard, Reason::Discard) => match owner {
+            Some(owner) => format!("P{} discards {n}", owner.get()),
+            None => format!("{n} is discarded"),
+        },
+        (Zone::Hand, Zone::Exile, _) => format!("{n} is exiled from {whose} hand"),
         _ => return None,
     })
 }

@@ -50,7 +50,7 @@ fn shared_set<L: Layout>(s: &State<L>, zone: Zone) -> Bitboard<L::Slot> {
 
 fn unowned<L: Layout>(s: &State<L>, slot: L::Slot) -> bool {
     let o = s.object(slot);
-    o.owner() == Seat::P0 && o.base_controller == Seat::P0 && !s.has_owner(slot)
+    o.owner().is_none() && o.base_controller == Seat::P0 && !s.has_owner(slot)
 }
 
 #[test]
@@ -81,7 +81,7 @@ fn a_card_drawn_goes_to_the_drawer_and_comes_back_with_no_owner() {
     let sink = &mut Sink::off();
 
     let drawn = s.draw(sink, Seat::P1).unwrap().unwrap();
-    assert_eq!(s.object(drawn).owner(), Seat::P1);
+    assert_eq!(s.object(drawn).owner(), Some(Seat::P1));
     assert_eq!(s.object(drawn).zone, Zone::Hand);
     assert!(s.zone(ZoneKey::Of(Seat::P1, Zone::Hand)).contains(drawn));
     assert!(!shared_set(&s, Zone::Library).contains(drawn));
@@ -110,7 +110,7 @@ fn a_card_drawn_goes_to_the_drawer_and_comes_back_with_no_owner() {
     // The opponent draws the card they saw go back.
     let again = s.draw(sink, Seat::P0).unwrap().unwrap();
     assert_eq!(again, drawn);
-    assert_eq!(s.object(again).owner(), Seat::P0);
+    assert_eq!(s.object(again).owner(), Some(Seat::P0));
     assert_eq!(s.check_invariants(&t), Ok(()));
 }
 
@@ -120,7 +120,7 @@ fn a_claim_gives_a_shared_card_to_a_player_until_it_is_disowned() {
     let mut s = deal::<Small>(&t);
     let top = s.library_from_top(Seat::P0).next().unwrap();
     s.claim(top, Seat::P1);
-    assert_eq!(s.object(top).owner(), Seat::P1);
+    assert_eq!(s.object(top).owner(), Some(Seat::P1));
     assert_eq!(s.object(top).base_controller, Seat::P1);
     s.disown(top);
     assert!(unowned(&s, top));

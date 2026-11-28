@@ -429,7 +429,7 @@ impl<L: Layout> Board<'_, L> {
     /// ([`State::check_invariants`]).
     #[doc(hidden)]
     pub fn corrupt(&mut self, slot: L::Slot, how: Corruption) {
-        let owner = self.0.object(slot).owner.index();
+        let owner = self.0.object(slot).pile_seat().index();
         match how {
             Corruption::Zone(zone) => self.0.object_mut(slot).zone = zone,
             Corruption::Tapped => {
