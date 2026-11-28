@@ -1,7 +1,12 @@
 //! Tip verification's handling of rounds that cannot end cleanly: a check that stays
 //! incomplete, a family that cannot be listed, a refused push, telemetry that fails.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
+use ignite_core::traits::Error;
+
 use super::*;
+use crate::testhub::SpyHub;
 
 #[test]
 fn a_round_that_ran_a_batch_is_finished_when_a_newer_tip_arrives() {
@@ -29,54 +34,43 @@ fn a_round_that_ran_a_batch_is_finished_when_a_newer_tip_arrives() {
 fn a_round_keeps_its_candidate_when_the_hub_cannot_confirm_a_replacement() {
     for unreachable in [false, true] {
         let world = World::new();
-        let ctx = world.ctx("m-1");
+        // The hub cannot say which candidate it selected while `down` is raised.
+        let down = Arc::new(AtomicBool::new(false));
+        let mut ctx = world.ctx("m-1");
+        let refusing = down.clone();
+        ctx.hub = Arc::new(SpyHub::new(world.hub.clone()).refusing(move |method| {
+            (method == "tip_candidate" && refusing.load(Ordering::SeqCst))
+                .then(|| Error::Unreachable("hub restarting".to_owned()))
+        }));
         let tip = commit("bbbb000");
         world.land(&tip);
         let mut first = check("a", 'a');
         first.family = "alpha".to_owned();
         let mut second = check("b", 'b');
         second.family = "beta".to_owned();
-        world.work.set_checks(&tip, vec![first.clone(), second]);
-        // Another machine holds the first batch, so this one is idle when it reaches the
-        // second. Marking its candidate for retry does not select a replacement.
+        world.work.set_checks(&tip, vec![first, second]);
+        // While this machine builds the first family, staging moves on and its candidate is
+        // marked for retry, which does not select a replacement. The round goes on to run the
+        // batch it claimed before the build, and the second family.
         let (other, candidate) = (ctx.clone(), tip.clone());
-        let (git, hub) = (world.git.clone(), world.hub.clone());
+        let (git, flag) = (world.git.clone(), down.clone());
         world.work.before_batches.lock().unwrap().insert(
             "alpha".to_owned(),
             Arc::new(move || {
                 git.set_tip("staging", commit("cccc000"));
-                assert!(
-                    other
-                        .hub
-                        .tip_claim(&TipClaim {
-                            commit: candidate.clone(),
-                            family: "alpha".to_owned(),
-                            batch: 0,
-                            machine: MachineId::new("m-2").unwrap(),
-                        })
-                        .unwrap()
-                        .granted
-                );
                 super::super::candidate::allow_newer(&other, &candidate).unwrap();
-                hub.set_unreachable(unreachable);
+                flag.store(unreachable, Ordering::SeqCst);
             }),
         );
-        let hub = world.hub.clone();
         world.work.before_batches.lock().unwrap().insert(
             "beta".to_owned(),
-            Arc::new(move || hub.set_unreachable(false)),
+            Arc::new(move || down.store(false, Ordering::SeqCst)),
         );
         assert_eq!(
             world.verifier().round(&ctx, 0).unwrap(),
-            Some((
-                tip,
-                TipOutcome::Waiting {
-                    checks: vec![first.check],
-                    unrunnable: Vec::new()
-                }
-            ))
+            Some((tip, TipOutcome::Verified))
         );
-        assert_eq!(world.work.runs().len(), 1, "the second family ran");
+        assert_eq!(world.work.runs().len(), 2, "both families ran");
     }
 }
 

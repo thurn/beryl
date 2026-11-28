@@ -2,7 +2,9 @@
 //!
 //! On a slow machine, a round used to lease a tree for each family and build the family's
 //! products to list it, and only then claim its batches, by which time faster machines had
-//! claimed every one. One such round spent 94 core-minutes building and ran no check.
+//! claimed every one. One such round spent 94 core-minutes building and ran no check. Asking
+//! the hub first was not enough when the build itself took most of an hour, so the round also
+//! claims the family's first batch before building it.
 
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -91,8 +93,10 @@ fn a_family_whose_batches_another_machine_holds_is_not_built() {
     assert!(budget.unrun.is_empty(), "{:?}", budget.unrun);
 }
 
+/// A hub that cannot answer the lookup leaves the family to its claims: a batch another machine
+/// claimed after the lookup is not built for, and the checks are left to that machine.
 #[test]
-fn a_hub_that_cannot_say_what_is_unclaimed_leaves_the_family_to_be_built() {
+fn a_family_claimed_after_the_lookup_is_not_built() {
     let world = World::new();
     let (tip, built) = held_by_another_machine(&world);
     let mut ctx = world.ctx("m-1");
@@ -102,9 +106,71 @@ fn a_hub_that_cannot_say_what_is_unclaimed_leaves_the_family_to_be_built() {
 
     world.verifier().verify(&ctx, &tip).unwrap();
 
-    assert!(built.load(Ordering::SeqCst), "the family was not built");
-    // The claim is still refused, so nothing runs twice.
+    assert!(!built.load(Ordering::SeqCst), "the family was built");
     assert!(world.work.runs().is_empty());
+    let budget = world.hub.tip_rounds().pop().unwrap().budget.unwrap();
+    assert_eq!(budget.elsewhere, BTreeMap::from([("unit".to_owned(), 2)]));
+}
+
+#[test]
+fn a_hub_that_cannot_say_what_is_unclaimed_leaves_the_family_to_be_built() {
+    let world = World::new();
+    let tip = commit("bbbb000");
+    world.land(&tip);
+    world
+        .work
+        .set_checks(&tip, vec![check("a", 'a'), check("b", 'b')]);
+    let built = Arc::new(AtomicBool::new(false));
+    let flag = built.clone();
+    world.work.before_batches.lock().unwrap().insert(
+        "unit".to_owned(),
+        Arc::new(move || flag.store(true, Ordering::SeqCst)),
+    );
+    let mut ctx = world.ctx("m-1");
+    ctx.hub = Arc::new(SpyHub::new(world.hub.clone()).refusing(|method| {
+        (method == "tip_unclaimed").then(|| Error::Unreachable("hub restarting".to_owned()))
+    }));
+
+    world.verifier().verify(&ctx, &tip).unwrap();
+
+    assert!(built.load(Ordering::SeqCst), "the family was not built");
+    assert!(!world.work.runs().is_empty());
+}
+
+/// The family's first batch is claimed before its products build, so a machine that builds
+/// slowly still holds a batch to run when the build finishes.
+#[test]
+fn a_family_holds_its_first_batch_while_it_builds() {
+    let world = World::new();
+    let tip = commit("bbbb000");
+    world.land(&tip);
+    world
+        .work
+        .set_checks(&tip, vec![check("a", 'a'), check("b", 'b')]);
+    let hub = world.hub.clone();
+    let held = Arc::new(AtomicBool::new(false));
+    let flag = held.clone();
+    world.work.before_batches.lock().unwrap().insert(
+        "unit".to_owned(),
+        Arc::new(move || {
+            let asks = hub.tip_claim_asks();
+            let claimed = asks
+                .iter()
+                .any(|ask| ask.machine.as_str() == "m-1" && ask.family == "unit");
+            flag.store(claimed, Ordering::SeqCst);
+        }),
+    );
+
+    world.verifier().verify(&world.ctx("m-1"), &tip).unwrap();
+
+    assert!(
+        held.load(Ordering::SeqCst),
+        "no batch was claimed before the build"
+    );
+    assert!(!world.work.runs().is_empty());
+    // The batch claimed before the build is not asked for again when it runs.
+    let asks = world.hub.tip_claim_asks();
+    assert_eq!(asks.len(), 1, "{asks:?}");
 }
 
 #[test]

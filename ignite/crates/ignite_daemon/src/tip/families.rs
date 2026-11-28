@@ -25,7 +25,13 @@
 //! find that faster machines had claimed every batch meanwhile, so it ran nothing. A family with
 //! none left is skipped and counted as left to other machines ([`Elsewhere`]), not as unrun; it
 //! stores no verdict, so a later round still runs the checks if those claims lapse. A hub that
-//! cannot answer leaves the family to be built as before, so a failed lookup never loses a check.
+//! cannot answer leaves the family to run, so a failed lookup never loses a check.
+//!
+//! The lookup alone was not enough: a family whose products took 10 to 58 minutes to build was
+//! still unclaimed when it was looked up, and claimed by faster machines by the time the build
+//! finished. So the family's thread also claims its first batch it can get before leasing the
+//! tree, and the renewer holds that claim through the build. A family whose every batch another
+//! machine already holds is not built and is counted in [`Elsewhere`] too.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -134,13 +140,36 @@ impl Round<'_> {
 
     /// Claims and runs `family`'s batches, reporting each batch's failures to `failed`. Before
     /// `master` moves, their builds and commands may draw on the tip reserve.
+    ///
+    /// The first batch is claimed before the family's tree is leased, because leasing it lists
+    /// the family and listing builds its products, which on a slow machine takes up to an hour.
+    /// The renewer holds that claim while the products build, so faster machines cannot claim
+    /// every batch meanwhile and leave this machine with nothing to run after the build. When
+    /// every batch is refused, nothing is built (see [`Round::claim_first`]).
     fn run_family(
         &self,
         family: &str,
         batches: &[(u32, Vec<CheckName>)],
         failed: &dyn Fn(&[ResultKey]),
     ) -> Vec<TipRun> {
-        let claim = |batch: u32| self.claim(family, batch);
+        let Some(first) = self.claim_first(family, batches) else {
+            return Vec::new();
+        };
+        // Batches before the first granted one were refused, as `run_batches` would refuse them.
+        let batches = &batches[first..];
+        let granted = Mutex::new(Some(batches[0].0));
+        let claim = |batch: u32| {
+            // The batch claimed before the build runs under that claim, which the renewer kept,
+            // unless the round should stop now that the build is done.
+            if lock(&granted).take_if(|held| *held == batch).is_some() {
+                if self.should_stop() {
+                    lock(&self.held).remove(family);
+                    return false;
+                }
+                return true;
+            }
+            self.claim(family, batch)
+        };
         let callbacks = BatchCallbacks {
             claim: &claim,
             failed,
@@ -150,6 +179,39 @@ impl Round<'_> {
         let work = &self.verifier.work;
         let (runs, _) = work.run_batches(self.ctx, self.tip, family, batches, &callbacks, pre_move);
         runs
+    }
+
+    /// Claims the first of `batches` the hub grants and returns its index. Returns `None` when
+    /// none is granted, and then records the family's checks in `elsewhere` if every batch was
+    /// refused because another machine holds it. A batch the hub could not answer for leaves
+    /// the checks unrun instead, so a later round runs them.
+    fn claim_first(&self, family: &str, batches: &[(u32, Vec<CheckName>)]) -> Option<usize> {
+        let mut all_held = true;
+        // `Round::next` has just asked whether the round should stop, and the batch claimed here
+        // asks again before it runs, so the round is not asked here as well.
+        for (index, (batch, _)) in batches.iter().enumerate() {
+            match self.try_ask(family, *batch) {
+                Some(true) => {
+                    lock(&self.held).insert(family.to_owned(), *batch);
+                    return Some(index);
+                }
+                Some(false) => {}
+                None => all_held = false,
+            }
+        }
+        if all_held {
+            let names: Vec<CheckName> = batches.iter().flat_map(|(_, n)| n.clone()).collect();
+            let count = batches.len();
+            eprintln!(
+                "ignite: tip verification: {family} not built: other machines hold all {count} \
+                 of its batches"
+            );
+            lock(&self.elsewhere)
+                .entry(family.to_owned())
+                .or_default()
+                .extend(names);
+        }
+        None
     }
 
     /// Claims one batch from the hub. A claim the hub cannot answer is not granted, so the
@@ -222,8 +284,13 @@ impl Round<'_> {
     }
 
     /// Asks the hub for `batch` of `family`. The hub grants a batch this machine holds again,
-    /// renewing its claim.
+    /// renewing its claim. A hub that cannot answer grants nothing.
     fn ask(&self, family: &str, batch: u32) -> bool {
+        self.try_ask(family, batch).unwrap_or(false)
+    }
+
+    /// [`Round::ask`], or `None` when the hub cannot answer.
+    fn try_ask(&self, family: &str, batch: u32) -> Option<bool> {
         let claim = TipClaim {
             commit: self.tip.clone(),
             family: self.claim_name(family),
@@ -231,12 +298,12 @@ impl Round<'_> {
             machine: self.ctx.machine.clone(),
         };
         match self.ctx.hub.tip_claim(&claim) {
-            Ok(reply) => reply.granted,
+            Ok(reply) => Some(reply.granted),
             Err(error) => {
                 eprintln!(
                     "ignite: tip verification: batch {batch} of {family} not claimed: {error}"
                 );
-                false
+                None
             }
         }
     }

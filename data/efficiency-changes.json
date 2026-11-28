@@ -1145,5 +1145,10 @@
     "label": "Restrict non-build stall auto-revert (`[revert] stall_minutes`) in `TipVerifier` to `[rules] protected` checks and checks with a recorded product catch (`score::proven_checks`, matching `upkeep::unproven_holds` by excluding `[rules] budgets` and multi-family closes). Unproven non-build checks instead report regressions and let `upkeep::unproven_holds` switch them off after an hour without reverting product landings. Over the prior 24 hours, stall auto-revert on unproven checks while `master` was already stalled reverted 7 product landings (`EP4KG.58`, `ERQ07.6`, `EP4KG.76`, `EP4KG.77`, `EVH5W.42`, `EVH5W.34`, `EVH5W.29`), adding 26.0 product ticket-hours of landing latency",
     "metric": "bead.minutes",
     "expect": "down"
+  },
+  {
+    "label": "A tip round claims a family's first batch before leasing a tree and building the family's products, and holds the claim through the build, so a slow machine no longer builds for 10 to 58 minutes and then finds every batch claimed by faster machines (two rounds on cygnus on 2026-11-27 built for 51 and 78 minutes and ran no check)",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]
