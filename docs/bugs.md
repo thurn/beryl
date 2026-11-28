@@ -116,13 +116,13 @@ fixed in the same session. Newest first.
   Soul Cauldron on the battlefield, Knowledge Pool exiled a spell "with this
   artifact". The Cauldron's static ability reads the cards exiled with an
   object, so that exile made the layer results stale, and the offer to cast one
-  of the Pool's cards then checked the casting timing through
-  `State::rules_for` and hit the debug assertion "rules read while dirty".
+  of the Pool's cards then checked the casting timing through `State::rules_for`
+  and hit the debug assertion "rules read while dirty".
   `casting::start::offer_spell`, which every "you may cast" instruction goes
   through, now calls `layers::refresh` before it finds the options. Guard: the
-  Knowledge Pool scenario "The offer follows an exile that the layers read",
-  and the existing debug assertion. No lint can say it, for the same reason as
-  the reflexive trigger's stale read above.
+  Knowledge Pool scenario "The offer follows an exile that the layers read", and
+  the existing debug assertion. No lint can say it, for the same reason as the
+  reflexive trigger's stale read above.
 
 - **The sequence reference failed games with many lands under Mana Reflection or
   Mana Flare.** With Mana Reflection and seventeen lands, `just fuzz` reported
