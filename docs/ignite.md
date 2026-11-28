@@ -4757,6 +4757,21 @@ only and active, respectively. The same commands with `--all` stop or resume
 hand-offs across the fleet independently of machine state. Global resume also
 clears an emergency pause.
 
+The hub's limit on build tickets, one per three shared cores, applies only at
+hand-off, so a machine can still come to hold more: through a dispatch bug, a
+limit lowered by hand, or lost cores. Each heartbeat reply with a sample says
+how many build tickets the machine holds and its limit, and `ignite pool list`
+and `ignite status` show it as `held N of limit M build tickets`. A machine that
+has held more than twice its limit for 5 minutes sheds down to the limit by
+itself. `ignite pool shed [--machine <name>] [--to <n>]`, for the operator,
+incident commanders and justiciars, sheds at once: on this machine, or on the
+named one at its next heartbeat. Shedding takes back the newest claims first and
+keeps tickets that are landing or hold master back. For each ticket, the daemon
+ends the worker's turn, stops its verbs, saves the tree's work on the remote,
+releases the ticket with a comment that says who shed it and why, and frees the
+worker's slot. The worker never has to cooperate, and a shed release does not
+count against the ticket. Each shed appears in the fleet's recent changes.
+
 The hub stores versioned settings and an audit log. Each change records the
 actor, time, summary and resulting policy. A new database seeds the machines and
 providers named in `ignite.toml` with the standard defaults: active machines

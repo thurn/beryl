@@ -186,8 +186,14 @@ impl<'a> Budget<'a> {
     }
 
     /// An occupied slot counts as build work even when the ticket was expected to be light.
-    /// The daemon's free slot count already accounts for it.
-    pub fn hold(&mut self, ticket: &TicketId, needs_build_slot: bool, since: Option<Timestamp>) {
+    /// The daemon's free slot count already accounts for it. Returns whether the ticket counts
+    /// as a build ticket against [`Budget::build_limit`].
+    pub fn hold(
+        &mut self,
+        ticket: &TicketId,
+        needs_build_slot: bool,
+        since: Option<Timestamp>,
+    ) -> bool {
         let occupies_slot = self.pressure.slot_holders.contains(ticket);
         if occupies_slot || needs_build_slot {
             self.heavy += 1;
@@ -196,6 +202,13 @@ impl<'a> Budget<'a> {
                 self.pending_slots = self.pending_slots.saturating_add(1);
             }
         }
+        occupies_slot || needs_build_slot
+    }
+
+    /// How many build tickets the machine may hold: one per `SHARED_CORES_PER_BUILD_TICKET` of
+    /// its shared cores, or `None` when it reported no cores.
+    pub fn build_limit(&self) -> Option<u32> {
+        self.build_limit
     }
 
     fn free_build_slots(&self) -> u32 {

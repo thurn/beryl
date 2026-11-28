@@ -113,6 +113,12 @@ pub(super) fn heartbeat(conn: &mut Connection, beat: &Heartbeat, now: Timestamp)
         eprintln!("ignite: claims of {} not reconciled: {error}", beat.machine);
         Vec::new()
     });
+    // An order goes out with the build tickets it is carried out against.
+    let shed = beat
+        .sample
+        .is_some()
+        .then(|| sheds::take_order(conn, beat))
+        .flatten();
     // The heartbeat was recorded above. The reply only reads, so it can take a snapshot
     // without holding the write lock while assembling the fleet policy.
     let snapshot = conn
@@ -126,6 +132,10 @@ pub(super) fn heartbeat(conn: &mut Connection, beat: &Heartbeat, now: Timestamp)
         )
         .optional()
         .map_err(sql_failure)?;
+    let build_tickets = beat
+        .sample
+        .as_ref()
+        .and_then(|sample| sheds::holdings(&snapshot, beat, sample, now));
     let reply = HeartbeatReply {
         fleet: Some(
             usage::notice(&snapshot, beat.machine.as_str(), now).map_err(|e| store_failure(&e))?,
@@ -136,6 +146,8 @@ pub(super) fn heartbeat(conn: &mut Connection, beat: &Heartbeat, now: Timestamp)
         paused_everywhere: fleet::paused_everywhere(&snapshot, now)
             .map_err(|e| store_failure(&e))?,
         reconciled,
+        build_tickets,
+        shed,
     };
     snapshot.commit().map_err(sql_failure)?;
     if let Some(sample) = &beat.sample
@@ -201,3 +213,6 @@ pub(super) fn pause(
     }
     Ok(done())
 }
+
+#[path = "dispatch_machines_shed.rs"]
+pub(super) mod sheds;

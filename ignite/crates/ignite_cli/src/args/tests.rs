@@ -98,6 +98,21 @@ fn parses_pool_usage() {
     ));
 }
 
+/// `ignite pool shed` reaches the daemon's `pool` verb with its flags as written.
+#[test]
+fn parses_pool_shed() {
+    let raw = ["ignite", "pool", "shed", "--machine", "jarvis", "--to", "3"].map(str::to_owned);
+    let cli = Cli::try_parse_from(&raw).unwrap();
+    assert!(matches!(
+        &cli.command,
+        Command::Pool {
+            command: PoolCommand::Shed { machine: Some(machine), to: Some(3) }
+        } if machine == "jarvis"
+    ));
+    let request = crate::client::request(cli.command.verb(), &raw, PathBuf::default(), None);
+    assert_eq!(request.args, ["shed", "--machine", "jarvis", "--to", "3"]);
+}
+
 #[test]
 fn parses_the_documented_commands() {
     let parse = |line: &str| {

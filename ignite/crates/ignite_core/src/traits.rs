@@ -651,6 +651,18 @@ pub trait Hub: Send + Sync {
         Err(not_supported("pause hand-offs"))
     }
 
+    /// Orders a machine to shed build tickets at its next heartbeat (`POST /shed`).
+    fn shed(&self, order: &crate::protocol::hub::shed::ShedOrder) -> Result<()> {
+        let _ = order;
+        Err(not_supported("order a machine to shed"))
+    }
+
+    /// Records what a machine shed in the fleet's recent changes (`POST /shed/done`).
+    fn shed_done(&self, done: &crate::protocol::hub::shed::ShedDone) -> Result<()> {
+        let _ = done;
+        Err(not_supported("record a shed"))
+    }
+
     /// Edits a registered machine's state through the versioned fleet settings API.
     fn set_fleet_machine_state(
         &self,

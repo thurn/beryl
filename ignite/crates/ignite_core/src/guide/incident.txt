@@ -18,6 +18,8 @@ evidence of why the normal handler failed, or explain why no fix is needed.
 
 2. Locate affected work with ignite status, ignite pool list, ignite fleet and
    ignite ticket list --status in_progress. Record fleet settings first.
+   Unwind over-allocation (pool list: held N of limit M build tickets) with
+   ignite pool shed --machine <name>, not by telling workers to release.
    Stop harmful commands with ignite stop <handle> --force. Use ignite tell
    or ignite tell --all. Contact desktop sessions without tickets directly.
    Include both IDs, the facts and the action. Recipients verify your claim

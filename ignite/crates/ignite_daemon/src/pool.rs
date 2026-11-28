@@ -186,13 +186,14 @@ impl Verb for PoolVerb {
             Some((&"pause", rest)) => self.pause(ctx, req, rest, true),
             Some((&"resume", rest)) => self.pause(ctx, req, rest, false),
             Some((&"watch", rest)) => self.watch(rest),
+            Some((&"shed", rest)) => self.shed(ctx, req, rest),
             Some((&"usage", [])) => Ok(crate::dispatchd::usage_report(
                 self.headless_dispatch.pool(),
                 ctx.clock.now(),
             )),
             Some(_) => Err(Error::Invalid(
                 "usage: ignite pool list | pause [--all] | resume [--all] | usage \
-                 | watch <ticket | session> [--after <n>]"
+                 | watch <ticket | session> [--after <n>] | shed [--machine <name>] [--to <n>]"
                     .to_owned(),
             )),
         };
@@ -230,6 +231,11 @@ impl PoolVerb {
         if let Some(shared) = self.headless_dispatch.shared_failure() {
             lines.push(format!("shared   {shared}"));
         }
+        lines.extend(
+            self.headless_dispatch
+                .build_line()
+                .map(|line| format!("builds   {line}")),
+        );
         lines.extend(self.headless_dispatch.cli_lines(ctx.clock.now()));
         for worker in &view {
             let mut line = format_worker(worker);
@@ -278,6 +284,58 @@ impl PoolVerb {
             json: Some(serde_json::json!({"session": session, "next": lines.len()})),
             handle: None,
         })
+    }
+
+    /// `ignite pool shed [--machine <name>] [--to <n>]`: sheds this machine's build tickets
+    /// down to `n` at once, or orders the named machine to at its next heartbeat. Only the
+    /// operator, an incident commander or a justiciar may take work away from other sessions.
+    fn shed(&self, ctx: &Context, req: &Request, words: &[&str]) -> Result<Reply> {
+        let usage =
+            || Error::Invalid("usage: ignite pool shed [--machine <name>] [--to <n>]".into());
+        let (mut machine, mut to) = (None, None);
+        let mut rest = words.iter();
+        while let Some(word) = rest.next() {
+            match *word {
+                "--machine" => machine = Some((*rest.next().ok_or_else(usage)?).to_owned()),
+                "--to" => {
+                    let number = rest.next().ok_or_else(usage)?;
+                    to = Some(number.parse::<u32>().map_err(|_| {
+                        Error::Invalid(format!("not a number of build tickets: {number:?}"))
+                    })?);
+                }
+                _ => return Err(usage()),
+            }
+        }
+        if let Err(reason) = crate::stop::emergency_or_operator(ctx) {
+            return Ok(Reply::text(
+                Exit::Conflict,
+                format!(
+                    "refused  `ignite pool shed` is for incident commanders, justiciars and the \
+                     operator: {reason}"
+                ),
+            ));
+        }
+        let by = ctx
+            .session
+            .clone()
+            .or_else(|| req.session.clone())
+            .map_or_else(|| "the operator".to_owned(), |session| session.to_string());
+        if let Some(machine) = machine {
+            let order = ignite_core::protocol::hub::shed::ShedOrder { machine, to, by };
+            ctx.hub.shed(&order)?;
+            let target = to.map_or_else(|| "its limit".to_owned(), |n| n.to_string());
+            return Ok(Reply::text(
+                Exit::Success,
+                format!(
+                    "ordered  {} to shed down to {target} build tickets at its next heartbeat \
+                     with a sample, within about a minute\nnext     ignite fleet shows the shed \
+                     in its recent changes",
+                    order.machine
+                ),
+            ));
+        }
+        let shed = self.headless_dispatch.shed(ctx, to, &by)?;
+        Ok(Reply::text(Exit::Success, shed.lines().join("\n")))
     }
 
     /// Changes this machine's state, or pauses or resumes all hand-offs. Resuming all
@@ -367,6 +425,7 @@ impl crate::doctor::StatusSection for PauseSection {
         lines.extend(shared);
         lines.extend(holds);
         lines.extend(self.headless_dispatch.cli_hold_lines(self.clock.now()));
+        lines.extend(self.headless_dispatch.build_line());
         if ordinary {
             lines.extend(self.headless_dispatch.worker_room_line());
             if let Some((_, why)) = self.headless_dispatch.idle_reason() {

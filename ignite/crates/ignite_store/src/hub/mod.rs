@@ -36,6 +36,7 @@ mod routing_migrations;
 pub mod rows;
 pub mod schedules;
 pub mod session_titles;
+pub mod shed;
 pub mod ticket_spend;
 pub mod tickets;
 pub mod tip_coverage;

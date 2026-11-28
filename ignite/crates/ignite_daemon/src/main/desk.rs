@@ -377,6 +377,9 @@ pub struct DaemonHost {
     pub results: Mutex<rusqlite::Connection>,
 }
 
+/// How long shedding waits for a shed session's verbs to stop before it saves the tree.
+const SHED_STOP_WAIT: Duration = Duration::from_secs(20);
+
 impl DaemonHost {
     fn server(&self) -> Option<Arc<Server>> {
         self.server.get().and_then(Weak::upgrade)
@@ -494,6 +497,42 @@ impl Host for DaemonHost {
                     started,
                     step,
                 })
+            })
+            .collect()
+    }
+
+    /// Every running verb is asked to stop first, and all of them share one wait of
+    /// [`SHED_STOP_WAIT`], so that shedding many tickets does not hold the heartbeat loop long.
+    fn stop_verbs(&self, session: &SessionId) -> Vec<String> {
+        let Some(server) = self.server() else {
+            return Vec::new();
+        };
+        let verbs: Vec<_> = server
+            .steps()
+            .live()
+            .into_iter()
+            .filter(|activity| activity.work().session.as_ref() == Some(session))
+            .filter(|activity| matches!(activity.kind(), crate::steps::Kind::Verb(_)))
+            .collect();
+        let refusals: Vec<Option<String>> = verbs.iter().map(|v| v.request_stop().err()).collect();
+        let deadline = Instant::now() + SHED_STOP_WAIT;
+        verbs
+            .iter()
+            .zip(refusals)
+            .map(|(activity, refused)| {
+                let handle = activity
+                    .handle()
+                    .map_or_else(|| "a verb".to_owned(), |handle| handle.to_string());
+                let left = deadline.saturating_duration_since(Instant::now());
+                match refused {
+                    Some(reason) => {
+                        format!("warning  {handle} of {session} refused to stop: {reason}")
+                    }
+                    None if activity.wait_finished(left) => {
+                        format!("stopped  {handle} of {session}")
+                    }
+                    None => format!("stopping {handle} of {session}: told to stop, still running"),
+                }
             })
             .collect()
     }

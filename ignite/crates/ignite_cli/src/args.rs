@@ -401,6 +401,17 @@ pub enum PoolCommand {
     /// Print the newest sample of each Claude plan window, and the usage hold if one is in
     /// force.
     Usage,
+    /// Take back the newest build tickets of a machine that holds more than its limit, without
+    /// the workers' help: their work is saved and the tickets are open again. For the operator,
+    /// incident commanders and justiciars.
+    Shed {
+        /// The machine to shed on, by name; this machine when left out.
+        #[arg(long)]
+        machine: Option<String>,
+        /// The number of build tickets to keep; the machine's limit when left out.
+        #[arg(long)]
+        to: Option<u32>,
+    },
     /// Print the digest of a CLI worker's transcript (what it said, its tool calls and how each
     /// turn ended) and follow it until interrupted.
     Watch {

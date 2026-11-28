@@ -103,33 +103,38 @@ impl StopVerb {
         self
     }
 
-    /// Whether the asker may give `--force`: the operator, whose request names no session, or a
-    /// session that holds an in-progress incident or justiciar ticket.
+    /// Whether the asker may give `--force` (see [`emergency_or_operator`]).
     fn may_force(ctx: &Context) -> Result<(), String> {
-        let Some(session) = &ctx.session else {
-            return Ok(());
-        };
-        let query = TicketQuery {
-            status: Some(Status::InProgress),
-            assignee: Some(session.to_string()),
-            label_any: EMERGENCY_LABELS.map(str::to_owned).to_vec(),
-            ..TicketQuery::default()
-        };
-        match ctx.hub.tickets(&query) {
-            Ok(held)
-                if held.iter().any(|ticket| {
-                    ticket.session.as_ref() == Some(session) && has_emergency_label(&ticket.labels)
-                }) =>
-            {
-                Ok(())
-            }
-            Ok(_) => Err(format!(
-                "session {session} holds no in-progress incident or justiciar ticket"
-            )),
-            Err(error) => Err(format!(
-                "the hub could not check the tickets held by {session}: {error}"
-            )),
+        emergency_or_operator(ctx)
+    }
+}
+
+/// Whether the asker may take work away from other sessions: the operator, whose request names
+/// no session, or a session that holds an in-progress incident or justiciar ticket.
+pub(crate) fn emergency_or_operator(ctx: &Context) -> Result<(), String> {
+    let Some(session) = &ctx.session else {
+        return Ok(());
+    };
+    let query = TicketQuery {
+        status: Some(Status::InProgress),
+        assignee: Some(session.to_string()),
+        label_any: EMERGENCY_LABELS.map(str::to_owned).to_vec(),
+        ..TicketQuery::default()
+    };
+    match ctx.hub.tickets(&query) {
+        Ok(held)
+            if held.iter().any(|ticket| {
+                ticket.session.as_ref() == Some(session) && has_emergency_label(&ticket.labels)
+            }) =>
+        {
+            Ok(())
         }
+        Ok(_) => Err(format!(
+            "session {session} holds no in-progress incident or justiciar ticket"
+        )),
+        Err(error) => Err(format!(
+            "the hub could not check the tickets held by {session}: {error}"
+        )),
     }
 }
 

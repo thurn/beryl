@@ -27,6 +27,10 @@ pub(super) struct FakeHost {
     pub(super) worker_capacity: Mutex<(u32, bool, Option<u64>)>,
     pub(super) interrupts: Mutex<Vec<(SessionId, String)>>,
     pub(super) releases: Mutex<Vec<(SessionId, TicketId)>>,
+    /// The reason and cause of each release, in the order of `releases`.
+    pub(super) release_reasons: Mutex<Vec<(String, ReleaseCause)>>,
+    /// Each session whose running verbs were told to stop.
+    pub(super) stopped: Mutex<Vec<SessionId>>,
     /// Every release fails, as one at the hub does when the hub is unreachable.
     pub(super) fail_release: Mutex<bool>,
     /// Each session's title in the desktop app; a session missing here has none that can be read.
@@ -94,6 +98,11 @@ impl Host for FakeHost {
         lock(&self.verbs).get(session).cloned().unwrap_or_default()
     }
 
+    fn stop_verbs(&self, session: &SessionId) -> Vec<String> {
+        lock(&self.stopped).push(session.clone());
+        Vec::new()
+    }
+
     fn interrupt(&self, session: &SessionId, reply: Reply) -> bool {
         lock(&self.interrupts).push((session.clone(), reply.text));
         true
@@ -131,12 +140,13 @@ impl Host for FakeHost {
         &self,
         session: &SessionId,
         ticket: &TicketId,
-        _reason: &str,
-        _cause: ReleaseCause,
+        reason: &str,
+        cause: ReleaseCause,
     ) -> Result<()> {
         if *lock(&self.fail_release) {
             return Err(Error::Unreachable("the hub is away".to_owned()));
         }
+        lock(&self.release_reasons).push((reason.to_owned(), cause));
         lock(&self.holders).remove(session);
         lock(&self.releases).push((session.clone(), ticket.clone()));
         Ok(())

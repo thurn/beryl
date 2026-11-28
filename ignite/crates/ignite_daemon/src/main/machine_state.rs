@@ -179,6 +179,7 @@ impl Parts {
                 )?;
                 heard(pool, &reply, &home, &trees);
                 headless_dispatch.reconciled(&ctx, &reply.reconciled);
+                headless_dispatch.heard_builds(&ctx, &reply);
                 *hub_version.borrow_mut() = Some(reply.hub_version);
                 emergencies.heard(reply.emergency);
                 Ok(())

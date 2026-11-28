@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 /// itself, a worker giving up or Ignite taking the ticket back from a worker, and two counted
 /// releases by different sessions stop the hub offering the ticket until a justiciar has looked
 /// at it. A release caused by the worker's circumstances (its plan limit, a hold on its app, its
-/// machine going offline, an emergency) is not counted, because the next worker would not meet
-/// the same obstacle.
+/// machine going offline, an emergency, a machine holding more build tickets than its limit) is
+/// not counted, because the next worker would not meet the same obstacle.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ReleaseCause {
@@ -27,6 +27,9 @@ pub enum ReleaseCause {
     Offline,
     /// An emergency pause ended the work.
     Emergency,
+    /// The machine held more build tickets than its limit, and `ignite pool shed` or the
+    /// daemon's automatic shedding took this one back (see `ignite_core::protocol::hub::shed`).
+    Shed,
     /// A cause a newer build sent that this one does not know. It is not counted.
     #[serde(other)]
     Unknown,
@@ -49,6 +52,7 @@ impl ReleaseCause {
             ReleaseCause::CliHold => "cli-hold",
             ReleaseCause::Offline => "offline",
             ReleaseCause::Emergency => "emergency",
+            ReleaseCause::Shed => "shed",
             ReleaseCause::Unknown => "unknown",
         }
     }
@@ -67,6 +71,7 @@ mod tests {
             ReleaseCause::CliHold,
             ReleaseCause::Offline,
             ReleaseCause::Emergency,
+            ReleaseCause::Shed,
             ReleaseCause::Unknown,
         ]
         .into_iter()

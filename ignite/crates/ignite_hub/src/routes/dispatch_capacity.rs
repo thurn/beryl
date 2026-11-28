@@ -14,6 +14,9 @@ use super::{Candidate, Requirements, expected_cores, named_files, resolved_files
 pub(super) struct Capacity<'a> {
     pub cores: Vec<f64>,
     pub budget: Budget<'a>,
+    /// Each ticket counted against the build-ticket limit, with when it was claimed or
+    /// reserved and whether it is claimed rather than only reserved.
+    pub builds: Vec<(String, Option<Timestamp>, bool)>,
 }
 
 impl Capacity<'_> {
@@ -63,6 +66,7 @@ pub(super) fn read<'a>(
     let mut capacity = Capacity {
         cores: Vec::new(),
         budget,
+        builds: Vec::new(),
     };
     for row in held {
         let (id, claimed, expires) = row?;
@@ -87,7 +91,9 @@ pub(super) fn read<'a>(
                 cores,
                 &files,
             );
-            capacity.budget.hold(&ticket.id, build, since);
+            if capacity.budget.hold(&ticket.id, build, since) {
+                capacity.builds.push((id, since, claimed.is_some()));
+            }
         }
     }
     Ok(capacity)

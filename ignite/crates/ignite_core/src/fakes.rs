@@ -709,6 +709,14 @@ impl Hub for FakeHub {
         self.fake_set_machine_state(machine, state, actor)
     }
 
+    fn shed(&self, order: &crate::protocol::hub::shed::ShedOrder) -> Result<()> {
+        self.fake_shed(order)
+    }
+
+    fn shed_done(&self, done: &crate::protocol::hub::shed::ShedDone) -> Result<()> {
+        self.fake_shed_done(done)
+    }
+
     fn pause(&self, pause: &Pause) -> Result<()> {
         self.reachable()?;
         if pause.machine.is_none()

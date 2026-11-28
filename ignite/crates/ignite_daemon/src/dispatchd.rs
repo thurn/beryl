@@ -30,6 +30,8 @@ mod recovery;
 mod returning;
 #[path = "dispatchd_shared.rs"]
 mod shared;
+#[path = "dispatchd_shed.rs"]
+mod shed;
 #[path = "dispatchd_stall.rs"]
 mod stall;
 #[path = "dispatchd_tell.rs"]
@@ -128,6 +130,11 @@ pub trait Host: Send + Sync {
     /// Whether the handle has a result, even if the activity has yet to hear it finished.
     fn verb_finished(&self, _handle: &Handle) -> bool {
         false
+    }
+    /// Asks every verb the session started that is still running to stop, and waits a short
+    /// while for them to finish. Returns a line for each verb, for the daemon log.
+    fn stop_verbs(&self, _session: &SessionId) -> Vec<String> {
+        Vec::new()
     }
     /// Ends the session's `ignite wait` at once with `reply`. Returns whether it was waiting.
     fn interrupt(&self, session: &SessionId, reply: Reply) -> bool;
@@ -254,6 +261,10 @@ struct State {
     begins_running: Vec<cli::Call>,
     /// The shared failure in force, if any (see `shared`).
     shared: shared::Watch,
+    /// The build tickets this machine holds and its limit, from the last heartbeat reply that
+    /// counted them, and since when it has held more than twice its limit (see `shed`).
+    builds: Option<ignite_core::protocol::hub::shed::BuildHoldings>,
+    far_over_since: Option<Timestamp>,
 }
 
 /// Reserves tickets, hands them to local CLI workers, and tracks those workers.
@@ -421,6 +432,9 @@ mod restart_tests;
 #[cfg(test)]
 #[path = "dispatchd_returning_tests.rs"]
 mod returning_tests;
+#[cfg(test)]
+#[path = "dispatchd_shed_tests.rs"]
+mod shed_tests;
 #[cfg(test)]
 #[path = "dispatchd_stall_tests.rs"]
 mod stall_tests;

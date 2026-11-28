@@ -7,6 +7,7 @@ use super::{FakeHub, lock};
 use crate::fleet::{FleetNotice, MachineState};
 use crate::ids::MachineId;
 use crate::protocol::fleet::FleetVersions;
+use crate::protocol::hub::shed::{ShedDone, ShedOrder};
 use crate::traits::Result;
 
 /// The versions [`FakeHub::set_fleet_versions`] set; none until then.
@@ -14,9 +15,33 @@ use crate::traits::Result;
 pub(super) struct FakeFleet {
     versions: Mutex<Option<FleetVersions>>,
     notices: Mutex<BTreeMap<MachineId, FleetNotice>>,
+    sheds: Mutex<Vec<ShedOrder>>,
+    shed_dones: Mutex<Vec<ShedDone>>,
 }
 
 impl FakeHub {
+    /// Every `ignite pool shed --machine` order sent so far, in order.
+    pub fn sheds(&self) -> Vec<ShedOrder> {
+        lock(&self.fleet.sheds).clone()
+    }
+
+    /// Every shed a machine recorded in the fleet's recent changes, in order.
+    pub fn shed_dones(&self) -> Vec<ShedDone> {
+        lock(&self.fleet.shed_dones).clone()
+    }
+
+    pub(super) fn fake_shed(&self, order: &ShedOrder) -> Result<()> {
+        self.reachable()?;
+        lock(&self.fleet.sheds).push(order.clone());
+        Ok(())
+    }
+
+    pub(super) fn fake_shed_done(&self, done: &ShedDone) -> Result<()> {
+        self.reachable()?;
+        lock(&self.fleet.shed_dones).push(done.clone());
+        Ok(())
+    }
+
     pub fn set_fleet_notice(&self, machine: MachineId, notice: FleetNotice) {
         lock(&self.fleet.notices).insert(machine, notice);
     }

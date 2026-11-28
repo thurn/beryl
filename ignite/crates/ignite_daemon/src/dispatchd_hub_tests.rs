@@ -85,6 +85,8 @@ fn hear_fleet_state(rig: &Rig) {
             hub_version: "test".to_owned(),
             emergency: None,
             reconciled: Vec::new(),
+            build_tickets: None,
+            shed: None,
         },
     )
     .unwrap();

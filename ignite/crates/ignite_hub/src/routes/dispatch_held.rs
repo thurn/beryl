@@ -232,6 +232,11 @@ fn has_blocker(conn: &Connection, filter: &str, key: &str) -> Result<bool> {
     )?)
 }
 
+/// Whether the ticket with ID `id` holds `master` back, as [`holds_master`] says of a ready one.
+pub(super) fn holds_master_id(conn: &Connection, id: &str) -> Result<bool> {
+    has_blocker(conn, "t.id = ?5", id)
+}
+
 /// Replays a reservation whose reply was lost. If the requester is limited to master blockers,
 /// it can retry an offer that still holds master back.
 pub(super) fn retry_reservation(

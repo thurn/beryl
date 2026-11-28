@@ -86,6 +86,8 @@ pub fn handle(
         | "/release"
         | "/close"
         | "/pause"
+        | "/shed"
+        | "/shed/done"
         | "/session-titles"
         | "/emergency" => true,
         _ => return None,
@@ -201,6 +203,9 @@ fn route(
             machines::pause(conn, &parsed, request, now)
         }
         "/emergency" => emergency_route::change(conn, request, now),
+        // Any machine may order another to shed, as `ignite pool shed --machine` does.
+        "/shed" => machines::sheds::order(conn, &body(request)?),
+        "/shed/done" => machines::sheds::record(conn, request, &body(request)?, now),
         other => Err(failure(404, &format!("no route {other}"))),
     }
 }
@@ -740,6 +745,9 @@ mod pins_tests;
 #[cfg(test)]
 #[path = "dispatch_release_count_tests.rs"]
 mod release_count_tests;
+#[cfg(test)]
+#[path = "dispatch_shed_tests.rs"]
+mod shed_tests;
 
 #[cfg(test)]
 #[path = "dispatch_usage_tests.rs"]

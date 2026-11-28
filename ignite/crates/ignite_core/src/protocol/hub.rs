@@ -112,6 +112,12 @@ pub struct HeartbeatReply {
     /// Released tickets this machine's workers still hold trees for ([`super::returning`]).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub reconciled: Vec<super::returning::Reconciled>,
+    /// The build tickets this machine holds and its limit, in a reply to a beat with a sample.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub build_tickets: Option<shed::BuildHoldings>,
+    /// An `ignite pool shed --machine` order for this machine, delivered once ([`shed`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shed: Option<shed::ShedOrder>,
 }
 
 /// An idle pool member that could take a ticket.
@@ -357,6 +363,9 @@ pub use cost::ResultCost;
 #[path = "hub_releases.rs"]
 mod releases;
 pub use releases::ReleaseCause;
+
+#[path = "hub_shed.rs"]
+pub mod shed;
 
 // Verdicts and reverted landings live in a file of their own, with their tests.
 #[path = "hub_verdicts.rs"]

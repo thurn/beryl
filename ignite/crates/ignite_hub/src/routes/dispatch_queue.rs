@@ -44,16 +44,15 @@ use crate::upkeep::regressions;
 
 #[path = "dispatch_allocation.rs"]
 mod allocation;
-
-#[path = "dispatch_pins.rs"]
-mod pins;
-
 #[path = "dispatch_held.rs"]
 pub(super) mod held;
+#[path = "dispatch_pins.rs"]
+mod pins;
 use held::Paused;
-
 #[path = "dispatch_capacity.rs"]
 mod capacity;
+#[path = "dispatch_shed.rs"]
+pub(super) mod shed;
 
 #[path = "dispatch_named_files.rs"]
 mod files;

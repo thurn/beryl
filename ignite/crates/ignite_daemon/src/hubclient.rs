@@ -615,6 +615,16 @@ impl Hub for HubClient {
         Ok(())
     }
 
+    fn shed(&self, order: &ignite_core::protocol::hub::shed::ShedOrder) -> Result<()> {
+        self.post::<_, serde_json::Value>("/shed", order)
+            .map(|_| ())
+    }
+
+    fn shed_done(&self, done: &ignite_core::protocol::hub::shed::ShedDone) -> Result<()> {
+        self.post::<_, serde_json::Value>("/shed/done", done)
+            .map(|_| ())
+    }
+
     fn set_fleet_machine_state(
         &self,
         machine: &ignite_core::ids::MachineId,
