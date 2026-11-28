@@ -21,7 +21,7 @@ use crate::prompt::PromptState;
 use crate::publication::PublishedTable;
 use crate::refusal::to_wire;
 use crate::saves::Save;
-use crate::sessions::{Emit, EmitEvent, TableEvent};
+use crate::sessions::{Emit, EmitEvent, TableDeckSnapshot, TableEvent};
 
 const LOCAL: Seat = Seat(0);
 const GUEST: Seat = Seat(1);
@@ -121,6 +121,27 @@ impl HostSession {
     pub(super) fn current(&self) -> GameUpdate {
         let table = self.0.lock();
         table.update(LOCAL, table.link_state(), table.show_script)
+    }
+
+    pub(super) fn report_snapshot(&self) -> (GameUpdate, Vec<TableDeckSnapshot>, Option<Vec<u8>>) {
+        let table = self.0.lock();
+        let update = table.update(LOCAL, table.link_state(), table.show_script);
+        let decks = table
+            .table
+            .table()
+            .game_match
+            .seats
+            .iter()
+            .enumerate()
+            .map(|(index, seat)| TableDeckSnapshot {
+                seat: index as u8,
+                name: None,
+                main: seat.deck.clone(),
+                side: seat.sideboard.clone(),
+            })
+            .collect();
+        let save = std::fs::read(&table.save.path).ok();
+        (update, decks, save)
     }
 
     pub(super) fn link_state(&self) -> LinkState {

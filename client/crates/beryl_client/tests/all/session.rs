@@ -329,3 +329,151 @@ fn the_live_session_saves_a_pasted_decklist_and_lists_it() {
     commands.close();
     let _ = std::fs::remove_dir_all(&data);
 }
+
+#[test]
+fn bug_report_at_a_manual_table_after_an_agent_game_records_that_table() {
+    let data = std::env::temp_dir().join(format!(
+        "beryl-client-manual-bug-test-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&data);
+    let bugs_dir = data.join("bugs");
+    let dirs = beryl_shell::Dirs {
+        data: data.clone(),
+        logs: data.join("logs"),
+        bugs: bugs_dir.clone(),
+    };
+    let (sender, inbox) = channel();
+    let commands = session::spawn(
+        Class::Utility,
+        {
+            let inbox = Inbox::new(sender.clone(), || true);
+            move || {
+                session::Live::new(Some(dirs), inbox)
+                    .played_by("random", "random", beryl_protocol::DECKS[0].key, 42)
+                    .expect("agent game starts")
+            }
+        },
+        Inbox::new(sender, || true),
+    );
+
+    // Wait for the earlier agent game to emit a view so `sessions.current()` and
+    // `sessions.current_replay()` are both populated.
+    loop {
+        match inbox.recv().expect("agent game emits a view") {
+            Input::Update(update) if update.view.table.is_none() => break,
+            _ => {}
+        }
+    }
+
+    // Open a Solo manual table and advance to turn 2.
+    let request = game_manual::manual::solo_request();
+    commands.send(SessionCommand::TableSolo(request));
+    let mut table_update = None;
+    while table_update.is_none() {
+        if let Input::Update(update) = inbox.recv().expect("solo table emits a view")
+            && update.view.table.is_some()
+        {
+            table_update = Some(update);
+        }
+    }
+    commands.send(SessionCommand::TableAct(
+        beryl_protocol::protocol::TableAction::NextTurn {},
+    ));
+    let mut advanced_update = None;
+    while advanced_update.is_none() {
+        if let Input::Update(update) = inbox.recv().expect("solo table advances turn")
+            && update.view.table.is_some()
+            && update.view.turn.number > 1
+        {
+            advanced_update = Some(update);
+        }
+    }
+    let table_update = advanced_update.unwrap();
+
+    let mut bugs = beryl_client::bugs::Bugs::new(bugs_dir.clone());
+    bugs.seen(&Input::Update(table_update.clone()));
+    bugs.save(
+        &app_client::command::Request::SaveBug {
+            description: "Manual table bug".to_owned(),
+            ai: false,
+            region: kit_ui::input::Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 100.0,
+                height: 100.0,
+            },
+            window: kit_ui::input::Size {
+                width: 800.0,
+                height: 600.0,
+            },
+        },
+        None,
+        Some(&commands),
+    );
+    while let Ok(input) = inbox.recv() {
+        if let Input::BugSaved(result) = input {
+            result.expect("bug report saved");
+            break;
+        }
+    }
+    commands.close();
+
+    assert_manual_table_report(&bugs_dir, &table_update);
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+fn assert_manual_table_report(
+    bugs_dir: &std::path::Path,
+    table_update: &beryl_protocol::GameUpdate,
+) {
+    let folder = std::fs::read_dir(bugs_dir)
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .find(|path| path.is_dir() && path.join("report.md").is_file())
+        .expect("saved report folder");
+    assert!(!folder.join("replay.json").exists());
+    assert!(!folder.join("searches.json").exists());
+    assert!(folder.join("table.jsonl").is_file());
+
+    let view: beryl_protocol::GameUpdate =
+        serde_json::from_str(&std::fs::read_to_string(folder.join("view.json")).unwrap()).unwrap();
+    assert_eq!(view.session, table_update.session);
+    assert_eq!(view.view.turn.number, table_update.view.turn.number);
+    assert_eq!(view.view.turn.step, table_update.view.turn.step);
+
+    let md = std::fs::read_to_string(folder.join("report.md")).unwrap();
+    assert!(md.contains("table: \"solo\"\n"), "{md}");
+    assert!(md.contains("deck: \""), "{md}");
+    assert!(
+        md.contains(&format!("turn: {}\n", table_update.view.turn.number)),
+        "{md}"
+    );
+    assert!(md.contains("seed: \n"), "{md}");
+    assert!(md.contains("just client app --table "), "{md}");
+    assert!(!md.contains("seed: 42"), "{md}");
+    assert!(!md.contains("just review"), "{md}");
+
+    // Reopen the saved table.jsonl via `Live::resuming_table`.
+    let (reopen_sender, reopen_inbox) = channel();
+    let reopen = session::spawn(
+        Class::Utility,
+        {
+            let inbox = Inbox::new(reopen_sender.clone(), || true);
+            let table_path = folder.join("table.jsonl");
+            move || session::Live::new(None, inbox).resuming_table(table_path)
+        },
+        Inbox::new(reopen_sender, || true),
+    );
+    while let Ok(input) = reopen_inbox.recv() {
+        if let Input::Update(update) = input
+            && update.view.table.is_some()
+        {
+            assert_eq!(update.view.turn.number, table_update.view.turn.number);
+            assert_eq!(update.view.turn.step, table_update.view.turn.step);
+            break;
+        }
+    }
+    reopen.close();
+}

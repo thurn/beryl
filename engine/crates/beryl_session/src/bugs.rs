@@ -36,7 +36,7 @@ use serde_json::{Value, json};
 
 use crate::ipc::{CHOOSE, Fixture, FixtureMessage, GAME_UPDATE, Platform, SET_STOPS};
 use crate::journal::{self, Level};
-use crate::{SessionError, Sessions};
+use crate::{GameUpdate, SessionError, Sessions};
 
 /// How many journal records a report copies.
 const JOURNAL_RECORDS: usize = 2000;
@@ -66,6 +66,29 @@ pub struct BugReport {
     /// Whether the report concerns the spec viewer itself.
     #[serde(skip)]
     pub spec_viewer: bool,
+    /// The manual table active when the report was saved, if any.
+    #[serde(skip)]
+    pub manual: Option<ManualTable>,
+}
+
+/// One seat's deck at a manual table.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ManualDeck {
+    pub seat: u8,
+    pub name: Option<String>,
+    pub main_cards: u32,
+    pub side_cards: u32,
+}
+
+/// The manual table recorded in place of any earlier engine game.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ManualTable {
+    /// `"solo"`, `"hosted"`, or `"joined"`.
+    pub kind: String,
+    pub update: Option<GameUpdate>,
+    pub decks: Vec<ManualDeck>,
+    /// Whether `table.jsonl` was attached and can reopen this table directly.
+    pub reopenable: bool,
 }
 
 /// A moment of a card's spec, seen from one seat: `/specs/<card>/<moment>/<view>`.
@@ -318,7 +341,15 @@ pub fn write_attached(
         put("window.png", png)?;
         files.push(("window.png", "the whole window, frozen".to_owned()));
     }
-    let replay = sessions.current_replay();
+    let (replay, moves, current) = if let Some(manual) = &report.manual {
+        (None, Vec::new(), manual.update.clone())
+    } else {
+        (
+            sessions.current_replay(),
+            sessions.agent_moves(),
+            sessions.current(),
+        )
+    };
     if let Some(replay) = &replay {
         put("replay.json", pretty(replay).as_bytes())?;
         files.push((
@@ -332,7 +363,6 @@ pub fn write_attached(
             ),
         ));
     }
-    let moves = sessions.agent_moves();
     if !moves.is_empty() {
         put("searches.json", pretty(&moves).as_bytes())?;
         files.push((
@@ -343,7 +373,6 @@ pub fn write_attached(
             ),
         ));
     }
-    let current = sessions.current();
     if let Some(update) = &current {
         put("view.json", pretty(update).as_bytes())?;
         files.push((
@@ -591,6 +620,7 @@ mod tests {
             updates: vec![json!({ "session": 1 })],
             spec: None,
             spec_viewer: false,
+            manual: None,
         };
         let images = Images {
             screenshot: Some(b"hi".to_vec()),
@@ -654,6 +684,7 @@ mod tests {
             updates: Vec::new(),
             spec: SpecMoment::parse("llanowar-elves/tap/theirs"),
             spec_viewer: false,
+            manual: None,
         };
         let first = write(
             &dir,
@@ -704,6 +735,55 @@ mod tests {
             open_by_moment(&dir).get("llanowar-elves/tap/theirs"),
             Some(&1)
         );
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn non_reopenable_manual_table_says_no_replay_exists() {
+        let dir = std::env::temp_dir().join(format!("beryl-manual-bugs-{}", std::process::id()));
+        let sessions = Sessions::new(&NO_CARDS, None, |_| {});
+        let report = BugReport {
+            description: "Joined table bug".to_owned(),
+            ai: false,
+            snapshot: None,
+            region: None,
+            page: PageInfo {
+                url: "client".to_owned(),
+                width: 1280.0,
+                height: 800.0,
+                scale: 1.0,
+            },
+            ui_log: json!([]),
+            updates: Vec::new(),
+            spec: None,
+            spec_viewer: false,
+            manual: Some(ManualTable {
+                kind: "joined".to_owned(),
+                update: None,
+                decks: vec![ManualDeck {
+                    seat: 0,
+                    name: Some("WU Control".to_owned()),
+                    main_cards: 60,
+                    side_cards: 15,
+                }],
+                reopenable: false,
+            }),
+        };
+        let saved = write(
+            &dir,
+            &report,
+            &Images::default(),
+            &sessions,
+            &Environment::current(),
+        )
+        .unwrap();
+        let folder = PathBuf::from(&saved.path);
+        assert!(!folder.join("replay.json").exists());
+        let md = std::fs::read_to_string(folder.join("report.md")).unwrap();
+        assert!(md.contains("table: \"joined\"\n"));
+        assert!(md.contains("deck: \"WU Control (60 main, 15 side)\"\n"));
+        assert!(md.contains("No replay exists for this joined manual table"));
+        assert!(!md.contains("just review"));
         std::fs::remove_dir_all(dir).unwrap();
     }
 }

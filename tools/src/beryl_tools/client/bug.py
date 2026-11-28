@@ -125,6 +125,12 @@ def reproduce(opened: Opened) -> list[str]:
             # `just client app` runs until `--for` ends, so `live` is run beside it.
             "just client live tree  (from another shell while the app runs)",
         ]
+    table = opened.report.folder / "table.jsonl"
+    if table.is_file() and opened.report.fields.get("table") == "solo":
+        return [
+            f"just client app --table {table} --window none --for 120s",
+            "just client live tree  (from another shell while the app runs)",
+        ]
     return []
 
 
@@ -164,6 +170,21 @@ def text(opened: Opened) -> str:
     commands = reproduce(opened)
     if commands:
         out += ["reproduce:", *(f"  {command}" for command in commands)]
+    elif table_kind := report.fields.get("table"):
+        details = [
+            part
+            for part in (
+                f"deck {report.fields['deck']}" if report.fields.get("deck") else None,
+                f"turn {report.fields['turn']}" if report.fields.get("turn") else None,
+                f"step {report.fields['step']}" if report.fields.get("step") else None,
+            )
+            if part
+        ]
+        suffix = f" ({', '.join(details)})" if details else ""
+        out.append(
+            f"reproduce: no replay exists for this {table_kind} manual table{suffix}; "
+            f"rebuild it from the start screen by opening a {table_kind} table"
+        )
     else:
         out.append("reproduce: the report has no recording moment and no replay.json")
     return "\n".join(out)

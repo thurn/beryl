@@ -206,6 +206,10 @@ def app_arguments(parser: argparse.ArgumentParser) -> None:
         "--replay",
         help="resume the game of this replay file (a bug report's replay.json), saving none",
     )
+    parser.add_argument(
+        "--table",
+        help="reopen the solo manual table of this save file (a bug report's table.jsonl)",
+    )
     parser.add_argument("--pause-at", help="stop the clock at this moment (1500ms)")
     parser.add_argument(
         "--for",
@@ -282,6 +286,7 @@ def run_app(args: argparse.Namespace) -> int:
     for option, value in (
         ("--fixture", args.fixture),
         ("--replay", args.replay),
+        ("--table", args.table),
         ("--pause-at", args.pause_at),
         ("--for", args.run_for),
         ("--scale", args.scale),

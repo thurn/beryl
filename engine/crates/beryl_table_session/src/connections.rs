@@ -131,6 +131,14 @@ impl TableConnections {
         self.tables.current()
     }
 
+    pub fn current_report(&self) -> Option<crate::TableReportSnapshot> {
+        self.tables.current_report()
+    }
+
+    pub fn resume_solo_file(&self, path: &Path) -> Result<SessionId, TableConnectionError> {
+        self.tables.resume_solo_file(path).map_err(error)
+    }
+
     pub fn leave(&self) -> Result<(), TableConnectionError> {
         let mut listener = self.listener.lock().unwrap_or_else(PoisonError::into_inner);
         if self.tables.is_joined() {

@@ -54,6 +54,9 @@ pub struct Options {
     /// A replay file whose game to resume at its latest decision instead of the newest game,
     /// such as a bug report's `replay.json` (`--replay`). The game saves nothing.
     pub replay: Option<PathBuf>,
+    /// A solo manual table save whose table to reopen instead of the newest game, such as a bug
+    /// report's `table.jsonl` (`--table`).
+    pub table: Option<PathBuf>,
     /// Where the clock stops: a moment as `just client` writes one (`1500ms`, `prompt:1`).
     pub pause_at: Option<String>,
     /// How long the run lasts before the app ends it.
@@ -125,6 +128,7 @@ impl Options {
         let mut options = Self {
             fixture: None,
             replay: None,
+            table: None,
             pause_at: None,
             run_for: None,
             window: Window::Fullscreen,
@@ -153,13 +157,8 @@ impl Options {
             };
             match option.as_str() {
                 "--fixture" if tools => options.fixture = Some(value()?),
-                "--replay" if tools => {
-                    let path = PathBuf::from(value()?);
-                    if !path.is_file() {
-                        return Err(format!("--replay {}: no such file", path.display()));
-                    }
-                    options.replay = Some(path);
-                }
+                "--replay" if tools => options.replay = Some(existing_file("--replay", &value()?)?),
+                "--table" if tools => options.table = Some(existing_file("--table", &value()?)?),
                 "--pause-at" if tools => options.pause_at = Some(value()?),
                 "--drive" if tools => options.drive = Some(value()?),
                 "--watch" if tools => options.watch = true,
@@ -217,11 +216,33 @@ impl Options {
                 _ => return Err(format!("{option} is not an option.\n{}", usage(tools))),
             }
         }
-        if options.replay.is_some() && (options.fixture.is_some() || options.agent.is_some()) {
-            return Err("--replay resumes a game, so it takes no --fixture or --agent".to_owned());
-        }
+        options.validate()?;
         Ok(options)
     }
+
+    fn validate(&self) -> Result<(), String> {
+        if self.replay.is_some()
+            && (self.fixture.is_some() || self.agent.is_some() || self.table.is_some())
+        {
+            return Err(
+                "--replay resumes a game, so it takes no --fixture, --agent or --table".to_owned(),
+            );
+        }
+        if self.table.is_some() && (self.fixture.is_some() || self.agent.is_some()) {
+            return Err(
+                "--table reopens a manual table, so it takes no --fixture or --agent".to_owned(),
+            );
+        }
+        Ok(())
+    }
+}
+
+fn existing_file(flag: &str, value: &str) -> Result<PathBuf, String> {
+    let path = PathBuf::from(value);
+    if !path.is_file() {
+        return Err(format!("{flag} {}: no such file", path.display()));
+    }
+    Ok(path)
 }
 
 /// The options this build takes, one line each.
@@ -237,6 +258,9 @@ pub fn usage(tools: bool) -> String {
         lines.push("  --fixture <recording>                            replay a recording");
         lines.push(
             "  --replay <replay.json>                           resume that file's game, saving none",
+        );
+        lines.push(
+            "  --table <table.jsonl>                            reopen that file's solo manual table",
         );
         lines.push("  --watch                                          reload tuning files when they change");
         lines.push("  --pause-at <moment>                              stop the clock there");

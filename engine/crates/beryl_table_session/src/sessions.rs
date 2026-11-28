@@ -87,6 +87,27 @@ impl Current {
 struct Solo {
     table: PublishedTable,
     session: SessionId,
+    seed: u64,
+    deck_name: Option<String>,
+}
+
+/// One seat's deck at a manual table, for bug reports and card preparation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TableDeckSnapshot {
+    pub seat: u8,
+    pub name: Option<String>,
+    pub main: Vec<(String, u16)>,
+    pub side: Vec<(String, u16)>,
+}
+
+/// What a bug report needs from the active manual table.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TableReportSnapshot {
+    pub kind: &'static str,
+    pub update: Option<GameUpdate>,
+    pub decks: Vec<TableDeckSnapshot>,
+    pub save: Option<Vec<u8>>,
+    pub reopenable: bool,
 }
 
 impl Solo {
@@ -156,6 +177,10 @@ impl TableSessions {
 
     fn open_solo(&self, deck: Option<Deck>, seed: u64) -> Result<SessionId, Refusal> {
         let mut current = self.lock();
+        let deck_name = deck
+            .as_ref()
+            .map(|d| d.name.trim().to_owned())
+            .filter(|n| !n.is_empty());
         let table = Table::new(1);
         let log = Log::new(&table);
         let mut table = PublishedTable::new(table, log, Chance::fresh(seed))?;
@@ -177,7 +202,42 @@ impl TableSessions {
             )?;
         }
         let session = self.ids.allocate();
-        let solo = Solo { table, session };
+        let solo = Solo {
+            table,
+            session,
+            seed,
+            deck_name,
+        };
+        let update = solo.update();
+        let lobby = solo.lobby();
+        let previous = replace(&mut current, Current::Solo(Box::new(solo)));
+        (self.emit)(update);
+        (self.emit_event)(TableEvent::Lobby(lobby));
+        drop(current);
+        leave_link(previous);
+        Ok(session)
+    }
+
+    /// Reopens a solo manual table from a `beryl_table::save` file (`table.jsonl`), replacing
+    /// any active table.
+    pub fn resume_solo_file(&self, path: &std::path::Path) -> Result<SessionId, SaveError> {
+        let file = std::fs::File::open(path)?;
+        let mut reader = io::BufReader::new(file);
+        let (table, log, chance) = beryl_table::save::open_with_chance(&mut reader)?;
+        if table.players.len() != 1 {
+            return Err(SaveError::InvalidEntry(0));
+        }
+        let (seed, deck_name) = read_solo_header(path);
+        let published = PublishedTable::new(table, log, chance)
+            .map_err(|refusal| SaveError::Replay { entry: 0, refusal })?;
+        let mut current = self.lock();
+        let session = self.ids.allocate();
+        let solo = Solo {
+            table: published,
+            session,
+            seed,
+            deck_name,
+        };
         let update = solo.update();
         let lobby = solo.lobby();
         let previous = replace(&mut current, Current::Solo(Box::new(solo)));
@@ -421,6 +481,12 @@ impl TableSessions {
                         solo.table.dispatch_action(SOLO, action, |_| Ok(()))?;
                     }
                     TableRequest::Lobby(request) => {
+                        if matches!(
+                            request.change,
+                            beryl_protocol::ipc::LobbyChange::LoadDeck { .. }
+                        ) {
+                            solo.deck_name = None;
+                        }
                         solo.table
                             .apply_lobby_checked(SOLO, request.change, |_| Ok(()))?;
                     }
@@ -467,6 +533,52 @@ impl TableSessions {
         })
     }
 
+    /// Snapshot of the active manual table for bug reports: kind, latest view, decks, and
+    /// `beryl_table::save` bytes when the local session owns the table.
+    pub fn current_report(&self) -> Option<TableReportSnapshot> {
+        self.lock().as_ref().map(|current| match current {
+            Current::Solo(solo) => {
+                let seat = solo.table.table().game_match.seats.first();
+                let decks = seat
+                    .map(|seat| {
+                        vec![TableDeckSnapshot {
+                            seat: 0,
+                            name: solo.deck_name.clone(),
+                            main: seat.deck.clone(),
+                            side: seat.sideboard.clone(),
+                        }]
+                    })
+                    .unwrap_or_default();
+                let save = solo_save_bytes(solo);
+                let reopenable = save.is_some();
+                TableReportSnapshot {
+                    kind: "solo",
+                    update: Some(solo.update()),
+                    decks,
+                    save,
+                    reopenable,
+                }
+            }
+            Current::Hosted(host) => {
+                let (update, decks, save) = host.report_snapshot();
+                TableReportSnapshot {
+                    kind: "hosted",
+                    update: Some(update),
+                    decks,
+                    save,
+                    reopenable: false,
+                }
+            }
+            Current::Joined(guest) => TableReportSnapshot {
+                kind: "joined",
+                update: guest.current(),
+                decks: Vec::new(),
+                save: None,
+                reopenable: false,
+            },
+        })
+    }
+
     #[cfg(debug_assertions)]
     pub(super) fn cut_host_for_test(&self) {
         let mut current = self.lock();
@@ -504,6 +616,42 @@ impl TableSessions {
     fn lock(&self) -> MutexGuard<'_, Option<Current>> {
         self.current.lock().unwrap_or_else(PoisonError::into_inner)
     }
+}
+
+fn solo_save_bytes(solo: &Solo) -> Option<Vec<u8>> {
+    let mut bytes = Vec::new();
+    let initial = Table::new(1);
+    let metadata = match &solo.deck_name {
+        Some(name) => serde_json::json!({ "kind": "solo", "deck": name }),
+        None => serde_json::json!({ "kind": "solo" }),
+    };
+    beryl_table::save::write_header_with_metadata(&mut bytes, &initial, solo.seed, Some(metadata))
+        .ok()?;
+    for entry in solo.table.log().entries() {
+        beryl_table::save::append(&mut bytes, entry).ok()?;
+    }
+    Some(bytes)
+}
+
+fn read_solo_header(path: &std::path::Path) -> (u64, Option<String>) {
+    use std::io::BufRead as _;
+    let Ok(file) = std::fs::File::open(path) else {
+        return (0, None);
+    };
+    let mut line = String::new();
+    if io::BufReader::new(file).read_line(&mut line).is_err() {
+        return (0, None);
+    }
+    let Ok(header) = serde_json::from_str::<Value>(&line) else {
+        return (0, None);
+    };
+    let seed = header.get("seed").and_then(Value::as_u64).unwrap_or(0);
+    let deck = header
+        .get("metadata")
+        .and_then(|meta| meta.get("deck"))
+        .and_then(Value::as_str)
+        .map(str::to_owned);
+    (seed, deck)
 }
 
 fn dial_guest<L: Link + 'static>(

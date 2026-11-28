@@ -56,7 +56,7 @@ pub trait Session {
     ///
     /// When the report cannot be written, with the reason the client shows.
     fn save_bug(&mut self, job: Job) -> Result<(), String> {
-        job.write(None)
+        job.write(None, None)
     }
 
     /// Called once on the session thread after the last command, when the frame thread has
@@ -161,6 +161,8 @@ pub struct Live {
     played_by: Option<(StartGame, String)>,
     /// The replay file `--replay` asked to resume in place of the newest game.
     resume: Option<PathBuf>,
+    /// The solo manual table save `--table` asked to reopen in place of the newest game.
+    resume_table: Option<PathBuf>,
     /// The agents `--offer` adds after the session's own on the start screen.
     offered: Vec<AgentView>,
     /// The card records last given to the client, which the manual table's views add to.
@@ -218,6 +220,7 @@ impl Live {
             inbox,
             played_by: None,
             resume: None,
+            resume_table: None,
             offered: Vec::new(),
             cards,
         }
@@ -243,6 +246,13 @@ impl Live {
     #[must_use]
     pub fn resuming(mut self, path: PathBuf) -> Self {
         self.resume = Some(path);
+        self
+    }
+
+    /// The same sessions, which reopen the solo manual table in `path` on `begin`.
+    #[must_use]
+    pub fn resuming_table(mut self, path: PathBuf) -> Self {
+        self.resume_table = Some(path);
         self
     }
 
@@ -409,6 +419,18 @@ impl Session for Live {
             if let Err(error) = self.sessions.resume_replay(path) {
                 eprintln!("beryl: {} does not resume: {error}", path.display());
             }
+        } else if let Some(path) = &self.resume_table {
+            if let Err(error) = self.tables.resume_solo_file(path) {
+                eprintln!(
+                    "beryl: {} does not reopen: {}",
+                    path.display(),
+                    error.reason
+                );
+            } else if let Some(report) = self.tables.current_report() {
+                for deck in &report.decks {
+                    self.give_deck(&deck.main, &deck.side);
+                }
+            }
         } else {
             beryl_shell::resume_latest(&self.sessions);
         }
@@ -504,7 +526,15 @@ impl Session for Live {
     }
 
     fn save_bug(&mut self, job: Job) -> Result<(), String> {
-        job.write(Some(&self.sessions))
+        let latest = job.latest_session();
+        let manual = self.tables.current_report().filter(|report| {
+            latest.is_none()
+                || report
+                    .update
+                    .as_ref()
+                    .is_some_and(|u| Some(u.session) == latest)
+        });
+        job.write(Some(&self.sessions), manual)
     }
 
     /// Shuts the manual table down so that it can be resumed, as the web app does on quit.

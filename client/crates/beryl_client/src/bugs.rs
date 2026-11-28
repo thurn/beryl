@@ -19,7 +19,10 @@ use beryl_host::Inbox;
 use beryl_render::Picture;
 use beryl_session::GameUpdate;
 use beryl_session::Sessions;
-use beryl_session::bugs::{self, Attached, BugReport, Environment, Images, PageInfo, Region};
+use beryl_session::bugs::{
+    self, Attached, BugReport, Environment, Images, ManualDeck, ManualTable, PageInfo, Region,
+};
+use beryl_table_session::TableReportSnapshot;
 use kit_probe::agent::{TreeOptions, tree};
 use kit_ui::input::{Rect, Size};
 use serde_json::json;
@@ -192,7 +195,7 @@ impl Bugs {
     fn write_apart(&self, job: Job) {
         let inbox = self.inbox.clone();
         std::thread::spawn(move || {
-            let saved = job.write(None);
+            let saved = job.write(None, None);
             if let Some(inbox) = inbox {
                 inbox.send(Input::BugSaved(saved));
             }
@@ -237,14 +240,22 @@ pub struct Job {
 }
 
 impl Job {
+    pub(crate) fn latest_session(&self) -> Option<beryl_session::SessionId> {
+        self.views.last().map(|update| update.session)
+    }
+
     /// Writes the report, with what `sessions` knows of the game if there are any: its replay,
-    /// its latest view and the agent's latest searches.
+    /// its latest view and the agent's latest searches, or `manual` when saved at a manual table.
     ///
     /// # Errors
     ///
     /// When the report cannot be written, with the reason the client shows under its
     /// description.
-    pub fn write(self, sessions: Option<&Sessions>) -> Result<(), String> {
+    pub fn write(
+        self,
+        sessions: Option<&Sessions>,
+        manual: Option<TableReportSnapshot>,
+    ) -> Result<(), String> {
         let saving = &self.saving;
         let window = saving.window;
         // The picture's pixels to one logical point.
@@ -285,38 +296,15 @@ impl Job {
                 note: "The client's frame log through the bug report request".to_owned(),
             });
         }
-        let report = BugReport {
-            description: saving.description.clone(),
-            ai: saving.ai,
-            snapshot: None,
-            region: Some(Region {
-                x: f64::from(region.x),
-                y: f64::from(region.y),
-                width: f64::from(region.width),
-                height: f64::from(region.height),
-            }),
-            page: PageInfo {
-                url: "client".to_owned(),
-                width: f64::from(window.width),
-                height: f64::from(window.height),
-                scale: f64::from(scale),
-            },
-            ui_log: match &self.replayed {
-                Some(replayed) => json!({
-                    "client": "Beryl",
-                    "recording": replayed.recording,
-                    "seat": replayed.seat,
-                    "at": replayed.at_ms,
-                    "ended": replayed.ended,
-                }),
-                None => json!({ "client": "Beryl" }),
-            },
-            updates: (self.views.iter())
-                .map(|update| serde_json::to_value(update).unwrap_or_default())
-                .collect(),
-            spec: None,
-            spec_viewer: false,
-        };
+        let report = build_bug_report(
+            saving,
+            window,
+            scale,
+            self.replayed.as_ref(),
+            &self.views,
+            manual,
+            &mut attached,
+        );
         let none;
         let sessions = if let Some(sessions) = sessions {
             sessions
@@ -337,6 +325,76 @@ impl Job {
         bugs::filing::enqueue(&self.folder, &saved.id, bundled_filing());
         println!("{SAVED} {}", saved.path);
         Ok(())
+    }
+}
+
+fn build_bug_report(
+    saving: &Saving,
+    window: Size,
+    scale: f32,
+    replayed: Option<&Replayed>,
+    views: &[GameUpdate],
+    manual: Option<TableReportSnapshot>,
+    attached: &mut Vec<Attached>,
+) -> BugReport {
+    let region = saving.region;
+    let manual = manual.map(|table| {
+        if let Some(save) = table.save {
+            attached.push(Attached {
+                name: "table.jsonl".to_owned(),
+                bytes: save,
+                note: "the manual table's initial state and action log".to_owned(),
+            });
+        }
+        ManualTable {
+            kind: table.kind.to_owned(),
+            update: table.update,
+            decks: table
+                .decks
+                .into_iter()
+                .map(|deck| ManualDeck {
+                    seat: deck.seat,
+                    name: deck.name,
+                    main_cards: deck.main.iter().map(|(_, n)| u32::from(*n)).sum(),
+                    side_cards: deck.side.iter().map(|(_, n)| u32::from(*n)).sum(),
+                })
+                .collect(),
+            reopenable: table.reopenable,
+        }
+    });
+    BugReport {
+        description: saving.description.clone(),
+        ai: saving.ai,
+        snapshot: None,
+        region: Some(Region {
+            x: f64::from(region.x),
+            y: f64::from(region.y),
+            width: f64::from(region.width),
+            height: f64::from(region.height),
+        }),
+        page: PageInfo {
+            url: "client".to_owned(),
+            width: f64::from(window.width),
+            height: f64::from(window.height),
+            scale: f64::from(scale),
+        },
+        ui_log: match replayed {
+            Some(replayed) => json!({
+                "client": "Beryl",
+                "recording": replayed.recording,
+                "seat": replayed.seat,
+                "at": replayed.at_ms,
+                "ended": replayed.ended,
+            }),
+            None => json!({ "client": "Beryl" }),
+        },
+        updates: views
+            .iter()
+            .map(|update| serde_json::to_value(update).unwrap_or_default())
+            .collect(),
+        spec: None,
+        spec_viewer: false,
+        manual,
     }
 }
 

@@ -38,6 +38,7 @@ BUNDLE_FILES: frozenset[str] = frozenset(
         "screenshot.png",
         "window.png",
         "replay.json",
+        "table.jsonl",
         "searches.json",
         "view.json",
         "fixture.json",

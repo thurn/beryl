@@ -16,4 +16,4 @@ mod view;
 
 pub use beryl_protocol::ipc::SavedTable;
 pub use saves::HostSettings;
-pub use sessions::{TableEvent, TableSessions};
+pub use sessions::{TableDeckSnapshot, TableEvent, TableReportSnapshot, TableSessions};

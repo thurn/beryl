@@ -6,7 +6,7 @@ use crate::ai::AgentMove;
 use crate::ledger::Counts;
 use crate::protocol::Status;
 
-use super::{BugReport, Environment, SpecMoment, body, commit};
+use super::{BugReport, Environment, ManualDeck, ManualTable, SpecMoment, body, commit};
 
 /// Where the game stood.
 pub(super) struct Game {
@@ -135,6 +135,13 @@ pub(super) fn front_matter(out: &mut String, m: &Markdown<'_>, viewport: &str) {
         )
         .expect("a String takes writes");
     }
+    if let Some(manual) = &m.report.manual {
+        writeln!(out, "table: {}", quote(&manual.kind)).expect("a String takes writes");
+        if !manual.decks.is_empty() {
+            writeln!(out, "deck: {}", quote(&manual_decks(&manual.decks)))
+                .expect("a String takes writes");
+        }
+    }
     out.push_str("---\n\n");
 }
 
@@ -176,7 +183,9 @@ pub(super) fn markdown(m: &Markdown<'_>) -> String {
     if let Some(spec) = &m.report.spec {
         spec_lines(&mut out, spec);
     }
-    if g.seed.is_some() {
+    if let Some(manual) = &m.report.manual {
+        manual_lines(&mut out, manual, g);
+    } else if g.seed.is_some() {
         let turn = g.turn.map(|t| format!(" --turn {t}")).unwrap_or_default();
         writeln!(
             out,
@@ -185,7 +194,7 @@ pub(super) fn markdown(m: &Markdown<'_>) -> String {
         )
         .expect("writes");
     }
-    if m.report.ai && g.seed.is_some() {
+    if m.report.manual.is_none() && m.report.ai && g.seed.is_some() {
         let turn = g.turn.map(|t| format!(" --turn {t}")).unwrap_or_default();
         writeln!(
             out,
@@ -235,6 +244,74 @@ pub(super) fn spec_lines(out: &mut String, spec: &SpecMoment) {
         moment = spec.moment,
     )
     .expect("writes");
+}
+
+fn manual_deck_label(deck: &ManualDeck) -> String {
+    let counts = if deck.side_cards > 0 {
+        format!("{} main, {} side", deck.main_cards, deck.side_cards)
+    } else {
+        format!("{} main", deck.main_cards)
+    };
+    match &deck.name {
+        Some(name) if !name.is_empty() => format!("{name} ({counts})"),
+        _ => counts,
+    }
+}
+
+fn manual_decks(decks: &[ManualDeck]) -> String {
+    if decks.len() == 1 {
+        return manual_deck_label(&decks[0]);
+    }
+    decks
+        .iter()
+        .map(|deck| format!("P{}: {}", deck.seat, manual_deck_label(deck)))
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
+fn manual_lines(out: &mut String, manual: &ManualTable, game: &Game) {
+    let mut details = Vec::new();
+    if !manual.decks.is_empty() {
+        details.push(format!("deck: `{}`", manual_decks(&manual.decks)));
+    }
+    if let Some(turn) = game.turn {
+        details.push(format!("turn {turn}"));
+    }
+    if let Some(step) = &game.step
+        && !step.is_empty()
+    {
+        details.push(format!("step `{step}`"));
+    }
+    let summary = if details.is_empty() {
+        String::new()
+    } else {
+        format!(" ({})", details.join(", "))
+    };
+    if manual.reopenable {
+        writeln!(
+            out,
+            "- {} manual table{summary}:\n  \
+             `just client app --table \"<report folder>/table.jsonl\" --window none --for 120s`",
+            capitalize(&manual.kind),
+        )
+        .expect("writes");
+    } else {
+        writeln!(
+            out,
+            "- No replay exists for this {} manual table{summary}. Rebuild it from the start \
+             screen by opening a {} table with the same deck and advancing to that turn and step.",
+            manual.kind, manual.kind,
+        )
+        .expect("writes");
+    }
+}
+
+fn capitalize(word: &str) -> String {
+    let mut chars = word.chars();
+    match chars.next() {
+        Some(first) => format!("{}{}", first.to_uppercase(), chars.as_str()),
+        None => String::new(),
+    }
 }
 
 pub(super) fn region_note(report: &BugReport) -> String {

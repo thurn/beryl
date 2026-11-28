@@ -43,7 +43,7 @@ pub(super) struct Metadata {
 }
 
 pub(super) struct Save {
-    path: PathBuf,
+    pub(super) path: PathBuf,
     file: Option<File>,
     pub(super) metadata: Metadata,
 }

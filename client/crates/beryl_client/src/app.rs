@@ -693,7 +693,8 @@ fn source(options: &Options, inbox: Inbox) -> Result<Source, String> {
     #[cfg(not(feature = "tools"))]
     let _ = options;
     let resume = options.replay.clone();
-    // A resumed replay, like a game an agent plays, keeps no replay or ledger.
+    let resume_table = options.table.clone();
+    // A resumed replay or table, like a game an agent plays, keeps no replay or ledger.
     let (data, played_by) = match &options.agent {
         Some(agent) => (
             None,
@@ -704,7 +705,7 @@ fn source(options: &Options, inbox: Inbox) -> Result<Source, String> {
                 options.seed,
             )),
         ),
-        None if resume.is_some() => (None, None),
+        None if resume.is_some() || resume_table.is_some() => (None, None),
         None => (data_dirs(), None),
     };
     let offer = options.offer.clone();
@@ -716,6 +717,9 @@ fn source(options: &Options, inbox: Inbox) -> Result<Source, String> {
                 let mut live = Live::new(data, inbox).offering(&offer);
                 if let Some(path) = resume {
                     live = live.resuming(path);
+                }
+                if let Some(path) = resume_table {
+                    live = live.resuming_table(path);
                 }
                 match played_by {
                     Some((agent, opponent, deck, seed)) => live
