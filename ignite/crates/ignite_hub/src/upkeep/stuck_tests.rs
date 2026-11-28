@@ -453,6 +453,75 @@ fn a_ticket_held_by_a_working_session_waits_six_hours() {
     );
 }
 
+/// Records that session `s-1` ran a landing gate check that ended at `at`.
+fn record_command(conn: &rusqlite::Connection, at: ignite_core::time::Timestamp) {
+    conn.execute(
+        "INSERT INTO records (machine, session, verb, class, family, queued_s, wall_s, cpu_s,
+                              peak_mb, ignite, at)
+         VALUES ('m', 's-1', 'land', 'express', 'rust', 0, 60, 60, 100, 'v', ?1)",
+        [at.to_string()],
+    )
+    .unwrap();
+}
+
+fn filed(upkeep: &mut Upkeep, conn: &mut rusqlite::Connection, now: ignite_core::time::Timestamp) -> Vec<String> {
+    upkeep.pass(conn, now).unwrap().tickets_filed
+}
+
+/// A session still running its landing gate after six hours, as on a slow machine, is not
+/// reported: a justiciar that read the report released such a ticket while its gate passed.
+/// A day-long hold is reported even so, which still catches a session that loops.
+#[test]
+fn a_ticket_whose_session_still_runs_commands_waits_a_day() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    let mut upkeep = Upkeep::new(None).unwrap();
+    held_by_s1(&mut conn, clock.now());
+    set_title(&conn, "⚒️ [T1] working", clock.now());
+    set_worker(&conn, "working", clock.now());
+    for _ in 0..23 {
+        clock.advance(3_600.0);
+        record_command(&conn, clock.now());
+        assert!(filed(&mut upkeep, &mut conn, clock.now()).is_empty());
+    }
+    clock.advance(3_600.0 + 60.0);
+    let report = filed(&mut upkeep, &mut conn, clock.now());
+    assert_eq!(report.len(), 1);
+    let body = ticket(&conn, &report[0]).body;
+    assert!(body.contains("held for 24 hours"), "{body}");
+    assert!(body.contains("last recorded a command 61 min ago"), "{body}");
+}
+
+#[test]
+fn a_ticket_whose_session_has_a_command_running_is_not_reported_at_six_hours() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    let mut upkeep = Upkeep::new(None).unwrap();
+    held_by_s1(&mut conn, clock.now());
+    set_worker(&conn, "working", clock.now());
+    conn.execute("UPDATE workers SET command_running = 1", []).unwrap();
+    clock.advance(7.0 * 3_600.0);
+    assert!(filed(&mut upkeep, &mut conn, clock.now()).is_empty());
+}
+
+/// A working session whose last command ended more than 30 minutes ago is reported at six
+/// hours, and the report says when that command ended.
+#[test]
+fn a_ticket_whose_session_stopped_running_commands_is_reported_at_six_hours() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    let mut upkeep = Upkeep::new(None).unwrap();
+    held_by_s1(&mut conn, clock.now());
+    set_worker(&conn, "working", clock.now());
+    clock.advance(6.0 * 3_600.0 - 40.0 * 60.0);
+    record_command(&conn, clock.now());
+    clock.advance(41.0 * 60.0);
+    let report = filed(&mut upkeep, &mut conn, clock.now());
+    assert_eq!(report.len(), 1);
+    let body = ticket(&conn, &report[0]).body;
+    assert!(body.contains("last recorded a command 41 min ago"), "{body}");
+}
+
 #[test]
 fn a_ticket_reclaimed_ten_minutes_ago_is_not_held_even_if_first_claimed_long_ago() {
     let clock = start();

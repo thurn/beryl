@@ -13,14 +13,12 @@
 //!   does not count as ready. An epic with a ticket still `pending_approval` is
 //!   waiting for a person, not stuck;
 //! - a loop of tickets that wait on one another and are under no epic;
-//! - a ticket held in progress for more than six hours, or for more than 30 minutes by a session
-//!   that has stopped (its title starts with ⛔) or been idle that long, which is reported for
-//!   the justiciar to look at.
+//! - a ticket held in progress too long, which is reported for the justiciar to look at
+//!   ([`held`], in `stuck_held.rs`).
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use rusqlite::{Connection, OptionalExtension, params};
-use serde_json::Value;
+use rusqlite::{Connection, params};
 
 use ignite_core::fleet::MachineState;
 use ignite_core::ids::{CheckName, TicketId};
@@ -31,7 +29,7 @@ use ignite_core::protocol::tickets::{
 };
 use ignite_core::time::Timestamp;
 use ignite_store::Result;
-use ignite_store::hub::{checks, fleet, fleet_settings, session_titles, tickets, tips};
+use ignite_store::hub::{checks, fleet, fleet_settings, tickets, tips};
 
 use super::filing::{self, Author, Filed, Filing, UPKEEP};
 use super::platform_wait::PlatformWait;
@@ -39,8 +37,13 @@ use super::regressions::OUTPUT_LINES;
 use super::signature::Signature;
 use super::{parse_time, tail};
 
+#[path = "stuck_held.rs"]
+mod held;
 #[path = "stuck_incomplete.rs"]
 mod incomplete;
+
+use held::{find_held, held_filing, held_recently_closed};
+pub use held::{ACTIVE_HELD_SECONDS, HELD_REFILE_COOLDOWN_SECONDS, HELD_SECONDS, STOPPED_SECONDS};
 
 pub use incomplete::{ROUND_LIMIT, incomplete};
 
@@ -293,25 +296,9 @@ fn unrunnable_filing(report: &TipWaiting, listed: &str) -> Filing {
     }
 }
 
-/// How long a ticket may stay in progress before a ticket reports it, in seconds.
-pub const HELD_SECONDS: f64 = 6.0 * 3_600.0;
-
-/// How long a ticket may stay in progress with a stopped or idle session, in seconds.
-pub const STOPPED_SECONDS: f64 = 30.0 * 60.0;
-
-/// How long upkeep waits before re-filing a `held` ticket for the same subject after a session
-/// closes one without releasing the held ticket, in seconds.
-pub const HELD_REFILE_COOLDOWN_SECONDS: f64 = 2.0 * 3_600.0;
-
-/// The mark a session puts at the start of its title when it stops unfinished.
-const STOPPED_MARK: &str = "⛔";
-
-/// The label on a ticket for the justiciar to look at.
-const JUSTICIAR: &str = ignite_core::dispatch::JUSTICIAR;
-
 /// Files one ticket for each epic whose open tickets are all blocked, one for each loop of
-/// tickets under no epic that wait on one another, and one for each ticket held in progress for
-/// more than six hours. Of nested stuck epics, only the innermost is reported, since the outer
+/// tickets under no epic that wait on one another, and one for each ticket held in progress too
+/// long (see [`held`]). Of nested stuck epics, only the innermost is reported, since the outer
 /// one waits on it.
 pub fn stuck_epics(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>> {
     let graph = tickets::graph(conn, false, now)?;
@@ -618,175 +605,6 @@ fn cycle_filing(cycle: &[String]) -> Filing {
             ticket_type: Some(TicketType::Task),
             priority: Some(1),
             labels: Some(vec!["graph-repair".to_owned()]),
-            ..TicketFields::default()
-        },
-        deps: Vec::new(),
-        released: false,
-    }
-}
-
-/// Why a ticket in progress is reported.
-enum HeldFor {
-    /// It has been in progress for more than [`HELD_SECONDS`].
-    Long,
-    /// Its session's title starts with the stopped mark.
-    Stopped,
-    /// Its session has been idle for more than [`STOPPED_SECONDS`].
-    Idle,
-}
-
-/// A ticket in progress for more than [`HELD_SECONDS`], or for more than [`STOPPED_SECONDS`]
-/// with a session that has stopped or gone idle.
-struct Held {
-    ticket: String,
-    title: String,
-    minutes: u64,
-    session: String,
-    machine: String,
-    reason: HeldFor,
-}
-
-fn find_held(conn: &Connection, graph: &Graph, now: Timestamp) -> Result<Vec<Held>> {
-    let mut found = Vec::new();
-    for entry in &graph.tickets {
-        let ticket = &entry.ticket;
-        let Some(claimed) = ticket
-            .claimed_at
-            .filter(|_| ticket.status == Status::InProgress)
-        else {
-            continue;
-        };
-        let held = now.seconds_since(claimed);
-        let reason = if held > HELD_SECONDS {
-            Some(HeldFor::Long)
-        } else if held > STOPPED_SECONDS {
-            stopped_or_idle(conn, ticket.session.as_ref().map(ToString::to_string), now)?
-        } else {
-            None
-        };
-        let Some(reason) = reason else { continue };
-        found.push(Held {
-            ticket: ticket.id.to_string(),
-            title: ticket.title.clone(),
-            minutes: (held / 60.0) as u64,
-            session: ticket
-                .session
-                .as_ref()
-                .map(ToString::to_string)
-                .or_else(|| ticket.assignee.clone())
-                .unwrap_or_else(|| "unknown".to_owned()),
-            machine: ticket
-                .machine
-                .as_ref()
-                .map_or_else(|| "unknown".to_owned(), ToString::to_string),
-            reason,
-        });
-    }
-    Ok(found)
-}
-
-/// Whether a session (not upkeep) closed the latest `held` ticket for `subject` within
-/// [`HELD_REFILE_COOLDOWN_SECONDS`] of `now`, so upkeep waits before re-filing it.
-fn held_recently_closed(conn: &Connection, subject: &str, now: Timestamp) -> Result<bool> {
-    let key = Signature::of_subject(subject, "held").key();
-    let newest: Option<(String, String, Option<String>)> = conn
-        .query_row(
-            "SELECT id, closed_at, metadata FROM tickets
-             WHERE json_extract(metadata, '$.ignite_signature') = ?1
-               AND status = 'closed' AND closed_at IS NOT NULL
-             ORDER BY closed_at DESC, id DESC LIMIT 1",
-            [key],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-        )
-        .optional()?;
-    let Some((id, closed_at, metadata)) = newest else {
-        return Ok(false);
-    };
-    if now.seconds_since(parse_time(&closed_at)?) >= HELD_REFILE_COOLDOWN_SECONDS {
-        return Ok(false);
-    }
-    let auto_closed = metadata
-        .as_deref()
-        .and_then(|json| serde_json::from_str::<Value>(json).ok())
-        .is_some_and(|meta| meta.get(filing::AUTO_CLOSED_KEY).is_some());
-    if auto_closed {
-        return Ok(false);
-    }
-    let closed_by_upkeep = tickets::history(conn, &id)?
-        .into_iter()
-        .rev()
-        .find(|row| row.change.pointer("/status/1").and_then(Value::as_str) == Some("closed"))
-        .is_some_and(|row| row.actor == UPKEEP.actor);
-    Ok(!closed_by_upkeep)
-}
-
-/// Whether the session holding a ticket has had a title starting with the stopped mark, or been
-/// idle, for more than [`STOPPED_SECONDS`].
-fn stopped_or_idle(
-    conn: &Connection,
-    session: Option<String>,
-    now: Timestamp,
-) -> Result<Option<HeldFor>> {
-    let Some(session) = session else {
-        return Ok(None);
-    };
-    let longer = |since: &str| -> Result<bool> {
-        Ok(now.seconds_since(parse_time(since)?) > STOPPED_SECONDS)
-    };
-    if let Some((title, updated)) = session_titles::get(conn, &session)?
-        && title.starts_with(STOPPED_MARK)
-        && longer(&updated)?
-    {
-        return Ok(Some(HeldFor::Stopped));
-    }
-    if let Some(since) = fleet::idle_since(conn, &session)?
-        && longer(&since)?
-    {
-        return Ok(Some(HeldFor::Idle));
-    }
-    Ok(None)
-}
-
-fn held_filing(held: &Held) -> Filing {
-    let Held {
-        ticket,
-        title,
-        minutes,
-        session,
-        machine,
-        reason,
-    } = held;
-    let hours = minutes / 60;
-    let (heading, how) = match reason {
-        HeldFor::Long => (
-            format!("Ticket {ticket} has been in progress for {hours} hours"),
-            format!("held for {hours} hours by session {session} on machine {machine}"),
-        ),
-        HeldFor::Stopped => (
-            format!("Ticket {ticket} is held by a stopped session"),
-            format!(
-                "held {minutes} min by a session titled {STOPPED_MARK}: {session} on machine \
-                 {machine}"
-            ),
-        ),
-        HeldFor::Idle => (
-            format!("Ticket {ticket} is held by an idle session"),
-            format!("held {minutes} min by an idle session: {session} on machine {machine}"),
-        ),
-    };
-    Filing {
-        signature: Signature::of_subject(ticket, "held"),
-        evidence: "held".to_owned(),
-        fields: TicketFields {
-            title: Some(heading),
-            body: Some(format!(
-                "{ticket} ({title}) is {how}. A session that stopped, a worker that lost the \
-                 ticket or a ticket too large for one session leaves it so. Find out which, and \
-                 release, split or finish the ticket."
-            )),
-            ticket_type: Some(TicketType::Task),
-            priority: Some(1),
-            labels: Some(vec![JUSTICIAR.to_owned()]),
             ..TicketFields::default()
         },
         deps: Vec::new(),

@@ -3463,8 +3463,11 @@ cleared:
 - A graph-repair ticket for an epic: something in the epic can start, is in
   progress or waits for a person's release, or the epic is closed. For a loop of
   tickets under no epic: the tickets no longer wait on one another.
-- A ticket held in progress for six hours, or for 30 minutes by a stopped or
-  idle session: it is no longer held that long, or its session is working.
+- A ticket held in progress for six hours by a session that is not active, for
+  a day by any session, or for 30 minutes by a stopped or idle session: it is no
+  longer held that long, or its session is active again. A session is active
+  when its worker is working and has a command running or recorded one in the
+  last 30 minutes.
 - A machine that has not reported: it has reported since, and no tip has waited
   an hour for verification since.
 - A machine that has stopped reporting (the P0 ticket for a person): it has
@@ -4285,7 +4288,8 @@ through the release ref.
   labels and a root ID beginning with `J`. It matches reports by signature so a
   repeated sighting adds a comment and never a second ticket. They come from
   upkeep, when the oldest landing since the last verified tip has waited two
-  hours or a ticket has been held for six hours (30 minutes when the holding
+  hours or a ticket has been held for six hours while its session is not
+  running commands (a day while it is, and 30 minutes when the holding
   session's title starts with ⛔, or the daemon has reported it idle that long),
   and from `POST /justiciar`, which daemons send for a crash record or a loop
   that keeps failing, and which `ignite justiciar "<reason>"` sends for a
