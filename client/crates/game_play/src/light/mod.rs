@@ -192,6 +192,17 @@ impl Lit {
         });
     }
 
+    /// Every Revealed Cards face still standing begins to go at `at`: the pile is put away when
+    /// the script after the one that held its cards up begins, as Arena dismisses a reveal
+    /// before the game goes on. Allocates nothing.
+    pub fn put_away_revealed(&mut self, at: Interval) {
+        for open in &mut self.open {
+            if matches!(open.span, Span::Revealed { .. }) && open.ends.is_none() {
+                open.ends = Some(at);
+            }
+        }
+    }
+
     /// The open span equal to `span` begins to go, and is gone once `over` is done. A span that
     /// is not open, or already going, is left as it is.
     pub fn end(&mut self, span: &Span, over: Interval) {

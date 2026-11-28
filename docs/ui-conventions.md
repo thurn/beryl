@@ -712,13 +712,14 @@ recordings do not show them.
   either system appearance. The bottom actions clear the gesture bar, and the
   seed and game buttons rise above the numeric keyboard.
 - **The Revealed Cards between reveals.** The pile holds what one spell or
-  ability revealed, and what another reveals takes its place; a card revealed
-  and then put where its face shows (a graveyard, exile, the battlefield, the
-  stack) is not held up, since its flight shows it. The pile opens into the
-  viewer every pile opens into. The recordings show the pile with one effect's
-  cards at a time, dismissed before the next. One spell's four revealed cards
-  lie in the pile together; the next reveal seen comes after the pile was
-  dismissed (I3Te0m1bBFw 22:08.8, I3Te0m1bBFw 29:45.5).
+  ability revealed, and what another reveals takes its place; it is put away
+  when the next script begins, so a free mulligan's revealed hand is gone before
+  the first turn plays; a card revealed and then put where its face shows (a
+  graveyard, exile, the battlefield, the stack) is not held up, since its flight
+  shows it. The pile opens into the viewer every pile opens into. The recordings
+  show the pile with one effect's cards at a time, dismissed before the next.
+  One spell's four revealed cards lie in the pile together; the next reveal seen
+  comes after the pile was dismissed (I3Te0m1bBFw 22:08.8, I3Te0m1bBFw 29:45.5).
 - **Why a creature can't attack.** During Choose attackers, clicking or tapping
   a creature you control that cannot attack plays the refusal sound and opens
   the inspector with the reason under its face: "Tapped", "Summoning sickness",

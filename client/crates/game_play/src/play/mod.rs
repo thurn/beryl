@@ -75,7 +75,7 @@ use game_table::faces::Faces;
 use game_table::table::badges::{BadgeSizes, Badges};
 use game_table::table::{Dress, Table, ability_track};
 use kit_base::data::playback::CatchUp;
-use kit_base::pose::Pose;
+use kit_base::pose::{Interval, Pose};
 use kit_frame::frame::FrameBuilder;
 use kit_fx::effects::{self, EffectRun};
 use kit_text::text::{Glyphs, Text};
@@ -580,6 +580,12 @@ impl Show {
                 self.effects.clear();
                 self.notices.clear();
             }
+            // The faces an earlier script held up leave the pile as the next script begins; a
+            // reveal this script makes opens its own faces afterwards.
+            self.lit.put_away_revealed(Interval {
+                from: start,
+                to: start,
+            });
             self.relay(&mut waiting, start, rate);
             self.record_start(waiting.number, start, rate);
             self.playing = Some(Playing::started(waiting, start, rate));

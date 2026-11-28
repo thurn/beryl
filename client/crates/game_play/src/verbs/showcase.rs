@@ -1,7 +1,7 @@
 //! `showcase`: the card stays where it lies, and its face joins the Revealed Cards pile at the top
 //! left of the screen, growing into its place there over the step (`Shape::Grown`). The face is a
-//! span the table shows until a script with a reset, or until another cause reveals cards
-//! (`Span::Revealed`); the table draws it from the record the step's act holds
+//! span the table shows until the next script begins (`Lit::put_away_revealed`), or until
+//! another cause reveals cards (`Span::Revealed`); the table draws it from the record the step's act holds
 //! (`Table::reveal`).
 
 use beryl_protocol::script::{Act, Span as Edge};

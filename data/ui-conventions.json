@@ -1425,7 +1425,7 @@
     {
       "kind": "not-seen",
       "name": "The Revealed Cards between reveals",
-      "rule": "The pile holds what one spell or ability revealed, and what another reveals takes its place; a card revealed and then put where its face shows (a graveyard, exile, the battlefield, the stack) is not held up, since its flight shows it. The pile opens into the viewer every pile opens into. The recordings show the pile with one effect's cards at a time, dismissed before the next.",
+      "rule": "The pile holds what one spell or ability revealed, and what another reveals takes its place; it is put away when the next script begins, so a free mulligan's revealed hand is gone before the first turn plays; a card revealed and then put where its face shows (a graveyard, exile, the battlefield, the stack) is not held up, since its flight shows it. The pile opens into the viewer every pile opens into. The recordings show the pile with one effect's cards at a time, dismissed before the next.",
       "arena": {
         "does": "One spell's four revealed cards lie in the pile together; the next reveal seen comes after the pile was dismissed.",
         "evidence": [
