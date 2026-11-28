@@ -187,6 +187,49 @@ def test_payments_are_left_to_xmage_where_land_types_change() -> None:
     assert repeated.unsupported == "a payment after one XMage chose the sources of"
 
 
+def test_a_payment_xmage_chooses_is_unsupported_beside_a_source_that_asks_a_mana_type() -> (
+    None
+):
+    # Reflecting Pool makes mana of any type another land could produce, which XMage asks
+    # for when it taps the Pool. XMage picks the sources of a payment the script leaves to
+    # it by an order that varies from run to run, so on some runs the question would be
+    # answered by the next queued choice, and the scenario fails on those runs only.
+    name = "Get Lost on a creature gives two Maps; one explores a land into hand"
+    dump = json.loads(FIXTURE.read_text())
+    entry = next(e for e in dump if e["name"] == name)
+    entry["cards"]["Plains"]["faces"][0]["abilities"].append(
+        {"index": "Own 1", "kind": "Static", "changes_land_types": True}
+    )
+    entry["cards"]["Reflecting Pool"] = {
+        "faces": [{"name": "Reflecting Pool", "abilities": []}]
+    }
+    entry["cards"]["Island"] = {
+        "faces": [
+            {
+                "name": "Island",
+                "abilities": [
+                    {"kind": "Mana", "produces": {"colors": ["Blue"]}},
+                ],
+            }
+        ]
+    }
+    entry["cards"]["Plains"]["faces"][0]["abilities"].append(
+        {"kind": "Mana", "produces": {"colors": ["White"]}}
+    )
+    battlefield = entry["setup"]["players"][0]["battlefield"]
+    for land in ("Reflecting Pool", "Island"):
+        battlefield.append({**battlefield[0], "card": land})
+    faces = xmage_java.Faces.load(card_store.STORE)
+    faces.oracle["Reflecting Pool"] = (
+        "{T}: Add one mana of any type that a land you control could produce."
+    )
+    known = XMAGE_CARDS | {"Reflecting Pool"}
+    export = xmage_export.export_one(entry, 1, faces, known)
+    assert export.unsupported == (
+        "a payment XMage chooses the sources of, with a source that asks for a mana type"
+    )
+
+
 def test_an_accented_card_is_exported_in_xmages_spelling() -> None:
     # XMage lists Dandân as "Dandan", so a scenario naming it is neither unsupported nor
     # written into the Java with the accent.

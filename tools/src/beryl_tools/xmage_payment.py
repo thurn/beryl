@@ -81,6 +81,7 @@ class Payments:
                 )
             # XMage chooses these sources, so a later payment may find one already tapped.
             if taps:
+                self.require_no_mana_type_prompt(who)
                 self.left_to_xmage.add(who)
             return []
         if source in taps:
@@ -120,6 +121,7 @@ class Payments:
         if self.cards.change_land_types() or any(map(self.cards.mana_choice, taps)):
             if who in self.left_to_xmage:
                 raise Unsupported("a payment after one XMage chose the sources of")
+            self.require_no_mana_type_prompt(who)
             self.left_to_xmage.add(who)
             return []
         lines: list[str] = []
@@ -142,6 +144,17 @@ class Payments:
                 for choice in _extra_type_choices(name, text, mana):
                     lines.append(f"setChoice({who}, {java_string(choice)});")
         return lines
+
+    def require_no_mana_type_prompt(self, who: str) -> None:
+        """Refuses a payment XMage chooses the sources of when `who` has a source that asks a
+        mana type. XMage taps whichever sources it picks, which varies from run to run. If it
+        picks that one, the script has no choice to answer the prompt, and the next queued
+        choice answers it instead, failing the scenario on some runs."""
+        if self.asks_mana_type(who):
+            raise Unsupported(
+                "a payment XMage chooses the sources of, with a source that asks "
+                "for a mana type"
+            )
 
     def asks_mana_type(self, who: str) -> bool:
         """Whether `who` has a source that XMage asks a mana type of when it taps the source
