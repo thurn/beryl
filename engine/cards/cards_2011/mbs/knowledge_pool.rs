@@ -282,16 +282,16 @@ pub mod scenarios {
         // whether the player may cast the card now.
         Scenario::new("The offer follows an exile that the layers read")
             .interaction(&[CAULDRON, BOLT, ANGEL])
-            .permanents(
-                P0,
-                &[
-                    Permanent::new(POOL).exiled_with(&[ANGEL]),
-                    Permanent::new(Card::Mountain),
-                ],
-            )
+            .battlefield(P0, SEVEN_MOUNTAINS)
             .battlefield(P1, &[CAULDRON])
-            .hand(P0, &[BOLT])
+            .hand(P0, &[POOL, BOLT])
+            .library(P0, &[ANGEL, Card::Island, Card::Plains, Card::Forest])
+            .library(P1, &[Card::Island, Card::Plains, Card::Mountain, Card::Forest])
             .actions(&[
+                ME.casts(POOL),
+                Resolve,
+                Resolve,
+                ME.has(Zone::Exile, ANGEL, 1),
                 ME.casts(BOLT),
                 ME.targets_player(THEM),
                 Resolve,

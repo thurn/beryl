@@ -182,6 +182,12 @@
   {
     "oracle": "xmage",
     "card": "Knowledge Pool",
+    "scenario": "The offer follows an exile that the layers read",
+    "gap": "XMage asks for a separate card choice after accepting the cast offer. The exporter only queues acceptance for this offer."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Knowledge Pool",
     "scenario": "An exiled spell can be cast on a later trigger",
     "gap": "XMage asks whether to cast when no other card can be cast. Beryl omits that choice, so the exporter has no answer to send."
   },
