@@ -149,6 +149,32 @@ fn a_finished_round_that_left_nothing_unrun_did_not_have_the_check() {
     assert!(comments[0].contains(&reason));
 }
 
+/// A round that left the family to other machines did not decide the check was unchanged. The
+/// claims may never have turned into results, which is how three checks failed at a tip with no
+/// round having run them.
+#[test]
+fn a_round_that_left_the_family_to_other_machines_is_no_unchanged_check() {
+    let mut conn = hub::open_in_memory().unwrap();
+    let clock = start();
+    round(&conn, &clock, "abcd", 0, None);
+    conn.execute(
+        "UPDATE tip_rounds SET budget = ?1 WHERE commit_sha = 'abcd'",
+        params![r#"{"seconds":1.0,"rate":1.0,"forced":0,"forced_billions":0.0,"within":0,"within_billions":0.0,"after":0,"after_billions":0.0,"master_s":null,"elsewhere":{"unit":5}}"#],
+    )
+    .unwrap();
+    let (_, miss) = file(
+        &mut conn,
+        &clock,
+        &report("unit:a", "abcd", FoundBy::Landing),
+    );
+    let (kind, reason) = miss.unwrap();
+    assert_eq!(kind, Kind::Elsewhere.as_str());
+    assert!(
+        reason.contains("left 5 unit checks to other machines"),
+        "{reason}"
+    );
+}
+
 /// The incident this records: the round at the tip moved `master`, and a newer tip ended it
 /// before it ran the checks past the budget, the failing one among them.
 #[test]

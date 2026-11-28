@@ -3004,9 +3004,15 @@ How a daemon verifies a tip:
 
   - **Stale pass:** a round passed the check at one of those tips. The check's
     declared inputs miss something it reads, or it is not deterministic.
-  - **Not run:** a round finished at one of them without running the check and
-    left none of its family's checks unrun. By its declared inputs nothing
-    changed since the last verified commit, so an earlier pass stood.
+  - **Not run:** a round finished at one of them without running the check, left
+    none of its family's checks unrun and none to other machines. By its
+    declared inputs nothing changed since the last verified commit, so an
+    earlier pass stood.
+  - **Elsewhere:** a round finished at one of them having left some of the
+    family's checks to other machines (the `elsewhere` count of its record),
+    which held their claims or had stored results. The check was probably among
+    them and no machine ran it. A round with no budget record says nothing and
+    is not read as "not run".
   - **Skipped:** every round that finished there left checks of the family
     unrun, because a newer tip ended it or because `master` did not move and the
     checks past the budget wait for a later round. Each round's record lists how

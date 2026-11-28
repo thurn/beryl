@@ -7,9 +7,13 @@
 //! tip and at the tips it saw after it, and records why it missed the check, in this order:
 //!
 //! - [`Kind::StalePass`]: a tip verification round passed the check at one of those tips.
-//! - [`Kind::NotRun`]: a round finished at one of them without running the check, and left none
-//!   of the check's family's checks unrun. It did not have the check to run: by the inputs the
-//!   check declares nothing changed since the last verified commit, so an earlier pass stood.
+//! - [`Kind::NotRun`]: a round finished at one of them without running the check, left none of
+//!   the check's family's checks unrun, and left none of them to other machines. It did not have
+//!   the check to run: by the inputs the check declares nothing changed since the last verified
+//!   commit, so an earlier pass stood.
+//! - [`Kind::Elsewhere`]: a round finished at one of them having left some of the family's
+//!   checks to other machines, which held their claims or had stored results. The check was
+//!   probably among them, and no machine ran it.
 //! - [`Kind::Skipped`]: every round that finished there left checks of the family unrun: a newer
 //!   tip ended the round, or `master` did not move and the checks past the tip budget wait for a
 //!   later round. The newest such round gives the reason.
@@ -52,6 +56,7 @@ pub enum Kind {
     StalePass,
     Skipped,
     NotRun,
+    Elsewhere,
 }
 
 impl Kind {
@@ -61,6 +66,7 @@ impl Kind {
             Kind::StalePass => "stale-pass",
             Kind::Skipped => "skipped",
             Kind::NotRun => "not-run",
+            Kind::Elsewhere => "elsewhere",
         }
     }
 }
@@ -104,7 +110,19 @@ pub fn explain(evidence: &Evidence, check: &CheckName, tip: &str) -> Option<Miss
             .and_then(|b| b.unrun.get(family).copied())
             .filter(|n| *n > 0)
     };
-    if let Some((commit, _)) = evidence.rounds.iter().find(|(_, b)| left(b).is_none()) {
+    // A round whose record has no budget, from a daemon built before it, says nothing about what
+    // it left out. A round that left some of the family to other machines did not decide for
+    // itself that the check was unchanged.
+    let elsewhere = |budget: &Option<ignite_core::tipround::RoundBudget>| {
+        budget
+            .as_ref()
+            .and_then(|b| b.elsewhere.get(family).copied())
+            .filter(|n| *n > 0)
+    };
+    let complete = |(_, b): &&(String, Option<ignite_core::tipround::RoundBudget>)| {
+        b.is_some() && left(b).is_none() && elsewhere(b).is_none()
+    };
+    if let Some((commit, _)) = evidence.rounds.iter().find(complete) {
         return Some(Miss {
             kind: Kind::NotRun,
             reason: format!(
@@ -112,6 +130,22 @@ pub fn explain(evidence: &Evidence, check: &CheckName, tip: &str) -> Option<Miss
                  of the {family} checks unrun. It did not have the check to run: by the inputs \
                  the check declares, nothing it reads changed since the last verified commit, \
                  so an earlier pass stood.",
+                at(commit)
+            ),
+        });
+    }
+    if let Some((commit, budget)) = evidence
+        .rounds
+        .iter()
+        .find(|(_, b)| left(b).is_none() && elsewhere(b).is_some())
+    {
+        let n = elsewhere(budget).unwrap_or_default();
+        return Some(Miss {
+            kind: Kind::Elsewhere,
+            reason: format!(
+                "The tip verification round {} left {n} {family} checks to other machines, \
+                 which held their claims or had stored results, and this check was likely \
+                 among them: no machine ran it.",
                 at(commit)
             ),
         });
