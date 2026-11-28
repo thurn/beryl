@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::ids::{Commit, Oid, RecordId, Seq, SessionId, TicketId, TreeId};
+use crate::ids::{CheckName, Commit, Oid, RecordId, Seq, SessionId, TicketId, TreeId};
 use crate::protocol::Class;
 use crate::protocol::Usage;
 use crate::protocol::cli::TranscriptAppend;
@@ -22,7 +22,7 @@ use crate::protocol::hub::{
     ResultKey, SessionTitle, StoredListing, TicketBrief, TipCheckFailures, TipClaim, TipClaimReply,
     TipUnclaimed, TipUnclaimedReply, TipVerified, TipWaiting, TipWaitingFiled,
 };
-use crate::protocol::hub::{RevertFiled, Reverted, Verdict, VerdictKey};
+use crate::protocol::hub::{CulpritSearcher, RevertFiled, Reverted, Verdict, VerdictKey};
 use crate::protocol::tickets::{
     BatchReply, BatchRequest, FeedBatch, ImportReply, ImportRequest, LeaseOp, LeaseReply, Ticket,
     TicketDetail, TicketQuery, WholeTicket,
@@ -518,9 +518,20 @@ pub trait Hub: Send + Sync {
     fn landing_regression(&self, failure: &LandingRegression) -> Result<RegressionFiled> {
         self.regression(&failure.report)
     }
-    /// The next open baseline failure this machine confirmed and still needs to attribute.
+    /// The next pending culprit search this machine should run: one it reported itself, or one
+    /// a slower machine handed off for which this is the fastest free machine.
     fn next_landing_attribution(&self) -> Result<Option<LandingAttribution>> {
         Ok(None)
+    }
+    /// The faster machine that should run the culprit search for `check`, which failed here, or
+    /// `None` to search here (`GET /regressions/searcher`).
+    fn culprit_searcher(&self, _check: &CheckName) -> Result<Option<CulpritSearcher>> {
+        Ok(None)
+    }
+    /// Records a failure whose culprit search a faster machine runs later
+    /// (`POST /regressions/handoff`).
+    fn handoff_regression(&self, failure: &LandingRegression) -> Result<RegressionFiled> {
+        self.regression(&failure.report)
     }
     /// Adds search diagnostics to the original open failure.
     fn attribute_regression(&self, _attribution: &RegressionAttribution) -> Result<()> {

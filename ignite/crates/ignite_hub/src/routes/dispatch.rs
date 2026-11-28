@@ -766,5 +766,9 @@ mod placement_tests;
 mod speed_tests;
 
 #[cfg(test)]
+#[path = "dispatch_search_tests.rs"]
+mod search_tests;
+
+#[cfg(test)]
 #[path = "dispatch_fix_outcomes_tests.rs"]
 mod fix_outcomes_tests;

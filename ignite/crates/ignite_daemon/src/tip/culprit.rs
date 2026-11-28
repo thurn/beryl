@@ -7,12 +7,15 @@
 //!   at commits between them, by bisection, for at most [`MAX_RUNS`] runs.
 //! - The report says how the search ended ([`CulpritSearch`]): one candidate, narrowed to one,
 //!   ended early with a range and why, or not run and why.
+//! - A machine much slower than the fastest free machine with its system reports the failure
+//!   without searching, and the hub gives the search to the faster machine, which runs it as a
+//!   landing's historical search (`crate::land::attribution`).
 
 use std::collections::{HashMap, HashSet};
 
 use ignite_core::ids::{CheckName, Commit};
 use ignite_core::protocol::Outcome;
-use ignite_core::protocol::hub::{FoundBy, IncompleteReason, RegressionReport};
+use ignite_core::protocol::hub::{FoundBy, IncompleteReason, LandingRegression, RegressionReport};
 use ignite_core::tipround::CulpritSearch;
 use ignite_core::traits::Result;
 
@@ -558,12 +561,37 @@ impl TipVerifier {
         if reported && note.is_none() {
             return Ok(true);
         }
+        let report = self.unsearched_report(tip, plan, note);
+        match ctx.hub.regression(&with_culprit(report, culprit)) {
+            Ok(_) => {
+                self.reported.insert(check.key.clone());
+                open.insert(check.check.clone());
+                Ok(true)
+            }
+            Err(error) => {
+                eprintln!(
+                    "ignite: regression of {} not reported: {error}",
+                    check.check
+                );
+                Ok(false)
+            }
+        }
+    }
+
+    /// The report of `plan`'s failure over its whole search range, before any search.
+    fn unsearched_report(
+        &self,
+        tip: &Commit,
+        plan: &BlamePlan<'_>,
+        note: Option<String>,
+    ) -> RegressionReport {
+        let check = plan.entry.check;
         let output = plan
             .entry
             .output
             .map(|o| tail(o, &self.own_outputs))
             .unwrap_or_default();
-        let report = RegressionReport {
+        RegressionReport {
             check: check.check.clone(),
             first_bad: plan.search_bad.clone(),
             last_good: plan.good.clone(),
@@ -577,19 +605,51 @@ impl TipVerifier {
             search: None,
             found_by: FoundBy::TipVerification,
             detected_at: Some(tip.clone()),
+        }
+    }
+
+    /// Reports `plan`'s failure without searching when the hub names a much faster machine to
+    /// search instead (see "Finding the culprit" in `docs/ignite.md`). Returns whether it did.
+    /// A search that may end in a revert stays here, because only this round can revert.
+    fn hand_off(
+        &mut self,
+        ctx: &Context,
+        tip: &Commit,
+        plan: &BlamePlan<'_>,
+        open: &mut HashSet<CheckName>,
+    ) -> bool {
+        let check = plan.entry.check;
+        if plan.allow_revert {
+            return false;
+        }
+        let searcher = match ctx.hub.culprit_searcher(&check.check) {
+            Ok(Some(searcher)) => searcher,
+            Ok(None) => return false,
+            Err(error) => {
+                eprintln!("ignite: no searcher named for {}: {error}", check.check);
+                return false;
+            }
         };
-        match ctx.hub.regression(&with_culprit(report, culprit)) {
+        let mut report = self.unsearched_report(tip, plan, None);
+        report.search = Some(CulpritSearch::NotRun {
+            why: searcher.why(),
+        });
+        let failure = LandingRegression {
+            report,
+            inputs: check.inputs.clone(),
+        };
+        match ctx.hub.handoff_regression(&failure) {
             Ok(_) => {
                 self.reported.insert(check.key.clone());
                 open.insert(check.check.clone());
-                Ok(true)
+                true
             }
             Err(error) => {
                 eprintln!(
-                    "ignite: regression of {} not reported: {error}",
-                    check.check
+                    "ignite: search for {} not handed to {}: {error}",
+                    check.check, searcher.machine
                 );
-                Ok(false)
+                false
             }
         }
     }
@@ -627,6 +687,12 @@ impl TipVerifier {
             let check = plan.entry.check;
             let reported = self.reported.contains(&check.key) || open.contains(&check.check);
             if reported && (check.is_build() || !plan.allow_revert) {
+                continue;
+            }
+            if self.hand_off(ctx, tip, plan, &mut open) {
+                if save_after_each {
+                    self.save(ctx);
+                }
                 continue;
             }
             let culprit = self.bisect_plan(

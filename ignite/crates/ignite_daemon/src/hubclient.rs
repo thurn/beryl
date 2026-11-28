@@ -19,18 +19,19 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use ignite_core::config::HubConfig;
-use ignite_core::ids::{Commit, RecordId, Seq, TicketId};
+use ignite_core::ids::{CheckName, Commit, RecordId, Seq, TicketId};
 use ignite_core::protocol::cli::TranscriptAppend;
 use ignite_core::protocol::hub::{
-    AdhocClaim, AuditReport, CachedResult, Claim, Close, ExplorationFind, FlakyReport, Heartbeat,
-    HeartbeatReply, IncompleteReport, JusticiarCleared, JusticiarReport, Landed, LandedCommit,
-    LandedReply, LandingAttribution, LandingRegression, LandingsReply, LandingsRequest, ListingKey,
-    ListingLookup, ListingReply, LookupReply, LookupRequest, MAX_BODY_BYTES, MachineFree,
-    MachineRegister, MachineRegistered, MetricsImport, NewResult, OpenRegression, OpenRegressions,
-    Pause, Record, RecordBatch, RegressionAttribution, RegressionFiled, RegressionReport, Release,
-    ReportFiled, Reservation, ResultKey, RevertFiled, Reverted, SessionTitle, StoreRequest,
-    StoredListing, TicketBrief, TipCheckFailures, TipClaim, TipClaimReply, TipUnclaimed,
-    TipUnclaimedReply, TipVerified, TipWaiting, TipWaitingFiled, Verdict, VerdictKey,
+    AdhocClaim, AuditReport, CachedResult, Claim, Close, CulpritSearcher, ExplorationFind,
+    FlakyReport, Heartbeat, HeartbeatReply, IncompleteReport, JusticiarCleared, JusticiarReport,
+    Landed, LandedCommit, LandedReply, LandingAttribution, LandingRegression, LandingsReply,
+    LandingsRequest, ListingKey, ListingLookup, ListingReply, LookupReply, LookupRequest,
+    MAX_BODY_BYTES, MachineFree, MachineRegister, MachineRegistered, MetricsImport, NewResult,
+    OpenRegression, OpenRegressions, Pause, Record, RecordBatch, RegressionAttribution,
+    RegressionFiled, RegressionReport, Release, ReportFiled, Reservation, ResultKey, RevertFiled,
+    Reverted, SessionTitle, StoreRequest, StoredListing, TicketBrief, TipCheckFailures, TipClaim,
+    TipClaimReply, TipUnclaimed, TipUnclaimedReply, TipVerified, TipWaiting, TipWaitingFiled,
+    Verdict, VerdictKey,
 };
 use ignite_core::protocol::tickets::{
     BatchReply, BatchRequest, FeedBatch, ImportReply, ImportRequest, Lease, LeaseBusy, LeaseOp,
@@ -573,6 +574,18 @@ impl Hub for HubClient {
             Err(Error::NotFound(_)) => Ok(None),
             reply => reply,
         }
+    }
+
+    fn culprit_searcher(&self, check: &CheckName) -> Result<Option<CulpritSearcher>> {
+        // A hub older than the route has every machine search for itself.
+        match self.get("/regressions/searcher", &[("check", check.to_string())]) {
+            Err(Error::NotFound(_)) => Ok(None),
+            reply => reply,
+        }
+    }
+
+    fn handoff_regression(&self, failure: &LandingRegression) -> Result<RegressionFiled> {
+        self.post("/regressions/handoff", failure)
     }
 
     fn attribute_regression(&self, attribution: &RegressionAttribution) -> Result<()> {

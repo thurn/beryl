@@ -14,12 +14,12 @@ use crate::protocol::Usage;
 use crate::protocol::cli::TranscriptAppend;
 use crate::protocol::cli::TranscriptLine;
 use crate::protocol::hub::{
-    AuditReport, CachedResult, Claim, ExplorationFind, FlakyReport, IncompleteReport,
-    JusticiarCleared, JusticiarReport, Landed, LandedCommit, LandedReply, ListingKey, MachineFree,
-    MetricsImport, NewResult, OpenRegression, Pause, Record, RegressionFiled, RegressionReport,
-    ReportFiled, Reservation, ResultKey, RevertFiled, Reverted, SessionTitle, StoredListing,
-    TicketBrief, TipClaim, TipClaimReply, TipUnclaimed, TipUnclaimedReply, TipVerified, TipWaiting,
-    TipWaitingFiled, Verdict,
+    AuditReport, CachedResult, Claim, CulpritSearcher, ExplorationFind, FlakyReport,
+    IncompleteReport, JusticiarCleared, JusticiarReport, Landed, LandedCommit, LandedReply,
+    LandingRegression, ListingKey, MachineFree, MetricsImport, NewResult, OpenRegression, Pause,
+    Record, RegressionFiled, RegressionReport, ReportFiled, Reservation, ResultKey, RevertFiled,
+    Reverted, SessionTitle, StoredListing, TicketBrief, TipClaim, TipClaimReply, TipUnclaimed,
+    TipUnclaimedReply, TipVerified, TipWaiting, TipWaitingFiled, Verdict,
 };
 use crate::protocol::tickets::{
     BatchReply, BatchRequest, Comment, FeedBatch, FeedChange, ImportReply, ImportRequest, Lease,
@@ -594,6 +594,13 @@ impl Hub for FakeHub {
         let ticket = TicketId::new(format!("tk.{}", regressions.len()))
             .map_err(|e| Error::Invalid(e.to_string()))?;
         Ok(RegressionFiled { ticket })
+    }
+
+    fn culprit_searcher(&self, _: &crate::ids::CheckName) -> Result<Option<CulpritSearcher>> {
+        self.fake_culprit_searcher()
+    }
+    fn handoff_regression(&self, failure: &LandingRegression) -> Result<RegressionFiled> {
+        self.fake_handoff_regression(failure)
     }
 
     fn open_regressions(&self) -> Result<Vec<OpenRegression>> {

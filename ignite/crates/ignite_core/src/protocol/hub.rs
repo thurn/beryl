@@ -530,7 +530,9 @@ pub struct RegressionFiled {
 
 #[path = "hub_landing_attribution.rs"]
 mod landing_attribution;
-pub use landing_attribution::{LandingAttribution, LandingRegression, RegressionAttribution};
+pub use landing_attribution::{
+    CulpritSearcher, LandingAttribution, LandingRegression, RegressionAttribution,
+};
 
 /// The record one command leaves.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

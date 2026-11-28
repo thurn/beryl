@@ -12,7 +12,7 @@ use super::tests::{at, file, free, open, post, register, start};
 
 /// jarvis (`m-1`) and multivac (`m-2`) run macOS and cygnus (`m-3`) runs Windows. Each has room
 /// for workers at `now`, and the operator has set the given speeds.
-fn fleet(speeds: [&str; 3], now: Timestamp) -> Connection {
+pub(super) fn fleet(speeds: [&str; 3], now: Timestamp) -> Connection {
     let mut conn = open();
     register(&mut conn);
     for (id, name, os) in [("m-2", "multivac", "macos"), ("m-3", "cygnus", "windows")] {

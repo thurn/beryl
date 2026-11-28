@@ -4,7 +4,9 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Mutex;
 
 use crate::ids::Commit;
-use crate::protocol::hub::{TipUnclaimed, TipUnclaimedReply};
+use crate::protocol::hub::{
+    CulpritSearcher, LandingRegression, RegressionFiled, TipUnclaimed, TipUnclaimedReply,
+};
 use crate::tipround::{
     TipBudgetPlan, TipCandidate, TipCandidateUpdate, TipCosts, TipCostsRequest, TipCoverage,
     TipCoverageUpdate, TipRound, TipRoundFiled, TipSelection, TipSelectionUpdate,
@@ -28,9 +30,38 @@ pub(super) struct FakeTips {
     /// The open improvement ticket a slow round filed, if any.
     open_ticket: Mutex<Option<String>>,
     filed: Mutex<u32>,
+    /// The faster machine every culprit search is handed to; none searches here.
+    searcher: Mutex<Option<CulpritSearcher>>,
+    /// Every failure whose search was handed off, in order.
+    handoffs: Mutex<Vec<LandingRegression>>,
 }
 
 impl FakeHub {
+    /// Makes `culprit_searcher` hand every search to `searcher`.
+    pub fn set_culprit_searcher(&self, searcher: Option<CulpritSearcher>) {
+        *lock(&self.tips.searcher) = searcher;
+    }
+
+    /// Every failure whose culprit search was handed to a faster machine, in order.
+    pub fn handoffs(&self) -> Vec<LandingRegression> {
+        lock(&self.tips.handoffs).clone()
+    }
+
+    pub(super) fn fake_culprit_searcher(&self) -> Result<Option<CulpritSearcher>> {
+        self.reachable()?;
+        Ok(lock(&self.tips.searcher).clone())
+    }
+
+    /// Files the report as `regression` does and keeps the handed-off search.
+    pub(super) fn fake_handoff_regression(
+        &self,
+        failure: &LandingRegression,
+    ) -> Result<RegressionFiled> {
+        let filed = crate::traits::Hub::regression(self, &failure.report)?;
+        lock(&self.tips.handoffs).push(failure.clone());
+        Ok(filed)
+    }
+
     /// The checks of `ask` whose batch no other machine has claimed and whose key has no result.
     /// The fake's claims never expire.
     pub(super) fn fake_tip_unclaimed(&self, ask: &TipUnclaimed) -> Result<TipUnclaimedReply> {

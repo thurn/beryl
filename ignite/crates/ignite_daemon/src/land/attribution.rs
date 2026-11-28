@@ -1,5 +1,7 @@
-//! Historical attribution of a failure a landing already confirmed at its exact base. The hub
-//! keeps the pending search. Each attempt runs as an internal verb with its own tree leases.
+//! Historical attribution of a failure a landing already confirmed at its exact base, or of a
+//! tip failure whose slow reporter handed the search to this faster machine. The hub keeps the
+//! pending search and says which machine runs it. Each attempt runs as an internal verb with
+//! its own tree leases.
 
 use std::sync::Arc;
 

@@ -36,7 +36,7 @@ use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use serde_json::{Value, json};
 
 use ignite_core::ids::Commit;
-use ignite_core::protocol::hub::{LandingRegression, RegressionReport};
+use ignite_core::protocol::hub::RegressionReport;
 use ignite_core::protocol::tickets::{
     BatchRequest, CAUSED_BY_KEY, CULPRIT_AFFINITY_KEY, CulpritAffinity, Dependency, EdgeKind,
     Operation, Status, Ticket, TicketFields, TicketType, regression_culprit,
@@ -53,6 +53,7 @@ use crate::routes::dispatch::set_columns;
 pub(crate) mod landing;
 mod moving;
 mod resolution;
+pub(crate) mod searcher;
 mod streaks;
 pub use moving::{Moved, move_check};
 pub use resolution::{passing, settle};
@@ -102,11 +103,12 @@ pub fn file(
     file_report(conn, author, report, None, now)
 }
 
+/// Files `report`, and queues its culprit search when `queued` says one is still due.
 fn file_report(
     conn: &mut Connection,
     author: Author,
     report: &RegressionReport,
-    baseline: Option<&LandingRegression>,
+    queued: Option<landing::Queued<'_>>,
     now: Timestamp,
 ) -> Result<(String, Outcome)> {
     let mut tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -177,8 +179,8 @@ fn file_report(
         tips::regression_fixed(&tx, check)?;
     }
     tips::regression(&tx, report, &ticket)?;
-    if let Some(baseline) = baseline {
-        landing::queue(&tx, &ticket, author.machine, baseline)?;
+    if let Some(queued) = queued {
+        landing::queue(&tx, &ticket, author.machine, queued, now)?;
     }
     tx.commit()?;
     // A landing found the failure before tip verification did. Recording why must not

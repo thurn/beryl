@@ -21,6 +21,7 @@ use serde::de::DeserializeOwned;
 use serde_json::json;
 
 use ignite_core::fleet::ProviderSample;
+use ignite_core::ids::CheckName;
 use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::{
     AuditReport, ExplorationFind, FlakyReport, IncompleteReport, JusticiarCleared, JusticiarReport,
@@ -54,7 +55,9 @@ pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Optio
         "/tips/failures" | "/tips/budget" | "/tips/selection" if request.method == "GET" => {
             ("GET", false)
         }
-        "/regressions/landing" if request.method == "GET" => ("GET", true),
+        "/regressions/landing" | "/regressions/searcher" if request.method == "GET" => {
+            ("GET", true)
+        }
         "/tips/failures"
         | "/results/store"
         | "/flaky"
@@ -63,6 +66,7 @@ pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Optio
         | "/tips/verified"
         | "/regressions"
         | "/regressions/landing"
+        | "/regressions/handoff"
         | "/regressions/attribution"
         | "/regressions/move"
         | "/reverted"
@@ -559,8 +563,20 @@ fn regression(
         other => store_failure(&other),
     };
     match (request.method.as_str(), request.path.as_str()) {
+        ("GET", "/regressions/searcher") => {
+            let check: CheckName = request
+                .param("check")
+                .ok_or_else(|| failure(400, "name the failing check with ?check="))?
+                .parse()
+                .map_err(|error| failure(400, &format!("check: {error}")))?;
+            let searcher =
+                regressions::searcher::placement(conn, author.machine, check.family(), now)
+                    .map_err(report_error)?;
+            Ok(Response::json(200, &json!(searcher)))
+        }
         ("GET", _) => {
-            let pending = regressions::landing::next(conn, author.machine).map_err(report_error)?;
+            let pending =
+                regressions::landing::next(conn, author.machine, now).map_err(report_error)?;
             Ok(Response::json(200, &json!(pending)))
         }
         (_, "/regressions") => {
@@ -578,6 +594,11 @@ fn regression(
                 to: moved.to,
             };
             Ok(Response::json(200, &json!(reply)))
+        }
+        (_, "/regressions/handoff") => {
+            let ticket = regressions::landing::file_handoff(conn, author, &body(request)?, now)
+                .map_err(report_error)?;
+            filed_reply(&ticket)
         }
         (_, "/regressions/landing") => {
             let ticket = regressions::landing::file(conn, author, &body(request)?, now)

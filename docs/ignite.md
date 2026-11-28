@@ -2588,8 +2588,9 @@ releases the lease and exits with code 4.
   check passed there. A check that fails at the tip counts as known to fail even
   when its failure in the landing reports more findings, because the adapters
   report no list of individual findings to compare.
-- The reporting daemon later runs the same bounded culprit search as tip
-  verification in a separate command. A historical probe leases a landing tree
+- The reporting daemon, or a much faster machine (see
+  [Finding the culprit](#finding-the-culprit)), later runs the same bounded
+  culprit search as tip verification in a separate command. A historical probe leases a landing tree
   only while another tree stays free. On a machine with one landing tree, the
   search reports when it cannot narrow the range because it needs a probe. The
   result updates the original open regression with its culprit or remaining
@@ -3095,6 +3096,25 @@ and what each commit changed:
 - The regression ticket says how the search ended: the only candidate with
   nothing run, found in N runs, ended early with the reason, or not run with the
   reason.
+
+The search runs on a fast machine. Before a tip round searches for a culprit
+that it cannot revert, it asks the hub (`GET /regressions/searcher`) whether a
+much faster machine could search instead. The rule is the one for a ticket that
+holds `master` back: the machine that saw the failure keeps the search when its
+speed is at least 75% of the fastest free machine with the same operating system
+that runs the check's family. A machine is free when the operator has not
+switched it off and its capacity report is recent and not under memory pressure.
+A slower machine reports the failure without searching
+(`POST /regressions/handoff`), with the search "not run" and a reason that names
+the faster machine. A landing's historical search, described below, is pooled
+the same way when the hub files it. The fastest free machine takes a pooled
+search when it next asks for a pending search (`GET /regressions/landing`, every
+30 seconds while it runs none), runs the same bounded search in its landing
+trees, and reports it through `POST /regressions/attribution`, which updates the
+open regression. A claim lasts two hours and is renewed when the claimant asks
+again. A search whose claim expired returns to the pool. A search the fastest
+machine has not claimed after 10 minutes goes to any free machine with the
+system that asks.
 
 ### A broken build is reverted
 
