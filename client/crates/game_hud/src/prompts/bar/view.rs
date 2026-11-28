@@ -557,12 +557,14 @@ impl<'a> PromptSlots<'a> {
 
     /// A box `width` by `height` on the middle band's line, starting at `left` or as far left
     /// of it as keeps the box within the band's room beside the phase icon, if it fits there.
-    /// A control may reach a few points past the band's top and foot, where the table's card
-    /// piles do too, but not past its ends, or into the shared piles' column at its left.
+    /// A control may reach a point or two past the band's top and foot, where the table's card
+    /// piles do too (`middle_overhang`), but not past its ends, or into the shared piles' column
+    /// at its left. The creatures' rows stand against the band's edges, so a control reaching
+    /// further would cover part of a creature that the prompt may let the player pick.
     fn middle(&self, left: f32, width: f32, height: f32) -> Option<Rect> {
         let left = left.min(self.middle_end() - width);
         (!self.held
-            && height <= self.middle.height + 2.0 * self.metrics.overlap + 1.0
+            && height <= self.middle.height + 2.0 * self.metrics.middle_overhang
             && left >= self.middle_start())
         .then(|| {
             rect(
