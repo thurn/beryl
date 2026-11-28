@@ -348,17 +348,15 @@ fn floating_bar(
             0.0
         };
         let strip = rect(right - width, over - tall, width, tall);
-        let middle_right = slots.middle(right - beside - width, width, tall);
-        let middle_left = slots.middle(slots.middle_start(), width, tall);
         let (slot, placed) = slots.place(
             "stacked prompt controls",
             "prompt.stacked",
             strip,
-            [middle_right, middle_left],
+            slots.stacked_middles(right - beside - width, width, tall),
         );
         match slot {
-            1 => beside_right = right - placed.x,
-            2 => beside_left = placed.x + placed.width - left,
+            1 | 3 | 4 => beside_right = right - placed.x,
+            2 | 5 | 6 => beside_left = placed.x + placed.width - left,
             _ => {}
         }
         more.anchor = Some(Anchor::Point(
@@ -575,6 +573,39 @@ impl<'a> PromptSlots<'a> {
                 width,
                 height,
             )
+        })
+    }
+
+    /// The places on the middle band's line for stacked controls `width` by `height`, with the
+    /// right-hand one starting at `right_at`: each side, centred, then with the box's foot, or
+    /// its top, on the band's, which reaches past only one edge of the band and so clears the
+    /// creatures' row wherever the cards there leave a gap.
+    fn stacked_middles(&self, right_at: f32, width: f32, height: f32) -> [Option<Rect>; 6] {
+        let start = self.middle_start();
+        [
+            self.middle(right_at, width, height),
+            self.middle(start, width, height),
+            self.middle_shifted(right_at, width, height, true),
+            self.middle_shifted(right_at, width, height, false),
+            self.middle_shifted(start, width, height, true),
+            self.middle_shifted(start, width, height, false),
+        ]
+    }
+
+    /// Like `middle`, but with the box's foot (`up`) or top on the band's, so that it reaches
+    /// past only one edge of the band, by as much as a control may reach past both.
+    fn middle_shifted(&self, left: f32, width: f32, height: f32, up: bool) -> Option<Rect> {
+        let left = left.min(self.middle_end() - width);
+        (!self.held
+            && height <= self.middle.height + 2.0 * self.metrics.overlap + 1.0
+            && left >= self.middle_start())
+        .then(|| {
+            let top = if up {
+                self.middle.y + self.middle.height - height
+            } else {
+                self.middle.y
+            };
+            rect(left, top, width, height)
         })
     }
 
