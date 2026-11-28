@@ -236,11 +236,11 @@ omniscient twin) and the search anchored to the expert (`anchor+expert+guard`).
 
 5. **The verdict and the record** (§4.6).
 
-**Each command finishes within 30 minutes.** Ignite treats an `ignite run`
-that has lasted 45 minutes as stuck, and takes the ticket back from a session
-still waiting on it 15 minutes later. A full suite or match takes far longer
-than that, so the measure ticket splits each step into commands that each take
-less than 30 minutes, run one after another:
+**Each command finishes within 30 minutes.** Ignite treats an `ignite run` that
+has lasted 45 minutes as stuck, and takes the ticket back from a session still
+waiting on it 15 minutes later. A full suite or match takes far longer than
+that, so the measure ticket splits each step into commands that each take less
+than 30 minutes, run one after another:
 
 - **The suite:** one `just gate` for each budget (`--work 3M`, then
   `--work 30M`), each with its own `--out` directory. If one budget still takes
