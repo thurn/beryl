@@ -34,15 +34,23 @@ cost across the rest of the session, so keep context small and cache warm.
   summary, then read only those narrow ranges in your own turn.
 - Keep small, targeted lookups (1–3 known files) in your own turn.
 
-## Keep the prompt cache warm during waits over 4 minutes
+## Waits: keep the cache warm briefly, then end the turn
+
+Each 240-second wake re-reads the whole conversation from the cache. Past about
+15 minutes, those reads cost more than one full re-read once the cache has
+expired, and Ignite resumes a worker whose turn ended while its `ignite` command
+runs, with one prompt, when the command finishes.
 
 - On any `run_command` that may run longer than 4 minutes (such as `ignite
   test`, `ignite check`, `ignite land`, `ignite run`, or `ignite wait`), pass
   `NotificationTimeoutSeconds: 240`.
 - When that 240-second notification arrives and the command is still running, do
-  not poll its logs or restart it. Once you are past the first few turns of a
-  session, set one `schedule` timer with `DurationSeconds: 240` and
-  `TimerCondition` set to the background task's ID (so it cancels automatically
-  when the command finishes), then stop calling tools and wait. Repeat once per
-  240 seconds only while the command is still running.
+  not poll its logs or restart it. Set one `schedule` timer with
+  `DurationSeconds: 240` and `TimerCondition` set to the background task's ID (so
+  it cancels automatically when the command finishes), then stop calling tools
+  and wait. Repeat at most three times.
+- If the command is still running about 15 minutes after it started, end your
+  turn: write one line saying which command you are waiting for, and make no
+  further tool call. Ignite starts your next turn when the command finishes, and
+  its prompt tells you which `ignite wait` to run.
 - Never use `sleep` loops or background shell monitors.

@@ -1155,5 +1155,10 @@
     "label": "Upkeep's held-ticket report (`upkeep/stuck_held.rs`) no longer reports a ticket at six hours while its session is active (its worker is working and has a command running or recorded one in the last 30 minutes); an active session is reported only after a day. On 2026-11-27 justiciars read six-hour reports on three card tickets whose cygnus sessions were still running their landing gates and released them (`EVH5W.9`, `EVH5W.26`, `EVH5W.30`); `EVH5W.9` had a passing gate and landed 7.9 hours later from a fresh session, and `EVH5W.26` was done again from nothing by another session 6.7 hours later",
     "metric": "bead.minutes",
     "expect": "down"
+  },
+  {
+    "label": "The Antigravity rule in `.agents/rules/agy-efficiency.md` keeps the prompt cache warm with 240-second `schedule` wakes for at most about 15 minutes of a wait, then ends the turn so that Ignite resumes the worker when its `ignite` command finishes. On 2026-11-28 a Gemini worker on `ENVP2.22` kept one turn open for 5 hours of waits on its test run and landing: 219 model calls, most of them wakes, read 36.4M cached tokens of a 180k-234k conversation against 0.6M fresh input, and the turn ended on the weekly quota",
+    "metric": "bead.dollars",
+    "expect": "down"
   }
 ]
