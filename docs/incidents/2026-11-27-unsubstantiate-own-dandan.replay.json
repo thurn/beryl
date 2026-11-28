@@ -1,0 +1,8554 @@
+{
+  "formatVersion": 15,
+  "seed": 13311631893818503597,
+  "sharedDeck": true,
+  "decks": [
+    [
+      [
+        10,
+        "Dandân"
+      ],
+      [
+        20,
+        "Island"
+      ],
+      [
+        8,
+        "Memory Lapse"
+      ],
+      [
+        4,
+        "Accumulated Knowledge"
+      ],
+      [
+        2,
+        "Magical Hack"
+      ],
+      [
+        2,
+        "Mystic Sanctuary"
+      ],
+      [
+        2,
+        "Brainstorm"
+      ],
+      [
+        2,
+        "Capture of Jingzhou"
+      ],
+      [
+        2,
+        "Chart a Course"
+      ],
+      [
+        2,
+        "Control Magic"
+      ],
+      [
+        2,
+        "Crystal Spray"
+      ],
+      [
+        2,
+        "Day's Undoing"
+      ],
+      [
+        2,
+        "Mental Note"
+      ],
+      [
+        2,
+        "Metamorphose"
+      ],
+      [
+        2,
+        "Predict"
+      ],
+      [
+        2,
+        "Telling Time"
+      ],
+      [
+        2,
+        "Unsubstantiate"
+      ],
+      [
+        2,
+        "Halimar Depths"
+      ],
+      [
+        2,
+        "Haunted Fengraf"
+      ],
+      [
+        2,
+        "Lonely Sandbar"
+      ],
+      [
+        2,
+        "Remote Isle"
+      ],
+      [
+        2,
+        "The Surgical Bay"
+      ],
+      [
+        2,
+        "Svyelunite Temple"
+      ]
+    ],
+    []
+  ],
+  "human": 0,
+  "opponent": "pimc72-hidden-30m-anchor",
+  "stops": {
+    "fullControl": false,
+    "yours": [
+      "precombatMain",
+      "declareAttackers",
+      "declareBlockers",
+      "postcombatMain"
+    ],
+    "theirs": [
+      "declareAttackers",
+      "declareBlockers",
+      "end"
+    ]
+  },
+  "chooser": 1,
+  "log": [
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 0,
+        "step": "untap",
+        "kind": "playOrDraw",
+        "act": {
+          "act": "play"
+        }
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Day's Undoing"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Mystic Sanctuary"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Accumulated Knowledge"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Island"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Brainstorm"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Chart a Course"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Dandân"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Dandân"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Memory Lapse"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Memory Lapse"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Chart a Course"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Island"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Dandân"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Accumulated Knowledge"
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 1,
+        "turn": 0,
+        "step": "untap",
+        "kind": "keepOrMulligan",
+        "act": {
+          "act": "freeMulligan"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 0,
+        "step": "untap",
+        "kind": "keepOrMulligan",
+        "act": {
+          "act": "keep"
+        }
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Remote Isle"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Island"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Island"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Haunted Fengraf"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Capture of Jingzhou"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Mental Note"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Chart a Course"
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 0,
+        "step": "untap",
+        "kind": "keepOrMulligan",
+        "act": {
+          "act": "keep"
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 1,
+        "ordinal": 2,
+        "active": 1,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Accumulated Knowledge",
+              "Chart a Course",
+              "Dandân",
+              "Island",
+              "Island",
+              "Memory Lapse",
+              "Mystic Sanctuary"
+            ],
+            "graveyard": [],
+            "library": 66
+          },
+          {
+            "life": 20,
+            "hand": [
+              "Capture of Jingzhou",
+              "Chart a Course",
+              "Haunted Fengraf",
+              "Island",
+              "Island",
+              "Mental Note",
+              "Remote Isle"
+            ],
+            "graveyard": [],
+            "library": 66
+          }
+        ],
+        "battlefield": []
+      }
+    },
+    {
+      "choice": {
+        "index": 3,
+        "player": 1,
+        "turn": 1,
+        "step": "precombatMain",
+        "ordinal": 3,
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "Remote Isle",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 2,
+        "ordinal": 2,
+        "active": 0,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Accumulated Knowledge",
+              "Chart a Course",
+              "Dandân",
+              "Island",
+              "Island",
+              "Memory Lapse",
+              "Mystic Sanctuary"
+            ],
+            "graveyard": [],
+            "library": 66
+          },
+          {
+            "life": 20,
+            "hand": [
+              "Capture of Jingzhou",
+              "Chart a Course",
+              "Haunted Fengraf",
+              "Island",
+              "Island",
+              "Mental Note"
+            ],
+            "graveyard": [],
+            "library": 66
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Remote Isle",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true,
+            "sick": true
+          }
+        ]
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Mystic Sanctuary"
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 2,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "Mystic Sanctuary",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 3,
+        "ordinal": 2,
+        "active": 1,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Accumulated Knowledge",
+              "Chart a Course",
+              "Dandân",
+              "Island",
+              "Island",
+              "Memory Lapse",
+              "Mystic Sanctuary"
+            ],
+            "graveyard": [],
+            "library": 65
+          },
+          {
+            "life": 20,
+            "hand": [
+              "Capture of Jingzhou",
+              "Chart a Course",
+              "Haunted Fengraf",
+              "Island",
+              "Island",
+              "Mental Note"
+            ],
+            "graveyard": [],
+            "library": 65
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Remote Isle",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true,
+            "sick": true
+          }
+        ]
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Metamorphose"
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 3,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "Haunted Fengraf",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 3,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Metamorphose",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 0,
+        "turn": 3,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "chooseUpTo",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Dandân",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 4,
+        "ordinal": 2,
+        "active": 0,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Accumulated Knowledge",
+              "Chart a Course",
+              "Island",
+              "Island",
+              "Memory Lapse",
+              "Mystic Sanctuary"
+            ],
+            "graveyard": [
+              "Dandân",
+              "Metamorphose"
+            ],
+            "library": 65,
+            "known": [
+              {
+                "depth": 0,
+                "card": "Mystic Sanctuary",
+                "by": [
+                  0,
+                  1
+                ]
+              }
+            ]
+          },
+          {
+            "life": 20,
+            "hand": [
+              "Capture of Jingzhou",
+              "Chart a Course",
+              "Island",
+              "Island",
+              "Mental Note"
+            ],
+            "graveyard": [
+              "Dandân",
+              "Metamorphose"
+            ],
+            "library": 65,
+            "known": [
+              {
+                "depth": 0,
+                "card": "Mystic Sanctuary",
+                "by": [
+                  0,
+                  1
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Remote Isle",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Haunted Fengraf",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true,
+            "sick": true
+          }
+        ]
+      }
+    },
+    "undo",
+    {
+      "choice": {
+        "index": 2,
+        "player": 0,
+        "turn": 3,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "chooseUpTo",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Dandân",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 4,
+        "ordinal": 2,
+        "active": 0,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Accumulated Knowledge",
+              "Chart a Course",
+              "Island",
+              "Island",
+              "Memory Lapse",
+              "Mystic Sanctuary"
+            ],
+            "graveyard": [
+              "Dandân",
+              "Metamorphose"
+            ],
+            "library": 65,
+            "known": [
+              {
+                "depth": 0,
+                "card": "Mystic Sanctuary",
+                "by": [
+                  0,
+                  1
+                ]
+              }
+            ]
+          },
+          {
+            "life": 20,
+            "hand": [
+              "Capture of Jingzhou",
+              "Chart a Course",
+              "Island",
+              "Island",
+              "Mental Note"
+            ],
+            "graveyard": [
+              "Dandân",
+              "Metamorphose"
+            ],
+            "library": 65,
+            "known": [
+              {
+                "depth": 0,
+                "card": "Mystic Sanctuary",
+                "by": [
+                  0,
+                  1
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Remote Isle",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Haunted Fengraf",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true,
+            "sick": true
+          }
+        ]
+      }
+    },
+    "undo",
+    {
+      "choice": {
+        "index": 3,
+        "player": 0,
+        "turn": 3,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "chooseUpTo",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Mystic Sanctuary",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 4,
+        "ordinal": 2,
+        "active": 0,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Accumulated Knowledge",
+              "Chart a Course",
+              "Dandân",
+              "Island",
+              "Island",
+              "Memory Lapse"
+            ],
+            "graveyard": [
+              "Metamorphose"
+            ],
+            "library": 65,
+            "known": [
+              {
+                "depth": 0,
+                "card": "Mystic Sanctuary",
+                "by": [
+                  0,
+                  1
+                ]
+              }
+            ]
+          },
+          {
+            "life": 20,
+            "hand": [
+              "Capture of Jingzhou",
+              "Chart a Course",
+              "Island",
+              "Island",
+              "Mental Note"
+            ],
+            "graveyard": [
+              "Metamorphose"
+            ],
+            "library": 65,
+            "known": [
+              {
+                "depth": 0,
+                "card": "Mystic Sanctuary",
+                "by": [
+                  0,
+                  1
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Remote Isle",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Haunted Fengraf",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true,
+            "sick": true
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          }
+        ]
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 0,
+        "turn": 4,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "Island",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 0,
+        "turn": 4,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Dandân",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 5,
+        "ordinal": 2,
+        "active": 1,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Accumulated Knowledge",
+              "Chart a Course",
+              "Island",
+              "Memory Lapse",
+              "Mystic Sanctuary"
+            ],
+            "shown": [
+              "Mystic Sanctuary"
+            ],
+            "graveyard": [
+              "Metamorphose"
+            ],
+            "library": 64
+          },
+          {
+            "life": 20,
+            "hand": [
+              "Capture of Jingzhou",
+              "Chart a Course",
+              "Island",
+              "Island",
+              "Mental Note"
+            ],
+            "graveyard": [
+              "Metamorphose"
+            ],
+            "library": 64
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Remote Isle",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Haunted Fengraf",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true,
+            "sick": true
+          },
+          {
+            "card": "Dandân",
+            "owner": 0,
+            "controller": 0,
+            "sick": true
+          }
+        ]
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Control Magic"
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 5,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "Island",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 5,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 1,
+        "turn": 5,
+        "step": "postcombatMain",
+        "ordinal": 8,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Chart a Course",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 5,
+        "step": "postcombatMain",
+        "ordinal": 8,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Island"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Memory Lapse"
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 1,
+        "turn": 5,
+        "step": "postcombatMain",
+        "ordinal": 8,
+        "kind": "chooseObject",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Mental Note",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 6,
+        "ordinal": 2,
+        "active": 0,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Accumulated Knowledge",
+              "Chart a Course",
+              "Island",
+              "Memory Lapse",
+              "Mystic Sanctuary"
+            ],
+            "shown": [
+              "Mystic Sanctuary"
+            ],
+            "graveyard": [
+              "Chart a Course",
+              "Mental Note",
+              "Metamorphose"
+            ],
+            "library": 61
+          },
+          {
+            "life": 20,
+            "hand": [
+              "Capture of Jingzhou",
+              "Control Magic",
+              "Island",
+              "Island",
+              "Memory Lapse"
+            ],
+            "graveyard": [
+              "Chart a Course",
+              "Mental Note",
+              "Metamorphose"
+            ],
+            "library": 61
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Remote Isle",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Haunted Fengraf",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Dandân",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true,
+            "sick": true
+          }
+        ]
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Dandân"
+      }
+    },
+    "undo",
+    {
+      "choice": {
+        "index": 2,
+        "player": 0,
+        "turn": 4,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Dandân",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 5,
+        "ordinal": 2,
+        "active": 1,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Accumulated Knowledge",
+              "Chart a Course",
+              "Island",
+              "Memory Lapse",
+              "Mystic Sanctuary"
+            ],
+            "shown": [
+              "Mystic Sanctuary"
+            ],
+            "graveyard": [
+              "Metamorphose"
+            ],
+            "library": 64
+          },
+          {
+            "life": 20,
+            "hand": [
+              "Capture of Jingzhou",
+              "Chart a Course",
+              "Island",
+              "Island",
+              "Mental Note"
+            ],
+            "graveyard": [
+              "Metamorphose"
+            ],
+            "library": 64
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Remote Isle",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Haunted Fengraf",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true,
+            "sick": true
+          },
+          {
+            "card": "Dandân",
+            "owner": 0,
+            "controller": 0,
+            "sick": true
+          }
+        ]
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Control Magic"
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 5,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "Island",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 5,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 1,
+        "turn": 5,
+        "step": "postcombatMain",
+        "ordinal": 8,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Chart a Course",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 5,
+        "step": "postcombatMain",
+        "ordinal": 8,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Island"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Memory Lapse"
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 1,
+        "turn": 5,
+        "step": "postcombatMain",
+        "ordinal": 8,
+        "kind": "chooseObject",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Mental Note",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 6,
+        "ordinal": 2,
+        "active": 0,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Accumulated Knowledge",
+              "Chart a Course",
+              "Island",
+              "Memory Lapse",
+              "Mystic Sanctuary"
+            ],
+            "shown": [
+              "Mystic Sanctuary"
+            ],
+            "graveyard": [
+              "Chart a Course",
+              "Mental Note",
+              "Metamorphose"
+            ],
+            "library": 61
+          },
+          {
+            "life": 20,
+            "hand": [
+              "Capture of Jingzhou",
+              "Control Magic",
+              "Island",
+              "Island",
+              "Memory Lapse"
+            ],
+            "graveyard": [
+              "Chart a Course",
+              "Mental Note",
+              "Metamorphose"
+            ],
+            "library": 61
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Remote Isle",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Haunted Fengraf",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Dandân",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true,
+            "sick": true
+          }
+        ]
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Dandân"
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 0,
+        "turn": 6,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "Island",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 6,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 6,
+        "step": "declareAttackers",
+        "ordinal": 6,
+        "kind": "attacker",
+        "act": {
+          "act": "attack",
+          "creature": {
+            "name": "Dandân",
+            "zone": "battlefield",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "auto": {
+        "index": 0,
+        "player": 0,
+        "turn": 6,
+        "step": "declareAttackers",
+        "ordinal": 6,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "auto": {
+        "index": 0,
+        "player": 0,
+        "turn": 6,
+        "step": "declareBlockers",
+        "ordinal": 7,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 6,
+        "step": "postcombatMain",
+        "ordinal": 10,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Dandân",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 7,
+        "ordinal": 2,
+        "active": 1,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Accumulated Knowledge",
+              "Chart a Course",
+              "Memory Lapse",
+              "Mystic Sanctuary"
+            ],
+            "shown": [
+              "Mystic Sanctuary"
+            ],
+            "graveyard": [
+              "Chart a Course",
+              "Mental Note",
+              "Metamorphose"
+            ],
+            "library": 60
+          },
+          {
+            "life": 16,
+            "hand": [
+              "Capture of Jingzhou",
+              "Control Magic",
+              "Island",
+              "Island",
+              "Memory Lapse"
+            ],
+            "graveyard": [
+              "Chart a Course",
+              "Mental Note",
+              "Metamorphose"
+            ],
+            "library": 60
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Remote Isle",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Haunted Fengraf",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Dandân",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true,
+            "sick": true
+          },
+          {
+            "card": "Dandân",
+            "owner": 0,
+            "controller": 0,
+            "sick": true
+          }
+        ]
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Telling Time"
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 7,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "Island",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 7,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Control Magic",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 7,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "target",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Dandân",
+            "zone": "battlefield",
+            "controller": 0,
+            "sick": true
+          }
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 8,
+        "ordinal": 2,
+        "active": 0,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Accumulated Knowledge",
+              "Chart a Course",
+              "Memory Lapse",
+              "Mystic Sanctuary"
+            ],
+            "shown": [
+              "Mystic Sanctuary"
+            ],
+            "graveyard": [
+              "Chart a Course",
+              "Mental Note",
+              "Metamorphose"
+            ],
+            "library": 59
+          },
+          {
+            "life": 16,
+            "hand": [
+              "Capture of Jingzhou",
+              "Island",
+              "Memory Lapse",
+              "Telling Time"
+            ],
+            "graveyard": [
+              "Chart a Course",
+              "Mental Note",
+              "Metamorphose"
+            ],
+            "library": 59
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Remote Isle",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Haunted Fengraf",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Dandân",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Dandân",
+            "owner": 0,
+            "controller": 0,
+            "sick": true
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true,
+            "sick": true
+          },
+          {
+            "card": "Control Magic",
+            "owner": 1,
+            "controller": 1,
+            "sick": true,
+            "attachedTo": 7
+          }
+        ]
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Memory Lapse"
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 8,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 8,
+        "step": "declareAttackers",
+        "ordinal": 6,
+        "kind": "attacker",
+        "act": {
+          "act": "attack",
+          "creature": {
+            "name": "Dandân",
+            "zone": "battlefield",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "auto": {
+        "index": 0,
+        "player": 0,
+        "turn": 8,
+        "step": "declareAttackers",
+        "ordinal": 6,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 8,
+        "step": "declareBlockers",
+        "ordinal": 7,
+        "kind": "blocker",
+        "act": {
+          "act": "block",
+          "creature": {
+            "name": "Dandân",
+            "zone": "battlefield",
+            "controller": 1,
+            "owner": 0,
+            "sick": true
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 8,
+        "step": "declareBlockers",
+        "ordinal": 7,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 3,
+        "player": 0,
+        "turn": 8,
+        "step": "postcombatMain",
+        "ordinal": 10,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Chart a Course",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Island"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Lonely Sandbar"
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 0,
+        "turn": 8,
+        "step": "postcombatMain",
+        "ordinal": 10,
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "Mystic Sanctuary",
+            "zone": "hand",
+            "controller": 0,
+            "shown": true
+          }
+        }
+      }
+    },
+    "undo",
+    {
+      "choice": {
+        "index": 3,
+        "player": 0,
+        "turn": 8,
+        "step": "postcombatMain",
+        "ordinal": 10,
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "Island",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 8,
+        "step": "postcombatMain",
+        "ordinal": 10,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 9,
+        "ordinal": 2,
+        "active": 1,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Accumulated Knowledge",
+              "Lonely Sandbar",
+              "Memory Lapse",
+              "Memory Lapse",
+              "Mystic Sanctuary"
+            ],
+            "shown": [
+              "Mystic Sanctuary"
+            ],
+            "graveyard": [
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note",
+              "Metamorphose"
+            ],
+            "library": 56
+          },
+          {
+            "life": 16,
+            "hand": [
+              "Capture of Jingzhou",
+              "Island",
+              "Memory Lapse",
+              "Telling Time"
+            ],
+            "graveyard": [
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note",
+              "Metamorphose"
+            ],
+            "library": 56
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Remote Isle",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Haunted Fengraf",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "sick": true
+          }
+        ]
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Island"
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 1,
+        "turn": 9,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Telling Time",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 9,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 9,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Island"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Memory Lapse"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Magical Hack"
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 9,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "chooseObject",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Memory Lapse",
+            "zone": "library",
+            "controller": 0,
+            "shown": true
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 9,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "chooseObject",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Island",
+            "zone": "library",
+            "controller": 0,
+            "shown": true
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 9,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "Island",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 0,
+        "turn": 9,
+        "step": "end",
+        "ordinal": 9,
+        "kind": "priority",
+        "act": {
+          "act": "activate",
+          "card": {
+            "name": "Lonely Sandbar",
+            "zone": "hand",
+            "controller": 0
+          },
+          "ability": {
+            "n": 1
+          }
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 10,
+        "ordinal": 2,
+        "active": 0,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Accumulated Knowledge",
+              "Island",
+              "Memory Lapse",
+              "Memory Lapse",
+              "Mystic Sanctuary"
+            ],
+            "shown": [
+              "Island",
+              "Mystic Sanctuary"
+            ],
+            "graveyard": [
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note",
+              "Metamorphose"
+            ],
+            "library": 53,
+            "known": [
+              {
+                "depth": 52,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              }
+            ]
+          },
+          {
+            "life": 16,
+            "hand": [
+              "Capture of Jingzhou",
+              "Island",
+              "Memory Lapse",
+              "Memory Lapse"
+            ],
+            "graveyard": [
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note",
+              "Metamorphose"
+            ],
+            "library": 53,
+            "known": [
+              {
+                "depth": 52,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Remote Isle",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Haunted Fengraf",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "sick": true
+          }
+        ]
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Mental Note"
+      }
+    },
+    "undo",
+    {
+      "choice": {
+        "index": 2,
+        "player": 0,
+        "turn": 9,
+        "step": "end",
+        "ordinal": 9,
+        "kind": "priority",
+        "act": {
+          "act": "activate",
+          "card": {
+            "name": "Lonely Sandbar",
+            "zone": "hand",
+            "controller": 0
+          },
+          "ability": {
+            "n": 1
+          }
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 10,
+        "ordinal": 2,
+        "active": 0,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Accumulated Knowledge",
+              "Island",
+              "Memory Lapse",
+              "Memory Lapse",
+              "Mystic Sanctuary"
+            ],
+            "shown": [
+              "Island",
+              "Mystic Sanctuary"
+            ],
+            "graveyard": [
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note",
+              "Metamorphose"
+            ],
+            "library": 53,
+            "known": [
+              {
+                "depth": 52,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              }
+            ]
+          },
+          {
+            "life": 16,
+            "hand": [
+              "Capture of Jingzhou",
+              "Island",
+              "Memory Lapse",
+              "Memory Lapse"
+            ],
+            "graveyard": [
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note",
+              "Metamorphose"
+            ],
+            "library": 53,
+            "known": [
+              {
+                "depth": 52,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Remote Isle",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Haunted Fengraf",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "sick": true
+          }
+        ]
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Mental Note"
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 10,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "Island",
+            "zone": "hand",
+            "controller": 0,
+            "shown": true
+          }
+        }
+      }
+    },
+    "undo",
+    {
+      "choice": {
+        "index": 2,
+        "player": 0,
+        "turn": 10,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "Mystic Sanctuary",
+            "zone": "hand",
+            "controller": 0,
+            "shown": true
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 10,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "target",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Metamorphose",
+            "zone": "graveyard",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "auto": {
+        "index": 0,
+        "player": 0,
+        "turn": 10,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 10,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "yesNo",
+        "act": {
+          "act": "yes"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 0,
+        "turn": 10,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Accumulated Knowledge",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "auto": {
+        "index": 0,
+        "player": 0,
+        "turn": 10,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 10,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Memory Lapse",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 10,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 10,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 10,
+        "step": "postcombatMain",
+        "ordinal": 8,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 11,
+        "ordinal": 2,
+        "active": 1,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Island",
+              "Memory Lapse",
+              "Memory Lapse",
+              "Mental Note"
+            ],
+            "shown": [
+              "Island"
+            ],
+            "graveyard": [
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 54,
+            "known": [
+              {
+                "depth": 0,
+                "card": "Accumulated Knowledge",
+                "by": [
+                  0,
+                  1
+                ]
+              },
+              {
+                "depth": 1,
+                "card": "Metamorphose",
+                "by": [
+                  0,
+                  1
+                ]
+              },
+              {
+                "depth": 53,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              }
+            ]
+          },
+          {
+            "life": 16,
+            "hand": [
+              "Capture of Jingzhou",
+              "Island",
+              "Memory Lapse"
+            ],
+            "graveyard": [
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 54,
+            "known": [
+              {
+                "depth": 0,
+                "card": "Accumulated Knowledge",
+                "by": [
+                  0,
+                  1
+                ]
+              },
+              {
+                "depth": 1,
+                "card": "Metamorphose",
+                "by": [
+                  0,
+                  1
+                ]
+              },
+              {
+                "depth": 53,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Remote Isle",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Haunted Fengraf",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0,
+            "sick": true
+          }
+        ]
+      }
+    },
+    {
+      "choice": {
+        "index": 3,
+        "player": 1,
+        "turn": 11,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Capture of Jingzhou",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 11,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Mental Note",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "auto": {
+        "index": 0,
+        "player": 0,
+        "turn": 11,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Dandân"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Island"
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 11,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 11,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "Island",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 12,
+        "ordinal": 2,
+        "active": 1,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Island",
+              "Island",
+              "Memory Lapse",
+              "Memory Lapse"
+            ],
+            "shown": [
+              "Island"
+            ],
+            "graveyard": [
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 50,
+            "known": [
+              {
+                "depth": 49,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              }
+            ]
+          },
+          {
+            "life": 16,
+            "hand": [
+              "Accumulated Knowledge",
+              "Memory Lapse"
+            ],
+            "shown": [
+              "Accumulated Knowledge"
+            ],
+            "graveyard": [
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 50,
+            "known": [
+              {
+                "depth": 49,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Remote Isle",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Haunted Fengraf",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0,
+            "sick": true
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          }
+        ],
+        "lingering": "a changed turn order"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Crystal Spray"
+      }
+    },
+    {
+      "choice": {
+        "index": 3,
+        "player": 1,
+        "turn": 12,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "activate",
+          "card": {
+            "name": "Haunted Fengraf",
+            "zone": "battlefield",
+            "controller": 1
+          },
+          "ability": {
+            "n": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 12,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "pick": {
+        "player": 0,
+        "card": "Dandân"
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 12,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Dandân",
+            "zone": "hand",
+            "controller": 1,
+            "shown": true
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 12,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Memory Lapse",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "auto": {
+        "index": 0,
+        "player": 0,
+        "turn": 12,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "target",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Dandân",
+            "zone": "stack",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 13,
+        "ordinal": 2,
+        "active": 0,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Island",
+              "Island",
+              "Memory Lapse"
+            ],
+            "shown": [
+              "Island"
+            ],
+            "graveyard": [
+              "Memory Lapse",
+              "Haunted Fengraf",
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 50,
+            "known": [
+              {
+                "depth": 0,
+                "card": "Dandân",
+                "by": [
+                  0,
+                  1
+                ]
+              },
+              {
+                "depth": 49,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              }
+            ]
+          },
+          {
+            "life": 16,
+            "hand": [
+              "Accumulated Knowledge",
+              "Crystal Spray",
+              "Memory Lapse"
+            ],
+            "shown": [
+              "Accumulated Knowledge"
+            ],
+            "graveyard": [
+              "Memory Lapse",
+              "Haunted Fengraf",
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 50,
+            "known": [
+              {
+                "depth": 0,
+                "card": "Dandân",
+                "by": [
+                  0,
+                  1
+                ]
+              },
+              {
+                "depth": 49,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Remote Isle",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          }
+        ]
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 13,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "Island",
+            "zone": "hand",
+            "controller": 0,
+            "shown": true
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 13,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Dandân",
+            "zone": "hand",
+            "controller": 0,
+            "shown": true
+          }
+        }
+      }
+    },
+    {
+      "auto": {
+        "index": 0,
+        "player": 0,
+        "turn": 13,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 14,
+        "ordinal": 2,
+        "active": 1,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Island",
+              "Memory Lapse"
+            ],
+            "graveyard": [
+              "Memory Lapse",
+              "Haunted Fengraf",
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 49,
+            "known": [
+              {
+                "depth": 48,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              }
+            ]
+          },
+          {
+            "life": 16,
+            "hand": [
+              "Accumulated Knowledge",
+              "Crystal Spray",
+              "Memory Lapse"
+            ],
+            "shown": [
+              "Accumulated Knowledge"
+            ],
+            "graveyard": [
+              "Memory Lapse",
+              "Haunted Fengraf",
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 49,
+            "known": [
+              {
+                "depth": 48,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Remote Isle",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "sick": true
+          },
+          {
+            "card": "Dandân",
+            "owner": 0,
+            "controller": 0,
+            "sick": true
+          }
+        ]
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Day's Undoing"
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 14,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 1,
+        "turn": 14,
+        "step": "postcombatMain",
+        "ordinal": 8,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Crystal Spray",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 4,
+        "player": 1,
+        "turn": 14,
+        "step": "postcombatMain",
+        "ordinal": 8,
+        "kind": "target",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Dandân",
+            "zone": "battlefield",
+            "controller": 0,
+            "sick": true
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 14,
+        "step": "postcombatMain",
+        "ordinal": 8,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 14,
+        "step": "postcombatMain",
+        "ordinal": 8,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Memory Lapse",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "auto": {
+        "index": 0,
+        "player": 0,
+        "turn": 14,
+        "step": "postcombatMain",
+        "ordinal": 8,
+        "kind": "target",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Crystal Spray",
+            "zone": "stack",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 14,
+        "step": "postcombatMain",
+        "ordinal": 8,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 14,
+        "step": "postcombatMain",
+        "ordinal": 8,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Accumulated Knowledge",
+            "zone": "hand",
+            "controller": 1,
+            "shown": true
+          }
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 15,
+        "ordinal": 2,
+        "active": 0,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Island"
+            ],
+            "graveyard": [
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Memory Lapse",
+              "Haunted Fengraf",
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 48,
+            "known": [
+              {
+                "depth": 47,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              }
+            ]
+          },
+          {
+            "life": 16,
+            "hand": [
+              "Crystal Spray",
+              "Day's Undoing",
+              "Memory Lapse"
+            ],
+            "shown": [
+              "Crystal Spray"
+            ],
+            "graveyard": [
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Memory Lapse",
+              "Haunted Fengraf",
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 48,
+            "known": [
+              {
+                "depth": 47,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Remote Isle",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Dandân",
+            "owner": 0,
+            "controller": 0
+          }
+        ]
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Predict"
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 15,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "Island",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 15,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 15,
+        "step": "declareAttackers",
+        "ordinal": 6,
+        "kind": "attacker",
+        "act": {
+          "act": "attack",
+          "creature": {
+            "name": "Dandân",
+            "zone": "battlefield",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "auto": {
+        "index": 0,
+        "player": 0,
+        "turn": 15,
+        "step": "declareAttackers",
+        "ordinal": 6,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "auto": {
+        "index": 0,
+        "player": 0,
+        "turn": 15,
+        "step": "declareBlockers",
+        "ordinal": 7,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 15,
+        "step": "postcombatMain",
+        "ordinal": 10,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 16,
+        "ordinal": 2,
+        "active": 1,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Predict"
+            ],
+            "graveyard": [
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Memory Lapse",
+              "Haunted Fengraf",
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 47,
+            "known": [
+              {
+                "depth": 46,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              }
+            ]
+          },
+          {
+            "life": 12,
+            "hand": [
+              "Crystal Spray",
+              "Day's Undoing",
+              "Memory Lapse"
+            ],
+            "shown": [
+              "Crystal Spray"
+            ],
+            "graveyard": [
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Memory Lapse",
+              "Haunted Fengraf",
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 47,
+            "known": [
+              {
+                "depth": 46,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Remote Isle",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Dandân",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "sick": true
+          }
+        ]
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Dandân"
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 1,
+        "turn": 16,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Crystal Spray",
+            "zone": "hand",
+            "controller": 1,
+            "shown": true
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 4,
+        "player": 1,
+        "turn": 16,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "target",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Dandân",
+            "zone": "battlefield",
+            "controller": 0,
+            "tapped": true
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 16,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 16,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 6,
+        "player": 1,
+        "turn": 16,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "chooseObject",
+        "act": {
+          "act": "chosen",
+          "value": "Island"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 3,
+        "player": 1,
+        "turn": 16,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "chooseObject",
+        "act": {
+          "act": "chosen",
+          "value": "Forest"
+        }
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Memory Lapse"
+      }
+    },
+    {
+      "auto": {
+        "index": 0,
+        "player": 0,
+        "turn": 16,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 16,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Dandân",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 16,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 16,
+        "step": "end",
+        "ordinal": 9,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 17,
+        "ordinal": 2,
+        "active": 0,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Predict"
+            ],
+            "graveyard": [
+              "Dandân",
+              "Crystal Spray",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Memory Lapse",
+              "Haunted Fengraf",
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 45,
+            "known": [
+              {
+                "depth": 44,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              }
+            ]
+          },
+          {
+            "life": 12,
+            "hand": [
+              "Day's Undoing",
+              "Memory Lapse",
+              "Memory Lapse"
+            ],
+            "graveyard": [
+              "Dandân",
+              "Crystal Spray",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Memory Lapse",
+              "Haunted Fengraf",
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 45,
+            "known": [
+              {
+                "depth": 44,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Remote Isle",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Dandân",
+            "owner": 1,
+            "controller": 1,
+            "sick": true
+          }
+        ]
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Brainstorm"
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 17,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Brainstorm",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "auto": {
+        "index": 0,
+        "player": 0,
+        "turn": 17,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Predict"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Halimar Depths"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Remote Isle"
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 17,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "chooseObject",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Halimar Depths",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "continuation": true,
+        "player": 0,
+        "turn": 17,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "chooseObject",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Remote Isle",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 17,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Predict",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 17,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "target",
+        "act": {
+          "act": "player",
+          "seat": 0
+        }
+      }
+    },
+    {
+      "auto": {
+        "index": 0,
+        "player": 0,
+        "turn": 17,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 20,
+        "player": 0,
+        "turn": 17,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "chooseObject",
+        "act": {
+          "act": "chosen",
+          "value": "Remote Isle"
+        }
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Day's Undoing"
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 17,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "Halimar Depths",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "auto": {
+        "index": 0,
+        "player": 0,
+        "turn": 17,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Telling Time"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Dandân"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Island"
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 17,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "chooseObject",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Island",
+            "zone": "library",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "continuation": true,
+        "player": 0,
+        "turn": 17,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "chooseObject",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Dandân",
+            "zone": "library",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 17,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Predict",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 17,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "target",
+        "act": {
+          "act": "player",
+          "seat": 0
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 17,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "chooseObject",
+        "act": {
+          "act": "chosen",
+          "value": "Island"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 0,
+        "turn": 17,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Dandân",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 18,
+        "ordinal": 2,
+        "active": 1,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Day's Undoing",
+              "Telling Time"
+            ],
+            "graveyard": [
+              "Predict",
+              "Island",
+              "Predict",
+              "Remote Isle",
+              "Brainstorm",
+              "Dandân",
+              "Crystal Spray",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Memory Lapse",
+              "Haunted Fengraf",
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 37,
+            "known": [
+              {
+                "depth": 36,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              }
+            ]
+          },
+          {
+            "life": 12,
+            "hand": [
+              "Day's Undoing",
+              "Memory Lapse",
+              "Memory Lapse"
+            ],
+            "graveyard": [
+              "Predict",
+              "Island",
+              "Predict",
+              "Remote Isle",
+              "Brainstorm",
+              "Dandân",
+              "Crystal Spray",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Memory Lapse",
+              "Haunted Fengraf",
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 37,
+            "known": [
+              {
+                "depth": 36,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Remote Isle",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Dandân",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Halimar Depths",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true,
+            "sick": true
+          },
+          {
+            "card": "Dandân",
+            "owner": 0,
+            "controller": 0,
+            "sick": true
+          }
+        ]
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Accumulated Knowledge"
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 18,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 18,
+        "step": "declareAttackers",
+        "ordinal": 6,
+        "kind": "attacker",
+        "act": {
+          "act": "done"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 18,
+        "step": "postcombatMain",
+        "ordinal": 8,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 19,
+        "ordinal": 2,
+        "active": 0,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Day's Undoing",
+              "Telling Time"
+            ],
+            "graveyard": [
+              "Predict",
+              "Island",
+              "Predict",
+              "Remote Isle",
+              "Brainstorm",
+              "Dandân",
+              "Crystal Spray",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Memory Lapse",
+              "Haunted Fengraf",
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 36,
+            "known": [
+              {
+                "depth": 35,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              }
+            ]
+          },
+          {
+            "life": 12,
+            "hand": [
+              "Accumulated Knowledge",
+              "Day's Undoing",
+              "Memory Lapse",
+              "Memory Lapse"
+            ],
+            "graveyard": [
+              "Predict",
+              "Island",
+              "Predict",
+              "Remote Isle",
+              "Brainstorm",
+              "Dandân",
+              "Crystal Spray",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Memory Lapse",
+              "Haunted Fengraf",
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 36,
+            "known": [
+              {
+                "depth": 35,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Remote Isle",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Dandân",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Halimar Depths",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Dandân",
+            "owner": 0,
+            "controller": 0
+          }
+        ]
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Island"
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 19,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "Island",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 19,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 19,
+        "step": "declareAttackers",
+        "ordinal": 6,
+        "kind": "attacker",
+        "act": {
+          "act": "attack",
+          "creature": {
+            "name": "Dandân",
+            "zone": "battlefield",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "auto": {
+        "index": 0,
+        "player": 0,
+        "turn": 19,
+        "step": "declareAttackers",
+        "ordinal": 6,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 19,
+        "step": "declareAttackers",
+        "ordinal": 6,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 19,
+        "step": "declareBlockers",
+        "ordinal": 7,
+        "kind": "blocker",
+        "act": {
+          "act": "block",
+          "creature": {
+            "name": "Dandân",
+            "zone": "battlefield",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 19,
+        "step": "declareBlockers",
+        "ordinal": 7,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 19,
+        "step": "declareBlockers",
+        "ordinal": 7,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 19,
+        "step": "postcombatMain",
+        "ordinal": 10,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Telling Time",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 19,
+        "step": "postcombatMain",
+        "ordinal": 10,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Brainstorm"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Island"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Capture of Jingzhou"
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 19,
+        "step": "postcombatMain",
+        "ordinal": 10,
+        "kind": "chooseObject",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Brainstorm",
+            "zone": "library",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 19,
+        "step": "postcombatMain",
+        "ordinal": 10,
+        "kind": "chooseObject",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Capture of Jingzhou",
+            "zone": "library",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 19,
+        "step": "postcombatMain",
+        "ordinal": 10,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Brainstorm",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 19,
+        "step": "postcombatMain",
+        "ordinal": 10,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Dandân"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Accumulated Knowledge"
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 19,
+        "step": "postcombatMain",
+        "ordinal": 10,
+        "kind": "chooseObject",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Accumulated Knowledge",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "continuation": true,
+        "player": 0,
+        "turn": 19,
+        "step": "postcombatMain",
+        "ordinal": 10,
+        "kind": "chooseObject",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Dandân",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 19,
+        "step": "postcombatMain",
+        "ordinal": 10,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Capture of Jingzhou",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 19,
+        "step": "postcombatMain",
+        "ordinal": 10,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 19,
+        "step": "end",
+        "ordinal": 11,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 20,
+        "ordinal": 2,
+        "active": 0,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Day's Undoing"
+            ],
+            "graveyard": [
+              "Capture of Jingzhou",
+              "Brainstorm",
+              "Telling Time",
+              "Dandân",
+              "Dandân",
+              "Predict",
+              "Island",
+              "Predict",
+              "Remote Isle",
+              "Brainstorm",
+              "Dandân",
+              "Crystal Spray",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Memory Lapse",
+              "Haunted Fengraf",
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 33,
+            "known": [
+              {
+                "depth": 0,
+                "card": "Dandân",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 1,
+                "card": "Accumulated Knowledge",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 31,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 32,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          },
+          {
+            "life": 12,
+            "hand": [
+              "Accumulated Knowledge",
+              "Day's Undoing",
+              "Memory Lapse",
+              "Memory Lapse"
+            ],
+            "graveyard": [
+              "Capture of Jingzhou",
+              "Brainstorm",
+              "Telling Time",
+              "Dandân",
+              "Dandân",
+              "Predict",
+              "Island",
+              "Predict",
+              "Remote Isle",
+              "Brainstorm",
+              "Dandân",
+              "Crystal Spray",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Memory Lapse",
+              "Haunted Fengraf",
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 33,
+            "known": [
+              {
+                "depth": 0,
+                "card": "Dandân",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 1,
+                "card": "Accumulated Knowledge",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 31,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 32,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Remote Isle",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Halimar Depths",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          }
+        ],
+        "lingering": "a changed turn order"
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 20,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Dandân",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 20,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 20,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Day's Undoing",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 20,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Memory Lapse",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 20,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 20,
+        "step": "end",
+        "ordinal": 9,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Accumulated Knowledge",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 21,
+        "ordinal": 2,
+        "active": 1,
+        "players": [
+          {
+            "life": 20,
+            "hand": [],
+            "graveyard": [
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Capture of Jingzhou",
+              "Brainstorm",
+              "Telling Time",
+              "Dandân",
+              "Dandân",
+              "Predict",
+              "Island",
+              "Predict",
+              "Remote Isle",
+              "Brainstorm",
+              "Dandân",
+              "Crystal Spray",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Memory Lapse",
+              "Haunted Fengraf",
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 31,
+            "known": [
+              {
+                "depth": 29,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 30,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          },
+          {
+            "life": 12,
+            "hand": [
+              "Accumulated Knowledge",
+              "Day's Undoing",
+              "Day's Undoing",
+              "Memory Lapse"
+            ],
+            "shown": [
+              "Accumulated Knowledge",
+              "Day's Undoing"
+            ],
+            "graveyard": [
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Capture of Jingzhou",
+              "Brainstorm",
+              "Telling Time",
+              "Dandân",
+              "Dandân",
+              "Predict",
+              "Island",
+              "Predict",
+              "Remote Isle",
+              "Brainstorm",
+              "Dandân",
+              "Crystal Spray",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Memory Lapse",
+              "Haunted Fengraf",
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 31,
+            "known": [
+              {
+                "depth": 29,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 30,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Remote Isle",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Halimar Depths",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Dandân",
+            "owner": 0,
+            "controller": 0,
+            "sick": true
+          }
+        ]
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Halimar Depths"
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 21,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "Halimar Depths",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 21,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Memory Lapse"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Unsubstantiate"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "The Surgical Bay"
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 21,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "chooseObject",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "The Surgical Bay",
+            "zone": "library",
+            "controller": 0,
+            "shown": true
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 21,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "chooseObject",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Unsubstantiate",
+            "zone": "library",
+            "controller": 0,
+            "shown": true
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 21,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Accumulated Knowledge",
+            "zone": "hand",
+            "controller": 1,
+            "shown": true
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 21,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 21,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 21,
+        "step": "postcombatMain",
+        "ordinal": 8,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 22,
+        "ordinal": 2,
+        "active": 0,
+        "players": [
+          {
+            "life": 20,
+            "hand": [],
+            "graveyard": [
+              "Accumulated Knowledge",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Capture of Jingzhou",
+              "Brainstorm",
+              "Telling Time",
+              "Dandân",
+              "Dandân",
+              "Predict",
+              "Island",
+              "Predict",
+              "Remote Isle",
+              "Brainstorm",
+              "Dandân",
+              "Crystal Spray",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Memory Lapse",
+              "Haunted Fengraf",
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 27,
+            "known": [
+              {
+                "depth": 25,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 26,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          },
+          {
+            "life": 12,
+            "hand": [
+              "Day's Undoing",
+              "Day's Undoing",
+              "Memory Lapse",
+              "Memory Lapse",
+              "The Surgical Bay",
+              "Unsubstantiate"
+            ],
+            "shown": [
+              "Day's Undoing"
+            ],
+            "graveyard": [
+              "Accumulated Knowledge",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Capture of Jingzhou",
+              "Brainstorm",
+              "Telling Time",
+              "Dandân",
+              "Dandân",
+              "Predict",
+              "Island",
+              "Predict",
+              "Remote Isle",
+              "Brainstorm",
+              "Dandân",
+              "Crystal Spray",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Memory Lapse",
+              "Haunted Fengraf",
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 27,
+            "known": [
+              {
+                "depth": 25,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 26,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Remote Isle",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Halimar Depths",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Dandân",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Halimar Depths",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true,
+            "sick": true
+          }
+        ]
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Dandân"
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 22,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 22,
+        "step": "declareAttackers",
+        "ordinal": 6,
+        "kind": "attacker",
+        "act": {
+          "act": "attack",
+          "creature": {
+            "name": "Dandân",
+            "zone": "battlefield",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 22,
+        "step": "declareAttackers",
+        "ordinal": 6,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 22,
+        "step": "declareBlockers",
+        "ordinal": 7,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 22,
+        "step": "postcombatMain",
+        "ordinal": 10,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Dandân",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 1,
+        "turn": 22,
+        "step": "postcombatMain",
+        "ordinal": 10,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Memory Lapse",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 23,
+        "ordinal": 2,
+        "active": 1,
+        "players": [
+          {
+            "life": 20,
+            "hand": [],
+            "graveyard": [
+              "Memory Lapse",
+              "Accumulated Knowledge",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Capture of Jingzhou",
+              "Brainstorm",
+              "Telling Time",
+              "Dandân",
+              "Dandân",
+              "Predict",
+              "Island",
+              "Predict",
+              "Remote Isle",
+              "Brainstorm",
+              "Dandân",
+              "Crystal Spray",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Memory Lapse",
+              "Haunted Fengraf",
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 27,
+            "known": [
+              {
+                "depth": 0,
+                "card": "Dandân",
+                "by": [
+                  0,
+                  1
+                ]
+              },
+              {
+                "depth": 25,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 26,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          },
+          {
+            "life": 8,
+            "hand": [
+              "Day's Undoing",
+              "Day's Undoing",
+              "Memory Lapse",
+              "The Surgical Bay",
+              "Unsubstantiate"
+            ],
+            "shown": [
+              "Day's Undoing"
+            ],
+            "graveyard": [
+              "Memory Lapse",
+              "Accumulated Knowledge",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Capture of Jingzhou",
+              "Brainstorm",
+              "Telling Time",
+              "Dandân",
+              "Dandân",
+              "Predict",
+              "Island",
+              "Predict",
+              "Remote Isle",
+              "Brainstorm",
+              "Dandân",
+              "Crystal Spray",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Memory Lapse",
+              "Haunted Fengraf",
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 27,
+            "known": [
+              {
+                "depth": 0,
+                "card": "Dandân",
+                "by": [
+                  0,
+                  1
+                ]
+              },
+              {
+                "depth": 25,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 26,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Remote Isle",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Halimar Depths",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Dandân",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Halimar Depths",
+            "owner": 1,
+            "controller": 1
+          }
+        ]
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 23,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 23,
+        "step": "postcombatMain",
+        "ordinal": 8,
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "The Surgical Bay",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 3,
+        "player": 1,
+        "turn": 23,
+        "step": "postcombatMain",
+        "ordinal": 8,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Dandân",
+            "zone": "hand",
+            "controller": 1,
+            "shown": true
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 23,
+        "step": "postcombatMain",
+        "ordinal": 8,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 23,
+        "step": "postcombatMain",
+        "ordinal": 8,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 24,
+        "ordinal": 2,
+        "active": 0,
+        "players": [
+          {
+            "life": 20,
+            "hand": [],
+            "graveyard": [
+              "Memory Lapse",
+              "Accumulated Knowledge",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Capture of Jingzhou",
+              "Brainstorm",
+              "Telling Time",
+              "Dandân",
+              "Dandân",
+              "Predict",
+              "Island",
+              "Predict",
+              "Remote Isle",
+              "Brainstorm",
+              "Dandân",
+              "Crystal Spray",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Memory Lapse",
+              "Haunted Fengraf",
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 26,
+            "known": [
+              {
+                "depth": 24,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 25,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          },
+          {
+            "life": 8,
+            "hand": [
+              "Day's Undoing",
+              "Day's Undoing",
+              "Memory Lapse",
+              "Unsubstantiate"
+            ],
+            "shown": [
+              "Day's Undoing"
+            ],
+            "graveyard": [
+              "Memory Lapse",
+              "Accumulated Knowledge",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Capture of Jingzhou",
+              "Brainstorm",
+              "Telling Time",
+              "Dandân",
+              "Dandân",
+              "Predict",
+              "Island",
+              "Predict",
+              "Remote Isle",
+              "Brainstorm",
+              "Dandân",
+              "Crystal Spray",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Memory Lapse",
+              "Haunted Fengraf",
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 26,
+            "known": [
+              {
+                "depth": 24,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 25,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Remote Isle",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Halimar Depths",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Dandân",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Halimar Depths",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "The Surgical Bay",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true,
+            "sick": true
+          },
+          {
+            "card": "Dandân",
+            "owner": 1,
+            "controller": 1,
+            "sick": true
+          }
+        ]
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Island"
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 24,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 24,
+        "step": "declareAttackers",
+        "ordinal": 6,
+        "kind": "attacker",
+        "act": {
+          "act": "done"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 24,
+        "step": "postcombatMain",
+        "ordinal": 8,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 24,
+        "step": "end",
+        "ordinal": 9,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 25,
+        "ordinal": 2,
+        "active": 1,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Island"
+            ],
+            "graveyard": [
+              "Memory Lapse",
+              "Accumulated Knowledge",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Capture of Jingzhou",
+              "Brainstorm",
+              "Telling Time",
+              "Dandân",
+              "Dandân",
+              "Predict",
+              "Island",
+              "Predict",
+              "Remote Isle",
+              "Brainstorm",
+              "Dandân",
+              "Crystal Spray",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Memory Lapse",
+              "Haunted Fengraf",
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 25,
+            "known": [
+              {
+                "depth": 23,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 24,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          },
+          {
+            "life": 8,
+            "hand": [
+              "Day's Undoing",
+              "Day's Undoing",
+              "Memory Lapse",
+              "Unsubstantiate"
+            ],
+            "shown": [
+              "Day's Undoing"
+            ],
+            "graveyard": [
+              "Memory Lapse",
+              "Accumulated Knowledge",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Capture of Jingzhou",
+              "Brainstorm",
+              "Telling Time",
+              "Dandân",
+              "Dandân",
+              "Predict",
+              "Island",
+              "Predict",
+              "Remote Isle",
+              "Brainstorm",
+              "Dandân",
+              "Crystal Spray",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Memory Lapse",
+              "Haunted Fengraf",
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 25,
+            "known": [
+              {
+                "depth": 23,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 24,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Remote Isle",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Halimar Depths",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Dandân",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Halimar Depths",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "The Surgical Bay",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Dandân",
+            "owner": 1,
+            "controller": 1
+          }
+        ]
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Unsubstantiate"
+      }
+    },
+    {
+      "choice": {
+        "index": 4,
+        "player": 1,
+        "turn": 25,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "activate",
+          "card": {
+            "name": "The Surgical Bay",
+            "zone": "battlefield",
+            "controller": 1
+          },
+          "ability": {
+            "n": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 25,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Island"
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 25,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "Island",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 25,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 25,
+        "step": "declareAttackers",
+        "ordinal": 6,
+        "kind": "attacker",
+        "act": {
+          "act": "done"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 25,
+        "step": "postcombatMain",
+        "ordinal": 8,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 26,
+        "ordinal": 2,
+        "active": 0,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Island"
+            ],
+            "graveyard": [
+              "The Surgical Bay",
+              "Memory Lapse",
+              "Accumulated Knowledge",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Capture of Jingzhou",
+              "Brainstorm",
+              "Telling Time",
+              "Dandân",
+              "Dandân",
+              "Predict",
+              "Island",
+              "Predict",
+              "Remote Isle",
+              "Brainstorm",
+              "Dandân",
+              "Crystal Spray",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Memory Lapse",
+              "Haunted Fengraf",
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 23,
+            "known": [
+              {
+                "depth": 21,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 22,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          },
+          {
+            "life": 8,
+            "hand": [
+              "Day's Undoing",
+              "Day's Undoing",
+              "Memory Lapse",
+              "Unsubstantiate",
+              "Unsubstantiate"
+            ],
+            "shown": [
+              "Day's Undoing"
+            ],
+            "graveyard": [
+              "The Surgical Bay",
+              "Memory Lapse",
+              "Accumulated Knowledge",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Capture of Jingzhou",
+              "Brainstorm",
+              "Telling Time",
+              "Dandân",
+              "Dandân",
+              "Predict",
+              "Island",
+              "Predict",
+              "Remote Isle",
+              "Brainstorm",
+              "Dandân",
+              "Crystal Spray",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Memory Lapse",
+              "Haunted Fengraf",
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 23,
+            "known": [
+              {
+                "depth": 21,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 22,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Remote Isle",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Halimar Depths",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Dandân",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Halimar Depths",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Dandân",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "sick": true
+          }
+        ]
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "The Surgical Bay"
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 0,
+        "turn": 26,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "The Surgical Bay",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 26,
+        "step": "declareAttackers",
+        "ordinal": 6,
+        "kind": "attacker",
+        "act": {
+          "act": "done"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 26,
+        "step": "end",
+        "ordinal": 9,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 27,
+        "ordinal": 2,
+        "active": 1,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Island"
+            ],
+            "graveyard": [
+              "The Surgical Bay",
+              "Memory Lapse",
+              "Accumulated Knowledge",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Capture of Jingzhou",
+              "Brainstorm",
+              "Telling Time",
+              "Dandân",
+              "Dandân",
+              "Predict",
+              "Island",
+              "Predict",
+              "Remote Isle",
+              "Brainstorm",
+              "Dandân",
+              "Crystal Spray",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Memory Lapse",
+              "Haunted Fengraf",
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 22,
+            "known": [
+              {
+                "depth": 20,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 21,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          },
+          {
+            "life": 8,
+            "hand": [
+              "Day's Undoing",
+              "Day's Undoing",
+              "Memory Lapse",
+              "Unsubstantiate",
+              "Unsubstantiate"
+            ],
+            "shown": [
+              "Day's Undoing"
+            ],
+            "graveyard": [
+              "The Surgical Bay",
+              "Memory Lapse",
+              "Accumulated Knowledge",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Capture of Jingzhou",
+              "Brainstorm",
+              "Telling Time",
+              "Dandân",
+              "Dandân",
+              "Predict",
+              "Island",
+              "Predict",
+              "Remote Isle",
+              "Brainstorm",
+              "Dandân",
+              "Crystal Spray",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Memory Lapse",
+              "Haunted Fengraf",
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 22,
+            "known": [
+              {
+                "depth": 20,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 21,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Remote Isle",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Halimar Depths",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Dandân",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Halimar Depths",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Dandân",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "The Surgical Bay",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true,
+            "sick": true
+          }
+        ]
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Dandân"
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 1,
+        "turn": 27,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Dandân",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 27,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 27,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 27,
+        "step": "declareAttackers",
+        "ordinal": 6,
+        "kind": "attacker",
+        "act": {
+          "act": "done"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 27,
+        "step": "postcombatMain",
+        "ordinal": 8,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 28,
+        "ordinal": 2,
+        "active": 0,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Island"
+            ],
+            "graveyard": [
+              "The Surgical Bay",
+              "Memory Lapse",
+              "Accumulated Knowledge",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Capture of Jingzhou",
+              "Brainstorm",
+              "Telling Time",
+              "Dandân",
+              "Dandân",
+              "Predict",
+              "Island",
+              "Predict",
+              "Remote Isle",
+              "Brainstorm",
+              "Dandân",
+              "Crystal Spray",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Memory Lapse",
+              "Haunted Fengraf",
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 21,
+            "known": [
+              {
+                "depth": 19,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 20,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          },
+          {
+            "life": 8,
+            "hand": [
+              "Day's Undoing",
+              "Day's Undoing",
+              "Memory Lapse",
+              "Unsubstantiate",
+              "Unsubstantiate"
+            ],
+            "shown": [
+              "Day's Undoing"
+            ],
+            "graveyard": [
+              "The Surgical Bay",
+              "Memory Lapse",
+              "Accumulated Knowledge",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Capture of Jingzhou",
+              "Brainstorm",
+              "Telling Time",
+              "Dandân",
+              "Dandân",
+              "Predict",
+              "Island",
+              "Predict",
+              "Remote Isle",
+              "Brainstorm",
+              "Dandân",
+              "Crystal Spray",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Memory Lapse",
+              "Haunted Fengraf",
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 21,
+            "known": [
+              {
+                "depth": 19,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 20,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Remote Isle",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Halimar Depths",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Dandân",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Halimar Depths",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Dandân",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "The Surgical Bay",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Dandân",
+            "owner": 1,
+            "controller": 1,
+            "sick": true
+          }
+        ]
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Island"
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 28,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 28,
+        "step": "declareAttackers",
+        "ordinal": 6,
+        "kind": "attacker",
+        "act": {
+          "act": "done"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 28,
+        "step": "postcombatMain",
+        "ordinal": 8,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 28,
+        "step": "end",
+        "ordinal": 9,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Unsubstantiate",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 28,
+        "step": "end",
+        "ordinal": 9,
+        "kind": "target",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Dandân",
+            "zone": "battlefield",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 28,
+        "step": "end",
+        "ordinal": 9,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 28,
+        "step": "end",
+        "ordinal": 9,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 28,
+        "step": "end",
+        "ordinal": 9,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 29,
+        "ordinal": 2,
+        "active": 1,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Dandân",
+              "Island",
+              "Island"
+            ],
+            "shown": [
+              "Dandân"
+            ],
+            "graveyard": [
+              "Unsubstantiate",
+              "The Surgical Bay",
+              "Memory Lapse",
+              "Accumulated Knowledge",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Capture of Jingzhou",
+              "Brainstorm",
+              "Telling Time",
+              "Dandân",
+              "Dandân",
+              "Predict",
+              "Island",
+              "Predict",
+              "Remote Isle",
+              "Brainstorm",
+              "Dandân",
+              "Crystal Spray",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Memory Lapse",
+              "Haunted Fengraf",
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 20,
+            "known": [
+              {
+                "depth": 18,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 19,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          },
+          {
+            "life": 8,
+            "hand": [
+              "Day's Undoing",
+              "Day's Undoing",
+              "Memory Lapse",
+              "Unsubstantiate"
+            ],
+            "shown": [
+              "Day's Undoing"
+            ],
+            "graveyard": [
+              "Unsubstantiate",
+              "The Surgical Bay",
+              "Memory Lapse",
+              "Accumulated Knowledge",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Capture of Jingzhou",
+              "Brainstorm",
+              "Telling Time",
+              "Dandân",
+              "Dandân",
+              "Predict",
+              "Island",
+              "Predict",
+              "Remote Isle",
+              "Brainstorm",
+              "Dandân",
+              "Crystal Spray",
+              "Accumulated Knowledge",
+              "Memory Lapse",
+              "Memory Lapse",
+              "Haunted Fengraf",
+              "Capture of Jingzhou",
+              "Mental Note",
+              "Dandân",
+              "Metamorphose",
+              "Memory Lapse",
+              "Lonely Sandbar",
+              "Telling Time",
+              "Chart a Course",
+              "Control Magic",
+              "Dandân",
+              "Chart a Course",
+              "Mental Note"
+            ],
+            "library": 20,
+            "known": [
+              {
+                "depth": 18,
+                "card": "Magical Hack",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 19,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Remote Isle",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mystic Sanctuary",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Halimar Depths",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Halimar Depths",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Dandân",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "The Surgical Bay",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Dandân",
+            "owner": 1,
+            "controller": 1
+          }
+        ]
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Magical Hack"
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 29,
+        "step": "precombatMain",
+        "ordinal": 4,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 29,
+        "step": "declareAttackers",
+        "ordinal": 6,
+        "kind": "attacker",
+        "act": {
+          "act": "attack",
+          "creature": {
+            "name": "Dandân",
+            "zone": "battlefield",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 29,
+        "step": "declareAttackers",
+        "ordinal": 6,
+        "kind": "attacker",
+        "act": {
+          "act": "attack",
+          "creature": {
+            "name": "Dandân",
+            "zone": "battlefield",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 29,
+        "step": "declareAttackers",
+        "ordinal": 6,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 29,
+        "step": "declareAttackers",
+        "ordinal": 6,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 29,
+        "step": "declareBlockers",
+        "ordinal": 7,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "auto": {
+        "index": 0,
+        "player": 0,
+        "turn": 29,
+        "step": "declareBlockers",
+        "ordinal": 7,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 3,
+        "player": 1,
+        "turn": 29,
+        "step": "postcombatMain",
+        "ordinal": 10,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Unsubstantiate",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 29,
+        "step": "postcombatMain",
+        "ordinal": 10,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 29,
+        "step": "postcombatMain",
+        "ordinal": 10,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 29,
+        "step": "postcombatMain",
+        "ordinal": 10,
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Dandân",
+            "zone": "hand",
+            "controller": 1,
+            "shown": true
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 29,
+        "step": "postcombatMain",
+        "ordinal": 10,
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    }
+  ],
+  "commit": "935207163b549f93b952f2de0fef38a2ecbf92b7"
+}

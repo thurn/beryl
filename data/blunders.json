@@ -285,5 +285,17 @@
     "played": "attack with Beza, the Bounding Spring",
     "required": ["done"],
     "why": "The opposing Beza and a Fish can kill Beza, and Subtlety can kill Trinket Mage, while all planeswalkers survive. Keep both creatures back when entering combat without improving the attack."
+  },
+  {
+    "name": "unsubstantiate-own-dandan",
+    "incident": "2026-11-27-unsubstantiate-own-dandan",
+    "class": "removal spent on its own permanent",
+    "source": { "replay": "docs/incidents/2026-11-27-unsubstantiate-own-dandan.replay.json" },
+    "seat": 1,
+    "turn": 29,
+    "index": 7,
+    "played": "cast Unsubstantiate",
+    "forbidden": ["cast Unsubstantiate"],
+    "why": "Its only targets are its own two tapped Dandâns: bouncing and recasting one spends a card and taps it out, so it can no longer Memory Lapse the Dandân it knows the opponent holds."
   }
 ]

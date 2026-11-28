@@ -20,6 +20,9 @@ use crate::overlay;
 pub struct CardInfo {
     pub value: i16,
     pub wheel: bool,
+    /// Bit `i`: ability `i` of the front face, a spell ability, can end the turn
+    /// ([`Effect::ends_turn`]).
+    pub ends_turn: u8,
     pub never_cast: bool,
     /// Bit `i`: ability `i` of the front face targets to help its controller.
     pub friendly: u8,
@@ -29,6 +32,9 @@ pub struct CardInfo {
     /// format they come from the library both players draw from, which the policy's
     /// `may_draw` allows for.
     pub draws: u8,
+    /// Bit `i`: all ability `i` of the front face does is return its first target to its
+    /// owner's hand ([`Effect::only_returns_target_to_hand`]).
+    pub bounces: u8,
     /// Bit `i`: ability `i` of the front face wins by drawing the library empty: its
     /// controller's, which in the shared-deck format is the shared one, so the flag means the
     /// same there.
@@ -49,6 +55,10 @@ impl CardInfo {
 
     pub fn draws(self, ability: u8) -> bool {
         ability < 8 && self.draws & (1 << ability) != 0
+    }
+
+    pub fn bounces(self, ability: u8) -> bool {
+        ability < 8 && self.bounces & (1 << ability) != 0
     }
 
     pub fn empties(self, ability: u8) -> bool {
@@ -190,10 +200,14 @@ fn derive(def: &CardDef) -> CardInfo {
         value: 0,
         wheel: abilities()
             .any(|a| a.kind() == AbilityKind::Spell && effect(a).is_some_and(Effect::wheels)),
+        ends_turn: bits(|a, e| a.kind() == AbilityKind::Spell && e.ends_turn()),
         never_cast: false,
         friendly: bits(helps_first_target),
         never: 0,
         draws: bits(draws),
+        bounces: bits(|a, e| {
+            !a.targets().is_empty() && e.only_returns_target_to_hand(SpecIx::new(0))
+        }),
         empties: bits(|_, e| e.wins_by_drawing_out()),
         wins_instead: abilities().any(beryl_engine::wins_instead_of_drawing),
     }

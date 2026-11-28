@@ -3,15 +3,14 @@
 use std::cell::Cell;
 
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, CastingOption, Castings, Face, FaceAbility, FaceIx, Keywords,
-    ObjectAbility, Players, TargetKind, TargetSpec, TriggerEvent, Types,
+    Ability, AbilityKind, CastingOption, Castings, Face, FaceIx, Keywords, ObjectAbility, Players,
+    TargetKind, TriggerEvent, Types,
 };
 use beryl_engine::filter::Filter;
-use beryl_engine::state::{AttackTarget, StackEntry};
-use beryl_engine::two_player::TwoPlayerSeat as _;
+use beryl_engine::state::AttackTarget;
 use beryl_engine::{GameTable, Layout, Observation, Opt, Seat, TurnStep, Zone, ZoneKey};
 
-use super::{Candidate, LIBRARY_LOW, PolicyWeights, Rules};
+use super::{LIBRARY_LOW, PolicyWeights, Rules};
 use crate::values::{CardInfo, CardValues};
 
 /// One decision's view, for the rules above.
@@ -168,6 +167,12 @@ impl<L: Layout> Policy<'_, L> {
             _ => self.obs.object(slot).face(),
         };
         let f = self.t.def(card).face(face);
+        if matches!(o, Opt::Cast { .. })
+            && self.values.get(card).ends_turn != 0
+            && self.before_attacking()
+        {
+            return true;
+        }
         let (ability, permanent_spell) = match o {
             Opt::Cast { costs, .. } => {
                 if main
@@ -235,6 +240,37 @@ impl<L: Layout> Policy<'_, L> {
         }
     }
 
+    /// Whether it is our turn before attackers are declared and we control a creature that
+    /// could attack now: untapped, with power, and not summoning sick unless it has haste. A
+    /// spell that ends the turn waits until combat is over, for the game "skips straight to
+    /// the cleanup step" ([CR 725.1c](https://yawgatog.com/resources/magic-rules/#R7251c))
+    /// and the attack never happens. Day's Undoing cast in the first main phase by a player
+    /// with two Dandâns ready to attack threw away eight damage.
+    fn before_attacking(&self) -> bool {
+        let turn = self.obs.turn();
+        if turn.active() != self.me
+            || !matches!(
+                turn.step(),
+                TurnStep::Upkeep
+                    | TurnStep::Draw
+                    | TurnStep::PrecombatMain
+                    | TurnStep::BeginningOfCombat
+            )
+        {
+            return false;
+        }
+        self.obs.battlefield().iter().any(|&slot| {
+            let o = self.obs.object(slot);
+            let derived = self.obs.derived(slot);
+            let (power, keywords) = (derived.power, derived.keywords);
+            self.obs.controller(slot) == self.me
+                && self.creature(slot)
+                && !o.is_tapped()
+                && power > <L::Pt as beryl_engine::Number>::ZERO
+                && (!o.is_summoning_sick() || keywords.intersects(Keywords::HASTE))
+        })
+    }
+
     #[allow(
         clippy::disallowed_methods,
         reason = "reads the face an option casts, or the face up of a permanent"
@@ -299,7 +335,10 @@ impl<L: Layout> Policy<'_, L> {
         }
         match f.spell_ability_with(costs) {
             Some(a) if face == FaceIx::FRONT && info.draws(index_of(f, a)) && !self.may_draw() => 0,
-            Some(a) => self.worth_targeting(a, info.friendly(index_of(f, a)), v, false),
+            Some(a) => {
+                let i = index_of(f, a);
+                self.worth_targeting(a, info.friendly(i), info.bounces(i), v, false)
+            }
             None => self.enters_worth(f, info, v, self.rules.waste && evoked),
         }
     }
@@ -320,7 +359,8 @@ impl<L: Layout> Policy<'_, L> {
             return 0;
         }
         enters.fold(v, |v, a| {
-            self.worth_targeting(a, info.friendly(index_of(f, a)), v, require_target)
+            let i = index_of(f, a);
+            self.worth_targeting(a, info.friendly(i), info.bounces(i), v, require_target)
         })
     }
 
@@ -352,7 +392,7 @@ impl<L: Layout> Policy<'_, L> {
         // for X = 0, which does the least the ability can, and could be activated so again and
         // again, as Illusionary Mask's would offer only cards that cost nothing each time.
         let mana = a.cost().mana;
-        if mana.x > 0 && self.untapped_mana_sources() <= usize::from(mana.mana_value()) {
+        if mana.x > 0 && self.untapped_mana_sources(self.me) <= usize::from(mana.mana_value()) {
             return 0;
         }
         let v = match a.cost().loyalty_change() {
@@ -362,7 +402,7 @@ impl<L: Layout> Policy<'_, L> {
             None if a.cost().does(beryl_engine::card::CostAction::Discard) => 3,
             None => 15,
         };
-        self.worth_targeting(a, info.friendly(i), v, false)
+        self.worth_targeting(a, info.friendly(i), info.bounces(i), v, false)
     }
 
     /// How many untapped permanents of ours have a mana ability on their face up: about the
@@ -371,13 +411,13 @@ impl<L: Layout> Policy<'_, L> {
         clippy::disallowed_methods,
         reason = "reads an ability by its place on the face up of its permanent"
     )]
-    fn untapped_mana_sources(&self) -> usize {
+    pub(super) fn untapped_mana_sources(&self, who: Seat) -> usize {
         self.obs
             .battlefield()
             .iter()
             .filter(|&&slot| {
                 let o = self.obs.object(slot);
-                self.obs.controller(slot) == self.me
+                self.obs.controller(slot) == who
                     && !o.is_tapped()
                     && o.face() != FaceIx::DOWN
                     && self.obs.card(slot).is_some_and(|card| {
@@ -443,168 +483,6 @@ impl<L: Layout> Policy<'_, L> {
                             .any(beryl_engine::wins_instead_of_drawing)
                 })
         })
-    }
-
-    /// `v`, or 0 when the ability's first target is not worth it: a harmful one needs an
-    /// opponent's object worth the removal or counter threshold, unless it may target
-    /// nothing and `require_target` is false. A helpful one needs one of ours.
-    fn worth_targeting(&self, a: &Ability, friendly: bool, v: i32, require_target: bool) -> i32 {
-        let Some(spec) = a.targets().first() else {
-            return v;
-        };
-        let friendly = friendly || matches!(whose(&spec.filter), Some(Players::You));
-        let min = match spec.kind {
-            _ if friendly => 0,
-            TargetKind::Spell => self.weights.counter_min,
-            // Damage to an opponent is always worth something, as a player counts 0.
-            TargetKind::Player | TargetKind::PermanentOrPlayer => 0,
-            _ => self.weights.removal_min,
-        };
-        // The best target is worth `min` exactly when some target is.
-        if self.target_values(spec, friendly).any(|best| best >= min) {
-            v
-        } else if !require_target && spec.optional && !matches!(spec.kind, TargetKind::Spell) {
-            v / 2
-        } else {
-            0
-        }
-    }
-
-    /// The most valuable object a spec could target on the side it should: the opponent's
-    /// for a harmful effect, ours for a helpful one. Players count as 0.
-    pub(crate) fn best_target(&self, spec: &TargetSpec, friendly: bool) -> Option<i32> {
-        self.target_values(spec, friendly).max()
-    }
-
-    /// What each object a spec could target on the side it should is worth, as
-    /// [`Policy::best_target`] weighs them, players as 0.
-    fn target_values<'s>(
-        &'s self,
-        spec: &'s TargetSpec,
-        friendly: bool,
-    ) -> impl Iterator<Item = i32> + 's {
-        let side = if friendly {
-            self.me
-        } else {
-            self.me.opponent()
-        };
-        // A guess at the best target reads the spec as printed: it has no source at hand.
-        let printed = &beryl_engine::card::Words::NONE;
-        let ok = move |slot: L::Slot, controller: Seat| {
-            controller == side && self.obs.matches(self.t, &spec.filter, slot, printed)
-        };
-        let permanents = matches!(
-            spec.kind,
-            TargetKind::Permanent | TargetKind::SpellOrPermanent | TargetKind::PermanentOrPlayer
-        );
-        let spells = matches!(spec.kind, TargetKind::Spell | TargetKind::SpellOrPermanent);
-        let graveyard = spec.kind == TargetKind::GraveyardCard;
-        let on_battlefield = if permanents {
-            self.obs.battlefield()
-        } else {
-            &[]
-        }
-        .iter()
-        .filter(move |&&slot| ok(slot, self.obs.controller(slot)))
-        .map(|&slot| self.value(slot));
-        let on_stack = if spells { self.obs.stack() } else { &[] }
-            .iter()
-            .filter_map(|e| e.spell().map(|r| (r.slot, e.controller())))
-            .filter(move |&(slot, controller)| ok(slot, controller))
-            .map(|(slot, _)| self.value(slot));
-        let graveyard = if graveyard {
-            self.obs.graveyard(side)
-        } else {
-            &[]
-        }
-        .iter()
-        .filter(|&&slot| self.obs.matches(self.t, &spec.filter, slot, printed))
-        .map(|&slot| self.value(slot));
-        let player = matches!(
-            spec.kind,
-            TargetKind::Player | TargetKind::PermanentOrPlayer
-        )
-        .then_some(0);
-        on_battlefield
-            .chain(on_stack)
-            .chain(graveyard)
-            .chain(player)
-    }
-
-    /// What hitting each permanent `spec`'s filter accepts gains a harmful effect: the value of
-    /// the opponent's, less that of ours.
-    pub(crate) fn sweep(&self, spec: &TargetSpec) -> i32 {
-        // As in `target_values`, the spec is read as printed.
-        let printed = &beryl_engine::card::Words::NONE;
-        self.obs
-            .battlefield()
-            .iter()
-            .filter(|&&slot| self.obs.matches(self.t, &spec.filter, slot, printed))
-            .map(|&slot| {
-                if self.obs.controller(slot) == self.me {
-                    -self.value(slot)
-                } else {
-                    self.value(slot)
-                }
-            })
-            .sum()
-    }
-
-    /// The spec being targeted for and whether its effect helps its controller: the first
-    /// spec of the spell or ability on top of the stack, which a casting or a triggered
-    /// ability being put on the stack puts there first (CR 601.2a).
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "reads the face of the top stack entry"
-    )]
-    pub(crate) fn targeting(&self) -> Option<(&'static TargetSpec, bool)> {
-        let e: &StackEntry<L> = self.obs.stack().last()?;
-        let def: &'static CardDef = self.t.def(e.card());
-        let face: &'static Face = def.face(e.face());
-        let a = match e.ability() {
-            Some(ability) => face.ability(ability),
-            None => face.spell_ability_with(e.costs())?,
-        };
-        let spec = a.targets().first()?;
-        let index = match e.ability() {
-            Some(FaceAbility::Own(i)) => i.get(),
-            Some(FaceAbility::Grant(_)) => u8::MAX,
-            None => index_of(face, a),
-        };
-        let friendly = self.values.get(e.card()).friendly(index)
-            || matches!(whose(&spec.filter), Some(Players::You));
-        Some((spec, friendly))
-    }
-
-    /// A target's score: a candidate on the right side by its value, far above the wrong
-    /// side; choosing none in between.
-    pub(crate) fn target(&self, c: Candidate<L>, friendly: bool) -> i32 {
-        let side = if friendly {
-            self.me
-        } else {
-            self.me.opponent()
-        };
-        let (controller, v) = match c {
-            Candidate::Option(Opt::Player(p)) => (p, 0),
-            Candidate::Option(Opt::Done) => return 500,
-            _ => match c.object() {
-                Some(slot) => {
-                    let o = self.obs.object(slot);
-                    // A card in a shared library or graveyard has no owner: it is in both
-                    // players' zones, so it counts as on the wanted side.
-                    let controller = if matches!(o.zone(), Zone::Battlefield | Zone::Stack) {
-                        self.obs.controller(slot)
-                    } else if self.obs.holds(side, slot) {
-                        side
-                    } else {
-                        o.owner()
-                    };
-                    (controller, self.value(slot))
-                }
-                None => return 0,
-            },
-        };
-        if controller == side { 1000 + v } else { -v }
     }
 
     pub(crate) fn creature(&self, slot: L::Slot) -> bool {

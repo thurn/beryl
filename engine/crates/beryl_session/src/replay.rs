@@ -222,11 +222,8 @@ impl ReplayFile {
         }
     }
 
-    /// The game's table and its state before the first decision.
-    pub(crate) fn setup(
-        &self,
-        cards: &'static CardTable,
-    ) -> Result<(GameTable, State), SessionError> {
+    /// The game's table and its state before the first decision, as the session deals it.
+    pub fn setup(&self, cards: &'static CardTable) -> Result<(GameTable, State), SessionError> {
         let lists = |lists: &[Vec<(u8, String)>; 2]| {
             let [a, b] = lists.each_ref().map(|list| {
                 list.iter()

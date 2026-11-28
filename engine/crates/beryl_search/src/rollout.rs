@@ -28,6 +28,7 @@
 mod catalog;
 mod play;
 mod policy;
+mod targets;
 
 use std::cell::Cell;
 

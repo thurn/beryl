@@ -41,6 +41,23 @@ impl Effect {
         })
     }
 
+    /// Whether all it does is return the object chosen for the `target`th instance of the
+    /// word "target" to its owner's hand ([`Effect::ReturnToHand`]), as Unsubstantiate does.
+    /// Aimed at a spell, this removes the spell from the stack without countering it, so its
+    /// owner may cast it again. A spell that also does something else, such as Reprieve's
+    /// "Draw a card.", is not one.
+    pub fn only_returns_target_to_hand(&self, target: SpecIx) -> bool {
+        matches!(self, Effect::ReturnToHand(objects) if *objects == Objects::Target(target))
+    }
+
+    /// Whether it can end the turn ([`Effect::EndTurn`]), as Day's Undoing does on its
+    /// controller's turn. The game then "skips straight to the cleanup step"
+    /// ([CR 725.1c](https://yawgatog.com/resources/magic-rules/#R7251c)), so a player who
+    /// casts it in their first main phase gives up that turn's combat.
+    pub fn ends_turn(&self) -> bool {
+        self.any(&|instruction| matches!(instruction, Effect::EndTurn))
+    }
+
     /// Whether it replaces every player's hand, as a wheel does: each player shuffles their
     /// hand into their library ([`Effect::ShuffleInto`] of cards in each player's hand, with
     /// their graveyard or without it) and each player draws. Worth casting from a nearly

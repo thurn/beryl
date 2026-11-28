@@ -6,17 +6,14 @@
 
 use std::collections::VecDeque;
 
-use beryl_card_names::decks::WU_CONTROL;
 use beryl_engine::event::Event;
 use beryl_engine::{
-    Choice, Decision, GameTable, Outcome, Profile, Replay, Scratch, Seat, State, Step, apply, next,
-    view,
+    Choice, Decision, GameTable, Outcome, Replay, Scratch, Seat, State, Step, apply, next, view,
 };
 use beryl_session::replay::Entry;
 use beryl_session::{ReplayFile, StopsSetting, UNDO_POINTS, with_stops};
 
 use crate::Catalog;
-use crate::game;
 
 /// What the record does next.
 #[allow(clippy::large_enum_variant, reason = "one is alive at a time")]
@@ -53,22 +50,16 @@ pub struct Walk {
 }
 
 impl Walk {
-    /// The record of `file`, from its seed: a WU Control mirror played from its start.
+    /// The record of `file`, from its seed, on the table and deal the session gave it: two
+    /// constructed decks or the shared-deck format's one library.
     pub fn of_file(catalog: &'static Catalog, file: &ReplayFile) -> Result<Walk, String> {
-        let mirror: Vec<(u8, String)> = WU_CONTROL
-            .iter()
-            .map(|&(n, name)| (n, name.to_owned()))
-            .collect();
-        if file.decks.iter().any(|d| *d != mirror) {
-            return Err("only WU Control mirror games can be replayed".to_owned());
-        }
         if file.from.is_some() {
             return Err("a game rebuilt from a turn's beginning cannot be replayed".to_owned());
         }
         let human = Seat::try_new(file.human).ok_or("no such human seat")?;
-        let t = game::mirror(catalog);
-        let s = State::new(&t, file.seed, with_stops(Profile::SMART, file.stops, human))
-            .map_err(|e| e.to_string())?;
+        let (t, s) = file
+            .setup(catalog.cards)
+            .map_err(|e| format!("the record's game cannot be set up: {e:?}"))?;
         // Each turn's board, as it began, is the session's to check.
         let log = file
             .log
