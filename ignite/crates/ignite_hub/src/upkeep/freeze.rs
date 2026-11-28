@@ -12,9 +12,14 @@
 //! every daemon already knows how to enforce it. Upkeep writes it directly, as
 //! [`FREEZE_SESSION`], because no session declares it:
 //!
-//! - It files a justiciar ticket under the [`FREEZE_SUBJECT`] signature, whose worker finds and
-//!   fixes what let `master` fall so far behind. The emergency is declared on that ticket, so
-//!   its worker can land and can end the freeze.
+//! - It files a justiciar ticket under the [`FREEZE_SUBJECT`] signature, whose worker gets
+//!   `master` moving again. The emergency is declared on that ticket, so its worker can land
+//!   and can end the freeze.
+//! - It files a postmortem ticket under the [`POSTMORTEM_SUBJECT`] signature, which waits on the
+//!   freeze's ticket. Its worker finds out how `master` fell six hours behind without the earlier
+//!   escalations ending the stall, and fixes the workflow or infrastructure that let it happen.
+//!   The freeze's own ticket used to carry this work as a second task, so it depended on that
+//!   worker choosing to do it after `master` moved.
 //! - Every pass renews the emergency, so it never lapses while the stall lasts, and lists every
 //!   open regression, justiciar and incident ticket as allowed to land, so the fixes get in.
 //!   A tip round's own reverts do not go through `ignite land` and are never refused.
@@ -22,7 +27,8 @@
 //!   for its root-cause work.
 //! - It is not declared while a tip waits on a machine that has stopped reporting, because
 //!   stopping landings does not bring that machine back ([`super::stuck::tips_waiting`] files
-//!   its ticket), or while another emergency is in force.
+//!   its ticket), or while another emergency is in force. The postmortem ticket is filed
+//!   anyway: a stall of six hours needs one whether or not landings froze.
 //! - Once a session ends or replaces the freeze, upkeep does not declare it again until
 //!   `master` has caught up with the landings that were waiting when it froze.
 
@@ -32,7 +38,8 @@ use serde::{Deserialize, Serialize};
 use ignite_core::ids::{MachineId, SessionId, TicketId};
 use ignite_core::protocol::emergency::{Allowance, Emergency, EmergencyScope};
 use ignite_core::protocol::tickets::{
-    BatchRequest, INCIDENT_LABEL, JUSTICIAR_LABEL, Operation, TicketFields, TicketType,
+    BatchRequest, Dependency, EdgeKind, INCIDENT_LABEL, JUSTICIAR_LABEL, Operation, TicketFields,
+    TicketType,
 };
 use ignite_core::time::Timestamp;
 use ignite_store::hub::batch;
@@ -56,6 +63,9 @@ pub const FREEZE_SESSION: &str = "ignite-upkeep";
 /// The subject of the signature the freeze's justiciar ticket is filed under.
 pub const FREEZE_SUBJECT: &str = "master-freeze";
 
+/// The subject of the signature the postmortem ticket of a six-hour stall is filed under.
+pub const POSTMORTEM_SUBJECT: &str = "master-stall-postmortem";
+
 /// The `meta` key holding the freeze upkeep declared, until `master` catches up.
 const STATE_KEY: &str = "master_freeze";
 
@@ -75,8 +85,11 @@ struct Freeze {
 /// What one pass did about the freeze.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct FreezeReport {
-    /// The justiciar ticket filed or commented on when landings froze.
+    /// The freeze's justiciar ticket and the stall's postmortem ticket, filed or commented on
+    /// when `master` reached six hours behind.
     pub filed: Vec<Filed>,
+    /// Whether this pass declared the freeze.
+    pub frozen: bool,
     /// Whether this pass ended the freeze because `master` caught up.
     pub lifted: bool,
 }
@@ -102,17 +115,34 @@ pub fn pass(conn: &mut Connection, now: Timestamp) -> Result<FreezeReport> {
         }
         return Ok(report);
     }
-    if in_force.is_some() {
-        return Ok(report);
-    }
     let Some((landed_at, landing)) = oldest_unverified_landing(conn, now)? else {
         return Ok(report);
     };
     let waited = now.seconds_since(landed_at);
-    if waited < FREEZE_SECONDS || waiting_on_silent_machine(conn, now)? {
+    if waited < FREEZE_SECONDS {
         return Ok(report);
     }
-    let filed = file(conn, &landing, landed_at, waited, now)?;
+    let stall = Stall {
+        landing: &landing,
+        landed_at,
+        waited,
+    };
+    let skipped = if in_force.is_some() {
+        Some("another emergency was already in force")
+    } else if waiting_on_silent_machine(conn, now)? {
+        Some("a tip was waiting on a machine that had stopped reporting")
+    } else {
+        None
+    };
+    if let Some(reason) = skipped {
+        // Every pass of the same stall files the same evidence, which changes nothing after
+        // the first.
+        report
+            .filed
+            .push(file_postmortem(conn, &stall, Err(reason), now)?);
+        return Ok(report);
+    }
+    let filed = file(conn, &stall, now)?;
     let ticket = TicketId::new(filed.ticket.as_str())
         .map_err(|error| StoreError::Invalid(format!("freeze ticket: {error}")))?;
     let declared = Emergency {
@@ -124,9 +154,13 @@ pub fn pass(conn: &mut Connection, now: Timestamp) -> Result<FreezeReport> {
         scope: EmergencyScope::Landings,
         allowed: Vec::new(),
     };
+    // The postmortem is filed before the emergency, so that it is among the justiciar tickets
+    // the emergency lets land from the start.
+    let postmortem = file_postmortem(conn, &stall, Ok(&filed.ticket), now)?;
     emergency::impose(conn, &renewed(conn, declared, now)?)?;
     set_state(conn, Some(&Freeze { ticket, since: now }))?;
-    report.filed.push(filed);
+    report.filed = vec![filed, postmortem];
+    report.frozen = true;
     Ok(report)
 }
 
@@ -204,13 +238,21 @@ fn waiting_on_silent_machine(conn: &Connection, now: Timestamp) -> Result<bool> 
     Ok(false)
 }
 
-fn file(
-    conn: &mut Connection,
-    landing: &str,
+/// The landing `master` has waited longest for, which both tickets name.
+#[derive(Clone, Copy)]
+struct Stall<'a> {
+    landing: &'a str,
     landed_at: Timestamp,
+    /// Seconds since `landing` reached `staging`.
     waited: f64,
-    now: Timestamp,
-) -> Result<Filed> {
+}
+
+fn file(conn: &mut Connection, stall: &Stall<'_>, now: Timestamp) -> Result<Filed> {
+    let Stall {
+        landing,
+        landed_at,
+        waited,
+    } = *stall;
     let hours = waited / 3600.0;
     let body = format!(
         "Landings are frozen across the fleet. `master` has not moved for {hours:.1} hours: \
@@ -220,11 +262,11 @@ fn file(
          justiciar and incident tickets and this one. The freeze ends by itself once `master` \
          holds every landing made before it, and you can end it sooner with `ignite pool resume \
          --all` while you hold this ticket.\n\n\
-         Do two things. First, get `master` moving: fix or revert what fails at the tip, and \
-         defer a platform whose machine is off. Second, find out why `master` fell this far \
-         behind without the earlier escalations ending it, and fix that in Ignite or file a \
-         ticket for it. Record each mitigation with its root cause on this ticket. Read \
-         `ignite guide justiciar` before anything else."
+         Get `master` moving: fix or revert what fails at the tip, and defer a platform whose \
+         machine is off. Record each mitigation on this ticket with what it fixed and the \
+         evidence that led you to it, because a postmortem ticket waits on this one and starts \
+         from that record. Close this ticket once `master` moves; finding out why the stall \
+         happened is the postmortem's work. Read `ignite guide justiciar` before anything else."
     );
     let filing = Filing {
         signature: Signature::of_subject(FREEZE_SUBJECT, JUSTICIAR_LABEL),
@@ -245,11 +287,89 @@ fn file(
     filing::file(conn, UPKEEP, &filing, now)
 }
 
+/// Files the stall's postmortem ticket. `freeze` is the freeze's ticket, which the postmortem
+/// waits on, or why landings did not freeze.
+fn file_postmortem(
+    conn: &mut Connection,
+    stall: &Stall<'_>,
+    freeze: std::result::Result<&str, &str>,
+    now: Timestamp,
+) -> Result<Filed> {
+    let Stall {
+        landing,
+        landed_at,
+        waited,
+    } = *stall;
+    let hours = waited / 3600.0;
+    let (context, deps) = match freeze {
+        Ok(ticket) => (
+            format!(
+                "Upkeep froze landings and filed {ticket} to get `master` moving. This ticket \
+                 waits on it, so read its mitigations and their evidence first."
+            ),
+            vec![Dependency {
+                on: ticket.to_owned(),
+                kind: Some(EdgeKind::Blocks),
+            }],
+        ),
+        Err(reason) => (
+            format!(
+                "Upkeep did not freeze landings because {reason}. Find the ticket that is \
+                 handling the stall and read its record first."
+            ),
+            Vec::new(),
+        ),
+    };
+    let body = format!(
+        "`master` fell {hours:.1} hours behind `staging`: ticket {landing} landed on `staging` at \
+         {landed_at} and no tip had been verified since. {context}\n\n\
+         This is a postmortem. Getting `master` moving is not your job; finding out why it \
+         stopped and why nothing ended the stall sooner is. Before landings freeze, upkeep \
+         escalates a stall by itself: tip rounds search for the culprit and revert it, \
+         regression tickets go to the pool, and a justiciar ticket is filed once a landing has \
+         waited two hours. Ignite and its fleet are meant to keep `master` within a few hours of \
+         `staging` with no person involved, so a six-hour stall means part of that failed.\n\n\
+         1. Write the timeline on this ticket from the tips, tip rounds, regression, justiciar and \
+         incident tickets and the daemon logs: what broke `master`, when each escalation fired, \
+         who worked it and what each did.\n\
+         2. For every hour lost, name the cause: a check that failed or hung, a culprit search \
+         or revert that did not finish, a machine that was off or busy, a ticket nobody took or \
+         a worker that stalled, or an escalation that never fired.\n\
+         3. Fix each workflow or infrastructure cause in Ignite, the checks or the fleet \
+         settings, with a test that would have caught it, so the same stall cannot happen again. \
+         A test or check that held `master` back is a candidate for deletion: delete it if it \
+         is flaky, slow or has not caught a real bug that nothing else would, following `ignite \
+         guide flaky-checks`, and record what still covers its behavior. File a ticket only for \
+         a cause too large to fix here, and link it.\n\n\
+         Close this ticket with the root causes and the guard now in place for each, or one \
+         sentence per cause saying why nothing can guard it. Read `ignite guide justiciar` \
+         before anything else."
+    );
+    let filing = Filing {
+        signature: Signature::of_subject(POSTMORTEM_SUBJECT, JUSTICIAR_LABEL),
+        evidence: landing.to_owned(),
+        fields: TicketFields {
+            title: Some(format!(
+                "Postmortem: master fell {hours:.0} hours behind staging"
+            )),
+            body: Some(body),
+            ticket_type: Some(TicketType::Task),
+            priority: Some(1),
+            labels: Some(vec![JUSTICIAR_LABEL.to_owned(), "tier:high".to_owned()]),
+            ..TicketFields::default()
+        },
+        deps,
+        released: true,
+    };
+    filing::file(conn, UPKEEP, &filing, now)
+}
+
 /// Says on the freeze's ticket that landings resumed.
 fn comment(conn: &mut Connection, freeze: &Freeze, now: Timestamp) -> Result<()> {
     let text = format!(
         "`master` now holds every landing made before landings froze at {}, so landings resumed \
-         at {now}. This ticket stays open until the cause of the stall is fixed or filed.",
+         at {now}. Close this ticket once its mitigations are recorded; the postmortem ticket \
+         that waits on it finds the cause of the stall.",
         freeze.since
     );
     let request = BatchRequest {

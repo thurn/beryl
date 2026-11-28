@@ -9,8 +9,9 @@ use ignite_core::protocol::tickets::{Operation, Status, TicketType};
 use ignite_core::traits::Clock;
 use ignite_store::hub::{self, emergency};
 
+use super::filing::Change;
 use super::freeze::{self, FREEZE_SECONDS, FREEZE_SESSION};
-use super::tests::{apply, comment_count, create, start, ticket};
+use super::tests::{all_tickets, apply, comment_count, create, start, ticket};
 
 /// Records a landing of a new ticket at `clock`'s time and returns the ticket.
 fn landing(conn: &mut Connection, clock: &FakeClock) -> String {
@@ -65,6 +66,25 @@ fn id(ticket: &str) -> TicketId {
     TicketId::new(ticket).unwrap()
 }
 
+/// The tickets `ticket` depends on.
+fn waits_on(conn: &Connection, ticket: &str) -> Vec<String> {
+    conn.prepare("SELECT dst FROM edges WHERE src = ?1 ORDER BY dst")
+        .unwrap()
+        .query_map([ticket], |row| row.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap()
+}
+
+/// The open postmortem tickets, which upkeep files for every six-hour stall.
+fn postmortems(conn: &Connection, clock: &FakeClock) -> Vec<String> {
+    all_tickets(conn, clock.now())
+        .into_iter()
+        .filter(|t| t.status != Status::Closed && t.title.starts_with("Postmortem: "))
+        .map(|t| t.id.to_string())
+        .collect()
+}
+
 #[test]
 fn six_hours_of_lag_freezes_landings_except_for_fixes() {
     let clock = start();
@@ -77,7 +97,8 @@ fn six_hours_of_lag_freezes_landings_except_for_fixes() {
 
     clock.advance(120.0);
     let report = freeze::pass(&mut conn, clock.now()).unwrap();
-    assert_eq!(report.filed.len(), 1);
+    assert!(report.frozen);
+    assert_eq!(report.filed.len(), 2);
     let frozen = in_force(&conn, &clock).expect("landings are frozen");
     assert_eq!(frozen.scope, EmergencyScope::Landings);
     assert_eq!(frozen.session.as_str(), FREEZE_SESSION);
@@ -89,6 +110,19 @@ fn six_hours_of_lag_freezes_landings_except_for_fixes() {
     assert_eq!(filed.status, Status::Open);
     assert!(filed.labels.contains(&"justiciar".to_owned()));
     assert!(filed.body.contains(&stuck), "{}", filed.body);
+
+    // The postmortem waits on the freeze's ticket, and its fixes to Ignite may land.
+    let postmortem = ticket(&conn, &report.filed[1].ticket);
+    assert_eq!(postmortems(&conn, &clock), [postmortem.id.to_string()]);
+    assert_eq!(postmortem.priority, 1);
+    assert_eq!(postmortem.status, Status::Open);
+    assert!(postmortem.labels.contains(&"justiciar".to_owned()));
+    assert!(postmortem.body.contains(&stuck), "{}", postmortem.body);
+    assert_eq!(
+        waits_on(&conn, postmortem.id.as_str()),
+        [filed.id.to_string()]
+    );
+    assert!(frozen.allows(&postmortem.id, "land"));
 
     // Daemons refuse `land` to every ticket the emergency does not allow.
     assert!(frozen.allows(&id(&regression), "land"));
@@ -187,8 +221,35 @@ fn another_emergency_in_force_is_left_alone() {
     };
     emergency::impose(&conn, &declared).unwrap();
     let report = freeze::pass(&mut conn, clock.now()).unwrap();
-    assert_eq!(report.filed, []);
+    assert!(!report.frozen);
     assert_eq!(in_force(&conn, &clock), Some(declared));
+    assert_postmortem_without_freeze(&mut conn, &clock, &report.filed);
+}
+
+/// A stall that did not freeze landings still gets one postmortem, which later passes leave be.
+fn assert_postmortem_without_freeze(
+    conn: &mut Connection,
+    clock: &FakeClock,
+    filed: &[super::filing::Filed],
+) {
+    assert_eq!(filed.len(), 1);
+    assert_eq!(filed[0].change, Change::Created);
+    let postmortem = ticket(conn, &filed[0].ticket);
+    assert!(
+        postmortem.title.starts_with("Postmortem: "),
+        "{}",
+        postmortem.title
+    );
+    assert!(
+        postmortem.body.contains("did not freeze"),
+        "{}",
+        postmortem.body
+    );
+    assert_eq!(waits_on(conn, postmortem.id.as_str()), Vec::<String>::new());
+    clock.advance(600.0);
+    let again = freeze::pass(conn, clock.now()).unwrap();
+    assert!(again.filed.iter().all(|f| f.change == Change::Unchanged));
+    assert_eq!(postmortems(conn, clock), [postmortem.id.to_string()]);
 }
 
 #[test]
@@ -210,6 +271,7 @@ fn a_tip_waiting_on_a_silent_machine_does_not_freeze_landings() {
     .unwrap();
     clock.advance(FREEZE_SECONDS);
     let report = freeze::pass(&mut conn, clock.now()).unwrap();
-    assert_eq!(report.filed, []);
+    assert!(!report.frozen);
     assert_eq!(in_force(&conn, &clock), None);
+    assert_postmortem_without_freeze(&mut conn, &clock, &report.filed);
 }

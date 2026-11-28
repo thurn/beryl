@@ -15,8 +15,9 @@
 //! - files a P0 ticket for a person when a machine that is not off stops reporting for half
 //!   an hour ([`silent`]);
 //! - files justiciar tickets for sustained machine resource stalls ([`resource_stalls`]);
-//! - freezes landings across the fleet when `master` falls six hours behind, and ends the
-//!   freeze once it catches up ([`freeze`]);
+//! - freezes landings across the fleet when `master` falls six hours behind, files a
+//!   postmortem ticket for the stall, and ends the freeze once `master` catches up
+//!   ([`freeze`]);
 //! - files the copy of each meta-ticket whose schedule says one is due ([`schedules`]);
 //! - opens the tickets the hub filed pending once their automated source has a positive
 //!   allocation, its own or the General pool's ([`source_release`]);
@@ -237,7 +238,7 @@ impl Upkeep {
         keep(freeze::pass(conn, now).map(|freeze| {
             if freeze.lifted {
                 report.landings_frozen = Some(false);
-            } else if !freeze.filed.is_empty() {
+            } else if freeze.frozen {
                 report.landings_frozen = Some(true);
             }
             note(&mut report, freeze.filed);

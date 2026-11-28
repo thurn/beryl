@@ -4458,7 +4458,17 @@ behind:
   (`FREEZE_SECONDS` in the hub's `upkeep::freeze`), upkeep files a P0 justiciar
   ticket under the signature `master-freeze` and declares a landings-only
   emergency on it, as the session `ignite-upkeep`. Every daemon enforces it like
-  any other emergency, so `ignite land` refuses with exit code 6.
+  any other emergency, so `ignite land` refuses with exit code 6. That ticket's
+  worker gets `master` moving and records each mitigation.
+- Every six-hour stall also gets a P1 justiciar postmortem ticket under the
+  signature `master-stall-postmortem`, which waits on the freeze's ticket. Its
+  worker writes the stall's timeline, names the cause of each lost hour, and
+  fixes the workflow or infrastructure that let `master` fall behind, with a
+  test. A low-value test or check that held `master` back is deleted rather
+  than repaired. Upkeep files it even when it does not freeze landings (see below). The
+  freeze's ticket used to carry this work as a second task, so it depended on
+  that worker choosing to do it after `master` moved; as its own ticket it
+  always happens, and starts from the mitigation record.
 - Each upkeep pass renews the emergency, so it does not lapse after two hours,
   and lists every open regression, justiciar and incident ticket as allowed to
   land, so the fixes get in. A tip round's reverts do not go through
@@ -4466,13 +4476,14 @@ behind:
   ticket waits like any other landing; a justiciar ticket is the way to land an
   Ignite fix during a freeze.
 - The freeze ends by itself once `master` holds every landing made before it.
-  Upkeep then comments on the ticket, which stays open until its worker has
-  fixed or filed what let `master` fall so far behind. The worker holding the
-  ticket can end the freeze sooner with `ignite pool resume --all`.
+  Upkeep then comments on the ticket, which can close once its mitigations are
+  recorded. The worker holding the ticket can end the freeze sooner with
+  `ignite pool resume --all`.
 - Upkeep does not freeze landings while another emergency is in force, or while
   a tip has waited an hour on a machine that is not off and has not reported
   since the tip arrived. Stopping landings does not bring that machine back, and
-  its own ticket covers it (see [Tip verification](#tip-verification)).
+  its own ticket covers it (see [Tip verification](#tip-verification)). The
+  postmortem ticket is filed anyway, with no ticket to wait on.
 - Once a session ends or replaces the freeze, upkeep does not declare it again
   until `master` has caught up with the landings that were waiting when it
   froze.
