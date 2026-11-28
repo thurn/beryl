@@ -260,11 +260,13 @@ fn held_items(
     root: &str,
     now: Timestamp,
 ) -> Result<Vec<(Tone, String)>, ReadError> {
-    let everywhere = fleet::paused_everywhere(conn, now)?;
+    let pause = fleet::fleet_pause(conn, now)?;
+    let everywhere = pause == fleet::FleetPause::Everything;
     let limited = settings
         .machines
         .values()
-        .any(|setting| setting.state != MachineState::Active);
+        .any(|setting| setting.state != MachineState::Active)
+        || pause == fleet::FleetPause::ExceptHoldingMaster;
     if !everywhere && !limited {
         return Ok(Vec::new());
     }

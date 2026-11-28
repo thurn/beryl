@@ -41,16 +41,30 @@ pub fn dispatch_hold(conn: &Connection, now: Timestamp) -> Result<Option<Emergen
     Ok(in_force(conn, now)?.filter(|e| e.scope == EmergencyScope::All))
 }
 
-/// Applies `change` at `now` and returns the emergency it leaves. Only the session holding an
-/// incident or justiciar ticket may declare. A change the rules refuse is [`StoreError::Rejected`].
-pub fn change(conn: &Connection, change: &EmergencyChange, now: Timestamp) -> Result<Emergency> {
+/// Applies `change` at `now` and returns the emergency it leaves, `None` once it has ended. Only
+/// the session holding an incident or justiciar ticket may declare an emergency for it, or adopt
+/// one onto it. A change the rules refuse is [`StoreError::Rejected`].
+pub fn change(
+    conn: &Connection,
+    change: &EmergencyChange,
+    now: Timestamp,
+) -> Result<Option<Emergency>> {
     let tx = conn.unchecked_transaction()?;
-    if let EmergencyChange::Declare {
-        ticket,
-        session,
-        machine,
-        ..
-    } = change
+    let claim = match change {
+        EmergencyChange::Declare {
+            ticket,
+            session,
+            machine,
+            ..
+        }
+        | EmergencyChange::Adopt {
+            ticket,
+            session,
+            machine,
+        } => Some((ticket, session, machine)),
+        EmergencyChange::Allow { .. } | EmergencyChange::End { .. } => None,
+    };
+    if let Some((ticket, session, machine)) = claim
         && !tickets::load(&tx, ticket.as_str())?.is_some_and(|held| {
             held.status == Status::InProgress
                 && held.session.as_ref() == Some(session)
@@ -58,13 +72,35 @@ pub fn change(conn: &Connection, change: &EmergencyChange, now: Timestamp) -> Re
                 && has_emergency_label(&held.labels)
         })
     {
+        let what = match change {
+            EmergencyChange::Adopt { .. } => "adopt an emergency onto it",
+            _ => "declare an emergency for it",
+        };
         return Err(StoreError::Rejected(format!(
-            "only a session holding an in-progress incident or justiciar ticket may declare \
-             an emergency for it. {session} does not hold such a claim on {ticket} from {machine}"
+            "only a session holding an in-progress incident or justiciar ticket may {what}. \
+             {session} does not hold such a claim on {ticket} from {machine}"
         )));
     }
-    let next = emergency::apply(stored(&tx)?, change, now).map_err(StoreError::Rejected)?;
-    write(&tx, &next)?;
+    let current = stored(&tx)?;
+    // Another session may have declared an emergency since the caller declared its own, so
+    // only holding the emergency's own ticket lets a caller end it unnamed.
+    let holds = match (change, &current) {
+        (
+            EmergencyChange::End {
+                session: Some(session),
+                ..
+            },
+            Some(current),
+        ) => tickets::load(&tx, current.ticket.as_str())?.is_some_and(|held| {
+            held.status == Status::InProgress && held.session.as_ref() == Some(session)
+        }),
+        _ => false,
+    };
+    let next = emergency::apply(current, change, now, holds).map_err(StoreError::Rejected)?;
+    match &next {
+        Some(next) => write(&tx, next)?,
+        None => clear(&tx)?,
+    }
     tx.commit()?;
     Ok(next)
 }
@@ -87,7 +123,7 @@ fn write(conn: &Connection, emergency: &Emergency) -> Result<()> {
     Ok(())
 }
 
-/// Ends the emergency, as `ignite pool resume --all` does.
+/// Ends the emergency, as `ignite emergency end` does.
 pub fn clear(conn: &Connection) -> Result<()> {
     conn.execute("DELETE FROM meta WHERE key = ?1", [KEY])?;
     Ok(())
@@ -119,7 +155,7 @@ mod tests {
             scope: EmergencyScope::All,
         };
         let declared = change(&conn, &declare, now).unwrap();
-        assert_eq!(in_force(&conn, now).unwrap(), Some(declared));
+        assert_eq!(in_force(&conn, now).unwrap(), declared);
         let lapsed = now.plus_seconds(EMERGENCY_LASTS_S);
         assert_eq!(in_force(&conn, lapsed).unwrap(), None);
         clear(&conn).unwrap();

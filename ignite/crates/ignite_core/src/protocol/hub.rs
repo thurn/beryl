@@ -106,6 +106,10 @@ pub struct HeartbeatReply {
     /// A full emergency or `ignite pool pause --all` pauses hand-offs on every machine.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub paused_everywhere: bool,
+    /// `ignite pool pause --all --except-holding-master` pauses every hand-off on every machine
+    /// except of the tickets that hold `master` back. False while `paused_everywhere` is true.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub paused_except_master: bool,
     /// Fleet settings and provider holds for this machine.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fleet: Option<FleetNotice>,
@@ -704,9 +708,8 @@ pub struct ReportFiled {
 /// `POST /pause`: stops (or restarts) hand-offs to one machine, or to every machine when
 /// `machine` is `None`. While a pause holds, `/next` answers nothing.
 ///
-/// Resuming every machine also ends the emergency in force. The hub refuses that unless the
-/// emergency was declared by `session` or on a ticket it holds, or `emergency` names the
-/// emergency's ticket (see `protocol::emergency::ending_refusal`).
+/// The pause of every machine is the operator's own flag. An emergency pauses hand-offs by
+/// itself, so resuming every machine never ends an emergency (`ignite emergency end` does).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Pause {
     pub machine: Option<MachineId>,
@@ -714,9 +717,10 @@ pub struct Pause {
     /// The session that asks.
     #[serde(default)]
     pub session: Option<SessionId>,
-    /// The ticket of the emergency the caller means to end.
-    #[serde(default)]
-    pub emergency: Option<TicketId>,
+    /// With `machine` `None` and `paused`: still hand off the tickets that hold `master` back
+    /// (regressions and justiciar tickets), one at a time per machine.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub except_holding_master: bool,
 }
 
 /// `POST /commands/rejected`: a command line the `ignite` executable refused to parse, sent so

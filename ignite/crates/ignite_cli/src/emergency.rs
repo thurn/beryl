@@ -20,6 +20,15 @@ pub enum EmergencyCommand {
         /// `start`, `test`, `check`, `land`, `run`, `rebuild` or `audit`; every one if left out.
         verb: Option<String>,
     },
+    /// Move the emergency in force onto an incident or justiciar ticket you hold, keeping what
+    /// it pauses, its allowances and how it ends, such as a landings freeze that ends once
+    /// master catches up.
+    Adopt { ticket: String },
+    /// End the emergency on every machine.
+    End {
+        /// The emergency's ticket, when it was declared on a ticket you do not hold.
+        ticket: Option<String>,
+    },
     /// Lift the emergency on this machine alone when the declaring session is gone.
     Clear {
         /// Required: other machines go on enforcing it.
@@ -62,6 +71,16 @@ mod tests {
             Command::Emergency { command: Some(EmergencyCommand::Allow { verb: Some(v), .. }) } if v == "land"
         ));
         assert!(Cli::try_parse_from(["ignite", "emergency", "clear"]).is_err());
+        assert!(matches!(
+            parse("ignite emergency adopt IINC1"),
+            Command::Emergency { command: Some(EmergencyCommand::Adopt { ticket }) } if ticket == "IINC1"
+        ));
+        assert!(matches!(
+            parse("ignite emergency end"),
+            Command::Emergency {
+                command: Some(EmergencyCommand::End { ticket: None })
+            }
+        ));
         assert!(
             matches!(parse("ignite wait emergency"), Command::Wait { handle } if handle == "emergency")
         );

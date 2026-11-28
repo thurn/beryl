@@ -1218,6 +1218,11 @@ Rules for trees:
   free tree whose removal makes room under the limit. A speculative seed skips
   the copy when there is no empty slot it can use. When no slot can be
   reclaimed, the build waits and `ignite status` shows the wait.
+- When leased trees hold every slot, an incident commander, a justiciar or the
+  operator frees one with `ignite trees evict <tree> [--force]`. It deletes the
+  tree's build directories under the tree's command lock, so it refuses while a
+  command runs there; `--force` stops those commands first. The lease stays
+  with its holder, whose ticket gets a comment.
 - After a build command ends, the daemon measures that tree's build directories
   in logical bytes. Before its next build, a tree over its ceiling is cleaned
   until its outputs are below 80% of the ceiling. Cleanup removes replaced
@@ -4406,12 +4411,23 @@ full pause for a broken build, hub or daemon fault, or resource exhaustion.
   The order names the emergency ticket and the sender's session. Before acting,
   use `ignite ticket show <emergency ticket>` to confirm the `incident` or
   `justiciar` label and that the sender holds it.
-- `ignite pool resume --all` ends the pause on every machine. The hub refuses
+- `ignite emergency end` ends the emergency on every machine. The hub refuses
   when the emergency was declared on a ticket the caller does not hold, because
-  another session may have declared a newer one. The caller then adds
-  `--emergency <ticket>` to name it on purpose. An operator stuck behind a flag
-  nobody can end can lift it on one machine with
+  another session may have declared a newer one. The caller then runs
+  `ignite emergency end <ticket>` to name it on purpose. An operator stuck
+  behind a flag nobody can end can lift it on one machine with
   `ignite emergency clear --local`, which follows the same rule.
+- The operator's hand-off pause (`ignite pool pause --all`) is a separate flag
+  from the emergency, and hand-offs pause while either is set.
+  `ignite pool resume --all` clears only the operator's flag and never ends an
+  emergency. Before this was so, resuming hand-offs during upkeep's landings
+  freeze also ended the freeze.
+- `ignite emergency adopt <ticket>` moves the emergency in force onto an
+  incident or justiciar ticket the caller holds. It keeps the scope, the
+  allowances, the time it lapses and its end condition, so an adopted landings
+  freeze still ends once `master` catches up and upkeep goes on renewing it.
+  The ticket it leaves is allowed every heavy verb. Both tickets get a comment,
+  and the one left also gets an `ignite tell`.
 - When a declaration replaces another session's emergency, the earlier
   declarer's ticket gets a comment and an `ignite tell`.
 
@@ -4482,7 +4498,8 @@ behind:
 - The freeze ends by itself once `master` holds every landing made before it.
   Upkeep then comments on the ticket, which can close once its mitigations are
   recorded. The worker holding the ticket can end the freeze sooner with
-  `ignite pool resume --all`.
+  `ignite emergency end`. An incident commander takes it over with
+  `ignite emergency adopt <ticket>`, which keeps its allowances and its end.
 - Upkeep does not freeze landings while another emergency is in force, or while
   a tip has waited an hour on a machine that is not off and has not reported
   since the tip arrived. Stopping landings does not bring that machine back, and
@@ -4754,8 +4771,12 @@ updates itself.
 
 `ignite pool pause` and `ignite pool resume` set the local machine to checks
 only and active, respectively. The same commands with `--all` stop or resume
-hand-offs across the fleet independently of machine state. Global resume also
-clears an emergency pause.
+hand-offs across the fleet independently of machine state.
+`ignite pool pause --all --except-holding-master` still hands off the tickets
+that hold `master` back (regressions and justiciar tickets), one at a time per
+machine, so a pause does not stop the work that would end it. Global resume
+clears either pause and leaves an emergency in force (see
+[The emergency pause](#the-emergency-pause)).
 
 The hub's limit on build tickets, one per three shared cores, applies only at
 hand-off, so a machine can still come to hold more: through a dispatch bug, a

@@ -4,14 +4,12 @@ use rusqlite::{Connection, OptionalExtension, TransactionBehavior};
 use serde_json::json;
 
 use ignite_core::fleet::MachineState;
-use ignite_core::protocol::emergency::ending_refusal;
 use ignite_core::protocol::hub::{
     Heartbeat, HeartbeatReply, MachineRegister, MachineRegistered, Pause,
 };
-use ignite_core::protocol::tickets::Status;
 use ignite_core::time::Timestamp;
 use ignite_store::StoreError;
-use ignite_store::hub::{emergency, fleet, fleet_settings, tickets, tokens};
+use ignite_store::hub::{emergency, fleet, fleet_settings, tokens};
 
 use super::{
     Answer, HUB_VERSION, Request, Response, done, failure, sql_failure, store_failure, usage,
@@ -136,6 +134,7 @@ pub(super) fn heartbeat(conn: &mut Connection, beat: &Heartbeat, now: Timestamp)
         .sample
         .as_ref()
         .and_then(|sample| sheds::holdings(&snapshot, beat, sample, now));
+    let pause = fleet::fleet_pause(&snapshot, now).map_err(|e| store_failure(&e))?;
     let reply = HeartbeatReply {
         fleet: Some(
             usage::notice(&snapshot, beat.machine.as_str(), now).map_err(|e| store_failure(&e))?,
@@ -143,8 +142,8 @@ pub(super) fn heartbeat(conn: &mut Connection, beat: &Heartbeat, now: Timestamp)
         // A hub that never recorded its version asks no machine to update.
         hub_version: hub_version.unwrap_or_else(|| beat.version.clone()),
         emergency: emergency::in_force(&snapshot, now).map_err(|e| store_failure(&e))?,
-        paused_everywhere: fleet::paused_everywhere(&snapshot, now)
-            .map_err(|e| store_failure(&e))?,
+        paused_everywhere: pause == fleet::FleetPause::Everything,
+        paused_except_master: pause == fleet::FleetPause::ExceptHoldingMaster,
         reconciled,
         build_tickets,
         shed,
@@ -161,8 +160,10 @@ pub(super) fn heartbeat(conn: &mut Connection, beat: &Heartbeat, now: Timestamp)
     Ok(Response::json(200, &json!(reply)))
 }
 
-/// Pauses or resumes hand-offs to one machine or to every machine. Resuming every machine also
-/// ends the emergency, if one is in force.
+/// Pauses or resumes hand-offs to one machine or to every machine. The pause of every machine
+/// is the operator's own and leaves any emergency in force alone: in November 2026, resuming
+/// hand-offs ended the automatic landings freeze too, and the incident commander had to declare
+/// a new one and copy its allowances by hand.
 pub(super) fn pause(
     conn: &mut Connection,
     pause: &Pause,
@@ -182,34 +183,12 @@ pub(super) fn pause(
         fleet_settings::set_machine_state(conn, machine.as_str(), state, actor, now)
             .map_err(|e| store_failure(&e))?;
     } else {
-        let tx = conn
-            .transaction_with_behavior(TransactionBehavior::Immediate)
-            .map_err(sql_failure)?;
-        if !pause.paused
-            && let Some(current) = emergency::in_force(&tx, now).map_err(|e| store_failure(&e))?
-        {
-            // Another session may have declared an emergency since the caller declared its own.
-            let holds = tickets::load(&tx, current.ticket.as_str())
-                .map_err(|e| store_failure(&e))?
-                .is_some_and(|held| {
-                    held.status == Status::InProgress
-                        && pause.session.is_some()
-                        && held.session == pause.session
-                });
-            if let Some(message) = ending_refusal(
-                &current,
-                pause.session.as_ref(),
-                holds,
-                pause.emergency.as_ref(),
-            ) {
-                return Err(failure(409, &message));
-            }
-        }
-        fleet::set_paused_everywhere(&tx, pause.paused, now).map_err(|e| store_failure(&e))?;
-        if !pause.paused {
-            emergency::clear(&tx).map_err(|e| store_failure(&e))?;
-        }
-        tx.commit().map_err(sql_failure)?;
+        let fleet_pause = match (pause.paused, pause.except_holding_master) {
+            (false, _) => fleet::FleetPause::None,
+            (true, true) => fleet::FleetPause::ExceptHoldingMaster,
+            (true, false) => fleet::FleetPause::Everything,
+        };
+        fleet::set_fleet_pause(conn, fleet_pause, now).map_err(|e| store_failure(&e))?;
     }
     Ok(done())
 }

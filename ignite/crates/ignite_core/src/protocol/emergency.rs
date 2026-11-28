@@ -7,8 +7,15 @@
 //! emergency ticket or tickets it allows. Running commands continue.
 //!
 //! The flag lapses [`EMERGENCY_LASTS_S`] after the last declaration.
-//! `ignite pool resume --all` ends it at once, but only for a session that holds the emergency's
-//! ticket or names it with `--emergency <ticket>` (see [`ending_refusal`]).
+//! `ignite emergency end` ends it at once, but only for a session that holds the emergency's
+//! ticket or names it with `ignite emergency end <ticket>` (see [`ending_refusal`]). It is not
+//! the operator's hand-off pause (`ignite pool pause --all`), which is kept apart, so resuming
+//! hand-offs never ends an emergency.
+//!
+//! `ignite emergency adopt <ticket>` moves the emergency in force onto another incident or
+//! justiciar ticket that the caller holds, keeping what it pauses, its allowances and when it
+//! ends. An incident commander uses it to take over a landings freeze that upkeep declared
+//! without losing the freeze's automatic end.
 
 use serde::{Deserialize, Serialize};
 
@@ -58,6 +65,10 @@ pub struct Emergency {
     /// The tickets whose sessions the declaring session lets run heavy verbs.
     #[serde(default)]
     pub allowed: Vec<Allowance>,
+    /// Set on the landings freeze that hub upkeep declares: the emergency ends by itself once
+    /// `master` holds every landing made before this time. Adopting the emergency keeps it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub until_master_holds: Option<Timestamp>,
 }
 
 /// One exception named by the declaring session. The ticket may run `verb`, or any heavy verb
@@ -106,7 +117,7 @@ pub fn ending_refusal(
     Some(format!(
         "refused  emergency {} (declared by {} on {}) is in force, and it was declared on a \
          ticket you do not hold. It may not be the emergency you declared. To end it anyway, \
-         name its ticket: `--emergency {}`",
+         name its ticket: `ignite emergency end {}`",
         emergency.ticket, emergency.session, emergency.machine, emergency.ticket
     ))
 }
@@ -130,22 +141,82 @@ pub enum EmergencyChange {
         session: SessionId,
         allowance: Allowance,
     },
+    /// Moves the emergency in force onto `ticket`, an incident or justiciar ticket that
+    /// `session` holds, keeping its scope, its allowances, its end condition and when it
+    /// lapses. The ticket it leaves is allowed every heavy verb, as it was while it held the
+    /// emergency.
+    Adopt {
+        ticket: TicketId,
+        session: SessionId,
+        machine: MachineId,
+    },
+    /// Ends the emergency in force, unless [`ending_refusal`] refuses `session`. `ticket` is
+    /// the emergency the caller means to end, named on purpose.
+    End {
+        #[serde(default)]
+        session: Option<SessionId>,
+        #[serde(default)]
+        ticket: Option<TicketId>,
+    },
 }
 
-/// The reply to `POST /emergency`: the emergency after the change.
+/// The reply to `POST /emergency`: the emergency after the change, or `None` once it has ended.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EmergencyReply {
     pub emergency: Option<Emergency>,
 }
 
-/// The emergency `change` makes of `current` at `now`, or why it is refused. The hub and the
-/// fakes both apply changes this way.
+/// The emergency `change` makes of `current` at `now`, `None` once it has ended, or why it is
+/// refused. `holds_ticket` says whether the caller holds the emergency's ticket, which lets it
+/// end the emergency. The hub and the fakes both apply changes this way.
 pub fn apply(
     current: Option<Emergency>,
     change: &EmergencyChange,
     now: Timestamp,
-) -> Result<Emergency, String> {
+    holds_ticket: bool,
+) -> Result<Option<Emergency>, String> {
     let current = current.filter(|e| e.active(now));
+    match change {
+        EmergencyChange::End { session, ticket } => {
+            let Some(current) = current else {
+                return Ok(None);
+            };
+            match ending_refusal(&current, session.as_ref(), holds_ticket, ticket.as_ref()) {
+                Some(refusal) => Err(refusal),
+                None => Ok(None),
+            }
+        }
+        EmergencyChange::Adopt {
+            ticket,
+            session,
+            machine,
+        } => {
+            let Some(mut emergency) = current else {
+                return Err("no emergency is in force to adopt".to_owned());
+            };
+            if &emergency.ticket != ticket {
+                let left = Allowance {
+                    ticket: emergency.ticket.clone(),
+                    verb: None,
+                };
+                if !emergency.allowed.contains(&left) {
+                    emergency.allowed.push(left);
+                }
+            }
+            emergency.ticket = ticket.clone();
+            emergency.session = session.clone();
+            emergency.machine = machine.clone();
+            Ok(Some(emergency))
+        }
+        other => declare_or_allow(current, other, now).map(Some),
+    }
+}
+
+fn declare_or_allow(
+    current: Option<Emergency>,
+    change: &EmergencyChange,
+    now: Timestamp,
+) -> Result<Emergency, String> {
     match change {
         EmergencyChange::Declare {
             ticket,
@@ -166,6 +237,7 @@ pub fn apply(
                 renewed_at: now,
                 scope: *scope,
                 allowed: Vec::new(),
+                until_master_holds: None,
             },
         }),
         EmergencyChange::Allow { session, allowance } => {
@@ -184,12 +256,24 @@ pub fn apply(
             }
             Ok(emergency)
         }
+        EmergencyChange::Adopt { .. } | EmergencyChange::End { .. } => {
+            unreachable!("`apply` handles adoption and ending")
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The emergency a declaration or allowance leaves.
+    fn applied(
+        current: Option<Emergency>,
+        change: &EmergencyChange,
+        now: Timestamp,
+    ) -> Result<Emergency, String> {
+        apply(current, change, now, false).map(|e| e.expect("the change leaves an emergency"))
+    }
 
     fn declare(session: &str, ticket: &str) -> EmergencyChange {
         EmergencyChange::Declare {
@@ -213,11 +297,11 @@ mod tests {
     #[test]
     fn a_declaration_lasts_two_hours_and_renewing_starts_them_over() {
         let start = Timestamp::EPOCH;
-        let first = apply(None, &declare("local_j", "TJUS1"), start).unwrap();
+        let first = applied(None, &declare("local_j", "TJUS1"), start).unwrap();
         assert!(first.active(start.plus_seconds(EMERGENCY_LASTS_S - 1.0)));
         assert!(!first.active(start.plus_seconds(EMERGENCY_LASTS_S)));
         let later = start.plus_seconds(3600.0);
-        let renewed = apply(Some(first), &declare("local_j", "TJUS1"), later).unwrap();
+        let renewed = applied(Some(first), &declare("local_j", "TJUS1"), later).unwrap();
         assert_eq!(renewed.declared_at, start);
         assert!(renewed.active(start.plus_seconds(EMERGENCY_LASTS_S + 60.0)));
     }
@@ -231,10 +315,10 @@ mod tests {
             machine: MachineId::new("m-1").unwrap(),
             scope,
         };
-        let first = apply(None, &change(EmergencyScope::Landings), now).unwrap();
+        let first = applied(None, &change(EmergencyScope::Landings), now).unwrap();
         assert_eq!(first.scope, EmergencyScope::Landings);
-        let allowed = apply(Some(first), &allow("local_j", "TWORK", Some("land")), now).unwrap();
-        let renewed = apply(
+        let allowed = applied(Some(first), &allow("local_j", "TWORK", Some("land")), now).unwrap();
+        let renewed = applied(
             Some(allowed),
             &change(EmergencyScope::All),
             now.plus_seconds(60.0),
@@ -271,14 +355,14 @@ mod tests {
     #[test]
     fn only_the_declaring_session_grants_allowances_for_one_or_every_verb() {
         let now = Timestamp::EPOCH;
-        let emergency = apply(None, &declare("local_j", "TJUS1"), now).unwrap();
-        let refused = apply(
+        let emergency = applied(None, &declare("local_j", "TJUS1"), now).unwrap();
+        let refused = applied(
             Some(emergency.clone()),
             &allow("local_w", "TWORK", None),
             now,
         );
         assert!(refused.unwrap_err().contains("local_j"));
-        let emergency = apply(
+        let emergency = applied(
             Some(emergency),
             &allow("local_j", "TWORK", Some("land")),
             now,
@@ -293,7 +377,7 @@ mod tests {
     #[test]
     fn only_the_holder_or_a_named_ticket_ends_an_emergency() {
         let now = Timestamp::EPOCH;
-        let emergency = apply(None, &declare("local_j", "TJUS1"), now).unwrap();
+        let emergency = applied(None, &declare("local_j", "TJUS1"), now).unwrap();
         let other = SessionId::new("local_w").unwrap();
         let ticket = TicketId::new("TJUS1").unwrap();
         let refusal = ending_refusal(&emergency, Some(&other), false, None).unwrap();
@@ -312,10 +396,61 @@ mod tests {
     #[test]
     fn a_lapsed_emergency_is_declared_afresh_and_cannot_be_added_to() {
         let start = Timestamp::EPOCH;
-        let old = apply(None, &declare("local_j", "TJUS1"), start).unwrap();
+        let old = applied(None, &declare("local_j", "TJUS1"), start).unwrap();
         let later = start.plus_seconds(EMERGENCY_LASTS_S + 1.0);
-        assert!(apply(Some(old.clone()), &allow("local_j", "TWORK", None), later).is_err());
-        let fresh = apply(Some(old), &declare("local_j", "TJUS1"), later).unwrap();
+        assert!(applied(Some(old.clone()), &allow("local_j", "TWORK", None), later).is_err());
+        let fresh = applied(Some(old), &declare("local_j", "TJUS1"), later).unwrap();
         assert_eq!(fresh.declared_at, later);
+    }
+
+    #[test]
+    fn adopting_keeps_scope_allowances_and_end_and_allows_the_ticket_left() {
+        let now = Timestamp::EPOCH;
+        let mut freeze = applied(None, &declare("ignite-upkeep", "JFRZ1"), now).unwrap();
+        freeze.scope = EmergencyScope::Landings;
+        freeze.until_master_holds = Some(now);
+        let freeze = applied(Some(freeze), &allow("ignite-upkeep", "RFIX1", None), now).unwrap();
+        let adopt = EmergencyChange::Adopt {
+            ticket: TicketId::new("IINC1").unwrap(),
+            session: SessionId::new("local_i").unwrap(),
+            machine: MachineId::new("m-2").unwrap(),
+        };
+        let later = now.plus_seconds(60.0);
+        let adopted = apply(Some(freeze.clone()), &adopt, later, false)
+            .unwrap()
+            .unwrap();
+        assert_eq!(adopted.ticket.as_str(), "IINC1");
+        assert_eq!(adopted.session.as_str(), "local_i");
+        assert_eq!(adopted.scope, EmergencyScope::Landings);
+        assert_eq!(adopted.until_master_holds, Some(now));
+        assert_eq!(adopted.renewed_at, freeze.renewed_at);
+        assert!(adopted.allows(&TicketId::new("RFIX1").unwrap(), "land"));
+        assert!(adopted.allows(&TicketId::new("JFRZ1").unwrap(), "land"));
+        assert!(apply(None, &adopt, later, false).is_err());
+    }
+
+    #[test]
+    fn ending_follows_the_ending_refusal() {
+        let now = Timestamp::EPOCH;
+        let emergency = applied(None, &declare("local_j", "TJUS1"), now).unwrap();
+        let end = |session: &str, ticket: Option<&str>| EmergencyChange::End {
+            session: Some(SessionId::new(session).unwrap()),
+            ticket: ticket.map(|t| TicketId::new(t).unwrap()),
+        };
+        assert!(apply(Some(emergency.clone()), &end("local_w", None), now, false).is_err());
+        assert_eq!(
+            apply(
+                Some(emergency.clone()),
+                &end("local_w", Some("TJUS1")),
+                now,
+                false
+            ),
+            Ok(None)
+        );
+        assert_eq!(
+            apply(Some(emergency), &end("local_w", None), now, true),
+            Ok(None)
+        );
+        assert_eq!(apply(None, &end("local_w", None), now, false), Ok(None));
     }
 }

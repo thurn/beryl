@@ -172,8 +172,30 @@ fn parses_the_documented_commands() {
     assert!(matches!(
         parse("ignite pool pause --all"),
         Command::Pool {
-            command: PoolCommand::Pause { all: true }
+            command: PoolCommand::Pause {
+                all: true,
+                except_holding_master: false
+            }
         }
+    ));
+    assert!(matches!(
+        parse("ignite pool pause --all --except-holding-master"),
+        Command::Pool {
+            command: PoolCommand::Pause {
+                all: true,
+                except_holding_master: true
+            }
+        }
+    ));
+    assert!(Cli::try_parse_from(["ignite", "pool", "pause", "--except-holding-master"]).is_err());
+    assert!(
+        Cli::try_parse_from(["ignite", "pool", "resume", "--all", "--emergency", "T"]).is_err()
+    );
+    assert!(matches!(
+        parse("ignite trees evict tree-05 --force"),
+        Command::Trees {
+            command: TreesCommand::Evict { tree, force: true }
+        } if tree == "tree-05"
     ));
     assert!(matches!(
         parse("ignite status --admission"),

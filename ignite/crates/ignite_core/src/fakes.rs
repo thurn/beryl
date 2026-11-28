@@ -719,22 +719,7 @@ impl Hub for FakeHub {
 
     fn pause(&self, pause: &Pause) -> Result<()> {
         self.reachable()?;
-        if pause.machine.is_none()
-            && !pause.paused
-            && let Some(current) = lock(&self.emergency).as_ref()
-            && let Some(refusal) = crate::protocol::emergency::ending_refusal(
-                current,
-                pause.session.as_ref(),
-                false,
-                pause.emergency.as_ref(),
-            )
-        {
-            return Err(Error::Conflict(refusal));
-        }
         lock(&self.pauses).push(pause.clone());
-        if pause.machine.is_none() && !pause.paused {
-            *lock(&self.emergency) = None;
-        }
         Ok(())
     }
 
@@ -744,9 +729,11 @@ impl Hub for FakeHub {
     ) -> Result<Option<crate::protocol::emergency::Emergency>> {
         self.reachable()?;
         let mut current = lock(&self.emergency);
-        let next = crate::protocol::emergency::apply(current.take(), change, Timestamp::EPOCH)
-            .map_err(Error::Conflict)?;
-        *current = Some(next);
+        // A refused change leaves the emergency as it was.
+        let next =
+            crate::protocol::emergency::apply(current.clone(), change, Timestamp::EPOCH, false)
+                .map_err(Error::Conflict)?;
+        *current = next;
         Ok(current.clone())
     }
 

@@ -88,7 +88,10 @@ fn answer(cli: &Cli, raw: &[String]) -> Reply {
             history: *history,
         }),
         Command::Fleet { command } => fleet::run(command.as_ref(), &current_dir()),
-        Command::Trees { command } => trees::run(command, &current_dir()),
+        // Answered here: it provisions this machine's volume. `trees evict` goes to the daemon.
+        Command::Trees {
+            command: command @ args::TreesCommand::Volume { .. },
+        } => trees::run(command, &current_dir()),
         Command::Plan { command } => plan::run(command),
         Command::Manifest { command } => manifest::run(command, &current_dir()),
         Command::Import { .. } => import::run(&cli.command, &current_dir()),

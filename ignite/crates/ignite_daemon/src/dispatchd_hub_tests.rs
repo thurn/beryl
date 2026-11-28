@@ -82,6 +82,7 @@ fn hear_fleet_state(rig: &Rig) {
         &HeartbeatReply {
             fleet: rig.hub.fleet_notice(&rig.ctx.machine),
             paused_everywhere: rig.hub.pauses().last().is_some_and(|pause| pause.paused),
+            paused_except_master: false,
             hub_version: "test".to_owned(),
             emergency: None,
             reconciled: Vec::new(),

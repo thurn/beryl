@@ -25,6 +25,7 @@ pub(crate) fn read(conn: &Connection) -> Option<FleetNotice> {
 /// Applies machine policy sent by the hub. A reply from an older hub has no fleet notice.
 pub fn heard(pool: &Pool, reply: &HeartbeatReply) -> Result<()> {
     pool.set_paused_everywhere(reply.paused_everywhere);
+    pool.set_paused_except_master(reply.paused_except_master);
     if let Some(notice) = &reply.fleet {
         store(pool, notice)?;
     }

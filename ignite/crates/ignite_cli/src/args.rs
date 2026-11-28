@@ -387,16 +387,17 @@ pub enum PoolCommand {
         /// On every machine.
         #[arg(long)]
         all: bool,
+        /// With `--all`: still hand off the tickets that hold master back (regressions and
+        /// justiciar tickets), one at a time per machine.
+        #[arg(long, requires = "all")]
+        except_holding_master: bool,
     },
-    /// Start handing off tickets again.
+    /// Start handing off tickets again. An emergency in force goes on; `ignite emergency end`
+    /// ends it.
     Resume {
-        /// On every machine. This also ends the emergency in force.
+        /// On every machine.
         #[arg(long)]
         all: bool,
-        /// With `--all`: the ticket of the emergency to end, when it was declared on a ticket
-        /// you do not hold.
-        #[arg(long, requires = "all")]
-        emergency: Option<String>,
     },
     /// Print the newest sample of each Claude plan window, and the usage hold if one is in
     /// force.
@@ -698,6 +699,15 @@ pub enum RegressionCommand {
 
 #[derive(Debug, Subcommand)]
 pub enum TreesCommand {
+    /// Delete one tree's build output to free its build slot, for incident commanders,
+    /// justiciars and the operator. The lease stays with its holder, whose ticket is told.
+    Evict {
+        /// The tree, such as `tree-05`.
+        tree: String,
+        /// Stop the commands running in the tree first, instead of refusing.
+        #[arg(long)]
+        force: bool,
+    },
     /// Provision an APFS volume with matching reserve and quota.
     Volume {
         /// Use the volume for Ignite's databases and services instead of build trees.

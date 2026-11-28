@@ -52,16 +52,22 @@ pub enum Paused {
 
 /// A daemon can ask for master blockers only even on an Active machine, for example when
 /// its commands are waiting for cores. Only `ChecksOnly` machines defer to `Active` machines.
+/// `ignite pool pause --all --except-holding-master` limits every machine to master blockers,
+/// so the regression and justiciar tickets that would get `master` moving still start.
 pub fn paused(
     conn: &Connection,
     free: &MachineFree,
     state: MachineState,
     now: Timestamp,
 ) -> Result<Paused> {
+    let fleet = fleet::fleet_pause(conn, now)?;
     Ok(
-        if state == MachineState::Off || fleet::paused_everywhere(conn, now)? {
+        if state == MachineState::Off || fleet == fleet::FleetPause::Everything {
             Paused::Everything
-        } else if state == MachineState::ChecksOnly || free.master_only {
+        } else if state == MachineState::ChecksOnly
+            || free.master_only
+            || fleet == fleet::FleetPause::ExceptHoldingMaster
+        {
             Paused::MasterOnly
         } else {
             Paused::No

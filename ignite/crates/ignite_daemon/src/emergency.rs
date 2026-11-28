@@ -8,9 +8,12 @@
 //!   and running commands continue. To stop a running command, use `ignite stop`.
 //! - The declaring session and sessions working its ticket can still run heavy verbs.
 //!   The declaring session may grant other tickets exceptions with `ignite emergency allow`.
-//! - The flag lapses two hours after it was last declared. `ignite pool resume --all` ends it on
-//!   every machine, and `ignite emergency clear --local` lifts it on this machine alone, for an
-//!   operator stuck behind a flag nobody can end.
+//! - The flag lapses two hours after it was last declared. `ignite emergency end [<ticket>]`
+//!   ends it on every machine, and `ignite emergency clear --local` lifts it on this machine
+//!   alone, for an operator stuck behind a flag nobody can end. Resuming hand-offs with
+//!   `ignite pool resume --all` does not end it.
+//! - `ignite emergency adopt <ticket>` moves the emergency in force onto the caller's own
+//!   incident or justiciar ticket, keeping what it pauses, its allowances and how it ends.
 //! - `ignite wait emergency` returns when the flag clears, with the all-clear.
 
 use std::sync::{Arc, Condvar, Mutex};
@@ -310,13 +313,13 @@ pub fn named_emergency(words: &[&str]) -> Result<Option<TicketId>, String> {
     Ok(named)
 }
 
-/// `ignite emergency [declare <ticket> [--landings-only] | allow <ticket> [<verb>] | clear --local
-/// [--emergency <ticket>]]`.
+/// `ignite emergency [declare <ticket> [--landings-only] | allow <ticket> [<verb>] | adopt
+/// <ticket> | end [<ticket>] | clear --local [--emergency <ticket>]]`.
 pub struct EmergencyVerb(pub Arc<Emergencies>);
 
 const USAGE: &str = "usage    ignite emergency [declare <ticket> [--landings-only] | allow \
-                     <ticket> [<verb>] | clear --local \
-                     [--emergency <ticket>]]; `ignite pool resume --all [--emergency <ticket>]` ends it";
+                     <ticket> [<verb>] | adopt <ticket> | end [<ticket>] | clear --local \
+                     [--emergency <ticket>]]";
 
 impl Verb for EmergencyVerb {
     fn name(&self) -> &'static str {
@@ -342,6 +345,9 @@ impl Verb for EmergencyVerb {
             ["allow", ticket, verb @ ..] if verb.len() <= 1 => {
                 self.allow(ctx, req, ticket, verb.first().copied())
             }
+            ["adopt", ticket] => self.adopt(ctx, req, ticket),
+            ["end"] => self.end(ctx, req, None),
+            ["end", ticket] => self.end(ctx, req, Some(ticket)),
             ["clear", rest @ ..] if rest.contains(&"--local") => self.clear(ctx, req, rest),
             _ => Reply::text(Exit::Usage, USAGE),
         }
@@ -380,7 +386,7 @@ impl EmergencyVerb {
                 Exit::Success,
                 format!(
                     "lifted   emergency {} on this machine only; other machines still enforce \
-                     it until a session runs `ignite pool resume --all`",
+                     it until a session runs `ignite emergency end`",
                     lifted.ticket
                 ),
             ),
@@ -429,12 +435,91 @@ impl EmergencyVerb {
             Exit::Success,
             format!(
                 "declared emergency {} pauses {} across the fleet\nlapses   {} unless you \
-                 declare it again\nends     `ignite pool resume --all`",
+                 declare it again\nends     `ignite emergency end`",
                 emergency.ticket,
                 paused_work(emergency.scope),
                 emergency.expires_at()
             ),
         )
+    }
+
+    /// Moves the emergency in force onto `ticket`, which the caller must hold.
+    fn adopt(&self, ctx: &Context, req: &Request, ticket: &str) -> Reply {
+        let Some(session) = ctx.session.clone().or_else(|| req.session.clone()) else {
+            return Reply::text(
+                Exit::Usage,
+                "failed   only a session can adopt an emergency: set IGNITE_SESSION",
+            );
+        };
+        let Ok(ticket) = TicketId::new(ticket) else {
+            return Reply::text(Exit::Usage, format!("failed   not a ticket: {ticket}"));
+        };
+        let before = self.0.in_force();
+        let change = EmergencyChange::Adopt {
+            ticket,
+            session,
+            machine: ctx.machine.clone(),
+        };
+        let emergency = match self.change(ctx, &change) {
+            Ok(emergency) => emergency,
+            Err(reply) => return reply,
+        };
+        let from = before.map_or_else(String::new, |before| format!(" from {}", before.ticket));
+        let ends = match emergency.until_master_holds {
+            Some(since) => {
+                format!("by itself once `master` holds every landing made before {since}")
+            }
+            None => format!("at {} unless you declare it again", emergency.expires_at()),
+        };
+        Reply::text(
+            Exit::Success,
+            format!(
+                "adopted  emergency{from} onto {}; it pauses {} and keeps its allowances\nends     \
+                 {ends}, or with `ignite emergency end`",
+                emergency.ticket,
+                paused_work(emergency.scope)
+            ),
+        )
+    }
+
+    /// Ends the emergency on every machine, unless it was declared on a ticket the caller does
+    /// not hold and does not name.
+    fn end(&self, ctx: &Context, req: &Request, ticket: Option<&str>) -> Reply {
+        let named = match ticket.map(TicketId::new) {
+            None => None,
+            Some(Ok(ticket)) => Some(ticket),
+            Some(Err(_)) => {
+                return Reply::text(
+                    Exit::Usage,
+                    format!("failed   not a ticket: {}", ticket.unwrap_or_default()),
+                );
+            }
+        };
+        let before = self.0.in_force();
+        let change = EmergencyChange::End {
+            session: ctx.session.clone().or_else(|| req.session.clone()),
+            ticket: named,
+        };
+        match ctx.hub.emergency(&change) {
+            Ok(after) => {
+                let ended = after.is_none();
+                self.0.heard(after);
+                match before {
+                    Some(before) if ended => Reply::text(
+                        Exit::Success,
+                        format!("ended    emergency {} on every machine", before.ticket),
+                    ),
+                    _ => Reply::text(Exit::Success, "none     no emergency is in force"),
+                }
+            }
+            Err(ignite_core::traits::Error::Conflict(refusal)) => {
+                Reply::text(Exit::Conflict, refusal)
+            }
+            Err(error) => Reply::text(
+                crate::dispatchd::hub_exit(&error),
+                format!("failed   {error}"),
+            ),
+        }
     }
 
     fn allow(&self, ctx: &Context, req: &Request, ticket: &str, verb: Option<&str>) -> Reply {

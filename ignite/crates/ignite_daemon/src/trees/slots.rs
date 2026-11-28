@@ -20,6 +20,8 @@ use ignite_store::local::{rows, trees as store};
 use super::{Inner, Kind, Locked, Seeding, Trees, disk, store_error};
 use crate::supervise::Run;
 
+mod evict;
+
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct BuildSlots {
     pub total: u32,

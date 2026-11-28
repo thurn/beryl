@@ -79,6 +79,9 @@ pub struct Pool {
     pub(crate) cli_admission: Mutex<()>,
     /// The hub's last heartbeat reply said every machine is paused (`ignite pool pause --all`).
     paused_everywhere: AtomicBool,
+    /// The hub's last heartbeat reply said every machine is paused except for the tickets that
+    /// hold `master` back (`ignite pool pause --all --except-holding-master`).
+    paused_except_master: AtomicBool,
 }
 
 impl Pool {
@@ -87,6 +90,7 @@ impl Pool {
             conn: Mutex::new(conn),
             cli_admission: Mutex::new(()),
             paused_everywhere: AtomicBool::new(false),
+            paused_except_master: AtomicBool::new(false),
         }
     }
 
@@ -143,31 +147,33 @@ impl Pool {
     pub fn set_paused_everywhere(&self, paused: bool) {
         self.paused_everywhere.store(paused, Ordering::Relaxed);
     }
+
+    /// Whether the hub last said every machine hands off only tickets that hold `master` back.
+    pub fn paused_except_master(&self) -> bool {
+        self.paused_except_master.load(Ordering::Relaxed)
+    }
+
+    /// Records what the hub's heartbeat reply said about that pause.
+    pub fn set_paused_except_master(&self, paused: bool) {
+        self.paused_except_master.store(paused, Ordering::Relaxed);
+    }
 }
+
+/// What `ignite pool list` and `ignite status` say about the pause of every machine.
+const PAUSED_EVERYWHERE: &str = "paused   every machine: no hand-offs, not even of tickets that \
+                                 hold master back, until `ignite pool resume --all`";
+const PAUSED_EXCEPT_MASTER: &str = "paused   every machine: only tickets that hold master back \
+                                    (regressions and justiciar tickets) are handed off, until \
+                                    `ignite pool resume --all`";
 
 /// `ignite pool list | add | remove | pause | resume`.
 pub struct PoolVerb {
     headless_dispatch: Arc<HeadlessDispatch>,
-    /// The emergency this machine enforces, which resuming every machine ends here at once
-    /// rather than at the next heartbeat.
-    emergency: Option<Arc<crate::emergency::Emergencies>>,
 }
 
 impl PoolVerb {
     pub fn new(headless_dispatch: Arc<HeadlessDispatch>) -> PoolVerb {
-        PoolVerb {
-            headless_dispatch,
-            emergency: None,
-        }
-    }
-
-    /// The verb, ending `emergencies`' emergency when it resumes every machine.
-    #[must_use]
-    pub fn ending(self, emergencies: Arc<crate::emergency::Emergencies>) -> PoolVerb {
-        PoolVerb {
-            emergency: Some(emergencies),
-            ..self
-        }
+        PoolVerb { headless_dispatch }
     }
 }
 
@@ -192,7 +198,8 @@ impl Verb for PoolVerb {
                 ctx.clock.now(),
             )),
             Some(_) => Err(Error::Invalid(
-                "usage: ignite pool list | pause [--all] | resume [--all] | usage \
+                "usage: ignite pool list | pause [--all [--except-holding-master]] | resume \
+                 [--all] | usage \
                  | watch <ticket | session> [--after <n>] | shed [--machine <name>] [--to <n>]"
                     .to_owned(),
             )),
@@ -214,11 +221,9 @@ impl PoolVerb {
             lines.push(crate::fleet_notice::state_line(notice));
         }
         if pool.paused_everywhere() {
-            lines.push(
-                "paused   every machine: no hand-offs, not even of tickets that hold master back, \
-                 until `ignite pool resume --all`"
-                    .to_owned(),
-            );
+            lines.push(PAUSED_EVERYWHERE.to_owned());
+        } else if pool.paused_except_master() {
+            lines.push(PAUSED_EXCEPT_MASTER.to_owned());
         } else if state.is_none() && pool.paused().unwrap_or(false) {
             lines.push(
                 "paused   only tickets that hold master back are handed off, one at a time, \
@@ -338,31 +343,47 @@ impl PoolVerb {
         Ok(Reply::text(Exit::Success, shed.lines().join("\n")))
     }
 
-    /// Changes this machine's state, or pauses or resumes all hand-offs. Resuming all
-    /// hand-offs also ends the emergency, if one is in force.
+    /// Changes this machine's state, or pauses or resumes all hand-offs. Resuming all hand-offs
+    /// leaves an emergency in force alone: `ignite emergency end` ends it.
     fn pause(&self, ctx: &Context, req: &Request, words: &[&str], paused: bool) -> Result<Reply> {
-        let verb = if paused { "paused" } else { "resumed" };
+        let except_holding_master = words.contains(&"--except-holding-master");
+        if except_holding_master && !(paused && words.contains(&"--all")) {
+            return Err(Error::Invalid(
+                "`--except-holding-master` goes with `ignite pool pause --all`".to_owned(),
+            ));
+        }
+        if words.iter().any(|w| w.starts_with("--emergency")) {
+            return Err(Error::Invalid(
+                "resuming hand-offs no longer ends an emergency; `ignite emergency end \
+                 [<ticket>]` does"
+                    .to_owned(),
+            ));
+        }
         if words.contains(&"--all") {
-            let emergency = crate::emergency::named_emergency(words).map_err(Error::Invalid)?;
-            // The hub refuses to end an emergency that another session's ticket holds.
             ctx.hub.pause(&Pause {
                 machine: None,
                 paused,
                 session: ctx.session.clone().or_else(|| req.session.clone()),
-                emergency,
+                except_holding_master,
             })?;
             // Known here at once rather than at the next heartbeat.
-            self.headless_dispatch.pool().set_paused_everywhere(paused);
-            let mut text = format!("{verb}   hand-offs on every machine");
-            if paused {
-                text.push_str(", even of tickets that hold master back");
-            }
-            if !paused && let Some(emergencies) = &self.emergency {
-                if let Some(ended) = emergencies.in_force() {
-                    let _ = write!(text, "\nended    emergency {}", ended.ticket);
+            let pool = self.headless_dispatch.pool();
+            pool.set_paused_everywhere(paused && !except_holding_master);
+            pool.set_paused_except_master(except_holding_master);
+            let text = match (paused, except_holding_master) {
+                (true, true) => {
+                    "paused   hand-offs on every machine, except of tickets that \
+                                 hold master back (regressions and justiciar tickets)"
                 }
-                emergencies.heard(None);
-            }
+                (true, false) => {
+                    "paused   hand-offs on every machine, even of tickets that hold \
+                                  master back"
+                }
+                (false, _) => {
+                    "resumed  hand-offs on every machine. An emergency in force goes \
+                               on; `ignite emergency end` ends it"
+                }
+            };
             return Ok(Reply::text(Exit::Success, text));
         }
         let state = if paused {
@@ -410,6 +431,8 @@ impl crate::doctor::StatusSection for PauseSection {
                 "paused on every machine: nothing is handed off, not even the tickets that hold \
                  master back",
             )
+        } else if pool.paused_except_master() {
+            Some("paused on every machine: only tickets that hold master back are handed off")
         } else if notice.is_none() && pool.paused().unwrap_or(false) {
             Some(
                 "paused on this machine: only tickets that hold master back are handed off, one \

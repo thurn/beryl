@@ -1,5 +1,6 @@
-//! The emergency pause at the hub: declared and renewed with `POST /emergency`, sent in each
-//! heartbeat's reply while it is in force, and ended by resuming every machine.
+//! The emergency pause at the hub: declared, renewed, adopted and ended with `POST /emergency`,
+//! and sent in each heartbeat's reply while it is in force. Resuming every machine's hand-offs
+//! leaves it alone.
 
 use serde_json::{Value, json};
 
@@ -13,12 +14,16 @@ fn declare(ticket: &str, session: &str) -> Value {
     json!({"change": "declare", "ticket": ticket, "session": session, "machine": "m-1"})
 }
 
+fn end(session: &Value, ticket: &Value) -> Value {
+    json!({"change": "end", "session": session, "ticket": ticket})
+}
+
 fn beat() -> Value {
     json!({"machine": "m-1", "version": "d97ed0e", "workers": []})
 }
 
 #[test]
-fn a_declared_emergency_rides_every_heartbeat_until_every_machine_resumes() {
+fn a_declared_emergency_rides_every_heartbeat_until_it_is_ended() {
     let mut conn = open();
     register(&mut conn);
     let (_, ids) = file_under(
@@ -46,13 +51,172 @@ fn a_declared_emergency_rides_every_heartbeat_until_every_machine_resumes() {
     assert_eq!(during["emergency"]["scope"], "all", "{during}");
     assert_eq!(during["paused_everywhere"], true, "{during}");
 
+    let (status, ended) = post(
+        &mut conn,
+        "/emergency",
+        &end(&json!("local_i"), &Value::Null),
+        at(5.0),
+    );
+    assert_eq!(status, 200, "{ended}");
+    assert!(ended["emergency"].is_null(), "{ended}");
+    let (_, after) = post(&mut conn, "/machines/heartbeat", &beat(), at(6.0));
+    assert!(after.get("emergency").is_none(), "{after}");
+    assert!(after.get("paused_everywhere").is_none(), "{after}");
+}
+
+/// In November 2026 an incident commander resumed hand-offs with `ignite pool resume --all`
+/// while upkeep's landings freeze was in force, and that ended the freeze too.
+#[test]
+fn resuming_every_machine_leaves_a_landings_only_emergency_in_force() {
+    let mut conn = open();
+    register(&mut conn);
+    let (_, ids) = file_under(
+        &mut conn,
+        Parent::Loose,
+        &[("Incident", &["incident"], &[])],
+    );
+    let incident = ids[0].as_str();
+    assert_eq!(
+        post(&mut conn, "/claims", &claim(incident, "local_i"), at(1.0)).0,
+        200
+    );
+    let mut declaration = declare(incident, "local_i");
+    declaration["scope"] = json!("landings");
+    assert_eq!(post(&mut conn, "/emergency", &declaration, at(2.0)).0, 200);
+
     let pause =
         |paused: bool| json!({"machine": Value::Null, "paused": paused, "session": "local_i"});
-    post(&mut conn, "/pause", &pause(true), at(4.0));
+    assert_eq!(post(&mut conn, "/pause", &pause(true), at(3.0)).0, 200);
+    let (_, paused) = post(&mut conn, "/machines/heartbeat", &beat(), at(4.0));
+    assert_eq!(paused["paused_everywhere"], true, "{paused}");
     let (status, resumed) = post(&mut conn, "/pause", &pause(false), at(5.0));
     assert_eq!(status, 200, "{resumed}");
     let (_, after) = post(&mut conn, "/machines/heartbeat", &beat(), at(6.0));
-    assert!(after.get("emergency").is_none(), "{after}");
+    assert_eq!(after["emergency"]["ticket"], incident, "{after}");
+    assert_eq!(after["emergency"]["scope"], "landings", "{after}");
+    assert!(after.get("paused_everywhere").is_none(), "{after}");
+}
+
+/// A regression filed during a pause of every machine sat unclaimed for 36 minutes in November
+/// 2026. The pause that keeps the tickets holding `master` back moving hands it off.
+#[test]
+fn a_pause_except_holding_master_hands_off_a_regression_and_nothing_else() {
+    let mut conn = open();
+    register(&mut conn);
+    let (_, ids) = file_under(
+        &mut conn,
+        Parent::Loose,
+        &[("Feature", &[], &[]), ("Fix a check", &[], &[])],
+    );
+    conn.execute(
+        "INSERT INTO regressions (check_name, ticket, first_bad, last_good, state)
+         VALUES ('rust:a::b', ?1, 'b1', 'a1', 'open')",
+        [ids[1].as_str()],
+    )
+    .unwrap();
+    let pause = json!({"machine": Value::Null, "paused": true, "except_holding_master": true});
+    assert_eq!(post(&mut conn, "/pause", &pause, at(1.0)).0, 200);
+    let (_, reply) = post(&mut conn, "/machines/heartbeat", &beat(), at(2.0));
+    assert_eq!(reply["paused_except_master"], true, "{reply}");
+    assert!(reply.get("paused_everywhere").is_none(), "{reply}");
+
+    let (status, first) = post(&mut conn, "/next", &free("m-1", &["local_a"]), at(3.0));
+    assert_eq!(status, 200, "{first}");
+    assert_eq!(first["ticket"], ids[1].as_str(), "{first}");
+    let (_, nothing) = post(&mut conn, "/next", &free("m-1", &["local_b"]), at(4.0));
+    assert_eq!(nothing, Value::Null);
+
+    let resume = json!({"machine": Value::Null, "paused": false});
+    assert_eq!(post(&mut conn, "/pause", &resume, at(5.0)).0, 200);
+    let (_, feature) = post(&mut conn, "/next", &free("m-1", &["local_b"]), at(6.0));
+    assert_eq!(feature["ticket"], ids[0].as_str(), "{feature}");
+}
+
+/// An incident commander adopts upkeep's landings freeze: it keeps its allowances, upkeep goes
+/// on renewing it, and it still ends once `master` catches up.
+#[test]
+fn an_adopted_landings_freeze_keeps_its_allowances_and_ends_when_master_catches_up() {
+    use crate::upkeep::freeze::{self, FREEZE_SECONDS};
+    let mut conn = open();
+    register(&mut conn);
+    let (_, ids) = file_under(
+        &mut conn,
+        Parent::Loose,
+        &[
+            ("Work", &[], &[]),
+            ("Fix the tip", &["regression"], &[]),
+            ("Incident", &["incident"], &[]),
+        ],
+    );
+    let (work, fix, incident) = (ids[0].as_str(), ids[1].as_str(), ids[2].as_str());
+    conn.execute(
+        "UPDATE tickets SET landed_at = ?1 WHERE id = ?2",
+        rusqlite::params![at(0.0).to_string(), work],
+    )
+    .unwrap();
+    let report = freeze::pass(&mut conn, at(FREEZE_SECONDS)).unwrap();
+    assert!(report.frozen);
+    let frozen = report.filed[0].ticket.clone();
+    let declared = hub::emergency::in_force(&conn, at(FREEZE_SECONDS))
+        .unwrap()
+        .unwrap();
+    assert_eq!(declared.ticket.as_str(), frozen);
+
+    let later = |s: f64| at(FREEZE_SECONDS + s);
+    assert_eq!(
+        post(
+            &mut conn,
+            "/claims",
+            &claim(incident, "local_i"),
+            later(1.0)
+        )
+        .0,
+        200
+    );
+    let adopt = json!({"change": "adopt", "ticket": incident, "session": "local_i",
+                       "machine": "m-1"});
+    let (status, adopted) = post(&mut conn, "/emergency", &adopt, later(2.0));
+    assert_eq!(status, 200, "{adopted}");
+    let adopted = &adopted["emergency"];
+    assert_eq!(adopted["ticket"], incident, "{adopted}");
+    assert_eq!(adopted["session"], "local_i", "{adopted}");
+    assert_eq!(adopted["scope"], "landings", "{adopted}");
+    let allowed: Vec<&str> = adopted["allowed"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|a| a["ticket"].as_str().unwrap())
+        .collect();
+    assert!(allowed.contains(&fix), "{adopted}");
+    assert!(allowed.contains(&frozen.as_str()), "{adopted}");
+    for ticket in [frozen.as_str(), incident] {
+        let comments = hub::tickets::comments(&conn, ticket).unwrap();
+        let recorded = comments.last().expect("the hand-over is recorded");
+        assert!(recorded.text.contains("adopted"), "{}", recorded.text);
+    }
+    // Only a holder of an incident or justiciar ticket may adopt.
+    let stranger = json!({"change": "adopt", "ticket": work, "session": "local_w",
+                          "machine": "m-1"});
+    assert_eq!(post(&mut conn, "/emergency", &stranger, later(3.0)).0, 409);
+
+    // Upkeep renews the adopted freeze past the two hours a declaration lasts.
+    freeze::pass(&mut conn, later(3600.0)).unwrap();
+    let renewed = hub::emergency::in_force(&conn, later(EMERGENCY_LASTS_S + 60.0))
+        .unwrap()
+        .expect("upkeep renews the adopted freeze");
+    assert_eq!(renewed.ticket.as_str(), incident);
+
+    conn.execute(
+        "INSERT INTO tips (commit_sha, seen, verified, state) VALUES ('aaaaaaa', ?1, ?1, 'verified')",
+        [later(3700.0).to_string()],
+    )
+    .unwrap();
+    assert!(freeze::pass(&mut conn, later(3700.0)).unwrap().lifted);
+    assert!(
+        hub::emergency::in_force(&conn, later(3701.0))
+            .unwrap()
+            .is_none()
+    );
 }
 
 #[test]
@@ -248,7 +412,7 @@ fn a_replaced_declarer_is_told_and_the_allow_refusal_names_the_current_emergency
 }
 
 #[test]
-fn resuming_every_machine_does_not_end_an_emergency_declared_on_another_ticket() {
+fn ending_an_emergency_declared_on_another_ticket_needs_its_name() {
     let (mut conn, ids) = two_commanders();
     post(
         &mut conn,
@@ -256,7 +420,6 @@ fn resuming_every_machine_does_not_end_an_emergency_declared_on_another_ticket()
         &declare(&ids[1], "local_b"),
         at(3.0),
     );
-    let resume = |session: Value, named: Value| json!({"machine": Value::Null, "paused": false, "session": session, "emergency": named});
     let in_force = |conn: &mut rusqlite::Connection, at_s: f64| {
         post(conn, "/machines/heartbeat", &beat(), at(at_s))
             .1
@@ -264,14 +427,14 @@ fn resuming_every_machine_does_not_end_an_emergency_declared_on_another_ticket()
             .is_some()
     };
 
-    // The replaced declarer's resume is refused, with or without a session, and a wrong name
+    // The replaced declarer's end is refused, with or without a session, and a wrong name
     // does not help.
     for (session, named) in [
         (json!("local_a"), Value::Null),
         (Value::Null, Value::Null),
         (json!("local_a"), json!(ids[0])),
     ] {
-        let (status, refused) = post(&mut conn, "/pause", &resume(session, named), at(4.0));
+        let (status, refused) = post(&mut conn, "/emergency", &end(&session, &named), at(4.0));
         assert_eq!(status, 409, "{refused}");
         assert!(
             refused["error"].as_str().unwrap().contains(&ids[1]),
@@ -283,8 +446,8 @@ fn resuming_every_machine_does_not_end_an_emergency_declared_on_another_ticket()
     // Naming the emergency's ticket ends it, as does holding that ticket.
     let (status, ended) = post(
         &mut conn,
-        "/pause",
-        &resume(json!("local_a"), json!(ids[1])),
+        "/emergency",
+        &end(&json!("local_a"), &json!(ids[1])),
         at(6.0),
     );
     assert_eq!(status, 200, "{ended}");
@@ -297,8 +460,8 @@ fn resuming_every_machine_does_not_end_an_emergency_declared_on_another_ticket()
     );
     let (status, ended) = post(
         &mut conn,
-        "/pause",
-        &resume(json!("local_b"), Value::Null),
+        "/emergency",
+        &end(&json!("local_b"), &Value::Null),
         at(9.0),
     );
     assert_eq!(status, 200, "{ended}");

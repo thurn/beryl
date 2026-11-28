@@ -23,7 +23,12 @@
 //! - Every pass renews the emergency, so it never lapses while the stall lasts, and lists every
 //!   open regression, justiciar and incident ticket as allowed to land, so the fixes get in.
 //!   A tip round's own reverts do not go through `ignite land` and are never refused.
-//! - It ends once `master` holds every landing made before the freeze.
+//! - It ends once `master` holds every landing made before the freeze. The emergency carries that
+//!   end condition (`Emergency::until_master_holds`), so it still ends this way after an
+//!   incident commander adopts it onto their own ticket with `ignite emergency adopt`, and
+//!   upkeep goes on renewing it. In November 2026 the only way to resume hand-offs during a
+//!   freeze also ended the freeze, and the commander's replacement lapsed after two hours
+//!   instead of ending when `master` caught up.
 //! - Landing a fix under the freeze's ticket does not close it while the freeze's stall lasts
 //!   ([`holds_open`]): the hub releases it instead, so the pool sends it to another worker
 //!   if `master` still does not move. Its body says to close it once `master` moves, and
@@ -106,9 +111,12 @@ pub fn pass(conn: &mut Connection, now: Timestamp) -> Result<FreezeReport> {
     let session = session();
     let in_force = emergency::in_force(conn, now)?;
     if let Some(freeze) = state(conn)? {
-        let ours = in_force
-            .as_ref()
-            .filter(|e| e.session == session && e.ticket == freeze.ticket);
+        // The freeze, whether upkeep still holds it or a session adopted it. A record written
+        // before emergencies carried their end condition is recognized by its declarer.
+        let ours = in_force.as_ref().filter(|e| {
+            e.until_master_holds == Some(freeze.since)
+                || (e.session == session && e.ticket == freeze.ticket)
+        });
         if caught_up(conn, freeze.since, now)? {
             if ours.is_some() {
                 emergency::clear(conn)?;
@@ -159,6 +167,7 @@ pub fn pass(conn: &mut Connection, now: Timestamp) -> Result<FreezeReport> {
         renewed_at: now,
         scope: EmergencyScope::Landings,
         allowed: Vec::new(),
+        until_master_holds: Some(now),
     };
     // The postmortem is filed before the emergency, so that it is among the justiciar tickets
     // the emergency lets land from the start.
@@ -179,12 +188,22 @@ fn machine() -> MachineId {
 }
 
 /// `emergency` renewed at `now`, allowing every open regression, justiciar and incident ticket.
+/// Upkeep's own freeze allows exactly those. A freeze a session adopted also keeps the
+/// allowances that session granted.
 fn renewed(conn: &Connection, mut emergency: Emergency, now: Timestamp) -> Result<Emergency> {
     emergency.renewed_at = now;
-    emergency.allowed = fix_tickets(conn)?
+    let fixes = fix_tickets(conn)?
         .into_iter()
-        .map(|ticket| Allowance { ticket, verb: None })
-        .collect();
+        .map(|ticket| Allowance { ticket, verb: None });
+    if emergency.session == session() {
+        emergency.allowed = fixes.collect();
+    } else {
+        for fix in fixes {
+            if !emergency.allowed.contains(&fix) {
+                emergency.allowed.push(fix);
+            }
+        }
+    }
     Ok(emergency)
 }
 
@@ -266,8 +285,8 @@ fn file(conn: &mut Connection, stall: &Stall<'_>, now: Timestamp) -> Result<File
          verified.\n\n\
          While the freeze lasts, `ignite land` refuses every ticket except open regression, \
          justiciar and incident tickets and this one. The freeze ends by itself once `master` \
-         holds every landing made before it, and you can end it sooner with `ignite pool resume \
-         --all` while you hold this ticket.\n\n\
+         holds every landing made before it, and you can end it sooner with `ignite emergency \
+         end` while you hold this ticket.\n\n\
          Get `master` moving: fix or revert what fails at the tip, and defer a platform whose \
          machine is off. Record each mitigation on this ticket with what it fixed and the \
          evidence that led you to it, because a postmortem ticket waits on this one and starts \

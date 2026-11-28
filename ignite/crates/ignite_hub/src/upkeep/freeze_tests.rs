@@ -207,7 +207,7 @@ fn a_freeze_a_session_ended_is_not_declared_again_for_the_same_stall() {
     landing(&mut conn, &clock);
     clock.advance(FREEZE_SECONDS);
     freeze::pass(&mut conn, clock.now()).unwrap();
-    // `ignite pool resume --all` from the ticket's worker.
+    // `ignite emergency end` from the ticket's worker.
     emergency::clear(&conn).unwrap();
     clock.advance(3600.0);
     let report = freeze::pass(&mut conn, clock.now()).unwrap();
@@ -238,6 +238,7 @@ fn another_emergency_in_force_is_left_alone() {
         renewed_at: clock.now(),
         scope: EmergencyScope::All,
         allowed: Vec::new(),
+        until_master_holds: None,
     };
     clock.advance(FREEZE_SECONDS);
     let declared = Emergency {

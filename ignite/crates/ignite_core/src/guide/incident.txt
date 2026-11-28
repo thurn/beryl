@@ -4,46 +4,46 @@ The operator appoints one incident commander. Record the timeline and one
 outcome per mitigation on the incident ticket. Link a root-cause ticket with
 evidence of why the normal handler failed, or explain why no fix is needed.
 
-1. File and claim a root incident ticket. Its ID starts with I.
+1. File and claim a root incident ticket (ID starts with I), and record the
+   operator's declaration, the evidence and your session ID.
    ignite ticket create "<fault>" --labels incident --pending --independent
    ignite start <ticket>
-   Record the operator's declaration, the evidence and your session ID.
-   When master stalls while green advances, run
+   If ignite emergency shows one in force, such as upkeep's landings freeze,
+   take it over with ignite emergency adopt <ticket>: it keeps its scope,
+   allowances and end (a freeze still ends once master catches up).
+   Otherwise, when master stalls while green advances, run
    ignite emergency declare <ticket> --landings-only
-   Only new landings refuse (exit 6). Hand-offs, builds and checks continue.
-   For broken builds, hub or daemon faults, or resource exhaustion, omit the
-   flag to pause hand-offs and all new heavy verbs. Renew with the same scope.
-   Use ignite emergency allow <repair-ticket> land to let a repair land.
-   If Ignite is down, keep the record locally and continue recovery.
+   Only new landings refuse (exit 6). For broken builds, hub or daemon faults
+   or resource exhaustion, omit the flag to pause hand-offs and all new heavy
+   verbs. Renew with the same scope. ignite emergency allow <repair> land
+   lets a repair land. If Ignite is down, keep the record locally.
 
 2. Locate affected work with ignite status, ignite pool list, ignite fleet and
    ignite ticket list --status in_progress. Record fleet settings first.
-   Unwind over-allocation (pool list: held N of limit M build tickets) with
-   ignite pool shed --machine <name>, not by telling workers to release.
-   Stop harmful commands with ignite stop <handle> --force. Use ignite tell
-   or ignite tell --all. Contact desktop sessions without tickets directly.
-   Include both IDs, the facts and the action. Recipients verify your claim
-   with ignite ticket show. Refused sessions can run ignite wait emergency.
+   To stop hand-offs but keep regression and justiciar tickets starting, run
+   ignite pool pause --all --except-holding-master. Plain --all stops those
+   too. ignite pool resume --all ends either pause, never the emergency.
+   Unwind over-allocation with ignite pool shed --machine <name>. Stop
+   harmful commands with ignite stop <handle> --force. Use ignite tell or
+   ignite tell --all with both IDs, the facts and the action; recipients
+   verify with ignite ticket show. Contact desktop sessions directly.
 
 3. Stop the harm first. You may take over work, claims or dependencies.
-   Back up affected refs, tickets and state before destructive steps. Prefer
-   a revert or fast-forward. Use a lease for force pushes. Keep the operator
-   informed.
+   When leased trees hold every build slot, free one with
+   ignite trees evict <tree>; it refuses while a command runs there unless
+   --force, and tells the lease holder. Never delete build output by hand.
+   Back up refs, tickets and state before destructive steps. Prefer a revert
+   or fast-forward. Use a lease for force pushes. Keep the operator informed.
    Target moving master within 30 minutes of declaring the incident. If it
-   still waits on a slow secondary platform at 30 minutes, defer the platform
-   and record which checks to rerun. Revert known culprits blocking promotion.
+   still waits on a slow secondary platform then, defer the platform and
+   record which checks to rerun. Revert known culprits blocking promotion.
 
-4. If Ignite blocks its own repair, use an available tree and the smallest
-   check that proves the fix. Deploy a hotfix to both release and integration
-   refs or use ignite install. Push to main only if integration is broken.
-   Record old and new commits, skipped checks and any rules you relaxed.
+4. If Ignite blocks its own repair, prove the fix with the smallest check,
+   then push it to the release and integration refs or run ignite install
+   (main only if integration is broken). Record commits and skipped checks.
 
-5. Verify the repair with ignite status and ignite doctor. If master stalled,
-   confirm it advanced before restoring fleet settings. Run
-   ignite pool resume --all and verify claims and tip verification.
-   Withdraw orders. End the pause at once if the operator directs it.
-
-6. If master stalled, close the incident ticket once master advances. Record
-   the recovery and file follow-ups for skipped checks and remaining fixes.
-   If stopping before recovery, record what fails and keep the pause only
-   if resuming would cause harm. The operator can appoint a replacement.
+5. Verify with ignite status and ignite doctor; if master stalled, confirm it
+   advanced before restoring fleet settings. Run ignite pool resume --all if
+   you paused, and ignite emergency end unless a freeze ends by itself.
+   Withdraw orders, close the incident ticket once master advances, and file
+   follow-ups. If you stop early, record what fails and the next action.

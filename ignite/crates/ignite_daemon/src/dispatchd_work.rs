@@ -193,10 +193,11 @@ impl HeadlessDispatch {
             state.idle_reason = None;
             return None;
         }
-        let master_only = machine.map_or_else(
-            || self.pool.paused().unwrap_or(true),
-            |state| state == MachineState::ChecksOnly,
-        );
+        let master_only = self.pool.paused_except_master()
+            || machine.map_or_else(
+                || self.pool.paused().unwrap_or(true),
+                |state| state == MachineState::ChecksOnly,
+            );
         let providers = self.provider_offers(state);
         let reserved = u32::try_from(state.reserved.len()).unwrap_or(u32::MAX);
         let trees = self.host.free_ticket_trees().saturating_sub(reserved);

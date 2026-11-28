@@ -614,13 +614,14 @@ pub fn long_verbs(checks: &Arc<Checks>, landing: &Arc<Landing>, idle: &Arc<Idle>
     ]
 }
 
-/// The verbs that pause the fleet's work or put one session's ahead of it: `pool`, `emergency`
-/// and `rush`.
-fn control_verbs(parts: &loops::Parts) -> [Box<dyn Verb>; 3] {
+/// The verbs that pause the fleet's work, put one session's ahead of it, or take resources back
+/// in an emergency: `pool`, `emergency`, `rush` and `trees`.
+fn control_verbs(parts: &loops::Parts) -> [Box<dyn Verb>; 4] {
     [
-        Box::new(PoolVerb::new(parts.headless_dispatch.clone()).ending(parts.emergencies.clone())),
+        Box::new(PoolVerb::new(parts.headless_dispatch.clone())),
         Box::new(crate::emergency::EmergencyVerb(parts.emergencies.clone())),
         Box::new(crate::rush::RushVerb(parts.rushes.clone())),
+        Box::new(crate::trees_verb::TreesVerb(parts.trees.clone())),
     ]
 }
 

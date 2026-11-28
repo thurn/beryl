@@ -303,7 +303,8 @@ pub(super) fn peer_free_build_handoffs(
     Ok(held.budget.free_build_handoffs())
 }
 
-/// Lane hand-offs can start ordinary work, so only an Active machine can continue a chain.
+/// Lane hand-offs can start ordinary work, so only an Active machine can continue a chain, and
+/// no pause of every machine may hold.
 pub(super) fn chain_machine(
     conn: &Connection,
     machine: &MachineId,
@@ -311,7 +312,7 @@ pub(super) fn chain_machine(
 ) -> Result<Option<String>> {
     let name = fleet::name_of(conn, machine.as_str())?.unwrap_or_else(|| machine.to_string());
     let active = fleet_settings::settings(conn)?.machine(&name).state == MachineState::Active;
-    Ok((active && !fleet::paused_everywhere(conn, now)?).then_some(name))
+    Ok((active && fleet::fleet_pause(conn, now)? == fleet::FleetPause::None).then_some(name))
 }
 
 /// The next ready ticket of the `lane:` chain `lane`, reserved for the session that finished

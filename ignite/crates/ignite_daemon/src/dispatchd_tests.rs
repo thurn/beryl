@@ -322,61 +322,46 @@ impl Rig {
 }
 
 #[test]
-fn resuming_every_machine_ends_the_emergency_here_at_once() {
+fn resuming_every_machine_leaves_the_emergency_and_ending_it_needs_its_ticket() {
     use crate::emergency::{Emergencies, EmergencyVerb};
     let rig = rig(&[]);
     // The fake hub declares emergencies at the epoch.
     rig.clock.set(Timestamp::EPOCH);
     let emergencies = Arc::new(Emergencies::new(rig.clock.clone(), None));
-    let declare = request("emergency", &["declare", "TJUS1"], Some("local_j"));
-    let declared = EmergencyVerb(emergencies.clone()).run(&rig.ctx, &declare);
+    let verb = EmergencyVerb(emergencies.clone());
+    let emergency = |session: &str, args: &[&str]| {
+        verb.run(&rig.ctx, &request("emergency", args, Some(session)))
+    };
+    let declared = emergency("local_j", &["declare", "TJUS1"]);
     assert_eq!(declared.exit, Exit::Success, "{}", declared.text);
-    assert!(emergencies.in_force().is_some());
-    let pool = PoolVerb::new(rig.headless_dispatch.clone()).ending(emergencies.clone());
+    let pool = PoolVerb::new(rig.headless_dispatch.clone());
     let resumed = pool.run(
         &rig.ctx,
         &request("pool", &["resume", "--all"], Some("local_j")),
     );
-    assert!(
-        resumed.text.contains("ended    emergency TJUS1"),
-        "{}",
-        resumed.text
+    assert_eq!(resumed.exit, Exit::Success, "{}", resumed.text);
+    assert!(emergencies.in_force().is_some(), "{}", resumed.text);
+    let old = pool.run(
+        &rig.ctx,
+        &request(
+            "pool",
+            &["resume", "--all", "--emergency", "TJUS1"],
+            Some("local_j"),
+        ),
     );
-    assert!(emergencies.in_force().is_none());
-}
+    assert_eq!(old.exit, Exit::Usage, "{}", old.text);
+    assert!(old.text.contains("ignite emergency end"), "{}", old.text);
 
-#[test]
-fn resuming_every_machine_refuses_an_emergency_another_session_declared() {
-    use crate::emergency::{Emergencies, EmergencyVerb};
-    let rig = rig(&[]);
-    rig.clock.set(Timestamp::EPOCH);
-    let emergencies = Arc::new(Emergencies::new(rig.clock.clone(), None));
-    let declare = request("emergency", &["declare", "TJUS1"], Some("local_j"));
-    assert_eq!(
-        EmergencyVerb(emergencies.clone())
-            .run(&rig.ctx, &declare)
-            .exit,
-        Exit::Success
-    );
-    let pool = PoolVerb::new(rig.headless_dispatch.clone()).ending(emergencies.clone());
-    let resume =
-        |session: &str, args: &[&str]| pool.run(&rig.ctx, &request("pool", args, Some(session)));
-
-    let refused = resume("local_w", &["resume", "--all"]);
-    assert_ne!(refused.exit, Exit::Success, "{}", refused.text);
+    let refused = emergency("local_w", &["end"]);
+    assert_eq!(refused.exit, Exit::Conflict, "{}", refused.text);
     assert!(
         refused.text.contains("TJUS1") && refused.text.contains("local_j"),
         "{}",
         refused.text
     );
+    assert_eq!(emergency("local_w", &["end", "TOTHR"]).exit, Exit::Conflict);
     assert!(emergencies.in_force().is_some());
-    let wrong = resume("local_w", &["resume", "--all", "--emergency", "TOTHR"]);
-    assert_ne!(wrong.exit, Exit::Success, "{}", wrong.text);
-    let missing = resume("local_w", &["resume", "--all", "--emergency"]);
-    assert_eq!(missing.exit, Exit::Usage, "{}", missing.text);
-    assert!(emergencies.in_force().is_some());
-
-    let ended = resume("local_w", &["resume", "--all", "--emergency=TJUS1"]);
+    let ended = emergency("local_w", &["end", "TJUS1"]);
     assert_eq!(ended.exit, Exit::Success, "{}", ended.text);
     assert!(
         ended.text.contains("ended    emergency TJUS1"),
@@ -384,6 +369,33 @@ fn resuming_every_machine_refuses_an_emergency_another_session_declared() {
         ended.text
     );
     assert!(emergencies.in_force().is_none());
+}
+
+#[test]
+fn a_pause_except_holding_master_asks_only_for_master_blockers() {
+    let rig = rig(&[]);
+    let pool = PoolVerb::new(rig.headless_dispatch.clone());
+    let paused = pool.run(
+        &rig.ctx,
+        &request("pool", &["pause", "--all", "--except-holding-master"], None),
+    );
+    assert_eq!(paused.exit, Exit::Success, "{}", paused.text);
+    let sent = rig.hub.pauses().last().cloned().unwrap();
+    assert!(sent.paused && sent.except_holding_master && sent.machine.is_none());
+    let dispatch = rig.headless_dispatch.pool();
+    assert!(dispatch.paused_except_master() && !dispatch.paused_everywhere());
+    let resumed = pool.run(&rig.ctx, &request("pool", &["resume", "--all"], None));
+    assert_eq!(resumed.exit, Exit::Success, "{}", resumed.text);
+    assert!(!dispatch.paused_except_master());
+    let wrong = pool.run(
+        &rig.ctx,
+        &request(
+            "pool",
+            &["resume", "--all", "--except-holding-master"],
+            None,
+        ),
+    );
+    assert_ne!(wrong.exit, Exit::Success, "{}", wrong.text);
 }
 
 #[test]

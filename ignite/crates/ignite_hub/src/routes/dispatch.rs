@@ -193,12 +193,9 @@ fn route(
         "/pause" => {
             // Any machine may pause every machine, as `ignite pool pause --all` does, but only
             // a machine itself may pause or resume it alone.
-            let mut parsed: Pause = body(request)?;
+            let parsed: Pause = body(request)?;
             if let Some(machine) = &parsed.machine {
                 same_machine(request, machine)?;
-            }
-            if let Some(named) = &parsed.emergency {
-                parsed.emergency = Some(canonical(conn, named)?);
             }
             machines::pause(conn, &parsed, request, now)
         }

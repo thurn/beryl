@@ -306,29 +306,81 @@ fn read_reservation(
 /// The `machine` value of the pause that holds every machine.
 pub const ALL_MACHINES: &str = "*";
 
-/// Pauses or resumes every hand-off. Individual machine states are fleet settings.
-pub fn set_paused_everywhere(conn: &Connection, paused: bool, now: Timestamp) -> Result<()> {
-    if paused {
+/// The `machine` value of the pause that holds every machine except for the tickets that hold
+/// `master` back (`ignite pool pause --all --except-holding-master`).
+pub const ALL_BUT_MASTER: &str = "*except-holding-master";
+
+/// The operator's pause of every machine. An emergency's pause is kept apart from it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FleetPause {
+    /// No pause of every machine.
+    None,
+    /// Only the tickets that hold `master` back are handed off.
+    ExceptHoldingMaster,
+    /// Nothing is handed off.
+    Everything,
+}
+
+/// Sets the operator's pause of every machine, replacing the one before.
+pub fn set_fleet_pause(conn: &Connection, pause: FleetPause, now: Timestamp) -> Result<()> {
+    let keep = match pause {
+        FleetPause::None => None,
+        FleetPause::ExceptHoldingMaster => Some(ALL_BUT_MASTER),
+        FleetPause::Everything => Some(ALL_MACHINES),
+    };
+    for row in [ALL_MACHINES, ALL_BUT_MASTER] {
+        if Some(row) != keep {
+            conn.execute("DELETE FROM pauses WHERE machine = ?1", [row])?;
+        }
+    }
+    if let Some(row) = keep {
         conn.execute(
             "INSERT INTO pauses (machine, at) VALUES (?1, ?2) ON CONFLICT(machine) DO NOTHING",
-            params![ALL_MACHINES, now.to_string()],
+            params![row, now.to_string()],
         )?;
-    } else {
-        conn.execute("DELETE FROM pauses WHERE machine = ?1", [ALL_MACHINES])?;
     }
     Ok(())
 }
 
+/// Pauses or resumes every hand-off. Individual machine states are fleet settings.
+pub fn set_paused_everywhere(conn: &Connection, paused: bool, now: Timestamp) -> Result<()> {
+    let pause = if paused {
+        FleetPause::Everything
+    } else {
+        FleetPause::None
+    };
+    set_fleet_pause(conn, pause, now)
+}
+
+/// The pause of every machine in force: the operator's, or a full emergency's.
+pub fn fleet_pause(conn: &Connection, now: Timestamp) -> Result<FleetPause> {
+    if emergency::dispatch_hold(conn, now)?.is_some() {
+        return Ok(FleetPause::Everything);
+    }
+    let row: Option<String> = conn
+        .query_row(
+            "SELECT machine FROM pauses WHERE machine IN (?1, ?2)
+             ORDER BY machine = ?1 DESC LIMIT 1",
+            params![ALL_MACHINES, ALL_BUT_MASTER],
+            |row| row.get(0),
+        )
+        .optional()?;
+    Ok(match row.as_deref() {
+        Some(ALL_MACHINES) => FleetPause::Everything,
+        Some(_) => FleetPause::ExceptHoldingMaster,
+        None => FleetPause::None,
+    })
+}
+
 /// Whether an operator pause or a full emergency pauses hand-offs to every machine.
 pub fn paused_everywhere(conn: &Connection, now: Timestamp) -> Result<bool> {
-    if emergency::dispatch_hold(conn, now)?.is_some() {
-        return Ok(true);
-    }
-    Ok(conn.query_row(
-        "SELECT EXISTS (SELECT 1 FROM pauses WHERE machine = ?1)",
-        [ALL_MACHINES],
-        |row| row.get(0),
-    )?)
+    Ok(fleet_pause(conn, now)? == FleetPause::Everything)
+}
+
+/// Whether the operator paused every hand-off except of the tickets that hold `master` back,
+/// and nothing pauses every hand-off.
+pub fn paused_except_master(conn: &Connection, now: Timestamp) -> Result<bool> {
+    Ok(fleet_pause(conn, now)? == FleetPause::ExceptHoldingMaster)
 }
 
 /// The machine's hostname, if it has registered.

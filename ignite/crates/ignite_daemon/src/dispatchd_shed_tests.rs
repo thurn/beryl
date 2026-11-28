@@ -40,6 +40,7 @@ fn reply(holdings: Option<BuildHoldings>, order: Option<ShedOrder>) -> Heartbeat
         hub_version: "test".to_owned(),
         emergency: None,
         paused_everywhere: false,
+        paused_except_master: false,
         fleet: None,
         reconciled: Vec::new(),
         build_tickets: holdings,

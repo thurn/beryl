@@ -110,6 +110,10 @@ fn the_incident_guide_connects_operator_authority_to_the_pause_and_orders() {
         "close the incident ticket once master advances",
         "ignite tell --all",
         "ignite pool resume --all",
+        "ignite pool pause --all --except-holding-master",
+        "ignite emergency adopt <ticket>",
+        "ignite emergency end",
+        "ignite trees evict <tree>",
     ] {
         assert!(incident.text.contains(phrase), "missing {phrase}");
     }

@@ -434,3 +434,38 @@ fn an_unheld_leased_ticket_tree_is_reclaimed_for_a_build_slot() {
     assert_eq!(healed.leased_at, None);
     assert!(active.path.join("out/compiled").is_file());
 }
+
+/// In November 2026 an incident commander freed build slots by deleting the output directories
+/// of leased trees by hand, and broke a test running in one of them. `ignite trees evict`
+/// refuses a tree whose command lock a running command holds, and frees the slot of an idle one.
+#[test]
+fn evicting_refuses_a_tree_with_a_running_command_and_frees_an_idle_trees_slot() {
+    let f = Fixture::new(2, 1);
+    set_slot_budget(&f, 3);
+    let busy = f.lease("T.1", false);
+    let idle = f.lease("T.2", false);
+    for lease in [&busy, &idle] {
+        drop(
+            f.trees
+                .take_build_slot(&lease.tree, &[], true)
+                .unwrap()
+                .unwrap(),
+        );
+        write(&lease.path, "out/compiled", "built");
+    }
+    let free = f.trees.build_slots().free;
+
+    let command = command_lock(&busy.path).unwrap();
+    command.lock_shared().unwrap();
+    let refused = f.trees.evict(&busy.tree, false).unwrap_err();
+    assert!(matches!(refused, Error::Conflict(_)), "{refused}");
+    assert!(busy.path.join("out/compiled").is_file());
+    drop(command);
+
+    let evicted = f.trees.evict(&idle.tree, false).unwrap();
+    assert_eq!(evicted.ticket.as_deref(), Some("T.2"));
+    assert!(!idle.path.join("out").exists());
+    assert_eq!(f.trees.row(&idle.tree).unwrap().built_commit, None);
+    assert_eq!(f.trees.build_slots().free, free + 1);
+    assert_eq!(f.trees.row(&idle.tree).unwrap().state, "leased");
+}

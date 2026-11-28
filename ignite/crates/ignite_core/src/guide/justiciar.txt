@@ -15,9 +15,9 @@ You may, to end it:
   minutes) or run ignite install from a checkout of the fix. Push to the
   integration or main branch only when nothing else works, after recording
   the old commit, the reason and the skipped checks.
-Before any destructive step, take a backup you can restore. A fleet-wide
-pause is enforced (ignite emergency declare <ticket>; exit 6); ignite tell
---all only what it cannot enforce. End it with ignite pool resume --all.
+Back up before any destructive step. A fleet-wide pause is enforced (ignite
+emergency declare <ticket>, or adopt <ticket> to take over one in force; exit
+6); ignite tell --all only what it cannot enforce. End: ignite emergency end.
 Record each mitigation and exactly one outcome on this ticket. Link a filed
 root-cause ticket with evidence of why the normal handler failed, or write
 one sentence explaining why nothing needs fixing.

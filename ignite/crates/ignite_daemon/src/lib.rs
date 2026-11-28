@@ -51,6 +51,7 @@ mod test_process;
 mod testhub;
 pub mod tip;
 pub mod trees;
+pub mod trees_verb;
 pub mod update;
 pub mod verbproc;
 pub mod verdicts;
