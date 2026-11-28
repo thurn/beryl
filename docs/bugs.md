@@ -35,8 +35,9 @@ fixed in the same session. Newest first.
   `Funds::pays` saw only the pool. The engine offers abilities with
   `Funds::pays_for`, which falls back to the rich path, but the check compared
   `Funds::pays`. Fixed: the check compares `pays_for`, as the spell and sequence
-  checks already did. Guard: none beyond `just fuzz`; the three checks now call
-  the same function.
+  checks already did. Guard: the scenario "Lands under an opponent's Mana Flare
+  pay a creature's ability" in `agathas_soul_cauldron.rs`, which fails with the
+  old comparison; the three checks now call the same function.
 
 - **The combat reference ignored Mana Reflection when it priced an attack.**
   Under Propaganda with Mana Reflection on the battlefield, one Island makes

@@ -122,6 +122,18 @@ pub mod scenarios {
             Resolve,
             ME.tapped(Card::Plains, 1),
         ]),
+        // Under an opponent's Mana Flare no land is a source the cached funds count, so the
+        // reference check for abilities once compared the plain funds, which saw only the
+        // pool, and found that they disagreed with the reference about the Plains paying {B}.
+        Scenario::new("Lands under an opponent's Mana Flare pay a creature's ability")
+            .interaction(&[Card::DrudgeSkeletons, Card::ManaFlare])
+            .battlefield(P0, &[CAULDRON, Card::DrudgeSkeletons, Card::Plains])
+            .battlefield(P1, &[Card::ManaFlare])
+            .actions(&[
+                ME.activates(Card::DrudgeSkeletons, 0),
+                Resolve,
+                ME.tapped(Card::Plains, 1),
+            ]),
         Scenario::new("An opponent cannot spend mana of any color for their creatures' abilities")
             .interaction(&[Card::DrudgeSkeletons])
             .at(2, P1, TurnStep::PrecombatMain)
