@@ -22,6 +22,10 @@ use game_table::table::{Place, Placement, Rest};
 use kit_base::pose::{Pose, Segment, StepTime};
 use kit_space::motion::Track;
 
+/// How near, in millimetres, a segment must start to where its card rests to count as leaving
+/// from there (`Motion::as_drawn`): the same tolerance as the interface checks' `same`.
+const LEAVES_FROM_REST_MM: f32 = 0.01;
+
 /// A card a step left outside a scrolled container's window, kept until a later step moves it
 /// (`Motion::reveal`). `step` is the `StepTime` of the segment that arrived there, so the
 /// instant segment that hides it shifts with its arrival if the script is laid out again.
@@ -117,8 +121,14 @@ impl Motion<'_> {
     /// `segment`, which the step being played gives the object in `slot`, as it is drawn. If the
     /// card rests outside the same container's window before the step and after it, the step
     /// moves it out of view, and it is drawn nowhere along `segment`. When a step moves a hidden
-    /// card back into view or out of the container, it leaves at its resting opacity rather than
-    /// fading in from zero, keeping cards opaque during slides.
+    /// card back into view or out of the container from where it rests, it leaves at its
+    /// resting opacity rather than fading in from zero, keeping cards opaque during slides.
+    ///
+    /// A segment that starts somewhere else, such as an `appear` that fades the card in at the
+    /// top of a library, keeps its own opacity. On the phone layout, when Metamorphose put a
+    /// Control Magic that rested outside the creature row's window on top of its owner's
+    /// library, the card's fade-in started opaque, so it was drawn first beside the row and
+    /// then at once on the library, 402 mm away.
     pub(super) fn as_drawn(&self, slot: usize, mut segment: Segment) -> Segment {
         let Some((before, after)) = self.step_rests(slot) else {
             return segment;
@@ -132,6 +142,7 @@ impl Motion<'_> {
             segment.to.opacity = 0.0;
         } else if let Some(rest) = before
             && segment.from.opacity <= 0.0
+            && segment.from.position.distance(rest.pose.position) < LEAVES_FROM_REST_MM
         {
             segment.from.opacity = rest.pose.opacity;
         }
