@@ -818,3 +818,4 @@ mod rounds;
 mod speed;
 mod streaks;
 mod sweep;
+mod switched_off;

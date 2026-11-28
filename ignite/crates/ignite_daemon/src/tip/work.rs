@@ -87,6 +87,14 @@ impl TipWork for CheckTipWork {
         })?
     }
 
+    fn check_states(
+        &self,
+        _ctx: &Context,
+        family: &str,
+    ) -> Result<HashMap<CheckName, ignite_core::protocol::hub::CheckState>> {
+        self.checks.check_states(family)
+    }
+
     fn cached_checks(&self, ctx: &Context, commit: &Commit) -> Result<Option<CachedTipSet>> {
         let Some(lease) = self
             .trees

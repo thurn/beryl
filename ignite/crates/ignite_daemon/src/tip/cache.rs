@@ -3,13 +3,21 @@
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 
-use ignite_core::ids::{Commit, Handle};
-use ignite_core::protocol::hub::{Record, ResultKey};
+use ignite_core::ids::{CheckName, Commit, Handle};
+use ignite_core::protocol::hub::{CheckState, Record, ResultKey};
 use ignite_core::protocol::{Class, Outcome};
+use ignite_core::time::Timestamp;
 use ignite_core::traits::Result;
 
 use super::{TipCheck, TipRun, TipVerifier, verdict};
 use crate::server::Context;
+
+/// How long the tip loop keeps a family's check states before it reads them again. A check
+/// switched off at the hub makes a settled failed tip due again within this time.
+pub(super) const CHECK_STATES_TTL_S: f64 = 120.0;
+
+/// Each family's check states as the hub last reported them, with when they were read.
+pub(super) type CheckStates = HashMap<String, (Timestamp, HashMap<CheckName, CheckState>)>;
 
 impl TipVerifier {
     /// Looks up the checks still without a verdict, which other machines may have passed by
@@ -68,8 +76,13 @@ impl TipVerifier {
         Ok(confirm)
     }
 
-    /// Checks the shared cache even when the local verdicts already contain failures.
-    /// When stopping an active round, require that round's own failure record.
+    /// Whether every check that failed at `tip` has recovered: the hub has a pass for its exact
+    /// key, or it switched the check off (`ignite flaky off`, or upkeep). A switched-off check
+    /// never records a pass, so without the second test a tip whose only failures were switched
+    /// off stayed settled until another landing replaced it, and during a landing freeze
+    /// `master` stood still with nothing failing that was switched on. A hub that does not
+    /// answer leaves the tip settled. When stopping an active round, require that round's own
+    /// failure record.
     pub(super) fn failure_recovered(
         &self,
         ctx: &Context,
@@ -83,11 +96,52 @@ impl TipVerifier {
         }) else {
             return false;
         };
-        ctx.hub.lookup(&failed.checks).is_ok_and(|hits| {
-            hits.len() == failed.checks.len()
-                && hits.into_iter().zip(&failed.checks).all(|(hit, key)| {
-                    hit.is_some_and(|hit| hit.key == *key && hit.outcome == Outcome::Pass)
-                })
+        let Ok(hits) = ctx.hub.lookup(&failed.checks) else {
+            return false;
+        };
+        if hits.len() != failed.checks.len() {
+            return false;
+        }
+        let unpassed: Vec<&ResultKey> = hits
+            .into_iter()
+            .zip(&failed.checks)
+            .filter(|(hit, key)| {
+                !hit.as_ref()
+                    .is_some_and(|hit| hit.key == **key && hit.outcome == Outcome::Pass)
+            })
+            .map(|(_, key)| key)
+            .collect();
+        unpassed.is_empty() || self.switched_off(ctx, &unpassed)
+    }
+
+    /// Whether the hub has switched off every check of `keys`. Each family's states are read
+    /// at most once per [`CHECK_STATES_TTL_S`], and a read that fails is not kept, so the next
+    /// turn asks again.
+    fn switched_off(&self, ctx: &Context, keys: &[&ResultKey]) -> bool {
+        let now = ctx.clock.now();
+        let families: BTreeSet<&str> = keys.iter().map(|key| key.check.family()).collect();
+        let mut cache = self
+            .check_states
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for family in families {
+            let fresh = cache
+                .get(family)
+                .is_some_and(|(at, _)| now.seconds_since(*at) < CHECK_STATES_TTL_S);
+            if fresh {
+                continue;
+            }
+            // The error is not printed: the tip loop asks on every turn while the hub is down.
+            let Ok(states) = self.work.check_states(ctx, family) else {
+                return false;
+            };
+            cache.insert(family.to_owned(), (now, states));
+        }
+        keys.iter().all(|key| {
+            cache
+                .get(key.check.family())
+                .and_then(|(_, states)| states.get(&key.check))
+                == Some(&CheckState::Off)
         })
     }
 

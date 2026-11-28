@@ -256,7 +256,7 @@ impl Checks {
     /// Reads the hub's check states for `family` without per-area counts: families with thousands
     /// of checks otherwise exceed the 30 s HTTP timeout. Returns the hub error rather than falling
     /// back to an empty map, which would treat switched-off checks as on and run or bisect them.
-    fn check_states(&self, family: &str) -> Result<HashMap<CheckName, CheckState>> {
+    pub(crate) fn check_states(&self, family: &str) -> Result<HashMap<CheckName, CheckState>> {
         let no_areas = [String::new()];
         self.history.stats_in(family, &no_areas).map(|stats| {
             stats

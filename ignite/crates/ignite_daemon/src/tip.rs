@@ -315,6 +315,16 @@ pub trait TipWork: Send + Sync {
     }
     /// The landings after `from` up to and including `to`, oldest first.
     fn landings(&self, ctx: &Context, from: &Commit, to: &Commit) -> Result<Vec<TipLanding>>;
+    /// Whether the hub runs each of `family`'s checks, switched them off, or no longer reuses
+    /// their results. A settled failed tip is due again once each of its failed checks passes
+    /// or is switched off. The default knows of no check, so nothing counts as switched off.
+    fn check_states(
+        &self,
+        _ctx: &Context,
+        _family: &str,
+    ) -> Result<HashMap<CheckName, ignite_core::protocol::hub::CheckState>> {
+        Ok(HashMap::new())
+    }
     /// Checks with a recorded product-defect catch outside `[rules] budgets`. Non-build stall
     /// auto-revert applies only to `[rules] protected` checks and checks in this set; unproven
     /// checks are left to `upkeep::unproven_holds` to switch off instead of reverting landings.
@@ -404,6 +414,11 @@ pub struct TipVerifier {
     /// When this checking round first saw a newer hub candidate replace its target, used by
     /// `candidate::ends_checks` to enforce [`CHECKING_GRACE_S`].
     superseded_since: std::sync::Mutex<Option<Timestamp>>,
+    /// The check states last read from the hub for each family of a settled tip's failures,
+    /// with when they were read. [`TipVerifier::due`] runs on every turn of the tip loop, and
+    /// a family such as client-interface has about 28,000 checks, so they are read again only
+    /// after [`cache::CHECK_STATES_TTL_S`].
+    check_states: std::sync::Mutex<cache::CheckStates>,
     /// When a failed tip gets one more round to consider a revert after a master stall.
     retry_for_stall: Option<(Commit, Timestamp)>,
     /// Policy under which the last round started. An operator may make the same tip runnable.
@@ -470,6 +485,7 @@ impl TipVerifier {
             failed: None,
             checking: None,
             superseded_since: std::sync::Mutex::new(None),
+            check_states: std::sync::Mutex::default(),
             retry_for_stall: None,
             fleet_version: None,
             master_at_start: None,
@@ -530,8 +546,9 @@ impl TipVerifier {
         self.since
     }
 
-    /// Whether `tip` needs a round. A settled failure is due again once the hub has passes
-    /// for all of its failed keys, or when a required failure qualifies for stall reverts.
+    /// Whether `tip` needs a round. A settled failure is due again once the hub has a pass for
+    /// each of its failed keys or has switched that check off, or when a required failure
+    /// qualifies for stall reverts.
     pub fn due(&self, ctx: &Context, tip: &Commit) -> bool {
         let notice = self.fleet_notice();
         if notice

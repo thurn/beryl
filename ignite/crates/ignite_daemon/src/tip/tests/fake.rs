@@ -64,6 +64,8 @@ pub(super) struct FakeWork {
     pub(super) masters: Mutex<Vec<(Vec<CheckName>, Commit)>>,
     /// The checks each commit's listing finds switched off.
     pub(super) off: Mutex<HashMap<Commit, Vec<TipCheck>>>,
+    /// Makes `check_states` fail, as when the hub cannot be reached.
+    pub(super) states_down: Mutex<bool>,
     /// Checks with a recorded product-defect catch outside `[rules] budgets`.
     pub(super) proven: Mutex<BTreeSet<CheckName>>,
     /// Called when the round starts listing a phase.
@@ -225,6 +227,34 @@ impl TipWork for FakeWork {
             Self::launch(ctx, "list");
         }
         Ok(self.listing(at, phase))
+    }
+
+    /// Every check switched off at any commit is `Off` at the hub, as the hub's switch is not
+    /// kept per commit; the hub reports no state for the others.
+    fn check_states(
+        &self,
+        _ctx: &Context,
+        family: &str,
+    ) -> Result<HashMap<CheckName, ignite_core::protocol::hub::CheckState>> {
+        if *self.states_down.lock().unwrap() {
+            return Err(ignite_core::traits::Error::Unreachable(
+                "the hub is unreachable".to_owned(),
+            ));
+        }
+        Ok(self
+            .off
+            .lock()
+            .unwrap()
+            .values()
+            .flatten()
+            .filter(|check| check.family == family)
+            .map(|check| {
+                (
+                    check.check.clone(),
+                    ignite_core::protocol::hub::CheckState::Off,
+                )
+            })
+            .collect())
     }
 
     fn cached_checks(&self, _ctx: &Context, at: &Commit) -> Result<Option<CachedTipSet>> {
