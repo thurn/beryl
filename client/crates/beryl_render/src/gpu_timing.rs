@@ -63,14 +63,18 @@ impl GpuTimer {
         });
         let pending = Arc::new(AtomicU32::new(0));
         let count = Arc::clone(&pending);
-        let (submitted, work) = sync_channel(MAX_TRACKED);
+        let (submitted, work) = sync_channel::<Submitted>(MAX_TRACKED);
         let (done, finished) = sync_channel(2 * MAX_TRACKED);
         std::thread::Builder::new()
             .name("scene GPU timing".to_owned())
             .spawn(move || {
                 worker_setup();
                 for item in work {
-                    let sample = observe(&device, f64::from(period), epoch, &item);
+                    let sample = if worth_observing(&item.work) {
+                        observe(&device, f64::from(period), epoch, &item)
+                    } else {
+                        None
+                    };
                     count.fetch_sub(1, Ordering::Relaxed);
                     if let Some(sample) = sample {
                         let _ = done.try_send(sample);
@@ -191,6 +195,16 @@ impl Query {
     }
 }
 
+/// Whether the worker waits for a submission. Each wait polls the device, which takes wgpu's
+/// device lock many times per frame. The render thread needs that lock to present and submit,
+/// and a worker preempted while holding it stalled the next present for a scheduler quantum
+/// (10 ms): in one bug report 6,500 of 124,000 frames did, and the rate rule answered by
+/// stepping down to 60 Hz. The submissions without a timestamp query (7 of every 8) have no
+/// GPU time to read, so they are not waited for and their completion is not logged.
+fn worth_observing(work: &Work) -> bool {
+    work.query.is_some()
+}
+
 fn observe(
     device: &wgpu::Device,
     period: f64,
@@ -265,5 +279,19 @@ impl crate::Renderer {
             *pending = timer.submitted(work, submission.clone(), at);
         }
         self.slots.submitted(submission);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_sampled_submissions_are_waited_for() {
+        let unsampled = Work {
+            tick: 1,
+            query: None,
+        };
+        assert!(!worth_observing(&unsampled));
     }
 }

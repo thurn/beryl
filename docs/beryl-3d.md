@@ -627,6 +627,17 @@ the zero-allocation and native rank assertions.
   three seconds (`handler` 1, `callback late` 1; 0.06 `handler` late frames per
   1,000 frames).
 
+- **Present stalls of 10 ms in a long session, 2026-11-28.** Three bug reports of lag
+  while dragging, lag while typing and a 60 Hz readout came with frame logs of
+  18,000 to 45,000 lines at a load average near 30. In one log (124,089 frames),
+  6,465 present calls took 10 to 11 ms or 20 to 21 ms, a scheduler quantum or two,
+  against under 1 ms for the rest. The client's own work was 0.1 ms and the GPU's
+  main pass 1.3 ms at the median (5.1 ms at the 99th percentile), so the display
+  was not waiting on drawing. The remaining holder of wgpu's device lock was the
+  `scene GPU timing` worker, which still polled the device for every submission
+  although only one in eight carries a timestamp query. It now waits for the sampled
+  submissions only, an eighth of the lock acquisitions.
+
 - **A fixed 60 Hz on the development Mac, 2026-11-25.** Three pairs of runs, as
   above, asked the display link for a fixed 120 Hz and then a fixed 60 Hz
   (`--fixed-hz`). Late frames for each 1,000 frames:
