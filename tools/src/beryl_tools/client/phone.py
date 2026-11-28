@@ -563,6 +563,23 @@ def android_smoke_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def missing_glyph_faults(log: str | None) -> list[str]:
+    """A fault when the summary says the text still lacked glyphs. The glyph atlas is how life
+    totals, buttons and badges get their text, so a run that ends with glyphs missing drew the
+    table without them. The app waits for its glyph worker before it writes the summary (the
+    emulator's software renderer is slow enough that the worker can still be running when the
+    recording ends), so glyphs missing there were never delivered. Card scans are not checked:
+    the emulator has no network access to Scryfall, so its cards are always Beryl's frame."""
+    summary = next((line["summary"] for line in lines(log or "") if "summary" in line), {})
+    missing = summary.get("missing_glyphs", 0)
+    if not missing:
+        return []
+    return [
+        f"the last frame lacked {missing} glyphs, so text such as the life totals was not"
+        " drawn: the host is not delivering its glyph pages"
+    ]
+
+
 def run_android_smoke(args: argparse.Namespace) -> int:
     from . import android_lifecycle  # Uses the emulator helpers above.
 
@@ -654,6 +671,8 @@ def run_android_smoke(args: argparse.Namespace) -> int:
         finally:
             adb("emu", "kill")
             emulator.wait(timeout=REPLAY_LIMIT_S)
+    if not (args.touch or args.lifecycle):
+        faults.extend(missing_glyph_faults(log))
     if faults:
         if log is not None:
             png.with_suffix(".jsonl").write_text(log, encoding="utf-8")
