@@ -1,5 +1,5 @@
 //! The text commands of `just client` (docs/beryl-3d.md, "The agent interface"): `list`, `info`,
-//! `tree`, `diff`, `check` and `test`. The `client` program runs [`main`]; `just client` builds it and
+//! `tree`, `diff`, `check`, `moment` and `test`. The `client` program runs [`main`]; `just client` builds it and
 //! passes its arguments through.
 //!
 //! Every printout begins with the command that prints it again, every name it prints can be
@@ -12,6 +12,7 @@ mod explain;
 pub use kit_probe::agent::line;
 mod listing;
 mod map;
+mod moment;
 pub mod options;
 mod records;
 mod story;
@@ -403,6 +404,35 @@ const COMMANDS: &[Command] = &[
         run: story::from,
     },
     Command {
+        name: "moment",
+        summary: "the moment of a recording whose element tree is nearest a saved tree",
+        argument: " <recording>",
+        examples: [
+            (
+                "just client moment <report>/fixture.json --like <report>/tree.txt --size 1728x1117",
+                "when a bug report's frozen frame was drawn",
+            ),
+            (
+                "just client moment verbs-zones --like /tmp/tree.txt --from view:3",
+                "search from the third view to the end",
+            ),
+        ],
+        spec: Spec {
+            recording: true,
+            values: &["--like", "--from", "--to"],
+            switches: &[],
+        },
+        own: &[
+            ("--like <tree.txt>", "the saved tree, as `tree` prints it"),
+            (
+                "--from <moment>",
+                "the first frame compared (default start)",
+            ),
+            ("--to <moment>", "the last frame compared (default end)"),
+        ],
+        run: moment::moment,
+    },
+    Command {
         name: "export",
         summary: "every recording's messages, as the fixture files the web interface reads",
         argument: " <directory>",
@@ -574,7 +604,9 @@ fn open_recording(options: &Options) -> Result<Page, Usage> {
             options.command
         )));
     }
-    if !stories::is_recording_story(options.name()) {
+    if !stories::is_recording_story(options.name())
+        && !crate::fixture_file::is_fixture_file(options.name())
+    {
         options::known(options.name(), options.seat)?;
     }
     let profile = options

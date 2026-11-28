@@ -64,8 +64,8 @@ pub struct Options {
     pub tier: Tier,
     pub at: Moment,
     pub actions: Vec<Action>,
-    /// Each action as it was written, for the printed command.
-    action_lines: Vec<String>,
+    /// Each action as it was written, for the printed command and a story's `action` lines.
+    pub action_lines: Vec<String>,
     pub json: bool,
     /// Whether scripts play faster while many updates wait; real time with `--no-catch-up`.
     pub pace: Pace,

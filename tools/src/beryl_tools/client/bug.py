@@ -8,7 +8,8 @@ while a recording replayed also records the recording, its seat and the moment (
 milliseconds, and whether the replay had already ended) in `ui.json`, so `just client tree`
 reaches the same frame with no game. A report from a live game holds the game's `replay.json`, which `just client app --replay` resumes.
 
-The command writes no file.
+Without options the command writes no file. `--png`, `--film` and `--story` draw the reported
+moment on the current tree and write it as a story (`bug_moment`).
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .. import bugs, mobile_bugs
-from . import app, phone
+from . import app, bug_moment, phone
 from .command import Command
 
 # How many lines of `tree.txt` are printed.
@@ -119,6 +120,7 @@ def bug_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "report", help="a report folder, or an id, id prefix or ticket of one"
     )
+    bug_moment.arguments(parser)
 
 
 def run_bug(args: argparse.Namespace) -> int:
@@ -128,8 +130,15 @@ def run_bug(args: argparse.Namespace) -> int:
     if opened is None:
         print(f"bug: no report {key!r} in {root}", file=sys.stderr)
         return 1
-    print(text(opened))
-    return 0
+    if not (args.png or args.film is not None or args.story is not None):
+        print(text(opened))
+        return 0
+    if not is_client(opened.log):
+        print(text(opened))
+        return 1
+    words = bugs.description(opened.report) or opened.report.title or ""
+    print(f"report: {opened.report.folder}\n{words}\n")
+    return bug_moment.run(opened, args, words)
 
 
 IOS_REPORTS = Path("Documents/bugs")
@@ -179,12 +188,15 @@ COMMANDS: tuple[Command, ...] = (
     ),
     Command(
         "bug",
-        "a bug report: its words, element tree, frame log and the commands that reproduce it",
+        "a bug report: its words, tree and frame log; --png, --film and --story draw its moment",
         (
-            ("just client bug by-abcd", "the report filed as ticket by-abcd"),
             (
-                "just client bug ~/Library/Application\\ Support/ca.thurn.beryl/bugs/<folder>",
-                "one report folder",
+                "just client bug by-abcd --png --film 1500",
+                "the report filed as ticket by-abcd, its moment drawn and filmed",
+            ),
+            (
+                "just client bug by-abcd --do 'press pile \"Your graveyard\"' --png --story graveyard-zoom",
+                "open a viewer first, and write the moment as a story",
             ),
         ),
         run_bug,

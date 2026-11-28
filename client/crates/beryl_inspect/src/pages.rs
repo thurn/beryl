@@ -1,7 +1,8 @@
 //! Recordings by name, played through the test driver (docs/beryl-3d.md, "The test driver"):
 //! `Page::fixture` and `Page::spec`, and `check_recording`, which runs every interface check
 //! on every tick of a recording. A name is a fixture's, a card spec moment's as
-//! `<card>/<moment>`, or the name of a stress board or screen story.
+//! `<card>/<moment>`, the name of a stress board or screen story, or the path of a fixture
+//! file ([`crate::fixture_file`]).
 
 use std::sync::{Arc, OnceLock};
 
@@ -327,6 +328,9 @@ fn recording_with(
     seat: Side,
     read_packed: impl FnOnce(&str, Seat) -> Result<Recording, String>,
 ) -> Result<Recording, String> {
+    if crate::fixture_file::is_fixture_file(name) {
+        return crate::fixture_file::read(name, seat);
+    }
     let seat = match seat {
         Side::You => Seat::P0,
         Side::Opponent => Seat::P1,

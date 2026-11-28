@@ -242,8 +242,13 @@ def pack_selection(arguments: list[str]) -> tuple[str, ...]:
         "timeline",
         "png",
         "film",
+        "moment",
         "export",
     }:
+        # A story file or a fixture file, such as a bug report's `fixture.json`, holds its
+        # own messages and needs no recording from the pack.
+        if Path(name).suffix.lower() in {".story", ".json"}:
+            return ()
         if name.startswith("client:"):
             name = name.removeprefix("client:").rsplit("/", 2)[0]
         if "/" in name and not name.startswith("story/"):
@@ -501,6 +506,11 @@ OWN_COMMANDS: tuple[Command, ...] = (
     client_command(
         "story",
         "list stories or write a story from a recording's moment",
+        single=True,
+    ),
+    client_command(
+        "moment",
+        "the moment of a recording whose element tree is nearest a saved tree",
         single=True,
     ),
     client_command(

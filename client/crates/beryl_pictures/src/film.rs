@@ -204,6 +204,42 @@ fn shrink(pixels: &[u8], width: u32, height: u32, to_width: u32, to_height: u32)
     out
 }
 
+/// The box each frame of the film is cut to, the same size in every frame, with that size: the
+/// `--region` box, or a box that follows the `--crop` element, or none for the whole window.
+fn cell(
+    head: &mut SceneHost,
+    options: &Options,
+    from: &Moment,
+    times: &[u64],
+) -> Result<Option<(u32, u32, Vec<Region>)>, Error> {
+    let size = head.size();
+    // With `--crop`, a first pass follows the element to find the box that holds it in every
+    // frame, so that all the frames of the film are the same size.
+    Ok(match (options.value("--crop"), options.value("--region")) {
+        (Some(_), Some(_)) => {
+            return Err(Usage("give --crop or --region, not both".to_owned()).into());
+        }
+        (None, Some(text)) => {
+            let region = super::beside::region(text, options.scale, size)?;
+            Some((region.width, region.height, vec![region; times.len()]))
+        }
+        (None, None) => None,
+        (Some(locator), None) => {
+            let mut boxes: Vec<Region> = Vec::new();
+            walk(head, options, from, times, |head, time, _| {
+                let region = crop_of(head, locator, options.scale).map_err(|error| {
+                    Usage(format!("{error} (at {}ms)", cli::milliseconds(time)))
+                })?;
+                boxes.push(region);
+                Ok(())
+            })?;
+            let width = boxes.iter().map(|b| b.width).max().unwrap_or(1);
+            let height = boxes.iter().map(|b| b.height).max().unwrap_or(1);
+            Some((width.min(size.0), height.min(size.1), boxes))
+        }
+    })
+}
+
 pub(super) fn film(options: &Options) -> Result<String, Error> {
     let from = moment(options, "--from", Name::Start)?;
     let to = moment(options, "--to", Name::End)?;
@@ -222,24 +258,7 @@ pub(super) fn film(options: &Options) -> Result<String, Error> {
     let asked_width = frame_width(options)?;
     let size = head.size();
 
-    // With `--crop`, a first pass follows the element to find the box that holds it in every
-    // frame, so that all the frames of the film are the same size.
-    let cell = match options.value("--crop") {
-        None => None,
-        Some(locator) => {
-            let mut boxes: Vec<Region> = Vec::new();
-            walk(&mut head, options, &from, &times, |head, time, _| {
-                let region = crop_of(head, locator, options.scale).map_err(|error| {
-                    Usage(format!("{error} (at {}ms)", cli::milliseconds(time)))
-                })?;
-                boxes.push(region);
-                Ok(())
-            })?;
-            let width = boxes.iter().map(|b| b.width).max().unwrap_or(1);
-            let height = boxes.iter().map(|b| b.height).max().unwrap_or(1);
-            Some((width.min(size.0), height.min(size.1), boxes))
-        }
-    };
+    let cell = cell(&mut head, options, &from, &times)?;
     let (cell_width, cell_height) = cell.as_ref().map_or(size, |(w, h, _)| (*w, *h));
 
     let count = times.len() as u32;
@@ -303,6 +322,15 @@ pub(super) fn film(options: &Options) -> Result<String, Error> {
 
     let what = format!("{from}-{to}-{count}").replace(' ', "");
     let path = out_dir()?.join(format!("film-{}", file_name(options, &what)));
+    let (picture, picture_width, picture_height) = match options.value("--beside") {
+        Some(other) => super::beside::beside(
+            std::path::Path::new(other),
+            &picture,
+            picture_width,
+            picture_height,
+        )?,
+        None => (picture, picture_width, picture_height),
+    };
     beryl_render::write_rgba_png(&path, &picture, picture_width, picture_height)
         .map_err(Error::Failed)?;
     Ok(format!(

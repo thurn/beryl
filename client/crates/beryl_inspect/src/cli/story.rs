@@ -13,9 +13,10 @@ use super::{Printed, open};
 use crate::{scene::Scene, stories};
 
 pub(super) fn from(options: &Options) -> Result<Printed, Usage> {
-    if !options.rest.is_empty() || !options.actions.is_empty() {
+    if !options.rest.is_empty() {
         return Err(Usage(
-            "write story from <recording> --at <moment> [--feature <id>]".to_owned(),
+            "write story from <recording> --at <moment> [--do <action>] [--feature <id>]"
+                .to_owned(),
         ));
     }
     let mut scene = open(options)?;
@@ -55,10 +56,15 @@ pub(super) fn from(options: &Options) -> Result<Printed, Usage> {
                 "feature {id:?} has no standalone view at this moment"
             )));
         }
-        _ => page
-            .capture()
-            .write(header, feature, profile)
-            .map_err(|error| Usage(error.to_string()))?,
+        _ => {
+            // The story replays the `--do` actions after it seeks to the moment, as `tree`
+            // does them.
+            let mut capture = page.capture();
+            capture.actions.clone_from(&options.action_lines);
+            capture
+                .write(header, feature, profile)
+                .map_err(|error| Usage(error.to_string()))?
+        }
     };
     let path = write_story(options.value("--out").map(Path::new), text.as_bytes())?;
     let path = path.to_string_lossy();

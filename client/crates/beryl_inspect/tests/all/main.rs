@@ -42,4 +42,5 @@ mod stress;
 mod tiers;
 mod viewer_zoom;
 
+mod report_fixture;
 mod stories;

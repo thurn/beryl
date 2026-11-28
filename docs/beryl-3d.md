@@ -720,9 +720,15 @@ that moment. Closing the sheet resumes the table clock.
 The native app uses the shared bug storage. A saved report can include the
 picture, view and replay, `tree.txt`, and the frame log `frames.jsonl`. Its
 `ui.json` identifies the client and, for a recording, the seat and time to seek
-to. `just b3d bug <report>` prints the report and applicable reproduction
-commands. A replay supplied with `just b3d app --replay` can resume at a saved
-decision without putting the reproduction among the player's saved games.
+to. `just client bug <report>` prints the report and applicable reproduction
+commands. With `--png`, `--film <ms>` or `--story <name>` it draws the reported
+moment on the current tree, beside the report's screenshot, or writes it as a
+story. A live game's report holds `fixture.json`, its latest views, which every
+`just client` command that reads a recording also takes as a path; the card
+records it lacks come from the card store. The moment is the frame whose tree is
+nearest `tree.txt` (`just client moment`). A replay supplied with
+`just b3d app --replay` can resume at a saved decision without putting the
+reproduction among the player's saved games.
 
 The first report from a desktop launch with local filing configured creates a
 parked Ignite epic. Each report from that launch files as a child of the same

@@ -31,6 +31,9 @@ kit_probe.workspace = true
 kit_space.workspace = true
 kit_ui.workspace = true
 game_probe = { workspace = true, features = ["stories"] }
+# The card store's records for the cards a bug report's fixture names, which the report does
+# not hold (`fixture_file`).
+beryl_card_records = { path = "../../../engine/crates/beryl_card_records" }
 # The views, scripts and fixture messages a recording holds, with no engine.
 beryl_protocol = { workspace = true, features = ["testing"] }
 # The recordings pack's file format, in place of a hand-written binary format.

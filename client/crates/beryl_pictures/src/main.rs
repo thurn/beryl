@@ -8,6 +8,7 @@
 //! status 2 and a message that names what would work. Every file is written under
 //! `$BERYL_CACHE/b3d/out/` with a name that includes the process id, so two runs never share one.
 
+mod beside;
 mod film;
 mod font;
 mod scene;
@@ -63,11 +64,19 @@ const COMMANDS: [Command; 2] = [
         ],
         spec: Spec {
             recording: true,
-            values: &["--crop", "--only"],
+            values: &["--crop", "--only", "--region", "--beside"],
             switches: &["--tree"],
         },
         own: &[
             ("--crop <locator>", "only the box around that element"),
+            (
+                "--region <x,y,w,h>",
+                "only that box, in logical points, as a bug report's selection",
+            ),
+            (
+                "--beside <png>",
+                "that picture on the left of the drawn one, as a bug report's screenshot",
+            ),
             (
                 "--only <locator>",
                 "draw that element and what is inside it alone, on black",
@@ -99,6 +108,8 @@ const COMMANDS: [Command; 2] = [
                 "--rate",
                 "--frame-width",
                 "--crop",
+                "--region",
+                "--beside",
             ],
             switches: &[],
         },
@@ -121,6 +132,14 @@ const COMMANDS: [Command; 2] = [
             (
                 "--crop <locator>",
                 "follow that element, one box around it in each frame",
+            ),
+            (
+                "--region <x,y,w,h>",
+                "the same box in each frame, in logical points",
+            ),
+            (
+                "--beside <png>",
+                "that picture on the left of the film, as a bug report's screenshot",
             ),
         ],
         run: film::film,
@@ -331,11 +350,15 @@ fn png(options: &Options) -> Result<String, Error> {
         head.page().set_looking(true);
     }
     cli::seek_and_act(head.page(), options, &options.at)?;
-    let region = match options.value("--crop") {
-        Some(locator) => Some(crop_of(&mut head, locator, options.scale)?),
-        None => None,
-    };
     let (width, height) = head.size();
+    let region = match (options.value("--crop"), options.value("--region")) {
+        (Some(_), Some(_)) => {
+            return Err(Usage("give --crop or --region, not both".to_owned()).into());
+        }
+        (Some(locator), None) => Some(crop_of(&mut head, locator, options.scale)?),
+        (None, Some(text)) => Some(beside::region(text, options.scale, (width, height))?),
+        (None, None) => None,
+    };
     let pixels = match only {
         Some(locator) => {
             let index = (head.page().try_find(locator))
@@ -347,6 +370,10 @@ fn png(options: &Options) -> Result<String, Error> {
     };
     let (pixels, width, height) = match region {
         Some(region) => (cut(&pixels, width, region), region.width, region.height),
+        None => (pixels, width, height),
+    };
+    let (pixels, width, height) = match options.value("--beside") {
+        Some(path) => beside::beside(std::path::Path::new(path), &pixels, width, height)?,
         None => (pixels, width, height),
     };
     let moment = options.at.to_string();

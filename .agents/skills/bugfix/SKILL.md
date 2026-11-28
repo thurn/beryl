@@ -108,7 +108,20 @@ each case on the report's own capture first, or record why the capture no longer
 replays and reconstruct the failure in a deterministic case. The regression
 guard must replay that capture (a story, fixture, or spec moment made from it);
 hand-built views may be added for coverage, but they do not count as the
-report's guard. If a specific landed commit already resolves a report, verify
+report's guard.
+
+For a client report, `just client bug <id> --png` draws the reported moment on
+your tree from the report's own capture, at its window size, scale and seat,
+cut to the player's selection, beside the report's `screenshot.png`. Run it
+before the fix and after it for the before/after evidence. `--film <ms>` films
+that many milliseconds either side of the moment, `--do <action>` gives an
+input first (as `just client tree --do` does, to open a viewer or hover a
+card), and `--at <moment>` overrides the moment, which by default is the frame
+nearest the report's `tree.txt`. `--story <name>` writes the same moment as
+`story/game_table/<name>`, the regression guard, which `just client test` runs;
+`--views <n>` keeps only the last n views to make it smaller. Check that the
+printed match distance is small, or that the picture matches the screenshot,
+before trusting the moment. If a specific landed commit already resolves a report, verify
 the original expectation on a build containing it and record the evidence and
 commit.
 
