@@ -183,5 +183,72 @@ pub mod scenarios {
                 ME.controls(Card::ThievingSkydiver, 1),
                 ME.controls(Prop::Equipment, 1),
             ]),
+        // Under Mana Flare, tapping the Cavern for its colored mana also adds one unrestricted
+        // mana of that color. The Gold Myr is not a land, so Mana Flare leaves it a plain
+        // source. A payment once counted one mana for the Cavern and so ended with Mana Flare's
+        // mana unplanned in the pool, which a debug assertion of the payment caught.
+        Scenario::new("Cavern of Souls and Gold Myr pay under Mana Flare")
+            .interaction(&[Card::ManaFlare, Card::GoldMyr])
+            .battlefield(P0, &[Card::ManaFlare, Card::GoldMyr])
+            .hand(P0, &[Card::CavernOfSouls, Prop::Vanilla])
+            .library(P0, &[Card::Island; 7])
+            .actions(&[
+                ME.plays(Card::CavernOfSouls),
+                ME.chooses_named("Elk"),
+                ME.casts(Prop::Vanilla),
+                ME.tapped(Card::CavernOfSouls, 1),
+                Resolve,
+                ME.controls(Prop::Vanilla, 1),
+            ]),
+        // Under Mana Flare the Swamp makes {B}{B}, and the Cavern's colored ability makes two
+        // mana of one color, one of them restricted. The Swamp alone can't pay the {2}{B}
+        // creature, so both are tapped and one mana is left over. The first plan taps the
+        // Cavern for {C}, and the second for colored mana, so Counterspell does nothing. A
+        // payment once counted one mana for the Cavern, expected none to be left, and found
+        // Mana Flare's in the pool.
+        Scenario::new("Cavern of Souls and a Swamp pay under Mana Flare with mana left over")
+            .interaction(&[Card::ManaFlare])
+            .battlefield(P0, &[Card::ManaFlare, Card::Swamp])
+            .hand(P0, &[Card::CavernOfSouls, Prop::FlashCreature])
+            .library(P0, &[Card::Island; 7])
+            .battlefield(P1, &[Card::Island, Card::Island])
+            .hand(P1, &[Card::Counterspell])
+            .actions(&[
+                ME.plays(Card::CavernOfSouls),
+                ME.chooses_named("Assassin"),
+                ME.casts(Prop::FlashCreature),
+                ME.answers(DecisionKind::PaymentPlan, Pick::Plan { i: 1 }),
+                ME.tapped(Card::CavernOfSouls, 1),
+                ME.tapped(Card::Swamp, 1),
+                THEM.casts(Card::Counterspell),
+                Resolve,
+                THEM.has(Zone::Graveyard, Card::Counterspell, 1),
+                ME.controls(Prop::FlashCreature, 1),
+            ]),
+        // Under Mana Flare two Swamps make {B}{B}{B}{B}, enough for the Emissary's {2}{B} and the
+        // generic part of its kicker. Only the Cavern can pay the kicker's {U}, and Mana Flare
+        // adds a second blue mana, so one mana is left over.
+        Scenario::new("Cavern of Souls pays a kicker under Mana Flare")
+            .interaction(&[Card::ManaFlare, Card::UrborgEmissary])
+            .battlefield(P0, &[Card::ManaFlare, Card::Swamp, Card::Swamp])
+            .hand(P0, &[Card::CavernOfSouls, Card::UrborgEmissary])
+            .battlefield(P1, &[Prop::Flier])
+            .actions(&[
+                ME.plays(Card::CavernOfSouls),
+                ME.chooses_named("Wizard"),
+                Action::Cast {
+                    player: P0,
+                    card: Card::UrborgEmissary,
+                    face: FaceIx::FRONT,
+                    costs: Castings::only(0),
+                },
+                ME.tapped(Card::Swamp, 2),
+                ME.tapped(Card::CavernOfSouls, 1),
+                Resolve,
+                ME.targets(Prop::Flier),
+                Resolve,
+                THEM.has(Zone::Hand, Prop::Flier, 1),
+                ME.controls(Card::UrborgEmissary, 1),
+            ]),
     ];
 }

@@ -80,10 +80,13 @@ fixed in the same session. Newest first.
 - **Restricted mana abilities missed live mana changes under Mana Flare.** With
   Mana Flare, Cavern of Souls naming Elemental, and `{U}` in the pool,
   Flickerwisp (`{1}{W}{W}`) could not be cast and `just fuzz` reported "the
-  payability prefilter disagrees with the reference for a spell". When a
-  permanent matched a live mana-changing effect (`has_extra_mana`),
-  `Sources::of` still added its restricted mana ability to `classes` without
-  applying the mana change, while `collect_extras` skipped restricted abilities
+  payability prefilter disagrees with the reference for a spell". Where a spell
+  could be cast, its payment ended with one more mana in the pool than its plan
+  left, and the debug assertion after `mana::pay` failed in three fuzz tests,
+  because Mana Flare's mana for the Cavern was never planned. When a permanent
+  matched a live mana-changing effect (`has_extra_mana`), `Sources::of` still
+  added its restricted mana ability to `classes` without applying the mana
+  change, while `collect_extras` skipped restricted abilities
   (`a.spend().is_some()`) and put only the permanent's unrestricted abilities in
   `extras`. That both dropped Mana Flare's extra mana on the restricted ability
   and split one permanent across `classes` and `extras` without a twin link.
@@ -93,7 +96,10 @@ fixed in the same session. Newest first.
   stays unrestricted; `reference_sequences_with` also keeps restricted mana out
   of the unrestricted pool that can pay priced mana abilities. Guard: the
   scenario "Cavern of Souls under Mana Flare makes two mana for the chosen type"
-  in `mana_flare.rs`, and `check_spell_payments` in `just fuzz`.
+  in `mana_flare.rs`; the three scenarios in `cavern_of_souls.rs` that pay with
+  the Cavern under Mana Flare beside Gold Myr, beside a Swamp and for a kicker,
+  one for each payment path the fuzz positions took; and `check_spell_payments`
+  in `just fuzz`. Fixed in `b1da719bb`.
 
 - **A reflexive trigger's condition read stale layer results.** In a fuzz game
   with Painter's Servant on the battlefield, a creature-card exile out of a
