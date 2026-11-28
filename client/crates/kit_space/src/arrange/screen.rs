@@ -219,11 +219,17 @@ impl ScreenFit {
 
     fn scrolling_rows(self, count: usize, region: Rect) -> ScreenLayout {
         let mut grid = self.row_grid(count, region);
-        // Rows stand a card and a gap apart, unless the region is too short to show a whole
-        // first row and a press square of the second: then the second row overlaps the first
-        // (which keeps `step.y` of it uncovered) so that it can be pressed before scrolling.
-        let room = (region.height - self.press).max(self.press);
-        grid.step.y = (grid.item.y + self.gap).min(room);
+        // Rows stand a card and a gap apart. Where the region shows a whole first row and a
+        // press square of the second only by overlapping them, the second row overlaps the
+        // first (which keeps `step.y` of it uncovered), so that it can be pressed before
+        // scrolling. In a region too short for that, the second row stays out of view below.
+        let natural = grid.item.y + self.gap;
+        let room = region.height - self.press;
+        grid.step.y = if room >= self.press {
+            natural.min(room)
+        } else {
+            natural
+        };
         ScreenLayout::grid(grid, count, region, true)
     }
 
