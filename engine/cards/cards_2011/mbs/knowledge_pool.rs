@@ -36,6 +36,7 @@ pub mod scenarios {
     const ANGEL: &str = Card::ExaltedAngel;
     const SEVEN_MOUNTAINS: &[&str] = &[Card::Mountain; 7];
     const MAGE: &str = Card::SnapcasterMage;
+    const CAULDRON: &str = Card::AgathasSoulCauldron;
 
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("Imprint exiles every remaining card from short libraries")
@@ -275,6 +276,31 @@ pub mod scenarios {
                 ME.has(Zone::Exile, ANGEL, 1),
                 ME.library_top(&[Card::Forest, BOLT]),
                 THEM.has(Zone::Graveyard, Prop::Flier, 1),
+            ]),
+        // Agatha's Soul Cauldron's static ability reads the cards exiled with an object, so the
+        // Pool's exile of the spell leaves the layer results stale before the offer reads
+        // whether the player may cast the card now.
+        Scenario::new("The offer follows an exile that the layers read")
+            .interaction(&[CAULDRON, BOLT, ANGEL])
+            .permanents(
+                P0,
+                &[
+                    Permanent::new(POOL).exiled_with(&[ANGEL]),
+                    Permanent::new(Card::Mountain),
+                ],
+            )
+            .battlefield(P1, &[CAULDRON])
+            .hand(P0, &[BOLT])
+            .actions(&[
+                ME.casts(BOLT),
+                ME.targets_player(THEM),
+                Resolve,
+                ME.chooses(DecisionKind::CastOffer, ANGEL),
+                Resolve,
+                stack(0),
+                ME.controls(ANGEL, 1),
+                ME.has(Zone::Exile, BOLT, 1),
+                THEM.life(20),
             ]),
     ];
 }

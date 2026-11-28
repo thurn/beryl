@@ -13,6 +13,7 @@ use beryl_kernel::reference::Spell;
 
 use crate::bitboard::Bitboard;
 use crate::card::{Prompt, Purpose, Stop};
+use crate::continuous::layers;
 use beryl_card::FaceIx;
 
 use crate::decision::{Decision, DecisionKind, OPTIONS, Opt};
@@ -84,6 +85,12 @@ fn offer_spell<L: Layout>(
     if cards.is_empty() {
         return Ok(None);
     }
+    // See [CR 601.3](https://yawgatog.com/resources/magic-rules/#R6013): "A player can begin
+    // to cast a spell only if a rule or effect allows that player to cast it". Which rule
+    // changes are in force comes from the layer results, which the instructions before (an
+    // exile with an object that a static ability reads, say) may have made stale, so they
+    // are brought up to date before the options are found.
+    layers::refresh(game.state, game.table, game.sink)?;
     let mut options = match face {
         CastFace::Up => offer_options(game.state, game.table, cards, player, free)?,
         CastFace::DownTurnedUpWhenUsed => {
