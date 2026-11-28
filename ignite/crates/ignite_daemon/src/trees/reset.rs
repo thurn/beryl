@@ -1,5 +1,6 @@
 //! Ending a ticket tree's lease: stop its processes and reset it to a clean checkout.
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, MutexGuard, PoisonError};
 use std::time::Duration;
@@ -13,13 +14,17 @@ use ignite_store::local::{handles as handle_store, rows, trees as store};
 
 use super::{Ended, GRACE, Locked, Trees, park_branch, store_error};
 
-/// Whether `row` is a ticket tree marked `leased` with neither a ticket nor a session.
-/// No lease owns such a row, so nothing will release it normally.
-pub(super) fn is_unheld_lease(row: &rows::Tree) -> bool {
+/// Whether `row` is a ticket tree marked `leased` that no lease owns, so nothing will release
+/// it normally: it has neither a ticket nor a session, or its ticket is one of `vanished`, the
+/// tickets the hub has no record of (a ticket deleted while its session was away).
+pub(super) fn is_unheld_lease(row: &rows::Tree, vanished: &BTreeSet<String>) -> bool {
     row.kind == super::Kind::Ticket.as_str()
         && row.state == store::State::Leased.as_str()
-        && row.ticket.is_none()
-        && row.session.is_none()
+        && ((row.ticket.is_none() && row.session.is_none())
+            || row
+                .ticket
+                .as_ref()
+                .is_some_and(|ticket| vanished.contains(ticket)))
 }
 
 impl Trees {

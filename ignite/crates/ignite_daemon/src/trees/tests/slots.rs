@@ -469,3 +469,52 @@ fn evicting_refuses_a_tree_with_a_running_command_and_frees_an_idle_trees_slot()
     assert_eq!(f.trees.build_slots().free, free + 1);
     assert_eq!(f.trees.row(&idle.tree).unwrap().state, "leased");
 }
+
+/// On 2026-11-27 two trees stayed leased for three days to tickets that the hub had deleted, and
+/// each kept about 20 GB of build output and one of the machine's build slots. A tree leased to
+/// a ticket the hub does not know has its work saved, and then its build slot is reclaimed like
+/// an unheld lease's when another tree needs one.
+#[test]
+fn a_tree_leased_to_a_ticket_the_hub_lacks_is_saved_and_reclaimed_for_a_build_slot() {
+    let f = Fixture::with_landing(3, 1, 1);
+    set_slot_budget(&f, 3);
+    let active = f.lease("T.1", false);
+    write(&active.path, "out/compiled", "active");
+    let gone = f.lease("T.2", false);
+    write(&gone.path, "out/compiled", "stale");
+    write(&gone.path, "notes.txt", "unfinished");
+
+    let newcomer = f.lease("T.3", false);
+    assert!(
+        f.trees
+            .take_build_slot(&newcomer.tree, &[], true)
+            .unwrap()
+            .is_none(),
+        "a leased tree with a ticket is not reclaimable while the hub knows the ticket"
+    );
+
+    // A hub that cannot be asked proves nothing.
+    let unreachable = |_: &TicketId| Err(Error::Unreachable("hub".to_owned()));
+    assert!(f.trees.reap_vanished(&unreachable).is_empty());
+
+    let known = |ticket: &TicketId| Ok(ticket.as_str() != "T.2");
+    let reaped = f.trees.reap_vanished(&known);
+    assert_eq!(reaped.len(), 1);
+    assert_eq!(reaped[0].0, gone.tree);
+    assert!(
+        reaped[0]
+            .1
+            .uncommitted
+            .iter()
+            .any(|path| path.contains("notes.txt"))
+    );
+
+    let _slot = f
+        .trees
+        .take_build_slot(&newcomer.tree, &[], true)
+        .unwrap()
+        .expect("a tree leased to a missing ticket should be reclaimed for a build slot");
+    assert!(!gone.path.join("out").exists());
+    assert_eq!(f.trees.row(&gone.tree).unwrap().state, "free");
+    assert!(active.path.join("out/compiled").is_file());
+}

@@ -271,6 +271,10 @@ struct Locked {
     /// let the tree become free while it still accesses the checkout.
     ticket_tree_work: BTreeSet<TreeId>,
     build_space: slots::BuildSpace,
+    /// Tickets the hub has no record of whose leased trees' work is already saved. A tree leased
+    /// to one of them has no holder and is reclaimed like an unheld lease (see
+    /// `reset::is_unheld_lease`).
+    vanished: BTreeSet<String>,
 }
 
 impl std::fmt::Debug for Trees {
@@ -385,6 +389,7 @@ impl Trees {
                     waiters: VecDeque::new(),
                     ticket_tree_work: BTreeSet::new(),
                     build_space: slots::BuildSpace::default(),
+                    vanished: BTreeSet::new(),
                 }),
                 ticket_tree_work_done: Condvar::new(),
             }),

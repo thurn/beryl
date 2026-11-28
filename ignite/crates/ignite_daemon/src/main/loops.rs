@@ -347,9 +347,22 @@ impl Parts {
         let trees = self.trees.clone();
         let git = self.ctx.git.clone();
         let staging = self.ctx.config.repository.staging.clone();
+        let hub = self.ctx.hub.clone();
         self.start_loop("ignite-trees", TREES_STALLS_AFTER, move |ticker| {
             loop {
                 ticker.round(|| {
+                    let known = |ticket: &ignite_core::ids::TicketId| match hub.ticket(ticket) {
+                        Ok(_) => Ok(true),
+                        Err(ignite_core::traits::Error::NotFound(_)) => Ok(false),
+                        Err(error) => Err(error),
+                    };
+                    for (tree, saved) in trees.reap_vanished(&known) {
+                        eprintln!(
+                            "ignite: {tree} is leased to a ticket the hub does not know; saved to {} (uncommitted: {})",
+                            saved.branch,
+                            saved.uncommitted.join(", ")
+                        );
+                    }
                     if let Ok(freed) = trees.free_unheld_leases()
                         && !freed.is_empty()
                     {

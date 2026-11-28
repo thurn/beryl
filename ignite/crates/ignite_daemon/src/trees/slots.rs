@@ -349,7 +349,8 @@ impl Trees {
     }
 
     pub(super) fn reclaimable(locked: &Locked, row: &rows::Tree) -> bool {
-        (row.state == store::State::Free.as_str() || super::reset::is_unheld_lease(row))
+        (row.state == store::State::Free.as_str()
+            || super::reset::is_unheld_lease(row, &locked.vanished))
             && !disk::id_of(row).is_ok_and(|id| locked.build_space.active.contains_key(&id))
             && !Seeding::involves(Path::new(&row.path))
             && !Self::legacy_command_in(locked, Path::new(&row.path))
@@ -446,7 +447,7 @@ impl Trees {
                     return Ok(None);
                 };
                 let id = disk::id_of(&row)?;
-                let unheld = super::reset::is_unheld_lease(&row);
+                let unheld = super::reset::is_unheld_lease(&row, &locked.vanished);
                 let from = if unheld {
                     store::State::Leased
                 } else {

@@ -3,9 +3,10 @@
 use std::fs::{self, File};
 use std::path::Path;
 
+use ignite_core::ids::TicketId;
 use ignite_core::ids::TreeId;
 use ignite_core::traits::Result;
-use ignite_git::worktree;
+use ignite_git::{save, worktree};
 use ignite_store::local::{rows, trees as store};
 
 use super::disk::id_of;
@@ -18,6 +19,67 @@ const FREE_TREE_KEEP: usize = 2;
 const FREE_TREE_RETIRE_HOURS: u32 = 24;
 
 impl Trees {
+    /// Saves the work of each leased ticket tree whose ticket `exists` says the hub has no
+    /// record of, then counts the tree as an unheld lease, so a build slot eviction or
+    /// `free_unheld_leases` reclaims it. Without this a tree leased to a deleted ticket kept its
+    /// build output, and its slot, for as long as nothing released the lease. A tree whose work
+    /// cannot be saved stays leased and is tried again. Returns the saved work of each tree.
+    pub fn reap_vanished(
+        &self,
+        exists: &dyn Fn(&TicketId) -> Result<bool>,
+    ) -> Vec<(TreeId, save::Saved)> {
+        let candidates: Vec<(TreeId, TicketId, String)> = {
+            let locked = self.lock();
+            let Ok(rows) = store::all(&locked.db) else {
+                return Vec::new();
+            };
+            rows.iter()
+                .filter(|row| {
+                    row.kind == Kind::Ticket.as_str() && row.state == store::State::Leased.as_str()
+                })
+                .filter_map(|row| {
+                    let ticket = row.ticket.as_deref()?;
+                    if locked.vanished.contains(ticket) {
+                        return None;
+                    }
+                    Some((
+                        id_of(row).ok()?,
+                        TicketId::new(ticket).ok()?,
+                        row.path.clone(),
+                    ))
+                })
+                .collect()
+        };
+        let config = &self.inner.config;
+        let mut reaped = Vec::new();
+        for (tree, ticket, path) in candidates {
+            // A hub that cannot be asked proves nothing.
+            if !matches!(exists(&ticket), Ok(false)) {
+                continue;
+            }
+            let message = format!("wip: {ticket} saved at release\n\n{}", super::SAVED_TRAILER);
+            let saved = if Path::new(&path).join(".git").exists() {
+                match save::save(
+                    Path::new(&path),
+                    &config.remote,
+                    &config.save_branch(&ticket),
+                    &message,
+                ) {
+                    Ok(saved) => saved,
+                    Err(error) => {
+                        eprintln!("ignite: work in {tree} for missing {ticket} not saved: {error}");
+                        continue;
+                    }
+                }
+            } else {
+                continue;
+            };
+            self.lock().vanished.insert(ticket.to_string());
+            reaped.push((tree, saved));
+        }
+        reaped
+    }
+
     /// Frees any ticket tree whose row is `leased` with neither a ticket nor a session, so a
     /// leaked row with no holder heals itself even when no build slot eviction needs its disk
     /// space.
@@ -27,10 +89,10 @@ impl Trees {
             let rows = store::all(&locked.db).map_err(|e| store_error(&e))?;
             let now = self.now();
             let mut freed = Vec::new();
-            for row in rows
-                .iter()
-                .filter(|row| super::reset::is_unheld_lease(row) && Self::reclaimable(&locked, row))
-            {
+            for row in rows.iter().filter(|row| {
+                super::reset::is_unheld_lease(row, &locked.vanished)
+                    && Self::reclaimable(&locked, row)
+            }) {
                 let id = id_of(row)?;
                 let path = Path::new(&row.path);
                 let _guard = if path.exists() {
