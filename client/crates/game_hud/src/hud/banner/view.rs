@@ -43,6 +43,9 @@ pub(super) fn thinking_ring() -> Element {
         .width(spinner::SIZE)
         .height(spinner::SIZE)
         .background([0; 4])
+        // An element's default panel has a pale border with rounded corners. It drew a
+        // rounded square around the spinner, whose ring is the only thing it should draw.
+        .border(([0; 4], 0.0))
         .passes(true);
     element.shows = Some(Shown::Layers(spinner::artwork()));
     element
