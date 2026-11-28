@@ -520,7 +520,13 @@ fn landing_a_regression_or_justiciar_fix_lets_tip_verification_advance_past_stal
         200
     );
     assert_eq!(
-        post(&mut conn, "/landed", &landed(&ticket, "a", "fixed"), at(3.0)).0,
+        post(
+            &mut conn,
+            "/landed",
+            &landed(&ticket, "a", "fixed"),
+            at(3.0)
+        )
+        .0,
         200
     );
 
