@@ -4,6 +4,7 @@ use super::features::BUG_REPORT;
 use super::{Client, input::ScenePoint};
 use app_screens::screens::Sheet;
 use app_screens::screens::bug_report::{BugStage, Message, whole_window};
+use game_hud::hud::inspector;
 use kit_frame::frame::Wake;
 use kit_scene::input::KeyResponse;
 use kit_ui::input::{Button, Key, KeyCode, KeyPhase, Modifiers, PointerPhase};
@@ -54,6 +55,7 @@ impl Client {
             return false;
         }
         if was {
+            self.features.inspect(&inspector::Message::Release);
             self.update_bug(&Message::Closed(self.now));
             self.layer.focus(None);
         }
@@ -61,7 +63,8 @@ impl Client {
         // Closing or changing the sheet resets the settings confirmation.
         self.features.reset_sheet();
         if opening {
-            self.bug_hovered = self.hovered_slot();
+            let hovered = self.hovered_slot();
+            self.features.inspect(&inspector::Message::Hold(hovered));
             self.layer.focus(None);
             self.update_bug(&Message::Opened {
                 now: self.now,

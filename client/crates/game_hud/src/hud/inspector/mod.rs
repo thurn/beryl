@@ -25,6 +25,10 @@ pub struct Inspector {
     /// The card a finger tapped or held on to show it whole, until the next touch
     /// (`Client::card_tapped`). It is shown in place of the card under the pointer.
     pinned: Option<ObjectId>,
+    /// While the bug report is open, the card the pointer was over when it opened, or none
+    /// (`Message::Hold`). The report covers the table, so the pointer no longer finds cards, and
+    /// the inspector keeps showing this one for the player to capture.
+    held: Option<Option<ObjectId>>,
     /// The view or prompt changed since it was last laid out.
     due: bool,
     /// The click the open decision last refused, whose reason the inspector shows
@@ -39,6 +43,9 @@ pub struct Inspector {
 pub enum Message {
     Invalidate,
     Pin(Option<ObjectId>),
+    /// Keeps showing this card (or none) whatever is under the pointer, until `Release`.
+    Hold(Option<ObjectId>),
+    Release,
     Refused(DecisionId, Refused),
 }
 
@@ -75,6 +82,14 @@ impl Feature for Inspector {
                 state.due = true;
             }
             Message::Pin(_) => return false,
+            Message::Hold(slot) => {
+                state.held = Some(*slot);
+                state.due = true;
+            }
+            Message::Release => {
+                state.held = None;
+                state.due = true;
+            }
             Message::Refused(decision, refused) => {
                 state.refusal = Some(Refusal {
                     decision: *decision,
@@ -202,6 +217,13 @@ impl Inspector {
     #[must_use]
     pub fn shown(&self) -> Option<&Inspected> {
         self.shown.as_ref()
+    }
+
+    /// The card the inspector follows: the held one while the bug report is open, otherwise
+    /// the card `hovered` under the pointer.
+    #[must_use]
+    pub fn looking_at(&self, hovered: Option<ObjectId>) -> Option<ObjectId> {
+        self.held.unwrap_or(hovered)
     }
 
     #[must_use]

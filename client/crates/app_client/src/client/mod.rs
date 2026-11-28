@@ -20,7 +20,7 @@ use std::collections::VecDeque;
 
 use beryl_protocol::GameUpdate;
 use beryl_protocol::prompt::Click;
-use beryl_protocol::protocol::{ObjectId, SessionId};
+use beryl_protocol::protocol::SessionId;
 use beryl_protocol::script::{OwnTimings, Verb, own_timings};
 
 use app_screens::screens::{Screen, bug_report, start, testing};
@@ -117,10 +117,6 @@ pub struct Client {
     /// Whether the host has said memory is low (`Lifecycle::LowMemory`), which fixes the tier at
     /// Baseline.
     low_memory: bool,
-    /// The card under the pointer when the bug report opened. The report freezes the table and
-    /// covers it, so the pointer no longer finds cards, but the inspector's zoom of this card
-    /// stays on screen for the player to capture.
-    bug_hovered: Option<ObjectId>,
 }
 
 impl Client {
@@ -151,7 +147,6 @@ impl Client {
             commands: VecDeque::new(),
             tier: Tier::Baseline,
             low_memory: false,
-            bug_hovered: None,
         }
     }
 

@@ -56,11 +56,7 @@ impl Client {
     /// The slot of the card the inspector follows: the card under the pointer, or while the bug
     /// report is open, the one that was under it when the report opened.
     pub(super) fn inspected_slot(&self) -> Option<ObjectId> {
-        if self.bug_open() {
-            self.bug_hovered
-        } else {
-            self.hovered_slot()
-        }
+        self.features.inspector().looking_at(self.hovered_slot())
     }
 
     /// The slot of the card the last frame found under the pointer, whether or not the
