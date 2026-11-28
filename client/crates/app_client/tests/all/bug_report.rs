@@ -717,3 +717,29 @@ fn the_table_stays_frozen_while_the_report_is_open_and_plays_on_after() {
     page.still();
     assert_ne!(page.find(land).rect(), frozen, "and plays to its end");
 }
+
+#[test]
+fn cmd_b_and_ctrl_b_open_the_bug_report_at_a_manual_table() {
+    use super::elements::key;
+    use super::manual::{client_at_table, table_view};
+
+    for modifiers in [
+        Modifiers {
+            command: true,
+            ..Modifiers::default()
+        },
+        Modifiers {
+            control: true,
+            ..Modifiers::default()
+        },
+    ] {
+        let (mut client, _) = client_at_table(&table_view());
+        client.handle(key(KeyCode::B, modifiers));
+        // The report opens by freezing the table and asking the host for its picture.
+        assert!(
+            std::iter::from_fn(|| client.next_request())
+                .any(|request| request == Request::FreezeFrame),
+            "{modifiers:?} opens the report at the table"
+        );
+    }
+}

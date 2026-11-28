@@ -373,7 +373,7 @@
         "position": "bottom"
       }
     },
-    "key": { "mac": "Cmd+B", "other": "Ctrl+B" },
+    "key": { "mac": "Cmd+Option+B", "other": "Ctrl+Alt+B" },
     "menu": { "group": "Move to", "order": 60 },
     "group": "Move to",
     "also_applies_to": {

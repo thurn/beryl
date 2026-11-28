@@ -115,7 +115,7 @@ usually a drag, and the menu's "Move to" group lists the destinations.
 | --------------------------------- | ---------- | ------------------------------------------------------------------------ |
 | Top of library in random order    | —          | Drag onto the top half of the library. Menu, "Top of library".           |
 | X cards from the top of library…  | —          | List, asking for the number.                                             |
-| Bottom of library in random order | Cmd+B      | Drag onto the bottom half of the library. Key.                           |
+| Bottom of library in random order | Cmd+Option+B | Drag onto the bottom half of the library. Key.                           |
 | Table                             | —          | Drag to the battlefield. Menu, "Battlefield", from a graveyard or exile. |
 | Hand                              | —          | Drag to the hand. Menu.                                                  |
 | Graveyard                         | Cmd+Delete | Drag to the graveyard. Menu. Key.                                        |
@@ -418,7 +418,7 @@ open it from the gear at the top right of the table.
 | Load deck from clipboard…                          | Cmd+Shift+V               | Key. Paste a decklist.                                                                                                                                         |
 | Load remote deck…; Load from website…              | Cmd+Option+O; Cmd+Shift+O | Not carried over. Beryl has no deck server and fetches no decklists.                                                                                           |
 | Unload deck                                        | Cmd+Option+U              | Key. "Change" in the lobby.                                                                                                                                    |
-| Sideboard lock; drag cards between main and side   | Cmd+Shift+B               | Changed. In the lobby the key opens the sideboard swap view. There is no lock: changes are open until Start. Beryl's bug report uses this key only at a table. |
+| Sideboard lock; drag cards between main and side   | Cmd+Shift+B               | Changed. In the lobby the key opens the sideboard swap view. There is no lock: changes are open until Start. Beryl's bug report uses Cmd+B. |
 | Ready to start                                     | Cmd+Shift+S               | Key. The guest's "Ready".                                                                                                                                      |
 | Force start                                        | —                         | The host's Start, available when both decks are loaded and the guest is ready.                                                                                 |
 | (first seat plays first)                           |                           | Changed. Start rolls for first, or uses the lobby's setting.                                                                                                   |

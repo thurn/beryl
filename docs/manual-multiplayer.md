@@ -868,7 +868,7 @@ follows.
 | Cmd+W     | Look at top cards of library                        | Close window                                                                                             |
 | Cmd+M     | Mulligan                                            | Minimise window                                                                                          |
 | Cmd+,     | Remove a −1/−1 counter                              | The settings window                                                                                      |
-| Cmd+B     | Move card to bottom of library                      | Beryl's bug report, which is Cmd+Shift+B at a table and stays Cmd+B everywhere else, the lobby included. |
+| Cmd+B     | Move card to bottom of library                      | Beryl's bug report, which keeps Cmd+B everywhere, the table included. Bottom of library is Cmd+Option+B. |
 | Cmd+Q     | Quits Beryl after confirmation                      | Cockatrice's "Leave game", which it absorbs                                                              |
 | Cmd+Space | Stays with macOS (Spotlight)                        | "Next phase", which keeps Tab and gains Space                                                            |
 | Cmd+Z     | Undo, which Cockatrice does not have                | Nothing                                                                                                  |

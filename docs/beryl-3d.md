@@ -712,8 +712,7 @@ backend is unavailable.
 
 ## Bug reports
 
-Cmd+B or Ctrl+B opens the report during a game. At the manual table, use
-Cmd+Shift+B or Ctrl+Shift+B. The client freezes the table before raising the
+Cmd+B or Ctrl+B opens the report during a game and at the manual table. The client freezes the table before raising the
 sheet. The host reads back the renderer's frame and saves the resolved tree from
 that moment. Closing the sheet resumes the table clock.
 
