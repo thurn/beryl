@@ -174,10 +174,25 @@ mod tests {
             .to_string()
         };
         for (id, status, labels, metadata) in [
-            ("T1", "open", r#"["regression","machine:multivac"]"#, affinity(true)),
+            (
+                "T1",
+                "open",
+                r#"["regression","machine:multivac"]"#,
+                affinity(true),
+            ),
             // A person pinned it, so culprit affinity did not add the label.
-            ("T2", "open", r#"["regression","machine:multivac"]"#, affinity(false)),
-            ("T3", "closed", r#"["regression","machine:multivac"]"#, affinity(true)),
+            (
+                "T2",
+                "open",
+                r#"["regression","machine:multivac"]"#,
+                affinity(false),
+            ),
+            (
+                "T3",
+                "closed",
+                r#"["regression","machine:multivac"]"#,
+                affinity(true),
+            ),
             // A reopened landing keeps its pin until it lands again.
             ("T4", "open", r#"["machine:multivac"]"#, affinity(true)),
         ] {

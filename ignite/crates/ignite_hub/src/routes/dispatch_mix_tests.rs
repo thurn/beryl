@@ -642,7 +642,12 @@ fn a_late_culprit_prefers_its_machine_and_provider_for_an_unclaimed_regression()
     assert_eq!(post(&mut conn, "/claims", &stale_claim, at(4.0)).0, 409);
     let ticket = tickets::load(&conn, &id).unwrap().unwrap();
     assert_eq!(ticket.metadata[CAUSED_BY_KEY], json!(culprit));
-    assert!(!ticket.labels.iter().any(|label| label.starts_with("machine:")));
+    assert!(
+        !ticket
+            .labels
+            .iter()
+            .any(|label| label.starts_with("machine:"))
+    );
 
     record(&conn, "m-1", &capacity(true), at(600.0));
     let nearby = machine_room("m-1", 1, &["claude", "codex"]);

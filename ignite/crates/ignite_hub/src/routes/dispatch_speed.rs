@@ -94,9 +94,10 @@ impl Fastest {
             else {
                 continue;
             };
-            let room = report
-                .worker_room
-                .saturating_sub(dispatch_mix::pending(conn, &machine.id, now)?);
+            let room =
+                report
+                    .worker_room
+                    .saturating_sub(dispatch_mix::pending(conn, &machine.id, now)?);
             if room == 0 || report.memory_pressed {
                 continue;
             }

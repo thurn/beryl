@@ -4014,22 +4014,22 @@ File platform-specific work with `ignite ticket create --needs-os macos` or
 
 On 2026-11-27 `master` waited more than eight hours behind a regression pinned
 to the machine that held its culprit's transcript. That machine was at 99% CPU
-and swapping, while a machine several times faster had idle workers. So a
-ticket that holds `master` back (a regression, a justiciar ticket, or a repair
-that blocks a tip) goes to the fastest machine that can take it now:
+and swapping, while a machine several times faster had idle workers. So a ticket
+that holds `master` back (a regression, a justiciar ticket, or a repair that
+blocks a tip) goes to the fastest machine that can take it now:
 
-- Once an hour hub upkeep measures each machine's speed from the last seven
-  days of check records. For every check family and verb run on two or more
-  machines, a machine's ratio is its median duration over the median of all
-  the runs. Its slowness is the median of its ratios, and its speed is the
-  fastest machine's slowness over its own, so the fastest has 1.0. `ignite fleet`
-  shows each machine's speed, and `ignite fleet machine <name> --speed <n>`
-  replaces the measurement. A machine with no measurement counts as 1.0.
-- A machine that asks for work leaves such a ticket to another machine that
-  has a free worker slot, fits the ticket's operating system and check
-  families, and is faster. The culprit's machine keeps the ticket when its
-  speed is at least 75% of the fastest one's. A ticket passed over for a minute
-  goes to whichever eligible machine asks next.
+- Once an hour hub upkeep measures each machine's speed from the last seven days
+  of check records. For every check family and verb run on two or more machines,
+  a machine's ratio is its median duration over the median of all the runs. Its
+  slowness is the median of its ratios, and its speed is the fastest machine's
+  slowness over its own, so the fastest has 1.0. `ignite fleet` shows each
+  machine's speed, and `ignite fleet machine <name> --speed <n>` replaces the
+  measurement. A machine with no measurement counts as 1.0.
+- A machine that asks for work leaves such a ticket to another machine that has
+  a free worker slot, fits the ticket's operating system and check families, and
+  is faster. The culprit's machine keeps the ticket when its speed is at least
+  75% of the fastest one's. A ticket passed over for a minute goes to whichever
+  eligible machine asks next.
 - A `machine:` pin that a person or worker added, such as with
   `ignite release --needs <machine>`, still binds.
 

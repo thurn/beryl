@@ -18,7 +18,10 @@ fn fleet(speeds: [&str; 3], now: Timestamp) -> Connection {
     for (id, name, os) in [("m-2", "multivac", "macos"), ("m-3", "cygnus", "windows")] {
         let machine = json!({"machine": id, "name": name, "os": os, "cores": 20,
                              "memory_mb": 16384, "families": [], "version": "v"});
-        assert_eq!(post(&mut conn, "/machines/register", &machine, start()).0, 200);
+        assert_eq!(
+            post(&mut conn, "/machines/register", &machine, start()).0,
+            200
+        );
     }
     let mut settings = hub::fleet_settings::settings(&conn).unwrap();
     let version = settings.version;

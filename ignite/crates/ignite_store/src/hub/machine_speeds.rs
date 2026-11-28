@@ -119,8 +119,11 @@ mod tests {
         assert_eq!(of(&measured, "jarvis"), Speed::ONE);
         assert_eq!(of(&measured, "Multivac"), "0.4".parse().unwrap());
         assert_eq!(of(&measured, "cygnus"), Speed::ONE);
-        settings.machines.entry("multivac".to_owned()).or_default().speed =
-            Some("0.9".parse().unwrap());
+        settings
+            .machines
+            .entry("multivac".to_owned())
+            .or_default()
+            .speed = Some("0.9".parse().unwrap());
         let set = speeds(&conn, &settings).unwrap();
         assert_eq!(of(&set, "multivac"), "0.9".parse().unwrap());
     }
